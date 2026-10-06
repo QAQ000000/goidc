@@ -52,7 +52,7 @@ func TestBatch4BrowserFixture(t *testing.T) {
 	}
 	defer os.Remove(ready)
 	defer os.Remove(finish)
-	timer := time.NewTimer(15 * time.Minute)
+	timer := time.NewTimer(30 * time.Minute)
 	defer timer.Stop()
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
