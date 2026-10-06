@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -24,7 +25,12 @@ func New(account Account) (Adapter, error) {
 		return nil, &Error{Code: "invalid_account"}
 	}
 	u, err := url.Parse(account.BaseURL)
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost"))) || strings.Contains(u.Path, "..") || strings.ContainsAny(u.Path, "\\\r\n") {
+	if err != nil || u == nil {
+		return nil, &Error{Code: "invalid_url"}
+	}
+	ip, isIP := netip.ParseAddr(u.Hostname())
+	localHTTP := u.Hostname() == "localhost" || (isIP == nil && (ip.IsLoopback() || ip.IsPrivate()))
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && localHTTP)) || strings.Contains(u.Path, "..") || strings.ContainsAny(u.Path, "\\\r\n") {
 		return nil, &Error{Code: "invalid_url"}
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -44,6 +50,7 @@ type wire struct {
 	Status       int             `json:"status"`
 	JWT          string          `json:"jwt"`
 	Data         json.RawMessage `json:"data"`
+	User         json.RawMessage `json:"user"`
 	HostID       json.RawMessage `json:"hostid"`
 	InvoiceID    json.RawMessage `json:"invoiceid"`
 	DomainStatus string          `json:"domainstatus"`
@@ -159,12 +166,13 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	}
 	var d struct {
 		Products struct {
-			ID           int64  `json:"id"`
-			Name         string `json:"name"`
-			Description  string `json:"description"`
-			StockControl int    `json:"stock_control"`
-			Qty          int64  `json:"qty"`
-			PayType      string `json:"pay_type"`
+			ID              int64           `json:"id"`
+			Name            string          `json:"name"`
+			Description     string          `json:"description"`
+			StockControl    int             `json:"stock_control"`
+			Qty             int64           `json:"qty"`
+			PayType         string          `json:"pay_type"`
+			LocationVersion json.RawMessage `json:"location_version"`
 		} `json:"products"`
 		ProductPricings []map[string]json.RawMessage `json:"product_pricings"`
 		ConfigGroups    json.RawMessage              `json:"config_groups"`
@@ -174,15 +182,18 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	if json.Unmarshal(w.Data, &d) != nil || d.Products.ID != id {
 		return Product{}, &Error{Code: "product_invalid"}
 	}
-	h := sha256.Sum256(w.Data)
-	p := Product{ID: id, Name: d.Products.Name, Description: d.Products.Description, Revision: hex.EncodeToString(h[:]), Prices: map[string]Price{}, Supported: true}
+	p := Product{ID: id, Name: d.Products.Name, Description: d.Products.Description, SupplierVersion: number(d.Products.LocationVersion), Prices: map[string]Price{}, Supported: true}
+	if p.SupplierVersion < 1 {
+		p.Supported = false
+		p.UnsupportedReason = "supplier_version_unknown"
+	}
 	if d.Products.StockControl == 1 {
 		qty := d.Products.Qty
 		p.Stock = &qty
 	}
-	if len(d.ConfigGroups) > 2 && string(d.ConfigGroups) != "[]" || len(d.CustomFields) > 2 && string(d.CustomFields) != "[]" || len(d.Advanced) > 2 && string(d.Advanced) != "[]" {
+	if len(d.Advanced) > 0 && string(d.Advanced) != "[]" && string(d.Advanced) != "null" && string(d.Advanced) != "{}" {
 		p.Supported = false
-		p.UnsupportedReason = "complex_configuration"
+		p.UnsupportedReason = "advanced_configuration"
 	}
 	for _, r := range d.ProductPricings {
 		var code string
@@ -195,19 +206,119 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 			p.UnsupportedReason = "multiple_currencies"
 			continue
 		}
-		for _, cycle := range []string{"monthly", "quarterly", "semiannually", "annually", "biennially", "triennially", "onetime"} {
-			c, ok := moneyRaw(r[cycle])
+		for cycle, keys := range map[string][2]string{"monthly": {"monthly", "msetupfee"}, "quarterly": {"quarterly", "qsetupfee"}, "annually": {"annually", "asetupfee"}, "once": {"onetime", "osetupfee"}} {
+			c, ok := moneyRaw(r[keys[0]])
 			if !ok || c < 0 {
 				continue
 			}
-			setup, _ := moneyRaw(r["msetupfee"])
+			setup, _ := moneyRaw(r[keys[1]])
 			p.Prices[cycle] = Price{AmountCents: c, SetupCents: setup}
 		}
+	}
+	var groups []struct {
+		Options []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"option_name"`
+			Type int    `json:"option_type"`
+			Sub  []struct {
+				ID       int64                        `json:"id"`
+				Name     string                       `json:"option_name"`
+				Pricings []map[string]json.RawMessage `json:"pricings"`
+			} `json:"sub"`
+		} `json:"options"`
+	}
+	if len(d.ConfigGroups) > 0 && json.Unmarshal(d.ConfigGroups, &groups) != nil {
+		p.Supported = false
+		p.UnsupportedReason = "option_schema_invalid"
+	}
+	for _, group := range groups {
+		for _, raw := range group.Options {
+			o := Option{ID: raw.ID, Name: raw.Name, Type: "select", Required: true}
+			if raw.ID <= 0 || (raw.Type != 1 && raw.Type != 2) || len(raw.Sub) == 0 {
+				p.Supported = false
+				p.UnsupportedReason = "unsupported_option_type"
+				continue
+			}
+			for _, sub := range raw.Sub {
+				c := Choice{ID: sub.ID, Name: sub.Name, Prices: map[string]Price{}}
+				if c.ID <= 0 {
+					p.Supported = false
+					p.UnsupportedReason = "option_schema_invalid"
+				}
+				for _, price := range sub.Pricings {
+					var code string
+					_ = json.Unmarshal(price["code"], &code)
+					if code != p.Currency {
+						continue
+					}
+					for cycle, keys := range map[string][2]string{"monthly": {"monthly", "msetupfee"}, "quarterly": {"quarterly", "qsetupfee"}, "annually": {"annually", "asetupfee"}, "once": {"onetime", "osetupfee"}} {
+						if _, available := p.Prices[cycle]; !available {
+							continue
+						}
+						amount, ok := moneyRaw(price[keys[0]])
+						if !ok || amount < 0 {
+							continue
+						}
+						setup, _ := moneyRaw(price[keys[1]])
+						c.Prices[cycle] = Price{AmountCents: amount, SetupCents: setup}
+					}
+				}
+				if len(c.Prices) != len(p.Prices) {
+					p.Supported = false
+					p.UnsupportedReason = "option_price_missing"
+				}
+				o.Choices = append(o.Choices, c)
+			}
+			p.Options = append(p.Options, o)
+		}
+	}
+	var fields []struct {
+		ID          int64  `json:"id"`
+		Name        string `json:"fieldname"`
+		Description string `json:"description"`
+		Type        string `json:"fieldtype"`
+		Options     string `json:"fieldoptions"`
+		Regex       string `json:"regexpr"`
+		Required    int    `json:"required"`
+	}
+	if len(d.CustomFields) > 0 && json.Unmarshal(d.CustomFields, &fields) != nil {
+		p.Supported = false
+		p.UnsupportedReason = "field_schema_invalid"
+	}
+	for _, raw := range fields {
+		f := Field{ID: raw.ID, Name: raw.Name, Description: raw.Description, Type: raw.Type, Required: raw.Required == 1}
+		if raw.ID <= 0 || raw.Regex != "" || (raw.Type != "text" && raw.Type != "dropdown") {
+			p.Supported = false
+			p.UnsupportedReason = "unsupported_field_type"
+			continue
+		}
+		if raw.Type == "dropdown" {
+			for _, choice := range strings.Split(raw.Options, ",") {
+				choice = strings.TrimSpace(choice)
+				if choice != "" {
+					f.Choices = append(f.Choices, choice)
+				}
+			}
+			if len(f.Choices) == 0 {
+				p.Supported = false
+				p.UnsupportedReason = "field_schema_invalid"
+			}
+		}
+		p.Fields = append(p.Fields, f)
 	}
 	if p.Currency != "CNY" || len(p.Prices) == 0 {
 		p.Supported = false
 		p.UnsupportedReason = "unsupported_currency_or_price"
 	}
+	stable, _ := json.Marshal(struct {
+		ID, SupplierVersion int64
+		Currency            string
+		Prices              map[string]Price
+		Options             []Option
+		Fields              []Field
+	}{p.ID, p.SupplierVersion, p.Currency, p.Prices, p.Options, p.Fields})
+	h := sha256.Sum256(stable)
+	p.Revision = hex.EncodeToString(h[:])
 	return p, nil
 }
 func money(s string) (int64, bool) {
@@ -291,8 +402,8 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	if !p.Supported || p.Revision != r.Revision {
 		return out, failure("product_changed_or_unsupported", false, out)
 	}
-	price, ok := p.Prices[r.Cycle]
-	if !ok || price.AmountCents+price.SetupCents > r.MaximumCostCents {
+	cost, selectionErr := ValidateSelection(p, r.Cycle, r.ConfigOptions, r.CustomFields)
+	if selectionErr != nil || cost > r.MaximumCostCents {
 		return out, failure("price_exceeded", false, out)
 	}
 	token, e := z.login(ctx)
@@ -304,10 +415,11 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 		return out, e
 	}
 	var ud struct {
-		Currency int64 `json:"currency"`
+		Currency json.RawMessage `json:"currency"`
 	}
-	_ = json.Unmarshal(user.Data, &ud)
-	if ud.Currency <= 0 {
+	_ = json.Unmarshal(user.User, &ud)
+	currencyID := number(ud.Currency)
+	if currencyID <= 0 {
 		return out, failure("currency_unknown", false, out)
 	}
 	common := url.Values{"downstream_url": {r.DownstreamURL}, "downstream_token": {r.DownstreamToken}, "downstream_id": {strconv.FormatInt(r.LocalServiceID, 10)}}
@@ -316,11 +428,12 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 		return out, e
 	}
 	out.UpstreamID, out.InvoiceID = ids(clear)
-	if clear.Status == 400 && out.UpstreamID > 0 && clear.DomainStatus == "Active" {
-		return CreateResult{UpstreamID: out.UpstreamID, Status: "active"}, nil
-	}
 	if out.UpstreamID == 0 && out.InvoiceID == 0 {
-		cart := url.Values{"pid": {strconv.FormatInt(r.ProductID, 10)}, "billingcycle": {r.Cycle}, "currencyid": {strconv.FormatInt(ud.Currency, 10)}, "qty": {"1"}, "supplier_version": {"0"}, "host": {r.Host}, "password": {r.Password}}
+		upstreamCycle := r.Cycle
+		if upstreamCycle == "once" {
+			upstreamCycle = "onetime"
+		}
+		cart := url.Values{"pid": {strconv.FormatInt(r.ProductID, 10)}, "billingcycle": {upstreamCycle}, "currencyid": {strconv.FormatInt(currencyID, 10)}, "qty": {"1"}, "supplier_version": {strconv.FormatInt(p.SupplierVersion, 10)}, "host": {r.Host}, "password": {r.Password}}
 		for k, v := range common {
 			cart[k] = v
 		}
@@ -369,6 +482,10 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 		Currency struct {
 			Code string `json:"code"`
 		} `json:"currency"`
+		InvoiceItems []struct {
+			Type  string          `json:"type"`
+			RelID json.RawMessage `json:"rel_id"`
+		} `json:"invoice_items"`
 	}
 	if json.Unmarshal(detail.Data, &invoice) != nil || invoice.Detail.ID != out.InvoiceID {
 		return out, failure("invoice_invalid", true, out)
@@ -381,8 +498,20 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	if !valid || invoice.Currency.Code != "CNY" || cost > r.MaximumCostCents {
 		return out, failure("invoice_price_mismatch", true, out)
 	}
+	matched := false
+	for _, item := range invoice.InvoiceItems {
+		if item.Type == "host" && number(item.RelID) == out.UpstreamID && out.UpstreamID > 0 {
+			matched = true
+		}
+	}
+	if !matched {
+		return out, failure("invoice_host_mismatch", true, out)
+	}
 	out.CostCents = cost
 	out.Currency = "CNY"
+	if invoice.Detail.Status != "Unpaid" && invoice.Detail.Status != "Paid" {
+		return out, failure("invoice_status_invalid", true, out)
+	}
 	if invoice.Detail.Status != "Paid" {
 		pay := url.Values{"invoiceid": {strconv.FormatInt(out.InvoiceID, 10)}, "use_credit": {"1"}, "enough": {"0"}}
 		for k, v := range common {
@@ -420,10 +549,10 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 	}
 	var d struct {
 		Hosts []struct {
-			ID           int64  `json:"id"`
-			DomainStatus string `json:"domainstatus"`
-			Domain       string `json:"domain"`
-			NextDueDate  string `json:"nextduedate"`
+			ID           int64           `json:"id"`
+			DomainStatus string          `json:"domainstatus"`
+			Domain       string          `json:"domain"`
+			NextDueDate  json.RawMessage `json:"nextduedate"`
 		} `json:"hosts"`
 	}
 	if json.Unmarshal(w.Data, &d) != nil {
@@ -431,7 +560,11 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 	}
 	for _, v := range d.Hosts {
 		if v.ID == id {
-			return Service{UpstreamID: id, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: v.NextDueDate}, nil
+			var due string
+			if json.Unmarshal(v.NextDueDate, &due) != nil {
+				due = strings.TrimSpace(string(v.NextDueDate))
+			}
+			return Service{UpstreamID: id, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: due}, nil
 		}
 	}
 	return s, &Error{Code: "service_missing"}
