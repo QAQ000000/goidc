@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"errors"
 	"io"
@@ -13,6 +14,17 @@ import (
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 )
+
+// Pass the authenticated credential into store transactions for a final check after waits.
+func requestFileContext(r *http.Request) context.Context {
+	if bearer := bearerCredential(r); bearer != "" {
+		return store.WithStorageCredential(r.Context(), tokenHash(bearer), true)
+	}
+	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
+		return store.WithStorageCredential(r.Context(), tokenHash(cookie.Value), false)
+	}
+	return r.Context()
+}
 
 func (s *Server) invoiceProfiles(w http.ResponseWriter, r *http.Request) {
 	uid := identityFrom(r).ID
@@ -131,6 +143,10 @@ func (s *Server) invoiceApplicationDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if admin {
 		var customerID int64
 		if err = tx.QueryRow(ctx, "SELECT user_id FROM invoice_applications WHERE id=$1", id).Scan(&customerID); err != nil {
@@ -182,11 +198,45 @@ func (s *Server) invoiceApplicationDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	item["documents"], item["adjustments"] = documents, adjustments
+	if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.customerFileCredentialCurrent(w, r, tx, actor) {
+		return
+	}
+	if admin && !s.invoiceApplicationReader(w, r, tx, actor) {
+		return
+	}
 	if err = tx.Commit(ctx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	write(w, 200, item)
+}
+
+func (s *Server) invoiceApplicationReader(w http.ResponseWriter, r *http.Request, tx pgx.Tx, actor int64) bool {
+	var role string
+	var roleID *int64
+	if err := tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
+		s.fail(w, r, err)
+		return false
+	}
+	if role == "super_admin" {
+		return true
+	}
+	var allowed bool
+	if role == "admin" && roleID != nil {
+		if err := tx.QueryRow(r.Context(), "SELECT active AND 'invoice_applications.view'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+			s.fail(w, r, err)
+			return false
+		}
+	}
+	if !allowed {
+		writeError(w, 403, "permission_denied", "没有读取发票申请的权限")
+		return false
+	}
+	return true
 }
 
 func invoiceDocumentID(r *http.Request) (int64, int64, bool) {
@@ -259,9 +309,10 @@ func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http
 		}
 		decoder := xml.NewDecoder(bytes.NewReader(content))
 		decoder.Strict = true
-		var tokenCount int
+		var roots, depth int
+		var invalid bool
 		for {
-			_, e := decoder.Token()
+			token, e := decoder.Token()
 			if e == io.EOF {
 				break
 			}
@@ -269,9 +320,21 @@ func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http
 				writeError(w, 400, "invalid_invoice_document", "XML 文件格式无效")
 				return
 			}
-			tokenCount++
+			switch tok := token.(type) {
+			case xml.StartElement:
+				if depth == 0 {
+					roots++
+				}
+				depth++
+			case xml.EndElement:
+				depth--
+			case xml.CharData:
+				if depth == 0 && len(bytes.TrimSpace(tok)) != 0 {
+					invalid = true
+				}
+			}
 		}
-		if tokenCount > 0 {
+		if roots == 1 && depth == 0 && !invalid {
 			mt = "application/xml"
 		}
 	}
@@ -279,7 +342,7 @@ func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http
 		writeError(w, 400, "invalid_invoice_document", "仅支持内容匹配的 PDF 或 XML 文件")
 		return
 	}
-	id, err := s.db.SaveInvoiceApplicationDocument(r.Context(), identityFrom(r).ID, appID, adjustmentID, store.InvoiceApplicationDocument{Filename: name, MIME: mt, Content: content})
+	id, err := s.db.SaveInvoiceApplicationDocument(requestFileContext(r), identityFrom(r).ID, appID, adjustmentID, store.InvoiceApplicationDocument{Filename: name, MIME: mt, Content: content, ExpectedSHA256: r.FormValue("expected_sha256")})
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -296,7 +359,7 @@ func (s *Server) adjustInvoiceApplication(w http.ResponseWriter, r *http.Request
 	if !decode(w, r, &in) {
 		return
 	}
-	out, err := s.db.AdjustInvoiceApplication(r.Context(), identityFrom(r).ID, appID, in, r.Header.Get("Idempotency-Key"))
+	out, err := s.db.AdjustInvoiceApplication(requestFileContext(r), identityFrom(r).ID, appID, in, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -322,21 +385,19 @@ func (s *Server) invoiceApplicationDocumentFile(w http.ResponseWriter, r *http.R
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var owner int64
 	var name, mt, hash string
 	var content []byte
-	if err = tx.QueryRow(r.Context(), `SELECT a.user_id,d.filename,d.mime_type,d.sha256,d.content FROM invoice_application_documents d JOIN invoice_applications a ON a.id=d.application_id WHERE d.id=$1 AND d.application_id=$2`, docID, appID).Scan(&owner, &name, &mt, &hash, &content); err != nil {
+	if err = tx.QueryRow(r.Context(), `SELECT a.user_id FROM invoice_application_documents d JOIN invoice_applications a ON a.id=d.application_id WHERE d.id=$1 AND d.application_id=$2`, docID, appID).Scan(&owner); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	actor := identityFrom(r).ID
-	if current, authErr := s.publicDownloadIdentity(r, tx); authErr != nil {
-		s.fail(w, r, authErr)
-		return
-	} else if current != actor {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "登录已失效")
-		return
-	}
+
 	if adminRoute(r) {
 		if err = store.LockAdminCustomer(r.Context(), tx, actor, owner); err != nil {
 			s.fail(w, r, err)
@@ -344,6 +405,21 @@ func (s *Server) invoiceApplicationDocumentFile(w http.ResponseWriter, r *http.R
 		}
 	} else if owner != actor {
 		writeError(w, 404, "not_found", "文件不存在")
+		return
+	}
+	// Load the currently stored file after authorization-related waits.
+	if err = tx.QueryRow(r.Context(), "SELECT filename,mime_type,sha256,content FROM invoice_application_documents WHERE id=$1 AND application_id=$2 FOR UPDATE", docID, appID).Scan(&name, &mt, &hash, &content); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.customerFileCredentialCurrent(w, r, tx, actor) {
+		return
+	}
+	if adminRoute(r) && !s.invoiceApplicationReader(w, r, tx, actor) {
 		return
 	}
 	if storedFileTransfersBytes(r, name, mt, hash, content) {

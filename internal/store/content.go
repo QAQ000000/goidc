@@ -130,7 +130,7 @@ func validCanonical(value string) bool {
 	if value == "" {
 		return true
 	}
-	return strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//") && !strings.ContainsAny(value, "?#\\\r\n\t") && contentTextValid(value, 500, false)
+	return safeContentLink(value) && strings.HasPrefix(value, "/") && !strings.ContainsAny(value, "?#") && contentTextValid(value, 500, false)
 }
 
 func uniquePositiveContentIDs(ids []int64) error {
@@ -217,6 +217,16 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 			}
 		}
 		action = "content.updated"
+	}
+	imageRefs := regexp.MustCompile(`src="/api/v1/content-images/([1-9][0-9]*)"`).FindAllStringSubmatch(in.BodyHTML, -1)
+	for _, ref := range imageRefs {
+		var belongs bool
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM content_images WHERE id=$1::bigint AND article_id=$2)", ref[1], id).Scan(&belongs); err != nil {
+			return 0, err
+		}
+		if !belongs {
+			return 0, conflict("invalid_content_image", "正文图片不属于当前文章，请先保存草稿并上传图片")
+		}
 	}
 	for _, categoryID := range in.CategoryIDs {
 		var categoryType string

@@ -71,9 +71,10 @@ type InvoiceApplicationAdjustment struct {
 }
 
 type InvoiceApplicationDocument struct {
-	Filename string
-	MIME     string
-	Content  []byte
+	Filename       string
+	MIME           string
+	Content        []byte
+	ExpectedSHA256 string
 }
 
 func (s *Store) invoiceCustomerTx(ctx context.Context, userID int64) (pgx.Tx, error) {
@@ -493,6 +494,9 @@ func (s *Store) invoiceManageTx(ctx context.Context, actorID, applicationID int6
 			_ = tx.Rollback(ctx)
 		}
 	}()
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		return nil, 0, err
+	}
 	var allowed bool
 	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'invoice_applications.view'=ANY(r.permissions) AND 'invoice_applications.manage'=ANY(r.permissions)),false)
  FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil || !allowed {
@@ -509,6 +513,33 @@ func (s *Store) invoiceManageTx(ctx context.Context, actorID, applicationID int6
 		return nil, 0, err
 	}
 	return tx, customerID, nil
+}
+
+// Recheck after scope, application or idempotency locks may have waited.
+func invoiceDocumentAuthorize(ctx context.Context, tx pgx.Tx, actorID int64) error {
+	if err := lockStorageCredential(ctx, tx, actorID); err != nil {
+		return err
+	}
+	var role string
+	var roleID *int64
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+		return conflict("permission_denied", "没有管理发票申请的权限")
+	}
+	if role == "super_admin" {
+		return nil
+	}
+	if role != "admin" || roleID == nil {
+		return conflict("permission_denied", "没有管理发票申请的权限")
+	}
+	var allowed bool
+	err := tx.QueryRow(ctx, "SELECT active AND 'invoice_applications.view'=ANY(permissions) AND 'invoice_applications.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed)
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return conflict("permission_denied", "没有管理发票申请的权限")
+	}
+	return nil
 }
 
 func validateInvoiceDocument(file InvoiceApplicationDocument) error {
@@ -550,6 +581,9 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 	if applicationStatus != "issued" {
 		return 0, conflict("invoice_document_not_ready", "只有已开具申请可以登记电子发票文件")
 	}
+	if err = invoiceDocumentAuthorize(ctx, tx, actorID); err != nil {
+		return 0, err
+	}
 	digest := sha256.Sum256(file.Content)
 	hash := hex.EncodeToString(digest[:])
 	var id int64
@@ -562,6 +596,13 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 		err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id)
  VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8) RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
 	} else if err == nil {
+		var currentHash string
+		if err = tx.QueryRow(ctx, "SELECT sha256 FROM invoice_application_documents WHERE id=$1", id).Scan(&currentHash); err != nil {
+			return 0, err
+		}
+		if file.ExpectedSHA256 != currentHash {
+			return 0, conflict("stale_invoice_document", "文件已存在或已被替换，请刷新后确认覆盖")
+		}
 		_, err = tx.Exec(ctx, `UPDATE invoice_application_documents SET filename=$2,mime_type=$3,size_bytes=$4,sha256=$5,content=$6,uploader_id=$7,created_at=now() WHERE id=$1`, id, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID)
 	}
 	if err != nil {
@@ -597,6 +638,9 @@ func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicati
 	var saved []byte
 	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM invoice_application_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
 	if err == nil {
+		if err = invoiceDocumentAuthorize(ctx, tx, actorID); err != nil {
+			return out, err
+		}
 		if savedHash != hash {
 			return out, conflict("idempotency_conflict", "相同幂等键对应不同发票调整")
 		}
@@ -615,6 +659,9 @@ func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicati
 	}
 	if status != "issued" || out.Version != in.ExpectedVersion {
 		return out, conflict("stale_invoice_application", "只有已开具申请可以作废或红冲")
+	}
+	if err = invoiceDocumentAuthorize(ctx, tx, actorID); err != nil {
+		return out, err
 	}
 	if in.Action == "red" && in.DocumentNumber == "" {
 		return out, conflict("invalid_invoice_adjustment", "红冲必须填写红字发票编号")

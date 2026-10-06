@@ -155,33 +155,19 @@ func (s *Store) Checkout(ctx context.Context, userID int64, key string, input Ch
 		if err = json.Unmarshal(v.PurchaseJSON, &fieldValues); err != nil {
 			return result, err
 		}
-		_, v.PurchaseSnapshot, err = ValidatePurchaseFieldsWithKey(ctx, tx, v.ProductID, fieldValues, s.PurchaseFieldEncryptionKey)
+		_, v.PurchaseSnapshot, err = ValidateStoredPurchaseFields(ctx, tx, userID, v.ProductID, fieldValues, s.PurchaseFieldEncryptionKey)
 		if err != nil {
 			return result, err
 		}
 		for i := range v.PurchaseSnapshot {
 			if v.PurchaseSnapshot[i].Encrypted {
-				v.PurchaseSnapshot[i].Value, err = SealPurchaseValue(s.PurchaseFieldEncryptionKey, v.PurchaseSnapshot[i].Value)
+				v.PurchaseSnapshot[i].Value, err = SealPurchaseValue(s.PurchaseFieldEncryptionKey, userID, v.ProductID, v.PurchaseSnapshot[i].Key, v.PurchaseSnapshot[i].Value)
 				if err != nil {
 					return result, conflict("purchase_field_encryption_unconfigured", "敏感购买字段未配置加密密钥")
 				}
 			}
 		}
-		profile := map[string]string{}
-		for _, field := range v.PurchaseSnapshot {
-			if field.Scope == "customer" && field.ProfileKey != "" {
-				profile[field.ProfileKey] = field.Value
-			}
-		}
-		if len(profile) > 0 {
-			profileJSON, marshalErr := json.Marshal(profile)
-			if marshalErr != nil {
-				return result, marshalErr
-			}
-			if _, err = tx.Exec(ctx, `UPDATE users SET metadata=metadata || jsonb_build_object('purchase_profile',coalesce(metadata->'purchase_profile','{}'::jsonb) || $2::jsonb),updated_at=now() WHERE id=$1`, userID, profileJSON); err != nil {
-				return result, err
-			}
-		}
+
 		price, setup, amountErr := OptionAmounts(v.Price, v.Setup, selection)
 		if amountErr != nil {
 			return result, amountErr

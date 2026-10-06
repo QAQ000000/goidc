@@ -40,6 +40,11 @@ func lockStorageCredential(ctx context.Context, tx pgx.Tx, actorID int64) error 
 	return nil
 }
 
+// LockFileCredential keeps revocation serialized with private file transactions.
+func LockFileCredential(ctx context.Context, tx pgx.Tx, actorID int64) error {
+	return lockStorageCredential(ctx, tx, actorID)
+}
+
 func (s *Store) StorageServiceAction(ctx context.Context, actorID, serviceID int64, kind, operation, pointID, key string, ack bool, admin bool) (ServiceActionResult, error) {
 	action := kind + "_" + operation
 	if !provision.IsStorageAction(action) || !ack || (operation == "create" && pointID != "") || (operation != "create" && !provision.ValidResourceID(pointID)) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/jackc/pgx/v5"
 	"strings"
 )
 
@@ -23,6 +24,16 @@ func (s *Store) SaveContentImage(ctx context.Context, actorID, articleID int64, 
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	if err = lockStorageCredential(ctx, tx, actorID); err != nil {
+		return 0, err
+	}
+	var exists bool
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM content_articles WHERE id=$1)", articleID).Scan(&exists); err != nil {
+		return 0, err
+	}
+	if !exists {
+		return 0, pgx.ErrNoRows
+	}
 	var id int64
 	if err = tx.QueryRow(ctx, `INSERT INTO content_images(article_id,uploader_id,filename,mime_type,size_bytes,content) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, articleID, actorID, image.Filename, image.MIME, len(image.Content), image.Content).Scan(&id); err != nil {
 		return 0, err

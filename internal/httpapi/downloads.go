@@ -29,9 +29,9 @@ func (s *Server) publicDownloadIdentity(r *http.Request, q interface {
 	var id int64
 	var err error
 	if bearer := bearerCredential(r); bearer != "" {
-		err = q.QueryRow(r.Context(), `SELECT u.id FROM api_keys k JOIN users u ON u.id=k.user_id WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()) AND u.status='active'`, tokenHash(bearer)).Scan(&id)
+		err = q.QueryRow(r.Context(), `SELECT u.id FROM api_keys k JOIN users u ON u.id=k.user_id WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()) AND u.status='active'`, tokenHash(bearer)).Scan(&id)
 	} else if cookie, e := r.Cookie("zjmfgo_session"); e == nil {
-		err = q.QueryRow(r.Context(), `SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&id)
+		err = q.QueryRow(r.Context(), `SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>clock_timestamp() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&id)
 	} else {
 		return 0, nil
 	}

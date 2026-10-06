@@ -1103,6 +1103,7 @@ function ApplicationDetailContent({
   const [adjustmentAction, setAdjustmentAction] = useState<"void" | "red" | null>(null);
   const [adjustmentNote, setAdjustmentNote] = useState("");
   const [adjustmentDocument, setAdjustmentDocument] = useState("");
+  const [documentTarget, setDocumentTarget] = useState("0");
   const retry = useRef<{ body: string; key: string } | null>(null);
   const allowed = useAdminPermission("invoice_applications.manage");
   async function review(status: "issued" | "rejected") {
@@ -1146,7 +1147,10 @@ function ApplicationDetailContent({
     setBusy(true); setReviewError("");
     try {
       const form = new FormData(); form.append("file", file);
-      await upload(`/admin/invoice-applications/${id}/document`, form);
+      const existing = data.documents?.find((doc) => (doc.adjustment_id ?? 0) === Number(documentTarget));
+      if (existing) form.append("expected_sha256", existing.sha256);
+      const target = documentTarget === "0" ? "document" : `adjustments/${documentTarget}/document`;
+      await upload(`/admin/invoice-applications/${id}/${target}`, form);
       refresh();
     } catch (e) { setReviewError((e as Error).message); } finally { setBusy(false); }
   }
@@ -1248,12 +1252,13 @@ function ApplicationDetailContent({
                   <Button variant="outline" size="sm" asChild><a href={file.download_url}><FileCheck />下载</a></Button>
                 </div>
               )) : <p className="text-sm text-muted-foreground">暂无电子发票文件</p>}
+              {admin && allowed && <div className="space-y-2"><Label>文件对应记录</Label><Select value={documentTarget} disabled={busy} onValueChange={setDocumentTarget}><SelectTrigger aria-label="文件对应记录"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">原发票</SelectItem>{data.adjustments?.map((item)=><SelectItem key={item.id} value={String(item.id)}>{item.action === "void" ? "作废记录" : "红字发票"} · {item.document_number || item.id}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">上传至所选记录；已有文件会被替换。</p></div>}
               {admin && allowed && <label className="inline-flex"><Button asChild variant="outline" disabled={busy}><span><FileUp />上传文件</span></Button><input className="sr-only" type="file" accept=".pdf,.xml,application/pdf,application/xml" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadDocument(file); e.currentTarget.value = ""; }} /></label>}
             </section>
           )}
           {admin && allowed && data.status === "issued" && (
             <section className="border-t pt-4 space-y-3">
-              <h2 className="font-semibold">作废或红冲</h2>
+              <h2 className="font-semibold">作废或红冲</h2><p className="text-sm text-muted-foreground">登记已在线下完成的税务处理结果；登记不会办理税务作废、红冲或退款。</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="destructive" disabled={busy} onClick={() => setAdjustmentAction("void")}><Ban />登记作废</Button>
                 <Button variant="outline" disabled={busy} onClick={() => setAdjustmentAction("red")}><FileCheck />登记红冲</Button>

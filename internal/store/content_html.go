@@ -6,7 +6,10 @@ import (
 	stdhtml "html"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	nethtml "golang.org/x/net/html"
 )
@@ -16,6 +19,9 @@ var contentAllowedTags = map[string]bool{"p": true, "br": true, "strong": true, 
 
 // SanitizeContentHTML drops executable markup and restricts links/images to safe URLs.
 func SanitizeContentHTML(input string) (string, error) {
+	if len(input) > 120000 || !utf8.ValidString(input) {
+		return "", fmt.Errorf("invalid or oversized html")
+	}
 	if strings.TrimSpace(input) == "" {
 		return "", nil
 	}
@@ -34,6 +40,9 @@ func SanitizeContentHTML(input string) (string, error) {
 			for c := n.FirstChild; c != nil; c = c.NextSibling {
 				render(c)
 			}
+			return
+		}
+		if n.Data == "script" || n.Data == "style" || n.Data == "iframe" || n.Data == "object" || n.Data == "template" {
 			return
 		}
 		if !contentAllowedTags[n.Data] {
@@ -57,7 +66,7 @@ func SanitizeContentHTML(input string) (string, error) {
 					fmt.Fprintf(&out, ` href="%s" rel="nofollow noopener"`, stdhtml.EscapeString(value))
 				}
 			case "src":
-				if n.Data == "img" && contentImageURL.MatchString(value) {
+				if n.Data == "img" && validContentImageURL(value) {
 					fmt.Fprintf(&out, ` src="%s"`, stdhtml.EscapeString(value))
 				}
 			}
@@ -80,13 +89,38 @@ func SanitizeContentHTML(input string) (string, error) {
 	return result, nil
 }
 
+func validContentImageURL(value string) bool {
+	if !contentImageURL.MatchString(value) {
+		return false
+	}
+	id, err := strconv.ParseInt(strings.TrimPrefix(value, "/api/v1/content-images/"), 10, 64)
+	return err == nil && id > 0
+}
+
 func safeContentLink(value string) bool {
+	if !utf8.ValidString(value) || value == "" || strings.Contains(value, "\\") {
+		return false
+	}
+	for _, r := range value {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return false
+		}
+	}
 	u, err := url.Parse(value)
 	if err != nil || u.User != nil {
 		return false
 	}
-	if u.IsAbs() {
-		return u.Scheme == "https" || u.Scheme == "http"
+	decoded, err := url.PathUnescape(u.EscapedPath())
+	if err != nil || strings.Contains(decoded, "\\") {
+		return false
 	}
-	return strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//")
+	for _, r := range decoded {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	if u.IsAbs() {
+		return (u.Scheme == "https" || u.Scheme == "http") && u.Hostname() != ""
+	}
+	return u.Host == "" && strings.HasPrefix(value, "/") && strings.HasPrefix(decoded, "/") && !strings.HasPrefix(decoded, "//")
 }

@@ -36,7 +36,7 @@ FROM orders o JOIN users u ON u.id=o.user_id JOIN invoices i ON i.order_id=o.id 
 		s.fail(w, r, err)
 		return
 	}
-	itemsRows, err := tx.Query(r.Context(), `SELECT id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit
+	itemsRows, err := tx.Query(r.Context(), `SELECT id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,`+maskedPurchaseFields+` AS purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit
 FROM order_items WHERE order_id=$1 ORDER BY id`, id)
 	if err != nil {
 		s.fail(w, r, err)

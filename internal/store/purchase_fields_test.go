@@ -63,16 +63,24 @@ func TestPurchaseFieldDefinitionAndUnicodeLimits(t *testing.T) {
 
 func TestPurchaseFieldEncryptionRoundTrip(t *testing.T) {
 	key := []byte("01234567890123456789012345678901")
-	sealed, err := SealPurchaseValue(key, "sensitive-value")
+	sealed, err := SealPurchaseValue(key, 1, 2, "secret", "sensitive-value")
 	if err != nil || sealed == "sensitive-value" || len(sealed) < 16 {
 		t.Fatalf("seal failed: %v", err)
 	}
-	plain, err := unsealPurchaseValue(key, sealed)
+	plain, err := unsealPurchaseValue(key, 1, 2, "secret", sealed)
 	if err != nil || plain != "sensitive-value" {
 		t.Fatalf("unseal failed: %q %v", plain, err)
 	}
-	if _, err = SealPurchaseValue(nil, "x"); err == nil {
+	if _, err = SealPurchaseValue(nil, 1, 2, "secret", "x"); err == nil {
 		t.Fatal("missing key accepted")
+	}
+	for _, changed := range []struct {
+		owner, product int64
+		field          string
+	}{{3, 2, "secret"}, {1, 3, "secret"}, {1, 2, "other"}} {
+		if _, err = unsealPurchaseValue(key, changed.owner, changed.product, changed.field, sealed); err == nil {
+			t.Fatal("ciphertext accepted in another context")
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -78,7 +79,7 @@ func (s *Server) cart(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		canonicalFields, fieldSnapshot, fieldErr := store.ValidatePurchaseFieldsWithKey(r.Context(), tx, item["product_id"].(int64), fieldValues, s.db.PurchaseFieldEncryptionKey)
+		canonicalFields, fieldSnapshot, fieldErr := store.ValidateStoredPurchaseFields(r.Context(), tx, identityFrom(r).ID, item["product_id"].(int64), fieldValues, s.db.PurchaseFieldEncryptionKey)
 		if fieldErr != nil {
 			if _, ok := fieldErr.(*store.Conflict); !ok {
 				s.fail(w, r, fieldErr)
@@ -217,25 +218,27 @@ func (s *Server) mutateCart(w http.ResponseWriter, r *http.Request, action strin
 				return
 			}
 			preserveOptions := input.OptionIDs == nil
+			var existingFields map[string]string
+			if err = json.Unmarshal(currentFieldJSON, &existingFields); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			existingPlain, existingSnapshot, existingErr := store.ValidateStoredPurchaseFields(r.Context(), tx, identityFrom(r).ID, input.ProductID, existingFields, s.db.PurchaseFieldEncryptionKey)
 			if input.PurchaseFields == nil {
-				if err = json.Unmarshal(currentFieldJSON, &input.PurchaseFields); err != nil {
-					s.fail(w, r, err)
+				if existingErr != nil {
+					s.fail(w, r, existingErr)
 					return
 				}
+				input.PurchaseFields = existingPlain
 			} else {
-				var existingFields map[string]string
-				if err = json.Unmarshal(currentFieldJSON, &existingFields); err != nil {
-					s.fail(w, r, err)
-					return
-				}
-				for key, value := range input.PurchaseFields {
-					if value == "********" {
-						if sealed, ok := existingFields[key]; ok {
-							input.PurchaseFields[key] = sealed
-						}
+				// A mask preserves only an encrypted value from this exact owned cart item.
+				for _, field := range existingSnapshot {
+					if field.Encrypted && input.PurchaseFields[field.Key] == "********" && existingErr == nil {
+						input.PurchaseFields[field.Key] = existingPlain[field.Key]
 					}
 				}
 			}
+
 			if input.BillingCycle == "" {
 				input.BillingCycle = currentCycle
 			}
@@ -290,9 +293,15 @@ func (s *Server) mutateCart(w http.ResponseWriter, r *http.Request, action strin
 			s.fail(w, r, err)
 			return
 		}
+		identityFields := make(map[string]string, len(fieldValues))
+		sensitive := false
+		for key, value := range fieldValues {
+			identityFields[key] = value
+		}
 		for _, field := range fieldSnapshots {
 			if field.Encrypted {
-				sealed, sealErr := store.SealPurchaseValue(s.db.PurchaseFieldEncryptionKey, field.Value)
+				sensitive = true
+				sealed, sealErr := store.SealPurchaseValue(s.db.PurchaseFieldEncryptionKey, identityFrom(r).ID, input.ProductID, field.Key, field.Value)
 				if sealErr != nil {
 					s.fail(w, r, sealErr)
 					return
@@ -319,9 +328,15 @@ func (s *Server) mutateCart(w http.ResponseWriter, r *http.Request, action strin
 			IDs        []int64           `json:"ids"`
 			Quantities map[int64]int64   `json:"quantities"`
 			Fields     map[string]string `json:"fields,omitempty"`
-		}{selection.IDs, selection.Quantities, fieldValues})
+		}{selection.IDs, selection.Quantities, identityFields})
 		optionSum := sha256.Sum256(optionKeyInput)
 		optionKey := hex.EncodeToString(optionSum[:])
+		if sensitive {
+			mac := hmac.New(sha256.New, s.db.PurchaseFieldEncryptionKey)
+			fmt.Fprintf(mac, "purchase-variant:%d:%d:", identityFrom(r).ID, input.ProductID)
+			mac.Write(optionKeyInput)
+			optionKey = hex.EncodeToString(mac.Sum(nil))
+		}
 		if action == "add" {
 			_, err = tx.Exec(r.Context(), "INSERT INTO cart_items(cart_id,product_id,billing_cycle,option_ids,option_quantities,option_key,quantity,product_revision,purchase_fields) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(cart_id,product_id,billing_cycle,option_key) DO UPDATE SET option_ids=EXCLUDED.option_ids,option_quantities=EXCLUDED.option_quantities,purchase_fields=EXCLUDED.purchase_fields,quantity=EXCLUDED.quantity,product_revision=EXCLUDED.product_revision", cartID, input.ProductID, input.BillingCycle, optionJSON, quantityJSON, optionKey, input.Quantity, revision, fieldJSON)
 		} else {
