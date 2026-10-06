@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,10 +15,12 @@ func TestNativeSecurityBrowserFixture(t *testing.T) {
 	if os.Getenv("ZJMFGO_BROWSER_READY_FILE") == "" {
 		t.Skip("opt-in browser fixture")
 	}
+	var fixture *store.Store
 	adminBrowserFixture(t, "security-super", func(db *store.Store, h http.Handler) {
+		fixture = db
 		_, admin := user(t, db, h, "security-editor", "super_admin")
 		reader, _ := user(t, db, h, "security-reader", "admin")
-		contentRole(t, db, reader, "products.view", "services.view")
+		contentRole(t, db, reader, "products.view", "services.view", "settings.view")
 		customer, cookie := user(t, db, h, "security-customer", "customer")
 		user(t, db, h, "security-other", "customer")
 		in := productInput("security-cloud", nil)
@@ -39,8 +42,20 @@ VALUES($1,'service.auto_renew.updated','service',$2,jsonb_build_object('password
 			}
 		}
 		if _, err := db.Pool.Exec(t.Context(), `INSERT INTO provision_jobs(service_id,action,status,idempotency_key,attempts,last_error,result,request_payload)
-VALUES($1,'create','waiting_verification','security-browser-job',2,'fixture-secret-never-public','{"password":"fixture-secret-never-public"}','{"url":"https://private-vendor.invalid"}')`, sid); err != nil {
+VALUES($1,'create','waiting_verification','security-browser-job',2,'等待核验','{"password":"fixture-secret-never-public"}','{}')`, sid); err != nil {
+			t.Fatal(err)
+		}
+		manifest, _ := json.Marshal(map[string]int64{"product_id": pid, "service_id": sid})
+		if err := os.WriteFile(os.Getenv("ZJMFGO_BROWSER_READY_FILE")+".fixture.json", manifest, 0600); err != nil {
 			t.Fatal(err)
 		}
 	})
+	var orders, rules, consumed, captchaLogins int
+	var total int64
+	if err := fixture.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT sum(total_cents) FROM orders),(SELECT count(*) FROM native_configuration_rules WHERE enabled),(SELECT count(*) FROM auth_captcha_challenges WHERE consumed_at IS NOT NULL)`).Scan(&orders, &total, &rules, &consumed); err != nil || orders != 2 || total != 4483 || rules != 1 || consumed < 2 {
+		t.Fatalf("acceptance incomplete orders=%d total=%d rules=%d captcha-consumed=%d err=%v", orders, total, rules, consumed, err)
+	}
+	if err := fixture.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_events WHERE action='auth.login_succeeded' AND created_at > (SELECT min(consumed_at) FROM auth_captcha_challenges)`).Scan(&captchaLogins); err != nil || captchaLogins < 1 {
+		t.Fatalf("no successful login after captcha consumption: %d, error: %v", captchaLogins, err)
+	}
 }
