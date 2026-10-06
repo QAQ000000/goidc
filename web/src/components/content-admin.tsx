@@ -1,0 +1,98 @@
+"use client";
+import { useState } from "react";
+import Link from "next/link";
+import { Plus, Save, RefreshCw, Trash2, ArrowUpRight } from "lucide-react";
+import { api, date, type AdminContentArticle, type ContentCategory } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { Failure, Loading } from "./common";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Checkbox } from "./ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+
+const kindNames = { news: "新闻", knowledge: "知识库" };
+const statusNames = { draft: "草稿", published: "发布", archived: "归档" };
+const accessNames = { public: "公开", login: "登录后可见", active_service: "有效服务客户可见" };
+type Kind = "news" | "knowledge";
+type PageData = { items: AdminContentArticle[]; total: number };
+const selectStyle = "h-9 w-full min-w-0 rounded-md border border-input bg-white px-3 text-sm";
+const emptyArticle = (kind: Kind): AdminContentArticle => ({ id: 0, content_type: kind, category_id: null, category_name: null, title: "", slug: "", excerpt: "", body: "", status: "draft", access_level: "public", published_at: null, version: 0, author_id: null, views: 0, created_at: "", updated_at: "", scheduled: false });
+const emptyCategory = (kind: Kind): ContentCategory => ({ id: 0, content_type: kind, name: "", slug: "", description: "", sort_order: 0, active: true, version: 0, article_count: 0 });
+
+export function ContentAdminView() {
+  return <Workspace title="新闻与知识库" admin><ContentManager /></Workspace>;
+}
+function ContentManager() {
+  const [kind, setKind] = useState<Kind>("news");
+  const [mode, setMode] = useState("articles");
+  const [status, setStatus] = useState("");
+  const [category, setCategory] = useState("");
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [article, setArticle] = useState<AdminContentArticle | null>(null);
+  const [categoryEdit, setCategoryEdit] = useState<ContentCategory | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const items = useResource<PageData>(`/admin/content?content_type=${kind}&status=${status}&category_id=${category}&q=${encodeURIComponent(query)}&limit=20&offset=${offset}`, false);
+  const categories = useResource<ContentCategory[]>(`/admin/content-categories?content_type=${kind}`, false);
+  const manage = useAdminPermission("content.manage");
+  async function openArticle(id: number) {
+    setBusy(true); setError("");
+    try { setArticle(await api<AdminContentArticle>(`/admin/content/${id}`)); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  function refresh() { items.refresh(); categories.refresh(); }
+  function changedKind(value: Kind) { setKind(value); setOffset(0); setCategory(""); }
+  return <><div className="flex flex-wrap justify-between items-end gap-4 mb-8"><div><h1 className="page-title">新闻与知识库</h1><p className="text-sm text-muted-foreground mt-2">管理草稿、发布内容和分类</p></div><div className="flex gap-2"><Button variant="outline" size="icon" aria-label="重新加载内容" onClick={refresh}><RefreshCw /></Button><PermissionGate permission="content.manage"><Button onClick={() => mode === "articles" ? setArticle(emptyArticle(kind)) : setCategoryEdit(emptyCategory(kind))}><Plus />{mode === "articles" ? "新增文章" : "新增分类"}</Button></PermissionGate></div></div>
+    <div className="flex flex-wrap gap-2 border-b pb-4 mb-5">{(["news", "knowledge"] as Kind[]).map(k => <Button key={k} variant={kind === k ? "default" : "outline"} onClick={() => changedKind(k)}>{kindNames[k]}</Button>)}<div className="flex gap-2 sm:ml-auto"><Button variant={mode === "articles" ? "secondary" : "ghost"} onClick={() => setMode("articles")}>文章</Button><Button variant={mode === "categories" ? "secondary" : "ghost"} onClick={() => setMode("categories")}>分类</Button></div></div>
+    {error && <p role="alert" className="text-sm text-destructive mb-4">{error}</p>}
+    {mode === "articles" && <form className="grid sm:grid-cols-[1fr_1fr_2fr_auto] gap-3 mb-6" onSubmit={e => { e.preventDefault(); setQuery(search); setOffset(0); }}><select aria-label="文章状态" className={selectStyle} value={status} onChange={e => { setStatus(e.target.value); setOffset(0); }}><option value="">全部状态</option>{Object.entries(statusNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select aria-label="文章分类" className={selectStyle} value={category} onChange={e => { setCategory(e.target.value); setOffset(0); }}><option value="">全部分类</option><option value="0">未分类</option>{categories.data?.map(c => <option key={c.id} value={c.id}>{c.name}{!c.active && "（隐藏）"}</option>)}</select><Input aria-label="搜索文章" placeholder="搜索标题或标识" value={search} onChange={e => setSearch(e.target.value)} /><Button variant="outline">搜索</Button></form>}
+    {categories.error || (mode === "articles" && items.error) ? <Failure error={categories.error ?? items.error!} retry={refresh} /> : !categories.data || (mode === "articles" && !items.data) ? <Loading /> : mode === "articles" ? <><div className="divide-y border-y">{items.data!.items.map(item => <article key={item.id} className="py-5 flex flex-wrap justify-between gap-3"><div className="min-w-0 flex-1"><p className="font-medium break-words">{item.title}</p><p className="text-xs text-muted-foreground mt-2 break-words">{item.category_name ?? "未分类"} · {statusNames[item.status]}{item.scheduled ? "（定时）" : ""} · {accessNames[item.access_level]} · 版本 {item.version}</p><p className="text-xs text-muted-foreground mt-1">{item.published_at ? date(item.published_at) : "尚未发布"} · {item.views} 次阅读</p></div><Button variant="outline" disabled={busy} aria-label={`查看 ${item.title}`} onClick={() => void openArticle(item.id)}>{manage ? "编辑" : "查看"}</Button></article>)}{items.data!.items.length === 0 && <p className="py-16 text-center text-muted-foreground">暂无文章</p>}</div><div className="flex justify-between items-center gap-3 mt-5 text-sm"><span>{items.data!.total} 篇文章</span><div className="flex gap-2"><Button variant="outline" disabled={offset === 0} onClick={() => setOffset(v => Math.max(0, v - 20))}>上一页</Button><Button variant="outline" disabled={offset + 20 >= items.data!.total} onClick={() => setOffset(v => v + 20)}>下一页</Button></div></div></> : <div className="divide-y border-y">{categories.data.map(c => <article key={c.id} className="py-5 flex flex-wrap justify-between gap-3"><div className="min-w-0 flex-1"><p className="font-medium break-words">{c.name}</p><p className="text-xs text-muted-foreground mt-2">{c.active ? "显示" : "隐藏"} · {c.article_count} 篇文章 · 排序 {c.sort_order}</p><p className="text-sm text-muted-foreground mt-2 whitespace-pre-wrap break-words">{c.description}</p></div><Button variant="outline" aria-label={`查看分类 ${c.name}`} onClick={() => setCategoryEdit(c)}>{manage ? "编辑" : "查看"}</Button></article>)}{categories.data.length === 0 && <p className="py-16 text-center text-muted-foreground">暂无分类</p>}</div>}
+    <Dialog open={!!article} onOpenChange={open => { if (!open) setArticle(null); }}><DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{article?.id ? (manage ? "编辑文章" : "查看文章") : "新增文章"}</DialogTitle><DialogDescription>正文按纯文本显示，发布后按可见范围供客户阅读。</DialogDescription></DialogHeader>{article && <ArticleForm key={`${article.id}:${article.version}`} initial={article} categories={categories.data ?? []} manage={manage} onClose={() => setArticle(null)} onSaved={refresh} onReload={() => void openArticle(article.id)} />}</DialogContent></Dialog>
+    <Dialog open={!!categoryEdit} onOpenChange={open => { if (!open) setCategoryEdit(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{categoryEdit?.id ? (manage ? "编辑分类" : "查看分类") : "新增分类"}</DialogTitle><DialogDescription>隐藏分类会隐藏其文章；关联文章需移走后才能删除分类。</DialogDescription></DialogHeader>{categoryEdit && <CategoryForm key={`${categoryEdit.id}:${categoryEdit.version}`} initial={categoryEdit} manage={manage} onClose={() => setCategoryEdit(null)} onSaved={refresh} onReload={async () => { const list = await api<ContentCategory[]>(`/admin/content-categories?content_type=${kind}`); setCategoryEdit(list.find(c => c.id === categoryEdit.id) ?? null); categories.refresh(); }} />}</DialogContent></Dialog>
+  </>;
+}
+function ArticleForm({ initial, categories, manage, onClose, onSaved, onReload }: { initial: AdminContentArticle; categories: ContentCategory[]; manage: boolean; onClose: () => void; onSaved: () => void; onReload: () => void }) {
+  const [form, setForm] = useState(initial);
+  const [published, setPublished] = useState(initial.published_at ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(e: React.FormEvent) {
+    e.preventDefault(); if (busy || !manage) return;
+    setBusy(true); setError("");
+    try {
+      if (published && (!/(Z|[+-]\d{2}:\d{2})$/.test(published) || !Number.isFinite(Date.parse(published)))) throw new Error("请填写有效的日期时间及其时区，例如 2026-10-06T12:00:00+08:00");
+      await api(`/admin/content${form.id ? `/${form.id}` : ""}`, { method: form.id ? "PUT" : "POST", body: JSON.stringify({ content_type: form.content_type, category_id: form.category_id, title: form.title, slug: form.slug, excerpt: form.excerpt, body: form.body, status: form.status, access_level: form.access_level, published_at: published ? new Date(published).toISOString() : null, expected_version: form.version }) });
+      onSaved(); onClose();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!manage || busy || !window.confirm("永久删除这篇文章？")) return;
+    setBusy(true); setError("");
+    try { await api(`/admin/content/${form.id}`, { method: "DELETE", body: JSON.stringify({ expected_version: form.version }) }); onSaved(); onClose(); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  return <form onSubmit={save} className="space-y-5"><fieldset disabled={busy || !manage} className="space-y-5"><div className="grid sm:grid-cols-2 gap-4"><label className="grid gap-2 text-sm">标题<Input aria-label="文章标题" value={form.title} required maxLength={240} onChange={e => setForm({ ...form, title: e.target.value })} /></label><label className="grid gap-2 text-sm">标识<Input aria-label="文章标识" value={form.slug} required maxLength={120} pattern={"[a-z][a-z0-9\\-]*"} onChange={e => setForm({ ...form, slug: e.target.value })} /></label><label className="grid gap-2 text-sm">分类<select aria-label="编辑文章分类" className={selectStyle} value={form.category_id ?? ""} onChange={e => setForm({ ...form, category_id: e.target.value ? Number(e.target.value) : null })}><option value="">未分类</option>{categories.filter(c => c.content_type === form.content_type).map(c => <option key={c.id} value={c.id}>{c.name}{!c.active && "（隐藏）"}</option>)}</select></label><label className="grid gap-2 text-sm">状态<select aria-label="编辑文章状态" className={selectStyle} value={form.status} onChange={e => setForm({ ...form, status: e.target.value as AdminContentArticle["status"] })}>{Object.entries(statusNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>{form.content_type === "knowledge" && <label className="grid gap-2 text-sm">可见范围<select aria-label="文章可见范围" className={selectStyle} value={form.access_level} onChange={e => setForm({ ...form, access_level: e.target.value as AdminContentArticle["access_level"] })}>{Object.entries(accessNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>}<label className="grid gap-2 text-sm">发布时间<Input aria-label="发布时间" placeholder="留空使用默认时间；例如 2026-10-06T12:00:00+08:00" value={published} onChange={e => setPublished(e.target.value)} /><span className="text-xs text-muted-foreground">填写带时区的日期时间。留空保留已发布文章的时间；首次或重新发布时立即发布，未来时间会定时发布。</span></label></div><label className="grid gap-2 text-sm">摘要<Textarea aria-label="文章摘要" value={form.excerpt} maxLength={1000} rows={2} onChange={e => setForm({ ...form, excerpt: e.target.value })} /></label><label className="grid gap-2 text-sm">正文<Textarea aria-label="文章正文" required value={form.body} maxLength={20000} rows={10} onChange={e => setForm({ ...form, body: e.target.value })} /></label></fieldset>{error && <p role="alert" className="text-sm text-destructive break-words">{error}{form.id > 0 && <Button type="button" variant="link" onClick={onReload}>重新加载</Button>}</p>}<div className="flex flex-wrap justify-between gap-3 border-t pt-4"><div className="flex gap-2">{form.id > 0 && manage && <Button type="button" variant="outline" disabled={busy} onClick={() => void remove()}><Trash2 />删除文章</Button>}{form.id > 0 && <Button variant="ghost" type="button" asChild><Link href={`/${form.content_type === "news" ? "news" : "knowledgebase"}/${form.id}`} target="_blank"><ArrowUpRight />客户页面</Link></Button>}</div>{manage && <Button disabled={busy}><Save />{busy ? "保存中" : "保存文章"}</Button>}</div></form>;
+}
+function CategoryForm({ initial, manage, onClose, onSaved, onReload }: { initial: ContentCategory; manage: boolean; onClose: () => void; onSaved: () => void; onReload: () => Promise<void> }) {
+  const [form, setForm] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(e: React.FormEvent) {
+    e.preventDefault(); if (busy || !manage) return; setBusy(true); setError("");
+    try { await api(`/admin/content-categories${form.id ? `/${form.id}` : ""}`, { method: form.id ? "PUT" : "POST", body: JSON.stringify({ content_type: form.content_type, name: form.name, slug: form.slug, description: form.description, sort_order: form.sort_order, active: form.active, expected_version: form.version }) }); onSaved(); onClose(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function remove() {
+    if (!manage || busy || !window.confirm("删除这个分类？")) return; setBusy(true); setError("");
+    try { await api(`/admin/content-categories/${form.id}`, { method: "DELETE", body: JSON.stringify({ expected_version: form.version }) }); onSaved(); onClose(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  return <form onSubmit={save} className="space-y-5"><fieldset disabled={busy || !manage} className="space-y-4"><label className="grid gap-2 text-sm">分类名称<Input aria-label="分类名称" required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label><label className="grid gap-2 text-sm">分类标识<Input aria-label="分类标识" required pattern={"[a-z][a-z0-9\\-]*"} maxLength={120} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} /></label><label className="grid gap-2 text-sm">分类说明<Textarea aria-label="分类说明" maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></label><label className="grid gap-2 text-sm">排序<Input aria-label="分类排序" type="number" min={0} max={1000000} value={form.sort_order} onChange={e => setForm({ ...form, sort_order: Number(e.target.value) })} /></label><label className="flex gap-3 items-center text-sm"><Checkbox checked={form.active} onCheckedChange={checked => setForm({ ...form, active: checked === true })} />显示分类</label></fieldset>{error && <p role="alert" className="text-sm text-destructive break-words">{error}{form.id > 0 && <Button type="button" variant="link" onClick={() => void onReload().catch(e => setError(e.message))}>重新加载</Button>}</p>}<div className="flex justify-between gap-3 border-t pt-4">{form.id > 0 && manage ? <Button type="button" variant="outline" disabled={busy} onClick={() => void remove()}><Trash2 />删除分类</Button> : <span />}{manage && <Button disabled={busy}><Save />{busy ? "保存中" : "保存分类"}</Button>}</div></form>;
+}

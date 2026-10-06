@@ -1,0 +1,35 @@
+import { NextRequest, NextResponse } from "next/server";
+import type { SiteProfile, User } from "./lib/api";
+
+export async function proxy(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+  if (path === "/admin" || path.startsWith("/admin/") || ["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
+  const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
+  let site: SiteProfile | null = null;
+  try {
+    const response = await fetch(`${origin}/api/v1/site`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    if (response.ok) site = (await response.json()).data as SiteProfile;
+  } catch {}
+  if (site && !site.maintenance_enabled) return NextResponse.next();
+  const cookie = request.cookies.get("zjmfgo_session");
+  if (cookie) {
+    try {
+      const response = await fetch(`${origin}/api/v1/me`, { headers: { Cookie: `zjmfgo_session=${cookie.value}` }, cache: "no-store", signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        const user = (await response.json()).data as User;
+        if (user.role === "admin" || user.role === "super_admin") return NextResponse.next();
+      }
+    } catch {}
+  }
+  if (site?.maintenance_url) return NextResponse.redirect(site.maintenance_url, { status: 307, headers: { "Cache-Control": "no-store" } });
+  const headers = { "Cache-Control": "no-store", "Retry-After": "60", "Content-Type": "text/html; charset=utf-8" };
+  try {
+    // App page rendering resets a rewrite's status to 200. Return the rendered maintenance document as a 503 response.
+    const webOrigin = process.env.WEB_INTERNAL_URL ?? "http://127.0.0.1:3088";
+    const response = await fetch(`${webOrigin}/maintenance`, { cache: "no-store", signal: AbortSignal.timeout(8000) });
+    if (response.ok) return new NextResponse(response.body, { status: 503, headers });
+  } catch {}
+  return new NextResponse("站点暂时不可用，请稍后再试。", { status: 503, headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" } });
+}
+
+export const config = { matcher: ["/((?!api/|_next/|assets/|favicon.ico).*)"] };

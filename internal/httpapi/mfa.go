@@ -1,0 +1,374 @@
+package httpapi
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha1"
+	"crypto/subtle"
+	"encoding/base32"
+	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const mfaStep = 30 * time.Second
+
+func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identity) error {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
+	token := hex.EncodeToString(raw)
+	if _, err := s.db.Pool.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), id.ID); err != nil {
+		return err
+	}
+	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	return nil
+}
+
+func (s *Server) createMFAChallenge(ctx context.Context, userID int64) (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	challenge := hex.EncodeToString(raw)
+	_, err := s.db.Pool.Exec(ctx, "DELETE FROM mfa_challenges WHERE user_id=$1 OR expires_at<=now()", userID)
+	if err != nil {
+		return "", err
+	}
+	_, err = s.db.Pool.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '5 minutes')", tokenHash(challenge), userID)
+	return challenge, err
+}
+
+func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
+	if !s.authLimit(w, r, "login-mfa", 30) {
+		return
+	}
+	var input struct {
+		Challenge string `json:"challenge"`
+		Code      string `json:"code"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	input.Challenge = strings.TrimSpace(input.Challenge)
+	input.Code = strings.TrimSpace(input.Code)
+	if len(input.Challenge) != 64 || (!validMFACode(input.Code) && !validRecoveryCode(input.Code)) {
+		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var userID int64
+	var secretEnc []byte
+	var username, email, name, role string
+	var attempts int
+	err = tx.QueryRow(r.Context(), `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc
+		FROM mfa_challenges c JOIN users u ON u.id=c.user_id
+		WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true
+		FOR UPDATE`, tokenHash(input.Challenge)).Scan(&userID, &attempts, &username, &email, &name, &role, &secretEnc)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if attempts >= 5 {
+		_, _ = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge))
+		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码尝试次数过多，请重新登录")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "UPDATE mfa_challenges SET attempts=attempts+1 WHERE token_hash=$1", tokenHash(input.Challenge)); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret, err := s.decryptMFASecret(secretEnc)
+	validCode := err == nil && verifyTOTP(secret, input.Code, time.Now())
+	if !validCode && validRecoveryCode(input.Code) {
+		var usedHash string
+		recoveryErr := tx.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", userID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash)
+		validCode = recoveryErr == nil
+	}
+	if !validCode {
+		if attempts+1 >= 5 {
+			_, _ = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge))
+		}
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": r.RemoteAddr})
+		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码错误")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge)); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = s.completeLogin(w, r, identity{ID: userID, Username: username, Email: email, Name: name, Role: role}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, identity{ID: userID, Username: username, Email: email, Name: name, Role: role})
+}
+
+func (s *Server) mfaStatus(w http.ResponseWriter, r *http.Request) {
+	var enabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", identityFrom(r).ID).Scan(&enabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]bool{"enabled": enabled})
+}
+
+func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
+	if len(s.cfg.MFAEncryptionKey) != 32 {
+		writeError(w, http.StatusServiceUnavailable, "mfa_unavailable", "服务器未配置 MFA 加密密钥")
+		return
+	}
+	user := identityFrom(r)
+	var enabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", user.ID).Scan(&enabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if enabled {
+		writeError(w, http.StatusConflict, "mfa_already_enabled", "MFA 已启用")
+		return
+	}
+	raw := make([]byte, 20)
+	if _, err := rand.Read(raw); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(raw)
+	enc, err := s.encryptMFASecret(secret)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=$2,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID, enc); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "DELETE FROM mfa_recovery_codes WHERE user_id=$1", user.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	recoveryCodes := make([]string, 0, 8)
+	for i := 0; i < 8; i++ {
+		codeBytes := make([]byte, 5)
+		if _, err = rand.Read(codeBytes); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		code := strings.ToUpper(hex.EncodeToString(codeBytes))
+		if _, err = tx.Exec(r.Context(), "INSERT INTO mfa_recovery_codes(code_hash,user_id) VALUES($1,$2)", tokenHash(code), user.ID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		recoveryCodes = append(recoveryCodes, code)
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	issuer := url.QueryEscape("ZJMF")
+	account := url.QueryEscape(user.Email)
+	otpauth := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", issuer, account, secret, issuer)
+	s.authAudit(r.Context(), user.ID, "auth.mfa_enrollment_started", map[string]any{})
+	write(w, http.StatusOK, map[string]any{"secret": secret, "otpauth_uri": otpauth, "recovery_codes": recoveryCodes})
+}
+
+func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Code string `json:"code"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if !validMFACode(strings.TrimSpace(input.Code)) {
+		writeError(w, http.StatusBadRequest, "invalid_mfa", "请输入 6 位验证码")
+		return
+	}
+	user := identityFrom(r)
+	var enabled bool
+	var enc []byte
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc FROM users WHERE id=$1", user.ID).Scan(&enabled, &enc); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if enabled || len(enc) == 0 {
+		writeError(w, http.StatusConflict, "mfa_not_pending", "没有待确认的 MFA 设置")
+		return
+	}
+	secret, err := s.decryptMFASecret(enc)
+	if err != nil || !verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now()) {
+		writeError(w, http.StatusBadRequest, "invalid_mfa", "验证码错误")
+		return
+	}
+	if _, err = s.db.Pool.Exec(r.Context(), "UPDATE users SET mfa_enabled=true,mfa_confirmed_at=now(),updated_at=now() WHERE id=$1", user.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.authAudit(r.Context(), user.ID, "auth.mfa_enabled", map[string]any{})
+	write(w, http.StatusOK, map[string]bool{"enabled": true})
+}
+
+func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Password string `json:"password"`
+		Code     string `json:"code"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if (!validMFACode(strings.TrimSpace(input.Code)) && !validRecoveryCode(input.Code)) || len(input.Password) < 8 || len(input.Password) > 72 {
+		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码无效")
+		return
+	}
+	user := identityFrom(r)
+	var hash string
+	var enc []byte
+	var enabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT password_hash,mfa_enabled,mfa_secret_enc FROM users WHERE id=$1", user.ID).Scan(&hash, &enabled, &enc); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	secret, decryptErr := s.decryptMFASecret(enc)
+	validCode := decryptErr == nil && verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now())
+	passwordValid := bcrypt.CompareHashAndPassword([]byte(hash), []byte(input.Password)) == nil
+	if !enabled || !passwordValid {
+		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码错误")
+		return
+	}
+	if !validCode && validRecoveryCode(input.Code) {
+		var usedHash string
+		if err := s.db.Pool.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", user.ID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash); err == nil {
+			validCode = true
+		}
+	}
+	if !validCode {
+		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码错误")
+		return
+	}
+	if _, err := s.db.Pool.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=NULL,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
+		_, _ = s.db.Pool.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", user.ID, tokenHash(cookie.Value))
+	}
+	s.authAudit(r.Context(), user.ID, "auth.mfa_disabled", map[string]any{})
+	write(w, http.StatusOK, map[string]bool{"enabled": false})
+}
+
+func (s *Server) encryptMFASecret(secret string) ([]byte, error) {
+	block, err := aes.NewCipher(s.cfg.MFAEncryptionKey)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return gcm.Seal(nonce, nonce, []byte(secret), nil), nil
+}
+
+func (s *Server) decryptMFASecret(payload []byte) (string, error) {
+	block, err := aes.NewCipher(s.cfg.MFAEncryptionKey)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil || len(payload) < gcm.NonceSize() {
+		return "", errors.New("invalid MFA secret")
+	}
+	plain, err := gcm.Open(nil, payload[:gcm.NonceSize()], payload[gcm.NonceSize():], nil)
+	return string(plain), err
+}
+
+func validMFACode(code string) bool {
+	if len(code) != 6 {
+		return false
+	}
+	for _, c := range code {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func validRecoveryCode(code string) bool {
+	code = strings.TrimSpace(code)
+	if len(code) != 10 {
+		return false
+	}
+	for _, c := range code {
+		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') && !(c >= 'A' && c <= 'F') {
+			return false
+		}
+	}
+	return true
+}
+
+func verifyTOTP(secret, code string, now time.Time) bool {
+	if secret == "" || !validMFACode(code) {
+		return false
+	}
+	decoded, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
+	if err != nil {
+		return false
+	}
+	for offset := int64(-1); offset <= 1; offset++ {
+		counter := (now.Unix() / int64(mfaStep/time.Second)) + offset
+		if counter < 0 {
+			continue
+		}
+		mac := hmac.New(sha1.New, decoded)
+		var buf [8]byte
+		binary.BigEndian.PutUint64(buf[:], uint64(counter))
+		_, _ = mac.Write(buf[:])
+		sum := mac.Sum(nil)
+		idx := sum[len(sum)-1] & 0x0f
+		value := (uint32(sum[idx])&0x7f)<<24 | uint32(sum[idx+1])<<16 | uint32(sum[idx+2])<<8 | uint32(sum[idx+3])
+		candidate := fmt.Sprintf("%06d", value%1000000)
+		if subtle.ConstantTimeCompare([]byte(candidate), []byte(code)) == 1 {
+			return true
+		}
+	}
+	return false
+}

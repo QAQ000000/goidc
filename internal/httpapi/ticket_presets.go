@@ -1,0 +1,298 @@
+package httpapi
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/codex/zjmfgo/internal/store"
+)
+
+func (s *Server) ticketReplyPresets(w http.ResponseWriter, r *http.Request) {
+	s.list(w, r, `SELECT p.id,p.category_id,c.name AS category_name,c.active AS category_active,p.title,p.body,p.active,p.created_at,p.updated_at
+FROM ticket_reply_presets p JOIN ticket_reply_preset_categories c ON c.id=p.category_id ORDER BY c.sort_order,c.id,p.id`)
+}
+
+func (s *Server) ticketReplyPresetCategories(w http.ResponseWriter, r *http.Request) {
+	s.list(w, r, "SELECT id,name,sort_order,active,created_at,updated_at FROM ticket_reply_preset_categories ORDER BY sort_order,id")
+}
+
+func (s *Server) createTicketReplyPresetCategory(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Name      string `json:"name"`
+		SortOrder int    `json:"sort_order"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	if input.Name == "" || len(input.Name) > 120 || input.SortOrder < -100000 || input.SortOrder > 100000 {
+		writeError(w, http.StatusBadRequest, "invalid_preset_category", "预设回复分类无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var id int64
+	if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_preset_categories(name,sort_order) VALUES($1,$2) RETURNING id", input.Name, input.SortOrder).Scan(&id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.created", "ticket_reply_preset_category", id, input); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]any{"id": id, "name": input.Name, "sort_order": input.SortOrder, "active": true})
+}
+
+func (s *Server) updateTicketReplyPresetCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		Name      *string `json:"name"`
+		SortOrder *int    `json:"sort_order"`
+		Active    *bool   `json:"active"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if input.Name == nil && input.SortOrder == nil && input.Active == nil {
+		writeError(w, http.StatusBadRequest, "invalid_preset_category", "至少提供一个修改字段")
+		return
+	}
+	if input.Name != nil {
+		*input.Name = strings.TrimSpace(*input.Name)
+		if *input.Name == "" || len(*input.Name) > 120 {
+			writeError(w, http.StatusBadRequest, "invalid_preset_category", "预设回复分类无效")
+			return
+		}
+	}
+	if input.SortOrder != nil && (*input.SortOrder < -100000 || *input.SortOrder > 100000) {
+		writeError(w, http.StatusBadRequest, "invalid_preset_category", "排序值无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_preset_categories SET name=COALESCE($2,name),sort_order=COALESCE($3,sort_order),active=COALESCE($4,active),updated_at=now() WHERE id=$1", id, input.Name, input.SortOrder, input.Active); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var exists bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_preset_categories WHERE id=$1)", id).Scan(&exists); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.updated", "ticket_reply_preset_category", id, input); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"id": id, "updated": true})
+}
+
+func (s *Server) deleteTicketReplyPresetCategory(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var exists bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_preset_categories WHERE id=$1)", id).Scan(&exists); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_preset_categories WHERE id=$1", id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.deleted", "ticket_reply_preset_category", id, map[string]any{}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+}
+
+func validatePreset(categoryID int64, title, body string) bool {
+	return categoryID > 0 && strings.TrimSpace(title) != "" && len(title) <= 240 && strings.TrimSpace(body) != "" && len(body) <= 10000
+}
+
+func (s *Server) createTicketReplyPreset(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		CategoryID int64  `json:"category_id"`
+		Title      string `json:"title"`
+		Body       string `json:"body"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	input.Title, input.Body = strings.TrimSpace(input.Title), strings.TrimSpace(input.Body)
+	if !validatePreset(input.CategoryID, input.Title, input.Body) {
+		writeError(w, http.StatusBadRequest, "invalid_preset", "预设回复内容无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var categoryActive bool
+	if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", input.CategoryID).Scan(&categoryActive); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !categoryActive {
+		writeError(w, http.StatusConflict, "invalid_preset_category", "预设回复分类不可用")
+		return
+	}
+	var id int64
+	if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_presets(category_id,title,body) VALUES($1,$2,$3) RETURNING id", input.CategoryID, input.Title, input.Body).Scan(&id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.created", "ticket_reply_preset", id, input); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]any{"id": id, "category_id": input.CategoryID, "title": input.Title, "body": input.Body, "active": true})
+}
+
+func (s *Server) updateTicketReplyPreset(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var input struct {
+		CategoryID *int64  `json:"category_id"`
+		Title      *string `json:"title"`
+		Body       *string `json:"body"`
+		Active     *bool   `json:"active"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if input.Title != nil {
+		*input.Title = strings.TrimSpace(*input.Title)
+	}
+	if input.Body != nil {
+		*input.Body = strings.TrimSpace(*input.Body)
+	}
+	if input.CategoryID == nil && input.Title == nil && input.Body == nil && input.Active == nil {
+		writeError(w, http.StatusBadRequest, "invalid_preset", "至少提供一个修改字段")
+		return
+	}
+	if input.Title != nil && (*input.Title == "" || len(*input.Title) > 240) || input.Body != nil && (*input.Body == "" || len(*input.Body) > 10000) {
+		writeError(w, http.StatusBadRequest, "invalid_preset", "预设回复内容无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if input.CategoryID != nil {
+		var active bool
+		if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", *input.CategoryID).Scan(&active); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if !active {
+			writeError(w, http.StatusConflict, "invalid_preset_category", "预设回复分类不可用")
+			return
+		}
+	}
+	if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_presets SET category_id=COALESCE($2,category_id),title=COALESCE($3,title),body=COALESCE($4,body),active=COALESCE($5,active),updated_at=now() WHERE id=$1", id, input.CategoryID, input.Title, input.Body, input.Active); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var exists bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "not_found", "预设回复不存在")
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.updated", "ticket_reply_preset", id, input); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"id": id, "updated": true})
+}
+
+func (s *Server) deleteTicketReplyPreset(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var exists bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !exists {
+		writeError(w, http.StatusNotFound, "not_found", "预设回复不存在")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_presets WHERE id=$1", id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.deleted", "ticket_reply_preset", id, map[string]any{}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+}

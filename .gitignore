@@ -1,0 +1,10 @@
+.env
+bin/
+node_modules/
+.next/
+*.local
+web/tsconfig.tsbuildinfo
+output/
+.playwright-cli/
+*.pid
+*.log

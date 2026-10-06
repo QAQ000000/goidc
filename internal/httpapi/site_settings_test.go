@@ -1,0 +1,195 @@
+package httpapi
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/codex/zjmfgo/internal/store"
+)
+
+func siteInput(profile store.SiteProfile, version int64) map[string]any {
+	b, _ := json.Marshal(profile)
+	var input map[string]any
+	_ = json.Unmarshal(b, &input)
+	input["expected_version"] = version
+	return input
+}
+
+func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "site-root", "super_admin")
+	_, staff := user(t, db, h, "site-staff", "admin")
+	_, customer := user(t, db, h, "site-customer", "customer")
+	settings, err := db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.Version != 1 || settings.Name != "智简魔方" || !settings.RegistrationEnabled {
+		t.Fatal("site defaults")
+	}
+	path := "/api/v1/admin/site-settings"
+	expect(t, request(h, "GET", path, nil, "", ""), 401)
+	for _, cookie := range []string{staff, customer} {
+		expect(t, request(h, "GET", path, nil, cookie, ""), 403)
+		expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, 1), cookie, ""), 403)
+	}
+	key := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "site-key"}, root, "")
+	expect(t, key, 201)
+	secret := data(t, key)["secret"].(string)
+	expect(t, requestBearer(h, "GET", path, nil, secret), 403)
+	expect(t, requestBearer(h, "PUT", path, siteInput(settings.SiteProfile, 1), secret), 403)
+	missing := siteInput(settings.SiteProfile, 1)
+	delete(missing, "registration_enabled")
+	expect(t, request(h, "PUT", path, missing, root, ""), 400)
+	for _, tc := range []struct{ field, value string }{
+		{"site_name", ""}, {"support_email", "Name <test@example.test>"}, {"logo_url", "javascript:alert(1)"},
+		{"terms_url", "//evil.example.test"}, {"privacy_url", "http://example.test/privacy"},
+		{"support_url", "https://user:secret@example.test"}, {"logo_url", "/\\evil.test/logo.png"},
+		{"support_phone", "one\x00two"}, {"terms_url", "relative-path"},
+	} {
+		input := siteInput(settings.SiteProfile, 1)
+		input[tc.field] = tc.value
+		expect(t, request(h, "PUT", path, input, root, ""), 409)
+	}
+	profile := settings.SiteProfile
+	profile.Name = "云管理验收站"
+	profile.CompanyName = "Example Cloud"
+	profile.SupportEmail = "help@example.test"
+	profile.TermsURL = "/terms"
+	profile.PrivacyURL = "https://example.test/privacy"
+	profile.SupportURL = "/console/tickets"
+	profile.Description = "云管理\n服务"
+	profile.Address = "上海\n测试地址"
+	w := request(h, "PUT", path, siteInput(profile, 1), root, "")
+	expect(t, w, 200)
+	if data(t, w)["version"] != float64(2) {
+		t.Fatal("site version")
+	}
+	w = request(h, "GET", "/api/v1/site", nil, "", "")
+	expect(t, w, 200)
+	public := data(t, w)
+	if len(public) != 16 || public["site_name"] != profile.Name || public["description"] != "云管理 服务" || public["version"] != nil || public["updated_at"] != nil {
+		t.Fatal("public profile incorrect", w.Body.String())
+	}
+	var count int
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='site.settings_updated'").Scan(&count); err != nil || count != 1 {
+		t.Fatal("invalid save wrote audit", err)
+	}
+	expect(t, request(h, "PUT", path, siteInput(profile, 1), root, ""), 409)
+}
+
+func TestSiteSettingsConcurrentUpdateAndAuditRollback(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "site-race-root", "super_admin")
+	settings, err := db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	statuses := make(chan int, 2)
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			p := settings.SiteProfile
+			p.Name = fmt.Sprintf("Site %d", i)
+			statuses <- request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, 1), root, "").Code
+		}(i)
+	}
+	wg.Wait()
+	close(statuses)
+	counts := map[int]int{}
+	for status := range statuses {
+		counts[status]++
+	}
+	if counts[200] != 1 || counts[409] != 1 {
+		t.Fatal("settings race", counts)
+	}
+	settings, err = db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_site_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='site.settings_updated' THEN RAISE EXCEPTION 'injected site audit failure'; END IF; RETURN NEW; END $$;
+CREATE TRIGGER reject_site_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_site_audit();`); err != nil {
+		t.Fatal(err)
+	}
+	profile := settings.SiteProfile
+	profile.Name = "Must roll back"
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, ""), 500)
+	after, err := db.SiteSettings(t.Context())
+	if err != nil || after.Name != settings.Name || after.Version != 2 {
+		t.Fatal("audit failure left settings changed", err)
+	}
+}
+
+func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "site-register-root", "super_admin")
+	settings, err := db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := settings.SiteProfile
+	profile.RegistrationEnabled = false
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 1), root, ""), 200)
+	registration := map[string]any{"username": "site-new-customer", "email": "site-new@example.test", "display_name": "New customer", "password": "integration-password"}
+	w := request(h, "POST", "/api/v1/auth/register", registration, "", "")
+	expect(t, w, 403)
+	if errorData(t, w)["code"] != "registration_disabled" {
+		t.Fatal("wrong registration rejection")
+	}
+	profile.RegistrationEnabled = true
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 2), root, ""), 200)
+	expect(t, request(h, "POST", "/api/v1/auth/register", registration, "", ""), 201)
+	ctx, cancel := context.WithTimeout(t.Context(), 7*time.Second)
+	defer cancel()
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, "SELECT id FROM site_settings WHERE id=1 FOR UPDATE"); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan int, 1)
+	registration["username"] = "site-waiting-customer"
+	registration["email"] = "site-waiting@example.test"
+	go func() { result <- request(h, "POST", "/api/v1/auth/register", registration, "", "").Code }()
+	for {
+		var waiting bool
+		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT registration_enabled FROM site_settings WHERE id=1 FOR SHARE')").Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("registration never reached settings row lock")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if _, err = tx.Exec(ctx, "UPDATE site_settings SET registration_enabled=false,version=version+1 WHERE id=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case status := <-result:
+		if status != 403 {
+			t.Fatalf("waiting registration status=%d", status)
+		}
+	case <-ctx.Done():
+		t.Fatal("registration did not finish")
+	}
+	var count int
+	if err = db.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE username='site-waiting-customer'").Scan(&count); err != nil || count != 0 {
+		t.Fatal("registration bypassed disabled setting", err)
+	}
+	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "site-new-customer", "password": "integration-password"}, "", ""), 200)
+}
