@@ -36,26 +36,29 @@ func (s *Store) EnqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if provision.IsStorageAction(action) {
 		return ServiceActionResult{}, conflict("storage_confirmation_required", "请使用快照或备份确认流程")
 	}
-	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, nil)
+	if provision.IsCDROMAction(action) {
+		return ServiceActionResult{}, conflict("cdrom_confirmation_required", "请使用光驱确认流程")
+	}
+	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, nil, nil)
 }
 
 func (s *Store) ResetServicePassword(ctx context.Context, actorID, serviceID int64, password, key string, admin bool) (ServiceActionResult, error) {
-	return s.enqueueServiceAction(ctx, actorID, serviceID, "reset_password", key, admin, password, 0, nil)
+	return s.enqueueServiceAction(ctx, actorID, serviceID, "reset_password", key, admin, password, 0, nil, nil)
 }
 
 func (s *Store) ReinstallService(ctx context.Context, actorID, serviceID, templateID int64, acknowledged bool, key string, admin bool) (ServiceActionResult, error) {
 	if !acknowledged || templateID < 1 || templateID > 2147483647 {
 		return ServiceActionResult{}, conflict("invalid_reinstall_request", "请选择镜像并确认数据清除风险")
 	}
-	return s.enqueueServiceAction(ctx, actorID, serviceID, "reinstall", key, admin, "", templateID, nil)
+	return s.enqueueServiceAction(ctx, actorID, serviceID, "reinstall", key, admin, "", templateID, nil, nil)
 }
 
-func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest) (ServiceActionResult, error) {
+func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest, cdrom *provision.CDROMRequest) (ServiceActionResult, error) {
 	var out ServiceActionResult
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
-	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) {
+	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsCDROMAction(action) {
 		return out, conflict("unsupported_service_action", "不支持该服务动作")
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -70,7 +73,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	var current, mode, power string
 	var credentials []byte
 	if admin {
-		if action == "reset_password" || action == "reinstall" || provision.IsStorageAction(action) {
+		if action == "reset_password" || action == "reinstall" || provision.IsStorageAction(action) || provision.IsCDROMAction(action) {
 			if err = requireDeliveryManage(ctx, tx, actorID); err != nil {
 				return out, err
 			}
@@ -85,7 +88,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if storage != nil {
+	if storage != nil || cdrom != nil {
 		if err = lockStorageCredential(ctx, tx, actorID); err != nil {
 			return out, err
 		}
@@ -131,6 +134,15 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 		fingerprint = hex.EncodeToString(mac.Sum(nil))
 	}
 	var storedFingerprint string
+	if cdrom != nil {
+		if len(s.ProvisionEncryptionKey) != 32 {
+			return out, conflict("credentials_unavailable", "交付密钥未配置")
+		}
+		mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
+		raw, _ := json.Marshal([]any{"nokvm-cdrom", serviceID, key, cdrom.Operation, cdrom.ImageID})
+		mac.Write(raw)
+		fingerprint = hex.EncodeToString(mac.Sum(nil))
+	}
 	if storage != nil {
 		if len(s.ProvisionEncryptionKey) != 32 {
 			return out, conflict("credentials_unavailable", "交付加密密钥未配置")
@@ -160,6 +172,59 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	}
 	var pendingCredentials []byte
 	requestPayload := []byte(`{}`)
+	if cdrom != nil {
+		if mode != "nokvm" || power == "processing" || power == "suspended" || power == "network_limited" {
+			return out, conflict("cdrom_unavailable", "服务当前不允许光驱操作")
+		}
+		var upstream, profile string
+		if err = tx.QueryRow(ctx, "SELECT upstream_id,coalesce(delivery_snapshot->>'profile_id','') FROM services WHERE id=$1", serviceID).Scan(&upstream, &profile); err != nil {
+			return out, err
+		}
+		if !provision.ValidResourceID(upstream) || profile == "" || s.Provisioners[profile] == nil {
+			return out, conflict("invalid_cdrom_binding", "服务光驱绑定无效")
+		}
+		if cdrom.Prepared && (cdrom.UpstreamID != upstream || cdrom.ProfileID != profile) {
+			return out, conflict("cdrom_resource_changed", "服务资源已变更，请刷新")
+		}
+		cdrom.UpstreamID, cdrom.ProfileID = upstream, profile
+		var recent bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action IN ('cdrom_mount','cdrom_unmount') AND created_at>clock_timestamp()-interval '60 seconds')`, serviceID).Scan(&recent); err != nil {
+			return out, err
+		}
+		if recent {
+			return out, conflict("cdrom_cooldown", "操作频繁，请60秒后重试")
+		}
+		if !cdrom.Prepared {
+			if !allowedServiceAction(current, action) {
+				return out, conflict("invalid_service_state", "服务状态不允许该操作")
+			}
+			if err = tx.Rollback(ctx); err != nil {
+				return out, err
+			}
+			listing, readErr := s.ServiceCDROM(ctx, actorID, serviceID, admin)
+			if readErr != nil {
+				return out, readErr
+			}
+			if listing.binding.Profile != profile || listing.binding.Upstream != upstream {
+				return out, conflict("cdrom_resource_changed", "服务资源已变更，请刷新")
+			}
+			if (cdrom.Operation == "mount" && listing.MountedID != "") || (cdrom.Operation == "unmount" && listing.MountedID != cdrom.ImageID) {
+				return out, conflict("cdrom_state_changed", "光驱状态已变更，请刷新")
+			}
+			for _, image := range listing.Items {
+				if image.ID == cdrom.ImageID {
+					cdrom.Image = image
+					break
+				}
+			}
+			if cdrom.Image.ID == "" {
+				return out, pgx.ErrNoRows
+			}
+			cdrom.MountedID, cdrom.Prepared = listing.MountedID, true
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom)
+		}
+		requestPayload, _ = json.Marshal(cdrom)
+	}
 	if storage != nil {
 		if mode != "nokvm" {
 			return out, conflict("unsupported_storage_mode", "该服务不支持快照或备份")
@@ -235,7 +300,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 				}
 			}
 			storage.Prepared = true
-			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage)
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom)
 		}
 		requestPayload, _ = json.Marshal(storage)
 	}
@@ -343,7 +408,7 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingC
 }
 
 func allowedServiceAction(status, action string) bool {
-	if provision.IsStorageAction(action) {
+	if provision.IsStorageAction(action) || provision.IsCDROMAction(action) {
 		return status == "active"
 	}
 	switch action {

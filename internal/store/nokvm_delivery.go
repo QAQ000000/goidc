@@ -104,6 +104,13 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 			return fail("快照或备份任务资源绑定已变更")
 		}
 	}
+	var cdromRequest provision.CDROMRequest
+	if provision.IsCDROMAction(job.Action) {
+		cdromRequest, err = pendingCDROMRequest(ctx, tx, job)
+		if err != nil || cdromRequest.ProfileID != delivery.ProfileID || cdromRequest.UpstreamID != upstream {
+			return fail("光驱任务资源绑定已变更")
+		}
+	}
 	if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET external_started_at=clock_timestamp(),updated_at=now() WHERE id=$1", job.ID); err != nil {
 		return err
 	}
@@ -111,7 +118,7 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 		return err
 	}
 	timeout := 65 * time.Second
-	if provision.IsStorageAction(job.Action) {
+	if provision.IsStorageAction(job.Action) || provision.IsCDROMAction(job.Action) {
 		timeout = 125 * time.Second
 	}
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -119,6 +126,8 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 	var callErr error
 	if provision.IsStorageAction(job.Action) {
 		result, callErr = adapter.ExecuteStorage(callCtx, storageRequest)
+	} else if provision.IsCDROMAction(job.Action) {
+		result, callErr = adapter.ExecuteCDROM(callCtx, cdromRequest)
 	} else {
 		result, callErr = adapter.Execute(callCtx, request)
 	}
@@ -156,8 +165,11 @@ func (s *Store) finishNOKVMJob(ctx context.Context, job ProvisionJob, result pro
 			state = "failed"
 			message = "供应商请求失败：" + failure.Code
 		}
-		if (job.Action == "reinstall" || provision.IsStorageAction(job.Action)) && result.CommandAccepted {
+		if (job.Action == "reinstall" || provision.IsStorageAction(job.Action) || provision.IsCDROMAction(job.Action)) && result.CommandAccepted {
 			message = "供应商已受理快照或备份操作，请核验实际结果，禁止重复提交"
+			if provision.IsCDROMAction(job.Action) {
+				message = "供应商已受理光驱操作，请核验实际挂载状态与启动顺序，禁止重复提交"
+			}
 			if job.Action == "reinstall" {
 				message = "供应商已受理重装，请核验安装完成及新登录密码，禁止重复提交"
 			}
@@ -423,6 +435,8 @@ func (s *Store) VerifyNOKVMJob(ctx context.Context, actorID, serviceID int64, in
 		}
 		if provision.IsStorageAction(job.Action) {
 			err = s.applyStorageVerification(ctx, tx, job, current, in)
+		} else if provision.IsCDROMAction(job.Action) {
+			err = s.applyCDROMVerification(ctx, tx, job, current)
 		} else {
 			err = s.applyNOKVMResult(ctx, tx, job, current, verifiedResult)
 		}

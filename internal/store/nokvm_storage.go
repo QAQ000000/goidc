@@ -46,7 +46,7 @@ func (s *Store) StorageServiceAction(ctx context.Context, actorID, serviceID int
 		return ServiceActionResult{}, conflict("invalid_storage_request", "请选择有效操作与还原点并确认风险")
 	}
 	input := &provision.StorageRequest{Kind: kind, Operation: operation, PointID: pointID}
-	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, input)
+	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, input, nil)
 }
 
 func pendingStorageRequest(ctx context.Context, tx pgx.Tx, job ProvisionJob) (provision.StorageRequest, error) {
