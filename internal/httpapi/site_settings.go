@@ -32,6 +32,7 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 		ExpectedVersion     int64 `json:"expected_version"`
 		RegistrationEnabled *bool `json:"registration_enabled"`
 		MaintenanceEnabled  *bool `json:"maintenance_enabled"`
+		AuthCaptchaEnabled  *bool `json:"auth_captcha_enabled"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -46,6 +47,9 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.SiteProfile.MaintenanceEnabled = *input.MaintenanceEnabled
+	if input.AuthCaptchaEnabled != nil {
+		input.SiteProfile.AuthCaptchaEnabled = *input.AuthCaptchaEnabled
+	}
 	if target, err := url.Parse(strings.TrimSpace(input.MaintenanceURL)); err == nil && target.Hostname() != "" {
 		origin, _ := url.Parse(s.cfg.PublicOrigin)
 		if origin != nil && strings.EqualFold(strings.TrimRight(target.Hostname(), "."), strings.TrimRight(origin.Hostname(), ".")) {
@@ -53,7 +57,7 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, input.SiteProfile, input.ExpectedVersion)
+	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, input.SiteProfile, input.ExpectedVersion, input.AuthCaptchaEnabled)
 	if err != nil {
 		s.fail(w, r, err)
 		return

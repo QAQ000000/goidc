@@ -29,10 +29,20 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username      string `json:"username"`
+		Password      string `json:"password"`
+		CaptchaID     string `json:"captcha_id"`
+		CaptchaAnswer string `json:"captcha_answer"`
 	}
 	if !decode(w, r, &input) {
+		return
+	}
+	if err := s.consumeCaptcha(r.Context(), r, "login", input.CaptchaID, input.CaptchaAnswer); err != nil {
+		if !errors.Is(err, errInvalidCaptcha) {
+			s.fail(w, r, err)
+			return
+		}
+		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
 		return
 	}
 	if len(input.Username) > 254 || len(input.Password) > 72 || input.Username == "" {
@@ -129,10 +139,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		Name     string `json:"display_name"`
+		Username      string `json:"username"`
+		Email         string `json:"email"`
+		Password      string `json:"password"`
+		Name          string `json:"display_name"`
+		CaptchaID     string `json:"captcha_id"`
+		CaptchaAnswer string `json:"captcha_answer"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -165,6 +177,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 403, "registration_disabled", "本站暂未开放注册")
 		return
 	}
+	if err := s.consumeCaptcha(r.Context(), r, "register", input.CaptchaID, input.CaptchaAnswer); err != nil {
+		if !errors.Is(err, errInvalidCaptcha) {
+			s.fail(w, r, err)
+			return
+		}
+		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
+		return
+	}
 	if err = tx.QueryRow(r.Context(), "INSERT INTO users(username,email,password_hash,display_name) VALUES($1,$2,$3,$4) RETURNING id", input.Username, input.Email, string(hash), input.Name).Scan(&id); err != nil {
 		s.fail(w, r, err)
 		return
@@ -189,9 +209,19 @@ func (s *Server) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Identifier string `json:"identifier"`
+		Identifier    string `json:"identifier"`
+		CaptchaID     string `json:"captcha_id"`
+		CaptchaAnswer string `json:"captcha_answer"`
 	}
 	if !decode(w, r, &input) {
+		return
+	}
+	if err := s.consumeCaptcha(r.Context(), r, "forgot-password", input.CaptchaID, input.CaptchaAnswer); err != nil {
+		if !errors.Is(err, errInvalidCaptcha) {
+			s.fail(w, r, err)
+			return
+		}
+		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
 		return
 	}
 	input.Identifier = strings.ToLower(strings.TrimSpace(input.Identifier))

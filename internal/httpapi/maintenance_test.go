@@ -78,7 +78,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, requestBearer(h, "GET", "/api/v1/admin/dashboard", nil, adminKey), 200)
-	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, staff, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, staff, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, customer, ""), 403)
 	for _, path := range []string{"/healthz", "/readyz", "/api/v1/site"} {
 		expect(t, request(h, "GET", path, nil, "", ""), 200)

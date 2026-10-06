@@ -29,6 +29,7 @@ type SiteProfile struct {
 	MaintenanceEnabled  bool   `json:"maintenance_enabled"`
 	MaintenanceMessage  string `json:"maintenance_message"`
 	MaintenanceURL      string `json:"maintenance_url"`
+	AuthCaptchaEnabled  bool   `json:"auth_captcha_enabled"`
 }
 
 type SiteSettings struct {
@@ -37,11 +38,11 @@ type SiteSettings struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-const siteColumns = `site_name,description,company_name,logo_url,support_email,support_phone,address,support_url,terms_url,privacy_url,record_number,copyright,registration_enabled,maintenance_enabled,maintenance_message,maintenance_url,version,updated_at`
+const siteColumns = `site_name,description,company_name,logo_url,support_email,support_phone,address,support_url,terms_url,privacy_url,record_number,copyright,registration_enabled,maintenance_enabled,maintenance_message,maintenance_url,auth_captcha_enabled,version,updated_at`
 
 func scanSite(row pgx.Row) (SiteSettings, error) {
 	var out SiteSettings
-	err := row.Scan(&out.Name, &out.Description, &out.CompanyName, &out.LogoURL, &out.SupportEmail, &out.SupportPhone, &out.Address, &out.SupportURL, &out.TermsURL, &out.PrivacyURL, &out.RecordNumber, &out.Copyright, &out.RegistrationEnabled, &out.MaintenanceEnabled, &out.MaintenanceMessage, &out.MaintenanceURL, &out.Version, &out.UpdatedAt)
+	err := row.Scan(&out.Name, &out.Description, &out.CompanyName, &out.LogoURL, &out.SupportEmail, &out.SupportPhone, &out.Address, &out.SupportURL, &out.TermsURL, &out.PrivacyURL, &out.RecordNumber, &out.Copyright, &out.RegistrationEnabled, &out.MaintenanceEnabled, &out.MaintenanceMessage, &out.MaintenanceURL, &out.AuthCaptchaEnabled, &out.Version, &out.UpdatedAt)
 	return out, err
 }
 
@@ -96,14 +97,14 @@ func validateSite(in *SiteProfile) error {
 	return nil
 }
 
-func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, in SiteProfile, expectedVersion int64) (SiteSettings, error) {
+func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, in SiteProfile, expectedVersion int64, captchaEnabled *bool) (SiteSettings, error) {
 	if err := validateSite(&in); err != nil {
 		return SiteSettings{}, err
 	}
 	if expectedVersion < 1 {
 		return SiteSettings{}, conflict("invalid_site_version", "请提供有效站点版本")
 	}
-	tx, err := adminManagementTx(ctx, s, actorID)
+	tx, err := settingsManagementTx(ctx, s, actorID)
 	if err != nil {
 		return SiteSettings{}, err
 	}
@@ -115,7 +116,10 @@ func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, in SitePr
 	if previous.Version != expectedVersion {
 		return SiteSettings{}, conflict("version_conflict", "站点设置已变更，请重新加载")
 	}
-	out, err := scanSite(tx.QueryRow(ctx, `UPDATE site_settings SET site_name=$1,description=$2,company_name=$3,logo_url=$4,support_email=$5,support_phone=$6,address=$7,support_url=$8,terms_url=$9,privacy_url=$10,record_number=$11,copyright=$12,registration_enabled=$13,maintenance_enabled=$14,maintenance_message=$15,maintenance_url=$16,version=version+1,updated_at=now() WHERE id=1 RETURNING `+siteColumns, in.Name, in.Description, in.CompanyName, in.LogoURL, in.SupportEmail, in.SupportPhone, in.Address, in.SupportURL, in.TermsURL, in.PrivacyURL, in.RecordNumber, in.Copyright, in.RegistrationEnabled, in.MaintenanceEnabled, in.MaintenanceMessage, in.MaintenanceURL))
+	if captchaEnabled == nil {
+		in.AuthCaptchaEnabled = previous.AuthCaptchaEnabled
+	}
+	out, err := scanSite(tx.QueryRow(ctx, `UPDATE site_settings SET site_name=$1,description=$2,company_name=$3,logo_url=$4,support_email=$5,support_phone=$6,address=$7,support_url=$8,terms_url=$9,privacy_url=$10,record_number=$11,copyright=$12,registration_enabled=$13,maintenance_enabled=$14,maintenance_message=$15,maintenance_url=$16,auth_captcha_enabled=$17,version=version+1,updated_at=now() WHERE id=1 RETURNING `+siteColumns, in.Name, in.Description, in.CompanyName, in.LogoURL, in.SupportEmail, in.SupportPhone, in.Address, in.SupportURL, in.TermsURL, in.PrivacyURL, in.RecordNumber, in.Copyright, in.RegistrationEnabled, in.MaintenanceEnabled, in.MaintenanceMessage, in.MaintenanceURL, in.AuthCaptchaEnabled))
 	if err != nil {
 		return SiteSettings{}, err
 	}

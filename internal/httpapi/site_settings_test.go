@@ -24,6 +24,9 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	_, root := user(t, db, h, "site-root", "super_admin")
 	_, staff := user(t, db, h, "site-staff", "admin")
 	_, customer := user(t, db, h, "site-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='site-staff')"); err != nil {
+		t.Fatal(err)
+	}
 	settings, err := db.SiteSettings(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -72,7 +75,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	w = request(h, "GET", "/api/v1/site", nil, "", "")
 	expect(t, w, 200)
 	public := data(t, w)
-	if len(public) != 16 || public["site_name"] != profile.Name || public["description"] != "云管理 服务" || public["version"] != nil || public["updated_at"] != nil {
+	if len(public) != 17 || public["site_name"] != profile.Name || public["description"] != "云管理 服务" || public["version"] != nil || public["updated_at"] != nil {
 		t.Fatal("public profile incorrect", w.Body.String())
 	}
 	var count int

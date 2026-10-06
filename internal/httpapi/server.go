@@ -61,6 +61,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", s.ready)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
+	mux.HandleFunc("GET /api/v1/auth/captcha", s.issueCaptcha)
 	mux.HandleFunc("POST /api/v1/auth/login/mfa", s.loginMFA)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/request", s.requestPasswordReset)
