@@ -2,6 +2,7 @@
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { NOKVMMonitoringPanel } from "./nokvm-monitoring";
 import { NOKVMStoragePanel } from "./nokvm-storage";
+import { NOKVMNATPanel } from "./nokvm-nat";
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { useEffect, useState } from "react";
 import { ServiceDownloads } from "./service-downloads";
@@ -805,6 +806,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
           {data.provision_mode === "nokvm" && <NOKVMServiceDelivery key={`${data.id}:${data.version}`} service={data} admin={admin} refresh={refresh} />}
           {data.provision_mode === "nokvm" && ["active","suspended"].includes(data.status) && <NOKVMMonitoringPanel key={data.id} service={data} admin={admin}/>}
           {data.provision_mode === "nokvm" && ["active","suspended"].includes(data.status) && <NOKVMStoragePanel key={`${data.id}:${data.jobs?.map(j=>j.status).join("-")}`} service={data} admin={admin} refresh={refresh}/>}
+          {data.provision_mode === "nokvm" && ["active","suspended"].includes(data.status) && <NOKVMNATPanel key={`${data.id}:${data.jobs?.map(j=>j.status).join("-")}`} service={data} admin={admin} refresh={refresh}/>}
           <ServiceConfigurationChanges service={data} admin={admin} refresh={refresh} />
           {!!data.purchase_fields?.length && <section className="data-surface p-6 my-5"><h2 className="font-semibold mb-4">购买信息</h2><PurchaseFieldDetails fields={data.purchase_fields}/></section>}
           {!admin && <ServiceDownloads key={data.id} serviceID={data.id} />}
