@@ -2,6 +2,8 @@
 
 PHP 财务系统的独立 Go API / Next.js React shadcn/ui / PostgreSQL 18 重构。业务覆盖和剩余工作见 [重构台账](docs/reconstruction.md)。当前仍在开发，不能替换原 PHP 生产站点。
 
+开发实例已部署 schema080：电子发票 PDF/XML 文件与线下作废/红冲登记、敏感购买字段加密与隐藏、图文图片与自定义 SEO。组合浏览器、权限/所有权、手机布局、schema077 恢复升级和现场检查通过，详见 [第四批验收](docs/batch4-acceptance.md)。验证码按用户要求关闭；真实支付、供应商和其他领域仍待完成。
+
 ## 本地运行
 
 配置 `.env`（数据库 URL、API 监听地址、前端来源、Cookie 是否 HTTPS）。数据库角色仅操作本项目独立库；示例中没有实际密码。
