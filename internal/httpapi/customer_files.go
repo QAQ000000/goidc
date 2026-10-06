@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -262,13 +261,13 @@ func (s *Server) downloadCustomerFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "文件不存在")
 		return
 	}
-	var name, mt string
+	var name, mt, hash string
 	if !s.customerFileCredentialCurrent(w, r, tx, uid) {
 		return
 	}
 	var content []byte
 	var size int64
-	if err := tx.QueryRow(r.Context(), "SELECT filename,mime_type,size_bytes,content FROM customer_files WHERE id=$1", id).Scan(&name, &mt, &size, &content); err != nil {
+	if err := tx.QueryRow(r.Context(), "SELECT filename,mime_type,size_bytes,sha256,content FROM customer_files WHERE id=$1", id).Scan(&name, &mt, &size, &hash, &content); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -286,13 +285,5 @@ func (s *Server) downloadCustomerFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, no-store")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Type", mt)
-	w.Header().Set("Content-Disposition", `attachment; filename="download"; filename*=UTF-8''`+url.PathEscape(name))
-	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.WriteHeader(200)
-	if r.Method != "HEAD" {
-		_, _ = w.Write(content)
-	}
+	serveStoredFile(w, r, name, mt, hash, content)
 }
