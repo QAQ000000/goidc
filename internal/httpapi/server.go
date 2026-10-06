@@ -71,6 +71,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/page", s.catalogPage)
 	mux.HandleFunc("GET /api/v1/catalog/sections", s.catalogSections)
 	mux.HandleFunc("GET /api/v1/site", s.publicSite)
+	mux.HandleFunc("GET /api/v1/public-index", s.publicIndex)
+	mux.HandleFunc("GET /api/v1/public-content/{kind}/{id}", s.publicContentPreview)
 	mux.HandleFunc("GET /api/v1/admin/site-settings", s.sessionAuth(s.siteSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/site-settings", s.sessionAuth(s.updateSiteSettings, true))
 	mux.HandleFunc("GET /api/v1/catalog/{id}", s.product)

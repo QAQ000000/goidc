@@ -43,15 +43,16 @@ export function ContentList({ type }: { type: "news" | "knowledge" }) {
   </PublicShell>;
 }
 
-export function ContentDetail({ type, id }: { type: "news" | "knowledge"; id: number }) {
+export function ContentDetail({ type, id, initialArticle }: { type: "news" | "knowledge"; id: number; initialArticle?: ContentArticle }) {
   const title = type === "news" ? "新闻详情" : "知识库文章";
   const { data, error, refresh } = useResource<ContentArticle>(`/${type === "news" ? "news" : "knowledgebase"}/${id}`, false);
+  const article = error ? undefined : data ?? initialArticle;
   return <PublicShell title={title}>
     <Link href={`/${type === "news" ? "news" : "knowledgebase"}`} className="inline-flex items-center gap-2 text-sm text-primary mb-8"><ArrowLeft size={15} />返回列表</Link>
     {error ? <div className="border border-red-200 bg-red-50 text-destructive p-4 rounded-md" role="alert">
       {error instanceof ApiError && error.status === 404 ? "文章不存在或当前账户无法访问。" : error.message}
       <Button variant="link" onClick={refresh}>重试</Button>{type === "knowledge" && <Link href="/login" className="text-primary ml-3">登录账户</Link>}
-    </div> : !data ? <p className="text-muted-foreground">加载中...</p>
-      : <article className="max-w-3xl"><h1 className="text-3xl font-semibold leading-tight break-all">{data.title}</h1><div className="text-xs text-muted-foreground mt-3 break-words">{data.category_name || "未分类"} · {data.published_at ? date(data.published_at) : ""}</div><div className="mt-10 whitespace-pre-wrap break-all leading-8 text-[15px]">{data.body}</div></article>}
+    </div> : !article ? <p className="text-muted-foreground">加载中...</p>
+      : <article className="max-w-3xl"><h1 className="text-3xl font-semibold leading-tight break-all">{article.title}</h1><div className="text-xs text-muted-foreground mt-3 break-words">{article.category_name || "未分类"} · {article.published_at ? date(article.published_at) : ""}</div><div className="mt-10 whitespace-pre-wrap break-all leading-8 text-[15px]">{article.body}</div></article>}
   </PublicShell>;
 }
