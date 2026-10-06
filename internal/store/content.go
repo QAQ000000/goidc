@@ -21,10 +21,22 @@ type ContentInput struct {
 	Slug            string     `json:"slug"`
 	Excerpt         string     `json:"excerpt"`
 	Body            string     `json:"body"`
+	BodyHTML        string     `json:"body_html"`
+	SEO             ContentSEO `json:"seo"`
+	SEOTitle        string     `json:"seo_title"`
+	SEODescription  string     `json:"seo_description"`
+	SEOCanonical    string     `json:"seo_canonical"`
+	CanonicalURL    string     `json:"canonical_url"`
 	Status          string     `json:"status"`
 	AccessLevel     string     `json:"access_level"`
 	PublishedAt     *time.Time `json:"published_at"`
 	ExpectedVersion int64      `json:"expected_version"`
+}
+
+type ContentSEO struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Canonical   string `json:"canonical"`
 }
 
 type ContentCategoryInput struct {
@@ -52,13 +64,34 @@ func validateContent(in *ContentInput) error {
 	in.Slug = strings.ToLower(strings.TrimSpace(in.Slug))
 	in.Excerpt = strings.TrimSpace(in.Excerpt)
 	in.Body = strings.TrimSpace(in.Body)
+	in.BodyHTML = strings.TrimSpace(in.BodyHTML)
+	in.SEO.Title = strings.TrimSpace(in.SEO.Title)
+	in.SEO.Description = strings.TrimSpace(in.SEO.Description)
+	in.SEO.Canonical = strings.TrimSpace(in.SEO.Canonical)
+	if in.SEO.Title == "" {
+		in.SEO.Title = strings.TrimSpace(in.SEOTitle)
+	}
+	if in.SEO.Description == "" {
+		in.SEO.Description = strings.TrimSpace(in.SEODescription)
+	}
+	if in.SEO.Canonical == "" {
+		in.SEO.Canonical = strings.TrimSpace(in.SEOCanonical)
+		if in.SEO.Canonical == "" {
+			in.SEO.Canonical = strings.TrimSpace(in.CanonicalURL)
+		}
+	}
+	cleanHTML, err := SanitizeContentHTML(in.BodyHTML)
+	if err != nil {
+		return conflict("invalid_content", "正文 HTML 无效")
+	}
+	in.BodyHTML = cleanHTML
 	if in.Status == "" {
 		in.Status = "draft"
 	}
 	if in.AccessLevel == "" {
 		in.AccessLevel = "public"
 	}
-	if !contentTypeValid(in.ContentType) || in.Title == "" || !contentTextValid(in.Title, 240, false) || !contentSlug.MatchString(in.Slug) || !contentTextValid(in.Excerpt, 1000, true) || in.Body == "" || !contentTextValid(in.Body, 20000, true) || (in.Status != "draft" && in.Status != "published" && in.Status != "archived") || (in.AccessLevel != "public" && in.AccessLevel != "login" && in.AccessLevel != "active_service") || (in.ContentType == "news" && in.AccessLevel != "public") || (in.CategoryID != nil && *in.CategoryID < 1) || (in.SortOrder != nil && (*in.SortOrder < 0 || *in.SortOrder > 1000000)) || len(in.CategoryIDs) > 30 || len(in.TagIDs) > 30 {
+	if !contentTypeValid(in.ContentType) || in.Title == "" || !contentTextValid(in.Title, 240, false) || !contentSlug.MatchString(in.Slug) || !contentTextValid(in.Excerpt, 1000, true) || in.Body == "" || !contentTextValid(in.Body, 20000, true) || utf8.RuneCountInString(in.BodyHTML) > 20000 || (in.Status != "draft" && in.Status != "published" && in.Status != "archived") || (in.AccessLevel != "public" && in.AccessLevel != "login" && in.AccessLevel != "active_service") || (in.ContentType == "news" && in.AccessLevel != "public") || (in.CategoryID != nil && *in.CategoryID < 1) || (in.SortOrder != nil && (*in.SortOrder < 0 || *in.SortOrder > 1000000)) || len(in.CategoryIDs) > 30 || len(in.TagIDs) > 30 || !contentTextValid(in.SEO.Title, 240, false) || !contentTextValid(in.SEO.Description, 1000, true) || !validCanonical(in.SEO.Canonical) {
 		return conflict("invalid_content", "文章类型、标题、标识、正文或可见范围无效")
 	}
 	if in.PublishedAt != nil && (in.PublishedAt.Year() < 2000 || in.PublishedAt.Year() > 2200) {
@@ -91,6 +124,13 @@ func validateContent(in *ContentInput) error {
 		}
 	}
 	return nil
+}
+
+func validCanonical(value string) bool {
+	if value == "" {
+		return true
+	}
+	return strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//") && !strings.ContainsAny(value, "?#\\\r\n\t") && contentTextValid(value, 500, false)
 }
 
 func uniquePositiveContentIDs(ids []int64) error {
@@ -212,9 +252,9 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 		published = nil
 	}
 	if id == 0 {
-		err = tx.QueryRow(ctx, `INSERT INTO content_articles(content_type,category_id,title,slug,excerpt,body,status,access_level,published_at,author_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, in.ContentType, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published, actorID, sortOrder).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO content_articles(content_type,category_id,title,slug,excerpt,body,body_html,seo_title,seo_description,seo_canonical,status,access_level,published_at,author_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, in.ContentType, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.BodyHTML, in.SEO.Title, in.SEO.Description, in.SEO.Canonical, in.Status, in.AccessLevel, published, actorID, sortOrder).Scan(&id)
 	} else {
-		_, err = tx.Exec(ctx, `UPDATE content_articles SET category_id=$2,title=$3,slug=$4,excerpt=$5,body=$6,status=$7,access_level=$8,published_at=$9,sort_order=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published, sortOrder)
+		_, err = tx.Exec(ctx, `UPDATE content_articles SET category_id=$2,title=$3,slug=$4,excerpt=$5,body=$6,body_html=$7,seo_title=$8,seo_description=$9,seo_canonical=$10,status=$11,access_level=$12,published_at=$13,sort_order=$14,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.BodyHTML, in.SEO.Title, in.SEO.Description, in.SEO.Canonical, in.Status, in.AccessLevel, published, sortOrder)
 	}
 	if err != nil {
 		return 0, err

@@ -204,6 +204,10 @@ export type ContentArticle = {
   slug: string;
   excerpt: string;
   body: string;
+  body_html: string;
+  seo_title: string;
+  seo_description: string;
+  seo_canonical: string;
   published_at: string | null;
   views: number;
   created_at: string;
