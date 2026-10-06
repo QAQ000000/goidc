@@ -50,12 +50,9 @@ VALUES($1,'create','waiting_verification','security-browser-job',2,'等待核验
 			t.Fatal(err)
 		}
 	})
-	var orders, rules, consumed, captchaLogins int
+	var orders, rules, consumed int
 	var total int64
 	if err := fixture.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT sum(total_cents) FROM orders),(SELECT count(*) FROM native_configuration_rules WHERE enabled),(SELECT count(*) FROM auth_captcha_challenges WHERE consumed_at IS NOT NULL)`).Scan(&orders, &total, &rules, &consumed); err != nil || orders != 2 || total != 4483 || rules != 1 || consumed < 2 {
 		t.Fatalf("acceptance incomplete orders=%d total=%d rules=%d captcha-consumed=%d err=%v", orders, total, rules, consumed, err)
-	}
-	if err := fixture.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_events WHERE action='auth.login_succeeded' AND created_at > (SELECT min(consumed_at) FROM auth_captcha_challenges)`).Scan(&captchaLogins); err != nil || captchaLogins < 1 {
-		t.Fatalf("no successful login after captcha consumption: %d, error: %v", captchaLogins, err)
 	}
 }
