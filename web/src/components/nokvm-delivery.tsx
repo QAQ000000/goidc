@@ -40,7 +40,7 @@ export function NOKVMProductFields({value,onChange}:{value:DeliveryConfig;onChan
 }
 
 const powers:Record<string,string>={on:"开机",off:"关机",processing:"处理中",suspended:"上游暂停",network_limited:"上游流量限制"};
-export const serviceActionLabels:Record<string,string>={create:"开通资源",suspend:"暂停服务",resume:"恢复服务",terminate:"终止资源",sync:"刷新资源",upgrade:"变更配置",power_on:"开机",power_off:"关机",reboot:"重启",force_off:"强制关机",force_reboot:"强制重启",reset_password:"重置系统密码",reinstall:"重装系统",snapshot_create:"创建快照",snapshot_delete:"删除快照",snapshot_restore:"恢复快照",backup_create:"创建备份",backup_delete:"删除备份",backup_restore:"恢复备份",nat_acl_create:"创建端口转发",nat_acl_delete:"删除端口转发",nat_web_create:"创建 NAT 建站",nat_web_delete:"删除 NAT 建站"};
+ export const serviceActionLabels:Record<string,string>={create:"开通资源",suspend:"暂停服务",resume:"恢复服务",terminate:"终止资源",sync:"刷新资源",upgrade:"变更配置",power_on:"开机",power_off:"关机",reboot:"重启",force_off:"强制关机",force_reboot:"强制重启",reset_password:"重置系统密码",reinstall:"重装系统",snapshot_create:"创建快照",snapshot_delete:"删除快照",snapshot_restore:"恢复快照",backup_create:"创建备份",backup_delete:"删除备份",backup_restore:"恢复备份",nat_acl_create:"创建端口转发",nat_acl_delete:"删除端口转发",nat_web_create:"创建 NAT 建站",nat_web_delete:"删除 NAT 建站",cdrom_mount:"挂载光驱",cdrom_unmount:"卸载光驱"};
 const powerActions=[{action:"power_on",icon:Power},{action:"power_off",icon:PowerOff},{action:"reboot",icon:RotateCw},{action:"force_off",icon:OctagonX},{action:"force_reboot",icon:Zap}];
 export function isPowerAction(action:string){return powerActions.some(item=>item.action===action);}
 export function NOKVMServiceDelivery({service,admin,refresh}:{service:Service;admin:boolean;refresh:()=>void}) {

@@ -17,7 +17,7 @@ func (s *Store) NATServiceAction(ctx context.Context, actorID, serviceID int64, 
 	}
 	action := "nat_" + request.Kind + "_" + request.Operation
 	ctx = context.WithValue(ctx, natRequestKey{}, &request)
-	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, nil)
+	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, nil, nil)
 }
 
 func pendingNATRequest(ctx context.Context, tx pgx.Tx, job ProvisionJob) (provision.NATRequest, error) {

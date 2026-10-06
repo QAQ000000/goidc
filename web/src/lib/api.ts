@@ -409,6 +409,8 @@ export type NOKVMStoragePoint={id:string;name:string;created_at:string};
 export type NOKVMStorageListing={kind:"snapshot"|"backup";limit:number;items:NOKVMStoragePoint[];fetched_at:string};
 export type NOKVMNATItem={id:string;name:string;type:string;domain:string;exterior_port:number;interior_port:number};
 export type NOKVMNATListing={kind:"acl"|"web";limit:number;items:NOKVMNATItem[];fetched_at:string};
+export type NOKVMCDROMImage={id:string;name:string;description:string};
+export type NOKVMCDROMListing={items:NOKVMCDROMImage[];mounted_id:string;fetched_at:string};
 export type Service = {
   installed_os?:Partial<NOKVMTemplate>;
   purchase_fields?: PurchaseFieldSnapshot[];
