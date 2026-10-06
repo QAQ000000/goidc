@@ -88,7 +88,17 @@ export function configurationRuleError(rules: NativeConfigurationRule[] | undefi
     }
   }
   for (const rule of rules ?? []) {
-    if (rule.enabled && rule.conditions.length && rule.conditions.every(matches) && !rule.results.every(matches)) return `配置不符合规则：${rule.name}`;
+    if (!rule.enabled) continue;
+    if (!rule.conditions.length || !rule.results.length) return "商品配置暂不可用，请联系管理员";
+    for (const predicate of [...rule.conditions, ...rule.results]) {
+      const group = groups.find(item => item.id === predicate.group_id && item.active);
+      const option = group?.options.find(item => item.id === predicate.option_id && item.active);
+      if (!group || (predicate.operator !== "absent" && !option) ||
+        (predicate.operator.startsWith("quantity_") && (!isQuantityOption(group) || predicate.qty_minimum === null || predicate.qty_maximum === null || predicate.qty_minimum < 1 || predicate.qty_maximum < predicate.qty_minimum))) {
+        return "商品配置暂不可用，请联系管理员";
+      }
+    }
+    if (rule.conditions.every(matches) && !rule.results.every(matches)) return `配置不符合规则：${rule.name}`;
   }
   return null;
 }
