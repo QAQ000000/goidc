@@ -78,7 +78,7 @@ func (s *Server) cart(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		_, fieldSnapshot, fieldErr := store.ValidatePurchaseFields(r.Context(), tx, item["product_id"].(int64), fieldValues)
+		canonicalFields, fieldSnapshot, fieldErr := store.ValidatePurchaseFieldsWithKey(r.Context(), tx, item["product_id"].(int64), fieldValues, s.db.PurchaseFieldEncryptionKey)
 		if fieldErr != nil {
 			if _, ok := fieldErr.(*store.Conflict); !ok {
 				s.fail(w, r, fieldErr)
@@ -89,6 +89,18 @@ func (s *Server) cart(w http.ResponseWriter, r *http.Request) {
 		}
 		item["fields_valid"] = fieldErr == nil
 		item["purchase_field_snapshot"] = fieldSnapshot
+		if fieldErr == nil {
+			for i := range fieldSnapshot {
+				if fieldSnapshot[i].Encrypted {
+					fieldSnapshot[i].Value = "********"
+					canonicalFields[fieldSnapshot[i].Key] = "********"
+				}
+			}
+			item["purchase_fields"] = canonicalFields
+			item["purchase_field_snapshot"] = fieldSnapshot
+		} else {
+			item["purchase_fields"] = map[string]string{}
+		}
 		delete(item, "purchase_fields_json")
 		delete(item, "option_ids_json")
 		delete(item, "option_quantities_json")
@@ -210,6 +222,19 @@ func (s *Server) mutateCart(w http.ResponseWriter, r *http.Request, action strin
 					s.fail(w, r, err)
 					return
 				}
+			} else {
+				var existingFields map[string]string
+				if err = json.Unmarshal(currentFieldJSON, &existingFields); err != nil {
+					s.fail(w, r, err)
+					return
+				}
+				for key, value := range input.PurchaseFields {
+					if value == "********" {
+						if sealed, ok := existingFields[key]; ok {
+							input.PurchaseFields[key] = sealed
+						}
+					}
+				}
 			}
 			if input.BillingCycle == "" {
 				input.BillingCycle = currentCycle
@@ -260,10 +285,20 @@ func (s *Server) mutateCart(w http.ResponseWriter, r *http.Request, action strin
 			s.fail(w, r, err)
 			return
 		}
-		fieldValues, _, err := store.ValidatePurchaseFields(r.Context(), tx, input.ProductID, input.PurchaseFields)
+		fieldValues, fieldSnapshots, err := store.ValidatePurchaseFieldsWithKey(r.Context(), tx, input.ProductID, input.PurchaseFields, s.db.PurchaseFieldEncryptionKey)
 		if err != nil {
 			s.fail(w, r, err)
 			return
+		}
+		for _, field := range fieldSnapshots {
+			if field.Encrypted {
+				sealed, sealErr := store.SealPurchaseValue(s.db.PurchaseFieldEncryptionKey, field.Value)
+				if sealErr != nil {
+					s.fail(w, r, sealErr)
+					return
+				}
+				fieldValues[field.Key] = sealed
+			}
 		}
 		fieldJSON, err := json.Marshal(fieldValues)
 		if err != nil {

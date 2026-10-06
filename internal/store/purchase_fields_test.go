@@ -60,3 +60,33 @@ func TestPurchaseFieldDefinitionAndUnicodeLimits(t *testing.T) {
 		t.Fatal("unicode limit bypassed")
 	}
 }
+
+func TestPurchaseFieldEncryptionRoundTrip(t *testing.T) {
+	key := []byte("01234567890123456789012345678901")
+	sealed, err := SealPurchaseValue(key, "sensitive-value")
+	if err != nil || sealed == "sensitive-value" || len(sealed) < 16 {
+		t.Fatalf("seal failed: %v", err)
+	}
+	plain, err := unsealPurchaseValue(key, sealed)
+	if err != nil || plain != "sensitive-value" {
+		t.Fatalf("unseal failed: %q %v", plain, err)
+	}
+	if _, err = SealPurchaseValue(nil, "x"); err == nil {
+		t.Fatal("missing key accepted")
+	}
+}
+
+func TestSensitivePurchaseFieldDefinitionRules(t *testing.T) {
+	valid := PurchaseField{Key: "secret", Label: "Secret", Type: "text", Active: true, MaxLength: 32, Encrypted: true}
+	if err := normalizePurchaseField(&valid); err != nil {
+		t.Fatal(err)
+	}
+	invalidAdmin := PurchaseField{Key: "internal", Label: "Internal", Type: "text", Active: true, Scope: "admin", Required: true, MaxLength: 32}
+	if err := normalizePurchaseField(&invalidAdmin); err == nil {
+		t.Fatal("required admin field accepted")
+	}
+	validCustomer := PurchaseField{Key: "company", Label: "Company", Type: "text", Active: true, Scope: "customer", ProfileKey: "company_name", MaxLength: 80}
+	if err := normalizePurchaseField(&validCustomer); err != nil {
+		t.Fatal(err)
+	}
+}

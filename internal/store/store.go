@@ -17,9 +17,10 @@ import (
 )
 
 type Store struct {
-	Pool *pgxpool.Pool
-	Provisioners map[string]*provision.NOKVM
-	ProvisionEncryptionKey []byte
+	Pool                       *pgxpool.Pool
+	Provisioners               map[string]*provision.NOKVM
+	ProvisionEncryptionKey     []byte
+	PurchaseFieldEncryptionKey []byte
 }
 
 func Open(ctx context.Context, dsn string) (*Store, error) {

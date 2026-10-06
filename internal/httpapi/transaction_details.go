@@ -11,7 +11,8 @@ import (
 
 const invoicePendingProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='pending') AS payment_pending,
  i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='pending' AND pt.provider<>'mock') AS real_payment_pending`
-const orderItemProjection = `id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,renewal_discount_percent,renewal_promo_code,purchase_fields,renewal_fixed_discount_cents,renewal_discount_limit`
+const maskedPurchaseFields = `coalesce((SELECT jsonb_agg(CASE WHEN field->>'encrypted'='true' THEN jsonb_set(field,'{value}','"********"'::jsonb) ELSE field END) FROM jsonb_array_elements(purchase_fields) field),'[]'::jsonb)`
+const orderItemProjection = `id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,` + maskedPurchaseFields + ` AS purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit`
 
 func collectTransactionRows(rows pgx.Rows, err error) ([]map[string]any, error) {
 	if err != nil {
@@ -145,7 +146,7 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	invoiceOrderProjection := strings.Replace(orderItemProjection, ",purchase_fields", `,jsonb_path_query_array(purchase_fields,'$[*] ? (@.show_invoice == true)') AS purchase_fields`, 1)
+	invoiceOrderProjection := strings.Replace(orderItemProjection, maskedPurchaseFields+` AS purchase_fields`, `jsonb_path_query_array(purchase_fields,'$[*] ? (@.show_invoice == true)') AS purchase_fields`, 1)
 	orderItems, err := collectTransactionRows(tx.Query(ctx, "SELECT "+invoiceOrderProjection+` FROM order_items WHERE order_id IN
  (SELECT o.id FROM orders o JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE i.id=$1) ORDER BY id`, id))
 	if err != nil {

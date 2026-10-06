@@ -13,7 +13,7 @@ const serviceColumns = `s.installed_os,s.resource_info,s.id,s.user_id,s.order_id
 s.status,s.next_due_at,s.auto_renew,s.auto_renew_error,s.username,s.upstream_id,s.last_error,s.provision_mode,s.unit_number,s.inventory_released,s.version,s.created_at,s.updated_at,
 COALESCE((SELECT jsonb_agg(jsonb_build_object('id',sos.id,'group_id',sos.group_id,'group_name',pog.name,'option_id',sos.option_id,'label',po.label,'value',po.value,'quantity',sos.quantity) ORDER BY pog.sort_order,pog.id) FROM service_option_selections sos JOIN product_option_groups pog ON pog.id=sos.group_id LEFT JOIN product_options po ON po.id=sos.option_id WHERE sos.service_id=s.id),'[]'::jsonb) AS config_options`
 
-const serviceGroupColumns = `,coalesce((SELECT oi.purchase_fields FROM order_items oi WHERE oi.id=s.order_item_id),'[]'::jsonb) AS purchase_fields,p.service_group_id,g.name AS service_group_name,p.revision AS product_revision,p.config_upgrade_enabled,p.config_downgrade_enabled,
+const serviceGroupColumns = `,coalesce((SELECT ` + maskedPurchaseFields + ` FROM order_items oi WHERE oi.id=s.order_item_id),'[]'::jsonb) AS purchase_fields,p.service_group_id,g.name AS service_group_name,p.revision AS product_revision,p.config_upgrade_enabled,p.config_downgrade_enabled,
 EXISTS(SELECT 1 FROM product_upgrade_targets t WHERE t.product_id=s.product_id) AS product_upgrade_available,
 coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents) AS recurring_price_cents,
 s.renewal_discount_percent,s.renewal_promo_code,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,

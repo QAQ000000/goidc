@@ -239,8 +239,8 @@ export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, pa
 export type CatalogSection = { id: number; name: string; slug: string; description: string; sort_order: number; active: boolean; version: number; member_count: number };
 export type CatalogCategory = CatalogSection & { section_id: number | null; section_name: string | null; section_active: boolean; headline: string; tagline: string };
 export type ProductPage = { items: Product[]; total: number; limit: number; offset: number };
-export type PurchaseField = { key:string;label:string;type:"text"|"textarea"|"select"|"checkbox"|"url";description:string;required:boolean;active:boolean;show_invoice:boolean;max_length:number;pattern:string;choices:string[];sort_order:number };
-export type PurchaseFieldSnapshot = { key:string;label:string;type:string;value:string;show_invoice:boolean };
+export type PurchaseField = { key:string;label:string;type:"text"|"textarea"|"select"|"checkbox"|"url";description:string;required:boolean;active:boolean;show_invoice:boolean;max_length:number;pattern:string;choices:string[];sort_order:number;scope?:"purchase"|"admin"|"customer";encrypted?:boolean;customer_profile_key?:string };
+export type PurchaseFieldSnapshot = { key:string;label:string;type:string;value:string;show_invoice:boolean;scope?:string;encrypted?:boolean;customer_profile_key?:string };
 export type NOKVMResources = {
   areas_id:number;core:number;cpu_mode:string;memory:number;data_disk_size:number;
   net_out:number;net_in:number;snapshoot:number;backups:number;templates_id:number;

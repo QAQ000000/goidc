@@ -333,7 +333,7 @@ func (s *Store) CartPromoQuote(ctx context.Context, tx pgx.Tx, userID int64, car
 		if err = json.Unmarshal(entry.fields, &fields); err != nil {
 			return PromoQuote{}, 0, err
 		}
-		if _, _, err = ValidatePurchaseFields(ctx, tx, entry.line.ProductID, fields); err != nil {
+		if _, _, err = ValidatePurchaseFieldsWithKey(ctx, tx, entry.line.ProductID, fields, s.PurchaseFieldEncryptionKey); err != nil {
 			return PromoQuote{}, 0, err
 		}
 		var ids []int64
