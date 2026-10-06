@@ -53,6 +53,75 @@ func configuredCart(t *testing.T, h http.Handler, customer string, pid int64, id
 	return int64(cart["version"].(float64)), int64(items[len(items)-1].(map[string]any)["id"].(float64))
 }
 
+func TestNativeDropdownRadioAndCheckboxAddOn(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "native-controls-admin", "super_admin")
+	_, customer := user(t, db, h, "native-controls-customer", "customer")
+	pid := managedProductID(t, h, root, productInput("native-controls", nil))
+	path := fmt.Sprintf("/api/v1/admin/products/%d/option-groups", pid)
+	option := func(label, value string, price int64) store.ProductOptionInput {
+		return store.ProductOptionInput{Label: label, Value: value, PriceDeltaCents: price, Active: enabled()}
+	}
+	create := func(name string, kind int64, required bool, choices []store.ProductOptionInput) int64 {
+		w := request(h, "POST", path, store.ProductOptionGroupInput{Name: name, Slug: name, OptionType: kind, Required: required, Active: enabled(), Options: choices, ExpectedRevision: configRevision(t, h, root, pid)}, root, "")
+		expect(t, w, 201)
+		return int64(data(t, w)["id"].(float64))
+	}
+	dropdown := create("region", 1, true, []store.ProductOptionInput{option("北京", "bj", 100), option("上海", "sh", 200)})
+	radio := create("backup", 2, false, []store.ProductOptionInput{option("每日", "daily", 300), option("每周", "weekly", 50)})
+	addon := create("security", 3, false, []store.ProductOptionInput{option("安全附加项", "security-on", 400)})
+	regionID := configOption(t, h, root, pid, dropdown, "bj")
+	radioID := configOption(t, h, root, pid, radio, "daily")
+	addonID := configOption(t, h, root, pid, addon, "security-on")
+	public := data(t, request(h, "GET", fmt.Sprintf("/api/v1/catalog/%d", pid), nil, "", ""))
+	for _, entry := range public["option_groups"].([]any) {
+		group := entry.(map[string]any)
+		if group["option_type"] != float64(1) && group["option_type"] != float64(2) && group["option_type"] != float64(3) {
+			t.Fatal("native option type missing from catalog", group)
+		}
+	}
+	cart := data(t, request(h, "GET", "/api/v1/cart", nil, customer, ""))
+	base := map[string]any{"version": cart["version"], "product_id": pid, "quantity": 1, "option_ids": []int64{regionID}}
+	expect(t, request(h, "POST", "/api/v1/cart/items", base, customer, ""), 200)
+	item := data(t, request(h, "GET", "/api/v1/cart", nil, customer, ""))["items"].([]any)[0].(map[string]any)
+	if item["price_cents"] != float64(2100) || len(item["option_ids"].([]any)) != 1 {
+		t.Fatal("unchecked optional controls changed cart", item)
+	}
+	version := data(t, request(h, "GET", "/api/v1/cart", nil, customer, ""))["version"]
+	edit := fmt.Sprintf("/api/v1/cart/items/%d", int64(item["id"].(float64)))
+	expect(t, request(h, "PATCH", edit, map[string]any{"version": version, "quantity": 1, "option_ids": []int64{regionID, radioID, addonID}}, customer, ""), 200)
+	item = data(t, request(h, "GET", "/api/v1/cart", nil, customer, ""))["items"].([]any)[0].(map[string]any)
+	if item["price_cents"] != float64(2800) || len(item["config_snapshot"].([]any)) != 3 {
+		t.Fatal("selected controls lost prices or snapshots", item)
+	}
+	badGroup := store.ProductOptionGroupInput{Name: "invalid", Slug: "invalid", OptionType: 3, Required: true, Active: enabled(), Options: []store.ProductOptionInput{option("附加", "on", 10)}, ExpectedRevision: configRevision(t, h, root, pid)}
+	expect(t, request(h, "POST", path, badGroup, root, ""), 409)
+	badGroup.Required = false
+	badGroup.Options = append(badGroup.Options, option("其他", "other", 20))
+	expect(t, request(h, "POST", path, badGroup, root, ""), 409)
+	second := option("第二个", "second", 10)
+	second.ExpectedRevision = configRevision(t, h, root, pid)
+	expect(t, request(h, "POST", fmt.Sprintf("%s/%d/options", path, addon), second, root, ""), 409)
+	var legacySecond int64
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO product_options(group_id,label,value,active) VALUES($1,'旧附加项','legacy-second',true) RETURNING id", addon).Scan(&legacySecond); err != nil {
+		t.Fatal(err)
+	}
+	version = data(t, request(h, "GET", "/api/v1/cart", nil, customer, ""))["version"]
+	w := request(h, "PATCH", edit, map[string]any{"version": version, "quantity": 1, "option_ids": []int64{regionID}}, customer, "")
+	expect(t, w, 409)
+	if !strings.Contains(w.Body.String(), "unsupported_product_configuration") {
+		t.Fatal("ambiguous legacy checkbox did not fail closed", w.Body.String())
+	}
+	groupPath := fmt.Sprintf("%s/%d", path, addon)
+	paused := store.ProductOptionGroupInput{Name: "security", Slug: "security", OptionType: 3, Active: new(bool), ExpectedRevision: configRevision(t, h, root, pid)}
+	expect(t, request(h, "PUT", groupPath, paused, root, ""), 200)
+	fix := store.ProductOptionInput{Label: "旧附加项", Value: "legacy-second", Active: new(bool), ExpectedRevision: configRevision(t, h, root, pid)}
+	expect(t, request(h, "PUT", fmt.Sprintf("%s/options/%d", groupPath, legacySecond), fix, root, ""), 200)
+	paused.Active = enabled()
+	paused.ExpectedRevision = configRevision(t, h, root, pid)
+	expect(t, request(h, "PUT", groupPath, paused, root, ""), 200)
+}
+
 func TestConfigurationLifecycleAmountsAndImmutableSnapshot(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "configuration-root", "super_admin")

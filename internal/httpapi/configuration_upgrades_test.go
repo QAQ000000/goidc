@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,6 +16,32 @@ type upgradeFixture struct {
 	h                                         http.Handler
 	root, customer, other                     string
 	uid, pid, gid, small, large, sid, orderID int64
+}
+
+func TestCheckboxAddOnConfigurationQuote(t *testing.T) {
+	f := configurationUpgradeFixture(t, false)
+	group := request(f.h, "POST", fmt.Sprintf("/api/v1/admin/products/%d/option-groups", f.pid), store.ProductOptionGroupInput{
+		Name: "security", Slug: "security", OptionType: 3, Active: enabled(), ExpectedRevision: configRevision(t, f.h, f.root, f.pid),
+		Options: []store.ProductOptionInput{{Label: "安全附加项", Value: "security-on", PriceDeltaCents: 400, Active: enabled()}},
+	}, f.root, "")
+	expect(t, group, 201)
+	addon := configOption(t, f.h, f.root, f.pid, int64(data(t, group)["id"].(float64)), "security-on")
+	detail := data(t, request(f.h, "GET", fmt.Sprintf("/api/v1/services/%d", f.sid), nil, f.customer, ""))
+	path := fmt.Sprintf("/api/v1/services/%d/configuration-quotes", f.sid)
+	quote := func(ids []int64) map[string]any {
+		w := request(f.h, "POST", path, store.ConfigurationChangeInput{OptionIDs: ids, ExpectedVersion: int64(detail["version"].(float64)), ExpectedRevision: *configRevision(t, f.h, f.root, f.pid)}, f.customer, "")
+		expect(t, w, 201)
+		return data(t, w)
+	}
+	checked := quote([]int64{f.small, addon})
+	if checked["new_recurring_cents"] != float64(2900) || len(checked["config_snapshot"].([]any)) != 2 {
+		t.Fatal("checked add-on missing from quote", checked)
+	}
+	unchanged := request(f.h, "POST", path, store.ConfigurationChangeInput{OptionIDs: []int64{f.small}, ExpectedVersion: int64(detail["version"].(float64)), ExpectedRevision: *configRevision(t, f.h, f.root, f.pid)}, f.customer, "")
+	expect(t, unchanged, 409)
+	if !strings.Contains(unchanged.Body.String(), "configuration_unchanged") {
+		t.Fatal("unchecked add-on changed service configuration", unchanged.Body.String())
+	}
 }
 
 func TestConfigurationUpgradeAuditRollbackAndPaymentCancellationRace(t *testing.T) {

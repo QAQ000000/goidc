@@ -85,6 +85,20 @@ func ValidateProductOptionsForCycleWithQuantities(ctx context.Context, q sqlQuer
 	if err != nil {
 		return selection, err
 	}
+	for groupID, group := range hierarchies {
+		if !group.active || group.optionType != 3 {
+			continue
+		}
+		count := 0
+		for _, option := range optionParents {
+			if option.groupID == groupID && option.active {
+				count++
+			}
+		}
+		if group.required || count != 1 {
+			return selection, conflict("unsupported_product_configuration", "勾选附加项必须可选且恰好有一个启用选项")
+		}
+	}
 	requiredGroups := map[int64]bool{}
 	for id, group := range hierarchies {
 		if group.required && group.active {
