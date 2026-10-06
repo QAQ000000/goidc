@@ -1,6 +1,6 @@
 # 新闻与知识库
 
-源行为来自 `app/admin/controller/NewsController.php`、`KnowledgeBaseController.php`、`app/admin/validate/KnowledgeBaseValidate.php` 和 `app/home/controller/KnowledgeBaseController.php`。本批迁移文章与分类 CRUD、草稿/发布/归档、发布时间和知识库访问范围。旧系统的多分类、标签、富文本/图片、文章排序、SEO/自定义字段仍待迁移。按用户2026-10-06要求，不开发评论或文章评价互动。
+源行为来自 `app/admin/controller/NewsController.php`、`KnowledgeBaseController.php`、`app/admin/validate/KnowledgeBaseValidate.php` 和 `app/home/controller/KnowledgeBaseController.php`。本批迁移文章与分类 CRUD、草稿/发布/归档、发布时间和知识库访问范围。多分类、标签和文章排序见 [content-taxonomy.md](content-taxonomy.md)；富文本/图片、SEO/自定义字段另行处理。按用户2026-10-06要求，不开发评论或文章评价互动。
 
 ## 管理入口与权限
 
@@ -30,7 +30,7 @@
 
 新闻只能公开。知识库 `access_level` 为 `public`、`login`、`active_service`，后两种分别要求有效凭据、有效凭据且本人拥有 `active` 服务且 `import_review_required=false`。其他客户的服务、暂停服务和待复核历史服务不满足条件；此处沿用旧源码按 Active 状态判定的行为，不额外根据到期日期推导状态。管理员不会绕过客户详情的服务条件，可通过后台详情读取。
 
-公开 API：`GET /api/v1/news`、`/news/{id}`、`/knowledgebase`、`/knowledgebase/{id}`。列表与详情同时排除草稿、归档、未来发布时间、隐藏分类及权限不足文章；列表搜索正文、标题和摘要，分页总数只统计允许读取的文章。`category_id=0` 表示未分类；不指定表示全部。分页默认 25、最多 100；页面每页 20。公开分类 `GET /api/v1/content-categories?content_type=news|knowledge` 返回全部启用分类的公开名称和说明，不公开隐藏分类或管理元数据，不按文章访问范围过滤分类名称。
+公开 API：`GET /api/v1/news`、`/news/{id}`、`/knowledgebase`、`/knowledgebase/{id}`。列表与详情同时排除草稿、归档、未来发布时间、隐藏分类及权限不足文章；列表搜索正文、标题和摘要，分页总数只统计允许读取的文章。`category_id=0` 表示未分类；不指定表示全部。分页默认 25、最多 100；页面每页 20。schema 074 起公开分类 `GET /api/v1/content-categories?content_type=news|knowledge` 仅返回当前访问者可读取文章关联的启用分类，不公开隐藏分类或管理元数据。
 
 可选 Cookie 或 API 密钥用于识别知识库阅读权限；有 Bearer 时优先使用它，无效、撤销、过期或停用凭据按匿名处理。拒绝详情统一 404，不暴露受限标题或正文；阅读数仅在成功详情事务中增加，返回增加后的数值。列表及详情不返回作者、版本、可见范围、状态等后台元数据。认证或分类在已经开始的请求中变化时遵循数据库快照和锁规则，不承诺撤销已经返回的正文。所有响应禁止缓存。
 

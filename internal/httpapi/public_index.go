@@ -20,7 +20,7 @@ func (s *Server) publicContentPreview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_content_type", "内容类型无效")
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+articleColumns+` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.content_type=$1 AND `+publicArticleWhere+" AND a.id=$3", kind, 0, id)
+	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+articleColumns+articleTaxonomyColumns+` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.content_type=$1 AND `+publicArticleWhere+" AND a.id=$3", kind, 0, id)
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -14,6 +14,9 @@ import (
 type ContentInput struct {
 	ContentType     string     `json:"content_type"`
 	CategoryID      *int64     `json:"category_id"`
+	CategoryIDs     []int64    `json:"category_ids"`
+	TagIDs          []int64    `json:"tag_ids"`
+	SortOrder       *int       `json:"sort_order"`
 	Title           string     `json:"title"`
 	Slug            string     `json:"slug"`
 	Excerpt         string     `json:"excerpt"`
@@ -55,11 +58,48 @@ func validateContent(in *ContentInput) error {
 	if in.AccessLevel == "" {
 		in.AccessLevel = "public"
 	}
-	if !contentTypeValid(in.ContentType) || in.Title == "" || !contentTextValid(in.Title, 240, false) || !contentSlug.MatchString(in.Slug) || !contentTextValid(in.Excerpt, 1000, true) || in.Body == "" || !contentTextValid(in.Body, 20000, true) || (in.Status != "draft" && in.Status != "published" && in.Status != "archived") || (in.AccessLevel != "public" && in.AccessLevel != "login" && in.AccessLevel != "active_service") || (in.ContentType == "news" && in.AccessLevel != "public") || (in.CategoryID != nil && *in.CategoryID < 1) {
+	if !contentTypeValid(in.ContentType) || in.Title == "" || !contentTextValid(in.Title, 240, false) || !contentSlug.MatchString(in.Slug) || !contentTextValid(in.Excerpt, 1000, true) || in.Body == "" || !contentTextValid(in.Body, 20000, true) || (in.Status != "draft" && in.Status != "published" && in.Status != "archived") || (in.AccessLevel != "public" && in.AccessLevel != "login" && in.AccessLevel != "active_service") || (in.ContentType == "news" && in.AccessLevel != "public") || (in.CategoryID != nil && *in.CategoryID < 1) || (in.SortOrder != nil && (*in.SortOrder < 0 || *in.SortOrder > 1000000)) || len(in.CategoryIDs) > 30 || len(in.TagIDs) > 30 {
 		return conflict("invalid_content", "文章类型、标题、标识、正文或可见范围无效")
 	}
 	if in.PublishedAt != nil && (in.PublishedAt.Year() < 2000 || in.PublishedAt.Year() > 2200) {
 		return conflict("invalid_content", "发布时间无效")
+	}
+	if in.CategoryIDs == nil {
+		in.CategoryIDs = []int64{}
+		if in.CategoryID != nil {
+			in.CategoryIDs = append(in.CategoryIDs, *in.CategoryID)
+		}
+	} else if len(in.CategoryIDs) > 0 && in.CategoryID == nil {
+		in.CategoryID = &in.CategoryIDs[0]
+	}
+	if len(in.CategoryIDs) == 0 && in.CategoryID != nil {
+		return conflict("invalid_category", "主分类必须属于文章分类")
+	}
+	if err := uniquePositiveContentIDs(in.CategoryIDs); err != nil {
+		return err
+	}
+	if err := uniquePositiveContentIDs(in.TagIDs); err != nil {
+		return err
+	}
+	if in.CategoryID != nil {
+		found := false
+		for _, id := range in.CategoryIDs {
+			found = found || id == *in.CategoryID
+		}
+		if !found {
+			return conflict("invalid_category", "主分类必须属于文章分类")
+		}
+	}
+	return nil
+}
+
+func uniquePositiveContentIDs(ids []int64) error {
+	seen := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		if id < 1 || seen[id] {
+			return conflict("invalid_content", "分类或标签编号无效或重复")
+		}
+		seen[id] = true
 	}
 	return nil
 }
@@ -88,6 +128,7 @@ func (s *Store) contentTx(ctx context.Context, actorID int64) (pgx.Tx, error) {
 }
 
 func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentInput) (int64, error) {
+	categoriesProvided, tagsProvided := in.CategoryIDs != nil, in.TagIDs != nil
 	if err := validateContent(&in); err != nil {
 		return 0, err
 	}
@@ -99,9 +140,15 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 	action := "content.created"
 	var oldType string
 	var oldVersion int64
+	var oldCategoryID *int64
 	var oldPublished *time.Time
+	sortOrder := 0
+	if in.SortOrder != nil {
+		sortOrder = *in.SortOrder
+	}
 	if id != 0 {
-		if err = tx.QueryRow(ctx, "SELECT content_type,version,published_at FROM content_articles WHERE id=$1 FOR UPDATE", id).Scan(&oldType, &oldVersion, &oldPublished); err != nil {
+		var oldSortOrder int
+		if err = tx.QueryRow(ctx, "SELECT content_type,version,category_id,published_at,sort_order FROM content_articles WHERE id=$1 FOR UPDATE", id).Scan(&oldType, &oldVersion, &oldCategoryID, &oldPublished, &oldSortOrder); err != nil {
 			return 0, err
 		}
 		if oldVersion != in.ExpectedVersion {
@@ -110,12 +157,31 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 		if oldType != in.ContentType {
 			return 0, conflict("content_type_immutable", "文章类型不能改变")
 		}
+		if in.SortOrder == nil {
+			sortOrder = oldSortOrder
+		}
+		if !categoriesProvided && in.CategoryID != nil {
+			var secondary []int64
+			if err = tx.QueryRow(ctx, `SELECT coalesce(array_agg(category_id ORDER BY category_id),'{}'::bigint[]) FROM content_article_categories
+ WHERE article_id=$1 AND ($2::bigint IS NULL OR category_id<>$2) AND category_id<>$3`, id, oldCategoryID, in.CategoryID).Scan(&secondary); err != nil {
+				return 0, err
+			}
+			in.CategoryIDs = append(in.CategoryIDs, secondary...)
+			if len(in.CategoryIDs) > 30 {
+				return 0, conflict("invalid_category", "文章分类不能超过 30 个")
+			}
+		}
+		if !tagsProvided {
+			if err = tx.QueryRow(ctx, `SELECT coalesce(array_agg(tag_id ORDER BY tag_id),'{}'::bigint[]) FROM content_article_tags WHERE article_id=$1`, id).Scan(&in.TagIDs); err != nil {
+				return 0, err
+			}
+		}
 		action = "content.updated"
 	}
-	if in.CategoryID != nil {
+	for _, categoryID := range in.CategoryIDs {
 		var categoryType string
 		var active bool
-		if err = tx.QueryRow(ctx, "SELECT content_type,active FROM content_categories WHERE id=$1 FOR SHARE", *in.CategoryID).Scan(&categoryType, &active); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT content_type,active FROM content_categories WHERE id=$1 FOR SHARE", categoryID).Scan(&categoryType, &active); err != nil {
 			return 0, err
 		}
 		if categoryType != in.ContentType {
@@ -123,6 +189,15 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 		}
 		if in.Status == "published" && !active {
 			return 0, conflict("category_hidden", "不能发布到隐藏分类")
+		}
+	}
+	for _, tagID := range in.TagIDs {
+		var tagType string
+		if err = tx.QueryRow(ctx, "SELECT content_type FROM content_tags WHERE id=$1 FOR SHARE", tagID).Scan(&tagType); err != nil {
+			return 0, err
+		}
+		if tagType != in.ContentType {
+			return 0, conflict("invalid_tag", "文章与标签类型不一致")
 		}
 	}
 	published := in.PublishedAt
@@ -137,14 +212,30 @@ func (s *Store) SaveContent(ctx context.Context, actorID, id int64, in ContentIn
 		published = nil
 	}
 	if id == 0 {
-		err = tx.QueryRow(ctx, `INSERT INTO content_articles(content_type,category_id,title,slug,excerpt,body,status,access_level,published_at,author_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, in.ContentType, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published, actorID).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO content_articles(content_type,category_id,title,slug,excerpt,body,status,access_level,published_at,author_id,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, in.ContentType, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published, actorID, sortOrder).Scan(&id)
 	} else {
-		_, err = tx.Exec(ctx, `UPDATE content_articles SET category_id=$2,title=$3,slug=$4,excerpt=$5,body=$6,status=$7,access_level=$8,published_at=$9,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published)
+		_, err = tx.Exec(ctx, `UPDATE content_articles SET category_id=$2,title=$3,slug=$4,excerpt=$5,body=$6,status=$7,access_level=$8,published_at=$9,sort_order=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Slug, in.Excerpt, in.Body, in.Status, in.AccessLevel, published, sortOrder)
 	}
 	if err != nil {
 		return 0, err
 	}
-	if err = Audit(ctx, tx, actorID, action, "content_article", id, map[string]any{"content_type": in.ContentType, "status": in.Status, "access_level": in.AccessLevel, "published_at": published, "previous_version": oldVersion, "version": oldVersion + 1}); err != nil {
+	if _, err = tx.Exec(ctx, "DELETE FROM content_article_categories WHERE article_id=$1", id); err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec(ctx, "DELETE FROM content_article_tags WHERE article_id=$1", id); err != nil {
+		return 0, err
+	}
+	for _, categoryID := range in.CategoryIDs {
+		if _, err = tx.Exec(ctx, "INSERT INTO content_article_categories(article_id,category_id) VALUES($1,$2)", id, categoryID); err != nil {
+			return 0, err
+		}
+	}
+	for _, tagID := range in.TagIDs {
+		if _, err = tx.Exec(ctx, "INSERT INTO content_article_tags(article_id,tag_id) VALUES($1,$2)", id, tagID); err != nil {
+			return 0, err
+		}
+	}
+	if err = Audit(ctx, tx, actorID, action, "content_article", id, map[string]any{"content_type": in.ContentType, "status": in.Status, "access_level": in.AccessLevel, "published_at": published, "category_ids": in.CategoryIDs, "tag_ids": in.TagIDs, "sort_order": sortOrder, "previous_version": oldVersion, "version": oldVersion + 1}); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)
@@ -228,7 +319,7 @@ func (s *Store) DeleteContentCategory(ctx context.Context, actorID, id, version 
 		return conflict("version_conflict", "分类已变更，请重新加载")
 	}
 	var used bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM content_articles WHERE category_id=$1)", id).Scan(&used); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM content_articles WHERE category_id=$1) OR EXISTS(SELECT 1 FROM content_article_categories WHERE category_id=$1)", id).Scan(&used); err != nil {
 		return err
 	}
 	if used {
