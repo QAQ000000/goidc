@@ -89,6 +89,11 @@ resource remains active; cancellation must be performed upstream and synchronize
 to terminated first. Automatic renewal, upgrades and lifecycle writes remain
 blocked for this provider.
 
+Use a dedicated upstream customer account for automated orders: this lease
+coordinates local workers, not people or other deployments sharing that account.
+Before external acceptance, set `PUBLIC_ORIGIN` to the real downstream URL;
+the development value `http://localhost:3088` is only a local preview address.
+
 To add another system, implement `Adapter` and register its factory and metadata
 in `internal/supplier/registry.go`. Normalize catalog/configuration/money/state
 and sanitized errors inside that adapter. The UI reads provider metadata from
