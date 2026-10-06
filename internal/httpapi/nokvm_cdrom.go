@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
 )
@@ -10,7 +11,7 @@ func (s *Server) serviceCDROM(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.authLimit(w, r, "service-cdrom", 30) {
+	if !s.authLimit(w, r, fmt.Sprintf("service-cdrom:%d", identityFrom(r).ID), 30) {
 		return
 	}
 	if r.Method == http.MethodGet {

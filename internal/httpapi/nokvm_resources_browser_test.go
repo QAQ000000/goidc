@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -64,7 +65,16 @@ func TestNOKVMResourcesBrowserFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	fileID := downloadID(t, f.h, f.root, downloadInput())
-	server := httptest.NewServer(New(f.db, config.Config{PublicOrigin: "http://localhost:3099", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
+	server := httptest.NewUnstartedServer(New(f.db, config.Config{PublicOrigin: "http://localhost:3099", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
+	if addr := os.Getenv("ZJMFGO_BROWSER_API_ADDR"); addr != "" {
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.Listener.Close()
+		server.Listener = listener
+	}
+	server.Start()
 	defer server.Close()
 	ctx, stop := context.WithCancel(t.Context())
 	done := make(chan struct{})
@@ -100,7 +110,11 @@ func TestNOKVMResourcesBrowserFixture(t *testing.T) {
 		}
 	}()
 	defer func() { stop(); <-done }()
-	manifest, _ := json.Marshal(map[string]any{"api_origin": server.URL, "service_id": f.sid, "customer": "nokvm-customer", "admin": "nokvm-root", "reader": "resources-browser-reader", "download_id": fileID})
+	var schema string
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _ := json.Marshal(map[string]any{"schema": schema, "api_origin": server.URL, "service_id": f.sid, "customer": "nokvm-customer", "admin": "nokvm-root", "reader": "resources-browser-reader", "download_id": fileID})
 	if err := os.WriteFile(ready, manifest, 0600); err != nil {
 		t.Fatal(err)
 	}

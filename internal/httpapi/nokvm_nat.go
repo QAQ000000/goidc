@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/codex/zjmfgo/internal/provision"
@@ -12,7 +13,7 @@ func (s *Server) serviceNAT(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.authLimit(w, r, "service-nat", 30) {
+	if !s.authLimit(w, r, fmt.Sprintf("service-nat:%d", identityFrom(r).ID), 30) {
 		return
 	}
 	kind := r.PathValue("kind")
