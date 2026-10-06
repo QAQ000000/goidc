@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 type Config struct {
 	HTTPAddr, DatabaseURL, PublicOrigin, PaymentGatewaySecret string
+	PublicOrigins                                             []string
 	EpayAPIURL, EpayPID, EpayKey                              string
 	EpayTypes                                                 []string
 	SecureCookie                                              bool
@@ -30,7 +32,12 @@ func Load() (Config, error) {
 	if err != nil || smtpPort < 1 || smtpPort > 65535 {
 		return Config{}, fmt.Errorf("SMTP_PORT must be between 1 and 65535")
 	}
-	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: strings.TrimRight(env("PUBLIC_ORIGIN", "http://localhost:3088"), "/"), PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true", SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
+	publicOrigin := strings.TrimRight(strings.TrimSpace(env("PUBLIC_ORIGIN", "http://localhost:3088")), "/")
+	publicOrigins, err := parsePublicOrigins(publicOrigin, os.Getenv("PUBLIC_ORIGINS"))
+	if err != nil {
+		return Config{}, err
+	}
+	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: publicOrigin, PublicOrigins: publicOrigins, PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true", SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("DATABASE_URL is required")
 	}
@@ -85,6 +92,28 @@ func Load() (Config, error) {
 		}
 	}
 	return c, nil
+}
+
+func parsePublicOrigins(primary, raw string) ([]string, error) {
+	values := []string{primary}
+	if strings.TrimSpace(raw) != "" {
+		values = append(values, strings.Split(raw, ",")...)
+	}
+	seen := make(map[string]struct{}, len(values))
+	origins := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimRight(strings.TrimSpace(value), "/")
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return nil, fmt.Errorf("PUBLIC_ORIGINS contains an invalid origin")
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		origins = append(origins, value)
+	}
+	return origins, nil
 }
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

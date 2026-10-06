@@ -33,3 +33,17 @@ func TestEpayConfigurationRequiresCompleteCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicOrigins(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://app@localhost/example_test")
+	t.Setenv("PUBLIC_ORIGIN", "http://localhost:3088/")
+	t.Setenv("PUBLIC_ORIGINS", "http://localhost:11750, http://localhost:3088/")
+	cfg, err := Load()
+	if err != nil || len(cfg.PublicOrigins) != 2 || cfg.PublicOrigins[0] != "http://localhost:3088" || cfg.PublicOrigins[1] != "http://localhost:11750" {
+		t.Fatalf("origins not normalized: %#v, %v", cfg.PublicOrigins, err)
+	}
+	t.Setenv("PUBLIC_ORIGINS", "https://example.test/path")
+	if _, err := Load(); err == nil {
+		t.Fatal("path-bearing origin accepted")
+	}
+}

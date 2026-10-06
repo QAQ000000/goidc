@@ -367,7 +367,7 @@ func (s *Server) Handler() http.Handler {
 				writeError(w, 403, "csrf_required", "请求校验失败")
 				return
 			}
-			if origin := r.Header.Get("Origin"); origin != "" && origin != s.cfg.PublicOrigin {
+			if origin := r.Header.Get("Origin"); origin != "" && !s.originAllowed(origin) {
 				writeError(w, 403, "origin_denied", "请求来源不允许")
 				return
 			}
@@ -382,6 +382,18 @@ func (s *Server) Handler() http.Handler {
 			mux.ServeHTTP(w, r)
 		}
 	})
+}
+
+func (s *Server) originAllowed(origin string) bool {
+	if len(s.cfg.PublicOrigins) == 0 {
+		return origin == s.cfg.PublicOrigin
+	}
+	for _, allowed := range s.cfg.PublicOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) gateway(name string) (payment.Gateway, bool) {
