@@ -815,8 +815,8 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
           {!!data.purchase_fields?.length && <section className="data-surface p-6 my-5"><h2 className="font-semibold mb-4">购买信息</h2><PurchaseFieldDetails fields={data.purchase_fields}/></section>}
           {!admin && <ServiceDownloads key={data.id} serviceID={data.id} />}
           {!admin && <CancellationPanel service={data} refresh={refresh} />}
-          {!admin && <RenewalPanel service={data} />}
-          {!admin && <AutoRenewPanel service={data} refresh={refresh} />}
+          {!admin && data.provision_mode !== "supplier" && <RenewalPanel service={data} />}
+          {!admin && data.provision_mode !== "supplier" && <AutoRenewPanel service={data} refresh={refresh} />}
         </>
       )}
     </Workspace>

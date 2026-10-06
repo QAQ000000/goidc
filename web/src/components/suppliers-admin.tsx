@@ -1,0 +1,103 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Download, Pencil, Plus, RefreshCw, Save } from "lucide-react";
+import { api, money, type CatalogCategory, type SupplierAccount, type SupplierProduct, type SupplierProvider } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+import { Workspace, useAdminPermission } from "./workspace";
+import { Failure, Loading, cycles } from "./common";
+import { catalogSelectStyle } from "./catalog-admin";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Checkbox } from "./ui/checkbox";
+
+type AccountDraft = {id:number;name:string;provider:string;base_url:string;username:string;password:string;active:boolean;expected_version:number};
+const emptyAccount = (provider:string):AccountDraft => ({id:0,name:"",provider,base_url:"",username:"",password:"",active:true,expected_version:0});
+function cents(value:string) {
+  if (!/^\d{1,7}(?:\.\d{1,2})?$/.test(value)) throw new Error("金额最多保留两位小数且不能超过 100 万元");
+  const result = Math.round(Number(value)*100);
+  if (result > 100000000) throw new Error("金额不能超过 100 万元");
+  return result;
+}
+function amount(value:number) { return (value/100).toFixed(2); }
+
+export function SuppliersView() {
+  return <Workspace title="供应商" admin><SuppliersManager /></Workspace>;
+}
+
+function SuppliersManager() {
+  const manage = useAdminPermission("products.manage");
+  const providers = useResource<SupplierProvider[]>("/admin/supplier-providers", false);
+  const accounts = useResource<SupplierAccount[]>("/admin/suppliers", false);
+  const [draft,setDraft] = useState<AccountDraft|null>(null);
+  const [selected,setSelected] = useState<SupplierAccount|null>(null);
+  const [catalog,setCatalog] = useState<SupplierProduct[]|null>(null);
+  const [catalogBusy,setCatalogBusy] = useState(false);
+  const [productID,setProductID] = useState<number|null>(null);
+  const [busy,setBusy] = useState(false);
+  const [error,setError] = useState("");
+  const [notice,setNotice] = useState("");
+  const detail = useResource<SupplierProduct>(selected && productID ? `/admin/suppliers/${selected.id}/products/${productID}` : null, false);
+
+  async function saveAccount(event:React.FormEvent) {
+    event.preventDefault();
+    if (!draft || !manage || busy) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      const {id,...body} = draft;
+      await api(`/admin/suppliers${id?`/${id}`:""}`, {method:id?"PUT":"POST",body:JSON.stringify(body)});
+      setDraft(null); accounts.refresh(); setSelected(null); setCatalog(null); setProductID(null);
+      setNotice("供应商已保存");
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function loadCatalog(account:SupplierAccount) {
+    if (!manage || catalogBusy) return;
+    setSelected(account); setCatalog(null); setProductID(null); setCatalogBusy(true); setError(""); setNotice("");
+    try { setCatalog(await api<SupplierProduct[]>(`/admin/suppliers/${account.id}/catalog`,{method:"POST"})); }
+    catch (e) { setError((e as Error).message); }
+    finally { setCatalogBusy(false); }
+  }
+  const failure = providers.error ?? accounts.error;
+  return <div className="space-y-7">
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="page-title">供应商</h1><p className="text-sm text-muted-foreground mt-2">管理上游账户与本地商品导入</p></div>{manage && providers.data && <Button onClick={()=>{setDraft(emptyAccount(providers.data?.[0]?.id??""));setError("");setNotice("");}} disabled={providers.data.length===0}><Plus />新增供应商</Button>}</div>
+    {notice && <p role="status" className="text-sm text-emerald-700">{notice}</p>}
+    {error && <p role="alert" className="text-sm text-destructive break-all">{error}</p>}
+    {failure ? <Failure error={failure} retry={()=>{providers.refresh();accounts.refresh();}}/> : !providers.data || !accounts.data ? <Loading/> : <>
+      {providers.data?.length===0 && <p className="border-y py-8 text-muted-foreground">暂无可用供应商类型</p>}
+      <div className="divide-y border-y">{accounts.data.map(account=><article key={account.id} className="py-5 flex flex-wrap items-center justify-between gap-4"><div className="min-w-0 flex-1"><h2 className="font-medium break-all">{account.name}</h2><p className="text-sm text-muted-foreground mt-1 break-all">{providers.data?.find(p=>p.id===account.provider)?.name??account.provider} · {account.base_url} · {account.username}</p><p className="text-xs text-muted-foreground mt-1">{account.active?"已启用":"已停用"} · {account.credentials_configured?"凭据已配置":"凭据未配置"} · {account.product_count} 个商品 · 版本 {account.version}</p>{account.blocked_job_id && <p className="text-xs text-amber-700 mt-1">存在待核对任务 #{account.blocked_job_id}</p>}</div><div className="flex gap-2">{manage && <><Button variant="outline" size="icon" title="编辑供应商" aria-label={`编辑 ${account.name}`} onClick={()=>{setDraft({...account,password:"",expected_version:account.version});setError("");setNotice("");}}><Pencil/></Button><Button variant="outline" disabled={catalogBusy||!account.active||!account.credentials_configured} onClick={()=>void loadCatalog(account)}><RefreshCw/>查看目录</Button></>}</div></article>)}{accounts.data.length===0 && <p className="py-10 text-center text-muted-foreground">暂无供应商</p>}</div>
+    </>}
+    {draft && providers.data && <section className="border-t pt-6 max-w-2xl"><div className="flex items-center justify-between gap-3 mb-5"><h2 className="text-lg font-semibold">{draft.id?"编辑供应商":"新增供应商"}</h2><Button variant="ghost" onClick={()=>{setDraft(null);setError("");}}>取消</Button></div><form onSubmit={saveAccount}><fieldset disabled={busy||!manage} className="space-y-4"><label className="grid gap-2 text-sm">名称<Input required maxLength={120} value={draft.name} onChange={e=>setDraft({...draft,name:e.target.value})}/></label><label className="grid gap-2 text-sm">类型<select className={catalogSelectStyle} required value={draft.provider} disabled={!!draft.id} onChange={e=>setDraft({...draft,provider:e.target.value})}>{providers.data.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="grid gap-2 text-sm">接口地址<Input required type="url" placeholder="https://" value={draft.base_url} onChange={e=>setDraft({...draft,base_url:e.target.value})}/></label><label className="grid gap-2 text-sm">用户名<Input required autoComplete="off" value={draft.username} onChange={e=>setDraft({...draft,username:e.target.value})}/></label><label className="grid gap-2 text-sm">{draft.id?"新密码（留空保留）":"密码"}<Input required={!draft.id} type="password" autoComplete="new-password" value={draft.password} onChange={e=>setDraft({...draft,password:e.target.value})}/></label><label className="flex items-center gap-2 text-sm"><Checkbox checked={draft.active} onCheckedChange={value=>setDraft({...draft,active:value===true})}/>启用供应商</label>{error && <p role="alert" className="text-sm text-destructive break-all">{error}</p>}<Button disabled={busy}><Save/>{busy?"保存中":"保存供应商"}</Button></fieldset></form></section>}
+    {selected && <section className="border-t pt-6"><div className="flex flex-wrap justify-between gap-3 items-center mb-5"><div><h2 className="text-lg font-semibold">{selected.name} · 上游目录</h2><p className="text-sm text-muted-foreground mt-1">预览目录不会创建本地商品</p></div><Button variant="ghost" onClick={()=>{setSelected(null);setCatalog(null);setProductID(null);}}><ArrowLeft/>返回供应商</Button></div>{catalogBusy?<Loading/>:catalog && <div className="divide-y border-y">{catalog.map(product=><article key={product.id} className="py-4 flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h3 className="font-medium break-all">{product.name}</h3><p className="text-xs text-muted-foreground mt-1">上游 ID {product.id} · {product.stock===null?"库存不限":`库存 ${product.stock}`} · {Object.entries(product.prices??{}).map(([cycle,price])=>`${cycles[cycle]??cycle} ${money(price.amount_cents)}`).join(" / ")}</p>{!product.supported && <p className="text-xs text-destructive mt-1">{product.unsupported_reason||"当前商品配置不支持导入"}</p>}</div><Button variant="outline" disabled={!product.supported} onClick={()=>setProductID(product.id)}>配置导入</Button></article>)}{catalog.length===0 && <p className="py-10 text-center text-muted-foreground">上游目录为空</p>}</div>}{productID && (detail.error?<Failure error={detail.error} retry={detail.refresh}/>:!detail.data?<Loading/>:<ImportProduct key={`${selected.id}:${productID}:${detail.data.revision}`} account={selected} product={detail.data}/>)}</section>}
+  </div>;
+}
+
+function ImportProduct({account,product}:{account:SupplierAccount;product:SupplierProduct}) {
+  const router=useRouter(); const manage=useAdminPermission("products.manage");
+  const categories=useResource<CatalogCategory[]>("/admin/catalog-groups/category",false);
+  const availableCycles=Object.keys(product.prices??{}).filter(c=>["monthly","quarterly","annually","once"].includes(c));
+  const [cycle,setCycle]=useState(availableCycles[0]??"");
+  const [name,setName]=useState(product.name);
+  const [slug,setSlug]=useState("");
+  const [categoryID,setCategoryID]=useState("");
+  const [price,setPrice]=useState(amount(product.prices[availableCycles[0]]?.amount_cents??0));
+  const [setup,setSetup]=useState(amount(product.prices[availableCycles[0]]?.setup_cents??0));
+  const [maxCost,setMaxCost]=useState(amount(product.prices[availableCycles[0]]?.amount_cents??0));
+  const [stock,setStock]=useState(product.stock===null?"":String(product.stock));
+  const [options,setOptions]=useState<Record<string,string>>({});
+  const [fields,setFields]=useState<Record<string,string>>({});
+  const [busy,setBusy]=useState(false);const [error,setError]=useState("");
+  async function submit(event:React.FormEvent) {
+    event.preventDefault(); if (!manage||busy||!product.supported) return;
+    setBusy(true);setError("");
+    try {
+      const result=await api<{id:number}>(`/admin/suppliers/${account.id}/import`,{method:"POST",body:JSON.stringify({upstream_product_id:product.id,expected_upstream_revision:product.revision,expected_supplier_version:account.version,name:name.trim(),slug:slug.trim(),category_id:categoryID?Number(categoryID):null,billing_cycle:cycle,price_cents:cents(price),setup_fee_cents:cents(setup),maximum_cost_cents:cents(maxCost),stock:stock===""?null:Number(stock),active:false,config_options:options,custom_fields:fields})});
+      router.push(`/admin/products/${result.id}`);
+    } catch (e) {setError((e as Error).message);} finally {setBusy(false);}
+  }
+  return <section className="border-t pt-6 mt-6 max-w-3xl space-y-5"><div><h3 className="text-lg font-semibold">导入 {product.name}</h3><p className="text-sm text-muted-foreground mt-1">选择固定的上游配置。客户使用本地购物车；导入后商品默认下架，可在商品编辑页上架。</p></div>{!product.supported?<p className="text-sm text-destructive">{product.unsupported_reason||"当前商品配置不支持导入"}</p>:<form onSubmit={submit} className="space-y-5"><fieldset disabled={!manage||busy} className="space-y-5"><div className="grid sm:grid-cols-2 gap-4"><label className="grid gap-2 text-sm">本地商品名称<Input required maxLength={180} value={name} onChange={e=>setName(e.target.value)}/></label><label className="grid gap-2 text-sm">公开标识<Input required maxLength={120} pattern="[a-z0-9\-]+" placeholder="例如 cloud-starter" value={slug} onChange={e=>setSlug(e.target.value)}/></label><label className="grid gap-2 text-sm">分类<select className={catalogSelectStyle} value={categoryID} onChange={e=>setCategoryID(e.target.value)}><option value="">未分类</option>{categories.data?.map(c=><option key={c.id} value={c.id}>{c.section_name?`${c.section_name} / `:""}{c.name}</option>)}</select></label><label className="grid gap-2 text-sm">账期<select className={catalogSelectStyle} required value={cycle} onChange={e=>{const next=e.target.value;setCycle(next);setMaxCost(amount(product.prices[next]?.amount_cents??0));}}>{availableCycles.map(c=><option key={c} value={c}>{cycles[c]??c}</option>)}</select></label></div>
+    {product.options.length>0 && <div className="border-t pt-4 space-y-4"><h4 className="font-medium">上游固定配置</h4>{product.options.map(option=><label key={option.id} className="grid gap-2 text-sm">{option.name}{option.required&&" *"}<select className={catalogSelectStyle} required={option.required} value={options[String(option.id)]??""} onChange={e=>setOptions({...options,[option.id]:e.target.value})}><option value="">请选择</option>{option.choices.map(choice=><option key={choice.id} value={String(choice.id)}>{choice.name}{choice.prices?.[cycle]?` · ${money(choice.prices[cycle].amount_cents)}`:""}</option>)}</select></label>)}</div>}
+    {product.fields.length>0 && <div className="border-t pt-4 space-y-4"><h4 className="font-medium">上游自定义字段</h4>{product.fields.map(field=><label key={field.id} className="grid gap-2 text-sm">{field.name}{field.required&&" *"}{field.description&&<span className="text-xs text-muted-foreground">{field.description}</span>}{field.choices?.length?<select className={catalogSelectStyle} required={field.required} value={fields[String(field.id)]??""} onChange={e=>setFields({...fields,[field.id]:e.target.value})}><option value="">请选择</option>{field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}</select>:field.type==="textarea"?<Textarea required={field.required} value={fields[String(field.id)]??""} onChange={e=>setFields({...fields,[field.id]:e.target.value})}/>:<Input required={field.required} type={field.type==="password"?"password":"text"} autoComplete="off" value={fields[String(field.id)]??""} onChange={e=>setFields({...fields,[field.id]:e.target.value})}/>}</label>)}</div>}
+    <div className="grid sm:grid-cols-2 gap-4 border-t pt-4"><label className="grid gap-2 text-sm">本地售价（元）<Input required inputMode="decimal" value={price} onChange={e=>setPrice(e.target.value)}/></label><label className="grid gap-2 text-sm">初装费（元）<Input required inputMode="decimal" value={setup} onChange={e=>setSetup(e.target.value)}/></label><label className="grid gap-2 text-sm">上游最高成本（元）<Input required inputMode="decimal" value={maxCost} onChange={e=>setMaxCost(e.target.value)}/></label><label className="grid gap-2 text-sm">本地库存<Input type="number" min={0} max={2147483647} placeholder="留空不限量" value={stock} onChange={e=>setStock(e.target.value)}/></label></div><p className="text-xs text-muted-foreground">售价由本地独立设定。最高成本用于限制上游实际结算金额。</p>{categories.error&&<Failure error={categories.error} retry={categories.refresh}/>}<Button disabled={busy||!cycle||!categories.data}><Download/>{busy?"导入中":"导入为下架商品"}</Button></fieldset>{error&&<p role="alert" className="text-sm text-destructive break-all">{error}</p>}</form>}</section>;
+}

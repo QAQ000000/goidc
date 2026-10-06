@@ -276,7 +276,7 @@ export type Product = {
   slug: string;
   description: string;
   billing_cycle: string;
-  provision_mode: "manual" | "simulation" | "nokvm";
+  provision_mode: "manual" | "simulation" | "nokvm" | "supplier";
   approval_required: boolean;
   price_cents: number;
   setup_fee_cents: number;
@@ -293,6 +293,11 @@ export type Product = {
   configuration_rules?: NativeConfigurationRule[];
 };
 export type NativeRulePredicate = {group_id:number;option_id:number|null;operator:"equals"|"not_equals"|"absent"|"quantity_in"|"quantity_out";qty_minimum:number|null;qty_maximum:number|null};
+export type SupplierProvider = { id:string; name:string; capabilities:{catalog:boolean;product:boolean;create:boolean;sync:boolean;suspend:boolean;resume:boolean;terminate:boolean;renew:boolean} };
+export type SupplierAccount = { id:number; name:string; provider:string; base_url:string; username:string; active:boolean; version:number; credentials_configured:boolean; product_count:number; blocked_job_id?:number|null };
+export type SupplierPrice = {amount_cents:number;setup_cents:number};
+export type SupplierProduct = {id:number;name:string;description:string;currency:string;revision:string;stock:number|null;prices:Record<string,SupplierPrice>;options:{id:number;name:string;type:string;required:boolean;choices:{id:number;name:string;prices:Record<string,SupplierPrice>}[]}[];fields:{id:number;name:string;type:string;description:string;required:boolean;choices:string[]}[];supported:boolean;unsupported_reason:string};
+export type SupplierBinding = {id:number;supplier_id:number;provider:string;upstream_product_id:number;upstream_revision:string;billing_cycle:string;maximum_cost_cents:number;config_options:Record<string,string>;currency:string;custom_fields_configured:boolean};
 export type NativeConfigurationRule = {id:number;name:string;enabled:boolean;conditions:NativeRulePredicate[];results:NativeRulePredicate[]};
 export type ProductOptionPrice = { id:number;billing_cycle:string;price_cents:number;setup_fee_cents:number;active:boolean };
 export type ProductOptionPriceTier = { id?:number;billing_cycle:string;qty_minimum:number;qty_maximum:number;price_cents:number;setup_fee_cents:number;active?:boolean };
@@ -454,7 +459,7 @@ export type Service = {
   name: string;
   domain: string;
   billing_cycle: string;
-  provision_mode: "manual" | "simulation" | "nokvm";
+  provision_mode: "manual" | "simulation" | "nokvm" | "supplier";
   resource_info?:{upstream_id?:string;name?:string;ips?:string[];power?:string};
   unit_number: number;
   inventory_released: boolean;
