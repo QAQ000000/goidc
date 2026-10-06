@@ -22,7 +22,7 @@ export async function sitemapChunk(chunk: number): Promise<Response> {
   if (!first) return new Response("Public index unavailable", { status: 503, headers: { "Cache-Control": "no-store" } });
   if (chunk > 0 && offset >= first.total) return new Response("Not found", { status: 404 });
   const origin = publicOrigin();
-  const entries = chunk === 0 ? ["/", "/news", "/knowledgebase"].map(path => `<url><loc>${xml(origin + path)}</loc></url>`) : [];
+  const entries = chunk === 0 ? ["/", "/news", "/knowledgebase", "/downloads"].map(path => `<url><loc>${xml(origin + path)}</loc></url>`) : [];
   const pages = Math.min(10, Math.ceil((first.total - offset) / 1000));
   for (let page = 0; page < pages; page++) {
     const index = page === 0 ? first : await getPublicIndex(offset + page * 1000, 1000);
