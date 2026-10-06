@@ -10,6 +10,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const articleTaxonomyColumns = `,a.sort_order,
+ coalesce((SELECT jsonb_agg(jsonb_build_object('id',cc.id,'name',cc.name,'slug',cc.slug) ORDER BY cc.sort_order,cc.id) FROM content_article_categories ac JOIN content_categories cc ON cc.id=ac.category_id WHERE ac.article_id=a.id),'[]'::jsonb) AS categories,
+ coalesce((SELECT jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,'slug',t.slug) ORDER BY t.sort_order,t.id) FROM content_article_tags at JOIN content_tags t ON t.id=at.tag_id WHERE at.article_id=a.id AND t.active),'[]'::jsonb) AS tags`
+const adminTaxonomyColumns = `,a.sort_order,
+ coalesce((SELECT jsonb_agg(jsonb_build_object('id',cc.id,'name',cc.name,'slug',cc.slug) ORDER BY cc.sort_order,cc.id) FROM content_article_categories ac JOIN content_categories cc ON cc.id=ac.category_id WHERE ac.article_id=a.id),'[]'::jsonb) AS categories,
+ coalesce((SELECT jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,'slug',t.slug) ORDER BY t.sort_order,t.id) FROM content_article_tags at JOIN content_tags t ON t.id=at.tag_id WHERE at.article_id=a.id),'[]'::jsonb) AS tags`
 const articleColumns = `a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.body,a.published_at,a.views,a.created_at,a.updated_at`
 const adminArticleColumns = articleColumns + `,a.status,a.access_level,a.version,a.author_id,(a.status='published' AND a.published_at>now()) AS scheduled`
 
@@ -60,7 +66,22 @@ func (s *Server) contentAccess(r *http.Request) (int, error) {
 }
 
 const publicArticleWhere = `a.status='published' AND a.published_at IS NOT NULL AND a.published_at<=now()
- AND (a.category_id IS NULL OR c.active) AND (a.access_level='public' OR (a.access_level='login' AND $2>=1) OR (a.access_level='active_service' AND $2>=2))`
+ AND (a.category_id IS NULL OR c.active)
+ AND NOT EXISTS(SELECT 1 FROM content_article_categories hidden_ac JOIN content_categories hidden_c ON hidden_c.id=hidden_ac.category_id WHERE hidden_ac.article_id=a.id AND NOT hidden_c.active)
+ AND (a.access_level='public' OR (a.access_level='login' AND $2>=1) OR (a.access_level='active_service' AND $2>=2))`
+
+func tagFilter(w http.ResponseWriter, r *http.Request) (*int64, bool) {
+	raw := r.URL.Query().Get("tag_id")
+	if raw == "" {
+		return nil, true
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, 400, "invalid_tag", "标签筛选无效")
+		return nil, false
+	}
+	return &id, true
+}
 
 func (s *Server) contentList(w http.ResponseWriter, r *http.Request, kind string) {
 	level, err := s.contentAccess(r)
@@ -72,15 +93,19 @@ func (s *Server) contentList(w http.ResponseWriter, r *http.Request, kind string
 	if !ok {
 		return
 	}
+	tag, ok := tagFilter(w, r)
+	if !ok {
+		return
+	}
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.content_type=$1 AND ` + publicArticleWhere + ` AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.excerpt ILIKE '%'||$3||'%' OR a.body ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR coalesce(a.category_id,0)=$4)`
+	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.content_type=$1 AND ` + publicArticleWhere + ` AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.excerpt ILIKE '%'||$3||'%' OR a.body ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR ($4=0 AND a.category_id IS NULL AND NOT EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id)) OR EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id AND ac.category_id=$4)) AND ($5::bigint IS NULL OR EXISTS(SELECT 1 FROM content_article_tags at JOIN content_tags t ON t.id=at.tag_id WHERE at.article_id=a.id AND at.tag_id=$5 AND t.active))`
 	var total int64
-	if err = s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, level, q, category).Scan(&total); err != nil {
+	if err = s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, level, q, category, tag).Scan(&total); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+articleColumns+where+" ORDER BY a.published_at DESC,a.id DESC LIMIT $5 OFFSET $6", kind, level, q, category, limit, offset)
+	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+articleColumns+articleTaxonomyColumns+where+" ORDER BY a.sort_order,a.published_at DESC,a.id DESC LIMIT $6 OFFSET $7", kind, level, q, category, tag, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -113,7 +138,7 @@ func (s *Server) contentDetail(w http.ResponseWriter, r *http.Request, kind stri
 		return
 	}
 	defer tx.Rollback(r.Context())
-	rows, err := tx.Query(r.Context(), "SELECT "+articleColumns+` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.id=$3 AND a.content_type=$1 AND `+publicArticleWhere+" FOR UPDATE OF a", kind, level, id)
+	rows, err := tx.Query(r.Context(), "SELECT "+articleColumns+articleTaxonomyColumns+` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.id=$3 AND a.content_type=$1 AND `+publicArticleWhere+" FOR UPDATE OF a", kind, level, id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -143,7 +168,46 @@ func (s *Server) publicContentCategories(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	s.list(w, r, "SELECT id,content_type,name,slug,description,sort_order FROM content_categories WHERE content_type=$1 AND active ORDER BY sort_order,id", kind)
+	level, err := s.contentAccess(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.list(w, r, `SELECT category.id,category.content_type,category.name,category.slug,category.description,category.sort_order
+ FROM content_categories category WHERE category.content_type=$1 AND category.active
+ AND EXISTS(SELECT 1 FROM content_article_categories ac JOIN content_articles a ON a.id=ac.article_id
+ LEFT JOIN content_categories c ON c.id=a.category_id WHERE ac.category_id=category.id AND a.content_type=$1 AND `+publicArticleWhere+`)
+ ORDER BY category.sort_order,category.id`, kind, level)
+}
+
+func (s *Server) publicContentTags(w http.ResponseWriter, r *http.Request) {
+	kind, ok := contentQueryType(w, r, true)
+	if !ok {
+		return
+	}
+	level, err := s.contentAccess(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT t.id,t.content_type,t.name,t.slug,t.sort_order,count(a.id) AS article_count
+ FROM content_tags t JOIN content_article_tags at ON at.tag_id=t.id
+ JOIN content_articles a ON a.id=at.article_id LEFT JOIN content_categories c ON c.id=a.category_id
+ WHERE t.content_type=$1 AND a.content_type=$1 AND t.active AND `+publicArticleWhere+`
+ GROUP BY t.id ORDER BY t.sort_order,t.id`, kind, level)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	write(w, 200, items)
 }
 func (s *Server) adminContentList(w http.ResponseWriter, r *http.Request) {
 	kind, ok := contentQueryType(w, r, false)
@@ -159,16 +223,20 @@ func (s *Server) adminContentList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	tag, ok := tagFilter(w, r)
+	if !ok {
+		return
+	}
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE ($1='' OR a.content_type=$1) AND ($2='' OR a.status=$2) AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.slug ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR coalesce(a.category_id,0)=$4)`
+	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE ($1='' OR a.content_type=$1) AND ($2='' OR a.status=$2) AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.slug ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR ($4=0 AND a.category_id IS NULL AND NOT EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id)) OR EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id AND ac.category_id=$4)) AND ($5::bigint IS NULL OR EXISTS(SELECT 1 FROM content_article_tags at WHERE at.article_id=a.id AND at.tag_id=$5))`
 	var total int64
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, status, q, category).Scan(&total)
+	err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, status, q, category, tag).Scan(&total)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.published_at,a.views,a.status,a.access_level,a.version,a.author_id,a.created_at,a.updated_at,(a.status='published' AND a.published_at>now()) AS scheduled`+where+" ORDER BY a.updated_at DESC,a.id DESC LIMIT $5 OFFSET $6", kind, status, q, category, limit, offset)
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.published_at,a.views,a.status,a.access_level,a.version,a.author_id,a.created_at,a.updated_at,(a.status='published' AND a.published_at>now()) AS scheduled`+adminTaxonomyColumns+where+" ORDER BY a.sort_order,a.updated_at DESC,a.id DESC LIMIT $6 OFFSET $7", kind, status, q, category, tag, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -188,7 +256,7 @@ func (s *Server) adminContentDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+adminArticleColumns+" FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.id=$1", id)
+	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+adminArticleColumns+adminTaxonomyColumns+" FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.id=$1", id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -250,7 +318,7 @@ func (s *Server) adminContentCategories(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	s.list(w, r, `SELECT c.*,(SELECT count(*) FROM content_articles a WHERE a.category_id=c.id) AS article_count FROM content_categories c WHERE ($1='' OR c.content_type=$1) ORDER BY c.sort_order,c.id`, kind)
+	s.list(w, r, `SELECT c.*,(SELECT count(*) FROM content_article_categories ac WHERE ac.category_id=c.id) AS article_count FROM content_categories c WHERE ($1='' OR c.content_type=$1) ORDER BY c.sort_order,c.id`, kind)
 }
 func (s *Server) adminSaveContentCategory(w http.ResponseWriter, r *http.Request) {
 	var id int64

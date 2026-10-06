@@ -192,6 +192,9 @@ export type ContentArticle = {
   content_type: "news" | "knowledge";
   category_id: number | null;
   category_name: string | null;
+  categories: { id: number; name: string; slug: string }[];
+  tags: { id: number; name: string; slug: string }[];
+  sort_order: number;
   title: string;
   slug: string;
   excerpt: string;
@@ -203,6 +206,7 @@ export type ContentArticle = {
 };
 export type AdminContentArticle = ContentArticle & { status: "draft" | "published" | "archived"; access_level: "public" | "login" | "active_service"; version: number; author_id: number | null; scheduled: boolean | null };
 export type ContentCategory = { id: number; content_type: "news" | "knowledge"; name: string; slug: string; description: string; sort_order: number; active: boolean; version: number; article_count: number };
+export type ContentTag = { id: number; content_type: "news" | "knowledge"; name: string; slug: string; sort_order: number; active: boolean; version: number; article_count: number };
 export type DownloadItem = { id:number;category_id:number|null;category_name:string|null;category_path?:string[]|null;title:string;description:string;access_level:"public"|"login"|"product";source_type:"local"|"remote";filename:string;size_bytes:number;sha256:string;downloads:number;created_at:string;updated_at:string;can_download:boolean };
 export type AdminDownload = DownloadItem & { active:boolean;version:number;remote_url:string;product_ids:number[] };
 export type DownloadCategory = { id:number;parent_id:number|null;name:string;description:string;sort_order:number;active:boolean;effective_active:boolean;version:number;file_count:number;direct_file_count:number;child_count:number;path:string[];depth:number };
