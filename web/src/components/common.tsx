@@ -64,6 +64,9 @@ const names: Record<string, string> = {
   declined: "已驳回",
   rejected: "已驳回",
   withdrawn: "已撤回",
+  recorded: "已记录",
+  verified: "已核验",
+  requested: "已申请",
 };
 export function Status({ value }: { value: string }) {
   return (

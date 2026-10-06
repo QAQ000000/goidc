@@ -55,18 +55,18 @@ func (s *Server) serviceActivity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_pagination", "分页参数无效")
 		return
 	}
-	action := strings.TrimSpace(r.URL.Query().Get("action"))
-	if action != "" && !serviceActivityActions[action] {
+	action, valid := serviceActivityFilter(r, "action", serviceActivityActions)
+	if !valid {
 		writeError(w, http.StatusBadRequest, "invalid_activity_action", "服务历史动作无效")
 		return
 	}
-	category := strings.TrimSpace(r.URL.Query().Get("category"))
-	if category != "" && !serviceActivityCategories[category] {
+	category, valid := serviceActivityFilter(r, "category", serviceActivityCategories)
+	if !valid {
 		writeError(w, http.StatusBadRequest, "invalid_activity_category", "服务历史分类无效")
 		return
 	}
-	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	if status != "" && !serviceActivityStatuses[status] {
+	status, valid := serviceActivityFilter(r, "status", serviceActivityStatuses)
+	if !valid {
 		writeError(w, http.StatusBadRequest, "invalid_activity_status", "服务历史状态无效")
 		return
 	}
@@ -78,17 +78,23 @@ func (s *Server) serviceActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	var ownerID int64
+	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3) FOR SHARE", id, admin, identityFrom(r).ID).Scan(&ownerID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if admin {
-		if err = store.LockAdminResourceCustomer(r.Context(), tx, identityFrom(r).ID, "service", id); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	} else {
-		var serviceID int64
-		if err = tx.QueryRow(r.Context(), "SELECT id FROM services WHERE id=$1 AND user_id=$2", id, identityFrom(r).ID).Scan(&serviceID); err != nil {
-			s.fail(w, r, err)
-			return
-		}
+		err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, ownerID)
+	}
+	// A scope or service lock may have waited while the credential was revoked.
+	current := false
+	s.auth(func(_ http.ResponseWriter, fresh *http.Request) { r, current = fresh, true }, admin)(w, r)
+	if !current {
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
 	}
 
 	query := `WITH timeline AS (
@@ -106,7 +112,8 @@ SELECT 'audit'::text AS source,
        END AS category,
        CASE
          WHEN a.action='service.action.queued' THEN 'queued'
-         WHEN a.action='service.manual.completed' OR a.action IN ('service.nokvm.completed','service.nokvm.verified','service.simulation.completed','service.billing_cycle.completed') THEN 'completed'
+         WHEN a.action='service.nokvm.verified' THEN CASE a.payload->>'resolution' WHEN 'applied' THEN 'verified' WHEN 'not_applied' THEN 'failed' ELSE 'recorded' END
+         WHEN a.action='service.manual.completed' OR a.action IN ('service.nokvm.completed','service.simulation.completed','service.billing_cycle.completed') THEN 'completed'
          WHEN a.action LIKE 'service.nokvm.%' THEN split_part(a.action,'.',3)
          WHEN a.action LIKE 'service.cancellation.%' THEN split_part(a.action,'.',3)
          ELSE 'recorded'
@@ -119,18 +126,17 @@ SELECT 'audit'::text AS source,
        a.created_at AS occurred_at,
        jsonb_strip_nulls(jsonb_build_object(
          'audit_id',a.id,
-         'job_id',CASE WHEN a.payload->>'job_id' ~ '^[0-9]{1,18}$' THEN (a.payload->>'job_id')::bigint END,
+         'job_id',aj.id,
          'action',CASE WHEN a.action='service.action.queued' AND a.payload->>'action'=ANY($5::text[]) THEN a.payload->>'action' END
        )) AS metadata,
        NULL::integer AS attempts,
        a.id AS sequence
 FROM audit_events a
 LEFT JOIN users u ON u.id=a.actor_id
+LEFT JOIN provision_jobs aj ON aj.service_id=$1::bigint AND aj.id::text=a.payload->>'job_id'
 WHERE a.entity_type='service' AND a.entity_id=$1::text AND a.action=ANY($4::text[])
   AND (a.action<>'service.action.queued' OR a.payload->>'action'=ANY($5::text[]))
-  AND NOT (a.action='service.action.queued' AND a.payload->>'job_id' ~ '^[0-9]{1,18}$' AND EXISTS (
-    SELECT 1 FROM provision_jobs q WHERE q.service_id=$1::bigint AND q.id=(a.payload->>'job_id')::bigint
-  ))
+  AND NOT (a.action='service.action.queued' AND aj.id IS NOT NULL)
 UNION ALL
 SELECT 'job'::text AS source,
        'job-'||j.id::text AS id,
@@ -187,7 +193,20 @@ SELECT (SELECT count(*) FROM filtered) AS total,
 		s.fail(w, r, err)
 		return
 	}
+	w.Header().Set("Cache-Control", "private, no-store")
 	write(w, http.StatusOK, result)
+}
+
+func serviceActivityFilter(r *http.Request, key string, allowed map[string]bool) (string, bool) {
+	values, exists := r.URL.Query()[key]
+	if !exists {
+		return "", true
+	}
+	if len(values) != 1 {
+		return "", false
+	}
+	value := strings.TrimSpace(values[0])
+	return value, allowed[value]
 }
 
 func serviceActivityPagination(r *http.Request) (int, int, bool) {

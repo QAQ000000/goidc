@@ -38,7 +38,8 @@ const activityActions = [
   ["reboot", "重启"], ["force_off", "强制关机"], ["force_reboot", "强制重启"], ["snapshot_create", "创建快照"], ["snapshot_delete", "删除快照"],
   ["snapshot_restore", "恢复快照"], ["backup_create", "创建备份"], ["backup_delete", "删除备份"], ["backup_restore", "恢复备份"], ["nat_acl_create", "创建端口转发"],
   ["nat_acl_delete", "删除端口转发"], ["nat_web_create", "创建 NAT 建站"], ["nat_web_delete", "删除 NAT 建站"], ["cdrom_mount", "挂载光驱"], ["cdrom_unmount", "卸载光驱"],
-  ["service.manual.completed", "人工交付完成"], ["service.nokvm.verified", "NOKVM 核验完成"], ["service.nokvm.completed", "NOKVM 操作完成"],
+  ["service.manual.completed", "人工交付完成"], ["service.nokvm.verified", "资源核验结果"], ["service.nokvm.completed", "资源操作完成"],
+  ["service.nokvm.pending", "资源任务待处理"], ["service.nokvm.running", "资源任务执行中"], ["service.nokvm.failed", "资源任务失败"], ["service.nokvm.waiting_verification", "资源任务待核验"],
   ["service.renewal.created", "创建续费账单"], ["service.auto_renew.updated", "更新自动续费"], ["service.configuration.submitted", "提交配置变更"],
   ["service.configuration.cancelled", "取消配置变更"], ["service.configuration.retried", "重试配置变更"], ["service.billing_cycle.completed", "账期变更完成"],
   ["service.simulation.completed", "模拟交付完成"], ["service.cancellation.requested", "提交取消申请"], ["service.cancellation.withdrawn", "撤回取消申请"],
@@ -46,7 +47,7 @@ const activityActions = [
 ] as const;
 
 const categories = [["lifecycle", "生命周期"], ["operation", "资源操作"], ["configuration", "配置变更"], ["billing", "账务与续费"], ["cancellation", "取消申请"]] as const;
-const statuses = [["queued", "排队中"], ["pending", "待处理"], ["running", "执行中"], ["waiting_manual", "待人工确认"], ["waiting_verification", "待核验"], ["succeeded", "已完成"], ["completed", "已完成"], ["verified", "已核验"], ["failed", "失败"], ["cancelled", "已取消"], ["recorded", "已记录"]] as const;
+const statuses = [["queued", "排队中"], ["pending", "待处理"], ["running", "执行中"], ["waiting_manual", "待人工确认"], ["waiting_verification", "待核验"], ["succeeded", "已完成"], ["completed", "已完成"], ["verified", "已核验"], ["failed", "失败"], ["cancelled", "已取消"], ["recorded", "已记录"], ["requested", "已申请"], ["withdrawn", "已撤回"], ["approved", "已通过"], ["rejected", "已驳回"]] as const;
 
 const actorLabels: Record<ActivityItem["actor_kind"], string> = { you: "你", admin: "管理员", system: "系统" };
 const categoryLabels = Object.fromEntries(categories) as Record<string, string>;
@@ -74,7 +75,7 @@ export function ServiceActivityPanel({ serviceID, admin = false }: { serviceID: 
       <div className="surface-head flex-wrap gap-4">
         <div>
           <h2 className="font-semibold">操作历史</h2>
-          <p className="text-xs text-muted-foreground mt-1">服务任务、交付核验和账务关联操作的安全记录</p>
+          <p className="text-xs text-muted-foreground mt-1">查看任务进度、核验结果及续费记录</p>
         </div>
         <Button variant="ghost" size="icon-sm" onClick={refresh} aria-label="刷新操作历史" title="刷新操作历史"><RefreshCw size={16} /></Button>
       </div>
