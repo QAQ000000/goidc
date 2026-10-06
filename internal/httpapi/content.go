@@ -16,7 +16,7 @@ const articleTaxonomyColumns = `,a.sort_order,
 const adminTaxonomyColumns = `,a.sort_order,
  coalesce((SELECT jsonb_agg(jsonb_build_object('id',cc.id,'name',cc.name,'slug',cc.slug) ORDER BY cc.sort_order,cc.id) FROM content_article_categories ac JOIN content_categories cc ON cc.id=ac.category_id WHERE ac.article_id=a.id),'[]'::jsonb) AS categories,
  coalesce((SELECT jsonb_agg(jsonb_build_object('id',t.id,'name',t.name,'slug',t.slug) ORDER BY t.sort_order,t.id) FROM content_article_tags at JOIN content_tags t ON t.id=at.tag_id WHERE at.article_id=a.id),'[]'::jsonb) AS tags`
-const articleColumns = `a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.body,a.published_at,a.views,a.created_at,a.updated_at`
+const articleColumns = `a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.body,a.body_html,a.seo_title,a.seo_description,a.seo_canonical,a.published_at,a.views,a.created_at,a.updated_at`
 const adminArticleColumns = articleColumns + `,a.status,a.access_level,a.version,a.author_id,(a.status='published' AND a.published_at>now()) AS scheduled`
 
 func contentQueryType(w http.ResponseWriter, r *http.Request, required bool) (string, bool) {

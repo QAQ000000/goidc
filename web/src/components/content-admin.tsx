@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Plus, Save, RefreshCw, Trash2, ArrowUpRight } from "lucide-react";
-import { api, date, type AdminContentArticle, type ContentCategory, type ContentTag } from "@/lib/api";
+import { api, date, upload, type AdminContentArticle, type ContentCategory, type ContentTag } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
 import { Failure, Loading } from "./common";
@@ -18,7 +18,7 @@ const accessNames = { public: "公开", login: "登录后可见", active_service
 type Kind = "news" | "knowledge";
 type PageData = { items: AdminContentArticle[]; total: number };
 const selectStyle = "h-9 w-full min-w-0 rounded-md border border-input bg-white px-3 text-sm";
-const emptyArticle = (kind: Kind): AdminContentArticle => ({ id: 0, content_type: kind, category_id: null, category_name: null, categories: [], tags: [], sort_order: 0, title: "", slug: "", excerpt: "", body: "", status: "draft", access_level: "public", published_at: null, version: 0, author_id: null, views: 0, created_at: "", updated_at: "", scheduled: false });
+const emptyArticle = (kind: Kind): AdminContentArticle => ({ id: 0, content_type: kind, category_id: null, category_name: null, categories: [], tags: [], sort_order: 0, title: "", slug: "", excerpt: "", body: "", body_html: "", seo_title: "", seo_description: "", seo_canonical: "", status: "draft", access_level: "public", published_at: null, version: 0, author_id: null, views: 0, created_at: "", updated_at: "", scheduled: false });
 const emptyCategory = (kind: Kind): ContentCategory => ({ id: 0, content_type: kind, name: "", slug: "", description: "", sort_order: 0, active: true, version: 0, article_count: 0 });
 const emptyTag = (kind: Kind): ContentTag => ({ id: 0, content_type: kind, name: "", slug: "", sort_order: 0, active: true, version: 0, article_count: 0 });
 
@@ -74,7 +74,7 @@ function ArticleForm({ initial, categories, tags, manage, onClose, onSaved, onRe
     setBusy(true); setError("");
     try {
       if (published && (!/(Z|[+-]\d{2}:\d{2})$/.test(published) || !Number.isFinite(Date.parse(published)))) throw new Error("请填写有效的日期时间及其时区，例如 2026-10-06T12:00:00+08:00");
-      await api(`/admin/content${form.id ? `/${form.id}` : ""}`, { method: form.id ? "PUT" : "POST", body: JSON.stringify({ content_type: form.content_type, category_id: form.category_id, category_ids: categoryIDs, tag_ids: tagIDs, sort_order: form.sort_order, title: form.title, slug: form.slug, excerpt: form.excerpt, body: form.body, status: form.status, access_level: form.access_level, published_at: published ? new Date(published).toISOString() : null, expected_version: form.version }) });
+      await api(`/admin/content${form.id ? `/${form.id}` : ""}`, { method: form.id ? "PUT" : "POST", body: JSON.stringify({ content_type: form.content_type, category_id: form.category_id, category_ids: categoryIDs, tag_ids: tagIDs, sort_order: form.sort_order, title: form.title, slug: form.slug, excerpt: form.excerpt, body: form.body, body_html: form.body_html, seo: { title: form.seo_title, description: form.seo_description, canonical: form.seo_canonical }, status: form.status, access_level: form.access_level, published_at: published ? new Date(published).toISOString() : null, expected_version: form.version }) });
       onSaved(); onClose();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
@@ -100,7 +100,10 @@ function ArticleForm({ initial, categories, tags, manage, onClose, onSaved, onRe
       <fieldset className="space-y-2"><legend className="text-sm">附加分类</legend><div className="grid sm:grid-cols-2 gap-2">{categories.filter(c => c.id !== form.category_id).map(c => <label key={c.id} className="flex items-center gap-2 text-sm"><Checkbox disabled={!form.category_id} checked={categoryIDs.includes(c.id)} onCheckedChange={v => setCategoryIDs(v === true ? [...categoryIDs, c.id] : categoryIDs.filter(id => id !== c.id))} />{c.name}{!c.active && "（隐藏）"}</label>)}</div></fieldset>
       <fieldset className="space-y-2"><legend className="text-sm">标签</legend><div className="grid sm:grid-cols-2 gap-2">{tags.map(t => <label key={t.id} className="flex items-center gap-2 text-sm"><Checkbox checked={tagIDs.includes(t.id)} onCheckedChange={v => setTagIDs(v === true ? [...tagIDs, t.id] : tagIDs.filter(id => id !== t.id))} />{t.name}{!t.active && "（隐藏）"}</label>)}</div></fieldset>
       <label className="grid gap-2 text-sm">摘要<Textarea aria-label="文章摘要" value={form.excerpt} maxLength={1000} rows={2} onChange={e => setForm({ ...form, excerpt: e.target.value })} /></label>
-      <label className="grid gap-2 text-sm">正文<Textarea aria-label="文章正文" required value={form.body} maxLength={20000} rows={10} onChange={e => setForm({ ...form, body: e.target.value })} /></label>
+      <label className="grid gap-2 text-sm">正文纯文本<Textarea aria-label="文章正文" required value={form.body} maxLength={20000} rows={6} onChange={e => setForm({ ...form, body: e.target.value })} /></label>
+      <label className="grid gap-2 text-sm">正文 HTML（仅允许安全白名单标签）<Textarea aria-label="文章正文 HTML" value={form.body_html} maxLength={100000} rows={8} onChange={e => setForm({ ...form, body_html: e.target.value })} /></label>
+      <fieldset className="space-y-3"><legend className="text-sm">SEO 元数据</legend><label className="grid gap-2 text-sm">SEO 标题<Input maxLength={240} value={form.seo_title} onChange={e => setForm({ ...form, seo_title: e.target.value })} /></label><label className="grid gap-2 text-sm">SEO 描述<Textarea maxLength={1000} rows={2} value={form.seo_description} onChange={e => setForm({ ...form, seo_description: e.target.value })} /></label><label className="grid gap-2 text-sm">Canonical 路径<Input placeholder="/news/123" value={form.seo_canonical} onChange={e => setForm({ ...form, seo_canonical: e.target.value })} /></label></fieldset>
+      {form.id > 0 && <label className="grid gap-2 text-sm">插入图片（单张不超过 5 MiB）<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const data = new FormData(); data.append("file", file); try { const result = await upload<{url:string}>(`/admin/content/${form.id}/images`, data); setForm(current => ({ ...current, body_html: `${current.body_html}<p><img src="${result.url}" alt="" /></p>` })); } catch (err) { setError((err as Error).message); } }} /></label>}
     </fieldset>
     {error && <p role="alert" className="text-sm text-destructive break-words">{error}{form.id > 0 && <Button type="button" variant="link" onClick={onReload}>重新加载</Button>}</p>}
     <div className="flex flex-wrap justify-between gap-3 border-t pt-4"><div className="flex gap-2">{form.id > 0 && manage && <Button type="button" variant="outline" disabled={busy} onClick={() => void remove()}><Trash2 />删除文章</Button>}{form.id > 0 && <Button variant="ghost" type="button" asChild><Link href={`/${form.content_type === "news" ? "news" : "knowledgebase"}/${form.id}`} target="_blank"><ArrowUpRight />客户页面</Link></Button>}</div>{manage && <Button disabled={busy}><Save />{busy ? "保存中" : "保存文章"}</Button>}</div>
