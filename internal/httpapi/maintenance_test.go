@@ -15,6 +15,9 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "maintenance-super", "super_admin")
 	staffID, staff := user(t, db, h, "maintenance-staff", "admin")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(array_remove(permissions,'settings.view'),'settings.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+		t.Fatal(err)
+	}
 	_, customer := user(t, db, h, "maintenance-customer", "customer")
 	key := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "maintenance-customer-key"}, customer, "")
 	expect(t, key, 201)

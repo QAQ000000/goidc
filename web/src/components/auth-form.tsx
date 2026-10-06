@@ -1,12 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api, type User } from "@/lib/api";
+import { api, fetchCaptcha, type CaptchaChallenge, type User } from "@/lib/api";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
 import { Failure, Loading } from "./common";
 export function AuthForm({ register = false, adminLogin = false }: { register?: boolean; adminLogin?: boolean }) {
@@ -16,6 +16,31 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
   const [busy, setBusy] = useState(false);
   const [mfaChallenge, setMfaChallenge] = useState("");
   const [mfaCode, setMfaCode] = useState("");
+  const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaBusy, setCaptchaBusy] = useState(false);
+  const captchaRequest = useRef<AbortController | null>(null);
+  const captchaAction = register ? "register" : "login" as const;
+  const refreshCaptcha = useCallback(async (preserveError = false) => {
+    captchaRequest.current?.abort();
+    const controller = new AbortController();
+    captchaRequest.current = controller;
+    setCaptcha(null);
+    setCaptchaAnswer("");
+    setCaptchaBusy(true);
+    try {
+      const next = await fetchCaptcha(captchaAction, controller.signal);
+      if (!controller.signal.aborted) { setCaptcha(next.enabled && next.captcha_id && next.image ? next : null); setCaptchaAnswer(""); if (!preserveError) setError(""); if (!next.enabled) refresh(); }
+    } catch (e) {
+      if (!controller.signal.aborted) setError(current => preserveError && current ? current : (e as Error).message);
+    } finally {
+      if (!controller.signal.aborted) setCaptchaBusy(false);
+    }
+  }, [captchaAction, refresh]);
+  useEffect(() => {
+    const timer = site?.auth_captcha_enabled && !mfaChallenge ? window.setTimeout(() => void refreshCaptcha(true), 0) : undefined;
+    return () => { if (timer) window.clearTimeout(timer); captchaRequest.current?.abort(); };
+  }, [site?.auth_captcha_enabled, mfaChallenge, refreshCaptcha]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -32,15 +57,22 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
             password,
             email: form.get("email"),
             display_name: form.get("display_name"),
+            captcha_id: captcha?.captcha_id,
+            captcha_answer: captchaAnswer,
           }),
         });
+        router.push("/login");
+        return;
       }
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }) })
-        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
+        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
       if (adminLogin && user.role !== "admin" && user.role !== "super_admin") {
         await api("/auth/logout", { method: "POST" });
+        setMfaChallenge("");
+        setMfaCode("");
         setError("需要管理员账户");
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
         return;
       }
       router.push(user.role === "customer" ? "/" : "/admin");
@@ -52,6 +84,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
         setError("");
       } else {
         setError(failure.message);
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
       }
     } finally {
       setBusy(false);
@@ -73,6 +106,13 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
           {register ? "云服务客户中心" : adminLogin ? "管理控制台" : "欢迎回来"}
         </p>
         {register && siteError ? <Failure error={siteError} retry={refresh} /> : register && !site ? <Loading /> : register && !site?.registration_enabled ? <p role="status" className="py-6 text-muted-foreground">本站暂未开放注册</p> : <form className="space-y-5" onSubmit={submit}>
+          {site?.auth_captcha_enabled && !mfaChallenge && (
+            <div className="space-y-2">
+              <Label htmlFor="captcha_answer">图形验证码</Label>
+              <div className="flex items-center gap-3"><div className="h-16 w-[190px] overflow-hidden border bg-slate-50"><img src={captcha?.image} alt="图形验证码" className="h-16 w-[190px]" /></div><Button type="button" variant="outline" size="icon" title="刷新验证码" aria-label="刷新验证码" onClick={() => void refreshCaptcha()} disabled={captchaBusy}><RefreshCw className={captchaBusy ? "animate-spin" : ""} /></Button></div>
+              <Input id="captcha_answer" name="captcha_answer" value={captchaAnswer} onChange={event => setCaptchaAnswer(event.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g, "").slice(0, 6))} autoComplete="off" maxLength={6} required />
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="username">{register ? "账号" : "账号或邮箱"}</Label>
             <Input
@@ -132,7 +172,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
               {error}
             </p>
           )}
-          <Button className="w-full" disabled={busy}>
+          <Button className="w-full" disabled={busy || (!!site?.auth_captcha_enabled && !mfaChallenge && (!captcha?.captcha_id || captchaBusy))}>
             {busy ? "提交中" : mfaChallenge ? "验证并登录" : register ? "创建账户" : "登录"}
             <ArrowRight size={16} />
           </Button>

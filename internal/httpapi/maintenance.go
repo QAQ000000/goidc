@@ -14,7 +14,7 @@ func maintenanceExempt(r *http.Request) bool {
 	if (r.Method == "GET" || r.Method == "POST") && strings.HasPrefix(path, "/api/v1/payments/epay_") && strings.HasSuffix(path, "/webhook") {
 		return true
 	}
-	if (r.Method == "GET" || r.Method == "HEAD") && (path == "/healthz" || path == "/readyz" || path == "/api/v1/site" || path == "/api/v1/me") {
+	if (r.Method == "GET" || r.Method == "HEAD") && (path == "/healthz" || path == "/readyz" || path == "/api/v1/site" || path == "/api/v1/me" || path == "/api/v1/auth/captcha") {
 		return true
 	}
 	if strings.HasPrefix(path, "/api/v1/admin/") {

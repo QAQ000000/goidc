@@ -19,6 +19,7 @@ type Permission struct {
 
 // These are new API capabilities, not aliases for PHP auth_rule IDs.
 var AdminPermissions = []Permission{
+	{"settings.view", "站点设置", "读取站点设置"}, {"settings.manage", "站点设置", "修改站点设置"},
 	{"dashboard.view", "工作台", "读取运营汇总"},
 	{"customers.view", "客户", "读取客户和联系人"}, {"customers.manage", "客户", "修改客户、联系人和密码"},
 	{"customer_groups.view", "客户分组", "读取分组"}, {"customer_groups.manage", "客户分组", "管理分组和客户归属"},
@@ -36,6 +37,66 @@ var AdminPermissions = []Permission{
 	{"ticket_presets.view", "预设回复", "读取预设回复"}, {"ticket_presets.manage", "预设回复", "管理预设回复及分类"},
 	{"notifications.view", "通知", "读取模板和邮件队列"}, {"notifications.manage", "通知", "修改模板和重试邮件"},
 	{"reports.view", "报表", "读取经营报表"}, {"audit.view", "审计", "读取操作日志"}, {"migrations.view", "迁移", "读取迁移记录和复核详情"},
+}
+
+func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108190)"); err != nil {
+		tx.Rollback(ctx)
+		return nil, err
+	}
+	var allowed bool
+	err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'settings.manage'=ANY(r.permissions)),false)
+ FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
+	if err != nil || !allowed {
+		tx.Rollback(ctx)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, conflict("permission_denied", "没有管理站点设置的权限")
+			}
+			return nil, err
+		}
+		return nil, conflict("permission_denied", "没有管理站点设置的权限")
+	}
+	return tx, nil
+}
+
+func recheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string) error {
+	var role string
+	var roleID *int64
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("permission_denied", "没有管理站点设置的权限")
+		}
+		return err
+	}
+	var sessionUserID int64
+	if err := tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUserID); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("unauthorized", "登录已失效")
+		}
+		return err
+	}
+	if role == "super_admin" {
+		return nil
+	}
+	if role != "admin" || roleID == nil {
+		return conflict("permission_denied", "没有管理站点设置的权限")
+	}
+	var allowed bool
+	if err := tx.QueryRow(ctx, "SELECT active AND 'settings.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("permission_denied", "没有管理站点设置的权限")
+		}
+		return err
+	}
+	if !allowed {
+		return conflict("permission_denied", "没有管理站点设置的权限")
+	}
+	return nil
 }
 
 func (s *Store) AdminGrants(ctx context.Context, userID int64) ([]string, error) {

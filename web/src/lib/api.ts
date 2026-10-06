@@ -37,6 +37,10 @@ export async function api<T>(
   }
   return body.data as T;
 }
+export type CaptchaChallenge = { enabled: boolean; captcha_id?: string; image?: string; expires_at?: string };
+export function fetchCaptcha(action: "login" | "register" | "forgot-password", signal?: AbortSignal) {
+  return api<CaptchaChallenge>(`/auth/captcha?action=${action}`, { signal });
+}
 export async function upload<T>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     method,
@@ -116,6 +120,7 @@ export type SiteProfile = {
   maintenance_enabled: boolean;
   maintenance_message: string;
   maintenance_url: string;
+  auth_captcha_enabled: boolean;
 };
 export type SiteSettings = SiteProfile & { version: number; updated_at: string };
 export type ApiKey = {

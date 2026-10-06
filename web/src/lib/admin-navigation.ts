@@ -24,7 +24,7 @@ export const adminNavigation = [
   { href: "/admin/notifications", label: "通知管理", icon: Mail, permission: "notifications.view" },
   { href: "/admin/migrations", label: "迁移复核", icon: ClipboardCheck, permission: "migrations.view" },
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super" },
-  { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "@super" },
+  { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view" },
 ];
 
 export function can(user: User | null, permission: string) {
