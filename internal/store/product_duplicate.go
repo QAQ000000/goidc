@@ -157,6 +157,9 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'',NULL) RETURNING id`, newGroup, 
 			}
 		}
 	}
+	if err = copyNativeConfigurationRules(ctx, tx, sourceID, productID, groupMap, optionMap); err != nil {
+		return 0, err
+	}
 	if _, _, err = loadProductOptionHierarchy(ctx, tx, productID); err != nil {
 		return 0, err
 	}

@@ -38,7 +38,10 @@ func productProjection(admin bool) string {
 		fieldVisibility = " AND f.active"
 	}
 	fields := `coalesce((SELECT jsonb_agg(jsonb_build_object('key',f.field_key,'label',f.label,'type',f.field_type,'description',f.description,'required',f.required,'active',f.active,'show_invoice',f.show_invoice,'max_length',f.max_length,'pattern',f.validation_pattern,'choices',f.choices,'sort_order',f.sort_order) ORDER BY f.sort_order,f.field_key) FROM product_purchase_fields f WHERE f.product_id=products.id` + fieldVisibility + `),'[]'::jsonb) AS purchase_field_definitions,`
-	return fields + `products.config_upgrade_enabled,products.config_downgrade_enabled,products.service_group_id,(SELECT name FROM service_navigation_groups WHERE id=products.service_group_id) AS service_group_name,` + projection
+	ruleVisibility := ""
+	if !admin { ruleVisibility = " AND r.enabled" }
+	rules := `coalesce((SELECT jsonb_agg(jsonb_build_object('id',r.id,'name',r.name,'enabled',r.enabled,'conditions',coalesce((SELECT jsonb_agg(jsonb_build_object('group_id',p.group_id,'option_id',p.option_id,'operator',p.operator,'qty_minimum',p.qty_minimum,'qty_maximum',p.qty_maximum) ORDER BY p.sort_order) FROM native_configuration_predicates p WHERE p.rule_id=r.id AND p.phase='condition'),'[]'::jsonb),'results',coalesce((SELECT jsonb_agg(jsonb_build_object('group_id',p.group_id,'option_id',p.option_id,'operator',p.operator,'qty_minimum',p.qty_minimum,'qty_maximum',p.qty_maximum) ORDER BY p.sort_order) FROM native_configuration_predicates p WHERE p.rule_id=r.id AND p.phase='result'),'[]'::jsonb)) ORDER BY r.id) FROM native_configuration_rules r WHERE r.product_id=products.id` + ruleVisibility + `),'[]'::jsonb) AS configuration_rules,`
+	return rules + fields + `products.config_upgrade_enabled,products.config_downgrade_enabled,products.service_group_id,(SELECT name FROM service_navigation_groups WHERE id=products.service_group_id) AS service_group_name,` + projection
 }
 
 func (s *Server) catalog(w http.ResponseWriter, r *http.Request) { s.catalogList(w, r, false, false) }

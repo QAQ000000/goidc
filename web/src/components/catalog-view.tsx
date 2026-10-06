@@ -10,7 +10,7 @@ import { Workspace } from "./workspace";
 import { PurchaseFieldInputs,purchaseFieldValues } from "./purchase-fields";
 import { cycles, Failure, Loading } from "./common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { changeProductOption, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
+import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
 import { ProductOptionChoice } from "./product-option-choice";
 export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
   const [query, setQuery] = useState("");
@@ -51,8 +51,9 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
     return result;
   }
   function optionsComplete(product: Product) {
-    return resolvedOptions(product).complete && previewPrice(product) !== null;
+    return resolvedOptions(product).complete && previewPrice(product) !== null && !ruleError(product);
   }
+  function ruleError(product:Product){const resolved=resolvedOptions(product);return resolved.complete?configurationRuleError(product.configuration_rules,product.option_groups??[],resolved.ids,optionQuantities(product)):null;}
   function previewPrice(product: Product) {
     const cycle = selectedCycles[product.id] ?? product.billing_cycle;
     const matrix = product.pricing?.find(price => price.billing_cycle === cycle && price.active);
@@ -82,6 +83,8 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
           throw new Error(`${group.name} 数量不符合范围或步长`);
         }
       }
+      const violation=ruleError(product);
+      if(violation)throw new Error(violation);
       const cart = await api<Cart>("/cart");
       await api("/cart/items", {
         method: "POST",
@@ -223,6 +226,7 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
                 )}
               </div>
               <PurchaseFieldInputs fields={product.purchase_field_definitions??[]} values={fieldValues[product.id]??{}} onChange={values=>setFieldValues({...fieldValues,[product.id]:values})} disabled={busy!==null}/>
+              {ruleError(product)&&<p role="alert" className="text-sm text-destructive mb-2">{ruleError(product)}</p>}
               <Button
                 className="w-full"
                 disabled={busy !== null || product.stock === 0 || !optionsComplete(product)}
