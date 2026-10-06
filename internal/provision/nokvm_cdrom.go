@@ -86,7 +86,7 @@ func (n *NOKVM) ListCDROM(ctx context.Context, upstreamID string) (CDROMListing,
 }
 
 func (n *NOKVM) ExecuteCDROM(ctx context.Context, request CDROMRequest) (Result, error) {
-	if request.ProfileID != n.profile.ID || !ValidResourceID(request.UpstreamID) || !ValidResourceID(request.ImageID) || (request.Operation != "mount" && request.Operation != "unmount") {
+	if request.ProfileID != n.profile.ID || !ValidResourceID(request.UpstreamID) || !ValidResourceID(request.ImageID) || request.Image.ID != request.ImageID || (request.Operation != "mount" && request.Operation != "unmount") {
 		return Result{}, &Error{Code: "invalid_cdrom_request"}
 	}
 	listing, err := n.ListCDROM(ctx, request.UpstreamID)

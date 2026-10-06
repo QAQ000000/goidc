@@ -56,6 +56,12 @@ func TestNOKVMCDROMProtocolAndHostProof(t *testing.T) {
 	if !errors.As(err, &failure) || failure.Unknown || writes != 1 {
 		t.Fatal("forged catalog reached command", err, writes)
 	}
+	req.Image = listing.Items[0]
+	req.ImageID = "11"
+	_, err = n.ExecuteCDROM(t.Context(), req)
+	if !errors.As(err, &failure) || failure.Code != "invalid_cdrom_request" || failure.Unknown || writes != 1 {
+		t.Fatal("mismatched image ID reached command", err, writes)
+	}
 }
 
 func TestNOKVMCDROMRejectsWrongHostAndAmbiguousCatalog(t *testing.T) {

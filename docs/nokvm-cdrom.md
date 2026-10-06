@@ -4,7 +4,7 @@
 
 ## 供应商协议
 
-旧 `nokvm.php` 的光驱页面读取 GET `/api/virtual/{virtual_id}` 与 GET `/api/cd_rom/`，以主机 `cd_roms_id` 判断挂载镜像。挂载/卸载分别发送签名 GET `/api/virtual_cd_rom/{virtual_id}/mount/{image_id}` 和 `/api/virtual_cd_rom/{virtual_id}/unmount/{image_id}`。旧模板说明挂载会切换为光驱启动，卸载切换为硬盘启动。没有已证实的供应商完成状态或启动顺序查询协议。
+旧 `nokvm.php` 的光驱页面读取 GET `/api/virtual/{virtual_id}` 与 GET `/api/cd_rom/`，以主机 `cd_roms_id` 判断挂载镜像。挂载/卸载分别发送签名 GET `/api/virtual_cd_rom/{virtual_id}/mount/{image_id}` 和 `/api/virtual_cd_rom/{virtual_id}/unmount/{image_id}`。旧模板提示启动顺序可能变化，但源码未证明供应商一定切换启动设备；也没有已证实的完成状态或启动顺序查询协议。
 
 目录最多 1000 项，要求唯一正 int64 十进制 ID、有效名称和描述；主机 ID 必须与服务绑定的上游 ID 相同，挂载 ID 必须属于目录。GET 响应仅返回 id/name/description、mounted_id 和 fetched_at；供应商路径、令牌、账户及额外字段不透传。列表读取、入队前读和 worker 发送前读都验证主机绑定及目标目录。挂载要求当前为空，卸载要求当前镜像与目标一致。
 
