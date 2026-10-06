@@ -40,3 +40,9 @@ schema073 和 BUILD_ID `6c95kOst9fotQvcbAu4wW` 已部署，API/worker/web 均 ac
 已部署 schema074、BUILD_ID `e0h8WJtL3EeuXOQpB0FBG`，三个服务 active，root 现场登录/读取/注销401通过。完整备份 `bin/previous/20261006T093251Z-native-core/` 的 schema073 实际恢复到独立测试库，旧 API 就绪、升级074、新 API 就绪与目录/既有业务摘要一致；环境及 SHA256 校验通过。内容多对多关系写入后，旧 API 无法维护新关联，因此禁止只替换旧二进制回退，失败时保留完整备份并执行一致性恢复。
 
 开发库仍2用户/4商品/2订单/2服务/2账单，新增标签及关联表均0；没有导入旧数据或加入评论评价。证据见 `output/native-core-20261006/` 和 [本批验收](native-core-acceptance.md)。真实支付、供应商、SMTP/SMS、实名/合同和其余模块继续推进，整体目标保持进行。
+
+## 第三批：规则、认证安全与服务历史
+
+三个 gpt-6-luna 分支已完成并在主分支合并：原生配置条件/结果规则（`d042fd7`）、可选认证图形验证码（`af0fc65`，审查修正 `46fec7f`）、客户/管理员服务操作历史（`96773a6`）。规则和历史接口均保留客户归属、管理员销售范围、会话复查和安全投影；不提供评论、评价或社交互动。
+
+隔离 PG18 全量回归、race、vet、前端 lint/typecheck、独立 webpack 构建及 743.88 秒浏览器夹具通过。发布脚本完成 schema074 备份、独立恢复/迁移到077、业务摘要不变和线上 root smoke；当前 schema077，BUILD_ID `ef182c1a5f9c8aa9d571e236a554873936820ff2419f186c0fb6db8b808c5de5`。详见 [本批验收](native-security-acceptance.md)。
