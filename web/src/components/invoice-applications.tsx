@@ -5,7 +5,9 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
+  Ban,
   FileCheck,
+  FileUp,
   Pencil,
   Plus,
   Receipt,
@@ -13,7 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { api, date, money } from "@/lib/api";
+import { api, date, money, upload } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -93,6 +95,23 @@ type Application = {
     invoice_no: string;
     description: string;
     amount_cents: number;
+  }[];
+  documents?: {
+    id: number;
+    adjustment_id: number | null;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    sha256: string;
+    downloads: number;
+    download_url: string;
+  }[];
+  adjustments?: {
+    id: number;
+    action: "void" | "red";
+    document_number: string;
+    note: string;
+    created_at: string;
   }[];
 };
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
@@ -1081,6 +1100,9 @@ function ApplicationDetailContent({
   const [document, setDocument] = useState("");
   const [carrier, setCarrier] = useState("");
   const [tracking, setTracking] = useState("");
+  const [adjustmentAction, setAdjustmentAction] = useState<"void" | "red" | null>(null);
+  const [adjustmentNote, setAdjustmentNote] = useState("");
+  const [adjustmentDocument, setAdjustmentDocument] = useState("");
   const retry = useRef<{ body: string; key: string } | null>(null);
   const allowed = useAdminPermission("invoice_applications.manage");
   async function review(status: "issued" | "rejected") {
@@ -1110,6 +1132,23 @@ function ApplicationDetailContent({
     } finally {
       setBusy(false);
     }
+  }
+  async function adjust() {
+    if (!adjustmentAction || !data || busy) return;
+    setBusy(true); setReviewError("");
+    try {
+      await api(`/admin/invoice-applications/${id}/adjust`, { method: "POST", body: JSON.stringify({ action: adjustmentAction, note: clean(adjustmentNote), document_number: clean(adjustmentDocument), expected_version: data.version }), headers: { "Idempotency-Key": `invoice-adjust-${crypto.randomUUID()}` } });
+      setAdjustmentAction(null); setAdjustmentNote(""); setAdjustmentDocument(""); refresh();
+    } catch (e) { setReviewError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function uploadDocument(file: File) {
+    if (!data || busy) return;
+    setBusy(true); setReviewError("");
+    try {
+      const form = new FormData(); form.append("file", file);
+      await upload(`/admin/invoice-applications/${id}/document`, form);
+      refresh();
+    } catch (e) { setReviewError((e as Error).message); } finally { setBusy(false); }
   }
   return (
     <>
@@ -1200,6 +1239,28 @@ function ApplicationDetailContent({
               ))}
             </div>
           </section>
+          {data.status === "issued" && (
+            <section className="border-t pt-4 space-y-3">
+              <h2 className="font-semibold">电子发票文件</h2>
+              {data.documents?.length ? data.documents.map((file) => (
+                <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <span className="break-all">{file.filename} · {file.mime_type} · {Math.ceil(file.size_bytes / 1024)} KB</span>
+                  <Button variant="outline" size="sm" asChild><a href={file.download_url}><FileCheck />下载</a></Button>
+                </div>
+              )) : <p className="text-sm text-muted-foreground">暂无电子发票文件</p>}
+              {admin && allowed && <label className="inline-flex"><Button asChild variant="outline" disabled={busy}><span><FileUp />上传文件</span></Button><input className="sr-only" type="file" accept=".pdf,.xml,application/pdf,application/xml" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadDocument(file); e.currentTarget.value = ""; }} /></label>}
+            </section>
+          )}
+          {admin && allowed && data.status === "issued" && (
+            <section className="border-t pt-4 space-y-3">
+              <h2 className="font-semibold">作废或红冲</h2>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="destructive" disabled={busy} onClick={() => setAdjustmentAction("void")}><Ban />登记作废</Button>
+                <Button variant="outline" disabled={busy} onClick={() => setAdjustmentAction("red")}><FileCheck />登记红冲</Button>
+              </div>
+              {data.adjustments?.map((item) => <p key={item.id} className="text-sm">{item.action === "void" ? "作废" : "红冲"} · {date(item.created_at)} · {item.document_number || item.note}</p>)}
+            </section>
+          )}
           {admin && allowed && data.status === "pending" && (
             <div className="flex gap-2">
               <Button
@@ -1315,6 +1376,13 @@ function ApplicationDetailContent({
                   确认
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={!!adjustmentAction} onOpenChange={(value) => { if (!value && !busy) setAdjustmentAction(null); }}>
+            <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{adjustmentAction === "void" ? "登记作废" : "登记红冲"}</DialogTitle></DialogHeader>
+              {adjustmentAction === "red" && <><Label htmlFor="adjustment-document">红字发票编号</Label><Input id="adjustment-document" maxLength={120} value={adjustmentDocument} onChange={(e) => setAdjustmentDocument(e.target.value)} disabled={busy} /></>}
+              <Label htmlFor="adjustment-note">登记原因</Label><Textarea id="adjustment-note" maxLength={500} value={adjustmentNote} onChange={(e) => setAdjustmentNote(e.target.value)} disabled={busy} />
+              <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setAdjustmentAction(null)}>返回</Button><Button disabled={busy || !clean(adjustmentNote) || (adjustmentAction === "red" && !clean(adjustmentDocument))} onClick={() => void adjust()}><FileCheck />确认</Button></DialogFooter>
             </DialogContent>
           </Dialog>
           {reviewError && (

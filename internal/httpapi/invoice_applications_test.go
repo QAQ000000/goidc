@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"sync"
@@ -62,6 +63,52 @@ func TestInvoiceApplicationLifecycle(t *testing.T) {
 	issue := store.InvoiceApplicationReview{Status: "issued", DocumentNumber: "TEST-20261006", Carrier: "测试快递", TrackingNumber: "TEST-TRACK", ExpectedVersion: 1}
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/invoice-applications/%d/review", nextID), issue, f.root, "application-issue-1"), 201)
 	expect(t, request(f.h, "POST", refundPath, map[string]any{}, f.root, "application-issued-refund"), 409)
+}
+
+func TestInvoiceElectronicFileAndAdjustmentControls(t *testing.T) {
+	f := configurationUpgradeFixture(t, false)
+	pid, aid, iid := applicationInputs(t, f)
+	in := store.InvoiceApplicationInput{ProfileID: pid, AddressID: aid, InvoiceIDs: []int64{iid}}
+	created := request(f.h, "POST", "/api/v1/invoice-applications", in, f.customer, "efile-create-1")
+	expect(t, created, 201)
+	appID := int64(data(t, created)["application_id"].(float64))
+	review := request(f.h, "POST", fmt.Sprintf("/api/v1/admin/invoice-applications/%d/review", appID), store.InvoiceApplicationReview{Status: "issued", DocumentNumber: "INV-EFILE-1", ExpectedVersion: 1}, f.root, "efile-review-1")
+	expect(t, review, 201)
+	path := fmt.Sprintf("/api/v1/admin/invoice-applications/%d/document", appID)
+	pdf := []byte("%PDF-1.7\ninvoice\n")
+	expect(t, multipartRequest(f.h, path, f.root, "invoice.pdf", pdf), 201)
+	badXML := []byte("<?xml version=\"1.0\"?><!DOCTYPE invoice [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><invoice>&xxe;</invoice>")
+	expect(t, multipartRequest(f.h, path, f.root, "invoice.xml", badXML), 400)
+	detail := data(t, request(f.h, "GET", fmt.Sprintf("/api/v1/invoice-applications/%d", appID), nil, f.customer, ""))
+	docs := detail["documents"].([]any)
+	if len(docs) != 1 || docs[0].(map[string]any)["sha256"] != fmt.Sprintf("%x", sha256.Sum256(pdf)) {
+		t.Fatalf("unexpected electronic file projection: %#v", detail["documents"])
+	}
+	docID := int64(docs[0].(map[string]any)["id"].(float64))
+	downloaded := request(f.h, "GET", fmt.Sprintf("/api/v1/invoice-applications/%d/documents/%d/file", appID, docID), nil, f.customer, "")
+	expect(t, downloaded, 200)
+	if downloaded.Body.String() != string(pdf) || downloaded.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("electronic file download policy/content mismatch: %d %q %q", downloaded.Code, downloaded.Body.String(), downloaded.Header().Get("Cache-Control"))
+	}
+	expect(t, request(f.h, "GET", fmt.Sprintf("/api/v1/invoice-applications/%d/documents/%d/file", appID, docID), nil, f.other, ""), 404)
+	adjustPath := fmt.Sprintf("/api/v1/admin/invoice-applications/%d/adjust", appID)
+	adjust := store.InvoiceApplicationAdjustment{Action: "red", DocumentNumber: "RED-EFILE-1", Note: "客户要求红冲", ExpectedVersion: 2}
+	first := request(f.h, "POST", adjustPath, adjust, f.root, "efile-adjust-1")
+	expect(t, first, 201)
+	second := request(f.h, "POST", adjustPath, adjust, f.root, "efile-adjust-1")
+	expect(t, second, 200)
+	if !data(t, second)["replayed"].(bool) {
+		t.Fatal("adjustment replay was not marked")
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), `CREATE FUNCTION invoice_efile_reject_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='invoice_application.adjusted' THEN RAISE EXCEPTION 'efile audit rejected'; END IF; RETURN NEW; END $$; CREATE TRIGGER invoice_efile_reject_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION invoice_efile_reject_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	failed := request(f.h, "POST", adjustPath, store.InvoiceApplicationAdjustment{Action: "void", Note: "人工作废", ExpectedVersion: 3}, f.root, "efile-adjust-failed")
+	expect(t, failed, 500)
+	var count int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM invoice_application_adjustments WHERE application_id=$1", appID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("audit failure left adjustment: %d %v", count, err)
+	}
 }
 
 func TestInvoiceApplicationConcurrentAndOwnership(t *testing.T) {

@@ -24,6 +24,7 @@
 - `GET/POST /api/v1/invoice-applications`，`GET /api/v1/invoice-applications/{id}`。
 - `GET /api/v1/admin/invoice-applications`，`GET /api/v1/admin/invoice-applications/{id}`，`POST /api/v1/admin/invoice-applications/{id}/review`。
 - `POST /api/v1/admin/invoice-applications/{id}/document`：后台登记本地电子发票文件（PDF/XML，20 MiB 内）；客户通过申请详情中的文件编号下载本人文件，后台对应路径下载受发票权限和销售范围约束。
+- `POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document`：为已登记的作废/红冲关联电子文件；关联由数据库复合外键保证。
 - `POST /api/v1/admin/invoice-applications/{id}/adjust`：对已开具申请登记一次作废（`action=void`）或红冲（`action=red`，必须填写红字发票编号）。操作使用 `Idempotency-Key` 和 `expected_version`，每类调整只能登记一次。
 
 列表支持 `limit`、`offset`；申请列表另支持 `status`。创建/审核使用 `Idempotency-Key`，资料编辑/删除及审核使用 `expected_version`。

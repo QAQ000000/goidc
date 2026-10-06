@@ -516,7 +516,7 @@ func validateInvoiceDocument(file InvoiceApplicationDocument) error {
 	if name == "" || !contentTextValid(name, 255, false) || strings.ContainsAny(name, "/\\\r\n\x00") || len(file.Content) == 0 || len(file.Content) > 20<<20 {
 		return conflict("invalid_invoice_document", "电子发票文件无效")
 	}
-	if file.MIME != "application/pdf" && file.MIME != "application/xml" && file.MIME != "text/xml" && file.MIME != "application/octet-stream" {
+	if file.MIME != "application/pdf" && file.MIME != "application/xml" {
 		return conflict("invalid_invoice_document", "电子发票文件类型不受支持")
 	}
 	return nil
@@ -544,7 +544,7 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 		}
 	}
 	var applicationStatus string
-	if err = tx.QueryRow(ctx, "SELECT status FROM invoice_applications WHERE id=$1 FOR SHARE", applicationID).Scan(&applicationStatus); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT status FROM invoice_applications WHERE id=$1 FOR UPDATE", applicationID).Scan(&applicationStatus); err != nil {
 		return 0, err
 	}
 	if applicationStatus != "issued" {
@@ -553,10 +553,17 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 	digest := sha256.Sum256(file.Content)
 	hash := hex.EncodeToString(digest[:])
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id)
- VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8)
- ON CONFLICT (application_id,adjustment_id) DO UPDATE SET filename=EXCLUDED.filename,mime_type=EXCLUDED.mime_type,size_bytes=EXCLUDED.size_bytes,sha256=EXCLUDED.sha256,content=EXCLUDED.content,uploader_id=EXCLUDED.uploader_id,created_at=now()
- RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
+	if adjustmentID == 0 {
+		err = tx.QueryRow(ctx, "SELECT id FROM invoice_application_documents WHERE application_id=$1 AND adjustment_id IS NULL FOR UPDATE", applicationID).Scan(&id)
+	} else {
+		err = tx.QueryRow(ctx, "SELECT id FROM invoice_application_documents WHERE application_id=$1 AND adjustment_id=$2 FOR UPDATE", applicationID, adjustmentID).Scan(&id)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id)
+ VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8) RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
+	} else if err == nil {
+		_, err = tx.Exec(ctx, `UPDATE invoice_application_documents SET filename=$2,mime_type=$3,size_bytes=$4,sha256=$5,content=$6,uploader_id=$7,created_at=now() WHERE id=$1`, id, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -569,7 +576,7 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicationID int64, in InvoiceApplicationAdjustment, key string) (InvoiceApplicationResult, error) {
 	var out InvoiceApplicationResult
 	in.Action, in.DocumentNumber, in.Note, key = strings.ToLower(strings.TrimSpace(in.Action)), strings.TrimSpace(in.DocumentNumber), strings.TrimSpace(in.Note), strings.TrimSpace(key)
-	if applicationID < 1 || (in.Action != "void" && in.Action != "red") || in.ExpectedVersion < 1 || !contentTextValid(in.Note, 500, true) || !contentTextValid(in.DocumentNumber, 120, false) || len(key) < 8 || len(key) > 128 {
+	if applicationID < 1 || (in.Action != "void" && in.Action != "red") || in.ExpectedVersion < 1 || in.Note == "" || !contentTextValid(in.Note, 500, true) || !contentTextValid(in.DocumentNumber, 120, false) || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_invoice_adjustment", "作废或红冲参数无效")
 	}
 	tx, customerID, err := s.invoiceManageTx(ctx, actorID, applicationID)

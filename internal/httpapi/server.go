@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/review", s.auth(s.reviewInvoiceApplication, true))
 	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/adjust", s.auth(s.adjustInvoiceApplication, true))
 	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/document", s.auth(s.uploadInvoiceApplicationDocument, true))
+	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document", s.auth(s.uploadInvoiceApplicationDocument, true))
 	mux.HandleFunc("GET /api/v1/admin/invoice-applications/{id}/documents/{document_id}/file", s.auth(s.invoiceApplicationDocumentFile, true))
 	mux.HandleFunc("PUT /api/v1/account/password", s.auth(s.changePassword, false))
 	mux.HandleFunc("GET /api/v1/account/mfa", s.sessionAuth(s.mfaStatus, false))

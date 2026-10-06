@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bytes"
+	"encoding/xml"
 	"errors"
 	"io"
 	"mime"
@@ -198,6 +200,15 @@ func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
+	adjustmentID := int64(0)
+	if raw := r.PathValue("adjustment_id"); raw != "" {
+		parsed, parseErr := strconv.ParseInt(raw, 10, 64)
+		if parseErr != nil || parsed < 1 {
+			writeError(w, 400, "invalid_invoice_adjustment", "调整编号无效")
+			return
+		}
+		adjustmentID = parsed
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, (20<<20)+(256<<10))
 	if err := r.ParseMultipartForm(32 << 10); err != nil {
 		var tooLarge *http.MaxBytesError
@@ -236,17 +247,39 @@ func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http
 		writeError(w, 413, "invoice_document_too_large", "电子发票文件不能超过 20 MiB")
 		return
 	}
-	mt := header.Header.Get("Content-Type")
-	if strings.HasSuffix(strings.ToLower(name), ".pdf") && len(content) >= 5 && string(content[:5]) == "%PDF-" {
+	mt := ""
+	lowerName := strings.ToLower(name)
+	if strings.HasSuffix(lowerName, ".pdf") && len(content) >= 5 && bytes.Equal(content[:5], []byte("%PDF-")) {
 		mt = "application/pdf"
 	}
-	if strings.HasSuffix(strings.ToLower(name), ".xml") && strings.HasPrefix(strings.TrimSpace(string(content)), "<") {
-		mt = "application/xml"
+	if strings.HasSuffix(lowerName, ".xml") {
+		if bytes.Contains(bytes.ToUpper(content), []byte("<!DOCTYPE")) || bytes.Contains(bytes.ToUpper(content), []byte("<!ENTITY")) {
+			writeError(w, 400, "invalid_invoice_document", "XML 文件包含不允许的声明")
+			return
+		}
+		decoder := xml.NewDecoder(bytes.NewReader(content))
+		decoder.Strict = true
+		var tokenCount int
+		for {
+			_, e := decoder.Token()
+			if e == io.EOF {
+				break
+			}
+			if e != nil {
+				writeError(w, 400, "invalid_invoice_document", "XML 文件格式无效")
+				return
+			}
+			tokenCount++
+		}
+		if tokenCount > 0 {
+			mt = "application/xml"
+		}
 	}
 	if mt == "" {
-		mt = "application/octet-stream"
+		writeError(w, 400, "invalid_invoice_document", "仅支持内容匹配的 PDF 或 XML 文件")
+		return
 	}
-	id, err := s.db.SaveInvoiceApplicationDocument(r.Context(), identityFrom(r).ID, appID, 0, store.InvoiceApplicationDocument{Filename: name, MIME: mt, Content: content})
+	id, err := s.db.SaveInvoiceApplicationDocument(r.Context(), identityFrom(r).ID, appID, adjustmentID, store.InvoiceApplicationDocument{Filename: name, MIME: mt, Content: content})
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -276,6 +309,8 @@ func (s *Server) adjustInvoiceApplication(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) invoiceApplicationDocumentFile(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	appID, docID, ok := invoiceDocumentID(r)
 	if !ok {
 		writeError(w, 400, "invalid_invoice_document", "电子发票文件编号无效")
