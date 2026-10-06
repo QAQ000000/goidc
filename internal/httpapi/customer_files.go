@@ -271,7 +271,7 @@ func (s *Server) downloadCustomerFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if r.Method != "HEAD" {
+	if r.Method != "HEAD" && storedFileTransfersBytes(r, name, mt, hash, content) {
 		if _, err := tx.Exec(r.Context(), "UPDATE customer_files SET downloads=downloads+1 WHERE id=$1", id); err != nil {
 			s.fail(w, r, err)
 			return

@@ -4,4 +4,4 @@ Local download-center files and customer files support `HEAD`, single and multip
 
 The quoted SHA-256 content hash is the strong `ETag`. File replacement changes the tag. Every request passes the existing session or API-key, visibility, ownership, and product or sales-scope checks before file headers or bytes are sent. File responses retain `Cache-Control: private, no-store`, attachment disposition, and `nosniff`.
 
-As before, every authorized `GET` attempt advances download counters, including range errors and conditional requests; `HEAD` does not. Customer file `GET` attempts also retain their audit event. Remote URL downloads still return their existing JSON response and do not support byte ranges.
+Authorized local `GET` responses with status 200 or 206 advance download counters; HEAD, 304, 412 and range errors do not. Customer file transfers retain their audit event in the same transaction. Response status is resolved before commit, with no headers or bytes sent on rollback. Remote URL downloads still return their existing JSON response and do not support byte ranges.

@@ -62,6 +62,9 @@ func checkFileRanges(t *testing.T, h http.Handler, path, cookie, full string) st
 	if invalid.Header().Get("Content-Range") != fmt.Sprintf("bytes */%d", len(full)) {
 		t.Fatal("unsatisfied range header")
 	}
+	if invalid.Header().Get("Cache-Control") != "private, no-store" || invalid.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatal("range error lost private file headers")
+	}
 	bounded := rangedFileRequest(h, "GET", path, cookie, "bytes="+strings.Repeat("0-0,", 16)+"0-0", etag)
 	expect(t, bounded, 416)
 	if bounded.Header().Get("Content-Range") != fmt.Sprintf("bytes */%d", len(full)) {
@@ -76,6 +79,23 @@ func checkFileRanges(t *testing.T, h http.Handler, path, cookie, full string) st
 	expect(t, head, 206)
 	if head.Body.Len() != 0 || head.Header().Get("Content-Range") != fmt.Sprintf("bytes 0-2/%d", len(full)) || head.Header().Get("ETag") != etag {
 		t.Fatal("HEAD range response", head.Header())
+	}
+	for _, condition := range []struct {
+		header, value string
+		status        int
+	}{
+		{"If-None-Match", etag, http.StatusNotModified},
+		{"If-Match", `"stale"`, http.StatusPreconditionFailed},
+	} {
+		r := httptest.NewRequest("GET", path, nil)
+		r.Header.Set("Cookie", cookie)
+		r.Header.Set(condition.header, condition.value)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		expect(t, w, condition.status)
+		if w.Header().Get("Cache-Control") != "private, no-store" {
+			t.Fatal("conditional response lost private cache policy")
+		}
 	}
 	return etag
 }
@@ -93,7 +113,7 @@ func TestDownloadResumeAuthorizationAndReplacement(t *testing.T) {
 	}
 	etag := checkFileRanges(t, h, path, customer, "下载内容 UTF-8\n")
 	var count int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT downloads FROM downloads WHERE id=$1", id).Scan(&count); err != nil || count != 8 {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT downloads FROM downloads WHERE id=$1", id).Scan(&count); err != nil || count != 6 {
 		t.Fatal("GET counter or HEAD semantics", count, err)
 	}
 	in.ExpectedVersion = 1
@@ -132,7 +152,7 @@ func TestCustomerFileResumeOwnershipAndAudit(t *testing.T) {
 	}
 	etag := checkFileRanges(t, h, path, customer, "客户专属文件内容\n")
 	var count, audit int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT downloads FROM customer_files WHERE id=$1", id).Scan(&count); err != nil || count != 8 {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT downloads FROM customer_files WHERE id=$1", id).Scan(&count); err != nil || count != 6 {
 		t.Fatal("customer GET counter or HEAD semantics", count, err)
 	}
 	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE entity_type='customer_file' AND entity_id=$1 AND action='customer_file.downloaded'", fmt.Sprint(id)).Scan(&audit); err != nil || audit != count {

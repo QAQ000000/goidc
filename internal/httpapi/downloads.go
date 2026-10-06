@@ -389,7 +389,7 @@ func (s *Server) serveDownloadFile(w http.ResponseWriter, r *http.Request, id, s
 			return
 		}
 	}
-	if r.Method != "HEAD" {
+	if r.Method != "HEAD" && (source == "remote" || storedFileTransfersBytes(r, name, mt, hash, content)) {
 		if _, err = tx.Exec(r.Context(), "UPDATE downloads SET downloads=downloads+1 WHERE id=$1", id); err != nil {
 			s.fail(w, r, err)
 			return
