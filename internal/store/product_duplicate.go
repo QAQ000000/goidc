@@ -53,7 +53,7 @@ RETURNING id`, sourceID, in.Name, in.Slug).Scan(&productID)
  SELECT $2,target_product_id,allow_downgrade FROM product_upgrade_targets WHERE product_id=$1`, sourceID, productID); err != nil {
 		return 0, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO product_purchase_fields(product_id,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order) SELECT $2,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order FROM product_purchase_fields WHERE product_id=$1`, sourceID, productID); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO product_purchase_fields(product_id,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order,field_scope,encrypted,customer_profile_key) SELECT $2,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order,field_scope,encrypted,customer_profile_key FROM product_purchase_fields WHERE product_id=$1`, sourceID, productID); err != nil {
 		return 0, err
 	}
 	if _, err = tx.Exec(ctx, `

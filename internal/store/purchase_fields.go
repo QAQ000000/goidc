@@ -2,6 +2,11 @@ package store
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"errors"
 	"net/url"
 	"regexp"
 	"strings"
@@ -23,6 +28,9 @@ type PurchaseField struct {
 	Pattern     string   `json:"pattern"`
 	Choices     []string `json:"choices"`
 	SortOrder   int      `json:"sort_order"`
+	Scope       string   `json:"scope"`
+	Encrypted   bool     `json:"encrypted"`
+	ProfileKey  string   `json:"customer_profile_key,omitempty"`
 }
 type PurchaseFieldSnapshot struct {
 	Key         string `json:"key"`
@@ -30,6 +38,9 @@ type PurchaseFieldSnapshot struct {
 	Type        string `json:"type"`
 	Value       string `json:"value"`
 	ShowInvoice bool   `json:"show_invoice"`
+	Scope       string `json:"scope,omitempty"`
+	Encrypted   bool   `json:"encrypted,omitempty"`
+	ProfileKey  string `json:"customer_profile_key,omitempty"`
 }
 type PurchaseFieldsInput struct {
 	ExpectedRevision int64           `json:"expected_revision"`
@@ -48,7 +59,15 @@ func normalizePurchaseField(f *PurchaseField) error {
 	if f.MaxLength == 0 {
 		f.MaxLength = 255
 	}
-	if !purchaseFieldKey.MatchString(f.Key) || !contentTextValid(f.Label, 120, false) || !contentTextValid(f.Description, 500, true) || f.MaxLength < 1 || f.MaxLength > 2048 || len(f.Pattern) > 500 || f.SortOrder < 0 || f.SortOrder > 1000000 {
+	f.Scope = strings.TrimSpace(f.Scope)
+	f.ProfileKey = strings.TrimSpace(f.ProfileKey)
+	if f.Scope == "" {
+		f.Scope = "purchase"
+	}
+	if f.Encrypted {
+		f.ShowInvoice = false
+	}
+	if !purchaseFieldKey.MatchString(f.Key) || !contentTextValid(f.Label, 120, false) || !contentTextValid(f.Description, 500, true) || f.MaxLength < 1 || f.MaxLength > 2048 || len(f.Pattern) > 500 || f.SortOrder < 0 || f.SortOrder > 1000000 || (f.Scope != "purchase" && f.Scope != "admin" && f.Scope != "customer") || (f.Scope == "admin" && (f.Required || f.ShowInvoice || f.ProfileKey != "")) || (f.Scope == "customer" && (!purchaseFieldKey.MatchString(f.ProfileKey) || f.ShowInvoice)) {
 		return conflict("invalid_purchase_fields", "购买字段的名称、标识、长度或排序无效")
 	}
 	switch f.Type {
@@ -98,6 +117,9 @@ func (s *Store) SavePurchaseFields(ctx context.Context, actor, product int64, in
 		if err := normalizePurchaseField(f); err != nil {
 			return err
 		}
+		if f.Encrypted && len(s.PurchaseFieldEncryptionKey) != 32 {
+			return conflict("purchase_field_encryption_unconfigured", "敏感购买字段未配置加密密钥")
+		}
 		if seen[f.Key] {
 			return conflict("invalid_purchase_fields", "购买字段标识重复")
 		}
@@ -112,7 +134,7 @@ func (s *Store) SavePurchaseFields(ctx context.Context, actor, product int64, in
 		return err
 	}
 	for _, f := range in.Fields {
-		if _, err = tx.Exec(ctx, `INSERT INTO product_purchase_fields(product_id,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, product, f.Key, f.Label, f.Type, f.Description, f.Required, f.Active, f.ShowInvoice, f.MaxLength, f.Pattern, f.Choices, f.SortOrder); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO product_purchase_fields(product_id,field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order,field_scope,encrypted,customer_profile_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, product, f.Key, f.Label, f.Type, f.Description, f.Required, f.Active, f.ShowInvoice, f.MaxLength, f.Pattern, f.Choices, f.SortOrder, f.Scope, f.Encrypted, f.ProfileKey); err != nil {
 			return err
 		}
 	}
@@ -125,17 +147,35 @@ func ValidatePurchaseFields(ctx context.Context, tx pgx.Tx, product int64, value
 	if len(values) > 20 {
 		return nil, nil, conflict("invalid_purchase_fields", "购买信息字段过多")
 	}
-	rows, err := tx.Query(ctx, `SELECT field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order FROM product_purchase_fields WHERE product_id=$1 ORDER BY sort_order,field_key`, product)
+	return ValidatePurchaseFieldsWithKey(ctx, tx, product, values, nil)
+}
+func ValidatePurchaseFieldsWithKey(ctx context.Context, tx pgx.Tx, product int64, values map[string]string, key []byte) (map[string]string, []PurchaseFieldSnapshot, error) {
+	if values == nil {
+		values = map[string]string{}
+	}
+	if len(values) > 20 {
+		return nil, nil, conflict("invalid_purchase_fields", "购买信息字段过多")
+	}
+	rows, err := tx.Query(ctx, `SELECT field_key,label,field_type,description,required,active,show_invoice,max_length,validation_pattern,choices,sort_order,field_scope,encrypted,customer_profile_key FROM product_purchase_fields WHERE product_id=$1 ORDER BY sort_order,field_key`, product)
 	if err != nil {
 		return nil, nil, err
 	}
 	fields, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (PurchaseField, error) {
 		var f PurchaseField
-		err := row.Scan(&f.Key, &f.Label, &f.Type, &f.Description, &f.Required, &f.Active, &f.ShowInvoice, &f.MaxLength, &f.Pattern, &f.Choices, &f.SortOrder)
+		err := row.Scan(&f.Key, &f.Label, &f.Type, &f.Description, &f.Required, &f.Active, &f.ShowInvoice, &f.MaxLength, &f.Pattern, &f.Choices, &f.SortOrder, &f.Scope, &f.Encrypted, &f.ProfileKey)
 		return f, err
 	})
 	if err != nil {
 		return nil, nil, err
+	}
+	for _, f := range fields {
+		if f.Encrypted && strings.HasPrefix(values[f.Key], "enc:v1:") {
+			plain, decryptErr := unsealPurchaseValue(key, values[f.Key])
+			if decryptErr != nil {
+				return nil, nil, conflict("invalid_purchase_fields", "敏感购买字段无法读取")
+			}
+			values[f.Key] = plain
+		}
 	}
 	return ValidatePurchaseFieldValues(fields, values)
 }
@@ -145,6 +185,9 @@ func ValidatePurchaseFieldValues(fields []PurchaseField, values map[string]strin
 	known := map[string]bool{}
 	for _, f := range fields {
 		if !f.Active {
+			continue
+		}
+		if f.Scope == "admin" {
 			continue
 		}
 		known[f.Key] = true
@@ -188,7 +231,7 @@ func ValidatePurchaseFieldValues(fields []PurchaseField, values map[string]strin
 			}
 		}
 		canonical[f.Key] = value
-		snapshots = append(snapshots, PurchaseFieldSnapshot{Key: f.Key, Label: f.Label, Type: f.Type, Value: value, ShowInvoice: f.ShowInvoice})
+		snapshots = append(snapshots, PurchaseFieldSnapshot{Key: f.Key, Label: f.Label, Type: f.Type, Value: value, ShowInvoice: f.ShowInvoice, Scope: f.Scope, Encrypted: f.Encrypted, ProfileKey: f.ProfileKey})
 	}
 	for key := range values {
 		if !known[key] {
@@ -196,4 +239,42 @@ func ValidatePurchaseFieldValues(fields []PurchaseField, values map[string]strin
 		}
 	}
 	return canonical, snapshots, nil
+}
+
+func SealPurchaseValue(key []byte, value string) (string, error) {
+	if len(key) != 32 {
+		return "", errors.New("purchase field encryption is not configured")
+	}
+	b, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(b)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = rand.Read(nonce); err != nil {
+		return "", err
+	}
+	return "enc:v1:" + base64.RawURLEncoding.EncodeToString(gcm.Seal(nonce, nonce, []byte(value), nil)), nil
+}
+func unsealPurchaseValue(key []byte, value string) (string, error) {
+	if !strings.HasPrefix(value, "enc:v1:") || len(key) != 32 {
+		return "", errors.New("invalid encrypted purchase field")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(value, "enc:v1:"))
+	if err != nil {
+		return "", err
+	}
+	b, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(b)
+	if err != nil || len(payload) < gcm.NonceSize() {
+		return "", errors.New("invalid encrypted purchase field")
+	}
+	plain, err := gcm.Open(nil, payload[:gcm.NonceSize()], payload[gcm.NonceSize():], nil)
+	return string(plain), err
 }

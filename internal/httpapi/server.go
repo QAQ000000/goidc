@@ -28,6 +28,7 @@ type Server struct {
 func New(db *store.Store, cfg config.Config, log *slog.Logger) *Server {
 	db.Provisioners = cfg.NOKVMProfiles
 	db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
+	db.PurchaseFieldEncryptionKey = cfg.PurchaseFieldEncryptionKey
 	return &Server{db, cfg, log}
 }
 

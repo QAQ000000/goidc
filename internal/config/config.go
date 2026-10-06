@@ -20,6 +20,7 @@ type Config struct {
 	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom            string
 	SMTPPort                                                  int
 	MFAEncryptionKey                                          []byte
+	PurchaseFieldEncryptionKey                                []byte
 	NOKVMProfiles                                             map[string]*provision.NOKVM
 	ProvisionEncryptionKey                                    []byte
 }
@@ -54,6 +55,13 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("MFA_ENCRYPTION_KEY must be 64 hexadecimal characters")
 		}
 		c.MFAEncryptionKey = key
+	}
+	if raw := strings.TrimSpace(os.Getenv("PURCHASE_FIELD_ENCRYPTION_KEY")); raw != "" {
+		key, decodeErr := hex.DecodeString(raw)
+		if decodeErr != nil || len(key) != 32 {
+			return c, fmt.Errorf("PURCHASE_FIELD_ENCRYPTION_KEY must be 64 hexadecimal characters")
+		}
+		c.PurchaseFieldEncryptionKey = key
 	}
 	if raw := strings.TrimSpace(os.Getenv("PROVISION_ENCRYPTION_KEY")); raw != "" {
 		key, decodeErr := hex.DecodeString(raw)
