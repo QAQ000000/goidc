@@ -174,7 +174,7 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		active := true
 		in.Active = &active
 	}
-	if in.Name == "" || !contentTextValid(in.Name, 180, false) || !contentTextValid(in.Description, 10000, true) || !productSlugPattern.MatchString(in.Slug) || in.Active == nil || (in.CategoryID != nil && *in.CategoryID < 1) || in.SortOrder < 0 || in.SortOrder > 1000000 || in.PriceCents < 0 || in.PriceCents > 100000000 || in.SetupFeeCents < 0 || in.SetupFeeCents > 100000000 || (in.Stock != nil && (*in.Stock < 0 || *in.Stock > 2147483647)) || (in.ProvisionMode != "manual" && in.ProvisionMode != "simulation" && in.ProvisionMode != "nokvm") || (in.BillingCycle != "monthly" && in.BillingCycle != "quarterly" && in.BillingCycle != "annually" && in.BillingCycle != "once") {
+	if in.Name == "" || !contentTextValid(in.Name, 180, false) || !contentTextValid(in.Description, 10000, true) || !productSlugPattern.MatchString(in.Slug) || in.Active == nil || (in.CategoryID != nil && *in.CategoryID < 1) || in.SortOrder < 0 || in.SortOrder > 1000000 || in.PriceCents < 0 || in.PriceCents > 100000000 || in.SetupFeeCents < 0 || in.SetupFeeCents > 100000000 || (in.Stock != nil && (*in.Stock < 0 || *in.Stock > 2147483647)) || (in.ProvisionMode != "manual" && in.ProvisionMode != "simulation" && in.ProvisionMode != "nokvm" && in.ProvisionMode != "supplier") || (in.BillingCycle != "monthly" && in.BillingCycle != "quarterly" && in.BillingCycle != "annually" && in.BillingCycle != "once") {
 		return 0, conflict("invalid_product", "商品名称、金额、账期、库存或可售状态无效")
 	}
 	deliveryJSON := []byte(`{}`)
@@ -198,6 +198,26 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		}
 		if configurable {
 			return 0, conflict("nokvm_fixed_resources", "当前 NOKVM 交付使用固定规格，请先停用可配置选项")
+		}
+	}
+	if id != 0 {
+		var oldMode string
+		if err = tx.QueryRow(ctx, "SELECT provision_mode FROM products WHERE id=$1", id).Scan(&oldMode); err != nil {
+			return 0, err
+		}
+		if oldMode == "supplier" && in.ProvisionMode != "supplier" {
+			return 0, conflict("supplier_source_locked", "供应商来源不可更改，请新建或重新导入商品")
+		}
+	}
+	if in.ProvisionMode == "supplier" {
+		if id == 0 {
+			return 0, conflict("supplier_import_required", "请从供应商目录导入商品")
+		}
+		if err = RequireSupplierProductCycle(ctx, tx, id, in.BillingCycle); err != nil {
+			return 0, err
+		}
+		if err = tx.QueryRow(ctx, "SELECT delivery_config FROM products WHERE id=$1 AND provision_mode='supplier'", id).Scan(&deliveryJSON); err != nil {
+			return 0, err
 		}
 	}
 	var revision int64

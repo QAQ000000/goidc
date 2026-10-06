@@ -31,6 +31,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	db.SupplierDownstreamURL = cfg.PublicOrigin
 	db.Provisioners = cfg.NOKVMProfiles
 	db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
 	if err = db.CheckSchema(ctx); err != nil {

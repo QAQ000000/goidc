@@ -26,13 +26,17 @@ func fixture(t *testing.T, invoiceAmount string, fail string) (Adapter, *int) {
 			fmt.Fprint(w, `{"status":200,"data":`)
 			return
 		}
+		if fail == "payment_host" && r.URL.Path == "/apply_credit" {
+			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[43]}}`)
+			return
+		}
 		switch r.URL.Path {
 		case "/zjmf_api_login":
 			fmt.Fprint(w, `{"status":200,"jwt":"private-jwt"}`)
 		case "/cart/all":
 			fmt.Fprint(w, `{"status":200,"data":{"products":[{"products":[{"id":7,"name":"VM","stock_control":1,"qty":5}]}],"count":1,"currency":"CNY"}}`)
 		case "/cart/get_product_config":
-			fmt.Fprint(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","description":"Virtual machine","location_version":1,"stock_control":1,"qty":5},"product_pricings":[{"code":"CNY","monthly":"16.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`)
+			fmt.Fprint(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","description":"Virtual machine","location_version":1,"stock_control":1,"qty":5,"pay_type":{"pay_type":"recurring"}},"product_pricings":[{"code":"CNY","monthly":"16.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`)
 		case "/user_info":
 			fmt.Fprint(w, `{"status":200,"user":{"currency":1}}`)
 		case "/cart/clear":
@@ -55,7 +59,7 @@ func fixture(t *testing.T, invoiceAmount string, fail string) (Adapter, *int) {
 			}
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
 		case "/cart/hostinfo":
-			fmt.Fprint(w, `{"status":200,"data":{"hosts":[{"id":42,"domainstatus":"Active","domain":"vm.example","nextduedate":1790000000}]}}`)
+			fmt.Fprint(w, `{"status":200,"data":{"hosts":[{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","nextduedate":1790000000}]}}`)
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
@@ -80,7 +84,7 @@ func TestRevisionExcludesStockAndMapsOneTime(t *testing.T) {
 			t.Errorf("unexpected path %s", r.URL.Path)
 			return
 		}
-		fmt.Fprintf(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","location_version":2,"stock_control":1,"qty":%d},"product_pricings":[{"code":"CNY","onetime":"30.00","osetupfee":"2.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`, qty.Load())
+		fmt.Fprintf(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","location_version":2,"stock_control":1,"qty":%d,"pay_type":{"pay_type":"onetime"}},"product_pricings":[{"code":"CNY","onetime":"30.00","osetupfee":"2.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`, qty.Load())
 	}))
 	defer srv.Close()
 	a, _ := New(Account{Provider: ProviderZJMF, BaseURL: srv.URL, Username: "user", Password: "pass"})
@@ -128,6 +132,64 @@ func TestInvoiceMismatchBlocksCredit(t *testing.T) {
 	var failure *Error
 	if !errors.As(e, &failure) || !failure.Unknown || failure.InvoiceID != 90 || out.InvoiceID != 90 {
 		t.Fatal(out, e)
+	}
+}
+
+func TestMismatchedPaymentHostIsUnknown(t *testing.T) {
+	a, _ := fixture(t, "16.00", "payment_host")
+	p, _ := a.Product(t.Context(), 7)
+	_, err := a.Create(t.Context(), createRequest(p))
+	var failure *Error
+	if !errors.As(err, &failure) || !failure.Unknown || failure.UpstreamID != 42 {
+		t.Fatal(err)
+	}
+}
+
+func TestMoneyBoundaries(t *testing.T) {
+	for _, value := range []string{"-1", "+1", "1.234", "92233720368547759", "92233720368547758.08", "92233720368547758.99"} {
+		if _, valid := money(value); valid {
+			t.Fatal("accepted", value)
+		}
+	}
+	if amount, valid := money("92233720368547758.07"); !valid || amount != 9223372036854775807 {
+		t.Fatal(amount, valid)
+	}
+}
+
+func TestProductAvailabilityAndPaymentRules(t *testing.T) {
+	for _, tc := range []struct {
+		rules, setup string
+		supported    bool
+		cycles       int
+	}{
+		{`"pay_type":{"pay_type":"recurring"}`, `"0.00"`, true, 1},
+		{`"pay_type":"{\"pay_type\":\"onetime\"}"`, `"0.00"`, true, 1},
+		{`"pay_type":{"pay_type":"free"}`, `"0.00"`, false, 2},
+		{`"pay_type":{"pay_type":"recurring"},"hidden":1`, `"0.00"`, false, 1},
+		{`"pay_type":{"pay_type":"recurring"},"retired":1`, `"0.00"`, false, 1},
+		{`"pay_type":{"pay_type":"recurring"},"password":"{\"show\":1}"`, `"0.00"`, false, 1},
+		{`"pay_type":{"pay_type":"recurring"},"host":{"show":1}`, `"0.00"`, false, 1},
+		{`"pay_type":{"pay_type":"recurring"}`, `"-1.00"`, false, 1},
+		{`"pay_type":{"pay_type":"recurring"}`, `"oops"`, false, 1},
+	} {
+		t.Run(tc.rules+tc.setup, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/zjmf_api_login" {
+					fmt.Fprint(w, `{"status":200,"jwt":"jwt"}`)
+					return
+				}
+				fmt.Fprintf(w, `{"status":200,"data":{"products":{"id":7,"location_version":1,%s},"product_pricings":[{"code":"CNY","monthly":"16.00","msetupfee":%s,"onetime":"30.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`, tc.rules, tc.setup)
+			}))
+			defer srv.Close()
+			a, _ := New(Account{Provider: ProviderZJMF, BaseURL: srv.URL, Username: "user", Password: "pass"})
+			p, err := a.Product(t.Context(), 7)
+			if err != nil || p.Supported != tc.supported {
+				t.Fatal(p, err)
+			}
+			if tc.supported && len(p.Prices) != tc.cycles {
+				t.Fatal("unavailable cycles", p.Prices)
+			}
+		})
 	}
 }
 func TestAmbiguousWriteAndSecretFreeError(t *testing.T) {
@@ -178,7 +240,7 @@ func TestExistingHostWithoutInvoiceIsUnknown(t *testing.T) {
 		case "/zjmf_api_login":
 			fmt.Fprint(w, `{"status":200,"jwt":"jwt"}`)
 		case "/cart/get_product_config":
-			fmt.Fprint(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","location_version":1},"product_pricings":[{"code":"CNY","monthly":"16.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`)
+			fmt.Fprint(w, `{"status":200,"data":{"products":{"id":7,"name":"VM","location_version":1,"pay_type":{"pay_type":"recurring"}},"product_pricings":[{"code":"CNY","monthly":"16.00"}],"config_groups":[],"customfields":[],"advanced":[]}}`)
 		case "/user_info":
 			fmt.Fprint(w, `{"status":200,"user":{"currency":1}}`)
 		case "/cart/clear":

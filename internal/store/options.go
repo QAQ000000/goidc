@@ -67,6 +67,11 @@ func ValidateProductOptionsForCycle(ctx context.Context, q sqlQueryer, productID
 // IDs and optional quantities. The quantity map is keyed by option ID; an
 // omitted quantity keeps legacy fixed-price behavior at one unit.
 func ValidateProductOptionsForCycleWithQuantities(ctx context.Context, q sqlQueryer, productID int64, billingCycle string, ids []int64, quantities map[int64]int64) (OptionSelection, error) {
+	if billingCycle != "" {
+		if err := RequireSupplierProductCycle(ctx, q, productID, billingCycle); err != nil {
+			return OptionSelection{}, err
+		}
+	}
 	selection := OptionSelection{IDs: []int64{}, Quantities: map[int64]int64{}, Snapshot: []OptionSnapshot{}}
 	if productID < 1 || len(ids) > 100 {
 		return selection, conflict("invalid_product_options", "产品配置项无效")

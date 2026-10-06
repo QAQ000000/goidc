@@ -126,6 +126,9 @@ func (s *Store) Checkout(ctx context.Context, userID int64, key string, input Ch
 	requiresApproval := false
 	for index := range items {
 		v := &items[index]
+		if err = lockSupplierAtCheckout(ctx, tx, v.ProductID, v.Cycle); err != nil {
+			return result, err
+		}
 		requiresApproval = requiresApproval || v.ApprovalRequired
 		if !v.Active || !v.PriceActive {
 			return result, conflict("product_unavailable", "商品已下架")

@@ -95,6 +95,9 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
+	if mode == "supplier" && action != "create" && action != "sync" {
+		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
+	}
 	if storage != nil || nat != nil || cdrom != nil {
 		if err = lockStorageCredential(ctx, tx, actorID); err != nil {
 			return out, err
@@ -211,7 +214,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("cdrom_cooldown", "操作频繁，请60秒后重试")
 		}
 		if !cdrom.Prepared {
-			if !allowedServiceAction(current, action) {
+			if !allowedServiceAction(current, action) && !(mode == "supplier" && action == "sync" && current == "provisioning") {
 				return out, conflict("invalid_service_state", "服务状态不允许该操作")
 			}
 			if err = tx.Rollback(ctx); err != nil {
@@ -286,7 +289,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("storage_cooldown", "操作频繁，请60秒后重试")
 		}
 		if !storage.Prepared {
-			if !allowedServiceAction(current, action) {
+			if !allowedServiceAction(current, action) && !(mode == "supplier" && action == "sync" && current == "provisioning") {
 				return out, conflict("invalid_service_state", "服务状态不允许该操作")
 			}
 			if err = tx.Rollback(ctx); err != nil {
@@ -355,7 +358,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("nat_cooldown", "操作频繁，请60秒后重试")
 		}
 		if !nat.Prepared {
-			if !allowedServiceAction(current, action) {
+			if !allowedServiceAction(current, action) && !(mode == "supplier" && action == "sync" && current == "provisioning") {
 				return out, conflict("invalid_service_state", "服务状态不允许该操作")
 			}
 			if err = tx.Rollback(ctx); err != nil {
@@ -457,7 +460,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("power_action_cooldown", "电源操作频繁，请30秒后重试")
 		}
 	}
-	if !allowedServiceAction(current, action) {
+	if !allowedServiceAction(current, action) && !(mode == "supplier" && action == "sync" && current == "provisioning") {
 		return out, conflict("invalid_service_state", "服务当前状态不允许执行该动作")
 	}
 	if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
@@ -548,6 +551,9 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 	var dispatchMode string
 	if err := s.Pool.QueryRow(ctx, "SELECT s.provision_mode FROM services s JOIN provision_jobs j ON j.service_id=s.id WHERE j.id=$1", job.ID).Scan(&dispatchMode); err != nil {
 		return err
+	}
+	if dispatchMode == "supplier" {
+		return s.processSupplierJob(ctx, job)
 	}
 	if dispatchMode == "nokvm" && job.Action != "upgrade" {
 		return s.processNOKVMJob(ctx, job)

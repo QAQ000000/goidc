@@ -115,6 +115,9 @@ func (s *Store) SaveProductOptionGroup(ctx context.Context, actor, product, grou
 		if err = tx.QueryRow(ctx, "SELECT provision_mode FROM products WHERE id=$1", product).Scan(&mode); err != nil {
 			return 0, err
 		}
+		if mode == "supplier" {
+			return 0, conflict("supplier_fixed_configuration", "上游商品使用导入时选定的规格，请重新导入不同规格")
+		}
 		if mode == "nokvm" {
 			return 0, conflict("nokvm_fixed_resources", "当前 NOKVM 商品使用固定资源规格，暂不支持可配置选项")
 		}

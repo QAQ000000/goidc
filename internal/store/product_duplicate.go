@@ -29,6 +29,13 @@ func (s *Store) DuplicateProduct(ctx context.Context, actor int64, in ProductDup
 	if err != nil {
 		return 0, err
 	}
+	var supplierMode bool
+	if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM products WHERE id=$1", sourceID).Scan(&supplierMode); err != nil {
+		return 0, err
+	}
+	if supplierMode {
+		return 0, conflict("supplier_import_required", "请从供应商目录重新导入商品，交付绑定不能复制")
+	}
 	var hasRules bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM legacy_product_config_option_links l JOIN product_option_groups g ON g.id=l.config_option_group_id WHERE g.product_id=$1)`, sourceID).Scan(&hasRules); err != nil {
 		return 0, err

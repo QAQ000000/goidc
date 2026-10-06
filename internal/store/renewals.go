@@ -63,6 +63,13 @@ FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON
 	if ownerID != userID {
 		return out, pgx.ErrNoRows
 	}
+	var supplierMode bool
+	if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+		return out, err
+	}
+	if supplierMode {
+		return out, conflict("unsupported_supplier_renewal", "该上游适配器暂未开放自动续费，请通过管理员核验处理")
+	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}

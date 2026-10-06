@@ -110,6 +110,13 @@ func (s *Store) QuoteBillingCycleChange(ctx context.Context, userID, serviceID i
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	var supplierMode bool
+	if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1 AND user_id=$2", serviceID, userID).Scan(&supplierMode); err != nil {
+		return out, err
+	}
+	if supplierMode {
+		return out, conflict("unsupported_supplier_upgrade", "该上游适配器暂未开放账期变更")
+	}
 	if err = CatalogReadLock(ctx, tx); err != nil {
 		return out, err
 	}
@@ -225,6 +232,9 @@ func (s *Store) QuoteConfigurationChange(ctx context.Context, userID, serviceID 
 	var deliveryMode string
 	if err = tx.QueryRow(ctx, "SELECT provision_mode FROM services WHERE id=$1 AND user_id=$2", serviceID, userID).Scan(&deliveryMode); err != nil {
 		return out, err
+	}
+	if deliveryMode == "supplier" {
+		return out, conflict("unsupported_supplier_upgrade", "该上游适配器暂未开放规格或账期变更")
 	}
 	if deliveryMode == "nokvm" {
 		return out, conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")

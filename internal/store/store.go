@@ -17,6 +17,7 @@ import (
 )
 
 type Store struct {
+	SupplierDownstreamURL      string
 	Pool                       *pgxpool.Pool
 	Provisioners               map[string]*provision.NOKVM
 	ProvisionEncryptionKey     []byte

@@ -23,6 +23,14 @@ func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enab
 		return pgx.ErrNoRows
 	}
 	if enabled {
+		var supplierMode bool
+		if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+			return err
+		}
+		if supplierMode {
+			return conflict("unsupported_supplier_renewal", "该上游适配器暂未开放自动续费")
+		}
+
 		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 			return err
 		}

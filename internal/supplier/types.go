@@ -51,7 +51,7 @@ type Product struct {
 	Currency          string           `json:"currency"`
 	Revision          string           `json:"revision"`
 	SupplierVersion   int64            `json:"supplier_version"`
-	Stock             *int64           `json:"stock,omitempty"`
+	Stock             *int64           `json:"stock"`
 	Prices            map[string]Price `json:"prices"`
 	Options           []Option         `json:"options"`
 	Fields            []Field          `json:"fields"`
@@ -91,15 +91,19 @@ type CreateRequest struct {
 }
 
 type CreateResult struct {
-	UpstreamID int64  `json:"upstream_id"`
-	InvoiceID  int64  `json:"invoice_id"`
-	Status     string `json:"status"`
-	CostCents  int64  `json:"cost_cents"`
-	Currency   string `json:"currency"`
+	UpstreamID  int64  `json:"upstream_id"`
+	InvoiceID   int64  `json:"invoice_id"`
+	Status      string `json:"status"`
+	CostCents   int64  `json:"cost_cents"`
+	Currency    string `json:"currency"`
+	ProductID   int64  `json:"product_id"`
+	Domain      string `json:"domain"`
+	NextDueDate string `json:"next_due_date"`
 }
 
 type Service struct {
 	UpstreamID  int64  `json:"upstream_id"`
+	ProductID   int64  `json:"product_id"`
 	Status      string `json:"status"`
 	Domain      string `json:"domain"`
 	NextDueDate string `json:"next_due_date"`
@@ -121,10 +125,6 @@ type Adapter interface {
 	Create(context.Context, CreateRequest) (CreateResult, error)
 	Sync(context.Context, int64) (Service, error)
 	Execute(context.Context, string, int64) (Service, error)
-}
-
-func Providers() []Provider {
-	return []Provider{{ID: ProviderZJMF, Name: "魔方财务 legacy v1", Capabilities: (Capabilities{Catalog: true, Product: true, Create: true, Sync: true})}}
 }
 
 func ValidateSelection(product Product, cycle string, options, fields map[int64]string) (int64, error) {

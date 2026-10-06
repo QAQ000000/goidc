@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -20,7 +21,7 @@ type zjmf struct {
 	client  *http.Client
 }
 
-func New(account Account) (Adapter, error) {
+func newZJMF(account Account) (Adapter, error) {
 	if account.Provider != ProviderZJMF || account.Username == "" || account.Password == "" {
 		return nil, &Error{Code: "invalid_account"}
 	}
@@ -171,7 +172,11 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 			Description     string          `json:"description"`
 			StockControl    int             `json:"stock_control"`
 			Qty             int64           `json:"qty"`
-			PayType         string          `json:"pay_type"`
+			PayType         json.RawMessage `json:"pay_type"`
+			Hidden          json.RawMessage `json:"hidden"`
+			Retired         json.RawMessage `json:"retired"`
+			Host            json.RawMessage `json:"host"`
+			Password        json.RawMessage `json:"password"`
 			LocationVersion json.RawMessage `json:"location_version"`
 		} `json:"products"`
 		ProductPricings []map[string]json.RawMessage `json:"product_pricings"`
@@ -182,7 +187,20 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	if json.Unmarshal(w.Data, &d) != nil || d.Products.ID != id {
 		return Product{}, &Error{Code: "product_invalid"}
 	}
-	p := Product{ID: id, Name: d.Products.Name, Description: d.Products.Description, SupplierVersion: number(d.Products.LocationVersion), Prices: map[string]Price{}, Supported: true}
+	p := Product{ID: id, Name: d.Products.Name, Description: d.Products.Description, SupplierVersion: number(d.Products.LocationVersion), Prices: map[string]Price{}, Options: []Option{}, Fields: []Field{}, Supported: true}
+	payType, validPayType := productRule(d.Products.PayType, "pay_type")
+	if !validPayType || (payType != "recurring" && payType != "onetime") {
+		p.Supported, p.UnsupportedReason = false, "unsupported_payment_type"
+	}
+	if number(d.Products.Hidden) != 0 || number(d.Products.Retired) != 0 {
+		p.Supported, p.UnsupportedReason = false, "product_unavailable"
+	}
+	for _, rule := range []json.RawMessage{d.Products.Host, d.Products.Password} {
+		show, valid := productRule(rule, "show")
+		if len(rule) > 0 && (!valid || (show != "" && show != "0")) {
+			p.Supported, p.UnsupportedReason = false, "unsupported_host_credentials"
+		}
+	}
 	if p.SupplierVersion < 1 {
 		p.Supported = false
 		p.UnsupportedReason = "supplier_version_unknown"
@@ -207,11 +225,18 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 			continue
 		}
 		for cycle, keys := range map[string][2]string{"monthly": {"monthly", "msetupfee"}, "quarterly": {"quarterly", "qsetupfee"}, "annually": {"annually", "asetupfee"}, "once": {"onetime", "osetupfee"}} {
+			if (payType == "onetime" && cycle != "once") || (payType == "recurring" && cycle == "once") {
+				continue
+			}
 			c, ok := moneyRaw(r[keys[0]])
 			if !ok || c < 0 {
 				continue
 			}
-			setup, _ := moneyRaw(r[keys[1]])
+			setup, valid := setupMoney(r[keys[1]])
+			if !valid {
+				p.Supported, p.UnsupportedReason = false, "invalid_setup_price"
+				continue
+			}
 			p.Prices[cycle] = Price{AmountCents: c, SetupCents: setup}
 		}
 	}
@@ -259,7 +284,11 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 						if !ok || amount < 0 {
 							continue
 						}
-						setup, _ := moneyRaw(price[keys[1]])
+						setup, valid := setupMoney(price[keys[1]])
+						if !valid {
+							p.Supported, p.UnsupportedReason = false, "invalid_setup_price"
+							continue
+						}
 						c.Prices[cycle] = Price{AmountCents: amount, SetupCents: setup}
 					}
 				}
@@ -327,8 +356,15 @@ func money(s string) (int64, bool) {
 	if len(parts) > 2 || len(parts[0]) == 0 {
 		return 0, false
 	}
+	for _, part := range parts {
+		for _, char := range part {
+			if char < '0' || char > '9' {
+				return 0, false
+			}
+		}
+	}
 	whole, e := strconv.ParseInt(parts[0], 10, 64)
-	if e != nil || whole < 0 || whole > 92233720368547757 {
+	if e != nil || whole < 0 || whole > math.MaxInt64/100 {
 		return 0, false
 	}
 	frac := int64(0)
@@ -345,7 +381,38 @@ func money(s string) (int64, bool) {
 			frac *= 10
 		}
 	}
+	if whole > (math.MaxInt64-frac)/100 {
+		return 0, false
+	}
 	return whole*100 + frac, true
+}
+
+func setupMoney(raw json.RawMessage) (int64, bool) {
+	if len(raw) == 0 {
+		return 0, true
+	}
+	return moneyRaw(raw)
+}
+
+// Legacy product rules may be JSON objects or JSON strings containing objects.
+func productRule(raw json.RawMessage, key string) (string, bool) {
+	var encoded string
+	if json.Unmarshal(raw, &encoded) == nil {
+		raw = json.RawMessage(encoded)
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return "", false
+	}
+	value := fields[key]
+	if len(value) == 0 {
+		return "", true
+	}
+	var result string
+	if json.Unmarshal(value, &result) != nil {
+		result = string(value)
+	}
+	return result, true
 }
 func moneyRaw(raw json.RawMessage) (int64, bool) {
 	if len(raw) == 0 {
@@ -498,13 +565,20 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	if !valid || invoice.Currency.Code != "CNY" || cost > r.MaximumCostCents {
 		return out, failure("invoice_price_mismatch", true, out)
 	}
-	matched := false
+	hostItems := 0
 	for _, item := range invoice.InvoiceItems {
-		if item.Type == "host" && number(item.RelID) == out.UpstreamID && out.UpstreamID > 0 {
-			matched = true
+		if number(item.RelID) != out.UpstreamID || out.UpstreamID < 1 {
+			return out, failure("invoice_host_mismatch", true, out)
+		}
+		switch item.Type {
+		case "host":
+			hostItems++
+		case "setup", "discount", "promo":
+		default:
+			return out, failure("invoice_host_mismatch", true, out)
 		}
 	}
-	if !matched {
+	if hostItems != 1 {
 		return out, failure("invoice_host_mismatch", true, out)
 	}
 	out.CostCents = cost
@@ -522,8 +596,8 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 			return out, failure("payment_unknown", true, out)
 		}
 		host, _ := ids(w)
-		if host > 0 {
-			out.UpstreamID = host
+		if host != out.UpstreamID {
+			return out, failure("payment_host_mismatch", true, out)
 		}
 		if w.Status != 1001 {
 			return out, failure("payment_not_confirmed", true, out)
@@ -532,8 +606,17 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	out.Status = "provisioning"
 	if out.UpstreamID > 0 {
 		svc, e := z.Sync(ctx, out.UpstreamID)
-		if e == nil && svc.Status == "Active" {
-			out.Status = "active"
+		if e != nil {
+			return out, failure("resource_unconfirmed", true, out)
+		}
+		if e == nil {
+			if svc.ProductID != r.ProductID {
+				return out, failure("resource_product_mismatch", true, out)
+			}
+			out.ProductID, out.Domain, out.NextDueDate = svc.ProductID, svc.Domain, svc.NextDueDate
+			if svc.Status == "Active" {
+				out.Status = "active"
+			}
 		}
 	}
 	return out, nil
@@ -550,6 +633,7 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 	var d struct {
 		Hosts []struct {
 			ID           int64           `json:"id"`
+			ProductID    int64           `json:"productid"`
 			DomainStatus string          `json:"domainstatus"`
 			Domain       string          `json:"domain"`
 			NextDueDate  json.RawMessage `json:"nextduedate"`
@@ -564,7 +648,7 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 			if json.Unmarshal(v.NextDueDate, &due) != nil {
 				due = strings.TrimSpace(string(v.NextDueDate))
 			}
-			return Service{UpstreamID: id, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: due}, nil
+			return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: due}, nil
 		}
 	}
 	return s, &Error{Code: "service_missing"}

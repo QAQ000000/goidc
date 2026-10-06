@@ -27,6 +27,11 @@ pricing, OS and advanced linkage remain unsupported. Text and dropdown custom
 fields are supported only without a supplier regex rule. The store seals custom
 field values and never projects them back in binding responses.
 
+Product payment rules accept the legacy JSON string or object form. Recurring
+products expose recurring cycles only; one-time products expose `once` only.
+Hidden/retired products, missing payment rules, malformed setup prices and
+products that require unsupported hostname/password rules cannot be imported.
+
 `Create` checks the selected product's revision, cycle and maximum cost. It
 reads currency from the top-level `user.currency` in GET `/user_info` and sends
 the upstream product's `location_version` as `supplier_version`. It
@@ -35,7 +40,9 @@ then POST `/cart/add_to_shop`, POST `/cart/settle`, GET
 `/get_invoices_detail?id=...`, and POST `/apply_credit`. The invoice detail must
 identify the returned invoice, use CNY, and have a subtotal within the caller's
 maximum before credit is applied. A host invoice item must match the returned
-upstream host ID. Credit-limit fallback is not used. Only
+upstream host ID. There must be exactly one host line; setup, discount and promo
+lines are accepted only for that same resource. Unrelated invoice lines are
+rejected. Credit-limit fallback is not used. Only
 `Unpaid` invoices are sent to `/apply_credit`; `Paid` invoices are read
 without a second payment attempt. Other invoice states are rejected. Existing
 host/invoice IDs from `cart/clear` are returned for recovery. An existing host
@@ -53,3 +60,48 @@ Supplier responses and transport errors never enter returned error strings.
 The HTTP client verifies TLS, disables redirects and environment proxies,
 limits each response to 2 MiB, and times out after 20 seconds. Plain HTTP is
 allowed for loopback or literal private IP supplier endpoints.
+
+## Business integration and future providers
+
+Schema081 separates `supplier_accounts`, immutable `supplier_product_bindings`
+and service delivery snapshots from local retail products. The admin selects
+fixed upstream options/fields and a cost ceiling, then imports an inactive local
+product. Retail prices, description and stock can be maintained locally. Source,
+account identity, fixed configuration and cycle cannot be retargeted; reimport a
+new product when changing those fields. Checkout uses the normal local cart and
+atomically records the binding. Only the worker uses the upstream shared cart.
+
+AES-GCM binds credentials and fixed custom fields to their owner and domain.
+The existing `PROVISION_ENCRYPTION_KEY` must remain stable. No supplier raw
+response or password enters customer DTOs, audit payloads or job result JSON.
+
+The worker holds `supplier_accounts.running_job_id` durably before any network
+write. Waiting for another account job does not consume a delivery attempt.
+Unknown results retain this lease and enter `waiting_verification`; subsequent
+jobs wait and no write is automatically retried. A resource collision also
+enters verification immediately. The operator confirms an actual upstream
+resource, or explicitly acknowledges the absence of both resources and invoices
+with a note. A synchronized service cannot be attached to a different resource.
+Due dates come from the upstream response. Pending provisioning gets delayed
+sync jobs, with a bounded limit of120 automatic syncs; thereafter an admin can
+request sync. Active supplier services cannot be refunded while their upstream
+resource remains active; cancellation must be performed upstream and synchronized
+to terminated first. Automatic renewal, upgrades and lifecycle writes remain
+blocked for this provider.
+
+To add another system, implement `Adapter` and register its factory and metadata
+in `internal/supplier/registry.go`. Normalize catalog/configuration/money/state
+and sanitized errors inside that adapter. The UI reads provider metadata from
+`GET /api/v1/admin/supplier-providers`; business code has no magic provider-name
+switch. IDs currently use positive numeric handles. A provider with opaque/UUID
+IDs needs a durable provider-to-handle mapping rather than lossy parsing or
+hashing. Additional credentials require a versioned encrypted account payload;
+the current first provider uses username/password.
+
+Capabilities reserve suspend/resume/terminate/renew, but advertising a flag alone
+does not enable those workflows. Implement and verify the matching store,
+queue, finance and UI contracts before opening a new lifecycle capability.
+Future interactive/quantity configurations likewise require normalized schema
+support and checkout validation. Protocol fixtures and isolated databases prove
+the local contracts; a real supplier account remains required for external
+acceptance.

@@ -247,6 +247,12 @@ func (s *Server) upsertProductPricing(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_pricing", "默认账期不能停用，请先切换默认账期")
 		return
 	}
+	if active {
+		if err = store.RequireSupplierProductCycle(r.Context(), tx, id, input.BillingCycle); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	var priceID int64
 	err = tx.QueryRow(r.Context(), `INSERT INTO product_prices(product_id,billing_cycle,price_cents,setup_fee_cents,active)
 VALUES($1,$2,$3,$4,$5)

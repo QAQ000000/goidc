@@ -38,7 +38,7 @@ func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID 
 	if err = tx.QueryRow(ctx, "SELECT product_type,provision_mode FROM products WHERE id=$1", productID).Scan(&kind, &mode); err != nil {
 		return err
 	}
-	if mode == "nokvm" && len(in.Targets) > 0 {
+	if (mode == "nokvm" || mode == "supplier") && len(in.Targets) > 0 {
 		return conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
 	}
 	seen := map[int64]bool{}
@@ -89,7 +89,7 @@ func (s *Store) QuoteProductChange(ctx context.Context, userID, serviceID int64,
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
-	if mode == "nokvm" {
+	if mode == "nokvm" || mode == "supplier" {
 		return out, conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
 	}
 	if status != "active" || due == nil || !due.After(time.Now()) || released || (cycle != "monthly" && cycle != "quarterly" && cycle != "annually") {

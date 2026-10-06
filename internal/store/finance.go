@@ -343,6 +343,13 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 			return out, queryErr
 		}
 		for _, v := range instances {
+			var unsupported bool
+			if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' AND status NOT IN ('terminated','cancelled') AND (upstream_id<>'' OR status='provisioning') FROM services WHERE id=$1", v.id).Scan(&unsupported); err != nil {
+				return out, err
+			}
+			if unsupported {
+				return out, conflict("unsupported_supplier_refund", "该上游资源请先在供应商处取消并同步终止状态，再处理本地退款")
+			}
 			if err = requireNoExternalDelivery(ctx, tx, v.id); err != nil {
 				return out, err
 			}

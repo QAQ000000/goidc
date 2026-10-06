@@ -26,6 +26,7 @@ type Server struct {
 }
 
 func New(db *store.Store, cfg config.Config, log *slog.Logger) *Server {
+	db.SupplierDownstreamURL = cfg.PublicOrigin
 	db.Provisioners = cfg.NOKVMProfiles
 	db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
 	db.PurchaseFieldEncryptionKey = cfg.PurchaseFieldEncryptionKey
@@ -230,6 +231,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/reports/product-income", s.auth(s.productIncomeReport, true))
 	mux.HandleFunc("GET /api/v1/admin/products", s.auth(s.adminProducts, true))
 	mux.HandleFunc("GET /api/v1/admin/products/page", s.auth(s.adminProductsPage, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-providers", s.auth(s.supplierProviders, true))
+	mux.HandleFunc("GET /api/v1/admin/suppliers", s.auth(s.suppliers, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers", s.auth(s.saveSupplier, true))
+	mux.HandleFunc("PUT /api/v1/admin/suppliers/{id}", s.auth(s.saveSupplier, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/catalog", s.auth(s.supplierCatalog, true))
+	mux.HandleFunc("GET /api/v1/admin/suppliers/{id}/products/{product_id}", s.auth(s.supplierProduct, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/import", s.auth(s.importSupplierProduct, true))
+	mux.HandleFunc("GET /api/v1/admin/products/{id}/supplier-binding", s.auth(s.supplierBinding, true))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/supplier-verification", s.auth(s.supplierVerification, true))
 	mux.HandleFunc("GET /api/v1/admin/provision-profiles", s.auth(s.provisionProfiles, true))
 	mux.HandleFunc("GET /api/v1/admin/products/{id}", s.auth(s.adminProduct, true))
 	mux.HandleFunc("PATCH /api/v1/admin/products/{id}", s.auth(s.createProduct, true))

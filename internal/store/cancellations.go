@@ -62,6 +62,13 @@ FROM service_cancellation_requests WHERE user_id=$1 AND idempotency_key=$2`, use
 	if ownerID != userID {
 		return out, pgx.ErrNoRows
 	}
+	var supplierMode bool
+	if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+		return out, err
+	}
+	if supplierMode {
+		return out, conflict("unsupported_supplier_cancellation", "该上游适配器暂未开放自动取消，请联系管理员处理")
+	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
