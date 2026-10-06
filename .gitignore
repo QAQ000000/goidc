@@ -1,6 +1,6 @@
 .env
 bin/
-node_modules/
+node_modules
 .next/
 *.local
 web/tsconfig.tsbuildinfo
