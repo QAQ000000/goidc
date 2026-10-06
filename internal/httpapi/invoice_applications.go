@@ -1,6 +1,9 @@
 package httpapi
 
 import (
+	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -157,11 +160,172 @@ func (s *Server) invoiceApplicationDetail(w http.ResponseWriter, r *http.Request
 		return
 	}
 	item["items"] = items
+	documents, err := collectTransactionRows(tx.Query(ctx, `SELECT id,adjustment_id,filename,mime_type,size_bytes,sha256,downloads,created_at FROM invoice_application_documents WHERE application_id=$1 ORDER BY id`, id))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for _, doc := range documents {
+		if docID, ok := doc["id"].(int64); ok {
+			prefix := "/api/v1/invoice-applications/"
+			if admin {
+				prefix = "/api/v1/admin/invoice-applications/"
+			}
+			doc["download_url"] = prefix + strconv.FormatInt(id, 10) + "/documents/" + strconv.FormatInt(docID, 10) + "/file"
+		}
+	}
+	adjustments, err := collectTransactionRows(tx.Query(ctx, `SELECT id,action,document_number,note,actor_id,created_at FROM invoice_application_adjustments WHERE application_id=$1 ORDER BY id`, id))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	item["documents"], item["adjustments"] = documents, adjustments
 	if err = tx.Commit(ctx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	write(w, 200, item)
+}
+
+func invoiceDocumentID(r *http.Request) (int64, int64, bool) {
+	appID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	docID, err2 := strconv.ParseInt(r.PathValue("document_id"), 10, 64)
+	return appID, docID, err == nil && err2 == nil && appID > 0 && docID > 0
+}
+
+func (s *Server) uploadInvoiceApplicationDocument(w http.ResponseWriter, r *http.Request) {
+	appID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, (20<<20)+(256<<10))
+	if err := r.ParseMultipartForm(32 << 10); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			writeError(w, 413, "invoice_document_too_large", "电子发票文件不能超过 20 MiB")
+		} else {
+			writeError(w, 400, "invalid_multipart", "文件上传格式无效")
+		}
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	files := r.MultipartForm.File["file"]
+	if len(files) != 1 {
+		writeError(w, 400, "invalid_invoice_document", "请选择一个电子发票文件")
+		return
+	}
+	header := files[0]
+	name := header.Filename
+	_, params, err := mime.ParseMediaType(header.Header.Get("Content-Disposition"))
+	if err != nil || params["filename"] != name || strings.ContainsAny(name, "/\\\r\n\x00") {
+		writeError(w, 400, "invalid_invoice_document", "文件名无效")
+		return
+	}
+	stream, err := header.Open()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	content, err := io.ReadAll(io.LimitReader(stream, (20<<20)+1))
+	stream.Close()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(content) > 20<<20 {
+		writeError(w, 413, "invoice_document_too_large", "电子发票文件不能超过 20 MiB")
+		return
+	}
+	mt := header.Header.Get("Content-Type")
+	if strings.HasSuffix(strings.ToLower(name), ".pdf") && len(content) >= 5 && string(content[:5]) == "%PDF-" {
+		mt = "application/pdf"
+	}
+	if strings.HasSuffix(strings.ToLower(name), ".xml") && strings.HasPrefix(strings.TrimSpace(string(content)), "<") {
+		mt = "application/xml"
+	}
+	if mt == "" {
+		mt = "application/octet-stream"
+	}
+	id, err := s.db.SaveInvoiceApplicationDocument(r.Context(), identityFrom(r).ID, appID, 0, store.InvoiceApplicationDocument{Filename: name, MIME: mt, Content: content})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]any{"id": id, "application_id": appID, "provider": "manual", "tax_service": "not_connected"})
+}
+
+func (s *Server) adjustInvoiceApplication(w http.ResponseWriter, r *http.Request) {
+	appID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in store.InvoiceApplicationAdjustment
+	if !decode(w, r, &in) {
+		return
+	}
+	out, err := s.db.AdjustInvoiceApplication(r.Context(), identityFrom(r).ID, appID, in, r.Header.Get("Idempotency-Key"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	status := http.StatusCreated
+	if out.Replayed {
+		status = http.StatusOK
+	}
+	write(w, status, out)
+}
+
+func (s *Server) invoiceApplicationDocumentFile(w http.ResponseWriter, r *http.Request) {
+	appID, docID, ok := invoiceDocumentID(r)
+	if !ok {
+		writeError(w, 400, "invalid_invoice_document", "电子发票文件编号无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var owner int64
+	var name, mt, hash string
+	var content []byte
+	if err = tx.QueryRow(r.Context(), `SELECT a.user_id,d.filename,d.mime_type,d.sha256,d.content FROM invoice_application_documents d JOIN invoice_applications a ON a.id=d.application_id WHERE d.id=$1 AND d.application_id=$2`, docID, appID).Scan(&owner, &name, &mt, &hash, &content); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	actor := identityFrom(r).ID
+	if current, authErr := s.publicDownloadIdentity(r, tx); authErr != nil {
+		s.fail(w, r, authErr)
+		return
+	} else if current != actor {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "登录已失效")
+		return
+	}
+	if adminRoute(r) {
+		if err = store.LockAdminCustomer(r.Context(), tx, actor, owner); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	} else if owner != actor {
+		writeError(w, 404, "not_found", "文件不存在")
+		return
+	}
+	if storedFileTransfersBytes(r, name, mt, hash, content) {
+		if _, err = tx.Exec(r.Context(), "UPDATE invoice_application_documents SET downloads=downloads+1 WHERE id=$1", docID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err = store.Audit(r.Context(), tx, actor, "invoice_application.document_downloaded", "invoice_application_document", docID, map[string]any{"application_id": appID, "customer_id": owner, "admin": adminRoute(r)}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	serveStoredFile(w, r, name, mt, hash, content)
 }
 
 func (s *Server) invoiceApplications(w http.ResponseWriter, r *http.Request) {

@@ -56,7 +56,24 @@ type InvoiceApplicationResult struct {
 	Status        string `json:"status"`
 	AmountCents   int64  `json:"amount_cents"`
 	Version       int64  `json:"version"`
+	AdjustmentID  int64  `json:"adjustment_id,omitempty"`
+	Action        string `json:"action,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	TaxService    string `json:"tax_service,omitempty"`
 	Replayed      bool   `json:"replayed"`
+}
+
+type InvoiceApplicationAdjustment struct {
+	Action          string `json:"action"`
+	DocumentNumber  string `json:"document_number"`
+	Note            string `json:"note"`
+	ExpectedVersion int64  `json:"expected_version"`
+}
+
+type InvoiceApplicationDocument struct {
+	Filename string
+	MIME     string
+	Content  []byte
 }
 
 func (s *Store) invoiceCustomerTx(ctx context.Context, userID int64) (pgx.Tx, error) {
@@ -461,6 +478,159 @@ func (s *Store) ReviewInvoiceApplication(ctx context.Context, actorID, id int64,
 		return out, err
 	}
 	if err = Audit(ctx, tx, actorID, "invoice_application.reviewed", "invoice_application", id, map[string]any{"status": in.Status, "note": in.ReviewNote}); err != nil {
+		return out, err
+	}
+	return out, tx.Commit(ctx)
+}
+
+func (s *Store) invoiceManageTx(ctx context.Context, actorID, applicationID int64) (pgx.Tx, int64, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+	var allowed bool
+	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'invoice_applications.view'=ANY(r.permissions) AND 'invoice_applications.manage'=ANY(r.permissions)),false)
+ FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil || !allowed {
+		if err == nil {
+			err = conflict("permission_denied", "没有管理发票申请的权限")
+		}
+		return nil, 0, err
+	}
+	var customerID int64
+	if err = tx.QueryRow(ctx, "SELECT user_id FROM invoice_applications WHERE id=$1", applicationID).Scan(&customerID); err != nil {
+		return nil, 0, err
+	}
+	if err = LockAdminCustomer(ctx, tx, actorID, customerID); err != nil {
+		return nil, 0, err
+	}
+	return tx, customerID, nil
+}
+
+func validateInvoiceDocument(file InvoiceApplicationDocument) error {
+	name := strings.TrimSpace(file.Filename)
+	if name == "" || !contentTextValid(name, 255, false) || strings.ContainsAny(name, "/\\\r\n\x00") || len(file.Content) == 0 || len(file.Content) > 20<<20 {
+		return conflict("invalid_invoice_document", "电子发票文件无效")
+	}
+	if file.MIME != "application/pdf" && file.MIME != "application/xml" && file.MIME != "text/xml" && file.MIME != "application/octet-stream" {
+		return conflict("invalid_invoice_document", "电子发票文件类型不受支持")
+	}
+	return nil
+}
+
+func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, applicationID, adjustmentID int64, file InvoiceApplicationDocument) (int64, error) {
+	if applicationID < 1 || adjustmentID < 0 {
+		return 0, conflict("invalid_invoice_document", "发票申请或调整编号无效")
+	}
+	if err := validateInvoiceDocument(file); err != nil {
+		return 0, err
+	}
+	tx, customerID, err := s.invoiceManageTx(ctx, actorID, applicationID)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	if adjustmentID > 0 {
+		var owner int64
+		if err = tx.QueryRow(ctx, "SELECT application_id FROM invoice_application_adjustments WHERE id=$1", adjustmentID).Scan(&owner); err != nil {
+			return 0, err
+		}
+		if owner != applicationID {
+			return 0, conflict("invalid_invoice_document", "调整记录不属于该申请")
+		}
+	}
+	var applicationStatus string
+	if err = tx.QueryRow(ctx, "SELECT status FROM invoice_applications WHERE id=$1 FOR SHARE", applicationID).Scan(&applicationStatus); err != nil {
+		return 0, err
+	}
+	if applicationStatus != "issued" {
+		return 0, conflict("invoice_document_not_ready", "只有已开具申请可以登记电子发票文件")
+	}
+	digest := sha256.Sum256(file.Content)
+	hash := hex.EncodeToString(digest[:])
+	var id int64
+	err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id)
+ VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8)
+ ON CONFLICT (application_id,adjustment_id) DO UPDATE SET filename=EXCLUDED.filename,mime_type=EXCLUDED.mime_type,size_bytes=EXCLUDED.size_bytes,sha256=EXCLUDED.sha256,content=EXCLUDED.content,uploader_id=EXCLUDED.uploader_id,created_at=now()
+ RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	if err = Audit(ctx, tx, actorID, "invoice_application.document_uploaded", "invoice_application_document", id, map[string]any{"application_id": applicationID, "adjustment_id": adjustmentID, "customer_id": customerID, "filename": file.Filename, "sha256": hash}); err != nil {
+		return 0, err
+	}
+	return id, tx.Commit(ctx)
+}
+
+func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicationID int64, in InvoiceApplicationAdjustment, key string) (InvoiceApplicationResult, error) {
+	var out InvoiceApplicationResult
+	in.Action, in.DocumentNumber, in.Note, key = strings.ToLower(strings.TrimSpace(in.Action)), strings.TrimSpace(in.DocumentNumber), strings.TrimSpace(in.Note), strings.TrimSpace(key)
+	if applicationID < 1 || (in.Action != "void" && in.Action != "red") || in.ExpectedVersion < 1 || !contentTextValid(in.Note, 500, true) || !contentTextValid(in.DocumentNumber, 120, false) || len(key) < 8 || len(key) > 128 {
+		return out, conflict("invalid_invoice_adjustment", "作废或红冲参数无效")
+	}
+	tx, customerID, err := s.invoiceManageTx(ctx, actorID, applicationID)
+	if err != nil {
+		return out, err
+	}
+	defer tx.Rollback(ctx)
+	if err = lockOperationKey(ctx, tx, "invoice-application", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
+		return out, err
+	}
+	canonical, _ := json.Marshal(struct {
+		ID    int64
+		Input InvoiceApplicationAdjustment
+	}{applicationID, in})
+	sum := sha256.Sum256(canonical)
+	hash := hex.EncodeToString(sum[:])
+	var savedHash string
+	var saved []byte
+	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM invoice_application_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
+	if err == nil {
+		if savedHash != hash {
+			return out, conflict("idempotency_conflict", "相同幂等键对应不同发票调整")
+		}
+		if err = json.Unmarshal(saved, &out); err != nil {
+			return out, err
+		}
+		out.Replayed = true
+		return out, tx.Commit(ctx)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	var status string
+	if err = tx.QueryRow(ctx, "SELECT status,version FROM invoice_applications WHERE id=$1 FOR UPDATE", applicationID).Scan(&status, &out.Version); err != nil {
+		return out, err
+	}
+	if status != "issued" || out.Version != in.ExpectedVersion {
+		return out, conflict("stale_invoice_application", "只有已开具申请可以作废或红冲")
+	}
+	if in.Action == "red" && in.DocumentNumber == "" {
+		return out, conflict("invalid_invoice_adjustment", "红冲必须填写红字发票编号")
+	}
+	if err = tx.QueryRow(ctx, `INSERT INTO invoice_application_adjustments(application_id,action,document_number,note,actor_id) VALUES($1,$2,$3,$4,$5) RETURNING id`, applicationID, in.Action, in.DocumentNumber, in.Note, actorID).Scan(&out.AdjustmentID); err != nil {
+		if strings.Contains(err.Error(), "invoice_application_adjustments_application_id_action_key") {
+			return out, conflict("invoice_adjustment_exists", "该申请已登记过此类调整")
+		}
+		return out, err
+	}
+	if _, err = tx.Exec(ctx, "UPDATE invoice_applications SET version=version+1,updated_at=now() WHERE id=$1", applicationID); err != nil {
+		return out, err
+	}
+	out.ApplicationID, out.Status, out.AmountCents, out.Action = applicationID, status, 0, in.Action
+	out.Provider, out.TaxService = "manual", "not_connected"
+	if err = tx.QueryRow(ctx, "SELECT amount_cents,version FROM invoice_applications WHERE id=$1", applicationID).Scan(&out.AmountCents, &out.Version); err != nil {
+		return out, err
+	}
+	encoded, _ := json.Marshal(out)
+	if _, err = tx.Exec(ctx, "INSERT INTO invoice_application_operations(actor_id,idempotency_key,application_id,action,request_hash,result) VALUES($1,$2,$3,'adjust',$4,$5)", actorID, key, applicationID, hash, encoded); err != nil {
+		return out, err
+	}
+	if err = Audit(ctx, tx, actorID, "invoice_application.adjusted", "invoice_application", applicationID, map[string]any{"action": in.Action, "adjustment_id": out.AdjustmentID, "customer_id": customerID, "document_number": in.DocumentNumber}); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)
