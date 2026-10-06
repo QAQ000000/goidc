@@ -88,3 +88,42 @@ func TestNOKVMCDROMRejectsWrongHostAndAmbiguousCatalog(t *testing.T) {
 		t.Fatal("accepted wrong host")
 	}
 }
+
+func TestNOKVMCDROMRequiresExplicitMountedStateAndCatalog(t *testing.T) {
+	for _, tc := range []struct {
+		name, host, catalog string
+		valid               bool
+		mounted             string
+	}{
+		{"missing", `{"id":42}`, `[]`, false, ""},
+		{"null", `{"id":42,"cd_roms_id":null}`, `[]`, false, ""},
+		{"empty", `{"id":42,"cd_roms_id":""}`, `[]`, false, ""},
+		{"negative", `{"id":42,"cd_roms_id":-1}`, `[]`, false, ""},
+		{"zero-number", `{"id":42,"cd_roms_id":0}`, `[]`, true, ""},
+		{"zero-string", `{"id":42,"cd_roms_id":"0"}`, `[]`, true, ""},
+		{"mounted", `{"id":42,"cd_roms_id":10}`, `[{"id":10,"name":"Rescue"}]`, true, "10"},
+		{"null-catalog", `{"id":42,"cd_roms_id":0}`, `null`, false, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/virtual/42" {
+					fmt.Fprintf(w, `{"code":0,"data":%s}`, tc.host)
+				} else {
+					fmt.Fprintf(w, `{"code":0,"data":%s}`, tc.catalog)
+				}
+			}))
+			defer remote.Close()
+			n, err := New(Profile{ID: "test", Name: "test", URL: remote.URL, Token: "token"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			listing, err := n.ListCDROM(t.Context(), "42")
+			if tc.valid && (err != nil || listing.MountedID != tc.mounted) {
+				t.Fatal(listing, err)
+			}
+			if !tc.valid && err == nil {
+				t.Fatal("accepted unknown mounted state or catalog", listing)
+			}
+		})
+	}
+}
