@@ -8,6 +8,7 @@ import { RenewalBenefitDetails } from "./renewal-benefit";
 import { useEffect, useState } from "react";
 import { ServiceDownloads } from "./service-downloads";
 import { ServiceConfigurationChanges } from "./configuration-upgrades";
+import { ServiceActivityPanel } from "./service-activity";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import type { PurchaseFieldSnapshot } from "@/lib/api";
 import Link from "next/link";
@@ -803,6 +804,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
             <section className="data-surface p-6"><p className="text-xs text-muted-foreground">到期时间</p><p className="mt-2">{serviceDueLabel(data)}</p><p className="text-xs text-muted-foreground mt-5">最近错误</p><p className="mt-2 text-destructive break-words">{data.last_error || "无"}</p></section>
           </div>
           <section className="data-surface overflow-auto"><div className="surface-head"><div><h2 className="font-semibold">开通任务</h2><p className="text-xs text-muted-foreground mt-1">任务状态与重试记录</p></div></div><Table><TableHeader><TableRow><TableHead>任务</TableHead><TableHead>动作</TableHead><TableHead>状态</TableHead><TableHead>尝试次数</TableHead><TableHead>错误</TableHead><TableHead>时间</TableHead></TableRow></TableHeader><TableBody>{!data.jobs?.length ? <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">暂无任务</TableCell></TableRow> : data.jobs.map((job) => <TableRow key={job.id}><TableCell>#{job.id}</TableCell><TableCell>{serviceActionLabels[job.action]??job.action}</TableCell><TableCell><Status value={job.status==="succeeded"?(isPowerAction(job.action)?"command_accepted":job.action==="reset_password"?"credentials_confirmed":job.status):job.status} /></TableCell><TableCell>{job.attempts}</TableCell><TableCell className="text-destructive max-w-80 whitespace-normal">{job.last_error || "-"}</TableCell><TableCell>{date(job.completed_at || job.created_at)}</TableCell></TableRow>)}</TableBody></Table></section>
+          <ServiceActivityPanel serviceID={data.id} admin={admin} />
           {admin && data.provision_mode === "manual" && data.jobs?.some((job) => job.status === "waiting_manual") && <PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh} /></PermissionGate>}
           {data.provision_mode === "nokvm" && <NOKVMServiceDelivery key={`${data.id}:${data.version}`} service={data} admin={admin} refresh={refresh} />}
           {data.provision_mode === "nokvm" && ["active","suspended"].includes(data.status) && <NOKVMMonitoringPanel key={data.id} service={data} admin={admin}/>}
