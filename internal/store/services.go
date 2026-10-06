@@ -36,6 +36,9 @@ func (s *Store) EnqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if provision.IsStorageAction(action) {
 		return ServiceActionResult{}, conflict("storage_confirmation_required", "请使用快照或备份确认流程")
 	}
+	if provision.IsNATAction(action) {
+		return ServiceActionResult{}, conflict("nat_confirmation_required", "请使用 NAT 确认流程")
+	}
 	return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, "", 0, nil)
 }
 
@@ -52,11 +55,15 @@ func (s *Store) ReinstallService(ctx context.Context, actorID, serviceID, templa
 
 func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest) (ServiceActionResult, error) {
 	var out ServiceActionResult
+	nat, _ := ctx.Value(natRequestKey{}).(*provision.NATRequest)
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
-	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) {
+	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) {
 		return out, conflict("unsupported_service_action", "不支持该服务动作")
+	}
+	if provision.IsNATAction(action) && (nat == nil || action != "nat_"+nat.Kind+"_"+nat.Operation || !provision.ValidNATRequest(*nat)) {
+		return out, conflict("nat_confirmation_required", "请使用 NAT 确认流程")
 	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -70,7 +77,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	var current, mode, power string
 	var credentials []byte
 	if admin {
-		if action == "reset_password" || action == "reinstall" || provision.IsStorageAction(action) {
+		if action == "reset_password" || action == "reinstall" || provision.IsStorageAction(action) || nat != nil {
 			if err = requireDeliveryManage(ctx, tx, actorID); err != nil {
 				return out, err
 			}
@@ -85,7 +92,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if storage != nil {
+	if storage != nil || nat != nil {
 		if err = lockStorageCredential(ctx, tx, actorID); err != nil {
 			return out, err
 		}
@@ -137,6 +144,15 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 		}
 		mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
 		raw, _ := json.Marshal([]any{"nokvm-storage", serviceID, key, storage.Kind, storage.Operation, storage.PointID})
+		mac.Write(raw)
+		fingerprint = hex.EncodeToString(mac.Sum(nil))
+	}
+	if nat != nil {
+		if len(s.ProvisionEncryptionKey) != 32 {
+			return out, conflict("credentials_unavailable", "交付加密密钥未配置")
+		}
+		mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
+		raw, _ := json.Marshal([]any{"nokvm-nat", serviceID, key, nat.Kind, nat.Operation, nat.PointID, nat.Name, nat.Type, nat.Domain, nat.ExteriorPort, nat.InteriorPort})
 		mac.Write(raw)
 		fingerprint = hex.EncodeToString(mac.Sum(nil))
 	}
@@ -238,6 +254,75 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage)
 		}
 		requestPayload, _ = json.Marshal(storage)
+	}
+	if nat != nil {
+		if mode != "nokvm" {
+			return out, conflict("unsupported_nat_mode", "该服务不支持 NAT")
+		}
+		if power == "processing" || power == "suspended" || power == "network_limited" {
+			return out, conflict("power_processing", "资源当前状态不允许该操作")
+		}
+		var raw []byte
+		var upstream string
+		if err = tx.QueryRow(ctx, "SELECT delivery_snapshot,upstream_id FROM services WHERE id=$1", serviceID).Scan(&raw, &upstream); err != nil {
+			return out, err
+		}
+		var delivery provision.Delivery
+		if json.Unmarshal(raw, &delivery) != nil || delivery.Validate() != nil || !provision.ValidResourceID(upstream) {
+			return out, conflict("invalid_nat_binding", "服务交付配置无效")
+		}
+		limit := natLimit(delivery, nat.Kind)
+		if nat.Prepared && (nat.ProfileID != delivery.ProfileID || nat.UpstreamID != upstream || nat.Limit != limit) {
+			return out, conflict("nat_resource_changed", "服务资源已变更，请刷新")
+		}
+		nat.ProfileID, nat.UpstreamID, nat.Limit = delivery.ProfileID, upstream, limit
+		if nat.Limit < 1 {
+			return out, conflict("nat_disabled", "此服务未购买该 NAT 功能")
+		}
+		if s.Provisioners[nat.ProfileID] == nil {
+			return out, conflict("supplier_unavailable", "供应商暂不可用")
+		}
+		var recent bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action IN ('nat_acl_create','nat_acl_delete','nat_web_create','nat_web_delete') AND created_at>clock_timestamp()-interval '60 seconds')`, serviceID).Scan(&recent); err != nil {
+			return out, err
+		}
+		if recent {
+			return out, conflict("nat_cooldown", "操作频繁，请60秒后重试")
+		}
+		if !nat.Prepared {
+			if !allowedServiceAction(current, action) {
+				return out, conflict("invalid_service_state", "服务状态不允许该操作")
+			}
+			if err = tx.Rollback(ctx); err != nil {
+				return out, err
+			}
+			listing, readErr := s.ServiceNAT(ctx, actorID, serviceID, nat.Kind, admin)
+			if readErr != nil {
+				return out, readErr
+			}
+			if listing.binding.Profile != nat.ProfileID || listing.binding.Upstream != nat.UpstreamID || listing.Limit != nat.Limit {
+				return out, conflict("nat_resource_changed", "服务资源已变更，请刷新")
+			}
+			if nat.Operation == "create" {
+				if len(listing.Items) >= nat.Limit {
+					return out, conflict("nat_quota_reached", "NAT 数量已达到购买额度")
+				}
+			} else {
+				for _, item := range listing.Items {
+					if item.ID == nat.PointID {
+						copy := item
+						nat.Point = &copy
+						break
+					}
+				}
+				if nat.Point == nil {
+					return out, pgx.ErrNoRows
+				}
+			}
+			nat.Prepared = true
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage)
+		}
+		requestPayload, _ = json.Marshal(nat)
 	}
 	if action == "reinstall" {
 		if mode != "nokvm" {
@@ -343,7 +428,7 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingC
 }
 
 func allowedServiceAction(status, action string) bool {
-	if provision.IsStorageAction(action) {
+	if provision.IsStorageAction(action) || provision.IsNATAction(action) {
 		return status == "active"
 	}
 	switch action {
