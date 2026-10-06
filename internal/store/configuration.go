@@ -135,6 +135,9 @@ func (s *Store) SaveProductOptionGroup(ctx context.Context, actor, product, grou
 			return 0, err
 		}
 	}
+	if in.OptionType == 3 && (in.Required || (*in.Active && activeCount != 1)) {
+		return 0, conflict("invalid_product_options", "勾选附加项必须可选，启用时须恰好有一个启用选项")
+	}
 	if *in.Active && in.Required && activeCount == 0 {
 		return 0, conflict("required_options_empty", "启用的必选配置组至少需要一个启用选项")
 	}
@@ -217,6 +220,15 @@ func (s *Store) SaveProductOption(ctx context.Context, actor, product, group, op
 			return 0, err
 		}
 	}
+	if optionType == 3 {
+		enabledAfter := activeOthers
+		if *in.Active {
+			enabledAfter++
+		}
+		if enabledAfter > 1 || (active && enabledAfter != 1) || required {
+			return 0, conflict("invalid_product_options", "勾选附加项必须可选，启用时须恰好有一个启用选项")
+		}
+	}
 	if required && active && !*in.Active && activeOthers == 0 {
 		return 0, conflict("required_options_empty", "请先停用配置组或启用其他选项")
 	}
@@ -255,7 +267,8 @@ func (s *Store) DeleteProductConfiguration(ctx context.Context, actor, product, 
 	}
 	defer tx.Rollback(ctx)
 	var required, active bool
-	if err = tx.QueryRow(ctx, "SELECT required,active FROM product_option_groups WHERE id=$1 AND product_id=$2 FOR UPDATE", group, product).Scan(&required, &active); err != nil {
+	var optionType int64
+	if err = tx.QueryRow(ctx, "SELECT required,active,option_type FROM product_option_groups WHERE id=$1 AND product_id=$2 FOR UPDATE", group, product).Scan(&required, &active, &optionType); err != nil {
 		return err
 	}
 	if option != 0 {
@@ -299,6 +312,9 @@ func (s *Store) DeleteProductConfiguration(ctx context.Context, actor, product, 
 		}
 		if required && active && others == 0 {
 			return conflict("required_options_empty", "请先停用配置组或启用其他选项")
+		}
+		if optionType == 3 && active && others != 1 {
+			return conflict("invalid_product_options", "请先停用勾选附加项配置组")
 		}
 		action = "product.option.deleted"
 		object = option

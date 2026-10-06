@@ -84,7 +84,7 @@ func Inspect(snapshot Snapshot, source string) Report {
 			out.issue("product_config_options", id, "missing_config_group", map[string]any{"group_id": gid})
 		}
 		typ := number(r, "option_type")
-		if typ != 1 && typ != 4 && typ != 5 && typ != 6 && typ != 8 && typ != 10 && typ != 11 && typ != 12 && typ != 13 && typ != 14 && typ != 19 {
+		if typ != 1 && typ != 2 && typ != 3 && typ != 4 && typ != 5 && typ != 6 && typ != 8 && typ != 10 && typ != 11 && typ != 12 && typ != 13 && typ != 14 && typ != 19 {
 			out.issue("product_config_options", id, "unsupported_option_type_preserved", map[string]any{"option_type": typ})
 		}
 	}

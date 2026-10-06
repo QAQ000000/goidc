@@ -11,6 +11,7 @@ import { PurchaseFieldInputs,purchaseFieldValues } from "./purchase-fields";
 import { cycles, Failure, Loading } from "./common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { changeProductOption, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
+import { ProductOptionChoice } from "./product-option-choice";
 export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
@@ -197,22 +198,9 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
                   return (
                     <div key={group.id} className="mb-3">
                       <label className="text-xs text-muted-foreground mb-1 block">{group.name}{group.required ? "（必选）" : ""}</label>
-                      <Select
-                        value={selected ? String(selected) : group.required ? "" : "0"}
-                        onValueChange={(value) => setSelectedOptions((current) => ({ ...current, [product.id]: changeProductOption(product.option_groups ?? [], resolveProductOptions(product.option_groups ?? [], current[product.id]).selected, group.id, Number(value)) }))}
-                      >
-                        <SelectTrigger aria-label={`${product.name} ${group.name}`} className="w-full">
-                          <SelectValue placeholder={`选择${group.name}`} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {!group.required && <SelectItem value="0">不选择</SelectItem>}
-                          {activeOptions.map((option) => (
-                            <SelectItem key={option.id} value={String(option.id)}>
-                              {option.label}{(() => { const cycle = selectedCycles[product.id] ?? product.billing_cycle; const amounts = productOptionAmounts(option, cycle, isQuantityOption(group) ? quantityFor(product, group, option) : 1); if (!amounts) return " · 不可计价"; const delta = amounts.price + amounts.setup; return delta !== 0 ? ` · ${money(delta)}` : ""; })()}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <ProductOptionChoice group={group} options={activeOptions} selected={selected} label={`${product.name} ${group.name}`}
+                        onChange={(id) => setSelectedOptions((current) => ({ ...current, [product.id]: changeProductOption(product.option_groups ?? [], resolveProductOptions(product.option_groups ?? [], current[product.id]).selected, group.id, id) }))}
+                        renderLabel={(option) => { const cycle = selectedCycles[product.id] ?? product.billing_cycle; const amounts = productOptionAmounts(option, cycle, isQuantityOption(group) ? quantityFor(product, group, option) : 1); if (!amounts) return `${option.label} · 不可计价`; const delta = amounts.price + amounts.setup; return `${option.label}${delta !== 0 ? ` · ${money(delta)}` : ""}`; }} />
                       {!!selected && isQuantityOption(group) && (() => {
                         const option = activeOptions.find((candidate) => candidate.id === selected);
                         if (!option) return null;

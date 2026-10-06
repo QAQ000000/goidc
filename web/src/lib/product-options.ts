@@ -31,7 +31,7 @@ export function resolveProductOptions(groups: ProductOptionGroup[], choices: Rec
       return null;
     }
     const requested = choices[group.id];
-    const selected = options.some((option) => option.id === requested) ? requested : (group.required ? options[0]?.id ?? 0 : 0);
+    const selected = options.some((option) => option.id === requested) ? requested : (group.required && group.option_type !== 3 ? options[0]?.id ?? 0 : 0);
     const branch = { group, options, selected };
     visiting.delete(group.id);
     resolved.set(group.id, branch);
@@ -43,7 +43,7 @@ export function resolveProductOptions(groups: ProductOptionGroup[], choices: Rec
   return {
     branches, selected,
     ids: branches.flatMap((branch) => branch.selected ? [branch.selected] : []),
-    complete: valid && branches.every((branch) => !branch.group.required || branch.selected > 0),
+    complete: valid && branches.every((branch) => (branch.group.option_type !== 3 || (!branch.group.required && branch.options.length === 1)) && (!branch.group.required || branch.selected > 0)),
   };
 }
 
