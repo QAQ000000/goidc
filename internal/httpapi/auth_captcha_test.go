@@ -215,6 +215,20 @@ func TestCaptchaInvalidWrongAnswerAndBoundedIssue(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "SELECT consumed_at IS NOT NULL FROM auth_captcha_challenges WHERE id=$1", tokenHash(id)).Scan(&consumed); err != nil || !consumed {
 		t.Fatal("wrong answer was not consumed", err)
 	}
+	malformedID := "1212121212121212121212121212121212121212121212121212121212121212"
+	seedCaptcha(t, db, malformedID, "login", "ABC234", cookie.Value, 5*time.Minute)
+	malformed := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "missing", "password": "password", "captcha_id": malformedID, "captcha_answer": strings.Repeat("A", 65)}, cookie.Name+"="+cookie.Value, "")
+	if errorData(t, malformed)["code"] != "invalid_captcha" {
+		t.Fatal("malformed answer accepted")
+	}
+	var malformedConsumed bool
+	if err := db.Pool.QueryRow(t.Context(), "SELECT consumed_at IS NOT NULL FROM auth_captcha_challenges WHERE id=$1", tokenHash(malformedID)).Scan(&malformedConsumed); err != nil || !malformedConsumed {
+		t.Fatal("malformed answer was not consumed", err)
+	}
+	correct := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "missing", "password": "password", "captcha_id": malformedID, "captcha_answer": "ABC234"}, cookie.Name+"="+cookie.Value, "")
+	if errorData(t, correct)["code"] != "invalid_captcha" {
+		t.Fatal("malformed answer challenge replay accepted")
+	}
 	for i := 0; i < 11; i++ {
 		expect(t, request(h, "GET", "/api/v1/auth/captcha?action=login", nil, cookie.Name+"="+cookie.Value, ""), 200)
 	}

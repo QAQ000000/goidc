@@ -65,18 +65,18 @@ func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx,
 }
 
 func recheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string) error {
-	var sessionUserID int64
-	if err := tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUserID); err != nil {
-		if err == pgx.ErrNoRows {
-			return conflict("unauthorized", "登录已失效")
-		}
-		return err
-	}
 	var role string
 	var roleID *int64
 	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		if err == pgx.ErrNoRows {
 			return conflict("permission_denied", "没有管理站点设置的权限")
+		}
+		return err
+	}
+	var sessionUserID int64
+	if err := tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUserID); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("unauthorized", "登录已失效")
 		}
 		return err
 	}

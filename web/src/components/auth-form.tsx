@@ -32,13 +32,13 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
       const next = await fetchCaptcha(captchaAction, controller.signal);
       if (!controller.signal.aborted) { setCaptcha(next.enabled && next.captcha_id && next.image ? next : null); setCaptchaAnswer(""); if (!preserveError) setError(""); if (!next.enabled) refresh(); }
     } catch (e) {
-      if (!controller.signal.aborted && !preserveError) setError((e as Error).message);
+      if (!controller.signal.aborted) setError(current => preserveError && current ? current : (e as Error).message);
     } finally {
       if (!controller.signal.aborted) setCaptchaBusy(false);
     }
   }, [captchaAction, refresh]);
   useEffect(() => {
-    const timer = site?.auth_captcha_enabled && !mfaChallenge ? window.setTimeout(() => void refreshCaptcha(), 0) : undefined;
+    const timer = site?.auth_captcha_enabled && !mfaChallenge ? window.setTimeout(() => void refreshCaptcha(true), 0) : undefined;
     return () => { if (timer) window.clearTimeout(timer); captchaRequest.current?.abort(); };
   }, [site?.auth_captcha_enabled, mfaChallenge, refreshCaptcha]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -69,7 +69,10 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
         : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
       if (adminLogin && user.role !== "admin" && user.role !== "super_admin") {
         await api("/auth/logout", { method: "POST" });
+        setMfaChallenge("");
+        setMfaCode("");
         setError("需要管理员账户");
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
         return;
       }
       router.push(user.role === "customer" ? "/" : "/admin");
@@ -81,7 +84,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
         setError("");
       } else {
         setError(failure.message);
-        if (site?.auth_captcha_enabled) void refreshCaptcha(true);
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
       }
     } finally {
       setBusy(false);

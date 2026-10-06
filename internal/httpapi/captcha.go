@@ -194,15 +194,18 @@ func (s *Server) consumeCaptcha(ctx context.Context, r *http.Request, action, id
 		return nil
 	}
 	id = strings.TrimSpace(id)
-	answer = strings.ToUpper(strings.TrimSpace(answer))
-	if !validCaptchaHex(id) || len(answer) != 6 || strings.IndexFunc(answer, func(r rune) bool { return !strings.ContainsRune(captchaAlphabet, r) }) >= 0 {
+	if !validCaptchaHex(id) {
 		return errInvalidCaptcha
 	}
 	cookie, err := r.Cookie(captchaCookie)
 	if err != nil || !validCaptchaHex(cookie.Value) {
 		return errInvalidCaptcha
 	}
-	answerHash := sha256.Sum256([]byte(answer))
+	validAnswer := len(answer) <= 64
+	if validAnswer {
+		answer = strings.ToUpper(strings.TrimSpace(answer))
+		validAnswer = len(answer) == 6 && strings.IndexFunc(answer, func(r rune) bool { return !strings.ContainsRune(captchaAlphabet, r) }) < 0
+	}
 	nonceHash := sha256.Sum256([]byte(cookie.Value))
 	tx, err := s.db.Pool.Begin(ctx)
 	if err != nil {
@@ -217,6 +220,13 @@ func (s *Server) consumeCaptcha(ctx context.Context, r *http.Request, action, id
 	if err != nil {
 		return err
 	}
+	if !validAnswer {
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		return errInvalidCaptcha
+	}
+	answerHash := sha256.Sum256([]byte(answer))
 	if !constantTimeHex(expected, hex.EncodeToString(answerHash[:])) {
 		if err = tx.Commit(ctx); err != nil {
 			return err

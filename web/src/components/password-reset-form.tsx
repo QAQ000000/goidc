@@ -28,7 +28,7 @@ export function ForgotPasswordForm() {
   const refreshCaptcha = useCallback(async (preserveError = false) => {
     captchaRequest.current?.abort(); const controller = new AbortController(); captchaRequest.current = controller; setCaptcha(null); setCaptchaAnswer(""); setCaptchaBusy(true);
     try { const next = await fetchCaptcha("forgot-password", controller.signal); if (!controller.signal.aborted) { setCaptcha(next.enabled && next.captcha_id && next.image ? next : null); setCaptchaAnswer(""); if (!preserveError) setError(""); if (!next.enabled) refreshSite(); } }
-    catch (e) { if (!controller.signal.aborted && !preserveError) setError((e as Error).message); }
+    catch (e) { if (!controller.signal.aborted) setError(current => preserveError && current ? current : (e as Error).message); }
     finally { if (!controller.signal.aborted) setCaptchaBusy(false); }
   }, [refreshSite]);
   useEffect(() => { const timer = site?.auth_captcha_enabled ? window.setTimeout(() => void refreshCaptcha(), 0) : undefined; return () => { if (timer) window.clearTimeout(timer); captchaRequest.current?.abort(); }; }, [site?.auth_captcha_enabled, refreshCaptcha]);
@@ -40,6 +40,7 @@ export function ForgotPasswordForm() {
     try {
       await api("/auth/password-reset/request", { method: "POST", body: JSON.stringify({ identifier, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
       setMessage("如果账号存在，重置链接会发送到绑定邮箱，请检查收件箱。");
+      if (site?.auth_captcha_enabled) void refreshCaptcha(true);
     } catch (e) {
       setError((e as Error).message);
       if (site?.auth_captcha_enabled) void refreshCaptcha(true);
