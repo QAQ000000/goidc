@@ -54,11 +54,49 @@ func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx,
 	if err != nil || !allowed {
 		tx.Rollback(ctx)
 		if err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, conflict("permission_denied", "没有管理站点设置的权限")
+			}
 			return nil, err
 		}
 		return nil, conflict("permission_denied", "没有管理站点设置的权限")
 	}
 	return tx, nil
+}
+
+func recheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string) error {
+	var sessionUserID int64
+	if err := tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUserID); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("unauthorized", "登录已失效")
+		}
+		return err
+	}
+	var role string
+	var roleID *int64
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("permission_denied", "没有管理站点设置的权限")
+		}
+		return err
+	}
+	if role == "super_admin" {
+		return nil
+	}
+	if role != "admin" || roleID == nil {
+		return conflict("permission_denied", "没有管理站点设置的权限")
+	}
+	var allowed bool
+	if err := tx.QueryRow(ctx, "SELECT active AND 'settings.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+		if err == pgx.ErrNoRows {
+			return conflict("permission_denied", "没有管理站点设置的权限")
+		}
+		return err
+	}
+	if !allowed {
+		return conflict("permission_denied", "没有管理站点设置的权限")
+	}
+	return nil
 }
 
 func (s *Store) AdminGrants(ctx context.Context, userID int64) ([]string, error) {

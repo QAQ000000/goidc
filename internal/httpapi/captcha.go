@@ -64,7 +64,7 @@ func captchaAnswer() (string, error) {
 }
 
 func captchaImage(answer string) (string, error) {
-	const width, height, scale = 190, 64, 5
+	const width, height, scale = 190, 64, 4
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -90,7 +90,7 @@ func captchaImage(answer string) (string, error) {
 	}
 	for i := 0; i < len(answer); i++ {
 		glyph := captchaGlyphs[answer[i]]
-		ox := 13 + i*28
+		ox := 9 + i*30
 		oy := 15 + (i%3)*2
 		ink := color.RGBA{25, 63, 94, 255}
 		for row, bits := range glyph {
@@ -119,6 +119,11 @@ func (s *Server) captchaEnabled(ctx context.Context) (bool, error) {
 	return enabled, err
 }
 
+func (s *Server) captchaUnavailable(w http.ResponseWriter, r *http.Request) {
+	s.log.Error("captcha storage unavailable", "path", r.URL.Path)
+	writeError(w, http.StatusServiceUnavailable, "captcha_unavailable", "验证码暂时不可用，请稍后重试")
+}
+
 func (s *Server) issueCaptcha(w http.ResponseWriter, r *http.Request) {
 	action := r.URL.Query().Get("action")
 	if action != "login" && action != "register" && action != "forgot-password" {
@@ -127,7 +132,7 @@ func (s *Server) issueCaptcha(w http.ResponseWriter, r *http.Request) {
 	}
 	enabled, err := s.captchaEnabled(r.Context())
 	if err != nil {
-		s.fail(w, r, err)
+		s.captchaUnavailable(w, r)
 		return
 	}
 	if !enabled {
@@ -147,21 +152,26 @@ func (s *Server) issueCaptcha(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	nonce, err := captchaRandomBytes(32)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	id := hex.EncodeToString(idRaw)
-	nonceValue := hex.EncodeToString(nonce)
+	nonceValue := ""
+	if cookie, cookieErr := r.Cookie(captchaCookie); cookieErr == nil && validCaptchaHex(cookie.Value) {
+		nonceValue = cookie.Value
+	} else {
+		nonce, randomErr := captchaRandomBytes(32)
+		if randomErr != nil {
+			s.fail(w, r, randomErr)
+			return
+		}
+		nonceValue = hex.EncodeToString(nonce)
+	}
 	answerHash := sha256.Sum256([]byte(answer))
 	nonceHash := sha256.Sum256([]byte(nonceValue))
 	if _, err = s.db.Pool.Exec(r.Context(), `DELETE FROM auth_captcha_challenges WHERE ctid IN (SELECT ctid FROM auth_captcha_challenges WHERE expires_at<=now() ORDER BY expires_at LIMIT 100)`); err != nil {
-		s.fail(w, r, err)
+		s.captchaUnavailable(w, r)
 		return
 	}
 	if _, err = s.db.Pool.Exec(r.Context(), "INSERT INTO auth_captcha_challenges(id,action,answer_hash,nonce_hash,issued_ip,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')", tokenHash(id), action, hex.EncodeToString(answerHash[:]), hex.EncodeToString(nonceHash[:]), r.RemoteAddr); err != nil {
-		s.fail(w, r, err)
+		s.captchaUnavailable(w, r)
 		return
 	}
 	img, err := captchaImage(answer)
@@ -185,11 +195,11 @@ func (s *Server) consumeCaptcha(ctx context.Context, r *http.Request, action, id
 	}
 	id = strings.TrimSpace(id)
 	answer = strings.ToUpper(strings.TrimSpace(answer))
-	if len(id) != 64 || len(answer) != 6 {
+	if !validCaptchaHex(id) || len(answer) != 6 || strings.IndexFunc(answer, func(r rune) bool { return !strings.ContainsRune(captchaAlphabet, r) }) >= 0 {
 		return errInvalidCaptcha
 	}
 	cookie, err := r.Cookie(captchaCookie)
-	if err != nil || len(cookie.Value) != 64 {
+	if err != nil || !validCaptchaHex(cookie.Value) {
 		return errInvalidCaptcha
 	}
 	answerHash := sha256.Sum256([]byte(answer))
@@ -214,6 +224,14 @@ func (s *Server) consumeCaptcha(ctx context.Context, r *http.Request, action, id
 		return errInvalidCaptcha
 	}
 	return tx.Commit(ctx)
+}
+
+func validCaptchaHex(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func constantTimeHex(a, b string) bool {

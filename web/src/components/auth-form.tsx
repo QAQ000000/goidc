@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, RefreshCw } from "lucide-react";
@@ -21,24 +21,26 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
   const [captchaBusy, setCaptchaBusy] = useState(false);
   const captchaRequest = useRef<AbortController | null>(null);
   const captchaAction = register ? "register" : "login" as const;
-  async function refreshCaptcha() {
+  const refreshCaptcha = useCallback(async (preserveError = false) => {
     captchaRequest.current?.abort();
     const controller = new AbortController();
     captchaRequest.current = controller;
+    setCaptcha(null);
+    setCaptchaAnswer("");
     setCaptchaBusy(true);
     try {
       const next = await fetchCaptcha(captchaAction, controller.signal);
-      if (!controller.signal.aborted) { setCaptcha(next); setCaptchaAnswer(""); }
+      if (!controller.signal.aborted) { setCaptcha(next.enabled && next.captcha_id && next.image ? next : null); setCaptchaAnswer(""); if (!preserveError) setError(""); if (!next.enabled) refresh(); }
     } catch (e) {
-      if (!controller.signal.aborted) setError((e as Error).message);
+      if (!controller.signal.aborted && !preserveError) setError((e as Error).message);
     } finally {
       if (!controller.signal.aborted) setCaptchaBusy(false);
     }
-  }
+  }, [captchaAction, refresh]);
   useEffect(() => {
     const timer = site?.auth_captcha_enabled && !mfaChallenge ? window.setTimeout(() => void refreshCaptcha(), 0) : undefined;
     return () => { if (timer) window.clearTimeout(timer); captchaRequest.current?.abort(); };
-  }, [site?.auth_captcha_enabled, captchaAction, mfaChallenge]);
+  }, [site?.auth_captcha_enabled, mfaChallenge, refreshCaptcha]);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -79,7 +81,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
         setError("");
       } else {
         setError(failure.message);
-        if (site?.auth_captcha_enabled) void refreshCaptcha();
+        if (site?.auth_captcha_enabled) void refreshCaptcha(true);
       }
     } finally {
       setBusy(false);
@@ -167,7 +169,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
               {error}
             </p>
           )}
-          <Button className="w-full" disabled={busy}>
+          <Button className="w-full" disabled={busy || (!!site?.auth_captcha_enabled && !mfaChallenge && (!captcha?.captcha_id || captchaBusy))}>
             {busy ? "提交中" : mfaChallenge ? "验证并登录" : register ? "创建账户" : "登录"}
             <ArrowRight size={16} />
           </Button>

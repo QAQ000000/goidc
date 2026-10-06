@@ -57,7 +57,12 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, input.SiteProfile, input.ExpectedVersion, input.AuthCaptchaEnabled)
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
+	}
+	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), input.SiteProfile, input.ExpectedVersion, input.AuthCaptchaEnabled)
 	if err != nil {
 		s.fail(w, r, err)
 		return

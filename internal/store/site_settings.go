@@ -97,7 +97,7 @@ func validateSite(in *SiteProfile) error {
 	return nil
 }
 
-func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, in SiteProfile, expectedVersion int64, captchaEnabled *bool) (SiteSettings, error) {
+func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHash string, in SiteProfile, expectedVersion int64, captchaEnabled *bool) (SiteSettings, error) {
 	if err := validateSite(&in); err != nil {
 		return SiteSettings{}, err
 	}
@@ -111,6 +111,9 @@ func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, in SitePr
 	defer tx.Rollback(ctx)
 	previous, err := scanSite(tx.QueryRow(ctx, "SELECT "+siteColumns+" FROM site_settings WHERE id=1 FOR UPDATE"))
 	if err != nil {
+		return SiteSettings{}, err
+	}
+	if err = recheckSettingsManager(ctx, tx, actorID, sessionHash); err != nil {
 		return SiteSettings{}, err
 	}
 	if previous.Version != expectedVersion {

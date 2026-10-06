@@ -7,11 +7,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"image/png"
+	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/config"
 	"github.com/codex/zjmfgo/internal/store"
 )
 
@@ -66,6 +69,12 @@ func TestCaptchaDisabledAndPNGContract(t *testing.T) {
 	var storedNonce string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT nonce_hash FROM auth_captcha_challenges WHERE id=$1", tokenHash(d["captcha_id"].(string))).Scan(&storedNonce); err != nil || storedNonce != tokenHash(cookies[0].Value) {
 		t.Fatal("issued challenge cookie binding", err)
+	}
+	secureHandler := New(db, config.Config{PublicOrigin: "https://example.test", SecureCookie: true}, slog.Default()).Handler()
+	secure := request(secureHandler, "GET", "/api/v1/auth/captcha?action=login", nil, "", "")
+	expect(t, secure, 200)
+	if len(secure.Result().Cookies()) != 1 || !secure.Result().Cookies()[0].Secure {
+		t.Fatal("secure deployment issued an insecure captcha cookie")
 	}
 }
 
@@ -144,5 +153,106 @@ func TestCaptchaProtectsRegisterAndForgotPassword(t *testing.T) {
 	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-new", "password": "integration-password", "captcha_id": "9999999999999999999999999999999999999999999999999999999999999999", "captcha_answer": "ABC234"}, captchaCookie+"="+nonce, "")
 	if errorData(t, w)["code"] != "invalid_captcha" {
 		t.Fatal("expired captcha accepted")
+	}
+}
+
+func TestIssuedCaptchaCookieRefreshAndLogin(t *testing.T) {
+	db, h := testServer(t)
+	_, _ = user(t, db, h, "captcha-issued-login", "customer")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE site_settings SET auth_captcha_enabled=true"); err != nil {
+		t.Fatal(err)
+	}
+	first := request(h, "GET", "/api/v1/auth/captcha?action=login", nil, "", "")
+	expect(t, first, 200)
+	firstID := data(t, first)["captcha_id"].(string)
+	cookie := first.Result().Cookies()[0]
+	if cookie.Secure || !cookie.HttpOnly || cookie.MaxAge != 300 || !strings.HasPrefix(data(t, first)["image"].(string), "data:image/png;base64,") {
+		t.Fatal("issued response security contract")
+	}
+	if len(data(t, first)) != 4 {
+		t.Fatal("challenge response has unexpected fields")
+	}
+	var storedID string
+	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM auth_captcha_challenges WHERE id=$1", tokenHash(firstID)).Scan(&storedID); err != nil || storedID == firstID {
+		t.Fatal("raw challenge token persisted", err)
+	}
+	second := request(h, "GET", "/api/v1/auth/captcha?action=login", nil, cookie.Name+"="+cookie.Value, "")
+	expect(t, second, 200)
+	if second.Result().Cookies()[0].Value != cookie.Value {
+		t.Fatal("refresh changed browser nonce")
+	}
+	answer := "ABC234"
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_captcha_challenges SET answer_hash=$1 WHERE id=$2", tokenHash(answer), tokenHash(firstID)); err != nil {
+		t.Fatal(err)
+	}
+	login := map[string]any{"username": "captcha-issued-login", "password": "integration-password", "captcha_id": firstID, "captcha_answer": " abc234 "}
+	expect(t, request(h, "POST", "/api/v1/auth/login", login, cookie.Name+"="+cookie.Value, ""), 200)
+	if errorData(t, request(h, "POST", "/api/v1/auth/login", login, cookie.Name+"="+cookie.Value, ""))["code"] != "invalid_captcha" {
+		t.Fatal("issued challenge replay accepted")
+	}
+}
+
+func TestCaptchaInvalidWrongAnswerAndBoundedIssue(t *testing.T) {
+	db, h := testServer(t)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE site_settings SET auth_captcha_enabled=true"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "GET", "/api/v1/auth/captcha?action=invalid", nil, "", ""), 400)
+	issued := request(h, "GET", "/api/v1/auth/captcha?action=login", nil, "", "")
+	expect(t, issued, 200)
+	id := data(t, issued)["captcha_id"].(string)
+	cookie := issued.Result().Cookies()[0]
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_captcha_challenges SET answer_hash=$1 WHERE id=$2", tokenHash("ABC234"), tokenHash(id)); err != nil {
+		t.Fatal(err)
+	}
+	post := func(answer string) *http.Response {
+		return request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "missing", "password": "password", "captcha_id": id, "captcha_answer": answer}, cookie.Name+"="+cookie.Value, "").Result()
+	}
+	if post("ABC2347").StatusCode != 401 || post("ZZZ999").StatusCode != 401 || post("ABC234").StatusCode != 401 {
+		t.Fatal("invalid answer or replay accepted")
+	}
+	var consumed bool
+	if err := db.Pool.QueryRow(t.Context(), "SELECT consumed_at IS NOT NULL FROM auth_captcha_challenges WHERE id=$1", tokenHash(id)).Scan(&consumed); err != nil || !consumed {
+		t.Fatal("wrong answer was not consumed", err)
+	}
+	for i := 0; i < 11; i++ {
+		expect(t, request(h, "GET", "/api/v1/auth/captcha?action=login", nil, cookie.Name+"="+cookie.Value, ""), 200)
+	}
+	expect(t, request(h, "GET", "/api/v1/auth/captcha?action=login", nil, cookie.Name+"="+cookie.Value, ""), 429)
+}
+
+func TestCaptchaBoundedExpiryCleanupAndStorageFailure(t *testing.T) {
+	db, h := testServer(t)
+	userID, _ := user(t, db, h, "captcha-storage-login", "customer")
+	if _, err := db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE user_id=$1", userID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE site_settings SET auth_captcha_enabled=true"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO auth_captcha_challenges(id,action,answer_hash,nonce_hash,issued_ip,expires_at)
+SELECT lpad(to_hex(n),64,'0'),'login',repeat('a',64),repeat('b',64),'127.0.0.1',now()-interval '1 minute' FROM generate_series(1,101) n`); err != nil {
+		t.Fatal(err)
+	}
+	issued := request(h, "GET", "/api/v1/auth/captcha?action=login", nil, "", "")
+	expect(t, issued, 200)
+	var remaining int
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM auth_captcha_challenges WHERE expires_at<=now()").Scan(&remaining); err != nil || remaining != 1 {
+		t.Fatal("expired challenge cleanup was not bounded", err, remaining)
+	}
+	id := data(t, issued)["captcha_id"].(string)
+	cookie := issued.Result().Cookies()[0]
+	if _, err := db.Pool.Exec(t.Context(), "DROP TABLE auth_captcha_challenges"); err != nil {
+		t.Fatal(err)
+	}
+	unavailable := request(h, "GET", "/api/v1/auth/captcha?action=login", nil, cookie.Name+"="+cookie.Value, "")
+	expect(t, unavailable, 503)
+	if errorData(t, unavailable)["code"] != "captcha_unavailable" {
+		t.Fatal("challenge storage failure was unclear")
+	}
+	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-storage-login", "password": "integration-password", "captcha_id": id, "captcha_answer": "ABC234"}, cookie.Name+"="+cookie.Value, "")
+	expect(t, login, 503)
+	if errorData(t, login)["code"] != "captcha_unavailable" || len(login.Result().Cookies()) != 0 {
+		t.Fatal("login did not fail closed on captcha storage error")
 	}
 }

@@ -196,3 +196,99 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "site-new-customer", "password": "integration-password"}, "", ""), 200)
 }
+
+func TestCaptchaSettingsReadOnlyOmittedAndRevokedWhileWaiting(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "captcha-settings-root", "super_admin")
+	viewerID, viewer := user(t, db, h, "captcha-settings-viewer", "admin")
+	writerID, writer := user(t, db, h, "captcha-settings-writer", "admin")
+	deniedID, denied := user(t, db, h, "captcha-settings-denied", "admin")
+	contentRole(t, db, viewerID, "settings.view")
+	contentRole(t, db, writerID, "settings.view", "settings.manage")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", deniedID); err != nil {
+		t.Fatal(err)
+	}
+	path := "/api/v1/admin/site-settings"
+	expect(t, request(h, "GET", path, nil, viewer, ""), 200)
+	expect(t, request(h, "GET", path, nil, denied, ""), 403)
+	settings, err := db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, settings.Version), viewer, ""), 403)
+	key := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "captcha-settings-key"}, root, "")
+	expect(t, key, 201)
+	secret := data(t, key)["secret"].(string)
+	expect(t, requestBearer(h, "GET", path, nil, secret), 403)
+	expect(t, requestBearer(h, "PUT", path, siteInput(settings.SiteProfile, settings.Version), secret), 403)
+	input := siteInput(settings.SiteProfile, settings.Version)
+	input["auth_captcha_enabled"] = true
+	expect(t, request(h, "PUT", path, input, root, ""), 200)
+	settings, err = db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	omitted := siteInput(settings.SiteProfile, settings.Version)
+	delete(omitted, "auth_captcha_enabled")
+	expect(t, request(h, "PUT", path, omitted, writer, ""), 200)
+	settings, err = db.SiteSettings(t.Context())
+	if err != nil || !settings.AuthCaptchaEnabled {
+		t.Fatal("omitted captcha flag changed", err)
+	}
+	expect(t, request(h, "PUT", path, omitted, writer, ""), 409)
+	var auditBefore int
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='site.settings_updated'").Scan(&auditBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 8*time.Second)
+	defer cancel()
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, "SELECT id FROM site_settings WHERE id=1 FOR UPDATE"); err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan int, 1)
+	go func() {
+		result <- request(h, "PUT", path, siteInput(settings.SiteProfile, settings.Version), writer, "").Code
+	}()
+	for {
+		var waiting bool
+		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE 'SELECT % FROM site_settings WHERE id=1 FOR UPDATE')").Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("settings write did not wait on row")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", writerID); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case status := <-result:
+		if status != 403 {
+			t.Fatalf("revoked settings write status=%d", status)
+		}
+	case <-ctx.Done():
+		t.Fatal("waiting settings write did not finish")
+	}
+	after, err := db.SiteSettings(t.Context())
+	if err != nil || after.Version != settings.Version {
+		t.Fatal("revoked write changed settings", err)
+	}
+	var auditAfter int
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='site.settings_updated'").Scan(&auditAfter); err != nil || auditAfter != auditBefore {
+		t.Fatal("revoked write changed audit history", err)
+	}
+}

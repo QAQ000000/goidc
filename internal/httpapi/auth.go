@@ -39,7 +39,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.consumeCaptcha(r.Context(), r, "login", input.CaptchaID, input.CaptchaAnswer); err != nil {
 		if !errors.Is(err, errInvalidCaptcha) {
-			s.fail(w, r, err)
+			s.captchaUnavailable(w, r)
 			return
 		}
 		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
@@ -157,11 +157,6 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_registration", "请检查账号、邮箱、姓名和密码长度")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
@@ -179,10 +174,15 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.consumeCaptcha(r.Context(), r, "register", input.CaptchaID, input.CaptchaAnswer); err != nil {
 		if !errors.Is(err, errInvalidCaptcha) {
-			s.fail(w, r, err)
+			s.captchaUnavailable(w, r)
 			return
 		}
 		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if err = tx.QueryRow(r.Context(), "INSERT INTO users(username,email,password_hash,display_name) VALUES($1,$2,$3,$4) RETURNING id", input.Username, input.Email, string(hash), input.Name).Scan(&id); err != nil {
@@ -218,7 +218,7 @@ func (s *Server) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.consumeCaptcha(r.Context(), r, "forgot-password", input.CaptchaID, input.CaptchaAnswer); err != nil {
 		if !errors.Is(err, errInvalidCaptcha) {
-			s.fail(w, r, err)
+			s.captchaUnavailable(w, r)
 			return
 		}
 		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
