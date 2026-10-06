@@ -44,16 +44,16 @@ func (n *NOKVM) ListCDROM(ctx context.Context, upstreamID string) (CDROMListing,
 		return out, &Error{Code: "invalid_cdrom_request"}
 	}
 	var host struct {
-		ID        json.Number `json:"id"`
-		MountedID json.Number `json:"cd_roms_id"`
+		ID        json.Number  `json:"id"`
+		MountedID *json.Number `json:"cd_roms_id"`
 	}
 	if err := n.call(ctx, http.MethodGet, "/api/virtual/"+upstreamID, nil, &host); err != nil {
 		return out, err
 	}
-	if host.ID.String() != upstreamID {
+	if host.ID.String() != upstreamID || host.MountedID == nil || host.MountedID.String() == "" {
 		return out, &Error{Code: "invalid_cdrom_host"}
 	}
-	if host.MountedID != "" && host.MountedID.String() != "0" {
+	if host.MountedID.String() != "0" {
 		if !ValidResourceID(host.MountedID.String()) {
 			return out, &Error{Code: "invalid_cdrom_host"}
 		}
