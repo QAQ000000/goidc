@@ -281,7 +281,10 @@ export type Product = {
     active: boolean;
   }[];
   option_groups?: ProductOptionGroup[];
+  configuration_rules?: NativeConfigurationRule[];
 };
+export type NativeRulePredicate = {group_id:number;option_id:number|null;operator:"equals"|"not_equals"|"absent"|"quantity_in"|"quantity_out";qty_minimum:number|null;qty_maximum:number|null};
+export type NativeConfigurationRule = {id:number;name:string;enabled:boolean;conditions:NativeRulePredicate[];results:NativeRulePredicate[]};
 export type ProductOptionPrice = { id:number;billing_cycle:string;price_cents:number;setup_fee_cents:number;active:boolean };
 export type ProductOptionPriceTier = { id?:number;billing_cycle:string;qty_minimum:number;qty_maximum:number;price_cents:number;setup_fee_cents:number;active?:boolean };
 export type ProductOption = { id:number;parent_option_id?:number;label:string;value:string;price_delta_cents:number;setup_delta_cents:number;sort_order:number;active:boolean;hidden?:boolean;qty_minimum?:number;qty_maximum?:number;upgrade_enabled?:boolean;pricing?:ProductOptionPrice[];price_tiers?:ProductOptionPriceTier[] };

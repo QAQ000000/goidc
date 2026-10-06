@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown, Calculator, Save, X } from "lucide-react";
 import { api, date, money, type ConfigurationChange, type Product, type Service } from "@/lib/api";
-import { changeProductOption, isQuantityOption, optionQuantityBounds, resolveProductOptions } from "@/lib/product-options";
+import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, resolveProductOptions } from "@/lib/product-options";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -81,9 +81,11 @@ function ConfigurationChangeForm({service,onSubmitted,onBusyChange}:{service:Ser
   const original=Object.fromEntries((service.config_snapshot??[]).map(choice=>[choice.group_id,choice.id]));
   const resolved=resolveProductOptions(groups,{...original,...choices});
   const quantityFor=(group:typeof groups[number],option:typeof group.options[number])=>quantities[option.id]??optionQuantityBounds(group,option).min;
+  const ruleError=resolved.complete?configurationRuleError(product?.configuration_rules,groups,resolved.ids,Object.fromEntries(resolved.branches.flatMap(({group,options,selected})=>{const option=options.find(candidate=>candidate.id===selected);return option&&isQuantityOption(group)?[[option.id,quantityFor(group,option)]]:[];}))):null;
   function working(next:boolean){setBusy(next);onBusyChange(next);}
   async function calculate() {
     if(!product)return;
+    if(ruleError){setError(ruleError);return;}
     working(true);setError("");setQuote(null);
     try {
       const selectedQuantities=Object.fromEntries(resolved.branches.flatMap(({group,options,selected})=>{const option=options.find(candidate=>candidate.id===selected);return option&&isQuantityOption(group)?[[option.id,quantityFor(group,option)]]:[];}));
@@ -102,5 +104,5 @@ function ConfigurationChangeForm({service,onSubmitted,onBusyChange}:{service:Ser
   return <div className="space-y-4"><fieldset disabled={busy} className="space-y-4">{resolved.branches.map(({group,options,selected})=>{
     const current=options.find(option=>option.id===selected);
     return <div key={group.id} className="space-y-2"><span className="block text-sm">{group.name}</span><ProductOptionChoice group={group} options={options.filter(option=>!option.hidden||option.id===original[group.id])} selected={selected} label={`变更 ${group.name}`} disabled={busy||group.upgrade_enabled===false} optionDisabled={option=>option.upgrade_enabled===false&&option.id!==original[group.id]} onChange={id=>{setChoices(changeProductOption(groups,resolved.selected,group.id,id));setQuote(null);}} />{current&&isQuantityOption(group)&&<label className="grid gap-2 text-xs text-muted-foreground">数量<Input aria-label={`变更 ${group.name} 数量`} type="number" {...optionQuantityBounds(group,current)} value={quantityFor(group,current)} disabled={group.upgrade_enabled===false||current.upgrade_enabled===false} onChange={event=>{setQuantities({...quantities,[current.id]:Number(event.target.value)});setQuote(null);}}/></label>}</div>;
-  })}</fieldset>{quote&&<dl className="border-y py-4 text-sm space-y-3"><div className="flex flex-wrap justify-between gap-2"><dt>变更后续费金额</dt><dd>{money(quote.new_recurring_cents)} / {cycles[service.billing_cycle]}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>本期应付差额</dt><dd className="font-semibold">{money(quote.amount_cents)}</dd></div>{quote.credit_cents>0&&<div className="flex flex-wrap justify-between gap-2"><dt>交付后返还余额</dt><dd>{money(quote.credit_cents)}</dd></div>}<div className="flex flex-wrap justify-between gap-2"><dt>报价有效期</dt><dd>{date(quote.expires_at)}</dd></div></dl>}{error&&<p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button variant="outline" disabled={busy||!resolved.complete} onClick={()=>void calculate()}><Calculator/>计算差额</Button>{quote&&<Button disabled={busy} onClick={()=>void submit()}><ArrowUpDown/>生成变更账单</Button>}</DialogFooter></div>;
+  })}</fieldset>{ruleError&&<p role="alert" className="text-sm text-destructive">{ruleError}</p>}{quote&&<dl className="border-y py-4 text-sm space-y-3"><div className="flex flex-wrap justify-between gap-2"><dt>变更后续费金额</dt><dd>{money(quote.new_recurring_cents)} / {cycles[service.billing_cycle]}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>本期应付差额</dt><dd className="font-semibold">{money(quote.amount_cents)}</dd></div>{quote.credit_cents>0&&<div className="flex flex-wrap justify-between gap-2"><dt>交付后返还余额</dt><dd>{money(quote.credit_cents)}</dd></div>}<div className="flex flex-wrap justify-between gap-2"><dt>报价有效期</dt><dd>{date(quote.expires_at)}</dd></div></dl>}{error&&<p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button variant="outline" disabled={busy||!resolved.complete||!!ruleError} onClick={()=>void calculate()}><Calculator/>计算差额</Button>{quote&&<Button disabled={busy} onClick={()=>void submit()}><ArrowUpDown/>生成变更账单</Button>}</DialogFooter></div>;
 }

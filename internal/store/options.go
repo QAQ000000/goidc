@@ -229,6 +229,9 @@ WHERE pog.product_id=$1 AND pog.active AND po.active AND po.id=ANY($3) ORDER BY 
 	if err = validateLegacyOptionLinks(ctx, q, productID, selection); err != nil {
 		return selection, err
 	}
+	if err = validateNativeConfigurationRules(ctx, q, productID, selection); err != nil {
+		return selection, err
+	}
 	return selection, nil
 }
 

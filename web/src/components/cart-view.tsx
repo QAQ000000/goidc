@@ -21,7 +21,7 @@ import { PurchaseFieldInputs,PurchaseFieldDetails,purchaseFieldValues } from "./
 import { cycles, Loading, Failure } from "./common";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { changeProductOption, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
+import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
 import { ProductOptionChoice } from "./product-option-choice";
 type Selection = { version: number; ids: number[] };
 type OptionQuantityMap = Record<number, number>;
@@ -304,6 +304,7 @@ function CartItemEditor({
   const resolved = resolveProductOptions(activeGroups, { ...originalOptions, ...options });
   const optionIDs = resolved.ids;
   const complete = resolved.complete;
+  const ruleError=complete?configurationRuleError(product?.configuration_rules,activeGroups,optionIDs,Object.fromEntries(resolved.branches.flatMap(({group,options,selected})=>{const option=options.find(candidate=>candidate.id===selected);return option&&isQuantityOption(group)?[[option.id,quantities[option.id]??optionQuantityBounds(group,option).min]]:[];}))):null;
   function quantityFor(group: NonNullable<Product["option_groups"]>[number], option: NonNullable<Product["option_groups"]>[number]["options"][number]) { return quantities[option.id] ?? optionQuantityBounds(group, option).min; }
   const pricesValid = resolved.branches.every(({ group, options, selected }) => {
     const option = options.find(candidate => candidate.id === selected);
@@ -320,8 +321,8 @@ function CartItemEditor({
     setOpen(next);
   }
   async function save() {
-    if (!complete || !pricesValid) {
-      setMessage(pricesValid ? "请完成必选配置" : "所选数量暂无可用价格");
+    if (!complete || !pricesValid || ruleError) {
+      setMessage(ruleError??(pricesValid ? "请完成必选配置" : "所选数量暂无可用价格"));
       return;
     }
     setBusy(true);
@@ -368,9 +369,9 @@ function CartItemEditor({
             return <div className="block text-sm" key={group.id}><span className="block text-muted-foreground mb-2">{group.name}{group.required ? "（必选）" : ""}</span><ProductOptionChoice group={group} options={availableOptions} selected={selectedID} label={`购物车 ${group.name}`} onChange={id => setOptions(changeProductOption(activeGroups, resolved.selected, group.id, id))} renderLabel={option => { const amount = productOptionAmounts(option, cycle, quantityType ? quantityFor(group, option) : 1); const delta = amount ? amount.price + amount.setup : null; return `${option.label}${delta === null ? " · 暂无可用价格" : delta !== 0 ? ` · ${money(delta)}` : ""}`; }} />{selected && quantityType && <label className="block text-xs text-muted-foreground mt-2">数量<Input type="number" aria-label={`购物车 ${group.name} 数量`} {...optionQuantityBounds(group, selected)} value={quantityFor(group, selected)} onChange={(event) => setQuantities((current) => ({ ...current, [selected.id]: Number(event.target.value) }))} /></label>}</div>;
           })}
           <PurchaseFieldInputs fields={product.purchase_field_definitions??[]} values={fields} onChange={setFields} disabled={busy}/>
-          {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
+          {(message||ruleError) && <p role="alert" className="text-sm text-destructive">{message||ruleError}</p>}
         </div>}
-        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>取消</Button><Button onClick={() => void save()} disabled={busy || !product || !!productError || !complete || !pricesValid}>{busy ? "保存中" : "保存配置"}</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>取消</Button><Button onClick={() => void save()} disabled={busy || !product || !!productError || !complete || !pricesValid || !!ruleError}>{busy ? "保存中" : "保存配置"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

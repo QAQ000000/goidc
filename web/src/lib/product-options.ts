@@ -1,4 +1,4 @@
-import type { ProductOption, ProductOptionGroup } from "./api";
+import type { NativeConfigurationRule, NativeRulePredicate, ProductOption, ProductOptionGroup } from "./api";
 
 type OptionBranch = { group: ProductOptionGroup; options: ProductOption[]; selected: number };
 
@@ -69,6 +69,28 @@ export function changeProductOption(groups: ProductOptionGroup[], selected: Reco
     if (id !== groupID) next[id] = 0;
   }
   return next;
+}
+
+export function configurationRuleError(rules: NativeConfigurationRule[] | undefined, groups: ProductOptionGroup[], ids: number[], quantities: Record<number, number>): string | null {
+  const selected = new Map<number, {id: number; quantity: number}>();
+  for (const group of groups) {
+    const option = group.options.find(item => ids.includes(item.id));
+    if (option) selected.set(group.id, {id: option.id, quantity: quantities[option.id] ?? 1});
+  }
+  function matches(predicate: NativeRulePredicate): boolean {
+    const choice = selected.get(predicate.group_id);
+    switch (predicate.operator) {
+      case "absent": return !choice;
+      case "equals": return !!choice && choice.id === predicate.option_id;
+      case "not_equals": return !!choice && choice.id !== predicate.option_id;
+      case "quantity_in": return !!choice && choice.id === predicate.option_id && predicate.qty_minimum !== null && predicate.qty_maximum !== null && choice.quantity >= predicate.qty_minimum && choice.quantity <= predicate.qty_maximum;
+      case "quantity_out": return !!choice && choice.id === predicate.option_id && predicate.qty_minimum !== null && predicate.qty_maximum !== null && (choice.quantity < predicate.qty_minimum || choice.quantity > predicate.qty_maximum);
+    }
+  }
+  for (const rule of rules ?? []) {
+    if (rule.enabled && rule.conditions.length && rule.conditions.every(matches) && !rule.results.every(matches)) return `配置不符合规则：${rule.name}`;
+  }
+  return null;
 }
 
 export function isQuantityOption(group: ProductOptionGroup) {

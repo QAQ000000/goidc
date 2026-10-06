@@ -301,6 +301,12 @@ func (s *Store) DeleteProductConfiguration(ctx context.Context, actor, product, 
 	if used {
 		return conflict("configuration_in_use", "配置已被购物车或订单引用，请停用而不是删除")
 	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM native_configuration_predicates p WHERE p.group_id=$1 AND ($2::bigint=0 OR p.option_id=$2))`, group, option).Scan(&used); err != nil {
+		return err
+	}
+	if used {
+		return conflict("configuration_in_use", "配置仍被规则引用，请先修改或删除规则")
+	}
 	action := "product.option_group.deleted"
 	object := group
 	if option == 0 {
