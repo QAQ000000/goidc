@@ -7,8 +7,6 @@ import (
 	"io"
 	"mime"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/fileformat"
@@ -367,12 +365,11 @@ func (s *Server) serveDownloadFile(w http.ResponseWriter, r *http.Request, id, s
 		writeError(w, 403, "downloads_disabled", "下载中心已关闭")
 		return
 	}
-	var name, mt, source, link, access string
-	var size int64
+	var name, mt, source, link, access, hash string
 	var content []byte
 	var allowed bool
-	err = tx.QueryRow(r.Context(), `SELECT d.filename,d.mime_type,d.source_type,d.remote_url,d.access_level,d.size_bytes,download_allowed(d.id,$2)
- FROM downloads d LEFT JOIN download_categories c ON c.id=d.category_id WHERE d.id=$1 AND `+downloadVisible, id, uid).Scan(&name, &mt, &source, &link, &access, &size, &allowed)
+	err = tx.QueryRow(r.Context(), `SELECT d.filename,d.mime_type,d.source_type,d.remote_url,d.access_level,d.sha256,download_allowed(d.id,$2)
+ FROM downloads d LEFT JOIN download_categories c ON c.id=d.category_id WHERE d.id=$1 AND `+downloadVisible, id, uid).Scan(&name, &mt, &source, &link, &access, &hash, &allowed)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -412,13 +409,5 @@ func (s *Server) serveDownloadFile(w http.ResponseWriter, r *http.Request, id, s
 		write(w, 200, map[string]string{"url": link})
 		return
 	}
-	w.Header().Set("Content-Type", mt)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", `attachment; filename="download"; filename*=UTF-8''`+url.PathEscape(name))
-	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
-	w.WriteHeader(200)
-	if r.Method == "HEAD" {
-		return
-	}
-	_, _ = w.Write(content)
+	serveStoredFile(w, r, name, mt, hash, content)
 }
