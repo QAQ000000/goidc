@@ -1141,7 +1141,7 @@ export function AdminCustomerContactsView({ customerId }: { customerId: number }
 export function AdminCustomerDetailView({ customerId }: { customerId: number }) {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const tab: CustomerDetailTab = requestedTab === "services" || requestedTab === "orders" || requestedTab === "invoices" || requestedTab === "tickets" ? requestedTab : "contacts";
+  const tab: CustomerDetailTab = requestedTab === "services" || requestedTab === "orders" || requestedTab === "invoices" || requestedTab === "tickets" || requestedTab === "transactions" ? requestedTab : "contacts";
   const backParams = new URLSearchParams(searchParams.toString());
   backParams.delete("tab");
   const returnHref = `/admin/customers${backParams.toString() ? `?${backParams.toString()}` : ""}`;
@@ -1166,7 +1166,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
         </dl>
       </section>
       <nav className="flex gap-1 overflow-x-auto border-b mb-5" aria-label="客户详情分区">
-        {(["contacts", "services", "orders", "invoices", "tickets"] as CustomerDetailTab[]).map((value) => {
+        {(["contacts", "services", "orders", "invoices", "tickets", "transactions"] as CustomerDetailTab[]).map((value) => {
           const params = new URLSearchParams(searchParams.toString());
           if (value === "contacts") params.delete("tab"); else params.set("tab", value);
           const href = `/admin/customers/${customerId}${params.toString() ? `?${params.toString()}` : ""}`;
@@ -1180,17 +1180,17 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
   </Workspace>;
 }
 
-type CustomerDetailTab = "contacts" | "services" | "orders" | "invoices" | "tickets";
-const customerDetailTabLabel: Record<CustomerDetailTab, string> = { contacts: "联系人", services: "服务", orders: "订单", invoices: "账单", tickets: "工单" };
+type CustomerDetailTab = "contacts" | "services" | "orders" | "invoices" | "tickets" | "transactions";
+const customerDetailTabLabel: Record<CustomerDetailTab, string> = { contacts: "联系人", services: "服务", orders: "订单", invoices: "账单", tickets: "工单", transactions: "交易" };
 
 function AdminCustomerRelatedView({ customerId, tab }: { customerId: number; tab: Exclude<CustomerDetailTab, "contacts"> }) {
-  const endpoint = `/admin/${tab}?customer_id=${customerId}&limit=25&offset=0`;
+  const endpoint = tab === "transactions" ? `/admin/customer-transactions?customer_id=${customerId}&limit=25&offset=0` : `/admin/${tab}?customer_id=${customerId}&limit=25&offset=0`;
   const { data, error, refresh } = useResource<Row[]>(endpoint, false);
   if (error) return <Failure error={error} retry={refresh} />;
   if (!data) return <Loading />;
   if (!data.length) return <section className="data-surface py-16 text-center text-muted-foreground">该客户暂无{customerDetailTabLabel[tab]}</section>;
-  const columns = tab === "services" ? ["服务", "域名", "状态", "下次到期"] : tab === "orders" ? ["订单号", "金额", "状态", "创建时间"] : tab === "invoices" ? ["账单号", "金额", "状态", "到期时间"] : ["工单号", "主题", "状态", "更新时间"];
-  return <section className="data-surface overflow-auto"><Table><TableHeader><TableRow>{columns.map(column => <TableHead key={column}>{column}</TableHead>)}</TableRow></TableHeader><TableBody>{data.map((row, index) => <TableRow key={String(row.id ?? index)}>{tab === "services" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/services/${Number(row.id)}`}>{String(row.name ?? "-")}</Link></TableCell><TableCell className="font-mono text-xs">{String(row.domain ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.next_due_at ? date(String(row.next_due_at)) : "-"}</TableCell></>}{tab === "orders" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/orders/${Number(row.id)}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.total_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.created_at))}</TableCell></>}{tab === "invoices" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/invoices/${Number(row.id)}`}>{String(row.invoice_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.amount_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.due_at ? date(String(row.due_at)) : "-"}</TableCell></>}{tab === "tickets" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/tickets/${Number(row.id)}`}>{String(row.ticket_no ?? "-")}</Link></TableCell><TableCell className="max-w-sm break-words">{String(row.subject ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.updated_at))}</TableCell></>}</TableRow>)}</TableBody></Table></section>;
+  const columns = tab === "services" ? ["服务", "域名", "状态", "下次到期"] : tab === "orders" ? ["订单号", "金额", "状态", "创建时间"] : tab === "invoices" ? ["账单号", "金额", "状态", "到期时间"] : tab === "tickets" ? ["工单号", "主题", "状态", "更新时间"] : ["类型", "关联账单", "渠道/类型", "金额", "状态", "时间"];
+  return <section className="data-surface overflow-auto"><Table><TableHeader><TableRow>{columns.map(column => <TableHead key={column}>{column}</TableHead>)}</TableRow></TableHeader><TableBody>{data.map((row, index) => <TableRow key={`${String(row.kind ?? tab)}:${String(row.id ?? index)}`}>{tab === "services" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/services/${Number(row.id)}`}>{String(row.name ?? "-")}</Link></TableCell><TableCell className="font-mono text-xs">{String(row.domain ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.next_due_at ? date(String(row.next_due_at)) : "-"}</TableCell></>}{tab === "orders" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/orders/${Number(row.id)}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.total_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.created_at))}</TableCell></>}{tab === "invoices" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/invoices/${Number(row.id)}`}>{String(row.invoice_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.amount_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.due_at ? date(String(row.due_at)) : "-"}</TableCell></>}{tab === "tickets" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/tickets/${Number(row.id)}`}>{String(row.ticket_no ?? "-")}</Link></TableCell><TableCell className="max-w-sm break-words">{String(row.subject ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.updated_at))}</TableCell></>}{tab === "transactions" && <><TableCell>{String(row.kind) === "payment" ? "支付" : "余额流水"}</TableCell><TableCell>{row.invoice_id ? <Link className="text-primary hover:underline" href={`/admin/invoices/${Number(row.invoice_id)}`}>{String(row.invoice_no ?? "-")}</Link> : "-"}</TableCell><TableCell>{String(row.label ?? "-")}</TableCell><TableCell className="money">{row.kind === "ledger" ? `${Number(row.delta_cents) > 0 ? "+" : ""}${money(Number(row.delta_cents))}` : money(Number(row.amount_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.created_at))}</TableCell></>}</TableRow>)}</TableBody></Table></section>;
 }
 
 function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number }) {

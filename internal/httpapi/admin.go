@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"net/mail"
+	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
@@ -46,6 +47,26 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, items[0])
+}
+
+func (s *Server) adminCustomerTransactions(w http.ResponseWriter, r *http.Request) {
+	customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+	if err != nil || customerID < 1 {
+		writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
+		return
+	}
+	limit, offset := pagination(r)
+	query := `SELECT kind,id,invoice_id,invoice_no,label,amount_cents,delta_cents,status,balance_after,created_at,completed_at,note
+FROM (
+ SELECT 'payment'::text AS kind,pt.id,i.id AS invoice_id,i.invoice_no,pt.provider AS label,pt.amount_cents,NULL::bigint AS delta_cents,pt.status,NULL::bigint AS balance_after,pt.created_at,pt.completed_at,''::text AS note
+ FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id
+ WHERE i.user_id=$1 AND admin_customer_allowed($2,i.user_id)
+ UNION ALL
+ SELECT 'ledger'::text,l.id,i.id AS invoice_id,i.invoice_no,l.entry_type AS label,NULL::bigint,l.delta_cents,'posted'::text,l.balance_after,l.created_at,NULL::timestamptz,l.note
+ FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type='invoice' AND i.id=l.reference_id AND i.user_id=l.user_id
+ WHERE l.user_id=$1 AND admin_customer_allowed($2,l.user_id)
+) events ORDER BY created_at DESC,id DESC LIMIT $3 OFFSET $4`
+	s.list(w, r, query, customerID, identityFrom(r).ID, limit, offset)
 }
 
 func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {

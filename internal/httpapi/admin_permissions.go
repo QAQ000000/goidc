@@ -73,7 +73,7 @@ var adminRoutePermissions = func() map[string]string {
 		"customer_groups.manage":      {"POST /api/v1/admin/customer-groups", "PATCH /api/v1/admin/customer-groups/{id}", "DELETE /api/v1/admin/customer-groups/{id}", "PUT /api/v1/admin/customers/{id}/group"},
 		"orders.view":                 {"GET /api/v1/admin/orders", "GET /api/v1/admin/orders/{id}"},
 		"orders.manage":               {"POST /api/v1/admin/orders/{id}/cancel", "POST /api/v1/admin/orders/{id}/review", "POST /api/v1/admin/orders/{id}/notes", "POST /api/v1/admin/orders/bulk-cancel"},
-		"invoices.view":               {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}"},
+		"invoices.view":               {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}", "GET /api/v1/admin/customer-transactions"},
 		"invoices.manage":             {"GET /api/v1/admin/invoice-customers", "POST /api/v1/admin/invoices", "PUT /api/v1/admin/invoices/{id}", "POST /api/v1/admin/invoices/{id}/cancel", "POST /api/v1/admin/invoices/merge"},
 		"invoices.refund":             {"POST /api/v1/admin/invoices/{id}/refund"},
 		"invoice_applications.manage": {"POST /api/v1/admin/invoice-applications/{id}/review", "POST /api/v1/admin/invoice-applications/{id}/adjust", "POST /api/v1/admin/invoice-applications/{id}/document", "POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document"},

@@ -71,6 +71,7 @@ staff 创建和更新接受 `customer_scope`、`customer_ownerless` 和 `sales_e
 | 方法和路径 | 契约 |
 | --- | --- |
 | `GET /api/v1/admin/customers/{id}` | 需要 `customers.view` 和客户范围；返回客户摘要（账号、邮箱、状态、余额、分组、销售归属）；范围外或不存在统一返回 404 |
+| `GET /api/v1/admin/customer-transactions?customer_id={id}` | 需要 `invoices.view` 和客户范围；返回该客户的支付与余额流水时间线，不返回支付凭据或原始网关响应 |
 | `GET /api/v1/admin/services?customer_id={id}` | 管理端可选客户筛选；仍执行 `services.view` 和客户范围；服务列表只返回该客户资源 |
 | `GET /api/v1/admin/orders?customer_id={id}` | 管理端可选客户筛选；仍执行 `orders.view` 和客户范围；订单列表只返回该客户订单 |
 | `GET /api/v1/admin/invoices?customer_id={id}` | 管理端可选客户筛选；仍执行 `invoices.view` 和客户范围；账单列表只返回该客户账单 |
