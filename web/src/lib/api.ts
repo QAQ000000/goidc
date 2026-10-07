@@ -117,6 +117,7 @@ export type SiteProfile = {
   record_number: string;
   copyright: string;
   registration_enabled: boolean;
+  email_verification_required: boolean;
   maintenance_enabled: boolean;
   maintenance_message: string;
   maintenance_url: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw, Save, Trash2 } from "lucide-react";
+import { RefreshCw, Save, Trash2, Send } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
 import { api, date } from "@/lib/api";
 import { Workspace, useAdminPermission } from "./workspace";
@@ -18,6 +18,8 @@ type Settings = {
   port: number;
   username: string;
   from: string;
+  from_name: string;
+  tls_mode: "implicit_tls" | "starttls" | "none";
   password_configured: boolean;
   version: number;
   updated_at: string;
@@ -47,6 +49,8 @@ function SMTPForm({ initial }: { initial: Settings }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [recipient, setRecipient] = useState("");
+  const [testMessage, setTestMessage] = useState("");
   const manage = useAdminPermission("@super");
   const dirty =
     password !== "" ||
@@ -55,7 +59,7 @@ function SMTPForm({ initial }: { initial: Settings }) {
     form.host !== baseline.host ||
     form.port !== baseline.port ||
     form.username !== baseline.username ||
-    form.from !== baseline.from;
+    form.from !== baseline.from || form.from_name !== baseline.from_name || form.tls_mode !== baseline.tls_mode;
   function changed(patch: Partial<Settings>) {
     setForm((current) => ({ ...current, ...patch }));
     setSaved(false);
@@ -75,6 +79,8 @@ function SMTPForm({ initial }: { initial: Settings }) {
           port: form.port,
           username: form.username,
           from: form.from,
+          from_name: form.from_name,
+          tls_mode: form.tls_mode,
           ...(password ? { password } : {}),
           clear_password: clear,
           expected_version: form.version,
@@ -143,6 +149,8 @@ function SMTPForm({ initial }: { initial: Settings }) {
           启用邮件发送
         </label>
         <section className="grid sm:grid-cols-2 gap-5 border-y py-5">
+          <label className="grid gap-2 text-sm">发件人名称<Input value={form.from_name ?? ""} maxLength={100} onChange={e => changed({from_name: e.target.value})} /></label>
+          <label className="grid gap-2 text-sm">传输加密<select className="h-9 border rounded-md px-3 bg-background" value={form.tls_mode ?? "starttls"} onChange={e => changed({tls_mode: e.target.value as Settings["tls_mode"]})}><option value="implicit_tls">TLS</option><option value="starttls">STARTTLS</option><option value="none">无加密</option></select></label>
           <label className="grid gap-2 text-sm min-w-0">
             SMTP 主机
             <Input
@@ -283,6 +291,8 @@ function SMTPForm({ initial }: { initial: Settings }) {
             </Button>
           </div>
         </div>
+        <div className="flex flex-wrap gap-3 border-t pt-5"><Input className="max-w-sm" aria-label="测试收件邮箱" type="email" value={recipient} onChange={e => setRecipient(e.target.value)} /><Button type="button" variant="outline" disabled={busy || dirty || !recipient || !baseline.enabled} onClick={async () => { setBusy(true); setError(""); setTestMessage(""); try { const result = await api<{queued: boolean}>("/admin/smtp-settings/test", {method:"POST", body:JSON.stringify({recipient, expected_version: baseline.version})}); setTestMessage(result.queued ? "测试邮件已加入发送队列" : "测试邮件未加入发送队列"); } catch(e) { setError((e as Error).message); } finally { setBusy(false); } }}><Send />测试发送</Button></div>
+        {testMessage && <p role="status" className="text-sm text-emerald-700">{testMessage}</p>}
       </fieldset>
     </form>
   );

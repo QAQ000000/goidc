@@ -22,6 +22,8 @@ type SMTPSettings struct {
 	Port                 int       `json:"port"`
 	Username             string    `json:"username"`
 	From                 string    `json:"from"`
+	TLSMode              string    `json:"tls_mode"`
+	FromName             string    `json:"from_name"`
 	PasswordConfigured   bool      `json:"password_configured"`
 	Version              int64     `json:"version"`
 	UpdatedAt            time.Time `json:"updated_at"`
@@ -30,6 +32,7 @@ type SMTPRuntimeConfig struct {
 	Host                     string
 	Port                     int
 	Username, Password, From string
+	TLSMode, FromName        string
 }
 
 func smtpSeal(key []byte, value string) ([]byte, error) {
@@ -80,7 +83,7 @@ func smtpOpen(key, sealed []byte) (string, error) {
 func (s *Store) SMTPSettings(ctx context.Context, fallback SMTPRuntimeConfig) (SMTPSettings, error) {
 	var o SMTPSettings
 	var sealed []byte
-	err := s.Pool.QueryRow(ctx, "SELECT configured,enabled,host,port,username,password_encrypted,from_address,version,updated_at FROM smtp_settings WHERE id=1").Scan(&o.Configured, &o.Enabled, &o.Host, &o.Port, &o.Username, &sealed, &o.From, &o.Version, &o.UpdatedAt)
+	err := s.Pool.QueryRow(ctx, "SELECT configured,enabled,host,port,username,password_encrypted,from_address,tls_mode,from_name,version,updated_at FROM smtp_settings WHERE id=1").Scan(&o.Configured, &o.Enabled, &o.Host, &o.Port, &o.Username, &sealed, &o.From, &o.TLSMode, &o.FromName, &o.Version, &o.UpdatedAt)
 	o.PasswordConfigured = len(sealed) > 0
 	o.EncryptionConfigured = len(s.ProvisionEncryptionKey) == 32
 	if !o.Configured {
@@ -88,20 +91,38 @@ func (s *Store) SMTPSettings(ctx context.Context, fallback SMTPRuntimeConfig) (S
 		o.Port = fallback.Port
 		o.Username = fallback.Username
 		o.From = fallback.From
+		o.TLSMode, o.FromName = fallback.TLSMode, fallback.FromName
 		o.Enabled = fallback.Host != "" && fallback.From != ""
 		o.PasswordConfigured = fallback.Password != ""
+	}
+	if o.TLSMode == "" {
+		if o.Port == 465 {
+			o.TLSMode = "implicit_tls"
+		} else {
+			o.TLSMode = "starttls"
+		}
 	}
 	return o, err
 }
 func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash string, in SMTPSettings, password *string, clear bool, expected int64, fallback SMTPRuntimeConfig) (SMTPSettings, error) {
+	if len(in.FromName) > 200 || strings.ContainsAny(in.FromName, "\r\n\x00") {
+		return SMTPSettings{}, conflict("invalid_smtp", "发件名称无效")
+	}
 	if strings.ContainsAny(in.Host+in.Username+in.From, "\r\n\x00\t") || strings.ContainsAny(in.Host, " /\\:") || len(in.Host) > 253 || len(in.Username) > 320 || len(in.From) > 320 || password != nil && len(*password) > 4096 || clear && (in.Enabled || password != nil && *password != "") {
 		return SMTPSettings{}, conflict("invalid_smtp", "SMTP配置无效")
 	}
 	if in.Port < 1 || in.Port > 65535 || strings.TrimSpace(in.Host) == "" && in.Enabled {
 		return SMTPSettings{}, conflict("invalid_smtp", "SMTP主机无效")
 	}
-	if in.Enabled && in.Port == 465 {
-		return SMTPSettings{}, conflict("invalid_smtp", "当前邮件发送支持STARTTLS，请使用相应端口")
+	if in.TLSMode == "" {
+		if in.Port == 465 {
+			in.TLSMode = "implicit_tls"
+		} else {
+			in.TLSMode = "starttls"
+		}
+	}
+	if in.TLSMode != "implicit_tls" && in.TLSMode != "starttls" && in.TLSMode != "none" || in.TLSMode == "none" && (in.Username != "" || password != nil && *password != "") {
+		return SMTPSettings{}, conflict("invalid_smtp", "SMTP TLS模式无效")
 	}
 	address, addressErr := mail.ParseAddress(strings.TrimSpace(in.From))
 	if strings.TrimSpace(in.From) != "" && (addressErr != nil || address.Address != strings.TrimSpace(in.From)) || in.Enabled && strings.TrimSpace(in.From) == "" {
@@ -114,7 +135,7 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 	defer tx.Rollback(ctx)
 	var old SMTPSettings
 	var sealed []byte
-	if e = tx.QueryRow(ctx, "SELECT configured,enabled,host,port,username,password_encrypted,from_address,version,updated_at FROM smtp_settings WHERE id=1 FOR UPDATE").Scan(&old.Configured, &old.Enabled, &old.Host, &old.Port, &old.Username, &sealed, &old.From, &old.Version, &old.UpdatedAt); e != nil {
+	if e = tx.QueryRow(ctx, "SELECT configured,enabled,host,port,username,password_encrypted,from_address,tls_mode,from_name,version,updated_at FROM smtp_settings WHERE id=1 FOR UPDATE").Scan(&old.Configured, &old.Enabled, &old.Host, &old.Port, &old.Username, &sealed, &old.From, &old.TLSMode, &old.FromName, &old.Version, &old.UpdatedAt); e != nil {
 		return old, e
 	}
 	if e = recheckSettingsManager(ctx, tx, actor, sessionHash); e != nil {
@@ -144,8 +165,11 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 	if in.Enabled && ((strings.TrimSpace(in.Username) == "") != (len(sealed) == 0)) {
 		return SMTPSettings{}, conflict("invalid_smtp", "SMTP用户名和密码必须成对配置")
 	}
+	if in.TLSMode == "none" && len(sealed) > 0 {
+		return SMTPSettings{}, conflict("invalid_smtp", "明文SMTP不可配置凭据")
+	}
 	var out SMTPSettings
-	e = tx.QueryRow(ctx, "UPDATE smtp_settings SET configured=true,enabled=$1,host=$2,port=$3,username=$4,password_encrypted=$5,from_address=$6,version=version+1,updated_at=now() WHERE id=1 RETURNING enabled,host,port,username,password_encrypted,from_address,version,updated_at", in.Enabled, strings.TrimSpace(in.Host), in.Port, strings.TrimSpace(in.Username), sealed, strings.TrimSpace(in.From)).Scan(&out.Enabled, &out.Host, &out.Port, &out.Username, &sealed, &out.From, &out.Version, &out.UpdatedAt)
+	e = tx.QueryRow(ctx, "UPDATE smtp_settings SET configured=true,enabled=$1,host=$2,port=$3,username=$4,password_encrypted=$5,from_address=$6,tls_mode=$7,from_name=$8,version=version+1,updated_at=now() WHERE id=1 RETURNING enabled,host,port,username,password_encrypted,from_address,tls_mode,from_name,version,updated_at", in.Enabled, strings.TrimSpace(in.Host), in.Port, strings.TrimSpace(in.Username), sealed, strings.TrimSpace(in.From), in.TLSMode, strings.TrimSpace(in.FromName)).Scan(&out.Enabled, &out.Host, &out.Port, &out.Username, &sealed, &out.From, &out.TLSMode, &out.FromName, &out.Version, &out.UpdatedAt)
 	out.PasswordConfigured = len(sealed) > 0
 	out.Configured = true
 	out.EncryptionConfigured = len(s.ProvisionEncryptionKey) == 32
@@ -157,6 +181,45 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 	}
 	return out, tx.Commit(ctx)
 }
+
+func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, recipient string, expected int64) (int64, error) {
+	recipient = strings.TrimSpace(recipient)
+	a, e := mail.ParseAddress(recipient)
+	if e != nil || a.Address != recipient || len(recipient) > 254 || expected < 1 || strings.ContainsAny(recipient, "\r\n\x00") {
+		return 0, conflict("invalid_smtp", "试发参数无效")
+	}
+	tx, e := settingsManagementTx(ctx, s, actor)
+	if e != nil {
+		return 0, e
+	}
+	defer tx.Rollback(ctx)
+	if e = recheckSettingsManager(ctx, tx, actor, sessionHash); e != nil {
+		return 0, e
+	}
+	var super bool
+	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1", actor).Scan(&super); e != nil || !super {
+		return 0, conflict("permission_denied", "需要超级管理员权限")
+	}
+	var version int64
+	var configured, enabled bool
+	if e = tx.QueryRow(ctx, "SELECT version,configured,enabled FROM smtp_settings WHERE id=1 FOR UPDATE").Scan(&version, &configured, &enabled); e != nil {
+		return 0, e
+	}
+	if version != expected {
+		return 0, conflict("version_conflict", "SMTP配置已变更，请重新加载")
+	}
+	if !configured || !enabled {
+		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
+	}
+	var id int64
+	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind) VALUES($1,'SMTP test','SMTP configuration test message.','system') RETURNING id", recipient).Scan(&id); e != nil {
+		return 0, e
+	}
+	if e = Audit(ctx, tx, actor, "smtp.test_queued", "email_outbox", id, map[string]any{"version": version}); e != nil {
+		return 0, e
+	}
+	return id, tx.Commit(ctx)
+}
 func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfig) (SMTPRuntimeConfig, error) {
 	var enabled bool
 	var host string
@@ -165,7 +228,8 @@ func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfi
 	var sealed []byte
 	var from string
 	var configured bool
-	err := s.Pool.QueryRow(ctx, "SELECT enabled,host,port,username,password_encrypted,from_address,configured FROM smtp_settings WHERE id=1").Scan(&enabled, &host, &port, &user, &sealed, &from, &configured)
+	var tlsMode, fromName string
+	err := s.Pool.QueryRow(ctx, "SELECT enabled,host,port,username,password_encrypted,from_address,tls_mode,from_name,configured FROM smtp_settings WHERE id=1").Scan(&enabled, &host, &port, &user, &sealed, &from, &tlsMode, &fromName, &configured)
 	if err == pgx.ErrNoRows {
 		return fallback, nil
 	}
@@ -182,5 +246,5 @@ func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfi
 	if e != nil {
 		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP credentials unavailable")
 	}
-	return SMTPRuntimeConfig{Host: host, Port: port, Username: user, Password: pass, From: from}, nil
+	return SMTPRuntimeConfig{Host: host, Port: port, Username: user, Password: pass, From: from, TLSMode: tlsMode, FromName: fromName}, nil
 }

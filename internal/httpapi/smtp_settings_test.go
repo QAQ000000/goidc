@@ -56,11 +56,30 @@ func TestSMTPSettingsSecurityAndDynamicResolution(t *testing.T) {
 	if e != nil || runtime.Password != fallback.Password {
 		t.Fatal(e)
 	}
+	out.Port, out.TLSMode, out.FromName = 465, "implicit_tls", "邮件服务"
+	out, e = db.UpdateSMTPSettings(t.Context(), actor, hash, out, nil, false, out.Version, fallback)
+	if e != nil || out.TLSMode != "implicit_tls" || out.FromName != "邮件服务" {
+		t.Fatal("implicit TLS settings", e)
+	}
+	runtime, e = db.ResolveSMTPConfig(t.Context(), fallback)
+	if e != nil || runtime.TLSMode != "implicit_tls" || runtime.FromName != out.FromName {
+		t.Fatal("SMTP field resolution", e)
+	}
+	for _, c := range []string{staff, customer} {
+		expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, c, ""), 403)
+	}
+	expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": 1}, root, ""), 409)
+	expect(t, requestBearer(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, "test-api-credential"), 403)
+	expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, root, ""), 202)
+	var pending int
+	if e = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM email_outbox WHERE recipient='to@example.test' AND status='pending' AND attempts=0").Scan(&pending); e != nil || pending != 1 {
+		t.Fatal("SMTP test must queue exactly once", e)
+	}
 	if _, e = db.UpdateSMTPSettings(t.Context(), actor, hash, out, nil, false, 1, fallback); e == nil {
 		t.Fatal("stale accepted")
 	}
 	for _, invalid := range []store.SMTPSettings{
-		{Enabled: true, Host: "smtp.example.test", Port: 465, From: "from@example.test"},
+		{Enabled: true, Host: "smtp.example.test", Port: 465, TLSMode: "invalid", From: "from@example.test"},
 		{Enabled: true, Host: "smtp.example.test", Port: 587, From: "Name <from@example.test>"},
 	} {
 		if _, e = db.UpdateSMTPSettings(t.Context(), actor, hash, invalid, nil, false, out.Version, fallback); e == nil {

@@ -373,6 +373,7 @@ func TestPaymentSettingsValidationFallbackAndStaleIntent(t *testing.T) {
 	// Separate fresh schema proves an unconfigured encryption key never persists a secret.
 	db2, h2 := testServer(t)
 	_, root2 := user(t, db2, h2, "payment-settings-no-encryption", "super_admin")
+	db2.ProvisionEncryptionKey = nil
 	expect(t, request(h2, "PUT", paymentSettingsPath, paymentSettingsBody("https://merchant.example", 1), root2, ""), 409)
 	var configuredFlag bool
 	if err = db2.Pool.QueryRow(t.Context(), "SELECT configured FROM payment_settings").Scan(&configuredFlag); err != nil || configuredFlag {

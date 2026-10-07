@@ -52,5 +52,31 @@ func (s *Server) updateSMTPSettings(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, out)
 }
 func (s *Server) smtpFallback() store.SMTPRuntimeConfig {
-	return store.SMTPRuntimeConfig{Host: s.cfg.SMTPHost, Port: s.cfg.SMTPPort, Username: s.cfg.SMTPUsername, Password: s.cfg.SMTPPassword, From: s.cfg.SMTPFrom}
+	return store.SMTPRuntimeConfig{Host: s.cfg.SMTPHost, Port: s.cfg.SMTPPort, Username: s.cfg.SMTPUsername, Password: s.cfg.SMTPPassword, From: s.cfg.SMTPFrom, TLSMode: s.cfg.SMTPTLSMode, FromName: s.cfg.SMTPFromName}
+}
+
+func (s *Server) testSMTPSettings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if identityFrom(r).Role != "super_admin" {
+		writeError(w, 403, "forbidden", "需要超级管理员权限")
+		return
+	}
+	var in struct {
+		Recipient       string `json:"recipient"`
+		ExpectedVersion int64  `json:"expected_version"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	cookie, e := r.Cookie("zjmfgo_session")
+	if e != nil {
+		writeError(w, 401, "unauthorized", "请先登录")
+		return
+	}
+	id, e := s.db.QueueSMTPTest(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), in.Recipient, in.ExpectedVersion)
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	write(w, 202, map[string]any{"queued": true, "job_id": id})
 }

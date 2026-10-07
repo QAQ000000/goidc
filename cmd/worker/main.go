@@ -46,7 +46,7 @@ func main() {
 		log.Error("stale email recovery failed", "error", err)
 		os.Exit(1)
 	}
-	smtpFallback := store.SMTPRuntimeConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom}
+	smtpFallback := store.SMTPRuntimeConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode, FromName: cfg.SMTPFromName}
 	var paymentWorker sync.WaitGroup
 	{
 		paymentWorker.Add(1)
@@ -76,6 +76,35 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if err = db.RecoverStaleSMSJobs(ctx); err != nil {
+				log.Error("SMS stale recovery failed")
+			}
+			for i := 0; i < 10; i++ {
+				smsRuntime, smsErr := db.ResolveSMSConfig(ctx)
+				if smsErr != nil || !smsRuntime.Enabled {
+					break
+				}
+				job, claimErr := db.ClaimSMSJob(ctx)
+				if errors.Is(claimErr, pgx.ErrNoRows) {
+					break
+				}
+				if claimErr != nil {
+					log.Error("SMS claim failed")
+					break
+				}
+				active, checkErr := db.SMSJobActive(ctx, *job)
+				if checkErr != nil || !active {
+					_ = db.RecoverStaleSMSJobs(ctx)
+					continue
+				}
+				sendErr := notification.SendSMS(ctx, smsRuntime, *job)
+				if completeErr := db.CompleteSMSJob(ctx, *job, sendErr); completeErr != nil {
+					log.Error("SMS completion failed", "job_id", job.ID)
+				}
+				if sendErr != nil {
+					log.Error("SMS delivery failed", "job_id", job.ID, "attempts", job.Attempts)
+				}
+			}
 			if err = db.RecoverStaleEmailJobs(ctx); err != nil {
 				log.Error("stale email recovery failed", "error", err)
 			}
@@ -83,14 +112,14 @@ func main() {
 			if smtpErr != nil {
 				log.Error("SMTP configuration unavailable")
 			}
-			smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From}
+			smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
 			if smtpErr == nil && smtpConfig.Enabled() {
 				for i := 0; i < 10; i++ {
 					smtpRuntime, smtpErr = db.ResolveSMTPConfig(ctx, smtpFallback)
 					if smtpErr != nil || smtpRuntime.Host == "" || smtpRuntime.From == "" {
 						break
 					}
-					smtpConfig = notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From}
+					smtpConfig = notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
 					job, claimErr := db.ClaimEmailJob(ctx)
 					if errors.Is(claimErr, pgx.ErrNoRows) {
 						break
@@ -98,6 +127,11 @@ func main() {
 					if claimErr != nil {
 						log.Error("email claim failed", "error", claimErr)
 						break
+					}
+					active, checkErr := db.EmailJobActive(ctx, *job)
+					if checkErr != nil || !active {
+						_ = db.RecoverStaleEmailJobs(ctx)
+						continue
 					}
 					sendErr := smtpConfig.Send(*job)
 					if completeErr := db.CompleteEmailJob(ctx, *job, sendErr); completeErr != nil {

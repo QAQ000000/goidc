@@ -28,6 +28,7 @@ export const adminNavigation = [
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super", group: "system" },
   { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/smtp-settings", label: "邮件发送", icon: Mail, permission: "@super", group: "system" },
+  { href: "/admin/sms-settings", label: "短信发送", icon: MessageSquare, permission: "@super", group: "system" },
   { href: "/admin/payment-settings", label: "支付渠道", icon: CreditCard, permission: "@super", group: "system" },
 ];
 

@@ -67,6 +67,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/auth/captcha", s.issueCaptcha)
 	mux.HandleFunc("POST /api/v1/auth/login/mfa", s.loginMFA)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
+	mux.HandleFunc("GET /api/v1/auth/verification/channels", s.verificationChannels)
+	mux.HandleFunc("POST /api/v1/auth/verification/request", s.requestRegistrationVerification)
+	mux.HandleFunc("POST /api/v1/account/verification/request", s.sessionAuth(s.requestAccountVerification, false))
+	mux.HandleFunc("POST /api/v1/account/verification/confirm", s.sessionAuth(s.confirmAccountVerification, false))
 	mux.HandleFunc("POST /api/v1/auth/password-reset/request", s.requestPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", s.confirmPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.auth(s.logout, false))
@@ -84,6 +88,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/smtp-settings", s.sessionAuth(s.smtpSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/smtp-settings", s.sessionAuth(s.updateSMTPSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/sms-settings", s.sessionAuth(s.smsSettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/sms-settings", s.sessionAuth(s.updateSMSSettings, true))
+	mux.HandleFunc("POST /api/v1/admin/sms-settings/test", s.sessionAuth(s.testSMSSettings, true))
+	mux.HandleFunc("POST /api/v1/admin/smtp-settings/test", s.sessionAuth(s.testSMTPSettings, true))
 	mux.HandleFunc("GET /api/v1/catalog/{id}", s.product)
 	mux.HandleFunc("GET /api/v1/categories", s.categories)
 	mux.HandleFunc("GET /api/v1/news", s.news)
@@ -370,7 +378,7 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		isWebhook := r.Method == "POST" && ((strings.HasPrefix(r.URL.Path, "/api/v1/payments/") && strings.HasSuffix(r.URL.Path, "/webhook")) || r.URL.Path == "/api/host/sync" || r.URL.Path == "/api/v1/host/sync")
-		if !isWebhook && r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" && bearerCredential(r) == "" {
+		if !isWebhook && r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" && (bearerCredential(r) == "" || strings.HasPrefix(r.URL.Path, "/api/v1/auth/")) {
 			if r.Header.Get("X-Requested-With") != "zjmfgo" {
 				writeError(w, 403, "csrf_required", "请求校验失败")
 				return

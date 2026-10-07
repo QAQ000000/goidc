@@ -71,7 +71,11 @@ func testServer(t *testing.T) (*store.Store, http.Handler) {
 	if err = db.CheckSchema(ctx); err != nil {
 		t.Fatal(err)
 	}
-	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	if _, err = db.Pool.Exec(ctx, "UPDATE site_settings SET email_verification_required=false"); err != nil {
+		t.Fatal(err)
+	}
+	db.ProvisionEncryptionKey = []byte("01234567890123456789012345678901")
+	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", SMTPHost: "localhost", SMTPPort: 587, SMTPFrom: "test@example.test", ProvisionEncryptionKey: db.ProvisionEncryptionKey, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
 }
 func request(h http.Handler, method, path string, body any, cookie string, key string) *httptest.ResponseRecorder {
 	var payload []byte
@@ -298,29 +302,19 @@ func TestAuthenticationOwnershipAndCSRF(t *testing.T) {
 	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, admin, ""), 401)
 }
 
-func TestPasswordResetUsesOneTimeEmailToken(t *testing.T) {
+func TestPasswordResetUsesOneTimeEmailCode(t *testing.T) {
 	db, h := testServer(t)
 	customerID, cookie := user(t, db, h, "password-reset-customer", "customer")
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "unknown@example.test"}, "", ""), 202)
-	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "password-reset-customer"}, "", ""), 202)
-	var body, status string
-	if err := db.Pool.QueryRow(context.Background(), "SELECT body,status FROM email_outbox WHERE kind='password_reset' ORDER BY id DESC LIMIT 1").Scan(&body, &status); err != nil {
-		t.Fatal(err)
-	}
-	marker := "/reset-password?token="
-	part := strings.Split(body, marker)
-	if len(part) != 2 {
-		t.Fatalf("reset link missing from outbox: %q", body)
-	}
-	token := strings.TrimSpace(strings.Split(part[1], "\n")[0])
-	if len(token) != 64 || status != "pending" {
-		t.Fatalf("unexpected reset outbox token/status token=%d status=%s", len(token), status)
-	}
-	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"token": token, "password": "new-reset-password"}, "", ""), 200)
+	issued := request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "password-reset-customer"}, "", "")
+	expect(t, issued, 202)
+	challenge := data(t, issued)["challenge_id"].(string)
+	code := verificationEmailCode(t, db, challenge)
+	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"challenge_id": challenge, "code": code, "password": "new-reset-password"}, "", ""), 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, cookie, ""), 401)
 	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "password-reset-customer", "password": "new-reset-password"}, "", "")
 	expect(t, login, 200)
-	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"token": token, "password": "another-reset-password"}, "", ""), 409)
+	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"challenge_id": challenge, "code": code, "password": "another-reset-password"}, "", ""), 409)
 	var auditCount int
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM audit_events WHERE actor_id=$1 AND action LIKE 'auth.password_reset_%'", customerID).Scan(&auditCount); err != nil || auditCount != 2 {
 		t.Fatalf("reset audit count=%d err=%v", auditCount, err)
@@ -334,18 +328,19 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	templates := request(h, "GET", "/api/v1/admin/notification-templates", nil, admin, "")
 	expect(t, templates, 200)
 	items := listData(t, templates)
-	if len(items) != 1 {
+	if len(items) != 2 {
 		t.Fatalf("template count=%d", len(items))
 	}
 	templateID := int64(items[0]["id"].(float64))
-	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/notification-templates/%d", templateID), map[string]any{"subject": "自定义重置主题", "body": "请使用：{{reset_link}}", "active": true}, admin, "")
+	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/notification-templates/%d", templateID), map[string]any{"subject": "自定义重置主题", "body": "请使用：{{code}}", "active": true}, admin, "")
 	expect(t, updated, 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "notification-customer"}, "", ""), 202)
 	var body, subject string
-	if err := db.Pool.QueryRow(context.Background(), "SELECT body,subject FROM email_outbox WHERE kind='password_reset' ORDER BY id DESC LIMIT 1").Scan(&body, &subject); err != nil {
+	var sealed []byte
+	if err := db.Pool.QueryRow(context.Background(), "SELECT body,subject,body_encrypted FROM email_outbox WHERE kind='password_reset' ORDER BY id DESC LIMIT 1").Scan(&body, &subject, &sealed); err != nil {
 		t.Fatal(err)
 	}
-	if body == "请使用：{{reset_link}}" || subject != "自定义重置主题" || !strings.Contains(body, "/reset-password?token=") {
+	if body != "" || subject != "自定义重置主题" || len(sealed) == 0 {
 		t.Fatalf("template was not rendered: subject=%q body=%q", subject, body)
 	}
 	job, err := db.ClaimEmailJob(context.Background())

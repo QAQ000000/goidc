@@ -154,7 +154,7 @@ func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {
 	args := []any{}
 	where := "TRUE"
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if status != "pending" && status != "sending" && status != "sent" {
+		if status != "pending" && status != "sending" && status != "sent" && status != "expired" {
 			writeError(w, http.StatusBadRequest, "invalid_email_status", "邮件状态无效")
 			return
 		}
@@ -197,6 +197,15 @@ func (s *Server) retryEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	if status == "sent" {
 		writeError(w, http.StatusConflict, "email_already_sent", "邮件已经发送")
+		return
+	}
+	var active bool
+	if err = tx.QueryRow(r.Context(), `SELECT (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM email_outbox WHERE id=$1`, id).Scan(&active); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !active || status == "expired" {
+		writeError(w, 409, "email_expired", "验证码邮件已过期，请重新申请验证码")
 		return
 	}
 	if _, err = tx.Exec(r.Context(), "UPDATE email_outbox SET status='pending',locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {

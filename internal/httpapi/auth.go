@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -139,12 +137,14 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Username      string `json:"username"`
-		Email         string `json:"email"`
-		Password      string `json:"password"`
-		Name          string `json:"display_name"`
-		CaptchaID     string `json:"captcha_id"`
-		CaptchaAnswer string `json:"captcha_answer"`
+		Username         string `json:"username"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		Name             string `json:"display_name"`
+		VerificationID   string `json:"verification_id"`
+		VerificationCode string `json:"verification_code"`
+		CaptchaID        string `json:"captcha_id"`
+		CaptchaAnswer    string `json:"captcha_answer"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -180,6 +180,28 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
 		return
 	}
+	var requireVerification bool
+	if err = tx.QueryRow(r.Context(), "SELECT email_verification_required FROM site_settings WHERE id=1").Scan(&requireVerification); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	verified := false
+	if requireVerification || input.VerificationID != "" {
+		challenge, valid, verifyErr := s.db.ConsumeVerification(r.Context(), tx, input.VerificationID, input.VerificationCode, "register", nil)
+		if verifyErr != nil {
+			s.fail(w, r, verifyErr)
+			return
+		}
+		if !valid || challenge.Channel != "email" || challenge.Recipient != input.Email {
+			if err = tx.Commit(r.Context()); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
+			return
+		}
+		verified = true
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
 	if err != nil {
 		s.fail(w, r, err)
@@ -193,6 +215,10 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if _, err = tx.Exec(r.Context(), "UPDATE users SET email_verified=$2 WHERE id=$1", id, verified); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = store.Audit(r.Context(), tx, id, "customer.registered", "user", id, map[string]string{}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -202,155 +228,6 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 201, map[string]int64{"id": id})
-}
-
-func (s *Server) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
-	if !s.authLimit(w, r, "password-reset", 5) {
-		return
-	}
-	var input struct {
-		Identifier    string `json:"identifier"`
-		CaptchaID     string `json:"captcha_id"`
-		CaptchaAnswer string `json:"captcha_answer"`
-	}
-	if !decode(w, r, &input) {
-		return
-	}
-	if err := s.consumeCaptcha(r.Context(), r, "forgot-password", input.CaptchaID, input.CaptchaAnswer); err != nil {
-		if !errors.Is(err, errInvalidCaptcha) {
-			s.captchaUnavailable(w, r)
-			return
-		}
-		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
-		return
-	}
-	input.Identifier = strings.ToLower(strings.TrimSpace(input.Identifier))
-	if input.Identifier == "" || len(input.Identifier) > 254 {
-		writeError(w, http.StatusBadRequest, "invalid_password_reset", "账号或邮箱无效")
-		return
-	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var userID int64
-	var email string
-	err = tx.QueryRow(r.Context(), "SELECT id,email FROM users WHERE (lower(username)=lower($1) OR lower(email)=lower($1)) AND status='active'", input.Identifier).Scan(&userID, &email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		// Keep the response identical for unknown accounts to prevent enumeration.
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, http.StatusAccepted, map[string]any{"queued": true})
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	raw := make([]byte, 32)
-	if _, err = rand.Read(raw); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	token := hex.EncodeToString(raw)
-	if _, err = tx.Exec(r.Context(), "UPDATE password_reset_tokens SET consumed_at=now() WHERE user_id=$1 AND consumed_at IS NULL", userID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	requestedIP := r.RemoteAddr
-	if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
-		requestedIP = host
-	}
-	if _, err = tx.Exec(r.Context(), "INSERT INTO password_reset_tokens(user_id,token_hash,expires_at,requested_ip) VALUES($1,$2,now()+interval '30 minutes',$3)", userID, tokenHash(token), requestedIP); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	link := strings.TrimRight(s.cfg.PublicOrigin, "/") + "/reset-password?token=" + url.QueryEscape(token)
-	subject := "重置 ZJMF 密码"
-	templateBody := "您好，\n\n请打开以下链接重置您的 ZJMF 密码（30 分钟内有效）：\n{{reset_link}}\n\n如果不是您本人操作，请忽略此邮件。"
-	var templateActive bool
-	templateErr := tx.QueryRow(r.Context(), "SELECT subject,body,active FROM notification_templates WHERE kind='password_reset'").Scan(&subject, &templateBody, &templateActive)
-	if errors.Is(templateErr, pgx.ErrNoRows) {
-		templateActive = true
-	} else if templateErr != nil {
-		s.fail(w, r, templateErr)
-		return
-	}
-	if templateActive {
-		body := strings.ReplaceAll(templateBody, "{{reset_link}}", link)
-		if _, err = tx.Exec(r.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind) VALUES($1,$2,$3,'password_reset')`, email, subject, body); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
-	if err = store.Audit(r.Context(), tx, userID, "auth.password_reset_requested", "user", userID, map[string]any{"requested_ip": requestedIP}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusAccepted, map[string]any{"queued": true})
-}
-
-func (s *Server) confirmPasswordReset(w http.ResponseWriter, r *http.Request) {
-	var input struct {
-		Token    string `json:"token"`
-		Password string `json:"password"`
-	}
-	if !decode(w, r, &input) {
-		return
-	}
-	input.Token = strings.TrimSpace(input.Token)
-	if len(input.Token) != 64 || len(input.Password) < 8 || len(input.Password) > 72 {
-		writeError(w, http.StatusBadRequest, "invalid_password_reset", "重置令牌或密码无效")
-		return
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var userID int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM password_reset_tokens WHERE token_hash=$1 AND consumed_at IS NULL AND expires_at>now() FOR UPDATE", tokenHash(input.Token)).Scan(&userID); errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusConflict, "invalid_password_reset", "重置令牌无效或已过期")
-		return
-	} else if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE users SET password_hash=$2,password_reset_required=false,admin_version=admin_version+1,updated_at=now() WHERE id=$1", userID, string(hash)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1", userID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE password_reset_tokens SET consumed_at=now() WHERE token_hash=$1", tokenHash(input.Token)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, userID, "auth.password_reset_completed", "user", userID, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"user_id": userID, "reset": true})
 }
 
 func (s *Server) adminSetCustomerPassword(w http.ResponseWriter, r *http.Request) {

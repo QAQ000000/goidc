@@ -10,7 +10,9 @@ import (
 func (s *Server) account(w http.ResponseWriter, r *http.Request) {
 	uid := identityFrom(r).ID
 	var balance int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT balance_cents FROM users WHERE id=$1", uid).Scan(&balance); err != nil {
+	var phone string
+	var phoneVerified, emailVerified bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT balance_cents,phone,phone_verified,email_verified FROM users WHERE id=$1", uid).Scan(&balance, &phone, &phoneVerified, &emailVerified); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -29,7 +31,7 @@ FROM balance_ledger WHERE user_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3`, uid, 
 	if items == nil {
 		items = []map[string]any{}
 	}
-	write(w, 200, map[string]any{"balance_cents": balance, "ledger": items})
+	write(w, 200, map[string]any{"balance_cents": balance, "ledger": items, "phone": phone, "phone_verified": phoneVerified, "email_verified": emailVerified})
 }
 
 func (s *Server) payInvoice(w http.ResponseWriter, r *http.Request) {

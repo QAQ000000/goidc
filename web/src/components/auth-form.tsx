@@ -14,6 +14,24 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
   const { site, error: siteError, refresh } = useSite();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [verificationId, setVerificationId] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationRecipient, setVerificationRecipient] = useState("");
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [resendAt, setResendAt] = useState(0);
+  const [clock, setClock] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  async function requestVerification() {
+    if (verificationBusy || Date.now() < resendAt) return;
+    setVerificationBusy(true); setError(""); setVerificationMessage("");
+    try {
+      const result = await api<{ challenge_id: string; resend_after: number }>("/auth/verification/request", { method: "POST", body: JSON.stringify({ purpose: "register", channel: "email", recipient: email, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
+      setVerificationId(result.challenge_id); setVerificationRecipient(email); setVerificationCode(""); setResendAt(Date.now() + result.resend_after * 1000); setVerificationMessage("验证码已加入发送队列");
+    } catch (e) { setError((e as Error).message); }
+    finally { setVerificationBusy(false); if (site?.auth_captcha_enabled) void refreshCaptcha(true); }
+  }
   const [mfaChallenge, setMfaChallenge] = useState("");
   const [mfaCode, setMfaCode] = useState("");
   const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
@@ -59,6 +77,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
             display_name: form.get("display_name"),
             captcha_id: captcha?.captcha_id,
             captcha_answer: captchaAnswer,
+            ...(site?.email_verification_required ? { verification_id: verificationId, verification_code: verificationCode } : {}),
           }),
         });
         router.push("/login");
@@ -151,8 +170,11 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
                   type="email"
                   required
                   autoComplete="email"
+                  value={email}
+                  onChange={event => { setEmail(event.target.value); setVerificationId(""); setVerificationMessage(""); }}
                 />
               </div>
+              {site?.email_verification_required && <div className="space-y-2"><Label htmlFor="verification_code">邮箱验证码</Label><div className="flex gap-2"><Input id="verification_code" value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required /><Button type="button" variant="outline" disabled={verificationBusy || !email || clock < resendAt || (!!site.auth_captcha_enabled && (!captcha?.captcha_id || !captchaAnswer || captchaBusy))} onClick={() => void requestVerification()}>{verificationBusy ? "发送中" : clock < resendAt ? `${Math.ceil((resendAt - clock) / 1000)} 秒` : "发送验证码"}</Button></div>{verificationMessage && <p role="status" className="text-sm text-emerald-700">{verificationMessage}</p>}</div>}
             </>
           )}
           <div className="space-y-2">
@@ -172,7 +194,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
               {error}
             </p>
           )}
-          <Button className="w-full" disabled={busy || (!!site?.auth_captcha_enabled && !mfaChallenge && (!captcha?.captcha_id || captchaBusy))}>
+          <Button className="w-full" disabled={busy || (register && !!site?.email_verification_required && (!verificationId || email !== verificationRecipient || verificationCode.length !== 6)) || (!!site?.auth_captcha_enabled && !mfaChallenge && (!captcha?.captcha_id || captchaBusy))}>
             {busy ? "提交中" : mfaChallenge ? "验证并登录" : register ? "创建账户" : "登录"}
             <ArrowRight size={16} />
           </Button>

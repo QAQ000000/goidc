@@ -29,10 +29,11 @@ func (s *Server) siteSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		store.SiteProfile
-		ExpectedVersion     int64 `json:"expected_version"`
-		RegistrationEnabled *bool `json:"registration_enabled"`
-		MaintenanceEnabled  *bool `json:"maintenance_enabled"`
-		AuthCaptchaEnabled  *bool `json:"auth_captcha_enabled"`
+		ExpectedVersion           int64 `json:"expected_version"`
+		RegistrationEnabled       *bool `json:"registration_enabled"`
+		MaintenanceEnabled        *bool `json:"maintenance_enabled"`
+		AuthCaptchaEnabled        *bool `json:"auth_captcha_enabled"`
+		EmailVerificationRequired *bool `json:"email_verification_required"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -47,6 +48,16 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.SiteProfile.MaintenanceEnabled = *input.MaintenanceEnabled
+	if input.EmailVerificationRequired == nil {
+		previous, err := s.db.SiteSettings(r.Context())
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		input.SiteProfile.EmailVerificationRequired = previous.EmailVerificationRequired
+	} else {
+		input.SiteProfile.EmailVerificationRequired = *input.EmailVerificationRequired
+	}
 	if input.AuthCaptchaEnabled != nil {
 		input.SiteProfile.AuthCaptchaEnabled = *input.AuthCaptchaEnabled
 	}

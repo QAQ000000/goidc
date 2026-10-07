@@ -1,5 +1,6 @@
 "use client";
 import { AdminCustomerDetailView, ContactsPanel } from "./admin-customer-detail";
+import { AccountVerification } from "./account-verification";
 export { AdminCustomerDetailView } from "./admin-customer-detail";
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { SupplierServiceDelivery } from "./supplier-delivery";
@@ -992,6 +993,9 @@ function InvoiceAction({ row, admin }: { row: Row; admin: boolean }) {
 }
 
 type Account = {
+  phone?: string;
+  phone_verified?: boolean;
+  email_verified?: boolean;
   balance_cents: number;
   ledger: {
     id: number;
@@ -1005,6 +1009,7 @@ type Account = {
 
 export function AccountView() {
   const { data, error, refresh } = useResource<Account>("/account");
+  const me = useResource<User>("/me");
   return (
     <Workspace title="账户余额">
       <PageHeading title="账户余额" description="余额流水与可用金额" />
@@ -1015,6 +1020,7 @@ export function AccountView() {
             <strong className="text-3xl money block mt-2">{money(data.balance_cents)}</strong>
           </section>
           <PasswordForm />
+          {me.error ? <Failure error={me.error} retry={me.refresh} /> : !me.data ? <Loading /> : <AccountVerification email={me.data.email} phone={data.phone} phoneVerified={data.phone_verified} emailVerified={data.email_verified} onVerified={refresh} />}
           <MfaPanel />
           <ApiKeysPanel />
           <ContactsPanel />

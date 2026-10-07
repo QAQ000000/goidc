@@ -14,18 +14,18 @@ import (
 )
 
 type Config struct {
-	HTTPAddr, DatabaseURL, PublicOrigin, PaymentGatewaySecret string
-	PublicOrigins                                             []string
-	EpayAPIURL, EpayPID, EpayKey                              string
-	EpayTypes                                                 []string
-	PaymentMockEnabled                                        bool
-	SecureCookie                                              bool
-	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom            string
-	SMTPPort                                                  int
-	MFAEncryptionKey                                          []byte
-	PurchaseFieldEncryptionKey                                []byte
-	NOKVMProfiles                                             map[string]*provision.NOKVM
-	ProvisionEncryptionKey                                    []byte
+	HTTPAddr, DatabaseURL, PublicOrigin, PaymentGatewaySecret                 string
+	PublicOrigins                                                             []string
+	EpayAPIURL, EpayPID, EpayKey                                              string
+	EpayTypes                                                                 []string
+	PaymentMockEnabled                                                        bool
+	SecureCookie                                                              bool
+	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom, SMTPFromName, SMTPTLSMode string
+	SMTPPort                                                                  int
+	MFAEncryptionKey                                                          []byte
+	PurchaseFieldEncryptionKey                                                []byte
+	NOKVMProfiles                                                             map[string]*provision.NOKVM
+	ProvisionEncryptionKey                                                    []byte
 }
 
 func Load() (Config, error) {
@@ -44,6 +44,18 @@ func Load() (Config, error) {
 	}
 	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: publicOrigin, PublicOrigins: publicOrigins, PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true", SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
 	c.PaymentMockEnabled = mockEnabled
+	c.SMTPFromName = strings.TrimSpace(os.Getenv("SMTP_FROM_NAME"))
+	c.SMTPTLSMode = strings.TrimSpace(os.Getenv("SMTP_TLS_MODE"))
+	if c.SMTPTLSMode == "" {
+		if c.SMTPPort == 465 {
+			c.SMTPTLSMode = "implicit_tls"
+		} else {
+			c.SMTPTLSMode = "starttls"
+		}
+	}
+	if c.SMTPTLSMode != "implicit_tls" && c.SMTPTLSMode != "starttls" && c.SMTPTLSMode != "none" || c.SMTPTLSMode == "none" && (c.SMTPUsername != "" || c.SMTPPassword != "") || strings.ContainsAny(c.SMTPFromName, "\r\n\x00") {
+		return c, fmt.Errorf("SMTP configuration is invalid")
+	}
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("DATABASE_URL is required")
 	}
