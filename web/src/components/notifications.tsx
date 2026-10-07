@@ -1,45 +1,58 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, RotateCcw, Save } from "lucide-react";
-import { api } from "@/lib/api";
+import { ArrowLeft, Pencil, RotateCcw, Save } from "lucide-react";
+import { api, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Failure, Loading, Status } from "@/components/common";
-import { Workspace, PermissionGate, PermissionFields } from "@/components/workspace";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Failure, Loading, Status } from "./common";
+import { Workspace, useAdminPermission } from "./workspace";
 
 type Template = { id: number; kind: string; name: string; subject: string; body: string; active: boolean; updated_at: string };
-type EmailJob = { id: number; recipient: string; subject: string; kind: string; status: string; attempts: number; last_error: string; available_at: string; sent_at: string | null; created_at: string };
+type EmailJob = { id: number; recipient: string; subject: string; kind: string; status: string; attempts: number; last_error: string; sent_at: string | null; created_at: string };
 
 export function NotificationsView() {
+  return <Workspace title="通知管理" admin><NotificationManager /></Workspace>;
+}
+function NotificationManager() {
   const templates = useResource<Template[]>("/admin/notification-templates");
   const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
-  const error = templates.error ?? outbox.error;
+  const manage = useAdminPermission("notifications.manage");
+  const [tab, setTab] = useState("templates");
+  const [query, setQuery] = useState("");
+  const [edit, setEdit] = useState<Template | null>(null);
+  const [editingBusy, setEditingBusy] = useState(false);
+  const [notice, setNotice] = useState("");
   const refresh = () => { templates.refresh(); outbox.refresh(); };
-  return <Workspace title="通知管理" admin><div className="flex items-start justify-between gap-4 mb-8"><div><h1 className="page-title">通知管理</h1><p className="text-muted-foreground mt-2">维护邮件模板并处理投递队列</p></div><Mail className="text-muted-foreground" size={22} /></div>{error ? <Failure error={error} retry={refresh} /> : !templates.data || !outbox.data ? <Loading /> : <div className="space-y-6"><section className="data-surface p-6"><h2 className="font-semibold">邮件模板</h2><p className="text-xs text-muted-foreground mt-1">密码重置模板支持变量 <code>{"{{reset_link}}"}</code>，保存时不会展开或记录令牌。</p><div className="mt-5 space-y-5">{templates.data.map((template) => <TemplateEditor key={template.id} template={template} refresh={templates.refresh} />)}{templates.data.length === 0 && <p className="text-sm text-muted-foreground">暂无模板</p>}</div></section><section className="data-surface p-6"><div className="flex items-center justify-between gap-4"><div><h2 className="font-semibold">邮件队列</h2><p className="text-xs text-muted-foreground mt-1">正文不在列表 API 返回，失败任务可重新排队</p></div><Button variant="outline" size="sm" onClick={outbox.refresh}><RotateCcw size={15} />刷新</Button></div><div className="overflow-auto mt-5"><Table><TableHeader><TableRow><TableHead>收件人</TableHead><TableHead>主题</TableHead><TableHead>类型</TableHead><TableHead>状态</TableHead><TableHead>尝试次数</TableHead><TableHead>错误</TableHead><TableHead /></TableRow></TableHeader><TableBody>{outbox.data.length === 0 ? <TableRow><TableCell colSpan={7} className="h-20 text-center text-muted-foreground">暂无邮件</TableCell></TableRow> : outbox.data.map((job) => <TableRow key={job.id}><TableCell>{job.recipient}</TableCell><TableCell>{job.subject}</TableCell><TableCell>{job.kind}</TableCell><TableCell><Status value={job.status} /></TableCell><TableCell>{job.attempts}</TableCell><TableCell className="max-w-xs truncate text-xs text-destructive">{job.last_error || "-"}</TableCell><TableCell>{job.status !== "sent" && <PermissionGate permission="notifications.manage"><RetryEmail id={job.id} refresh={outbox.refresh} /></PermissionGate>}</TableCell></TableRow>)}</TableBody></Table></div></section></div>}</Workspace>;
+  const error = tab === "templates" ? templates.error : outbox.error;
+  const list = templates.data?.filter(item => `${item.name} ${item.subject} ${item.kind}`.toLowerCase().includes(query.toLowerCase())) ?? [];
+  if (edit) return <><Button variant="ghost" className="mb-4" disabled={editingBusy} onClick={() => setEdit(null)}><ArrowLeft />返回邮件模板</Button><h1 className="page-title mb-5 break-all">{edit.name}</h1><TemplateEditor key={edit.id} template={edit} manage={manage} onBusy={setEditingBusy} saved={() => { setEdit(null); setNotice("邮件模板已保存"); templates.refresh(); }} /></>;
+  return <><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="page-title">通知管理</h1><Button variant="outline" size="icon" title="刷新通知" aria-label="刷新通知" onClick={refresh}><RotateCcw /></Button></div>
+    <nav aria-label="通知分区" className="mb-5 flex overflow-x-auto border-b">{[["templates", "邮件模板"], ["outbox", "投递队列"]].map(([value, label]) => <button type="button" key={value} aria-current={tab === value ? "page" : undefined} className={`shrink-0 border-b-2 px-5 py-3 text-sm ${tab === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setTab(value)}>{label}</button>)}</nav>
+    {notice && <p role="status" className="mb-4 text-sm text-emerald-700">{notice}</p>}
+    {tab === "templates" && <Input className="mb-4 max-w-md" aria-label="搜索邮件模板" placeholder="模板名称、主题或类型" value={query} onChange={event => setQuery(event.target.value)} />}
+    {error ? <Failure error={error} retry={refresh} /> : tab === "templates" ? !templates.data ? <Loading /> : <div className="overflow-x-auto border-y"><Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>模板名称</TableHead><TableHead>类型</TableHead><TableHead>邮件主题</TableHead><TableHead>状态</TableHead><TableHead>更新时间</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{list.map(item => <TableRow key={item.id}><TableCell>{item.id}</TableCell><TableCell className="max-w-64 whitespace-normal break-all">{item.name}</TableCell><TableCell>{item.kind}</TableCell><TableCell className="max-w-80 whitespace-normal break-all">{item.subject}</TableCell><TableCell><Status value={item.active ? "active" : "disabled"} /></TableCell><TableCell>{date(item.updated_at)}</TableCell><TableCell className="text-right"><Button size="sm" variant="ghost" aria-label={`${manage ? "编辑" : "查看"}模板 ${item.name}`} onClick={() => { setNotice(""); setEdit(item); }}><Pencil />{manage ? "编辑" : "查看"}</Button></TableCell></TableRow>)}{!list.length && <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">暂无符合条件的模板</TableCell></TableRow>}</TableBody></Table></div> : !outbox.data ? <Loading /> : <div className="overflow-x-auto border-y"><Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>收件人 / 主题</TableHead><TableHead>类型</TableHead><TableHead>状态</TableHead><TableHead>尝试次数</TableHead><TableHead>创建 / 发送时间</TableHead><TableHead>错误</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{outbox.data.map(job => <TableRow key={job.id}><TableCell>{job.id}</TableCell><TableCell className="max-w-80 whitespace-normal break-all"><p>{job.recipient}</p><p className="mt-1 text-xs text-muted-foreground">{job.subject}</p></TableCell><TableCell>{job.kind}</TableCell><TableCell><Status value={job.status} /></TableCell><TableCell>{job.attempts}</TableCell><TableCell>{date(job.created_at)}<p className="mt-1 text-xs text-muted-foreground">{job.sent_at ? date(job.sent_at) : "尚未发送"}</p></TableCell><TableCell className="max-w-64 whitespace-normal break-all text-xs text-destructive">{job.last_error || "-"}</TableCell><TableCell className="text-right">{manage && job.status !== "sent" && <RetryEmail id={job.id} refresh={outbox.refresh} />}</TableCell></TableRow>)}{!outbox.data.length && <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">暂无邮件</TableCell></TableRow>}</TableBody></Table></div>}
+  </>;
 }
-
-function TemplateEditor({ template, refresh }: { template: Template; refresh: () => void }) {
-  const [name, setName] = useState(template.name);
-  const [subject, setSubject] = useState(template.subject);
-  const [body, setBody] = useState(template.body);
-  const [active, setActive] = useState(template.active);
+function TemplateEditor({ template, manage, saved, onBusy }: { template: Template; manage: boolean; saved: () => void; onBusy: (value: boolean) => void }) {
+  const [form, setForm] = useState(template);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setMessage("");
-    try { await api("/admin/notification-templates/" + template.id, { method: "PATCH", body: JSON.stringify({ name, subject, body, active }) }); setMessage("已保存"); refresh(); }
-    catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
+  const [error, setError] = useState("");
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); if (!manage || busy) return;
+    setBusy(true); onBusy(true); setError("");
+    try { await api("/admin/notification-templates/" + template.id, { method: "PATCH", body: JSON.stringify({ name: form.name, subject: form.subject, body: form.body, active: form.active }) }); saved(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); onBusy(false); }
   }
-  return <PermissionFields permission="notifications.manage"><form className="border-t pt-5 first:border-t-0 first:pt-0 space-y-3" onSubmit={(event) => void save(event)}><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium">{template.name}</p><p className="text-xs text-muted-foreground mt-1">{template.kind}</p></div><label className="flex items-center gap-2 text-sm"><Checkbox checked={active} onCheckedChange={(value) => setActive(value === true)} />启用</label></div><Input value={name} onChange={(event) => setName(event.target.value)} aria-label="模板名称" placeholder="模板名称" maxLength={120} /><Input value={subject} onChange={(event) => setSubject(event.target.value)} aria-label="邮件主题" placeholder="邮件主题" maxLength={240} /><Textarea value={body} onChange={(event) => setBody(event.target.value)} aria-label="邮件正文" rows={7} maxLength={100000} /><div className="flex items-center gap-3"><Button disabled={busy || !name.trim() || !subject.trim() || !body.trim()}><Save size={15} />保存模板</Button>{message && <span className="text-sm text-muted-foreground" role="status">{message}</span>}</div></form></PermissionFields>;
+  return <form onSubmit={event => void save(event)} className="max-w-4xl space-y-5"><fieldset disabled={busy || !manage} className="space-y-5"><section className="space-y-4 border-b pb-5"><h2 className="text-sm font-semibold">模板资料</h2><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">模板名称<Input required aria-label="模板名称" maxLength={120} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label className="grid gap-2 text-sm">类型<Input readOnly value={template.kind} /></label></div><label className="grid gap-2 text-sm">邮件主题<Input required aria-label="邮件主题" maxLength={240} value={form.subject} onChange={event => setForm({ ...form, subject: event.target.value })} /></label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.active} onCheckedChange={value => setForm({ ...form, active: value === true })} />启用模板</label></section><section className="space-y-4"><h2 className="text-sm font-semibold">邮件正文</h2><Textarea required aria-label="邮件正文" rows={14} maxLength={100000} value={form.body} onChange={event => setForm({ ...form, body: event.target.value })} /></section></fieldset>{error && <p role="alert" className="text-sm text-destructive break-all">{error}</p>}{manage && <div className="flex flex-wrap gap-3 border-t pt-4"><Button disabled={busy}><Save />{busy ? "保存中" : "保存模板"}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => { setForm(template); setError(""); }}>取消更改</Button></div>}</form>;
 }
-
 function RetryEmail({ id, refresh }: { id: number; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
-  async function retry() { setBusy(true); try { await api("/admin/email-outbox/" + id + "/retry", { method: "POST", body: "{}" }); refresh(); } finally { setBusy(false); } }
-  return <Button size="icon-sm" variant="ghost" title="重新排队" aria-label="重新排队" disabled={busy} onClick={() => void retry()}><RotateCcw size={15} /></Button>;
+  const [error, setError] = useState("");
+  async function retry() { if (busy) return; setBusy(true); setError(""); try { await api("/admin/email-outbox/" + id + "/retry", { method: "POST", body: "{}" }); refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
+  return <div className="space-y-2"><Button size="icon-sm" variant="ghost" title="重新排队" aria-label={`重新排队邮件 ${id}`} disabled={busy} onClick={() => void retry()}><RotateCcw size={15} /></Button>{error && <p role="alert" className="max-w-56 whitespace-normal break-all text-xs text-destructive">{error}</p>}</div>;
 }
