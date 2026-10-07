@@ -5,5 +5,5 @@ import { ChannelInstancesView } from "@/components/channel-instances";
 export default async function Page() {
   const user = await requireUser(true);
   if (user.role !== "super_admin") redirect("/console/account");
-  return <ChannelInstancesView />;
+  return <ChannelInstancesView title="接口设置" initialCategory="payment" />;
 }
