@@ -712,7 +712,7 @@ export function OrderDetailView({ id }: { id: number }) {
 }
 
 export function ServicesView({ admin = false, groupId }: { admin?: boolean; groupId?: number }) {
-  return <Workspace title={admin ? "服务主机" : "我的服务"} admin={admin}><ServiceList admin={admin} groupId={groupId}/></Workspace>;
+  return <Workspace title={admin ? "产品服务" : "我的服务"} admin={admin}><ServiceList admin={admin} groupId={groupId}/></Workspace>;
 }
 function ServiceList({admin,groupId}:{admin:boolean;groupId?:number}){
   const [query,setQuery]=useState("");const [draft,setDraft]=useState("");const [state,setState]=useState("");const [offset,setOffset]=useState(0);
@@ -725,7 +725,8 @@ function ServiceList({admin,groupId}:{admin:boolean;groupId?:number}){
   const group=groups.data?.find(g=>g.id===groupId);
   const missingGroup=groupId!==undefined&&groupId!==0&&!!groups.data&&!group;
   return <>
-    <PageHeading title={admin?"服务主机":groupId===undefined?"我的服务":groupId===0?"未分组服务":group?.name??"服务分组"} description={admin?"服务生命周期与开通队列":"查看并管理已购买的服务"}>{!admin&&<ServiceNavigationSettings/>}</PageHeading>
+    <PageHeading title={admin?"产品服务":groupId===undefined?"我的服务":groupId===0?"未分组服务":group?.name??"服务分组"} description={admin?"业务列表":"查看并管理已购买的服务"}>{!admin&&<ServiceNavigationSettings/>}</PageHeading>
+    {admin&&<nav aria-label="业务状态" className="flex overflow-x-auto border-b mb-5">{[{value:"",label:"全部"},{value:"active",label:"已激活"},{value:"queued",label:"待开通"},{value:"suspended",label:"已暂停"},{value:"terminated",label:"已终止"},{value:"failed",label:"失败"}].map(tab=><button key={tab.value} type="button" aria-current={state===tab.value?"page":undefined} className={`shrink-0 border-b-2 px-5 py-3 text-sm whitespace-nowrap ${state===tab.value?"border-primary text-primary font-medium":"border-transparent text-muted-foreground hover:text-primary"}`} onClick={()=>{setState(tab.value);setOffset(0);}}>{tab.label}</button>)}</nav>}
     {!admin&&<div className="flex flex-wrap items-center gap-3 mb-5"><label className="text-sm flex gap-2 items-center min-w-0">查看分组<select aria-label="查看服务分组" className={`${catalogSelectStyle} sm:max-w-xs`} value={groupId??""} onChange={e=>{window.location.assign(e.target.value?`/console/services/group/${e.target.value}`:"/console/services");}}><option value="">全部服务</option><option value="0">未分组服务</option>{groups.data?.map(g=><option key={g.id} value={g.id}>{g.name}{!g.visible&&"（导航隐藏）"}</option>)}{missingGroup&&<option value={groupId}>已删除的分组</option>}</select></label>{groupId!==undefined&&<Button variant="link" asChild><Link href="/console/services">查看全部服务</Link></Button>}</div>}
     {missingGroup&&<p role="status" className="text-sm text-muted-foreground mb-5">该服务分组已删除，请从全部服务或其他分组继续查看。</p>}
     {!admin&&groups.error&&<Failure error={groups.error} retry={groups.refresh}/>}
