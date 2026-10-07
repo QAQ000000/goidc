@@ -19,7 +19,7 @@ var serviceActivityAuditActions = []string{
 
 var serviceActivityJobActions = []string{
 	"create", "suspend", "resume", "terminate", "sync", "upgrade", "reset_password", "reinstall",
-	"power_on", "power_off", "reboot", "force_off", "force_reboot",
+	"power_on", "power_off", "reboot", "force_off", "force_reboot", "rescue_system",
 	"snapshot_create", "snapshot_delete", "snapshot_restore", "backup_create", "backup_delete", "backup_restore",
 	"nat_acl_create", "nat_acl_delete", "nat_web_create", "nat_web_delete", "cdrom_mount", "cdrom_unmount",
 }

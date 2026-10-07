@@ -104,13 +104,34 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 		return tx.Commit(ctx)
 	}
 	caps := adapter.Capabilities()
-	supported := (claimed.Action == "create" && caps.Create) || (claimed.Action == "sync" && caps.Sync) || (claimed.Action == "suspend" && caps.Suspend) || (claimed.Action == "resume" && caps.Resume)
+	supported := (claimed.Action == "create" && caps.Create) || (claimed.Action == "sync" && caps.Sync) ||
+		(claimed.Action == "suspend" && caps.Suspend) || (claimed.Action == "resume" && caps.Resume) ||
+		(provision.IsPowerAction(claimed.Action) && caps.Power) ||
+		(claimed.Action == "reset_password" && caps.ResetPassword) ||
+		(claimed.Action == "rescue_system" && caps.Rescue)
 	if !supported {
 		return conflict("unsupported_supplier_action", "该适配器不支持该动作")
 	}
 	upstreamID, _ := strconv.ParseInt(upstream, 10, 64)
 	if claimed.Action != "create" && upstreamID < 1 {
 		return conflict("supplier_resource_missing", "缺少供应商资源标识")
+	}
+	actionRequest := supplier.ActionRequest{Action: claimed.Action, UpstreamID: upstreamID}
+	if claimed.Action == "reset_password" || claimed.Action == "rescue_system" {
+		credentials, credentialsErr := s.pendingJobCredentials(ctx, tx, claimed)
+		if credentialsErr != nil || !provision.ValidSystemPassword(credentials.Password) {
+			return conflict("credentials_unavailable", "供应商动作凭据不可用")
+		}
+		actionRequest.Password = credentials.Password
+		if claimed.Action == "rescue_system" {
+			var payload struct {
+				System int `json:"system"`
+			}
+			if err = tx.QueryRow(ctx, "SELECT request_payload FROM provision_jobs WHERE id=$1", claimed.ID).Scan(&raw); err != nil || json.Unmarshal(raw, &payload) != nil || (payload.System != 1 && payload.System != 2) {
+				return conflict("invalid_rescue_system", "救援系统参数无效")
+			}
+			actionRequest.System = payload.System
+		}
 	}
 	var fields map[int64]string
 	if err = supplierUnseal(s.ProvisionEncryptionKey, "binding-fields", b.ProductID, b.sealed, &fields); err != nil {
@@ -140,7 +161,7 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	} else if claimed.Action == "sync" {
 		remote, callErr = adapter.Sync(callCtx, upstreamID)
 	} else {
-		remote, callErr = adapter.Execute(callCtx, claimed.Action, upstreamID)
+		remote, callErr = adapter.Execute(callCtx, actionRequest)
 	}
 	cancel()
 	finishCtx, finishCancel := context.WithTimeout(context.Background(), 15*time.Second)

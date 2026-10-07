@@ -319,7 +319,7 @@ next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN
 func (s *Store) pendingJobCredentials(ctx context.Context, tx pgx.Tx, job ProvisionJob) (provision.Credentials, error) {
 	var sealed []byte
 	var key string
-	if err := tx.QueryRow(ctx, "SELECT idempotency_key,request_credentials_encrypted FROM provision_jobs WHERE id=$1 AND service_id=$2 AND action='reset_password'", job.ID, job.ServiceID).Scan(&key, &sealed); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT idempotency_key,request_credentials_encrypted FROM provision_jobs WHERE id=$1 AND service_id=$2 AND action IN ('reset_password','rescue_system')", job.ID, job.ServiceID).Scan(&key, &sealed); err != nil {
 		return provision.Credentials{}, err
 	}
 	return provision.UnsealJobCredentials(s.ProvisionEncryptionKey, job.ServiceID, key, sealed)

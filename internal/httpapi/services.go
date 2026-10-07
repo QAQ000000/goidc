@@ -151,7 +151,9 @@ func (s *Server) serviceAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Action string `json:"action"`
+		Action       string `json:"action"`
+		System       int    `json:"system"`
+		TempPassword string `json:"temp_password"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -161,7 +163,13 @@ func (s *Server) serviceAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_service_action", "服务动作不能为空")
 		return
 	}
-	result, err := s.db.EnqueueServiceAction(r.Context(), identityFrom(r).ID, id, input.Action, r.Header.Get("Idempotency-Key"), adminRoute(r))
+	var result store.ServiceActionResult
+	var err error
+	if input.Action == "rescue_system" {
+		result, err = s.db.RescueService(r.Context(), identityFrom(r).ID, id, input.System, input.TempPassword, r.Header.Get("Idempotency-Key"), adminRoute(r))
+	} else {
+		result, err = s.db.EnqueueServiceAction(r.Context(), identityFrom(r).ID, id, input.Action, r.Header.Get("Idempotency-Key"), adminRoute(r))
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return

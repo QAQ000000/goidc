@@ -126,6 +126,84 @@ func TestCatalogProductCreateSync(t *testing.T) {
 		t.Fatal("unsupported capability")
 	}
 }
+
+func TestSupplierActionsSendExpectedProviderPayload(t *testing.T) {
+	password := "new-system-password-123!"
+	for _, tc := range []struct {
+		action string
+		fields map[string]string
+	}{
+		{"force_reboot", map[string]string{"func": "hard_reboot"}},
+		{"force_off", map[string]string{"func": "hard_off"}},
+		{"reset_password", map[string]string{"func": "crack_pass", "password": password, "other_user": "0", "user": "", "action": ""}},
+		{"rescue_system", map[string]string{"func": "rescue_system", "system": "2", "temp_pass": password}},
+	} {
+		t.Run(tc.action, func(t *testing.T) {
+			var seen bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/zjmf_api_login":
+					fmt.Fprint(w, `{"status":200,"jwt":"jwt"}`)
+				case "/provision/default":
+					if r.Method != http.MethodPost || r.PostFormValue("id") != "42" || r.PostFormValue("is_api") != "1" {
+						t.Errorf("unexpected action request: method=%s form=%v", r.Method, r.Form)
+					}
+					for key, want := range tc.fields {
+						if got := r.PostFormValue(key); got != want {
+							t.Errorf("%s=%q, want %q", key, got, want)
+						}
+					}
+					if _, expected := tc.fields["password"]; !expected && r.PostFormValue("password") != "" {
+						t.Error("unexpected password field")
+					}
+					if _, expected := tc.fields["temp_pass"]; !expected && r.PostFormValue("temp_pass") != "" {
+						t.Error("unexpected temporary password field")
+					}
+					seen = true
+					fmt.Fprint(w, `{"status":200}`)
+				case "/host/header":
+					fmt.Fprint(w, `{"status":200,"data":{"host_data":{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","nextduedate":1790000000,"password":"new-system-password-123!"}}}`)
+				default:
+					t.Errorf("unexpected path %s", r.URL.Path)
+				}
+			}))
+			defer srv.Close()
+			a, err := New(Account{Provider: ProviderZJMF, BaseURL: srv.URL, Username: "user", Password: "secret"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := a.Execute(t.Context(), ActionRequest{Action: tc.action, UpstreamID: 42, Password: password, System: 2})
+			if err != nil || !seen || result.UpstreamID != 42 {
+				t.Fatalf("action result=%+v seen=%v err=%v", result, seen, err)
+			}
+		})
+	}
+}
+
+func TestSupplierActionRejectionIsDefinitive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zjmf_api_login" {
+			fmt.Fprint(w, `{"status":200,"jwt":"jwt"}`)
+			return
+		}
+		if r.URL.Path == "/provision/default" {
+			fmt.Fprint(w, `{"status":403,"message":"unsupported"}`)
+			return
+		}
+		t.Errorf("action rejection should stop before sync: %s", r.URL.Path)
+	}))
+	defer srv.Close()
+	a, err := New(Account{Provider: ProviderZJMF, BaseURL: srv.URL, Username: "user", Password: "secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = a.Execute(t.Context(), ActionRequest{Action: "force_off", UpstreamID: 42})
+	var failure *Error
+	if !errors.As(err, &failure) || failure.Code != "upstream_rejected" || failure.Unknown {
+		t.Fatalf("expected definitive rejection, got %v", err)
+	}
+}
+
 func TestInvoiceMismatchBlocksCredit(t *testing.T) {
 	ctx := context.Background()
 	a, _ := fixture(t, "17.00", "")

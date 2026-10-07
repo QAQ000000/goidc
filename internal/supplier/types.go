@@ -62,14 +62,17 @@ type Product struct {
 }
 
 type Capabilities struct {
-	Catalog   bool `json:"catalog"`
-	Product   bool `json:"product"`
-	Create    bool `json:"create"`
-	Sync      bool `json:"sync"`
-	Suspend   bool `json:"suspend"`
-	Resume    bool `json:"resume"`
-	Terminate bool `json:"terminate"`
-	Renew     bool `json:"renew"`
+	Catalog       bool `json:"catalog"`
+	Product       bool `json:"product"`
+	Create        bool `json:"create"`
+	Sync          bool `json:"sync"`
+	Power         bool `json:"power"`
+	ResetPassword bool `json:"reset_password"`
+	Rescue        bool `json:"rescue"`
+	Suspend       bool `json:"suspend"`
+	Resume        bool `json:"resume"`
+	Terminate     bool `json:"terminate"`
+	Renew         bool `json:"renew"`
 }
 type Provider struct {
 	ID           string       `json:"id"`
@@ -119,6 +122,15 @@ type Service struct {
 	SuspendReason string `json:"suspend_reason,omitempty"`
 }
 
+// ActionRequest contains the provider action and the one-time secret needed
+// by password reset or rescue mode. Password is never serialized or logged.
+type ActionRequest struct {
+	Action     string
+	UpstreamID int64
+	Password   string
+	System     int
+}
+
 type Error struct {
 	Code       string `json:"code"`
 	Unknown    bool   `json:"unknown"`
@@ -134,7 +146,7 @@ type Adapter interface {
 	Product(context.Context, int64) (Product, error)
 	Create(context.Context, CreateRequest) (CreateResult, error)
 	Sync(context.Context, int64) (Service, error)
-	Execute(context.Context, string, int64) (Service, error)
+	Execute(context.Context, ActionRequest) (Service, error)
 }
 
 func ValidateSelection(product Product, cycle string, options, fields map[int64]string) (int64, error) {

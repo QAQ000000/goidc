@@ -10,7 +10,7 @@ type registration struct {
 // Register additional protocols here; business code consumes normalized DTOs.
 var providers = map[string]registration{
 	ProviderZJMF: {
-		provider: Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true}},
+		provider: Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true}},
 		factory:  newZJMF,
 	},
 }

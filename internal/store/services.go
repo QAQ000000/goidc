@@ -49,6 +49,10 @@ func (s *Store) ResetServicePassword(ctx context.Context, actorID, serviceID int
 	return s.enqueueServiceAction(ctx, actorID, serviceID, "reset_password", key, admin, password, 0, nil, nil)
 }
 
+func (s *Store) RescueService(ctx context.Context, actorID, serviceID int64, system int, tempPassword, key string, admin bool) (ServiceActionResult, error) {
+	return s.enqueueServiceActionFor(ctx, actorID, serviceID, "rescue_system", key, admin, tempPassword, 0, nil, nil, system)
+}
+
 func (s *Store) ReinstallService(ctx context.Context, actorID, serviceID, templateID int64, acknowledged bool, key string, admin bool) (ServiceActionResult, error) {
 	if !acknowledged || templateID < 1 || templateID > 2147483647 {
 		return ServiceActionResult{}, conflict("invalid_reinstall_request", "请选择镜像并确认数据清除风险")
@@ -57,12 +61,16 @@ func (s *Store) ReinstallService(ctx context.Context, actorID, serviceID, templa
 }
 
 func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest, cdrom *provision.CDROMRequest) (ServiceActionResult, error) {
+	return s.enqueueServiceActionFor(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom, 0)
+}
+
+func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest, cdrom *provision.CDROMRequest, system int) (ServiceActionResult, error) {
 	var out ServiceActionResult
 	nat, _ := ctx.Value(natRequestKey{}).(*provision.NATRequest)
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
-	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {
+	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && action != "rescue_system" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {
 		return out, conflict("unsupported_service_action", "不支持该服务动作")
 	}
 	if provision.IsNATAction(action) && (nat == nil || action != "nat_"+nat.Kind+"_"+nat.Operation || !provision.ValidNATRequest(*nat)) {
@@ -95,7 +103,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if mode == "supplier" && action != "create" && action != "sync" {
+	if mode == "supplier" && action != "create" && action != "sync" && action != "reset_password" && action != "rescue_system" && !provision.IsPowerAction(action) {
 		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
 	}
 	if storage != nil || nat != nil || cdrom != nil {
@@ -130,7 +138,29 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("credentials_unavailable", "交付加密密钥未配置")
 		}
 		mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
-		requestJSON, _ := json.Marshal([]any{"nokvm-password", serviceID, key, password})
+		domain := "nokvm-password"
+		if mode == "supplier" {
+			domain = "supplier-password"
+		}
+		requestJSON, _ := json.Marshal([]any{domain, serviceID, key, password})
+		mac.Write(requestJSON)
+		fingerprint = hex.EncodeToString(mac.Sum(nil))
+	}
+	if action == "rescue_system" {
+		if mode != "supplier" {
+			return out, conflict("unsupported_rescue_mode", "该服务不支持救援系统")
+		}
+		if system != 1 && system != 2 {
+			return out, conflict("invalid_rescue_system", "救援系统类型无效")
+		}
+		if !provision.ValidSystemPassword(password) {
+			return out, conflict("invalid_rescue_password", "临时密码须为12至128位非空格可见ASCII字符")
+		}
+		if len(s.ProvisionEncryptionKey) != 32 {
+			return out, conflict("credentials_unavailable", "交付加密密钥未配置")
+		}
+		mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
+		requestJSON, _ := json.Marshal([]any{"supplier-rescue", serviceID, key, system, password})
 		mac.Write(requestJSON)
 		fingerprint = hex.EncodeToString(mac.Sum(nil))
 	}
@@ -422,9 +452,12 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 			return out, conflict("reinstall_cooldown", "系统重装频繁，请5分钟后重试")
 		}
 	}
-	if action == "reset_password" {
-		if mode != "nokvm" {
+	if action == "reset_password" || action == "rescue_system" {
+		if action == "reset_password" && mode != "nokvm" && mode != "supplier" {
 			return out, conflict("unsupported_password_mode", "该服务不支持系统密码重置")
+		}
+		if action == "rescue_system" && mode != "supplier" {
+			return out, conflict("unsupported_rescue_mode", "该服务不支持救援系统")
 		}
 		if power == "processing" || power == "suspended" || power == "network_limited" {
 			return out, conflict("power_processing", "资源状态不允许重置密码，请先刷新状态")
@@ -443,9 +476,12 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 		if err != nil {
 			return out, err
 		}
+		if action == "rescue_system" {
+			requestPayload, _ = json.Marshal(map[string]int{"system": system})
+		}
 	}
 	if provision.IsPowerAction(action) {
-		if mode != "nokvm" {
+		if mode != "nokvm" && mode != "supplier" {
 			return out, conflict("unsupported_power_mode", "该服务不支持电源控制")
 		}
 		if power == "processing" {
@@ -514,7 +550,7 @@ func allowedServiceAction(status, action string) bool {
 		return status == "active"
 	case "power_on", "power_off", "reboot", "force_off", "force_reboot":
 		return status == "active"
-	case "reset_password", "reinstall":
+	case "reset_password", "reinstall", "rescue_system":
 		return status == "active"
 	default:
 		return false

@@ -39,7 +39,7 @@ func newZJMF(account Account) (Adapter, error) {
 	return &zjmf{account: account, base: u, client: &http.Client{Transport: tr, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (z *zjmf) Capabilities() Capabilities {
-	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true}
+	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true}
 }
 func (z *zjmf) endpoint(path string) string {
 	u := *z.base
@@ -97,7 +97,7 @@ func (z *zjmf) call(ctx context.Context, token, method, path string, form url.Va
 		if write && out.Status == 400 && path == "cart/clear" && (number(out.HostID) > 0 || number(out.InvoiceID) > 0) {
 			return out, nil
 		}
-		return out, &Error{Code: "upstream_rejected", Unknown: write}
+		return out, &Error{Code: "upstream_rejected"}
 	}
 	return out, nil
 }
@@ -737,11 +737,72 @@ func rawIPs(raw json.RawMessage) string {
 	}
 	return ""
 }
-func (z *zjmf) Execute(ctx context.Context, action string, id int64) (Service, error) {
-	if action == "sync" {
-		return z.Sync(ctx, id)
+func (z *zjmf) Execute(ctx context.Context, request ActionRequest) (Service, error) {
+	if request.UpstreamID <= 0 {
+		return Service{}, &Error{Code: "invalid_service"}
 	}
-	return Service{}, &Error{Code: "unsupported_action"}
+	if request.Action == "sync" {
+		return z.Sync(ctx, request.UpstreamID)
+	}
+	funcName := map[string]string{
+		"power_on": "on", "power_off": "off", "reboot": "reboot",
+		"force_off": "hard_off", "force_reboot": "hard_reboot",
+		"reset_password": "crack_pass", "rescue_system": "rescue_system",
+	}[request.Action]
+	if funcName == "" {
+		return Service{}, &Error{Code: "unsupported_action"}
+	}
+	form := url.Values{
+		"id":     {strconv.FormatInt(request.UpstreamID, 10)},
+		"func":   {funcName},
+		"is_api": {"1"},
+	}
+	if request.Action == "reset_password" {
+		if !ValidActionPassword(request.Password) {
+			return Service{}, &Error{Code: "invalid_system_password"}
+		}
+		form.Set("password", request.Password)
+		form.Set("other_user", "0")
+		form.Set("user", "")
+		form.Set("action", "")
+	}
+	if request.Action == "rescue_system" {
+		if request.System != 1 && request.System != 2 {
+			return Service{}, &Error{Code: "invalid_rescue_system"}
+		}
+		if !ValidActionPassword(request.Password) {
+			return Service{}, &Error{Code: "invalid_rescue_password"}
+		}
+		form.Set("system", strconv.Itoa(request.System))
+		form.Set("temp_pass", request.Password)
+	}
+	token, err := z.login(ctx)
+	if err != nil {
+		return Service{}, err
+	}
+	if _, err = z.post(ctx, token, "provision/default", form); err != nil {
+		return Service{}, err
+	}
+	remote, err := z.Sync(ctx, request.UpstreamID)
+	if err != nil {
+		return Service{}, &Error{Code: "action_sync_failed", Unknown: true, UpstreamID: request.UpstreamID}
+	}
+	if request.Action == "reset_password" && remote.Password != request.Password {
+		return remote, &Error{Code: "password_confirmation_pending", Unknown: true, UpstreamID: request.UpstreamID}
+	}
+	return remote, nil
+}
+
+func ValidActionPassword(password string) bool {
+	if len(password) < 12 || len(password) > 128 {
+		return false
+	}
+	for _, ch := range []byte(password) {
+		if ch < 0x21 || ch > 0x7e {
+			return false
+		}
+	}
+	return true
 }
 
 var _ Adapter = (*zjmf)(nil)
