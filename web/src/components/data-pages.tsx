@@ -270,7 +270,7 @@ function CustomerActions({ row, refresh, returnQuery }: { row: Row; refresh: () 
   const detailHref = `/admin/customers/${Number(row.id)}${returnQuery}`;
   return (
     <div className="flex items-center gap-2">
-      <Button size="sm" variant="outline" asChild><Link href={detailHref}><ContactRound size={14} />联系人</Link></Button>
+      <Button size="sm" variant="outline" asChild><Link href={`${detailHref}${detailHref.includes("?") ? "&" : "?"}tab=contacts`}><ContactRound size={14} />联系人</Link></Button>
       <PermissionGate permission="customer_files.view"><Button size="sm" variant="outline" asChild><Link href={`/admin/customers/${Number(row.id)}/files`}>客户文件</Link></Button></PermissionGate>
       <PermissionGate permission="@super"><CustomerSalesAction row={row} refresh={refresh} /></PermissionGate>
       <PermissionGate permission="customers.manage"><CustomerActionDialog row={row} title="编辑客户" icon={Pencil}>{onBusyChange => <CustomerProfileAction row={row} refresh={refresh} onBusyChange={onBusyChange} />}</CustomerActionDialog><CustomerActionDialog row={row} title="重置密码" icon={KeyRound}>{onBusyChange => <CustomerPasswordAction row={row} onBusyChange={onBusyChange} />}</CustomerActionDialog></PermissionGate>

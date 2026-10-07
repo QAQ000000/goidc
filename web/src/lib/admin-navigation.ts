@@ -42,13 +42,13 @@ export const adminNavigationGroups = [
 ];
 
 export const adminDomains = [
-  { id: "overview", label: "工作台", groups: ["overview"] },
-  { id: "customers", label: "客户", groups: ["customers"] },
-  { id: "business", label: "业务", groups: ["orders", "products"] },
-  { id: "finance", label: "财务", groups: ["finance", "reports"] },
-  { id: "support", label: "工单", groups: ["support"] },
-  { id: "content", label: "功能", groups: ["content"] },
-  { id: "system", label: "设置", groups: ["system"] },
+  { id: "overview", label: "工作台", href: "/admin", groups: ["overview"] },
+  { id: "customers", label: "客户", href: "/admin/customers", groups: ["customers"] },
+  { id: "business", label: "业务", href: "/admin/orders", groups: ["orders", "products"] },
+  { id: "finance", label: "财务", href: "/admin/invoices", groups: ["finance", "reports"] },
+  { id: "support", label: "工单", href: "/admin/tickets", groups: ["support"] },
+  { id: "content", label: "功能", href: "/admin/content", groups: ["content"] },
+  { id: "system", label: "设置", href: "/admin/settings", groups: ["system"] },
 ];
 
 export function adminDomain(path: string) {

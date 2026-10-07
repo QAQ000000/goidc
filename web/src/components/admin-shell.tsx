@@ -75,7 +75,7 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
       <Brand user={user} />
       <nav className="admin-domain-navigation" aria-label="业务域导航">
         {adminDomains.map(item => {
-          const entry = adminNavigation.find(link => item.groups.includes(link.group) && can(user, link.permission));
+          const entry = adminNavigation.find(link => link.href === item.href && can(user, link.permission)) ?? adminNavigation.find(link => item.groups.includes(link.group) && can(user, link.permission));
           if (!entry) return null;
           return <Link key={item.id} href={entry.href} className={domain.id === item.id ? "active" : ""} aria-current={domain.id === item.id ? "true" : undefined}>{item.label}</Link>;
         })}

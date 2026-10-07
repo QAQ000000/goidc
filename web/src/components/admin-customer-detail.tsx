@@ -39,7 +39,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
   return <Workspace title="客户详情" admin>
     {customer.error ? <Failure error={customer.error} retry={customer.refresh} /> : !customer.data ? <Loading /> : <>
       <header className="flex flex-wrap items-center justify-between gap-3 mb-5"><div><h1 className="text-xl font-semibold break-words">{customer.data.display_name || customer.data.username}</h1><p className="text-sm text-muted-foreground mt-1">客户 #{customer.data.id} · {customer.data.username}</p></div><Button variant="outline" asChild><Link href={returnHref}><ArrowLeft size={16} />返回客户管理</Link></Button></header>
-      <section className="data-surface p-5 mb-5">
+      {tab !== "summary" && <section className="border-b bg-white p-5 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold break-words">{customer.data.display_name || "未命名客户"}</h2><Status value={customer.data.status} /></div>
@@ -52,7 +52,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
           <div><dt className="text-muted-foreground">销售归属</dt><dd className="mt-1">{customer.data.sales_owner_name || "无归属"}</dd></div>
           <div><dt className="text-muted-foreground">账号</dt><dd className="mt-1 break-all">{customer.data.username}</dd></div>
         </dl>
-      </section>
+      </section>}
       <nav className="flex gap-1 overflow-x-auto border-b mb-5" aria-label="客户详情分区">
         {(["summary", "profile", "services", "orders", "invoices", "transactions", "contacts", "tickets", "files"] as CustomerDetailTab[]).map((value) => {
           const params = new URLSearchParams(searchParams.toString());
