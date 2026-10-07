@@ -34,7 +34,7 @@ SELECT id,'sync','supplier-periodic-sync-'||id::text,now()
 FROM candidates
 ON CONFLICT (idempotency_key) DO UPDATE
  SET status='pending', attempts=0, available_at=now(), locked_at=NULL,
-     completed_at=NULL, last_error='', updated_at=now()
+     completed_at=NULL, external_started_at=NULL, last_error='', updated_at=now()
  WHERE provision_jobs.status IN ('succeeded','failed')
    AND provision_jobs.updated_at <= now()-interval '5 minutes'`)
 	return tag.RowsAffected(), err

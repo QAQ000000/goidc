@@ -228,6 +228,40 @@ func TestSupplierManagementImportCheckoutAndDelivery(t *testing.T) {
 	}
 }
 
+func TestSupplierPeriodicSyncCanReuseCompletedJob(t *testing.T) {
+	f := supplierSetup(t)
+	f.publish(t, f.pid, "local-vm")
+	f.purchase(t, f.pid, "supplier-periodic")
+	initial := f.claim(t)
+	if err := f.db.ProcessProvisionJob(t.Context(), *initial); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.db.EnqueuePeriodicSupplierSyncs(t.Context()); err != nil || got != 1 {
+		t.Fatalf("first periodic enqueue: rows=%d err=%v", got, err)
+	}
+	first := f.claim(t)
+	if err := f.db.ProcessProvisionJob(t.Context(), *first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET updated_at=now()-interval '6 minutes' WHERE id=$1", first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.db.EnqueuePeriodicSupplierSyncs(t.Context()); err != nil || got != 1 {
+		t.Fatalf("rearm periodic enqueue: rows=%d err=%v", got, err)
+	}
+	second := f.claim(t)
+	if second.ID != first.ID {
+		t.Fatalf("periodic job was not reused: first=%d second=%d", first.ID, second.ID)
+	}
+	if err := f.db.ProcessProvisionJob(t.Context(), *second); err != nil {
+		t.Fatal(err)
+	}
+	state, service, running := f.state(t, second)
+	if state != "succeeded" || service != "active" || running != nil {
+		t.Fatalf("periodic reuse failed: state=%s service=%s running=%v", state, service, running)
+	}
+}
+
 func TestSupplierProductMismatchAndDuplicateResourceRequireVerification(t *testing.T) {
 	for _, mismatch := range []bool{true, false} {
 		t.Run(fmt.Sprint(mismatch), func(t *testing.T) {
