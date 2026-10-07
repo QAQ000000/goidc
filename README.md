@@ -2,7 +2,7 @@
 
 PHP 财务系统的独立 Go API / Next.js React shadcn/ui / PostgreSQL 18 重构。业务覆盖和剩余工作见 [重构台账](docs/reconstruction.md)。当前仍在开发，不能替换原 PHP 生产站点。
 
-后台支付渠道和SMTP设置已支持加密存储、版本审计与运行时生效，邮件模板和工单预设补齐配置操作。入口、验收链路和仍缺少的配置见 [后台配置](docs/admin-configuration.md)。
+后台支付渠道和SMTP设置已支持加密存储、版本审计与运行时生效，邮件模板和工单预设补齐配置操作。支付单本地过期后可轮换商户，历史单保留加密凭据用于迟到通知和查单；模拟支付默认关闭。入口、验收链路和仍缺少的配置见 [后台配置](docs/admin-configuration.md)。
 
 开发实例已部署 schema080：电子发票 PDF/XML 文件与线下作废/红冲登记、敏感购买字段加密与隐藏、图文图片与自定义 SEO。组合浏览器、权限/所有权、手机布局、schema077 恢复升级和现场检查通过，详见 [第四批验收](docs/batch4-acceptance.md)。验证码按用户要求关闭；真实支付、供应商和其他领域仍待完成。
 
@@ -42,7 +42,7 @@ npm run dev
 
 API 还提供客户服务生命周期接口：`GET /api/v1/services`、`POST /api/v1/services/{id}/actions`；付款后由 `cmd/worker` 消费开通队列。商品默认采用人工交付：worker 将任务置为 `waiting_manual`，管理员通过 `POST /api/v1/admin/services/{id}/delivery` 登记实际资源标识和核验记录后才会启用服务。只有明确将商品 `provision_mode` 设为 `simulation` 的开发商品才会生成 `local-*` 模拟资源。
 
-账单支持原生易支付 MD5 协议及 `mock` 网关。部署配置 `EPAY_API_URL/PID/KEY/TYPES` 后，客户在账单详情选渠道并继续付款；签名回调事务校验账单、金额及渠道流水，支持重复通知，维护期间仍接收通知。待处理在线支付支持本人主动查单、独立后台权限及查询记录；worker 自动查询采用租约、有限重试与逐步退避，确认已付款后补结算，未付款或失败保留原单。账单显示查询来源及下次时间，次数用完后可手动核对。未配置商户时仅提供模拟渠道。模拟回调保持 POST JSON、`PAYMENT_GATEWAY_SECRET` HMAC-SHA256 和 `X-Payment-Signature`。真实商户付款验收、关单和原路退款尚未验证或实现，配置及限制见 [在线支付](docs/payments.md)。
+账单支持原生易支付 MD5 协议及 `mock` 网关。后台或部署配置 `EPAY_API_URL/PID/KEY/TYPES` 后，客户在账单详情选渠道并继续付款；签名回调事务校验账单、金额及渠道流水，支持重复通知，维护期间仍接收通知。待处理在线支付支持本人主动查单、独立后台权限及查询记录；worker 自动查询采用租约、有限重试与逐步退避，确认已付款后补结算，未付款或失败保留原单。账单显示查询来源及下次时间，次数用完后可手动核对。未配置商户且没有明确开启模拟支付时不提供在线渠道。模拟回调保持 POST JSON、`PAYMENT_GATEWAY_SECRET` HMAC-SHA256 和 `X-Payment-Signature`。真实商户付款验收、关单和原路退款尚未验证或实现，配置及限制见 [在线支付](docs/payments.md)。
 
 客户可通过 `POST/DELETE /api/v1/services/{id}/cancellation` 提交或撤回服务取消申请，管理员在 `/admin/cancellations` 审核；立即取消会进入终止队列，到期取消任务按服务 `next_due_at` 延迟执行。客户账户页支持 `PUT /api/v1/account/password` 修改密码，修改后除当前会话外的旧会话都会失效。
 

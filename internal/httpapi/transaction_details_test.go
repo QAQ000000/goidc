@@ -4,13 +4,50 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestInvoiceDetailUsesItsTransactionConnection(t *testing.T) {
+	f := configurationUpgradeFixture(t, false)
+	f.h = New(f.db, epayTestConfig(), slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	invoiceID := manualInvoiceCreate(t, f.h, f.root, manualInvoiceInput(f.uid), "detail-single-connection-invoice")
+	epayIntent(t, f, invoiceID, "epay_alipay", "detail-single-connection-payment")
+	poolConfig := f.db.Pool.Config()
+	poolConfig.MaxConns, poolConfig.MinConns = 1, 0
+	pool, err := pgxpool.NewWithConfig(t.Context(), poolConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.db.Pool.Close()
+	f.db.Pool = pool
+	for _, route := range []struct {
+		path, cookie string
+	}{
+		{fmt.Sprintf("/api/v1/invoices/%d", invoiceID), f.customer},
+		{fmt.Sprintf("/api/v1/admin/invoices/%d", invoiceID), f.root},
+	} {
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		r := httptest.NewRequest("GET", route.path, nil).WithContext(ctx)
+		r.Header.Set("Cookie", route.cookie)
+		response := httptest.NewRecorder()
+		f.h.ServeHTTP(response, r)
+		cancel()
+		expect(t, response, 200)
+		payments := data(t, response)["payments"].([]any)
+		if len(payments) != 1 || payments[0].(map[string]any)["query_enabled"] != true {
+			t.Fatal("transaction credentials not resolved", response.Body.String())
+		}
+	}
+}
 
 func transactionFixture(t *testing.T, db *store.Store, h http.Handler) upgradeFixture {
 	t.Helper()

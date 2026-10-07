@@ -87,7 +87,20 @@ func (s *Store) paymentConfiguration(row pgx.Row, fallback PaymentConfiguration)
 }
 
 func (s *Store) PaymentConfiguration(ctx context.Context, fallback PaymentConfiguration) (PaymentConfiguration, error) {
-	out, _, err := s.paymentConfiguration(s.Pool.QueryRow(ctx, "SELECT "+paymentSettingsColumns+" FROM payment_settings WHERE id=1"), fallback)
+	return s.PaymentConfigurationTx(ctx, nil, fallback)
+}
+
+// PaymentConfigurationTx reads settings using an existing transaction when one
+// is available. Callers holding a transaction must use this to avoid borrowing
+// another pool connection while their transaction is open.
+func (s *Store) PaymentConfigurationTx(ctx context.Context, tx pgx.Tx, fallback PaymentConfiguration) (PaymentConfiguration, error) {
+	var row pgx.Row
+	if tx != nil {
+		row = tx.QueryRow(ctx, "SELECT "+paymentSettingsColumns+" FROM payment_settings WHERE id=1")
+	} else {
+		row = s.Pool.QueryRow(ctx, "SELECT "+paymentSettingsColumns+" FROM payment_settings WHERE id=1")
+	}
+	out, _, err := s.paymentConfiguration(row, fallback)
 	return out, err
 }
 
@@ -196,11 +209,14 @@ func (s *Store) UpdatePaymentSettings(ctx context.Context, actor int64, sessionH
 	}
 	if in.APIURL != previous.APIURL || in.PID != previous.PID || key != previous.Key {
 		var busy bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE provider LIKE 'epay_%' AND status='pending') OR EXISTS(SELECT 1 FROM payment_reconciliation_checks c JOIN payment_transactions p ON p.id=c.payment_id WHERE p.provider LIKE 'epay_%' AND c.status='checking' AND c.lease_until>clock_timestamp())`).Scan(&busy); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE provider LIKE 'epay_%' AND status='pending' AND expires_at>clock_timestamp()) OR EXISTS(SELECT 1 FROM payment_reconciliation_checks c JOIN payment_transactions p ON p.id=c.payment_id WHERE p.provider LIKE 'epay_%' AND c.status='checking' AND c.lease_until>clock_timestamp())`).Scan(&busy); err != nil {
 			return empty, err
 		}
 		if busy {
 			return empty, conflict("payment_credentials_in_use", "仍有待支付订单或正在查单，不能更换或删除商户凭据")
+		}
+		if err = s.preserveLegacyPaymentCredentials(ctx, tx, previous); err != nil {
+			return empty, err
 		}
 	}
 	if key == "" {
@@ -275,17 +291,27 @@ func containsPaymentType(types []string, kind string) bool {
 }
 
 func (s *Store) ProcessConfiguredAutomaticPaymentCheck(ctx context.Context, fallback PaymentConfiguration) (bool, error) {
+	if _, err := s.ExpirePaymentIntents(ctx); err != nil {
+		return false, err
+	}
 	cfg, err := s.PaymentConfiguration(ctx, fallback)
 	if err != nil {
 		return false, err
 	}
-	gateways := map[string]payment.QueryGateway{}
-	for _, kind := range []string{"alipay", "wxpay", "qqpay", "bank"} {
-		if gateway, ok := cfg.Gateway("epay_"+kind, true); ok {
-			if query, ok := gateway.(payment.QueryGateway); ok {
-				gateways[gateway.Name()] = query
-			}
-		}
+	check, err := s.ClaimAutomaticPaymentCheck(WithPaymentConfigurationVersion(ctx, cfg.Version), []string{"epay_alipay", "epay_wxpay", "epay_qqpay", "epay_bank"})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
 	}
-	return s.ProcessAutomaticPaymentCheck(WithPaymentConfigurationVersion(ctx, cfg.Version), gateways)
+	if err != nil {
+		return false, err
+	}
+	gateway, ok, err := s.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, cfg)
+	query, supported := gateway.(payment.QueryGateway)
+	if err != nil || !ok || !supported {
+		if failErr := s.FailPaymentCheck(ctx, check, "provider_unavailable"); failErr != nil {
+			return true, failErr
+		}
+		return true, errors.New("payment credentials unavailable")
+	}
+	return s.processAutomaticPaymentCheck(ctx, check, query)
 }

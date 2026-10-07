@@ -37,3 +37,26 @@ func TestPaymentSecretEncryptionAndDomainIsolation(t *testing.T) {
 		t.Fatal("wrong encryption key accepted")
 	}
 }
+
+func TestPaymentCredentialsBoundToReference(t *testing.T) {
+	s := &Store{ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}
+	raw := []byte("merchant-test-identity")
+	sealed, err := s.paymentCredentials("payment-a", raw, true)
+	if err != nil || bytes.Contains(sealed, raw) {
+		t.Fatal("credential sealing failed", err)
+	}
+	decoded, err := s.paymentCredentials("payment-a", sealed, false)
+	if err != nil || !bytes.Equal(decoded, raw) {
+		t.Fatal("credential opening failed", err)
+	}
+	if _, err = s.paymentCredentials("payment-b", sealed, false); err == nil {
+		t.Fatal("credentials transplanted to another payment")
+	}
+	if _, err = s.paymentSecret(sealed, false); err == nil {
+		t.Fatal("transaction credentials accepted in settings domain")
+	}
+	sealed[len(sealed)-1] ^= 1
+	if _, err = s.paymentCredentials("payment-a", sealed, false); err == nil {
+		t.Fatal("tampered credentials accepted")
+	}
+}

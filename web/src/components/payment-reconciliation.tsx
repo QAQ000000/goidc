@@ -33,7 +33,7 @@ export function PaymentReconciliation({
         { method: "POST" },
       );
       setMessage(
-        result.status === "pending"
+        result.status === "pending" || result.status === "expired"
           ? "渠道尚未确认付款，原支付单继续保留。"
           : "付款已确认，账单已更新。",
       );
@@ -47,12 +47,13 @@ export function PaymentReconciliation({
   const statusLabels: Record<string, string> = {
     checking: "查询处理中",
     pending: "渠道尚未确认付款",
+    expired: "本地支付已过期，渠道尚未确认付款",
     succeeded: "付款已确认",
     error: "上次查询未确认结果，可稍后重试",
   };
   return (
     <div className="mt-2 max-w-64 space-y-2 text-xs">
-      {payment.status === "pending" && (!admin || allowed) && payment.query_enabled !== false && (
+      {(payment.status === "pending" || payment.status === "expired") && (!admin || allowed) && payment.query_enabled !== false && (
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void query()}>
           <RefreshCw className={busy ? "animate-spin" : ""} />
           {busy ? "查询中" : "查询付款结果"}
@@ -63,7 +64,7 @@ export function PaymentReconciliation({
           {payment.check_source === "worker" ? "自动查询" : "手动查询"} · {date(payment.checked_at)} · {statusLabels[payment.check_status ?? ""] ?? "已查询"}
         </p>
       )}
-      {payment.status === "pending" && (
+      {(payment.status === "pending" || payment.status === "expired") && (
         <p className="text-muted-foreground whitespace-normal">
           {payment.query_enabled === false
             ? "渠道查询未启用"

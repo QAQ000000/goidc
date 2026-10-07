@@ -82,7 +82,7 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 	if err = tx.QueryRow(ctx, "SELECT status FROM payment_transactions WHERE id=$1 FOR UPDATE", paymentID).Scan(&state); err != nil {
 		return check, err
 	}
-	if state != "pending" || !strings.HasPrefix(check.Provider, "epay_") {
+	if (state != "pending" && state != "expired") || !strings.HasPrefix(check.Provider, "epay_") {
 		return check, conflict("payment_not_queryable", "只有待处理的在线支付可以查询")
 	}
 	if _, err = tx.Exec(ctx, "UPDATE payment_reconciliation_checks SET status='error',result_code='lease_expired',completed_at=clock_timestamp() WHERE payment_id=$1 AND status='checking' AND lease_until<=clock_timestamp()", paymentID); err != nil {
@@ -159,11 +159,15 @@ func (s *Store) CompletePaymentCheck(ctx context.Context, check PaymentCheck, re
 	if state == "succeeded" && external != result.ExternalTransactionID {
 		return WebhookResult{}, conflict("payment_transaction_mismatch", "渠道流水号不一致")
 	}
-	if state != "pending" && state != "succeeded" {
+	if state != "pending" && state != "expired" && state != "succeeded" {
 		return WebhookResult{}, conflict("payment_state_conflict", "支付状态已改变，请刷新")
 	}
 	out := WebhookResult{Provider: check.Provider, ProviderPaymentID: check.ProviderPaymentID, InvoiceID: check.InvoiceID, Status: state}
-	return out, finishPaymentCheck(ctx, tx, &check, state)
+	checkStatus := state
+	if checkStatus == "expired" {
+		checkStatus = "pending"
+	}
+	return out, finishPaymentCheck(ctx, tx, &check, checkStatus)
 }
 
 func (s *Store) FailPaymentCheck(ctx context.Context, check PaymentCheck, code string) error {

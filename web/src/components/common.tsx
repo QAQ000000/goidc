@@ -33,6 +33,7 @@ export function Failure({ error, retry }: { error: Error; retry: () => void }) {
 }
 const names: Record<string, string> = {
   pending: "待处理",
+  expired: "本地已过期",
   paid: "已支付",
   unpaid: "待支付",
   active: "已启用",

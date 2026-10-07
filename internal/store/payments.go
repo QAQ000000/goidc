@@ -103,14 +103,27 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 		return out, err
 	}
 	var pending bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status='pending' AND (provider=$2 OR provider<>'mock' OR $2<>'mock'))", invoiceID, provider).Scan(&pending); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND (provider=$2 OR provider<>'mock' OR $2<>'mock'))", invoiceID, provider).Scan(&pending); err != nil {
 		return out, err
 	}
 	if pending {
 		return out, conflict("invoice_payment_pending", "账单已有待处理支付，请继续原支付单")
 	}
-	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url)
-VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL).Scan(&out.PaymentID); err != nil {
+	var sealed []byte
+	if realPaymentProvider(provider) {
+		cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration)
+		if !ok {
+			cfg, _, err = s.paymentConfiguration(tx.QueryRow(ctx, "SELECT "+paymentSettingsColumns+" FROM payment_settings WHERE id=1"), PaymentConfiguration{})
+			if err != nil {
+				return out, err
+			}
+		}
+		if sealed, err = s.snapshotPaymentCredentials(providerPaymentID, cfg, false); err != nil {
+			return out, err
+		}
+	}
+	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url,credential_snapshot)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL, append([]byte{}, sealed...)).Scan(&out.PaymentID); err != nil {
 		return out, err
 	}
 	out.Provider, out.ProviderPaymentID, out.InvoiceID, out.CheckoutURL, out.Status = provider, providerPaymentID, invoiceID, checkoutURL, "pending"
@@ -124,7 +137,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, provider, providerPaymentID, invoice
 // a real provider will no longer collect payment or retry its notification.
 func requireNoRealPaymentPending(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
 	var pending bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status='pending' AND provider<>'mock')", invoiceID).Scan(&pending); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock')", invoiceID).Scan(&pending); err != nil {
 		return err
 	}
 	if pending {

@@ -55,7 +55,7 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	result, err := s.db.CreatePaymentIntent(store.WithPaymentConfigurationVersion(r.Context(), configuration.Version), identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
+	result, err := s.db.CreatePaymentIntent(store.WithPaymentConfiguration(r.Context(), configuration), identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -74,13 +74,13 @@ func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if strings.HasPrefix(provider, "epay_") {
+		s.epayWebhook(w, r, provider, configuration)
+		return
+	}
 	gateway, ok := configuration.Gateway(provider, true)
 	if !ok {
 		writeError(w, 404, "payment_provider_not_found", "支付渠道不存在")
-		return
-	}
-	if strings.HasPrefix(provider, "epay_") {
-		s.epayWebhook(w, r, gateway)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -132,7 +132,7 @@ func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, items)
 }
 
-func (s *Server) epayWebhook(w http.ResponseWriter, r *http.Request, gateway payment.Gateway) {
+func (s *Server) epayWebhook(w http.ResponseWriter, r *http.Request, provider string, configuration store.PaymentConfiguration) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fail := func(status int) { w.WriteHeader(status); _, _ = io.WriteString(w, "fail") }
 	var payload []byte
@@ -150,16 +150,21 @@ func (s *Server) epayWebhook(w http.ResponseWriter, r *http.Request, gateway pay
 			return
 		}
 	}
+	values, err := url.ParseQuery(string(payload))
+	if err != nil || len(payload) > 64<<10 || len(values["out_trade_no"]) != 1 {
+		fail(400)
+		return
+	}
+	gateway, ok, err := s.db.PaymentTransactionGateway(r.Context(), provider, values.Get("out_trade_no"), configuration)
+	if err != nil || !ok {
+		fail(401)
+		return
+	}
 	if !gateway.VerifySignature(payload, "") {
 		fail(401)
 		return
 	}
 	event, err := gateway.DecodeWebhook(payload)
-	if err != nil {
-		fail(400)
-		return
-	}
-	values, err := url.ParseQuery(string(payload))
 	if err != nil {
 		fail(400)
 		return

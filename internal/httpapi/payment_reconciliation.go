@@ -41,9 +41,9 @@ func (s *Server) reconcilePayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, configurationErr)
 		return
 	}
-	gateway, enabled := configuration.Gateway(check.Provider, true)
+	gateway, enabled, gatewayErr := s.db.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, configuration)
 	queryGateway, supported := gateway.(payment.QueryGateway)
-	if !enabled || !supported {
+	if gatewayErr != nil || !enabled || !supported {
 		failCheck("provider_unavailable")
 		writeError(w, 409, "payment_query_unavailable", "当前支付渠道未启用查询")
 		return

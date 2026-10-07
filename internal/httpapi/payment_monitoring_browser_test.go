@@ -91,7 +91,9 @@ func TestPaymentMonitoringBrowserFixture(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.CreatePaymentIntent(t.Context(), f.uid, invoice, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, fmt.Sprintf("monitor-browser-intent-%d", i), details.Version); err != nil {
+			paymentConfig := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: true, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes, Version: 1}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin}
+			db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
+			if _, err := db.CreatePaymentIntent(store.WithPaymentConfiguration(t.Context(), paymentConfig), f.uid, invoice, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, fmt.Sprintf("monitor-browser-intent-%d", i), details.Version); err != nil {
 				t.Fatal(err)
 			}
 			checkout, err := url.Parse(intent.CheckoutURL)

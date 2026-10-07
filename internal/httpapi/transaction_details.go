@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const invoicePendingProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='pending') AS payment_pending,
- i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='pending' AND pt.provider<>'mock') AS real_payment_pending`
+const invoicePendingProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired')) AS payment_pending,
+ i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock') AS real_payment_pending`
 const maskedPurchaseFields = `coalesce((SELECT jsonb_agg(CASE WHEN field->>'encrypted'='true' THEN jsonb_set(field,'{value}','"********"'::jsonb) ELSE field END) FROM jsonb_array_elements(purchase_fields) field),'[]'::jsonb)`
 const orderItemProjection = `id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,` + maskedPurchaseFields + ` AS purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit`
 
@@ -154,25 +154,26 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payments, err := collectTransactionRows(tx.Query(ctx, `SELECT pt.id,pt.provider,pt.provider_payment_id,pt.external_transaction_id,CASE WHEN $2::boolean THEN '' ELSE pt.checkout_url END AS checkout_url,pt.amount_cents,pt.status,pt.created_at,pt.completed_at,pt.expires_at,
- pt.status='pending' AND pt.expires_at<=clock_timestamp() AS expired,
+ (pt.status='expired' OR pt.status='pending' AND pt.expires_at<=clock_timestamp()) AS expired,
  (SELECT c.status FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS check_status,
  (SELECT c.result_code FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS check_code,
  (SELECT c.started_at FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS checked_at,
  (SELECT c.source FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS check_source,
  pt.next_reconcile_at,pt.auto_reconcile_attempts,
- pt.status='pending' AND pt.provider LIKE 'epay_%' AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
+ pt.status IN ('pending','expired') AND pt.provider LIKE 'epay_%' AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
  FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE i.id=$1 ORDER BY pt.id DESC LIMIT 50`, id, admin))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	configuration, err := s.paymentConfiguration(ctx)
+	configuration, err := s.db.PaymentConfigurationTx(ctx, tx, s.paymentFallback())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	for _, payment := range payments {
-		_, payment["query_enabled"] = configuration.Gateway(payment["provider"].(string), true)
+		_, enabled, gatewayErr := s.db.PaymentTransactionGatewayTx(ctx, tx, payment["provider"].(string), payment["provider_payment_id"].(string), configuration)
+		payment["query_enabled"] = gatewayErr == nil && enabled
 		if payment["provider"] == "mock" {
 			payment["query_enabled"] = false
 		}

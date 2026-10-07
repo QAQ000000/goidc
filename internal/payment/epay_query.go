@@ -81,7 +81,7 @@ func (g EpayGateway) Query(ctx context.Context, in QueryRequest) (QueryResult, e
 	if status != "0" && status != "1" {
 		return out, ErrQueryInvalid
 	}
-	out = QueryResult{ProviderPaymentID: in.ProviderPaymentID, ExternalTransactionID: g.PID + ":" + trade, AmountCents: amount, Status: "pending"}
+	out = QueryResult{ProviderPaymentID: in.ProviderPaymentID, ExternalTransactionID: g.transactionID(trade), AmountCents: amount, Status: "pending"}
 	if status == "1" {
 		out.Status = "succeeded"
 	}

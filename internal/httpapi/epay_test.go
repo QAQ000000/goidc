@@ -18,11 +18,12 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
+	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/codex/zjmfgo/internal/store"
 )
 
 func epayTestConfig() config.Config {
-	return config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", EpayAPIURL: "https://merchant.example", EpayPID: "10001", EpayKey: "integration-epay-secret", EpayTypes: []string{"alipay", "wxpay"}}
+	return config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, ProvisionEncryptionKey: []byte("01234567890123456789012345678901"), PaymentGatewaySecret: "integration-payment-secret", EpayAPIURL: "https://merchant.example", EpayPID: "10001", EpayKey: "integration-epay-secret", EpayTypes: []string{"alipay", "wxpay"}}
 }
 
 func TestEpayBrowserFixture(t *testing.T) {
@@ -81,6 +82,10 @@ func TestEpayBrowserFixture(t *testing.T) {
 
 // Independent implementation of the PHP plugin's published sorted MD5 recipe.
 func signEpayTest(v url.Values) {
+	signEpayTestKey(v, "integration-epay-secret")
+}
+
+func signEpayTestKey(v url.Values, key string) {
 	var keys []string
 	for k := range v {
 		if k != "sign" && k != "sign_type" && v.Get(k) != "" {
@@ -92,7 +97,7 @@ func signEpayTest(v url.Values) {
 	for _, k := range keys {
 		parts = append(parts, k+"="+v.Get(k))
 	}
-	sum := md5.Sum([]byte(strings.Join(parts, "&") + "integration-epay-secret"))
+	sum := md5.Sum([]byte(strings.Join(parts, "&") + key))
 	v.Set("sign", hex.EncodeToString(sum[:]))
 	v.Set("sign_type", "MD5")
 }
@@ -166,7 +171,7 @@ func TestEpayPaymentLifecycleAndReplay(t *testing.T) {
 		}
 	}
 	var status, external string
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT i.status,p.external_transaction_id FROM invoices i JOIN payment_transactions p ON p.invoice_id=i.id WHERE i.id=$1", iid).Scan(&status, &external); err != nil || status != "paid" || external != "10001:trade-1" {
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT i.status,p.external_transaction_id FROM invoices i JOIN payment_transactions p ON p.invoice_id=i.id WHERE i.id=$1", iid).Scan(&status, &external); err != nil || status != "paid" || external != payment.EpayMerchantNamespace(epayTestConfig().EpayAPIURL, "10001")+":trade-1" {
 		t.Fatal("epay did not settle", status, external, err)
 	}
 	var ledger, jobs int

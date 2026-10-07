@@ -31,7 +31,7 @@ func (s *Store) ClaimAutomaticPaymentCheck(ctx context.Context, providers []stri
 	var attempts int
 	if err = tx.QueryRow(ctx, `SELECT p.id,p.invoice_id,p.user_id,p.provider,p.provider_payment_id,p.amount_cents,p.auto_reconcile_attempts
  FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id AND i.user_id=p.user_id
- WHERE p.status='pending' AND i.status='unpaid' AND p.provider LIKE 'epay_%' AND p.provider=ANY($1::text[])
+ WHERE p.status IN ('pending','expired') AND i.status='unpaid' AND p.provider LIKE 'epay_%' AND p.provider=ANY($1::text[])
  AND p.next_reconcile_at<=clock_timestamp() AND p.auto_reconcile_attempts<32
  AND NOT EXISTS(SELECT 1 FROM payment_reconciliation_checks c WHERE c.payment_id=p.id
    AND (c.status='checking' OR c.started_at>clock_timestamp()-interval '30 seconds'))
@@ -82,9 +82,14 @@ func (s *Store) ProcessAutomaticPaymentCheck(ctx context.Context, gateways map[s
 	if err != nil {
 		return false, err
 	}
+	return s.processAutomaticPaymentCheck(ctx, check, gateways[check.Provider])
+}
+
+func (s *Store) processAutomaticPaymentCheck(ctx context.Context, check PaymentCheck, gateway payment.QueryGateway) (bool, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	result, queryErr := gateways[check.Provider].Query(queryCtx, payment.QueryRequest{ProviderPaymentID: check.ProviderPaymentID, AmountCents: check.AmountCents})
+	result, queryErr := gateway.Query(queryCtx, payment.QueryRequest{ProviderPaymentID: check.ProviderPaymentID, AmountCents: check.AmountCents})
+	var err error
 	code := "provider_unavailable"
 	if queryErr == nil {
 		_, err = s.CompletePaymentCheck(queryCtx, check, result)

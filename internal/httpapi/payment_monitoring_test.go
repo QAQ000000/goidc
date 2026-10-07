@@ -21,16 +21,15 @@ import (
 
 func monitoringGateways(t *testing.T, db *store.Store, paymentID int64) map[string]payment.QueryGateway {
 	t.Helper()
-	var checkout string
-	if err := db.Pool.QueryRow(t.Context(), "SELECT checkout_url FROM payment_transactions WHERE id=$1", paymentID).Scan(&checkout); err != nil {
+	var provider, reference string
+	if err := db.Pool.QueryRow(t.Context(), "SELECT provider,provider_payment_id FROM payment_transactions WHERE id=$1", paymentID).Scan(&provider, &reference); err != nil {
 		t.Fatal(err)
 	}
-	u, err := url.Parse(checkout)
-	if err != nil {
+	g, ok, err := db.PaymentTransactionGateway(t.Context(), provider, reference, store.PaymentConfiguration{})
+	if err != nil || !ok {
 		t.Fatal(err)
 	}
-	g := payment.EpayGateway{EpayConfig: payment.EpayConfig{APIURL: u.Scheme + "://" + u.Host, PublicOrigin: "http://localhost:3088", PID: "10001", Key: "integration-epay-secret", Types: []string{"alipay"}}, Type: "alipay"}
-	return map[string]payment.QueryGateway{g.Name(): g}
+	return map[string]payment.QueryGateway{g.Name(): g.(payment.QueryGateway)}
 }
 
 func makeMonitoringDue(t *testing.T, db *store.Store, paymentID int64) {
@@ -113,7 +112,8 @@ func TestAutomaticPaymentMonitoringLeaseAndCallbackWins(t *testing.T) {
 	if callback.Code != 200 {
 		t.Fatal("callback blocked by query lease", callback.Code, callback.Body.String())
 	}
-	result, err := f.db.CompletePaymentCheck(t.Context(), check, payment.QueryResult{ProviderPaymentID: v.Get("out_trade_no"), ExternalTransactionID: "10001:query-trade", AmountCents: check.AmountCents, Status: "pending"})
+	gateway := monitoringGateways(t, f.db, paymentID)["epay_alipay"].(payment.EpayGateway)
+	result, err := f.db.CompletePaymentCheck(t.Context(), check, payment.QueryResult{ProviderPaymentID: v.Get("out_trade_no"), ExternalTransactionID: gateway.TransactionNamespace + ":query-trade", AmountCents: check.AmountCents, Status: "pending"})
 	if err != nil || result.Status != "succeeded" {
 		t.Fatal("pending query overwrote callback", result, err)
 	}
@@ -266,7 +266,7 @@ func TestAutomaticPaymentMonitoringConfiguredProvidersOnly(t *testing.T) {
 	f.h = New(f.db, cfg, slog.Default()).Handler()
 	detail := request(f.h, "GET", fmt.Sprintf("/api/v1/invoices/%d", invoiceID), nil, f.customer, "")
 	expect(t, detail, 200)
-	if !strings.Contains(detail.Body.String(), `"query_enabled":false`) {
-		t.Fatal("unconfigured query shown enabled", detail.Body.String())
+	if !strings.Contains(detail.Body.String(), `"query_enabled":true`) {
+		t.Fatal("saved payment credentials did not retain query access", detail.Body.String())
 	}
 }

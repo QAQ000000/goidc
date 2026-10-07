@@ -1268,7 +1268,7 @@ export function InvoiceDetailView({
                       </TableCell>
                       <TableCell className="min-w-48">
                         {payment.expired ? (
-                          <span className="text-muted-foreground">已过期</span>
+                          <span className="text-muted-foreground">本地已过期</span>
                         ) : (
                           <Status value={payment.status} />
                         )}

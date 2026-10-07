@@ -120,7 +120,7 @@ func (s *Store) MergeManualInvoices(ctx context.Context, actorID int64, in Manua
 			return out, err
 		}
 		var pending bool
-		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','succeeded'))", source.InvoiceID).Scan(&pending); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired','succeeded'))", source.InvoiceID).Scan(&pending); err != nil {
 			return out, err
 		}
 		if pending {
@@ -348,7 +348,7 @@ func requireManualInvoiceEditable(ctx context.Context, tx pgx.Tx, invoiceID int6
 		return err
 	}
 	var pending bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','succeeded'))", invoiceID).Scan(&pending); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired','succeeded'))", invoiceID).Scan(&pending); err != nil {
 		return err
 	}
 	if pending {

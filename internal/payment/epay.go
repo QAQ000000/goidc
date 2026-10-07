@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 type EpayConfig struct {
 	APIURL, PID, Key, PublicOrigin string
 	Types                          []string
+	TransactionNamespace           string `json:"transaction_namespace,omitempty"`
 }
 type EpayGateway struct {
 	EpayConfig
@@ -24,6 +26,20 @@ type EpayGateway struct {
 }
 
 func (g EpayGateway) Name() string { return "epay_" + g.Type }
+
+// New payment snapshots distinguish independent gateways with overlapping IDs.
+// Empty namespaces preserve the IDs of payments created before snapshots.
+func EpayMerchantNamespace(apiURL, pid string) string {
+	sum := sha256.Sum256([]byte(strings.TrimRight(apiURL, "/") + "\x00" + pid))
+	return hex.EncodeToString(sum[:16])
+}
+
+func (g EpayGateway) transactionID(trade string) string {
+	if g.TransactionNamespace != "" {
+		return g.TransactionNamespace + ":" + trade
+	}
+	return g.PID + ":" + trade
+}
 
 // HTTP is accepted only for isolated loopback test gateways.
 func validGatewayURL(raw string) bool {
@@ -140,5 +156,5 @@ func (g EpayGateway) DecodeWebhook(body []byte) (Webhook, error) {
 	if err != nil || invoiceID < 1 || cents < 1 || cents > 10000000000 {
 		return Webhook{}, errors.New("invalid epay amount or invoice")
 	}
-	return Webhook{EventID: g.PID + ":" + values.Get("trade_no"), ProviderPaymentID: values.Get("out_trade_no"), InvoiceID: invoiceID, AmountCents: cents, Status: "succeeded"}, nil
+	return Webhook{EventID: g.transactionID(values.Get("trade_no")), ProviderPaymentID: values.Get("out_trade_no"), InvoiceID: invoiceID, AmountCents: cents, Status: "succeeded"}, nil
 }

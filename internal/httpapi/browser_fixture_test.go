@@ -106,6 +106,7 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 	}
 	fixtureConfig := config.Config{PublicOrigin: origin, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret"}
 	if gatewayOrigin := os.Getenv("ZJMFGO_BROWSER_EPAY_API_URL"); gatewayOrigin != "" {
+		fixtureConfig.ProvisionEncryptionKey = []byte("01234567890123456789012345678901")
 		fixtureConfig.EpayAPIURL = gatewayOrigin
 		fixtureConfig.EpayPID = "10001"
 		fixtureConfig.EpayKey = "integration-epay-secret"

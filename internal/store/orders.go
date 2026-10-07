@@ -116,7 +116,7 @@ func (s *Store) CancelOrder(ctx context.Context, actorID, orderID int64, admin b
 		return out, conflict("order_not_cancellable", "账单当前状态不可取消订单")
 	}
 	var pending bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE i.order_id=$1 AND p.status='pending' AND p.provider<>'mock')", orderID).Scan(&pending); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE i.order_id=$1 AND p.status IN ('pending','expired') AND p.provider<>'mock')", orderID).Scan(&pending); err != nil {
 		return out, err
 	}
 	if pending {
