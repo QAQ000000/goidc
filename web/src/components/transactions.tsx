@@ -18,6 +18,7 @@ import {
 import { api, date, money, type OptionSnapshot, type User } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
 import { useResource } from "@/hooks/use-resource";
+import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
@@ -194,6 +195,8 @@ const invoiceStates = {
   cancelled: "已取消",
   refunded: "已退款",
 };
+const orderStatusValues = Object.keys(orderStates);
+const invoiceStatusValues = Object.keys(invoiceStates);
 function time(value: string | null | undefined) {
   return value ? date(value) : "-";
 }
@@ -215,10 +218,8 @@ function TransactionList({
   const router = useRouter();
   const { data: currentUser } = useResource<User>(admin ? "/me" : null, false);
   const mergePermission = admin && can(currentUser, "invoices.manage");
-  const [draft, setDraft] = useState("");
-  const [query, setQuery] = useState("");
-  const [state, setState] = useState("all");
-  const [offset, setOffset] = useState(0);
+  const { draft, setDraft, query, setQuery, status: state, setStatus: setState, page, setPage, ready, suffix } = useAdminListNavigation(admin, kind === "orders" ? orderStatusValues : invoiceStatusValues);
+  const offset = page * 20;
   const [selected, setSelected] = useState<Record<number, MergeSelection>>({});
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeBusy, setMergeBusy] = useState(false);
@@ -234,7 +235,7 @@ function TransactionList({
   if (state !== "all") params.set("status", state);
   const { data, error, refresh } = useResource<
     TransactionPage<OrderRow | InvoiceRow>
-  >(`${admin ? "/admin" : ""}/${kind}/page?${params}`, false);
+  >(ready ? `${admin ? "/admin" : ""}/${kind}/page?${params}` : null, false);
   const base = admin ? "/admin" : "/console";
   const selections = Object.values(selected).sort(
     (a, b) => a.invoice_id - b.invoice_id,
@@ -354,20 +355,20 @@ function TransactionList({
           </Button>
         </div>
       </div>
-      {admin && <AdminStatusTabs label="账单状态" value={state} states={invoiceStates} onChange={value => { setState(value); setOffset(0); }} />}
+      {admin && <AdminStatusTabs label="账单状态" value={state} states={invoiceStates} onChange={value => { setState(value); setPage(0); }} />}
       <form
         className={`grid ${admin ? "sm:grid-cols-[minmax(0,1fr)_auto]" : "sm:grid-cols-[10rem_minmax(0,1fr)_auto]"} gap-3 mb-4`}
         onSubmit={(e) => {
           e.preventDefault();
           setQuery(draft);
-          setOffset(0);
+          setPage(0);
         }}
       >
         {!admin && <Select
           value={state}
           onValueChange={(value) => {
             setState(value);
-            setOffset(0);
+            setPage(0);
           }}
         >
           <SelectTrigger
@@ -479,7 +480,7 @@ function TransactionList({
                       <TableCell>
                         <Link
                           className="font-mono text-xs text-primary hover:underline break-all whitespace-normal"
-                          href={`${base}/invoices/${row.id}`}
+                          href={`${base}/invoices/${row.id}${suffix}`}
                         >
                           {row.invoice_no}
                         </Link>
@@ -615,7 +616,7 @@ function TransactionList({
               <Button
                 variant="outline"
                 disabled={offset === 0}
-                onClick={() => setOffset((v) => Math.max(0, v - 20))}
+                onClick={() => setPage((v) => Math.max(0, v - 1))}
               >
                 <ArrowLeft />
                 上一页
@@ -623,7 +624,7 @@ function TransactionList({
               <Button
                 variant="outline"
                 disabled={offset + 20 >= data.total}
-                onClick={() => setOffset((v) => v + 20)}
+                onClick={() => setPage((v) => v + 1)}
               >
                 下一页
                 <ArrowRight />
@@ -1077,6 +1078,7 @@ export function InvoiceDetailView({
   id: number;
   admin?: boolean;
 }) {
+  const returnHref = useAdminListReturnHref(`${admin ? "/admin" : "/console"}/invoices`, invoiceStatusValues);
   const { data, error, refresh } = useResource<Invoice>(
     `${admin ? "/admin" : ""}/invoices/${id}`,
     false,
@@ -1089,7 +1091,7 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={`${admin ? "/admin" : "/console"}/invoices`}>
+        <Link href={admin ? returnHref : "/console/invoices"}>
           <ArrowLeft />
           返回账单列表
         </Link>
