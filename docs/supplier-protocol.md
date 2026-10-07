@@ -55,11 +55,23 @@ without an invoice is an unknown outcome; it is never reported as a new
 zero-cost success. An uncertain response after cart mutation returns
 `Error.Unknown=true` and known IDs.
 
-`Sync` uses GET `/cart/hostinfo?hostid[0]=...`. `CreateResult.Status` is
-`active` only after an upstream `Active` status is observed. Other successful
-outcomes remain `provisioning`. The `Execute` action `sync` is supported;
+`Sync` first uses GET `/host/header?host_id=...&source=API`, which is the
+endpoint used by the legacy PHP implementation, and falls back to
+`/cart/hostinfo?hostid[0]=...` for older upstream installations.
+`CreateResult.Status` is `active` only after an upstream `Active` status is
+observed. Other successful outcomes remain `provisioning`. The `Execute` action `sync` is supported;
 pause, resume, terminate and renew are unsupported. Legacy termination uses a
 separate cancellation path whose effect has not been established here.
+
+The downstream exposes the legacy callback `POST /api/host/sync` (and the
+versioned alias `/api/v1/host/sync`). The upstream sends `id` as the local
+service ID and `host_id` as its resource ID, together with `domainstatus`,
+`domain`, `username`, `password`, IPs, port, OS and `nextduedate`. The callback
+signature is the uppercase MD5 of compact, lexicographically sorted JSON with
+exactly `id`, `rand_str` and the per-service token. It validates the supplier
+binding and resource identity in a transaction, then stores credentials using
+the existing service encryption key. It does not use browser sessions or an
+Origin header.
 
 Supplier responses and transport errors never enter returned error strings.
 The HTTP client verifies TLS, disables redirects and environment proxies,
@@ -96,8 +108,11 @@ blocked for this provider.
 
 Use a dedicated upstream customer account for automated orders: this lease
 coordinates local workers, not people or other deployments sharing that account.
-Before external acceptance, set `PUBLIC_ORIGIN` to the real downstream URL;
-the development value `http://localhost:3088` is only a local preview address.
+Before external acceptance, set `PUBLIC_ORIGIN` to the real downstream URL
+reachable by the supplier; the development value `http://localhost:3088` is
+only a local preview address. The supplier must be able to POST the callback
+from its network, and the API process must be restarted after changing the
+environment.
 
 To add another system, implement `Adapter` and register its factory and metadata
 in `internal/supplier/registry.go`. Normalize catalog/configuration/money/state

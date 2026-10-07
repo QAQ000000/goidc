@@ -2,14 +2,12 @@ package store
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/provision"
 	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
@@ -90,9 +88,7 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	if err = supplierUnseal(s.ProvisionEncryptionKey, "binding-fields", b.ProductID, b.sealed, &fields); err != nil {
 		return err
 	}
-	mac := hmac.New(sha256.New, s.ProvisionEncryptionKey)
-	mac.Write([]byte("supplier-service:" + strconv.FormatInt(claimed.ServiceID, 10)))
-	req := supplier.CreateRequest{ProductID: b.UpstreamProductID, Cycle: b.BillingCycle, Revision: b.UpstreamRevision, ConfigOptions: b.ConfigOptions, CustomFields: fields, LocalServiceID: claimed.ServiceID, DownstreamURL: s.SupplierDownstreamURL, DownstreamToken: hex.EncodeToString(mac.Sum(nil))[:32], MaximumCostCents: b.MaximumCostCents, Currency: b.Currency, Host: "svc-" + strconv.FormatInt(claimed.ServiceID, 10)}
+	req := supplier.CreateRequest{ProductID: b.UpstreamProductID, Cycle: b.BillingCycle, Revision: b.UpstreamRevision, ConfigOptions: b.ConfigOptions, CustomFields: fields, LocalServiceID: claimed.ServiceID, DownstreamURL: s.SupplierDownstreamURL, DownstreamToken: supplierDownstreamToken(s.ProvisionEncryptionKey, claimed.ServiceID), MaximumCostCents: b.MaximumCostCents, Currency: b.Currency, Host: "svc-" + strconv.FormatInt(claimed.ServiceID, 10)}
 	if _, err = tx.Exec(ctx, "UPDATE supplier_accounts SET running_job_id=$2,updated_at=now() WHERE id=$1", b.SupplierID, claimed.ID); err != nil {
 		return err
 	}
@@ -176,7 +172,7 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 			if remote.ProductID != b.UpstreamProductID {
 				outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
 			} else {
-				err = applySupplierRemoteSafely(ctx, tx, j, remote)
+				err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey)
 				if err != nil {
 					outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
 				}
@@ -186,7 +182,7 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 		if remote.ProductID != b.UpstreamProductID || strconv.FormatInt(remote.UpstreamID, 10) != existing {
 			outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
 		} else {
-			if err = applySupplierRemoteSafely(ctx, tx, j, remote); err != nil {
+			if err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
 				outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
 			}
 		}
@@ -221,11 +217,11 @@ WHERE (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='sync'
 
 // Preserve the account lease and normalized response even when a resource
 // collides with another service or its status cannot be applied locally.
-func applySupplierRemoteSafely(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote supplier.Service) error {
+func applySupplierRemoteSafely(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote supplier.Service, key []byte) error {
 	if _, err := tx.Exec(ctx, "SAVEPOINT supplier_remote"); err != nil {
 		return err
 	}
-	if err := applySupplierRemote(ctx, tx, j, remote); err != nil {
+	if err := applySupplierRemote(ctx, tx, j, remote, key); err != nil {
 		if _, rollbackErr := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT supplier_remote"); rollbackErr != nil {
 			return rollbackErr
 		}
@@ -234,7 +230,7 @@ func applySupplierRemoteSafely(ctx context.Context, tx pgx.Tx, j ProvisionJob, r
 	_, err := tx.Exec(ctx, "RELEASE SAVEPOINT supplier_remote")
 	return err
 }
-func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote supplier.Service) error {
+func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote supplier.Service, key []byte) error {
 	if remote.UpstreamID < 1 {
 		return conflict("supplier_resource_missing", "供应商未返回有效资源")
 	}
@@ -250,17 +246,38 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 	default:
 		return conflict("supplier_status_unknown", "上游资源状态不可识别，请核验")
 	}
-	var due *time.Time
-	if remote.NextDueDate != "" && remote.NextDueDate != "0" {
-		seconds, err := strconv.ParseInt(remote.NextDueDate, 10, 64)
-		if err != nil || seconds < 1 || seconds > 253402300799 {
-			return conflict("supplier_due_invalid", "上游到期时间不可识别，请核验")
-		}
-		value := time.Unix(seconds, 0).UTC()
-		due = &value
+	due, err := supplierDueDate(remote.NextDueDate)
+	if err != nil {
+		return err
 	}
-	_, err := tx.Exec(ctx, `UPDATE services SET status=$2,upstream_id=$3,last_error='',version=version+1,updated_at=now(),
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE coalesce($4,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), due)
+	var credentials []byte
+	if remote.Password != "" {
+		previous, readErr := readSupplierCredentials(ctx, tx, j.ServiceID, key)
+		if readErr != nil {
+			return readErr
+		}
+		previous.Password = remote.Password
+		credentials, err = provision.Seal(key, j.ServiceID, previous)
+		if err != nil {
+			return err
+		}
+	}
+	resource, _ := json.Marshal(map[string]any{
+		"dedicated_ip": remote.DedicatedIP, "assigned_ips": remote.AssignedIPs, "port": remote.Port,
+		"suspend_reason": remote.SuspendReason,
+	})
+	installedOS := ""
+	if remote.OS != "" || remote.OSURL != "" {
+		installed, _ := json.Marshal(map[string]string{"name": remote.OS, "url": remote.OSURL})
+		installedOS = string(installed)
+	}
+	_, err = tx.Exec(ctx, `UPDATE services SET status=$2,upstream_id=$3,last_error='',version=version+1,updated_at=now(),
+ domain=CASE WHEN $4<>'' THEN $4 ELSE domain END,
+ username=CASE WHEN $5<>'' THEN $5 ELSE username END,
+ credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
+ resource_info=resource_info||$7::jsonb,
+ installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE coalesce($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due)
 	if err != nil {
 		return err
 	}

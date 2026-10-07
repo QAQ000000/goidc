@@ -62,6 +62,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", s.ready)
+	mux.HandleFunc("POST /api/host/sync", s.supplierHostSync)
+	mux.HandleFunc("POST /api/v1/host/sync", s.supplierHostSync)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/captcha", s.issueCaptcha)
 	mux.HandleFunc("POST /api/v1/auth/login/mfa", s.loginMFA)
@@ -363,7 +365,7 @@ func (s *Server) Handler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
-		isWebhook := r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/api/v1/payments/") && strings.HasSuffix(r.URL.Path, "/webhook")
+		isWebhook := r.Method == "POST" && ((strings.HasPrefix(r.URL.Path, "/api/v1/payments/") && strings.HasSuffix(r.URL.Path, "/webhook")) || r.URL.Path == "/api/host/sync" || r.URL.Path == "/api/v1/host/sync")
 		if !isWebhook && r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" && bearerCredential(r) == "" {
 			if r.Header.Get("X-Requested-With") != "zjmfgo" {
 				writeError(w, 403, "csrf_required", "请求校验失败")

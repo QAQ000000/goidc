@@ -76,6 +76,12 @@ func supplierSetup(t *testing.T) *supplierFixture {
 		case "/apply_credit":
 			f.pays.Add(1)
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
+		case "/host/header":
+			productID := f.remoteProduct.Load()
+			if productID == 0 {
+				productID = 7
+			}
+			fmt.Fprintf(w, `{"status":200,"data":{"host_data":{"id":42,"productid":%d,"domainstatus":"Active","domain":"vm.example","nextduedate":1800000000}}}`, productID)
 		case "/cart/hostinfo":
 			productID := f.remoteProduct.Load()
 			if productID == 0 {

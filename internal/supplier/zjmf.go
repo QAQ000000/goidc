@@ -641,13 +641,20 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	return out, nil
 }
 func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
-	var s Service
 	if id <= 0 {
-		return s, &Error{Code: "invalid_service"}
+		return Service{}, &Error{Code: "invalid_service"}
+	}
+	// The legacy PHP client uses host/header for the authoritative resource
+	// record. Some older installations expose only cart/hostinfo, so retain a
+	// compatibility fallback for those deployments.
+	if w, e := z.get(ctx, "host/header", url.Values{"host_id": {strconv.FormatInt(id, 10)}, "source": {"API"}}); e == nil {
+		if service, ok := parseHostHeader(w.Data, id); ok {
+			return service, nil
+		}
 	}
 	w, e := z.get(ctx, "cart/hostinfo", url.Values{"hostid[0]": {strconv.FormatInt(id, 10)}})
 	if e != nil {
-		return s, e
+		return Service{}, e
 	}
 	var d struct {
 		Hosts []struct {
@@ -656,21 +663,59 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 			DomainStatus string          `json:"domainstatus"`
 			Domain       string          `json:"domain"`
 			NextDueDate  json.RawMessage `json:"nextduedate"`
+			Username     string          `json:"username"`
+			Password     string          `json:"password"`
+			DedicatedIP  string          `json:"dedicatedip"`
+			AssignedIPs  string          `json:"assignedips"`
+			Port         int             `json:"port"`
+			OS           string          `json:"os"`
 		} `json:"hosts"`
 	}
 	if json.Unmarshal(w.Data, &d) != nil {
-		return s, &Error{Code: "service_invalid"}
+		return Service{}, &Error{Code: "service_invalid"}
 	}
 	for _, v := range d.Hosts {
 		if v.ID == id {
-			var due string
-			if json.Unmarshal(v.NextDueDate, &due) != nil {
-				due = strings.TrimSpace(string(v.NextDueDate))
-			}
-			return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: due}, nil
+			return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: v.AssignedIPs, Port: v.Port, OS: v.OS}, nil
 		}
 	}
-	return s, &Error{Code: "service_missing"}
+	return Service{}, &Error{Code: "service_missing"}
+}
+
+func rawDate(raw json.RawMessage) string {
+	var value string
+	if json.Unmarshal(raw, &value) == nil {
+		return value
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+func parseHostHeader(raw json.RawMessage, id int64) (Service, bool) {
+	var envelope struct {
+		HostData struct {
+			ID            int64           `json:"id"`
+			ProductID     int64           `json:"productid"`
+			DomainStatus  string          `json:"domainstatus"`
+			Domain        string          `json:"domain"`
+			NextDueDate   json.RawMessage `json:"nextduedate"`
+			Username      string          `json:"username"`
+			Password      string          `json:"password"`
+			DedicatedIP   string          `json:"dedicatedip"`
+			AssignedIPs   string          `json:"assignedips"`
+			Port          int             `json:"port"`
+			OS            string          `json:"os"`
+			OSURL         string          `json:"os_url"`
+			SuspendReason string          `json:"suspendreason"`
+		} `json:"host_data"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil || envelope.HostData.ProductID < 1 || envelope.HostData.DomainStatus == "" {
+		return Service{}, false
+	}
+	if envelope.HostData.ID > 0 && envelope.HostData.ID != id {
+		return Service{}, false
+	}
+	v := envelope.HostData
+	return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: v.AssignedIPs, Port: v.Port, OS: v.OS, OSURL: v.OSURL, SuspendReason: v.SuspendReason}, true
 }
 func (z *zjmf) Execute(ctx context.Context, action string, id int64) (Service, error) {
 	if action == "sync" {

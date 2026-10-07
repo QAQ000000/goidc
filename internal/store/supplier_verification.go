@@ -107,7 +107,7 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 	}
 	state = "failed"
 	if in.Outcome == "delivered" {
-		if err = applySupplierRemote(ctx, tx, j, remote); err != nil {
+		if err = applySupplierRemote(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
 			return err
 		}
 		state = "succeeded"
