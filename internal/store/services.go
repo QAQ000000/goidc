@@ -70,7 +70,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
-	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && action != "rescue_system" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {
+	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && action != "rescue_system" && action != "exit_rescue_system" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {
 		return out, conflict("unsupported_service_action", "不支持该服务动作")
 	}
 	if provision.IsNATAction(action) && (nat == nil || action != "nat_"+nat.Kind+"_"+nat.Operation || !provision.ValidNATRequest(*nat)) {
@@ -88,7 +88,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	var current, mode, power string
 	var credentials []byte
 	if admin {
-		if action == "reset_password" || action == "reinstall" || provision.IsStorageAction(action) || provision.IsNATAction(action) || provision.IsCDROMAction(action) {
+		if action == "reset_password" || action == "reinstall" || action == "rescue_system" || action == "exit_rescue_system" || provision.IsStorageAction(action) || provision.IsNATAction(action) || provision.IsCDROMAction(action) {
 			if err = requireDeliveryManage(ctx, tx, actorID); err != nil {
 				return out, err
 			}
@@ -103,10 +103,10 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if mode == "supplier" && action != "create" && action != "sync" && action != "reset_password" && action != "rescue_system" && !provision.IsPowerAction(action) {
+	if mode == "supplier" && action != "create" && action != "sync" && action != "reset_password" && action != "rescue_system" && action != "exit_rescue_system" && action != "reinstall" && !provision.IsPowerAction(action) {
 		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
 	}
-	if storage != nil || nat != nil || cdrom != nil {
+	if storage != nil || nat != nil || cdrom != nil || (mode == "supplier" && action == "reinstall") {
 		if err = lockStorageCredential(ctx, tx, actorID); err != nil {
 			return out, err
 		}
@@ -423,13 +423,38 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 		requestPayload, _ = json.Marshal(nat)
 	}
 	if action == "reinstall" {
-		if mode != "nokvm" {
+		if mode != "nokvm" && mode != "supplier" {
 			return out, conflict("unsupported_reinstall_mode", "该服务不支持系统重装")
 		}
 		if power == "processing" || power == "suspended" || power == "network_limited" {
 			return out, conflict("power_processing", "资源状态不允许重装，请先刷新状态")
 		}
-		templates, err := serviceTemplates(ctx, tx, serviceID)
+		var templates []provision.Template
+		if mode == "supplier" {
+			prepared, _ := ctx.Value(supplierReinstallKey{}).(*supplierTemplateListing)
+			if prepared == nil {
+				if err = tx.Rollback(ctx); err != nil {
+					return out, err
+				}
+				listing, readErr := s.supplierTemplates(ctx, actorID, serviceID, admin)
+				if readErr != nil {
+					return out, readErr
+				}
+				ctx = context.WithValue(ctx, supplierReinstallKey{}, &listing)
+				return s.enqueueServiceActionFor(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom, system)
+			}
+			binding, bindingErr := s.supplierConsoleBindingTx(ctx, tx, actorID, serviceID, admin, true)
+			if bindingErr != nil {
+				return out, bindingErr
+			}
+			if binding != prepared.binding {
+				return out, conflict("supplier_resource_changed", "服务供应商资源已变更，请刷新")
+			}
+			templates = prepared.templates
+			err = nil
+		} else {
+			templates, err = serviceTemplates(ctx, tx, serviceID)
+		}
 		if err != nil {
 			return out, err
 		}
@@ -462,11 +487,13 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 		if power == "processing" || power == "suspended" || power == "network_limited" {
 			return out, conflict("power_processing", "资源状态不允许重置密码，请先刷新状态")
 		}
-		if _, err = provision.Unseal(s.ProvisionEncryptionKey, serviceID, credentials); err != nil {
-			return out, conflict("credentials_unavailable", "当前服务凭据不可用，请联系管理员")
+		if mode == "nokvm" {
+			if _, err = provision.Unseal(s.ProvisionEncryptionKey, serviceID, credentials); err != nil {
+				return out, conflict("credentials_unavailable", "当前服务凭据不可用，请联系管理员")
+			}
 		}
 		var recent bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action='reset_password' AND created_at>clock_timestamp()-interval '60 seconds')`, serviceID).Scan(&recent); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action=$2 AND created_at>clock_timestamp()-interval '60 seconds')`, serviceID, action).Scan(&recent); err != nil {
 			return out, err
 		}
 		if recent {
@@ -479,6 +506,9 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 		if action == "rescue_system" {
 			requestPayload, _ = json.Marshal(map[string]int{"system": system})
 		}
+	}
+	if action == "exit_rescue_system" && mode != "supplier" {
+		return out, conflict("unsupported_rescue_mode", "该服务不支持退出救援系统")
 	}
 	if provision.IsPowerAction(action) {
 		if mode != "nokvm" && mode != "supplier" {
@@ -550,7 +580,7 @@ func allowedServiceAction(status, action string) bool {
 		return status == "active"
 	case "power_on", "power_off", "reboot", "force_off", "force_reboot":
 		return status == "active"
-	case "reset_password", "reinstall", "rescue_system":
+	case "reset_password", "reinstall", "rescue_system", "exit_rescue_system":
 		return status == "active"
 	default:
 		return false

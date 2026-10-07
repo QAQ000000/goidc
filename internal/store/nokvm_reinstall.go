@@ -42,6 +42,13 @@ func (s *Store) ServiceTemplates(ctx context.Context, actorID, serviceID int64, 
 	if err = tx.QueryRow(ctx, `SELECT provision_mode FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3)`, serviceID, admin, actorID).Scan(&mode); err != nil {
 		return nil, err
 	}
+	if mode == "supplier" {
+		if err = tx.Commit(ctx); err != nil {
+			return nil, err
+		}
+		listing, err := s.supplierTemplates(ctx, actorID, serviceID, admin)
+		return listing.templates, err
+	}
 	if mode != "nokvm" {
 		return nil, conflict("unsupported_reinstall_mode", "该服务不支持系统重装")
 	}

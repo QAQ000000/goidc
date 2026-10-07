@@ -22,6 +22,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/provision-profiles"] = "products.view"
 	m["POST /api/v1/admin/services/{id}/delivery-verification"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/credentials"] = "services.manage"
+	m["POST /api/v1/admin/services/{id}/vnc"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/reset-password"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/reinstall"] = "services.manage"
 	m["GET /api/v1/admin/services/{id}/reinstall-templates"] = "services.view"

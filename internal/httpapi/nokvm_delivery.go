@@ -33,6 +33,7 @@ func (s *Server) verifyDelivery(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, result)
 }
 func (s *Server) serviceCredentials(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	id, ok := pathID(w, r)
 	if !ok {
 		return
@@ -49,13 +50,30 @@ func (s *Server) serviceCredentials(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, result)
 }
 
+func (s *Server) serviceVNC(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	if !s.authLimit(w, r, "service-vnc", 30) {
+		return
+	}
+	u, err := s.db.ServiceVNC(requestFileContext(r), identityFrom(r).ID, id, true)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, map[string]string{"url": u})
+}
+
 func (s *Server) reinstallTemplates(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
-	result, err := s.db.ServiceTemplates(r.Context(), identityFrom(r).ID, id, adminRoute(r))
+	result, err := s.db.ServiceTemplates(requestFileContext(r), identityFrom(r).ID, id, adminRoute(r))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -76,7 +94,7 @@ func (s *Server) reinstallService(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	result, err := s.db.ReinstallService(r.Context(), identityFrom(r).ID, id, in.TemplateID, in.Acknowledged, r.Header.Get("Idempotency-Key"), adminRoute(r))
+	result, err := s.db.ReinstallService(requestFileContext(r), identityFrom(r).ID, id, in.TemplateID, in.Acknowledged, r.Header.Get("Idempotency-Key"), adminRoute(r))
 	if err != nil {
 		s.fail(w, r, err)
 		return

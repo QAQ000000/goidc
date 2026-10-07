@@ -39,7 +39,7 @@ func newZJMF(account Account) (Adapter, error) {
 	return &zjmf{account: account, base: u, client: &http.Client{Transport: tr, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (z *zjmf) Capabilities() Capabilities {
-	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true}
+	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true}
 }
 func (z *zjmf) endpoint(path string) string {
 	u := *z.base
@@ -747,7 +747,7 @@ func (z *zjmf) Execute(ctx context.Context, request ActionRequest) (Service, err
 	funcName := map[string]string{
 		"power_on": "on", "power_off": "off", "reboot": "reboot",
 		"force_off": "hard_off", "force_reboot": "hard_reboot",
-		"reset_password": "crack_pass", "rescue_system": "rescue_system",
+		"reset_password": "crack_pass", "rescue_system": "rescue_system", "reinstall": "reinstall", "exit_rescue_system": "exitRescue",
 	}[request.Action]
 	if funcName == "" {
 		return Service{}, &Error{Code: "unsupported_action"}
@@ -776,11 +776,22 @@ func (z *zjmf) Execute(ctx context.Context, request ActionRequest) (Service, err
 		form.Set("system", strconv.Itoa(request.System))
 		form.Set("temp_pass", request.Password)
 	}
+	if request.Action == "reinstall" {
+		if request.TemplateID < 1 {
+			return Service{}, &Error{Code: "invalid_template"}
+		}
+		form.Set("os", strconv.FormatInt(request.TemplateID, 10))
+		form.Set("format_data_disk", "0")
+	}
 	token, err := z.login(ctx)
 	if err != nil {
 		return Service{}, err
 	}
-	if _, err = z.post(ctx, token, "provision/default", form); err != nil {
+	path := "provision/default"
+	if request.Action == "exit_rescue_system" {
+		path = "provision/custom/" + strconv.FormatInt(request.UpstreamID, 10)
+	}
+	if _, err = z.post(ctx, token, path, form); err != nil {
 		return Service{}, err
 	}
 	remote, err := z.Sync(ctx, request.UpstreamID)
@@ -790,7 +801,68 @@ func (z *zjmf) Execute(ctx context.Context, request ActionRequest) (Service, err
 	if request.Action == "reset_password" && remote.Password != request.Password {
 		return remote, &Error{Code: "password_confirmation_pending", Unknown: true, UpstreamID: request.UpstreamID}
 	}
+	if request.Action == "reinstall" {
+		return remote, &Error{Code: "reinstall_confirmation_pending", Unknown: true, UpstreamID: request.UpstreamID}
+	}
 	return remote, nil
+}
+
+func (z *zjmf) Templates(ctx context.Context, id int64) ([]Template, error) {
+	if id < 1 {
+		return nil, &Error{Code: "invalid_service"}
+	}
+	w, err := z.get(ctx, "host/header", url.Values{"host_id": {strconv.FormatInt(id, 10)}, "source": {"API"}})
+	if err != nil {
+		return nil, err
+	}
+	var data struct {
+		CloudOS []Template `json:"cloud_os"`
+	}
+	if json.Unmarshal(w.Data, &data) != nil {
+		return nil, &Error{Code: "templates_invalid"}
+	}
+	if data.CloudOS == nil {
+		data.CloudOS = []Template{}
+	}
+	seen := map[int64]bool{}
+	for _, t := range data.CloudOS {
+		if t.ID < 1 || t.ID > 2147483647 || strings.TrimSpace(t.Name) == "" || len(t.Name) > 120 || len(t.Group) > 80 || strings.ContainsAny(t.Name+t.Group, "\r\n\x00") || seen[t.ID] {
+			return nil, &Error{Code: "templates_invalid"}
+		}
+		seen[t.ID] = true
+	}
+	return data.CloudOS, nil
+}
+
+func (z *zjmf) VNC(ctx context.Context, id int64) (string, error) {
+	if id < 1 {
+		return "", &Error{Code: "invalid_service"}
+	}
+	token, err := z.login(ctx)
+	if err != nil {
+		return "", err
+	}
+	w, err := z.post(ctx, token, "provision/default", url.Values{"id": {strconv.FormatInt(id, 10)}, "func": {"vnc"}, "is_api": {"1"}})
+	if err != nil {
+		return "", err
+	}
+	var data struct {
+		URL string `json:"url"`
+	}
+	if json.Unmarshal(w.Data, &data) != nil || !ValidConsoleURL(data.URL) {
+		return "", &Error{Code: "console_url_invalid"}
+	}
+	return data.URL, nil
+}
+
+func ValidConsoleURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.Fragment != "" || strings.ContainsAny(raw, "\\\r\n\t ") {
+		return false
+	}
+	ip, err := netip.ParseAddr(u.Hostname())
+	local := u.Hostname() == "localhost" || (err == nil && (ip.IsLoopback() || ip.IsPrivate()))
+	return u.Scheme == "https" || (u.Scheme == "http" && local)
 }
 
 func ValidActionPassword(password string) bool {

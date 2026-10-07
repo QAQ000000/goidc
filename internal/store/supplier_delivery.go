@@ -61,6 +61,22 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	if err != nil {
 		return s.failUndispatchedSupplierJob(ctx, claimed, err)
 	}
+	var reinstallItems []supplier.Template
+	if claimed.Action == "reinstall" {
+		var upstream string
+		if err = s.Pool.QueryRow(ctx, "SELECT upstream_id FROM services WHERE id=$1", claimed.ServiceID).Scan(&upstream); err != nil {
+			return err
+		}
+		id, _ := strconv.ParseInt(upstream, 10, 64)
+		console, ok := adapter.(supplier.ConsoleAdapter)
+		if !ok {
+			return s.failUndispatchedSupplierJob(ctx, claimed, nil)
+		}
+		reinstallItems, err = console.Templates(ctx, id)
+		if err != nil {
+			return s.failUndispatchedSupplierJob(ctx, claimed, err)
+		}
+	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -108,7 +124,8 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 		(claimed.Action == "suspend" && caps.Suspend) || (claimed.Action == "resume" && caps.Resume) ||
 		(provision.IsPowerAction(claimed.Action) && caps.Power) ||
 		(claimed.Action == "reset_password" && caps.ResetPassword) ||
-		(claimed.Action == "rescue_system" && caps.Rescue)
+		((claimed.Action == "rescue_system" || claimed.Action == "exit_rescue_system") && caps.Rescue) ||
+		(claimed.Action == "reinstall" && caps.Reinstall)
 	if !supported {
 		return conflict("unsupported_supplier_action", "该适配器不支持该动作")
 	}
@@ -117,6 +134,26 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 		return conflict("supplier_resource_missing", "缺少供应商资源标识")
 	}
 	actionRequest := supplier.ActionRequest{Action: claimed.Action, UpstreamID: upstreamID}
+	if claimed.Action == "reinstall" {
+		template, templateErr := pendingReinstallTemplate(ctx, tx, claimed)
+		if templateErr != nil {
+			return templateErr
+		}
+		found := false
+		for _, item := range reinstallItems {
+			if item.ID == template.ID && item.Name == template.Name && item.Group == template.Group {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='failed',last_error='供应商镜像目录已变更',locked_at=NULL,completed_at=now(),updated_at=now() WHERE id=$1", claimed.ID); err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		}
+		actionRequest.TemplateID = template.ID
+	}
 	if claimed.Action == "reset_password" || claimed.Action == "rescue_system" {
 		credentials, credentialsErr := s.pendingJobCredentials(ctx, tx, claimed)
 		if credentialsErr != nil || !provision.ValidSystemPassword(credentials.Password) {
@@ -236,13 +273,18 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 			}
 		}
 	}
+	// Sync cannot create or mutate an upstream resource, so read and apply
+	// failures release the account without requiring delivery reconciliation.
+	if j.Action == "sync" && outcome != "succeeded" {
+		outcome, message = "failed", "供应商同步失败，请稍后重试"
+	}
 	if outcome == "failed" && j.Action == "create" {
 		if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", j.ServiceID, message); err != nil {
 			return err
 		}
 	}
 	// Store only normalized identifiers/costs, never supplier raw payloads or credentials.
-	payload, _ := json.Marshal(map[string]any{"upstream_id": result.UpstreamID, "invoice_id": result.InvoiceID, "cost_cents": result.CostCents, "currency": result.Currency, "upstream_status": remote.Status})
+	payload, _ := json.Marshal(map[string]any{"upstream_id": result.UpstreamID, "invoice_id": result.InvoiceID, "cost_cents": result.CostCents, "currency": result.Currency, "upstream_status": remote.Status, "command_accepted": outcome == "succeeded" && (provision.IsPowerAction(j.Action) || j.Action == "rescue_system" || j.Action == "exit_rescue_system")})
 	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status=$2,last_error=$3,result=$4,locked_at=NULL,completed_at=CASE WHEN $2='waiting_verification' THEN NULL ELSE now() END,updated_at=now() WHERE id=$1`, j.ID, outcome, message, payload); err != nil {
 		return err
 	}

@@ -69,6 +69,8 @@ type Capabilities struct {
 	Power         bool `json:"power"`
 	ResetPassword bool `json:"reset_password"`
 	Rescue        bool `json:"rescue"`
+	VNC           bool `json:"vnc"`
+	Reinstall     bool `json:"reinstall"`
 	Suspend       bool `json:"suspend"`
 	Resume        bool `json:"resume"`
 	Terminate     bool `json:"terminate"`
@@ -127,8 +129,21 @@ type Service struct {
 type ActionRequest struct {
 	Action     string
 	UpstreamID int64
-	Password   string
+	Password   string `json:"-"`
 	System     int
+	TemplateID int64
+}
+
+// ConsoleAdapter supplies ephemeral console links and resource-owned OS choices.
+type ConsoleAdapter interface {
+	VNC(context.Context, int64) (string, error)
+	Templates(context.Context, int64) ([]Template, error)
+}
+
+type Template struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Group string `json:"group"`
 }
 
 type Error struct {

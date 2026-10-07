@@ -107,6 +107,18 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 	}
 	state = "failed"
 	if in.Outcome == "delivered" {
+		if j.Action == "reset_password" {
+			wanted, credentialErr := s.pendingJobCredentials(ctx, tx, j)
+			if credentialErr != nil || wanted.Password == "" || remote.Password != wanted.Password {
+				return conflict("password_confirmation_pending", "上游密码尚未与请求一致，请继续核验")
+			}
+		}
+		if j.Action == "reinstall" {
+			template, templateErr := pendingReinstallTemplate(ctx, tx, j)
+			if templateErr != nil || remote.OS != template.Name || remote.Password == "" {
+				return conflict("reinstall_confirmation_pending", "上游系统与登录凭据尚未确认，请继续核验")
+			}
+		}
 		if err = applySupplierRemote(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
 			return err
 		}

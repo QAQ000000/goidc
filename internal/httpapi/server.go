@@ -328,6 +328,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/delivery", s.auth(s.serviceDelivery, true))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/delivery-verification", s.auth(s.verifyDelivery, true))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/credentials", s.auth(s.serviceCredentials, true))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/vnc", s.auth(s.serviceVNC, true))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/reset-password", s.auth(s.resetServicePassword, true))
 	mux.HandleFunc("GET /api/v1/admin/services/{id}/reinstall-templates", s.auth(s.reinstallTemplates, true))
 	mux.HandleFunc("GET /api/v1/admin/services/{id}/monitoring", s.auth(s.serviceMonitoring, true))

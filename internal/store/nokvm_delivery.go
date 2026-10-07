@@ -494,12 +494,12 @@ func (s *Store) ServiceCredentials(ctx context.Context, actorID, serviceID int64
 	}
 	var username string
 	var sealed []byte
-	if err = tx.QueryRow(ctx, "SELECT username,credentials_encrypted FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3) AND status IN ('active','suspended') AND provision_mode='nokvm' FOR SHARE", serviceID, admin, actorID).Scan(&username, &sealed); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT username,credentials_encrypted FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3) AND status IN ('active','suspended') AND provision_mode IN ('nokvm','supplier') FOR SHARE", serviceID, admin, actorID).Scan(&username, &sealed); err != nil {
 		return nil, err
 	}
 	var resetting bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1
- AND action IN ('reset_password','reinstall','snapshot_restore','backup_restore') AND status IN ('pending','running','waiting_verification'))`, serviceID).Scan(&resetting); err != nil {
+ AND action IN ('reset_password','rescue_system','exit_rescue_system','reinstall','snapshot_restore','backup_restore') AND status IN ('pending','running','waiting_verification'))`, serviceID).Scan(&resetting); err != nil {
 		return nil, err
 	}
 	if resetting {

@@ -19,18 +19,21 @@ import (
 )
 
 type supplierFixture struct {
-	db                            *store.Store
-	h                             http.Handler
-	root, customer, reader, other string
-	supplierID, pid, uid          int64
-	in                            store.SupplierImportInput
-	remote                        *httptest.Server
-	creates, pays                 atomic.Int64
-	uncertain                     atomic.Bool
-	remoteProduct                 atomic.Int64
-	blocked                       chan struct{}
-	entered                       chan struct{}
-	once                          sync.Once
+	db                                   *store.Store
+	h                                    http.Handler
+	root, customer, reader, other        string
+	supplierID, pid, uid                 int64
+	in                                   store.SupplierImportInput
+	remote                               *httptest.Server
+	creates, pays                        atomic.Int64
+	uncertain                            atomic.Bool
+	remoteProduct                        atomic.Int64
+	blocked                              chan struct{}
+	entered                              chan struct{}
+	once                                 sync.Once
+	actions                              atomic.Int64
+	systemPassword, systemOS, consoleURL atomic.Value
+	syncFailure                          atomic.Bool
 }
 
 func supplierSetup(t *testing.T) *supplierFixture {
@@ -77,11 +80,37 @@ func supplierSetup(t *testing.T) *supplierFixture {
 			f.pays.Add(1)
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
 		case "/host/header":
+			if f.syncFailure.Load() {
+				fmt.Fprint(w, `{"status":200,"data":{"host_data":{"id":42,"productid":7,"domainstatus":"Active","nextduedate":"not-a-date"}}}`)
+				return
+			}
 			productID := f.remoteProduct.Load()
 			if productID == 0 {
 				productID = 7
 			}
-			fmt.Fprintf(w, `{"status":200,"data":{"host_data":{"id":42,"productid":%d,"domainstatus":"Active","domain":"vm.example","nextduedate":1800000000}}}`, productID)
+			password, _ := f.systemPassword.Load().(string)
+			osName, _ := f.systemOS.Load().(string)
+			json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"host_data": map[string]any{"id": 42, "productid": productID, "domainstatus": "Active", "domain": "vm.example", "nextduedate": 1800000000, "username": "root", "password": password, "os": osName}, "cloud_os": []map[string]any{{"id": 17, "name": "Debian 13", "group": "Linux"}, {"id": 18, "name": "Windows Server 2025", "group": "Windows"}}}})
+		case "/provision/default", "/provision/custom/42":
+			if r.Method != http.MethodPost || r.PostFormValue("id") != "42" || r.PostFormValue("is_api") != "1" {
+				t.Error("invalid supplier action identity")
+			}
+			if r.PostFormValue("func") == "vnc" {
+				u, _ := f.consoleURL.Load().(string)
+				if u == "" {
+					u = "https://console.example/vnc?token=private-console-token"
+				}
+				json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"url": u, "pass": "private-console-password"}})
+			} else {
+				f.actions.Add(1)
+				if r.URL.Path == "/provision/custom/42" && r.PostFormValue("func") != "exitRescue" {
+					t.Error("invalid custom function")
+				}
+				if r.PostFormValue("func") == "reinstall" && (r.PostFormValue("os") != "17" || r.PostFormValue("format_data_disk") != "0") {
+					t.Error("invalid reinstall arguments")
+				}
+				fmt.Fprint(w, `{"status":200}`)
+			}
 		case "/cart/hostinfo":
 			productID := f.remoteProduct.Load()
 			if productID == 0 {
