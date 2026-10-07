@@ -293,7 +293,7 @@ export type Product = {
   configuration_rules?: NativeConfigurationRule[];
 };
 export type NativeRulePredicate = {group_id:number;option_id:number|null;operator:"equals"|"not_equals"|"absent"|"quantity_in"|"quantity_out";qty_minimum:number|null;qty_maximum:number|null};
-export type SupplierProvider = { id:string; name:string; capabilities:{catalog:boolean;product:boolean;create:boolean;sync:boolean;suspend:boolean;resume:boolean;terminate:boolean;renew:boolean} };
+export type SupplierProvider = { id:string; name:string; capabilities:{catalog:boolean;product:boolean;create:boolean;sync:boolean;power:boolean;reset_password:boolean;rescue:boolean;vnc:boolean;reinstall:boolean;suspend:boolean;resume:boolean;terminate:boolean;renew:boolean} };
 export type SupplierAccount = { id:number; name:string; provider:string; base_url:string; username:string; active:boolean; version:number; credentials_configured:boolean; product_count:number; blocked_job_id?:number|null };
 export type SupplierPrice = {amount_cents:number;setup_cents:number};
 export type SupplierProduct = {id:number;name:string;description:string;currency?:string;revision?:string;stock?:number|null;prices?:Record<string,SupplierPrice>|null;options?:{id:number;name:string;type:string;required:boolean;choices?:{id:number;name:string;prices?:Record<string,SupplierPrice>|null}[]|null}[]|null;fields?:{id:number;name:string;type:string;description:string;required:boolean;choices?:string[]|null}[]|null;supported:boolean;unsupported_reason?:string};

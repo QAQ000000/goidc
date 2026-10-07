@@ -35,7 +35,7 @@ type ActivityResponse = {
 const activityActions = [
   ["create", "开通资源"], ["suspend", "暂停服务"], ["resume", "恢复服务"], ["terminate", "终止资源"], ["sync", "刷新资源"],
   ["upgrade", "变更配置"], ["reset_password", "重置系统密码"], ["reinstall", "重装系统"], ["power_on", "开机"], ["power_off", "关机"],
-  ["reboot", "重启"], ["force_off", "强制关机"], ["force_reboot", "强制重启"], ["rescue_system", "切换救援系统"], ["snapshot_create", "创建快照"], ["snapshot_delete", "删除快照"],
+  ["reboot", "重启"], ["force_off", "强制关机"], ["force_reboot", "强制重启"], ["rescue_system", "切换救援系统"], ["exit_rescue_system", "退出救援系统"], ["snapshot_create", "创建快照"], ["snapshot_delete", "删除快照"],
   ["snapshot_restore", "恢复快照"], ["backup_create", "创建备份"], ["backup_delete", "删除备份"], ["backup_restore", "恢复备份"], ["nat_acl_create", "创建端口转发"],
   ["nat_acl_delete", "删除端口转发"], ["nat_web_create", "创建 NAT 建站"], ["nat_web_delete", "删除 NAT 建站"], ["cdrom_mount", "挂载光驱"], ["cdrom_unmount", "卸载光驱"],
   ["service.manual.completed", "人工交付完成"], ["service.nokvm.verified", "资源核验结果"], ["service.nokvm.completed", "资源操作完成"],
