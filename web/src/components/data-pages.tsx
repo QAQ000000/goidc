@@ -472,7 +472,7 @@ export function AdminListView({
           value={draft}
           setValue={setDraft}
           submit={() => {setQuery(draft);setPage(0)}}
-          placeholder={kind === "customers" ? "搜索客户姓名或邮箱" : "搜索记录"}
+          placeholder={kind === "customers" ? "搜索客户姓名或邮箱" : "搜索工单标题或编号"}
         />
         {kind === "tickets" && admin && <div className="mb-4 max-w-xs"><Select value={department} onValueChange={value => { setDepartment(value); setPage(0); }}><SelectTrigger aria-label="筛选工单部门" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部授权部门</SelectItem>{currentUser.data?.ticket_unassigned && <SelectItem value="0">未指定部门</SelectItem>}{directory.data?.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.name}{item.active === false ? "（已停用）" : ""}</SelectItem>)}</SelectContent></Select>{directory.error && <Failure error={directory.error} retry={directory.refresh} />}</div>}
           </div>
@@ -1105,9 +1105,10 @@ export function TicketsView({ admin = false }: { admin?: boolean }) {
       description={admin ? "客户问题与服务请求" : "提交和跟踪支持请求"}
       endpoint={admin ? "/admin/tickets" : "/tickets"}
       columns={[
-        { key: "ticket_no", label: "工单号" },
-        { key: "subject", label: "主题",render:r=><Link className="text-primary underline underline-offset-4" href={`${admin?"/admin":"/console"}/tickets/${r.id}`}>{String(r.subject)}</Link> },
+        { key: "id", label: "ID" },
+        { key: "subject", label: "工单标题", render: (r, _refresh, returnQuery) => <div className="min-w-48 max-w-96"><Link className="block truncate text-primary hover:underline" title={String(r.subject)} href={`${admin ? "/admin" : "/console"}/tickets/${r.id}${returnQuery ? `?${returnQuery}` : ""}`}>{String(r.subject)}</Link><span className="mt-1 block font-mono text-xs text-muted-foreground">{String(r.ticket_no ?? `#${r.id}`)}</span></div> },
         ...(admin ? [
+          { key: "customer_name", label: "提交人", render: (r: Row) => <div><span className="block">{String(r.customer_name ?? "-")}</span><span className="text-xs text-muted-foreground">#{String(r.user_id ?? "-")}</span></div> },
           { key: "department_name", label: "部门", render: (r: Row) => String(r.department_name ?? "未指定") },
           { key: "assignee_name", label: "处理人", render: (r: Row) => String(r.assignee_name ?? "未分派") },
         ] : []),
@@ -1117,8 +1118,13 @@ export function TicketsView({ admin = false }: { admin?: boolean }) {
           render: (r) => <Status value={String(r.priority)} />,
         },
         {
+          key: "created_at",
+          label: "提交时间",
+          render: (r) => date(String(r.created_at)),
+        },
+        {
           key: "updated_at",
-          label: "更新时间",
+          label: "最近更新",
           render: (r) => date(String(r.updated_at)),
         },
         {
@@ -1134,7 +1140,7 @@ export function AuditView() {
   return (
     <AdminListView
       kind="audit"
-      title="操作审计"
+      title="系统日志"
       description="关键业务变更的不可变记录"
       endpoint="/admin/audit"
       columns={[
@@ -1143,10 +1149,10 @@ export function AuditView() {
           label: "时间",
           render: (r) => date(String(r.created_at)),
         },
-        { key: "actor_name", label: "操作者" },
-        { key: "action", label: "动作" },
-        { key: "entity_type", label: "对象" },
-        { key: "entity_id", label: "编号" },
+        { key: "action", label: "描述", render: (r) => <span className="block min-w-48 max-w-96 break-words text-sm">{String(r.action ?? "-")}</span> },
+        { key: "actor_name", label: "操作者", render: (r) => <div><span className="block">{String(r.actor_name ?? "系统")}</span>{r.actor_id != null && <span className="text-xs text-muted-foreground">#{String(r.actor_id)}</span>}</div> },
+        { key: "entity_type", label: "关联对象", render: (r) => <span className="text-sm">{String(r.entity_type ?? "-")}<span className="ml-2 font-mono text-xs text-muted-foreground">#{String(r.entity_id ?? "-")}</span></span> },
+        { key: "id", label: "日志 ID", render: (r) => <span className="font-mono text-xs text-muted-foreground">{String(r.id)}</span> },
       ]}
     />
   );
