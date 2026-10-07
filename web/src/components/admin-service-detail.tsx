@@ -16,6 +16,9 @@ import { ServiceConfigurationChanges } from "./configuration-upgrades";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
+
+const serviceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
 const cycles:Record<string,string>={monthly:"月付",quarterly:"季付",annually:"年付",once:"一次性"};
 const modes:Record<string,string>={manual:"人工交付",simulation:"模拟交付",nokvm:"NOKVM",supplier:"上游供应商"};
@@ -43,6 +46,7 @@ function CredentialsField({service}:{service:Service}) {
 }
 
 export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanels}:{service:Service;refresh:()=>void;manualDelivery?:ReactNode;resourcePanels?:ReactNode}) {
+  const backHref = useAdminListReturnHref("/admin/services", serviceStates, "");
   const [tab,setTab]=useState("product");
   const jobs=service.jobs??[];
   const pending=jobs.filter(job=>["pending","running","waiting_manual","waiting_verification"].includes(job.status));
@@ -53,7 +57,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
   const due=service.next_due_at?date(service.next_due_at):service.billing_cycle==="once"?"一次性服务":"尚未起算";
   return <div className="service-detail min-w-0">
     <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-      <Button variant="ghost" size="sm" asChild><Link href="/admin/services"><ArrowLeft size={16}/>服务列表</Link></Button>
+      <Button variant="ghost" size="sm" asChild><Link href={backHref}><ArrowLeft size={16}/>服务列表</Link></Button>
       <div className="flex flex-wrap gap-2"><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=services`}><UserRound size={15}/>{service.customer_name||`客户 #${service.user_id}`}</Link></Button></PermissionGate><Button variant="outline" size="icon-sm" onClick={refresh} aria-label="刷新服务详情" title="刷新服务详情"><RefreshCw size={16}/></Button></div>
     </div>
     <header className="admin-page-heading flex flex-wrap items-start justify-between gap-4 mb-5">
@@ -87,7 +91,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         {service.provision_mode==="supplier"&&<SupplierServiceDelivery service={service} admin refresh={refresh}/>}
         {service.provision_mode==="nokvm"&&<NOKVMServiceDelivery service={service} admin refresh={refresh}/>}
         {manualDelivery}
-        <Band title="财务" actions={<><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=transactions`}><ExternalLink size={15}/>交易流水</Link></Button></PermissionGate>{service.invoice_id&&<PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${service.invoice_id}`}><FileText size={15}/>账单</Link></Button></PermissionGate>}</>}>
+        <Band title="财务" actions={<><PermissionGate permission="customers.view"><PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=transactions`}><ExternalLink size={15}/>交易流水</Link></Button></PermissionGate></PermissionGate>{service.invoice_id&&<PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${service.invoice_id}`}><FileText size={15}/>账单</Link></Button></PermissionGate>}</>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
             <Field label="订购时间" value={date(service.created_at)}/>
             <Field label="首期金额" value={service.first_price_cents===undefined?null:money(service.first_price_cents)}/>
