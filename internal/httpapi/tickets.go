@@ -33,6 +33,15 @@ func isAdmin(r *http.Request) bool {
 func (s *Server) tickets(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	filter := r.URL.Query().Get("department_id") != "" && r.URL.Query().Get("department_id") != "all"
+	var customerID *int64
+	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
+		id, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, 400, "invalid_customer", "客户筛选无效")
+			return
+		}
+		customerID = &id
+	}
 	var department *int64
 	if filter {
 		var ok bool
@@ -48,7 +57,8 @@ func (s *Server) tickets(w http.ResponseWriter, r *http.Request) {
  FROM tickets t JOIN users u ON u.id=t.user_id LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN users a ON a.id=t.assignee_id
  WHERE t.merged_ticket_id IS NULL AND (($1::boolean AND admin_ticket_department_allowed($2,t.department_id)) OR (NOT $1::boolean AND t.user_id=$2 AND coalesce(d.customer_visible,true)))
  AND (NOT $5::boolean OR t.department_id IS NOT DISTINCT FROM $6::bigint)
- AND ($7='' OR t.subject ILIKE '%'||$7||'%' OR t.ticket_no ILIKE '%'||$7||'%' OR t.legacy_ticket_no ILIKE '%'||$7||'%') ORDER BY t.updated_at DESC,t.id DESC LIMIT $3 OFFSET $4`, adminRoute(r), identityFrom(r).ID, limit, offset, filter, department, strings.TrimSpace(r.URL.Query().Get("q")))
+ AND ($7='' OR t.subject ILIKE '%'||$7||'%' OR t.ticket_no ILIKE '%'||$7||'%' OR t.legacy_ticket_no ILIKE '%'||$7||'%')
+ AND ($8::bigint IS NULL OR t.user_id=$8) ORDER BY t.updated_at DESC,t.id DESC LIMIT $3 OFFSET $4`, adminRoute(r), identityFrom(r).ID, limit, offset, filter, department, strings.TrimSpace(r.URL.Query().Get("q")), customerID)
 }
 func (s *Server) ticketDepartments(w http.ResponseWriter, r *http.Request) {
 	s.list(w, r, "SELECT id,name,slug,sort_order FROM ticket_departments WHERE active AND customer_visible ORDER BY sort_order,id")

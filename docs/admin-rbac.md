@@ -71,6 +71,10 @@ staff 创建和更新接受 `customer_scope`、`customer_ownerless` 和 `sales_e
 | 方法和路径 | 契约 |
 | --- | --- |
 | `GET /api/v1/admin/customers/{id}` | 需要 `customers.view` 和客户范围；返回客户摘要（账号、邮箱、状态、余额、分组、销售归属）；范围外或不存在统一返回 404 |
+| `GET /api/v1/admin/services?customer_id={id}` | 管理端可选客户筛选；仍执行 `services.view` 和客户范围；服务列表只返回该客户资源 |
+| `GET /api/v1/admin/orders?customer_id={id}` | 管理端可选客户筛选；仍执行 `orders.view` 和客户范围；订单列表只返回该客户订单 |
+| `GET /api/v1/admin/invoices?customer_id={id}` | 管理端可选客户筛选；仍执行 `invoices.view` 和客户范围；账单列表只返回该客户账单 |
+| `GET /api/v1/admin/tickets?customer_id={id}` | 管理端可选客户筛选；仍执行 `tickets.view` 和工单部门范围；工单列表只返回该客户工单 |
 | `GET /api/v1/admin/sales-owners` | 超级管理员会话；仅启用的普通管理员、启用角色、`customers.view` 且 `sales_enabled`；返回 ID、登录名、姓名 |
 | `PUT /api/v1/admin/customers/{id}/sales-owner` | 超级管理员会话；必须显式传 `sales_owner_id`（正整数或 `null`）与 `expected_version`；错误版本 409；成功返回递增 `sales_version` |
 

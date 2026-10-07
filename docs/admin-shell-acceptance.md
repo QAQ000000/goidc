@@ -6,7 +6,7 @@
 
 管理端借鉴 Arco Pro 的蓝色主色、中性灰阶、紧凑控件和导航层级，沿用 Next.js、React、shadcn/ui、Radix 和 lucide-react，没有引入 Arco 依赖。客户中心保留绿色主题。管理员退出返回 `/admin-login`。
 
-本批补充了受 `customers.view` 和客户范围保护的 `GET /api/v1/admin/customers/{id}` 客户摘要接口；客户详情页接入真实摘要、联系人和客户文件入口。列表的 `q/page/department` 状态写入 URL，详情入口和返回按钮保留列表查询参数。未修改数据库、验证码配置或业务数据。
+本批补充了受 `customers.view` 和客户范围保护的 `GET /api/v1/admin/customers/{id}` 客户摘要接口；客户详情页接入真实摘要、联系人、服务、订单、账单、工单和客户文件入口。服务、订单、账单、工单列表增加管理端 `customer_id` 筛选，列表的 `q/page/department` 状态写入 URL，详情入口和返回按钮保留列表查询参数。未修改数据库、验证码配置或业务数据。
 
 ## 检查结果
 
@@ -26,7 +26,8 @@
 | 前端只读权限呈现 | PASS（模拟） | 浏览器临时将 `/me` 响应设为 `role: admin` 和 `customers.view`，仅显示客户导航，隐藏编辑按钮；随后恢复真实响应 |
 | 客户详情摘要与 URL 状态 | PASS | 实际 root 会话访问 `?q=acceptance`，详情 URL 为 `/admin/customers/2?q=acceptance`，返回后搜索框恢复 `acceptance`；摘要接口返回 200、客户 ID 2 |
 | 客户范围详情接口 | PASS | `GET /api/v1/admin/customers/2` 返回摘要；接口 SQL 使用 `admin_customer_allowed`，范围外对象统一 404 |
-| 后端 RBAC 和业务写入回归 | 未验证 | 本批未修改后端；权限响应模拟不构成真实只读账户或 API 拒绝写入的证据；未提交任何业务表单 |
+| 客户详情关联分区 | PASS | 实际 root 会话打开服务、订单、账单、工单分区；对应 `customer_id=2` 接口均返回 200，分别返回 2、2、2、1 条，四个分区均正确高亮并渲染表格 |
+| 后端 RBAC 和业务写入回归 | 部分验证 | 客户摘要及四个关联列表使用真实 root 会话和客户范围 SQL；未验证真实只读管理员的 API 拒绝写入边界；未提交任何业务表单 |
 | 全部业务页面状态与交互 | 未验证 | 本批不是逐页业务验收；错误、空态、超时、冲突、重复提交和完整客户标签页需要后续实施与验收 |
 
 部署后 `zjmfgo-api`、`zjmfgo-worker`、`zjmfgo-web` 均为 active，`http://localhost:3088/admin-login` 返回 200。浏览器控制台中的部署窗口连接拒绝及退出后的预期 401 已核对；最终检查没有 JavaScript 页面异常。

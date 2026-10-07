@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
@@ -382,6 +383,15 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	admin := adminRoute(r)
 	where := "(($1::boolean AND admin_customer_allowed($2,o.user_id)) OR (NOT $1::boolean AND o.user_id=$2))"
 	args := []any{admin, uid}
+	if admin && r.URL.Query().Get("customer_id") != "" {
+		customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		if err != nil || customerID < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
+			return
+		}
+		args = append(args, customerID)
+		where += fmt.Sprintf(" AND o.user_id=$%d", len(args))
+	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
 		valid := map[string]bool{"pending": true, "paid": true, "active": true, "cancelled": true, "refunded": true}
 		if !valid[status] {
@@ -416,6 +426,15 @@ func (s *Server) invoices(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	args := []any{adminRoute(r), identityFrom(r).ID}
 	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2))"
+	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
+		customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		if err != nil || customerID < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
+			return
+		}
+		args = append(args, customerID)
+		where += fmt.Sprintf(" AND i.user_id=$%d", len(args))
+	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
 		if status != "unpaid" && status != "paid" && status != "cancelled" && status != "refunded" {
 			writeError(w, 400, "invalid_status", "账单状态无效")

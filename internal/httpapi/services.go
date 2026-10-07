@@ -28,6 +28,15 @@ func (s *Server) services(w http.ResponseWriter, r *http.Request)     { s.servic
 func (s *Server) servicesPage(w http.ResponseWriter, r *http.Request) { s.servicesList(w, r, true) }
 func (s *Server) servicesList(w http.ResponseWriter, r *http.Request, paged bool) {
 	var group *int64
+	var customerID *int64
+	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
+		id, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, 400, "invalid_customer", "客户筛选无效")
+			return
+		}
+		customerID = &id
+	}
 	if raw := r.URL.Query().Get("group_id"); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || id < 0 {
@@ -43,16 +52,16 @@ func (s *Server) servicesList(w http.ResponseWriter, r *http.Request, paged bool
 	}
 	limit, offset := pagination(r)
 	where := serviceJoins + ` WHERE (($1::boolean AND admin_customer_allowed($2,s.user_id)) OR (NOT $1::boolean AND s.user_id=$2))
- AND ($3::bigint IS NULL OR coalesce(p.service_group_id,0)=$3) AND ($4='' OR s.status=$4)
- AND (s.name ILIKE $5 OR s.domain ILIKE $5)`
-	args := []any{adminRoute(r), identityFrom(r).ID, group, state, "%" + strings.TrimSpace(r.URL.Query().Get("q")) + "%"}
+	 AND ($3::bigint IS NULL OR coalesce(p.service_group_id,0)=$3) AND ($4='' OR s.status=$4)
+	 AND (s.name ILIKE $5 OR s.domain ILIKE $5) AND ($6::bigint IS NULL OR s.user_id=$6)`
+	args := []any{adminRoute(r), identityFrom(r).ID, group, state, "%" + strings.TrimSpace(r.URL.Query().Get("q")) + "%", customerID}
 	// Count and items share one statement snapshot, including empty pages.
 	if !paged {
-		s.list(w, r, "SELECT "+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+where+" ORDER BY s.id DESC LIMIT $6 OFFSET $7", append(args, limit, offset)...)
+		s.list(w, r, "SELECT "+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+where+" ORDER BY s.id DESC LIMIT $7 OFFSET $8", append(args, limit, offset)...)
 		return
 	}
 	rows, err := s.db.Pool.Query(r.Context(), `WITH filtered AS (SELECT `+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+where+`)
- SELECT (SELECT count(*) FROM filtered) AS total,coalesce((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $6 OFFSET $7) page),'[]'::jsonb) AS items`, append(args, limit, offset)...)
+ SELECT (SELECT count(*) FROM filtered) AS total,coalesce((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $7 OFFSET $8) page),'[]'::jsonb) AS items`, append(args, limit, offset)...)
 	if err != nil {
 		s.fail(w, r, err)
 		return
