@@ -61,20 +61,20 @@ export function QuantityTierEditor({ drafts, cycle, changedCycles, manage, busy,
       <div><h3 className="font-medium">数量阶梯价格</h3><p className="text-xs text-muted-foreground mt-1">区间不可重叠；未覆盖的数量不可购买。</p></div>
       {manage && <Button type="button" variant="outline" size="sm" disabled={busy || tiers.length >= 100} onClick={add}><Plus />新增区间</Button>}
     </div>
-    <label className="grid gap-2 text-sm">账期
+    <label className="grid gap-2 text-sm sm:max-w-xs">账期
       <Select value={cycle} disabled={busy} onValueChange={onCycleChange}>
         <SelectTrigger aria-label="阶梯价格账期" className="w-full"><SelectValue /></SelectTrigger>
         <SelectContent>{Object.entries(tierCycles).map(([value, label]) => <SelectItem key={value} value={value}>{label}{changedCycles.includes(value) ? "（未保存）" : ""}</SelectItem>)}</SelectContent>
       </Select>
     </label>
     {tiers.length === 0 && <p className="text-sm text-muted-foreground py-3">此账期暂无阶梯。</p>}
-    <fieldset disabled={!manage || busy} className="space-y-4">
-      {tiers.map((tier, index) => <div key={index} className="grid grid-cols-2 gap-3 items-end">
+    <fieldset disabled={!manage || busy} className="divide-y border-y">
+      {tiers.map((tier, index) => <div key={index} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-3 items-end py-3">
         <label className="grid gap-2 text-xs">起始数量<Input aria-label={`阶梯 ${index + 1} 起始数量`} type="number" min={1} max={1000000} step={1} value={tier.minimum} onChange={event => update(index, { minimum: event.target.value })} /></label>
         <label className="grid gap-2 text-xs">结束数量<Input aria-label={`阶梯 ${index + 1} 结束数量`} type="number" min={1} max={1000000} step={1} value={tier.maximum} onChange={event => update(index, { maximum: event.target.value })} /></label>
         <label className="grid gap-2 text-xs">单价（元）<Input aria-label={`阶梯 ${index + 1} 单价`} inputMode="decimal" value={tier.price} onChange={event => update(index, { price: event.target.value })} /></label>
         <label className="grid gap-2 text-xs">初装费（元）<Input aria-label={`阶梯 ${index + 1} 初装费`} inputMode="decimal" value={tier.setup} onChange={event => update(index, { setup: event.target.value })} /></label>
-        {manage && <div className="col-span-2 flex justify-end"><Button type="button" variant="ghost" size="icon" title={`删除阶梯 ${index + 1}`} aria-label={`删除阶梯 ${index + 1}`} onClick={() => onChange({ ...drafts, [cycle]: tiers.filter((_, i) => i !== index) })}><Trash2 /></Button></div>}
+        {manage && <div className="col-span-2 sm:col-span-1 flex justify-end"><Button type="button" variant="ghost" size="icon" title={`删除阶梯 ${index + 1}`} aria-label={`删除阶梯 ${index + 1}`} onClick={() => onChange({ ...drafts, [cycle]: tiers.filter((_, i) => i !== index) })}><Trash2 /></Button></div>}
       </div>)}
     </fieldset>
     {changedCycles.length > 0 && <p role="status" className="text-xs text-muted-foreground">待保存账期：{changedCycles.map(value => tierCycles[value]).join("、")}</p>}
