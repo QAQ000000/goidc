@@ -155,6 +155,17 @@ func TestPaymentSettingsDynamicAPIWorkerAndDisabledCallbacks(t *testing.T) {
 	}
 	body["key"] = ""
 	body["enabled"] = false
+	body["mock_enabled"] = true
+	body["types"] = []string{}
+	body["clear_key"] = true
+	w = request(f.h, "PUT", paymentSettingsPath, body, f.root, "")
+	expect(t, w, 409)
+	if errorData(t, w)["code"] != "payment_credentials_in_use" {
+		t.Fatal("pending payment credentials cleared for mock-only configuration")
+	}
+	delete(body, "clear_key")
+	body["key"] = ""
+	body["enabled"] = false
 	body["types"] = []string{}
 	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
 	w = epayCallback(f.h, "POST", "epay_wxpay", epayNotification(callbackCheckout, "disabled-callback-trade"))
@@ -198,6 +209,57 @@ func TestPaymentSettingsDynamicAPIWorkerAndDisabledCallbacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
+}
+
+func TestPaymentSettingsMockOnlyAfterClearingMerchantKey(t *testing.T) {
+	f := configurationUpgradeFixture(t, false)
+	cfg := settingsPaymentConfig()
+	f.h = New(f.db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	body := paymentSettingsBody("https://merchant.example", 1)
+	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
+	body["expected_version"] = 2
+	body["enabled"] = false
+	body["mock_enabled"] = true
+	body["types"] = []string{}
+	body["key"] = ""
+	body["clear_key"] = true
+	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
+	body["expected_version"] = 3
+	body["enabled"] = true
+	delete(body, "clear_key")
+	w := request(f.h, "PUT", paymentSettingsPath, body, f.root, "")
+	expect(t, w, 200)
+	saved := data(t, w)
+	if saved["api_url"] != "https://merchant.example" || saved["pid"] != "10001" || saved["key_configured"] != false {
+		t.Fatal("mock-only configuration lost retained merchant metadata")
+	}
+	providers := request(f.h, "GET", "/api/v1/payment-providers", nil, f.customer, "")
+	expect(t, providers, 200)
+	if !strings.Contains(providers.Body.String(), `"name":"mock"`) || strings.Contains(providers.Body.String(), "epay_") {
+		t.Fatal("mock-only providers incorrect", providers.Body.String())
+	}
+	invoice := manualInvoiceCreate(t, f.h, f.root, manualInvoiceInput(f.uid), "mock-only-cleared-invoice")
+	w = request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/payments", invoice), map[string]any{"provider": "mock", "expected_version": 1}, f.customer, "mock-only-cleared-intent")
+	expect(t, w, 201)
+	if data(t, w)["provider"] != "mock" {
+		t.Fatal("mock-only intent failed")
+	}
+	body["expected_version"] = 4
+	for _, kind := range []string{"alipay", "wxpay", "qqpay", "bank"} {
+		body["types"] = []string{kind}
+		w = request(f.h, "PUT", paymentSettingsPath, body, f.root, "")
+		expect(t, w, 409)
+		if errorData(t, w)["code"] != "invalid_payment_settings" {
+			t.Fatal("epay enabled without merchant key", kind)
+		}
+	}
+	body["types"] = []string{}
+	body["api_url"] = "http://merchant.example"
+	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 409)
+	var version int64
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT version FROM payment_settings").Scan(&version); err != nil || version != 4 {
+		t.Fatal("invalid mock-only updates changed configuration", err)
+	}
 }
 
 func TestPaymentSettingsValidationFallbackAndStaleIntent(t *testing.T) {

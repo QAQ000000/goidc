@@ -186,7 +186,7 @@ func (s *Store) UpdatePaymentSettings(ctx context.Context, actor int64, sessionH
 	}
 	if len(in.Types) > 0 || in.APIURL != "" || in.PID != "" || key != "" {
 		validationKey := key
-		if validationKey == "" && !*in.Enabled {
+		if validationKey == "" && (!*in.Enabled || len(in.Types) == 0) {
 			validationKey = "validation-only"
 		}
 		g := payment.EpayGateway{EpayConfig: payment.EpayConfig{APIURL: in.APIURL, PID: in.PID, Key: validationKey, PublicOrigin: fallback.PublicOrigin, Types: []string{"alipay"}}, Type: "alipay"}
