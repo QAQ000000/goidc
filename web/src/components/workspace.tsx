@@ -24,6 +24,7 @@ import { useResource } from "@/hooks/use-resource";
 import { adminNavigation, can, adminEntry } from "@/lib/admin-navigation";
 import { useServiceNavigation } from "@/hooks/use-service-navigation";
 import { serviceIcon } from "@/lib/service-icons";
+import { AdminShell } from "./admin-shell";
 
 const AccessContext = createContext<User | null>(null);
 export function useAdminPermission(permission: string) {
@@ -59,7 +60,7 @@ export function Workspace({
   title: string;
   admin?: boolean;
 }) {
-  const { data: user, error } = useResource<User>("/me");
+  const { data: user, error, refresh } = useResource<User>("/me");
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -69,11 +70,14 @@ export function Workspace({
   async function logout() {
     try {
       await api("/auth/logout", { method: "POST" });
-      router.push("/login");
+      router.push(admin ? "/admin-login" : "/login");
       router.refresh();
     } catch (e) {
       setLogoutError((e as Error).message);
     }
+  }
+  if (admin) {
+    return <AccessContext.Provider value={user}><AdminShell title={title} user={user} error={error} refresh={refresh} logout={logout} logoutError={logoutError}>{children}</AdminShell></AccessContext.Provider>;
   }
   return (
     <AccessContext.Provider value={user}><div className="workspace">

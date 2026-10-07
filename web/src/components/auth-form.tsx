@@ -91,7 +91,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
     }
   }
   return (
-    <main className="min-h-screen grid place-items-center px-6 py-8 bg-white">
+    <main className={`${adminLogin ? "admin-theme" : ""} min-h-screen grid place-items-center px-6 py-8 bg-white`}>
       <div className="auth-form">
         <Link
           href="/"
