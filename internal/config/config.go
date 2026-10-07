@@ -18,6 +18,7 @@ type Config struct {
 	PublicOrigins                                             []string
 	EpayAPIURL, EpayPID, EpayKey                              string
 	EpayTypes                                                 []string
+	PaymentMockEnabled                                        bool
 	SecureCookie                                              bool
 	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom            string
 	SMTPPort                                                  int
@@ -28,6 +29,10 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	mockEnabled, err := strconv.ParseBool(env("PAYMENT_MOCK_ENABLED", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("PAYMENT_MOCK_ENABLED must be a boolean")
+	}
 	smtpPort, err := strconv.Atoi(env("SMTP_PORT", "587"))
 	if err != nil || smtpPort < 1 || smtpPort > 65535 {
 		return Config{}, fmt.Errorf("SMTP_PORT must be between 1 and 65535")
@@ -38,6 +43,7 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: publicOrigin, PublicOrigins: publicOrigins, PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true", SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
+	c.PaymentMockEnabled = mockEnabled
 	if c.DatabaseURL == "" {
 		return c, fmt.Errorf("DATABASE_URL is required")
 	}

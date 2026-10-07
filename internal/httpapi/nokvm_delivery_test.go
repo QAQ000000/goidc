@@ -39,7 +39,7 @@ func nokvmFixtureSetup(t *testing.T, remote http.HandlerFunc, pay bool, configur
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: map[string]*provision.NOKVM{"fixture": adapter}, ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	h := New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: map[string]*provision.NOKVM{"fixture": adapter}, ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
 	_, root := user(t, db, h, "nokvm-root", "super_admin")
 	uid, customer := user(t, db, h, "nokvm-customer", "customer")
 	_, other := user(t, db, h, "nokvm-other", "customer")

@@ -123,7 +123,7 @@ func supplierSetup(t *testing.T) *supplierFixture {
 		}
 	}))
 	t.Cleanup(f.remote.Close)
-	f.h = New(f.db, config.Config{PublicOrigin: "http://localhost:3088", PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	f.h = New(f.db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
 	_, f.root = user(t, f.db, f.h, "supplier-root", "super_admin")
 	f.uid, f.customer = user(t, f.db, f.h, "supplier-customer", "customer")
 	rid, reader := user(t, f.db, f.h, "supplier-reader", "admin")

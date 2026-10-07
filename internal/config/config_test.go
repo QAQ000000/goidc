@@ -2,6 +2,30 @@ package config
 
 import "testing"
 
+func TestMockPaymentRequiresExplicitEnablement(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://app@localhost/example_test")
+	t.Setenv("PAYMENT_MOCK_ENABLED", "")
+	cfg, err := Load()
+	if err != nil || cfg.PaymentMockEnabled {
+		t.Fatal("mock payment must default to disabled", err)
+	}
+	for _, enabled := range []bool{false, true} {
+		value := "false"
+		if enabled {
+			value = "true"
+		}
+		t.Setenv("PAYMENT_MOCK_ENABLED", value)
+		cfg, err = Load()
+		if err != nil || cfg.PaymentMockEnabled != enabled {
+			t.Fatal("explicit mock payment configuration ignored", value, err)
+		}
+	}
+	t.Setenv("PAYMENT_MOCK_ENABLED", "enabled")
+	if _, err = Load(); err == nil {
+		t.Fatal("invalid mock payment configuration accepted")
+	}
+}
+
 func TestEpayConfigurationRequiresCompleteCredentials(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://app@localhost/example_test")
 	t.Setenv("MFA_ENCRYPTION_KEY", "")

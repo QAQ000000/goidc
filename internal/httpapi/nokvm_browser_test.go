@@ -60,7 +60,7 @@ func TestNOKVMBrowserFixture(t *testing.T) {
 	if origin == "" {
 		origin = "http://localhost:3099"
 	}
-	server := httptest.NewServer(New(f.db, config.Config{PublicOrigin: origin, PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
+	server := httptest.NewServer(New(f.db, config.Config{PublicOrigin: origin, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
 	defer server.Close()
 	ctx, stop := context.WithCancel(context.Background())
 	workerDone := make(chan struct{})

@@ -17,12 +17,86 @@ import (
 
 	"github.com/codex/zjmfgo/internal/config"
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 const paymentSettingsPath = "/api/v1/admin/payment-settings"
 
+func TestPaymentMockDisabledByDefaultAndExplicitConfiguration(t *testing.T) {
+	f := configurationUpgradeFixture(t, false)
+	cfg := epayTestConfig()
+	cfg.PaymentMockEnabled = false
+	f.h = New(f.db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	providers := request(f.h, "GET", "/api/v1/payment-providers", nil, f.customer, "")
+	expect(t, providers, 200)
+	if strings.Contains(providers.Body.String(), `"name":"mock"`) || !strings.Contains(providers.Body.String(), "epay_alipay") {
+		t.Fatal("default configuration exposed mock or disabled real payment", providers.Body.String())
+	}
+	settings := request(f.h, "GET", paymentSettingsPath, nil, f.root, "")
+	expect(t, settings, 200)
+	if data(t, settings)["mock_enabled"] != false {
+		t.Fatal("default settings enabled mock")
+	}
+	invoice := manualInvoiceCreate(t, f.h, f.root, manualInvoiceInput(f.uid), "mock-default-invoice")
+	for _, body := range []map[string]any{{"expected_version": 1}, {"provider": "mock", "expected_version": 1}} {
+		expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/payments", invoice), body, f.customer, "mock-default-intent"), 400)
+	}
+	cfg.PaymentMockEnabled = true
+	f.h = New(f.db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	providers = request(f.h, "GET", "/api/v1/payment-providers", nil, f.customer, "")
+	expect(t, providers, 200)
+	if !strings.Contains(providers.Body.String(), `"name":"mock"`) {
+		t.Fatal("explicit environment mock opt-in ignored")
+	}
+	w := request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/payments", invoice), map[string]any{"provider": "mock", "expected_version": 1}, f.customer, "mock-explicit-intent")
+	expect(t, w, 201)
+	body := map[string]any{"enabled": true, "mock_enabled": false, "api_url": "", "pid": "", "types": []string{}, "clear_key": false, "expected_version": 1}
+	// Save a mock-only policy in a deployment without Epay environment credentials.
+	cfg.EpayAPIURL, cfg.EpayPID, cfg.EpayKey, cfg.EpayTypes = "", "", "", nil
+	f.h = New(f.db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
+	providers = request(f.h, "GET", "/api/v1/payment-providers", nil, f.customer, "")
+	expect(t, providers, 200)
+	if strings.Contains(providers.Body.String(), `"name":"mock"`) {
+		t.Fatal("environment opted in over explicit database disable")
+	}
+	body["mock_enabled"], body["expected_version"] = true, 2
+	expect(t, request(f.h, "PUT", paymentSettingsPath, body, f.root, ""), 200)
+	cfg.PaymentMockEnabled = false
+	f.h = New(f.db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	providers = request(f.h, "GET", "/api/v1/payment-providers", nil, f.customer, "")
+	expect(t, providers, 200)
+	if !strings.Contains(providers.Body.String(), `"name":"mock"`) {
+		t.Fatal("explicit database mock enable was lost")
+	}
+}
+
+func TestPaymentMockMigrationPreservesConfiguredChoice(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(fmt.Sprint(configured), func(t *testing.T) {
+			db, _ := testServer(t)
+			if _, err := db.Pool.Exec(t.Context(), `ALTER TABLE payment_settings ALTER COLUMN mock_enabled SET DEFAULT true; UPDATE payment_settings SET configured=$1,mock_enabled=true; DELETE FROM schema_migrations WHERE version='086_payment_mock_default.sql'`, pgx.QueryExecModeSimpleProtocol, configured); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Migrate(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			var enabled bool
+			if err := db.Pool.QueryRow(t.Context(), "SELECT mock_enabled FROM payment_settings").Scan(&enabled); err != nil || enabled != configured {
+				t.Fatal("migration changed explicit policy or retained unsafe fallback", enabled, err)
+			}
+			if _, err := db.Pool.Exec(t.Context(), "DELETE FROM payment_settings; INSERT INTO payment_settings(id) VALUES(1)"); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Pool.QueryRow(t.Context(), "SELECT mock_enabled FROM payment_settings").Scan(&enabled); err != nil || enabled {
+				t.Fatal("new database row defaults to mock enabled", err)
+			}
+		})
+	}
+}
+
 func settingsPaymentConfig() config.Config {
-	return config.Config{PublicOrigin: "http://localhost:3088", PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}
+	return config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}
 }
 func paymentSettingsBody(apiURL string, version int64) map[string]any {
 	return map[string]any{"enabled": true, "mock_enabled": false, "api_url": apiURL, "pid": "10001", "types": []string{"alipay", "wxpay"}, "key": "integration-epay-secret", "expected_version": version}

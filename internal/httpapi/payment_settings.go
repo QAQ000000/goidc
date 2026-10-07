@@ -8,7 +8,7 @@ import (
 )
 
 func (s *Server) paymentFallback() store.PaymentConfiguration {
-	return store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: true, APIURL: s.cfg.EpayAPIURL, PID: s.cfg.EpayPID, Types: s.cfg.EpayTypes}, Key: s.cfg.EpayKey, MockSecret: s.cfg.PaymentGatewaySecret, PublicOrigin: s.cfg.PublicOrigin}
+	return store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: s.cfg.PaymentMockEnabled, APIURL: s.cfg.EpayAPIURL, PID: s.cfg.EpayPID, Types: s.cfg.EpayTypes}, Key: s.cfg.EpayKey, MockSecret: s.cfg.PaymentGatewaySecret, PublicOrigin: s.cfg.PublicOrigin}
 }
 func (s *Server) paymentConfiguration(ctx context.Context) (store.PaymentConfiguration, error) {
 	return s.db.PaymentConfiguration(ctx, s.paymentFallback())

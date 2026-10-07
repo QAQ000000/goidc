@@ -22,7 +22,7 @@ import (
 )
 
 func epayTestConfig() config.Config {
-	return config.Config{PublicOrigin: "http://localhost:3088", PaymentGatewaySecret: "integration-payment-secret", EpayAPIURL: "https://merchant.example", EpayPID: "10001", EpayKey: "integration-epay-secret", EpayTypes: []string{"alipay", "wxpay"}}
+	return config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", EpayAPIURL: "https://merchant.example", EpayPID: "10001", EpayKey: "integration-epay-secret", EpayTypes: []string{"alipay", "wxpay"}}
 }
 
 func TestEpayBrowserFixture(t *testing.T) {

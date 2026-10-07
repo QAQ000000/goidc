@@ -29,7 +29,7 @@ func TestConfigurationSettingsBrowserFixture(t *testing.T) {
 	if origin == "" {
 		origin = "http://localhost:3091"
 	}
-	cfg := config.Config{PublicOrigin: origin, SMTPPort: 587, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}
+	cfg := config.Config{PublicOrigin: origin, SMTPPort: 587, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}
 	h := New(db, cfg, slog.Default()).Handler()
 	user(t, db, seedHandler, "config-super", "super_admin")
 	user(t, db, seedHandler, "config-reader", "admin")

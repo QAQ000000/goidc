@@ -59,7 +59,7 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-timer.C:
-					fallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: true, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
+					fallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: cfg.PaymentMockEnabled, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
 					if _, checkErr := db.ProcessConfiguredAutomaticPaymentCheck(ctx, fallback); checkErr != nil && ctx.Err() == nil {
 						log.Error("automatic payment reconciliation failed", "error", checkErr)
 					}

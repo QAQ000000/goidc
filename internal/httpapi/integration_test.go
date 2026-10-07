@@ -71,7 +71,7 @@ func testServer(t *testing.T) (*store.Store, http.Handler) {
 	if err = db.CheckSchema(ctx); err != nil {
 		t.Fatal(err)
 	}
-	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
 }
 func request(h http.Handler, method, path string, body any, cookie string, key string) *httptest.ResponseRecorder {
 	var payload []byte
