@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Tabs } from "radix-ui";
 import { ArrowLeft, ExternalLink, Eye, EyeOff, FileText, RefreshCw, UserRound } from "lucide-react";
 import { api, date, money, type Service } from "@/lib/api";
-import { useAdminPermission } from "./workspace";
+import { PermissionGate, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Status } from "./common";
@@ -25,7 +25,7 @@ function Field({label,value,children}:{label:string;value?:string|number|null;ch
 }
 
 function Band({title,actions,children}:{title:string;actions?:ReactNode;children:ReactNode}) {
-  return <section className="bg-white border-b"><div className="service-section-heading"><h2 className="font-medium text-sm">{title}</h2><div className="flex flex-wrap items-center gap-2">{actions}</div></div><div className="p-5 sm:p-6">{children}</div></section>;
+  return <section className="bg-white border-b"><div className="service-section-heading"><h2 className="font-medium text-sm">{title}</h2><div className="flex flex-wrap items-center gap-2">{actions}</div></div><div className="p-4 sm:p-5">{children}</div></section>;
 }
 
 function CredentialsField({service}:{service:Service}) {
@@ -54,9 +54,9 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
   return <div className="service-detail min-w-0">
     <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
       <Button variant="ghost" size="sm" asChild><Link href="/admin/services"><ArrowLeft size={16}/>服务列表</Link></Button>
-      <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=services`}><UserRound size={15}/>{service.customer_name||`客户 #${service.user_id}`}</Link></Button><Button variant="outline" size="icon-sm" onClick={refresh} aria-label="刷新服务详情" title="刷新服务详情"><RefreshCw size={16}/></Button></div>
+      <div className="flex flex-wrap gap-2"><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=services`}><UserRound size={15}/>{service.customer_name||`客户 #${service.user_id}`}</Link></Button></PermissionGate><Button variant="outline" size="icon-sm" onClick={refresh} aria-label="刷新服务详情" title="刷新服务详情"><RefreshCw size={16}/></Button></div>
     </div>
-    <header className="flex flex-wrap items-start justify-between gap-4 mb-5">
+    <header className="admin-page-heading flex flex-wrap items-start justify-between gap-4 mb-5">
       <div className="min-w-0"><h1 className="text-xl font-semibold break-words">{service.name}</h1><p className="text-sm text-muted-foreground mt-2 break-all">服务 #{service.id}<span className="mx-2">·</span>{service.domain}<span className="mx-2">·</span>{service.service_group_name??"未分组"}</p></div>
       <div className="flex items-center gap-2"><Status value={service.status}/>{pending.length>0&&<button type="button" className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded" onClick={()=>setTab("jobs")}>{pending.length} 个待处理任务</button>}</div>
     </header>
@@ -65,7 +65,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="service-detail-tab">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
       </Tabs.List>
       <Tabs.Content value="product" className="outline-none space-y-5">
-        <Band title="产品" actions={<Button variant="outline" size="sm" asChild><Link href={`/admin/orders/${service.order_id}`}><FileText size={15}/>查看订单</Link></Button>}>
+        <Band title="产品" actions={<PermissionGate permission="orders.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/orders/${service.order_id}`}><FileText size={15}/>查看订单</Link></Button></PermissionGate>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
             <Field label="订单号" value={service.order_no||`#${service.order_id}`}/>
             <Field label="商品/服务" value={service.product_name||service.name}/>
@@ -87,7 +87,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         {service.provision_mode==="supplier"&&<SupplierServiceDelivery service={service} admin refresh={refresh}/>}
         {service.provision_mode==="nokvm"&&<NOKVMServiceDelivery service={service} admin refresh={refresh}/>}
         {manualDelivery}
-        <Band title="财务" actions={<><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=transactions`}><ExternalLink size={15}/>交易流水</Link></Button>{service.invoice_id&&<Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${service.invoice_id}`}><FileText size={15}/>账单</Link></Button>}</>}>
+        <Band title="财务" actions={<><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=transactions`}><ExternalLink size={15}/>交易流水</Link></Button></PermissionGate>{service.invoice_id&&<PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${service.invoice_id}`}><FileText size={15}/>账单</Link></Button></PermissionGate>}</>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
             <Field label="订购时间" value={date(service.created_at)}/>
             <Field label="首期金额" value={service.first_price_cents===undefined?null:money(service.first_price_cents)}/>
