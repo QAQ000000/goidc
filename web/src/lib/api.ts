@@ -123,6 +123,18 @@ export type SiteProfile = {
   auth_captcha_enabled: boolean;
 };
 export type SiteSettings = SiteProfile & { version: number; updated_at: string };
+export type PaymentSettings = {
+  enabled: boolean;
+  mock_enabled: boolean;
+  api_url: string;
+  pid: string;
+  types: string[];
+  key_configured: boolean;
+  configured: boolean;
+  encryption_configured: boolean;
+  version: number;
+  updated_at: string;
+};
 export type ApiKey = {
   id: number;
   name: string;
