@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Dialog, Tooltip } from "radix-ui";
 import { ArrowUpRight, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
+import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
 import type { User } from "@/lib/api";
 import { SiteBrand } from "./site-provider";
 
@@ -18,10 +18,11 @@ function Navigation({ user, path, close }: { user: User | null; path: string; cl
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const current = adminNavigationItem(path);
   const allowed = adminNavigation.filter(item => can(user, item.permission));
+  const domain = adminDomain(path);
   return <nav className="admin-navigation" aria-label="管理导航">
     {adminNavigationGroups.map(group => {
       const items = allowed.filter(item => item.group === group.id);
-      if (!items.length) return null;
+      if (!items.length || (!close && !domain.groups.includes(group.id))) return null;
       const expanded = !collapsed.includes(group.id);
       return <div className="admin-nav-group" key={group.id}>
         <button className="admin-group-toggle" aria-expanded={expanded} aria-controls={`admin-nav-${close ? "mobile" : "desktop"}-${group.id}`} onClick={() => setCollapsed(previous => expanded ? [...previous, group.id] : previous.filter(id => id !== group.id))}>
@@ -57,6 +58,8 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
   const path = usePathname();
   const current = adminNavigationItem(path);
   const group = adminNavigationGroups.find(item => item.id === current?.group);
+  const domain = adminDomain(path);
+  const home = path === "/admin";
   const [compact, setCompact] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
@@ -67,9 +70,23 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
     return () => media.removeEventListener("change", closeOnDesktop);
   }, []);
 
-  return <Tooltip.Provider delayDuration={300}><div className={`admin-shell ${compact ? "is-compact" : ""}`}>
-    <aside className="admin-sidebar">
+  return <Tooltip.Provider delayDuration={300}><div className={`admin-shell mf-admin-shell ${home ? "is-home" : ""} ${compact ? "is-compact" : ""}`}>
+    <div className="admin-global-header">
       <Brand user={user} />
+      <nav className="admin-domain-navigation" aria-label="业务域导航">
+        {adminDomains.map(item => {
+          const entry = adminNavigation.find(link => item.groups.includes(link.group) && can(user, link.permission));
+          if (!entry) return null;
+          return <Link key={item.id} href={entry.href} className={domain.id === item.id ? "active" : ""} aria-current={domain.id === item.id ? "true" : undefined}>{item.label}</Link>;
+        })}
+      </nav>
+      <div className="admin-global-account">
+        <Button className="admin-front-button" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight />客户中心</Link></Button>
+        {user ? <><span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span><span className="admin-user-name" title={user.display_name}>{user.display_name}</span><Button variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut /></Button></> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-muted-foreground" role="status">连接中</span>}
+      </div>
+    </div>
+    <aside className="admin-sidebar">
+      <div className="admin-sidebar-domain">{domain.label}</div>
       <Navigation key={path} user={user} path={path} />
       <Hint label="查看客户中心"><Link href="/" className="admin-front-link"><ArrowUpRight size={18} /><span className="admin-nav-label">查看客户中心</span></Link></Hint>
     </aside>
@@ -91,10 +108,6 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
             {current && current.label !== title ? <><Link href={current.href}>{current.label}</Link><ChevronRight size={14} aria-hidden="true" /></> : null}
             <span aria-current="page">{title}</span>
           </nav>
-        </div>
-        <div className="admin-account">
-          <Button className="admin-front-button" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight />客户中心</Link></Button>
-          {user ? <><span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span><span className="admin-user-name" title={user.display_name}>{user.display_name}</span><Button variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut /></Button></> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-muted-foreground" role="status">连接中</span>}
         </div>
       </header>
       <main className="admin-content">

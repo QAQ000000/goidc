@@ -41,6 +41,21 @@ export const adminNavigationGroups = [
   { id: "system", label: "系统" },
 ];
 
+export const adminDomains = [
+  { id: "overview", label: "工作台", groups: ["overview"] },
+  { id: "customers", label: "客户", groups: ["customers"] },
+  { id: "business", label: "业务", groups: ["orders", "products"] },
+  { id: "finance", label: "财务", groups: ["finance", "reports"] },
+  { id: "support", label: "工单", groups: ["support"] },
+  { id: "content", label: "功能", groups: ["content"] },
+  { id: "system", label: "设置", groups: ["system"] },
+];
+
+export function adminDomain(path: string) {
+  const group = adminNavigationItem(path)?.group;
+  return adminDomains.find(domain => domain.groups.includes(group ?? "")) ?? adminDomains[0];
+}
+
 export function adminNavigationItem(path: string) {
   return adminNavigation.find(item => path === item.href || (item.href !== "/admin" && path.startsWith(`${item.href}/`)));
 }
