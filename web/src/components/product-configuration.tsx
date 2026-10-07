@@ -19,12 +19,12 @@ function parseDelta(input:string){const match=input.match(/^(-?)(\d{1,7})(?:\.(\
 const quantityOptionTypes = new Set([4,7,9,11,14,15,16,17,18,19]);
 type FormState={dirty:boolean;busy:boolean};
 
-export function ProductConfigurationPanel({product,manage,onReload}:{product:Product;manage:boolean;onReload:()=>void}){
+export function ProductConfigurationPanel({product,manage,onReload,onRefreshed}:{product:Product;manage:boolean;onReload:()=>void;onRefreshed:(product:Product)=>void}){
  const [edit,setEdit]=useState<Edit|null>(null);
  const [formState,setFormState]=useState<FormState>({dirty:false,busy:false});
  const [reloadEpoch,setReloadEpoch]=useState(0);
  const [loadError,setLoadError]=useState("");
- async function reload(){try{const fresh=await api<Product>(`/admin/products/${product.id}`);if(edit){const group=fresh.option_groups?.find(g=>g.id===edit.group.id);if(edit.group.id===0)setEdit({...edit});else if(!group)setEdit(null);else if(edit.kind==="group")setEdit({kind:"group",group});else {const option=group.options.find(o=>o.id===edit.option.id);setEdit(edit.option.id===0?{...edit,group}:option?{kind:"option",group,option}:null);}}setReloadEpoch(value=>value+1);setLoadError("");onReload();}catch(e){setLoadError((e as Error).message);}}
+ async function reload(){try{const fresh=await api<Product>(`/admin/products/${product.id}`);if(edit){const group=fresh.option_groups?.find(g=>g.id===edit.group.id);if(edit.group.id===0)setEdit({...edit});else if(!group)setEdit(null);else if(edit.kind==="group")setEdit({kind:"group",group});else {const option=group.options.find(o=>o.id===edit.option.id);setEdit(edit.option.id===0?{...edit,group}:option?{kind:"option",group,option}:null);}}setReloadEpoch(value=>value+1);setLoadError("");onRefreshed(fresh);}catch(e){setLoadError((e as Error).message);}}
  const groups=product.option_groups??[];
  return <div className="max-w-5xl space-y-5"><div className="flex flex-wrap justify-between items-start gap-4"><p className="text-sm text-muted-foreground max-w-xl">每组选择一项，增减价在所选账期生效。修改会要求旧购物车重新确认；已购服务使用下单金额。</p>{manage&&<Button onClick={()=>setEdit({kind:"group",group:emptyGroup})}><Plus/>新增配置组</Button>}</div>
  <ConfigurationUpgradePolicy key={`${product.id}:${product.revision}`} product={product} manage={manage} onReload={onReload}/>

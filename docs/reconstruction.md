@@ -1,5 +1,7 @@
 # PHP 到 Go / Next.js 重构
 
+2026-10-07 魔方后台第二批：商品定价矩阵、配置/阶梯/规则/购买字段、目录/服务分组、供应商账户/目录/导入表单、订单详情及取消审核重排完成；订单/账单/服务的搜索状态分页及详情回跳保存在 URL。gpt-6.1-sol 分支成果已集成，主代理补跨分区草稿/版本和连续刷新修正。TypeScript/lint/生产构建通过，BUILD_ID `5A0hbtaZzdwa1Et_bdB3U` 已部署；真实只读、四宽度布局及浏览器拦截的冲突/读取失败/取消反馈验收通过，未提交真实业务写入。完整范围与剩余见 [第二批验收](admin-mofang-batch2-acceptance.md)。整体重构目标仍在进行。
+
 ## 目标与边界
 
 在 `/www/wwwroot/zjmfgo` 独立实现 `/www/wwwroot/zjmf-manger-decoded-副本` 的业务，Go 仅提供 JSON API，Next.js App Router + React + shadcn/ui 负责页面，PostgreSQL 18 为唯一业务数据库。旧 PHP 目录、MySQL、共享 Nginx 和其他站点不修改。
