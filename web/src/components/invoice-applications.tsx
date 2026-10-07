@@ -1,4 +1,5 @@
 "use client";
+import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 
 import { useRef, useState } from "react";
 import Link from "next/link";
@@ -116,6 +117,7 @@ type Application = {
 };
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 const statusLabel = { pending: "待审核", rejected: "已驳回", issued: "已开具" };
+const applicationStates = ["pending", "rejected", "issued"] as const;
 function clean(value: string) {
   return value.trim();
 }
@@ -135,10 +137,11 @@ export function InvoiceApplicationListView({
   );
 }
 function ApplicationList({ admin }: { admin: boolean }) {
-  const [offset, setOffset] = useState(0);
-  const [status, setStatus] = useState("all");
+  const { status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(admin, applicationStates);
+  const offset = page * 20;
+  const setOffset = (value: number | ((current: number) => number)) => setPage(current => Math.floor((typeof value === "function" ? value(current * 20) : value) / 20));
   const { data, error, refresh } = useResource<Page<Application>>(
-    `${admin ? "/admin" : ""}/invoice-applications?limit=20&offset=${offset}${status !== "all" ? `&status=${status}` : ""}`,
+    ready ? `${admin ? "/admin" : ""}/invoice-applications?limit=20&offset=${offset}${status !== "all" ? `&status=${status}` : ""}` : null,
     false,
   );
   return (
@@ -237,7 +240,7 @@ function ApplicationList({ admin }: { admin: boolean }) {
                     <td className="p-3">
                       <Button variant="link" size="sm" asChild>
                         <Link
-                          href={`${admin ? "/admin" : "/console"}/invoice-applications/${item.id}`}
+                          href={`${admin ? "/admin" : "/console"}/invoice-applications/${item.id}${suffix}`}
                         >
                           查看
                         </Link>
@@ -1090,6 +1093,7 @@ function ApplicationDetailContent({
   id: number;
   admin?: boolean;
 }) {
+  const backHref = useAdminListReturnHref("/admin/invoice-applications", applicationStates);
   const { data, error, refresh } = useResource<Application>(
     `${admin ? "/admin" : ""}/invoice-applications/${id}`,
     false,
@@ -1161,7 +1165,7 @@ function ApplicationDetailContent({
     <>
       <div className="mb-5">
         <Button variant="ghost" asChild>
-          <Link href={`${admin ? "/admin" : "/console"}/invoice-applications`}>
+          <Link href={admin ? backHref : "/console/invoice-applications"}>
             <Receipt />
             返回列表
           </Link>
@@ -1172,10 +1176,10 @@ function ApplicationDetailContent({
       ) : !data ? (
         <Loading />
       ) : (
-        <div className="space-y-6 max-w-3xl">
+        <div className="space-y-5 max-w-4xl">
           <div className="flex flex-wrap justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold">
+              <h1 className="page-title break-all">
                 {data.title || data.profile_snapshot?.title || "发票申请"}
               </h1>
               <p className="text-sm text-muted-foreground">
