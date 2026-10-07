@@ -1,6 +1,7 @@
 "use client";
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { SupplierServiceDelivery } from "./supplier-delivery";
+import { AdminServiceDetail } from "./admin-service-detail";
 import { NOKVMMonitoringPanel } from "./nokvm-monitoring";
 import { NOKVMStoragePanel } from "./nokvm-storage";
 import { NOKVMNATPanel } from "./nokvm-nat";
@@ -846,6 +847,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
     const timer = window.setInterval(refresh, 2000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
+  if (admin) return <Workspace title="服务详情" admin>{error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<AdminServiceDetail service={data} refresh={refresh} manualDelivery={data.provision_mode==="manual"&&data.jobs?.some(job=>job.status==="waiting_manual")?<PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh}/></PermissionGate>:null} resourcePanels={data.provision_mode==="nokvm"&&["active","suspended"].includes(data.status)?<><NOKVMMonitoringPanel service={data} admin/><NOKVMStoragePanel service={data} admin refresh={refresh}/><NOKVMNATPanel service={data} admin refresh={refresh}/><NOKVMCDROMPanel service={data} admin refresh={refresh}/></>:null}/>}</Workspace>;
   return (
     <Workspace title="服务详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild><Link href={admin ? "/admin/services" : "/console/services"}><ArrowUpRight size={16} />返回服务列表</Link></Button>

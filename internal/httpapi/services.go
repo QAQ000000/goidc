@@ -103,6 +103,28 @@ WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NO
 		s.fail(w, r, err)
 		return
 	}
+	if adminRoute(r) {
+		metadata, queryErr := tx.Query(r.Context(), `SELECT p.name AS product_name,
+ o.order_no,oi.price_cents AS first_price_cents,oi.setup_fee_cents,i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.paid_at,
+ a.name AS supplier_name,b.upstream_product_id,b.provider AS supplier_provider,
+ a.running_job_id AS supplier_running_job_id,j.service_id AS supplier_blocking_service_id,j.action AS supplier_blocking_action
+ FROM services s JOIN products p ON p.id=s.product_id JOIN orders o ON o.id=s.order_id
+ JOIN order_items oi ON oi.id=s.order_item_id LEFT JOIN invoices i ON i.order_id=s.order_id
+ LEFT JOIN supplier_product_bindings b ON b.product_id=s.product_id AND s.provision_mode='supplier'
+ LEFT JOIN supplier_accounts a ON a.id=b.supplier_id LEFT JOIN provision_jobs j ON j.id=a.running_job_id WHERE s.id=$1`, id)
+		if queryErr != nil {
+			s.fail(w, r, queryErr)
+			return
+		}
+		details, queryErr := pgx.CollectExactlyOneRow(metadata, pgx.RowToMap)
+		if queryErr != nil {
+			s.fail(w, r, queryErr)
+			return
+		}
+		for key, value := range details {
+			service[key] = value
+		}
+	}
 	jobs, err := tx.Query(r.Context(), `SELECT id,action,status,attempts,available_at,locked_at,completed_at,last_error,result,request_payload,created_at
 FROM provision_jobs WHERE service_id=$1 ORDER BY id DESC LIMIT 50`, id)
 	if err != nil {
