@@ -19,7 +19,6 @@ import {
   Plus,
   Search,
   ArrowUpRight,
-  MessageSquare,
   Package,
   Users,
   Receipt,
@@ -68,103 +67,10 @@ import { ServiceNavigationSettings } from "./service-groups";
 import { useServiceNavigation } from "@/hooks/use-service-navigation";
 import type { ServicePage } from "@/lib/api";
 import { catalogSelectStyle } from "./catalog-admin";
+import { AdminDashboard } from "./admin-dashboard";
 
-type Dashboard = {
-  customers: number;
-  active_products: number;
-  pending_orders: number;
-  unpaid_invoices: number;
-  open_tickets: number;
-  unpaid_cents: number;
-};
 export function DashboardView() {
-  const { data, error, refresh } = useResource<Dashboard>("/admin/dashboard");
-  return (
-    <Workspace title="工作台" admin>
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="page-title">工作台</h1>
-          <p className="text-muted-foreground mt-2">业务概况与待处理事项</p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href="/">
-            <ArrowUpRight size={16} />
-            客户中心
-          </Link>
-        </Button>
-      </div>
-      {error ? (
-        <Failure error={error} retry={refresh} />
-      ) : !data ? (
-        <Loading />
-      ) : (
-        <>
-          <div className="stat-grid">
-            <Stat icon={Users} label="客户" value={data.customers} />
-            <Stat
-              icon={Package}
-              label="在售产品"
-              value={data.active_products}
-            />
-            <Stat
-              icon={ClipboardList}
-              label="待处理订单"
-              value={data.pending_orders}
-            />
-            <Stat
-              icon={Receipt}
-              label="待收账单"
-              value={data.unpaid_invoices}
-            />
-          </div>
-          <div className="grid md:grid-cols-2 gap-5">
-            <section className="data-surface p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <span className="w-9 h-9 grid place-items-center rounded-md bg-amber-50 text-amber-700">
-                  <Receipt size={17} />
-                </span>
-                <div>
-                  <h2 className="font-semibold">财务待办</h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    未支付账单总额
-                  </p>
-                </div>
-              </div>
-              <strong className="text-3xl money">
-                {money(data.unpaid_cents)}
-              </strong>
-              <Link
-                className="block text-sm text-primary mt-5"
-                href="/admin/invoices"
-              >
-                查看账单 <ArrowUpRight className="inline" size={14} />
-              </Link>
-            </section>
-            <section className="data-surface p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <span className="w-9 h-9 grid place-items-center rounded-md bg-blue-50 text-blue-700">
-                  <MessageSquare size={17} />
-                </span>
-                <div>
-                  <h2 className="font-semibold">支持工单</h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    开放及等待回复
-                  </p>
-                </div>
-              </div>
-              <strong className="text-3xl">{data.open_tickets}</strong>
-              <Link
-                className="block text-sm text-primary mt-5"
-                href="/admin/tickets"
-              >
-                进入工单 <ArrowUpRight className="inline" size={14} />
-              </Link>
-            </section>
-          </div>
-        </>
-      )}
-    </Workspace>
-  );
+  return <AdminDashboard />;
 }
 
 type IncomeReport = { year: number; months: { month: string; income_cents: number; invoice_count: number }[]; total: { income_cents: number; invoice_count: number } };
