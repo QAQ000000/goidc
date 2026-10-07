@@ -144,7 +144,7 @@ function ApplicationList({ admin }: { admin: boolean }) {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="page-title">
           {admin ? "发票审核" : "发票申请"}
         </h1>
         {!admin && (
@@ -164,7 +164,10 @@ function ApplicationList({ admin }: { admin: boolean }) {
           </div>
         )}
       </div>
-      <Select
+      {admin && <div className="mb-4 flex overflow-x-auto border-b" role="group" aria-label="发票申请状态">
+        {Object.entries({ all: "全部", ...statusLabel }).map(([key, label]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => { setStatus(key); setOffset(0); }} className={`shrink-0 border-b-2 px-4 py-3 text-sm ${status === key ? "border-primary font-medium text-primary" : "border-transparent text-muted-foreground"}`}>{label}</button>)}
+      </div>}
+      {!admin && <Select
         value={status}
         onValueChange={(value) => {
           setStatus(value);
@@ -182,14 +185,14 @@ function ApplicationList({ admin }: { admin: boolean }) {
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
+      </Select>}
       {error ? (
         <Failure error={error} retry={refresh} />
       ) : !data ? (
         <Loading />
       ) : (
         <>
-          <div className="border rounded-md overflow-auto">
+          <div className="admin-list-surface data-surface overflow-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
