@@ -7,10 +7,11 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"net/mail"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type SMTPSettings struct {
@@ -32,6 +33,9 @@ type SMTPRuntimeConfig struct {
 }
 
 func smtpSeal(key []byte, value string) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, conflict("smtp_encryption_unconfigured", "凭据加密密钥未配置")
+	}
 	b, e := aes.NewCipher(key)
 	if e != nil {
 		return nil, e
@@ -50,6 +54,9 @@ func smtpSeal(key []byte, value string) ([]byte, error) {
 func smtpOpen(key, sealed []byte) (string, error) {
 	if len(sealed) == 0 {
 		return "", nil
+	}
+	if len(key) != 32 {
+		return "", fmt.Errorf("SMTP credentials unavailable")
 	}
 	b, e := aes.NewCipher(key)
 	if e != nil {
@@ -87,13 +94,17 @@ func (s *Store) SMTPSettings(ctx context.Context, fallback SMTPRuntimeConfig) (S
 	return o, err
 }
 func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash string, in SMTPSettings, password *string, clear bool, expected int64, fallback SMTPRuntimeConfig) (SMTPSettings, error) {
-	if strings.ContainsAny(in.Host+in.Username+in.From, "\r\n") || strings.ContainsAny(in.Host, " /\\:\t") || len(in.Host) > 253 || len(in.Username) > 320 || len(in.From) > 320 || password != nil && len(*password) > 4096 || clear && in.Enabled {
+	if strings.ContainsAny(in.Host+in.Username+in.From, "\r\n\x00\t") || strings.ContainsAny(in.Host, " /\\:") || len(in.Host) > 253 || len(in.Username) > 320 || len(in.From) > 320 || password != nil && len(*password) > 4096 || clear && (in.Enabled || password != nil && *password != "") {
 		return SMTPSettings{}, conflict("invalid_smtp", "SMTP配置无效")
 	}
 	if in.Port < 1 || in.Port > 65535 || strings.TrimSpace(in.Host) == "" && in.Enabled {
 		return SMTPSettings{}, conflict("invalid_smtp", "SMTP主机无效")
 	}
-	if _, e := mail.ParseAddress(in.From); e != nil && in.Enabled {
+	if in.Enabled && in.Port == 465 {
+		return SMTPSettings{}, conflict("invalid_smtp", "当前邮件发送支持STARTTLS，请使用相应端口")
+	}
+	address, addressErr := mail.ParseAddress(strings.TrimSpace(in.From))
+	if strings.TrimSpace(in.From) != "" && (addressErr != nil || address.Address != strings.TrimSpace(in.From)) || in.Enabled && strings.TrimSpace(in.From) == "" {
 		return SMTPSettings{}, conflict("invalid_smtp", "发件地址无效")
 	}
 	tx, e := settingsManagementTx(ctx, s, actor)

@@ -46,7 +46,7 @@ func main() {
 		log.Error("stale email recovery failed", "error", err)
 		os.Exit(1)
 	}
-	smtpConfig := notification.SMTPConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom}
+	smtpFallback := store.SMTPRuntimeConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom}
 	var paymentWorker sync.WaitGroup
 	{
 		paymentWorker.Add(1)
@@ -79,8 +79,18 @@ func main() {
 			if err = db.RecoverStaleEmailJobs(ctx); err != nil {
 				log.Error("stale email recovery failed", "error", err)
 			}
-			if smtpConfig.Enabled() {
+			smtpRuntime, smtpErr := db.ResolveSMTPConfig(ctx, smtpFallback)
+			if smtpErr != nil {
+				log.Error("SMTP configuration unavailable")
+			}
+			smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From}
+			if smtpErr == nil && smtpConfig.Enabled() {
 				for i := 0; i < 10; i++ {
+					smtpRuntime, smtpErr = db.ResolveSMTPConfig(ctx, smtpFallback)
+					if smtpErr != nil || smtpRuntime.Host == "" || smtpRuntime.From == "" {
+						break
+					}
+					smtpConfig = notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From}
 					job, claimErr := db.ClaimEmailJob(ctx)
 					if errors.Is(claimErr, pgx.ErrNoRows) {
 						break

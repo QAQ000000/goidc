@@ -1114,6 +1114,7 @@ func TestTicketReplyPresetsAreAdminOwned(t *testing.T) {
 	preset := request(h, "POST", "/api/v1/admin/ticket-reply-presets", map[string]any{"category_id": categoryID, "title": "付款核验", "body": "请提供付款凭证。"}, admin, "")
 	expect(t, preset, 201)
 	presetID := int64(data(t, preset)["id"].(float64))
+	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/ticket-reply-preset-categories/%d", categoryID), nil, admin, ""), 409)
 	presets := request(h, "GET", "/api/v1/admin/ticket-reply-presets", nil, admin, "")
 	expect(t, presets, 200)
 	if len(listData(t, presets)) != 1 {

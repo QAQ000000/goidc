@@ -26,6 +26,7 @@ func (s *Server) updateSMTPSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		store.SMTPSettings
+		Enabled         *bool   `json:"enabled"`
 		ExpectedVersion int64   `json:"expected_version"`
 		Password        *string `json:"password"`
 		ClearPassword   bool    `json:"clear_password"`
@@ -33,6 +34,11 @@ func (s *Server) updateSMTPSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	if in.Enabled == nil || in.ExpectedVersion < 1 {
+		writeError(w, 400, "invalid_smtp", "请提供邮件发送开关和有效版本")
+		return
+	}
+	in.SMTPSettings.Enabled = *in.Enabled
 	cookie, e := r.Cookie("zjmfgo_session")
 	if e != nil {
 		writeError(w, 401, "unauthorized", "请先登录")

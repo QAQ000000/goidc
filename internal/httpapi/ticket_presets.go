@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) ticketReplyPresets(w http.ResponseWriter, r *http.Request) {
@@ -120,13 +122,23 @@ func (s *Server) deleteTicketReplyPresetCategory(w http.ResponseWriter, r *http.
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var exists bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_preset_categories WHERE id=$1)", id).Scan(&exists); err != nil {
+	var lockedID int64
+	err = tx.QueryRow(r.Context(), "SELECT id FROM ticket_reply_preset_categories WHERE id=$1 FOR UPDATE", id).Scan(&lockedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
+		return
+	}
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
+	var referenced bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE category_id=$1)", id).Scan(&referenced); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if referenced {
+		writeError(w, http.StatusConflict, "preset_category_in_use", "请先删除或移动分类中的预设回复")
 		return
 	}
 	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_preset_categories WHERE id=$1", id); err != nil {
