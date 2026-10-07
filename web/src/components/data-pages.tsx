@@ -143,10 +143,11 @@ export function CustomersView() {
       endpoint="/admin/customers"
       actions={<Button variant="outline" asChild><Link href="/admin/customer-groups"><Users size={16} />管理客户分组</Link></Button>}
       columns={[
-        { key: "username", label: "账号" },
-        { key: "display_name", label: "姓名" },
-        { key: "email", label: "邮箱" },
+        { key: "id", label: "ID" },
+        { key: "display_name", label: "姓名", render: (r, _refresh, returnQuery) => <Link className="font-medium text-primary hover:underline" href={`/admin/customers/${r.id}${returnQuery ? `?${returnQuery}` : ""}`}>{String(r.display_name || r.username || "未命名客户")}</Link> },
+        { key: "email", label: "邮箱 / 账号", render: (r) => <div><span className="block">{String(r.email || "-")}</span><span className="block text-xs text-muted-foreground">{String(r.username || "-")}</span></div> },
         { key: "group_name", label: "客户分组", render: (r) => String(r.group_name ?? "未分组") },
+        { key: "status", label: "状态", render: (r) => <Status value={String(r.status)} /> },
         { key: "sales_owner_name", label: "销售归属", render: (r) => String(r.sales_owner_name ?? "无归属") },
         {
           key: "balance_cents",
@@ -155,7 +156,6 @@ export function CustomersView() {
             <span className="money">{money(Number(r.balance_cents))}</span>
           ),
         },
-        { key: "status", label: "状态" },
         { key: "actions", label: "操作", render: (r, refresh, returnQuery) => <CustomerActions row={r} refresh={refresh} returnQuery={returnQuery ? `?${returnQuery}` : ""} /> },
       ]}
     />
@@ -435,6 +435,7 @@ export function AdminListView({
   const [page,setPage] = useState(0);
   const [department, setDepartment] = useState("all");
   const [urlReady, setUrlReady] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const returnQuery = urlReady ? serializeAdminListState(kind, query, page, department) : "";
   const directory = useResource<TicketDepartment[]>(kind === "tickets" && admin ? "/admin/ticket-departments" : null);
   const currentUser = useResource<User>(kind === "tickets" && admin ? "/me" : null);
@@ -448,6 +449,7 @@ export function AdminListView({
       setDraft(state.query);
       setPage(state.page);
       setDepartment(state.department);
+      setSearchOpen(Boolean(state.query) || state.department !== "all");
       setUrlReady(true);
     };
     apply();
@@ -463,20 +465,24 @@ export function AdminListView({
     <Workspace title={title} admin={admin}>
       <PageHeading title={title} description={description}>{actions}</PageHeading>
       {(kind === "customers" || kind === "tickets") && (
-        <SearchForm
+        <div className="admin-list-search mb-4 border-b">
+          <button type="button" className="flex h-10 items-center gap-2 text-sm text-primary" aria-expanded={searchOpen} aria-controls={`admin-search-${kind}`} onClick={() => setSearchOpen(value => !value)}><Search size={15} />高级搜索<span className="text-xs text-muted-foreground">{searchOpen ? "收起" : "展开"}</span></button>
+          <div id={`admin-search-${kind}`} hidden={!searchOpen} className="pb-1"><SearchForm
           value={draft}
           setValue={setDraft}
           submit={() => {setQuery(draft);setPage(0)}}
-          placeholder="搜索记录"
+          placeholder={kind === "customers" ? "搜索客户姓名或邮箱" : "搜索记录"}
         />
+        {kind === "tickets" && admin && <div className="mb-4 max-w-xs"><Select value={department} onValueChange={value => { setDepartment(value); setPage(0); }}><SelectTrigger aria-label="筛选工单部门" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部授权部门</SelectItem>{currentUser.data?.ticket_unassigned && <SelectItem value="0">未指定部门</SelectItem>}{directory.data?.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.name}{item.active === false ? "（已停用）" : ""}</SelectItem>)}</SelectContent></Select>{directory.error && <Failure error={directory.error} retry={directory.refresh} />}</div>}
+          </div>
+        </div>
       )}
-      {kind === "tickets" && admin && <div className="mb-5 max-w-xs"><Select value={department} onValueChange={value => { setDepartment(value); setPage(0); }}><SelectTrigger aria-label="筛选工单部门" className="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部授权部门</SelectItem>{currentUser.data?.ticket_unassigned && <SelectItem value="0">未指定部门</SelectItem>}{directory.data?.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.name}{item.active === false ? "（已停用）" : ""}</SelectItem>)}</SelectContent></Select>{directory.error && <Failure error={directory.error} retry={directory.refresh} />}</div>}
       {error ? (
         <Failure error={error} retry={refresh} />
       ) : !data ? (
         <Loading />
       ) : (
-        <div className="data-surface overflow-auto">
+        <div className="admin-list-surface data-surface overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -514,7 +520,7 @@ function PageHeading({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap justify-between items-start gap-4 mb-8">
+    <div className="admin-page-heading flex flex-wrap justify-between items-start gap-4 mb-8">
       <div>
         <h1 className="page-title">{title}</h1>
         <p className="text-muted-foreground mt-2">{description}</p>
