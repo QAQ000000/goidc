@@ -57,6 +57,7 @@ import {
 } from "./online-payment";
 import { PaymentReconciliation } from "./payment-reconciliation";
 import { PurchaseFieldDetails } from "./purchase-fields";
+import { AdminStatusTabs } from "./admin-status-tabs";
 import type { PurchaseFieldSnapshot } from "@/lib/api";
 
 type OrderItem = {
@@ -326,11 +327,11 @@ function TransactionList({
   }
   return (
     <Workspace title={title} admin={admin}>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-semibold">{title}</h1>
+      <div className={`${admin ? "admin-page-heading " : ""}flex flex-wrap items-center justify-between gap-3 mb-6`}>
+        <h1 className={admin ? "page-title" : "text-2xl font-semibold"}>{title}</h1>
         <div className="flex flex-wrap gap-2">
           {admin && <InvoiceCreateLink />}
-          {mergeReady && (
+          {mergeReady && !admin && (
             <Button
               variant="outline"
               onClick={() => {
@@ -353,15 +354,16 @@ function TransactionList({
           </Button>
         </div>
       </div>
+      {admin && <AdminStatusTabs label="账单状态" value={state} states={invoiceStates} onChange={value => { setState(value); setOffset(0); }} />}
       <form
-        className="grid sm:grid-cols-[10rem_minmax(0,1fr)_auto] gap-3 mb-6"
+        className={`grid ${admin ? "sm:grid-cols-[minmax(0,1fr)_auto]" : "sm:grid-cols-[10rem_minmax(0,1fr)_auto]"} gap-3 mb-4`}
         onSubmit={(e) => {
           e.preventDefault();
           setQuery(draft);
           setOffset(0);
         }}
       >
-        <Select
+        {!admin && <Select
           value={state}
           onValueChange={(value) => {
             setState(value);
@@ -384,7 +386,7 @@ function TransactionList({
               </SelectItem>
             ))}
           </SelectContent>
-        </Select>
+        </Select>}
         <Input
           aria-label="搜索交易"
           placeholder={
@@ -409,7 +411,7 @@ function TransactionList({
         <Loading />
       ) : (
         <>
-          <div className="border rounded-md overflow-auto">
+          <div className={`${admin ? "admin-list-surface data-surface" : "border rounded-md"} overflow-auto`}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -605,6 +607,7 @@ function TransactionList({
             </DialogContent>
           </Dialog>
           <div className="flex flex-wrap items-center justify-between gap-3 mt-5 text-sm">
+            {admin && <div className="flex flex-wrap items-center gap-3">{mergePermission && <Button variant="outline" size="sm" disabled={!mergeReady} onClick={() => { setMergeError(""); setMergeOpen(true); }}><GitMerge />合并账单{selections.length ? ` (${selections.length})` : ""}</Button>}<span className="text-xs text-muted-foreground">本页金额 <span className="money">{money(data.items.reduce((sum, item) => sum + ("amount_cents" in item ? item.amount_cents : item.total_cents), 0))}</span></span></div>}
             <span>
               {data.total} 个{kind === "orders" ? "订单" : "账单"}
             </span>
@@ -1097,7 +1100,7 @@ export function InvoiceDetailView({
         <Loading />
       ) : (
         <>
-          <div className="border-b pb-5 flex flex-wrap justify-between items-start gap-4">
+          <div className={`${admin ? "admin-page-heading " : ""}border-b pb-5 flex flex-wrap justify-between items-start gap-4`}>
             <div className="min-w-0">
               <h1 className="font-mono text-sm sm:text-xl font-semibold break-all">
                 {data.invoice_no}
@@ -1119,7 +1122,7 @@ export function InvoiceDetailView({
               </Button>
             </div>
           </div>
-          <div className="py-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="py-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <div>
               <p className="text-sm text-muted-foreground">账单金额</p>
               <p className="text-2xl font-semibold money mt-2">
@@ -1156,9 +1159,7 @@ export function InvoiceDetailView({
             </div>
           </div>
           {admin && (
-            <p className="text-sm mb-5 break-all">
-              {data.customer_name} · {data.email}
-            </p>
+            <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
           )}
           <div className="pb-5 flex flex-wrap gap-3">
             <InvoiceActions

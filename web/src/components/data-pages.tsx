@@ -69,6 +69,7 @@ import { useServiceNavigation } from "@/hooks/use-service-navigation";
 import type { ServicePage } from "@/lib/api";
 import { catalogSelectStyle } from "./catalog-admin";
 import { AdminDashboard } from "./admin-dashboard";
+import { AdminStatusTabs } from "./admin-status-tabs";
 
 export function DashboardView() {
   return <AdminDashboard />;
@@ -634,19 +635,14 @@ function AdminOrdersView() {
   }
   return (
     <Workspace title="订单管理" admin>
-      <PageHeading title="订单管理" description="筛选订单并批量处理待支付订单">
-        <PermissionGate permission="orders.manage"><Button variant="destructive" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkCancel()}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button></PermissionGate>
-      </PageHeading>
+      <PageHeading title="订单管理" description="筛选订单并批量处理待支付订单" />
+      <AdminStatusTabs label="订单状态" value={status} states={{ pending: "待支付", paid: "已支付", active: "已启用", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="订单号、客户名称或邮箱" />
-        <Select value={status} onValueChange={(value) => { setStatus(value); setPage(0); }}>
-          <SelectTrigger className="w-36" aria-label="订单状态"><SelectValue placeholder="订单状态" /></SelectTrigger>
-          <SelectContent><SelectItem value="all">全部状态</SelectItem><SelectItem value="pending">待支付</SelectItem><SelectItem value="paid">已支付</SelectItem><SelectItem value="active">已启用</SelectItem><SelectItem value="cancelled">已取消</SelectItem><SelectItem value="refunded">已退款</SelectItem></SelectContent>
-        </Select>
         {message && <span className="text-sm text-muted-foreground" role="status">{message}</span>}
       </div>
       {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : (
-        <div className="data-surface overflow-auto">
+        <div className="admin-list-surface data-surface overflow-auto">
           <Table>
             <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? cancellable : [])} aria-label="选择待支付订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>金额</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
             <TableBody>
@@ -654,7 +650,7 @@ function AdminOrdersView() {
               {data.map((row, i) => { const id = Number(row.id); const pending = String(row.status) === "pending"; return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} disabled={!pending} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin /></div></TableCell></TableRow>; })}
             </TableBody>
           </Table>
-          <div className="flex items-center justify-end gap-4 border-t p-3"><span className="text-xs text-muted-foreground">第 {page + 1} 页</span><Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((v) => v - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={data.length < 25} onClick={() => setPage((v) => v + 1)}>下一页</Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkCancel()}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button></PermissionGate><div className="ml-auto flex items-center gap-3"><span className="text-xs text-muted-foreground">第 {page + 1} 页</span><Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((v) => v - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={data.length < 25} onClick={() => setPage((v) => v + 1)}>下一页</Button></div></div>
         </div>
       )}
     </Workspace>

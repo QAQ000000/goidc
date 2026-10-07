@@ -105,7 +105,7 @@ function ManualInvoiceEditor({ id }: { id?: number }) {
   const back = id ? `/admin/invoices/${id}` : "/admin/invoices";
   return <>
     <Button variant="ghost" asChild className="mb-5"><Link href={back}><ArrowLeft />{id ? "返回账单详情" : "返回账单列表"}</Link></Button>
-    <h1 className="text-2xl font-semibold mb-6">{id ? "编辑人工账单" : "创建人工账单"}</h1>
+    <div className="admin-page-heading mb-4"><h1 className="page-title">{id ? "编辑人工账单" : "创建人工账单"}</h1></div>
     {!allowed ? <p role="alert" className="text-sm text-muted-foreground">没有维护账单的权限</p> : error ? <Failure error={error} retry={refresh} /> : id && !data ? <Loading /> : data && (data.invoice_kind !== "manual" || data.status !== "unpaid" || data.payment_pending || data.import_review_required) ? <p role="alert" className="text-sm text-muted-foreground">此账单当前不可编辑</p> : <ManualInvoiceForm key={`${id ?? "new"}:${data?.version ?? 0}`} invoice={data ?? undefined} reload={refresh} />}
   </>;
 }
@@ -139,8 +139,8 @@ function ManualInvoiceForm({ invoice, reload }: { invoice?: ManualInvoiceRecord;
       setStale(e instanceof ApiError && (e.code === "stale_invoice" || e.code === "invoice_payment_pending" || e.code === "invoice_not_editable"));
     } finally { setBusy(false); }
   }
-  return <form onSubmit={save} className="space-y-6">
-    <div className="grid md:grid-cols-2 gap-6 border-b pb-6">
+  return <form onSubmit={save} className="space-y-5">
+    <div className="grid md:grid-cols-2 gap-5 border-b pb-5">
       <div className="space-y-3"><Label>账单客户</Label>{invoice ? <p className="text-sm break-all">{invoice.customer_name} · {invoice.email}</p> : <CustomerPicker selected={selected} onSelect={setSelected} disabled={busy} />}</div>
       <div className="space-y-3"><Label htmlFor="manual-invoice-due">到期时间</Label><Input id="manual-invoice-due" type="datetime-local" value={due} min="2000-01-01T00:00" max="2200-12-31T23:59" required onChange={e => setDue(e.target.value)} disabled={busy} /><p className="text-sm text-muted-foreground">币种 CNY</p></div>
     </div>
@@ -151,7 +151,7 @@ function ManualInvoiceForm({ invoice, reload }: { invoice?: ManualInvoiceRecord;
         <Button type="button" className="sm:mt-7" variant="ghost" size="icon" title={`删除项目 ${index + 1}`} aria-label={`删除项目 ${index + 1}`} disabled={busy || lines.length === 1} onClick={() => setLines(current => current.filter(item => item.key !== line.key))}><Trash2 /></Button>
       </div>)}</div>
     </section>
-    <div className="flex flex-wrap items-center justify-between gap-5"><div><p className="text-sm text-muted-foreground">应收总额</p><p className="text-2xl font-semibold money mt-2">{total === null ? "-" : money(total)}</p>{total !== null && (total < 0 || total > amountLimit) && <p className="text-sm text-destructive mt-2">总额必须在 0 到 1 亿元之间</p>}</div><Button disabled={busy || !valid} type="submit"><Save />{busy ? "保存中" : "保存账单"}</Button></div>
+    <div className="flex flex-wrap items-center justify-between gap-5 border-t pt-4"><div><p className="text-sm text-muted-foreground">应收总额</p><p className="text-xl font-semibold money mt-1">{total === null ? "-" : money(total)}</p>{total !== null && (total < 0 || total > amountLimit) && <p className="text-sm text-destructive mt-2">总额必须在 0 到 1 亿元之间</p>}</div><div className="flex gap-2"><Button variant="outline" type="button" disabled={busy} asChild><Link href={invoice ? `/admin/invoices/${invoice.id}` : "/admin/invoices"}>取消</Link></Button><Button disabled={busy || !valid} type="submit"><Save />{busy ? "保存中" : "保存账单"}</Button></div></div>
     {error && <div role="alert" className="space-y-3"><p className="text-sm text-destructive">{error}</p>{stale && <Button type="button" variant="outline" disabled={busy} onClick={reload}>重新载入账单</Button>}</div>}
   </form>;
 }
