@@ -25,6 +25,9 @@ func (s *Store) ClaimAutomaticPaymentCheck(ctx context.Context, providers []stri
 		return check, err
 	}
 	defer tx.Rollback(ctx)
+	if err = recheckPaymentQueryConfiguration(ctx, tx); err != nil {
+		return check, err
+	}
 	var attempts int
 	if err = tx.QueryRow(ctx, `SELECT p.id,p.invoice_id,p.user_id,p.provider,p.provider_payment_id,p.amount_cents,p.auto_reconcile_attempts
  FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id AND i.user_id=p.user_id

@@ -48,7 +48,7 @@ func main() {
 	}
 	smtpConfig := notification.SMTPConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom}
 	var paymentWorker sync.WaitGroup
-	if gateways := cfg.PaymentQueryGateways(); len(gateways) > 0 {
+	{
 		paymentWorker.Add(1)
 		go func() {
 			defer paymentWorker.Done()
@@ -59,7 +59,8 @@ func main() {
 				case <-ctx.Done():
 					return
 				case <-timer.C:
-					if _, checkErr := db.ProcessAutomaticPaymentCheck(ctx, gateways); checkErr != nil && ctx.Err() == nil {
+					fallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: true, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
+					if _, checkErr := db.ProcessConfiguredAutomaticPaymentCheck(ctx, fallback); checkErr != nil && ctx.Err() == nil {
 						log.Error("automatic payment reconciliation failed", "error", checkErr)
 					}
 				}

@@ -68,6 +68,9 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 		return check, err
 	}
 	defer tx.Rollback(ctx)
+	if err = lockPaymentConfiguration(ctx, tx); err != nil {
+		return check, err
+	}
 	if err = tx.QueryRow(ctx, `SELECT p.user_id,p.provider,p.provider_payment_id,p.amount_cents FROM payment_transactions p
  JOIN invoices i ON i.id=p.invoice_id AND i.user_id=p.user_id WHERE p.id=$1 AND p.invoice_id=$2 AND ($3::boolean OR p.user_id=$4)`, paymentID, invoiceID, admin, actorID).Scan(&check.UserID, &check.Provider, &check.ProviderPaymentID, &check.AmountCents); err != nil {
 		return check, err

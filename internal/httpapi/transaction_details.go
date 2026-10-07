@@ -166,9 +166,16 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	queryGateways := s.cfg.PaymentQueryGateways()
+	configuration, err := s.paymentConfiguration(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	for _, payment := range payments {
-		_, payment["query_enabled"] = queryGateways[payment["provider"].(string)]
+		_, payment["query_enabled"] = configuration.Gateway(payment["provider"].(string), true)
+		if payment["provider"] == "mock" {
+			payment["query_enabled"] = false
+		}
 	}
 	ledger, err := collectTransactionRows(tx.Query(ctx, `SELECT l.id,l.entry_type,l.delta_cents,l.balance_after,l.created_at
  FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id AND i.user_id=l.user_id

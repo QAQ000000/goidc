@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
-	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -81,6 +80,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/content-images/{id}", s.contentImage)
 	mux.HandleFunc("GET /api/v1/admin/site-settings", s.sessionAuth(s.siteSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/site-settings", s.sessionAuth(s.updateSiteSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/catalog/{id}", s.product)
 	mux.HandleFunc("GET /api/v1/categories", s.categories)
 	mux.HandleFunc("GET /api/v1/news", s.news)
@@ -399,10 +400,6 @@ func (s *Server) originAllowed(origin string) bool {
 		}
 	}
 	return false
-}
-
-func (s *Server) gateway(name string) (payment.Gateway, bool) {
-	return payment.For(name, s.cfg.PaymentGatewaySecret, payment.EpayConfig{APIURL: s.cfg.EpayAPIURL, PID: s.cfg.EpayPID, Key: s.cfg.EpayKey, PublicOrigin: s.cfg.PublicOrigin, Types: s.cfg.EpayTypes})
 }
 
 func (s *Server) auth(next http.HandlerFunc, admin bool) http.HandlerFunc {

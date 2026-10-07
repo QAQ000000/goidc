@@ -59,6 +59,9 @@ func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	if err = checkPaymentConfigurationVersion(ctx, tx, provider); err != nil {
+		return out, err
+	}
 	if err = lockOperationKey(ctx, tx, "payment-intent", fmt.Sprintf("%d:%s", userID, key)); err != nil {
 		return out, err
 	}

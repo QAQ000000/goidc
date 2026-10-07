@@ -30,7 +30,12 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 	if input.Provider == "" {
 		input.Provider = "mock"
 	}
-	gateway, ok := s.gateway(input.Provider)
+	configuration, err := s.paymentConfiguration(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	gateway, ok := configuration.Gateway(input.Provider, false)
 	if !ok {
 		writeError(w, 400, "unsupported_payment_provider", "支付渠道不支持")
 		return
@@ -50,7 +55,7 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	result, err := s.db.CreatePaymentIntent(r.Context(), identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
+	result, err := s.db.CreatePaymentIntent(store.WithPaymentConfigurationVersion(r.Context(), configuration.Version), identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -64,7 +69,12 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 	provider := strings.TrimSpace(strings.ToLower(r.PathValue("provider")))
-	gateway, ok := s.gateway(provider)
+	configuration, err := s.paymentConfiguration(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	gateway, ok := configuration.Gateway(provider, true)
 	if !ok {
 		writeError(w, 404, "payment_provider_not_found", "支付渠道不存在")
 		return
@@ -104,10 +114,18 @@ func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
-	items := []map[string]any{{"name": "mock", "label": "模拟支付", "simulation": true}}
+	configuration, err := s.paymentConfiguration(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items := []map[string]any{}
+	if _, ok := configuration.Gateway("mock", false); ok {
+		items = append(items, map[string]any{"name": "mock", "label": "模拟支付", "simulation": true})
+	}
 	labels := map[string]string{"alipay": "支付宝", "wxpay": "微信支付", "qqpay": "QQ 钱包", "bank": "网银支付"}
-	for _, value := range s.cfg.EpayTypes {
-		if _, ok := s.gateway("epay_" + value); ok {
+	for _, value := range configuration.Types {
+		if _, ok := configuration.Gateway("epay_"+value, false); ok {
 			items = append(items, map[string]any{"name": "epay_" + value, "label": labels[value], "simulation": false})
 		}
 	}
