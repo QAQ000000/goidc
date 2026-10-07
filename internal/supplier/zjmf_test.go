@@ -59,7 +59,7 @@ func fixture(t *testing.T, invoiceAmount string, fail string) (Adapter, *int) {
 			}
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
 		case "/host/header":
-			fmt.Fprint(w, `{"status":200,"data":{"host_data":{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","nextduedate":1790000000}}}`)
+			fmt.Fprint(w, `{"status":200,"data":{"host_data":{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","assignedips":[],"nextduedate":1790000000}}}`)
 		case "/cart/hostinfo":
 			fmt.Fprint(w, `{"status":200,"data":{"hosts":[{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","nextduedate":1790000000}]}}`)
 		default:

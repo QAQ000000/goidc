@@ -12,6 +12,34 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// EnqueuePeriodicSupplierSyncs keeps supplier-backed services in step when the
+// upstream cannot reach our callback URL. A stable idempotency key means each
+// service has at most one periodic row, which is re-armed after five minutes.
+func (s *Store) EnqueuePeriodicSupplierSyncs(ctx context.Context) (int64, error) {
+	tag, err := s.Pool.Exec(ctx, `
+WITH candidates AS (
+ SELECT s.id
+ FROM services s
+ WHERE s.provision_mode='supplier'
+   AND s.status IN ('provisioning','active','suspended')
+   AND s.upstream_id <> ''
+   AND NOT EXISTS (
+     SELECT 1 FROM provision_jobs j
+     WHERE j.service_id=s.id
+       AND j.status IN ('pending','running','waiting_verification')
+   )
+)
+INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
+SELECT id,'sync','supplier-periodic-sync-'||id::text,now()
+FROM candidates
+ON CONFLICT (idempotency_key) DO UPDATE
+ SET status='pending', attempts=0, available_at=now(), locked_at=NULL,
+     completed_at=NULL, last_error='', updated_at=now()
+ WHERE provision_jobs.status IN ('succeeded','failed')
+   AND provision_jobs.updated_at <= now()-interval '5 minutes'`)
+	return tag.RowsAffected(), err
+}
+
 func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) error {
 	var raw []byte
 	if err := s.Pool.QueryRow(ctx, "SELECT delivery_snapshot FROM services WHERE id=$1 AND provision_mode='supplier'", claimed.ServiceID).Scan(&raw); err != nil {

@@ -104,6 +104,9 @@ func main() {
 				log.Error("stale job recovery failed", "error", err)
 				continue
 			}
+			if _, err = db.EnqueuePeriodicSupplierSyncs(ctx); err != nil {
+				log.Error("periodic supplier sync enqueue failed", "error", err)
+			}
 			for i := 0; i < 20; i++ {
 				job, claimErr := db.ClaimProvisionJob(ctx)
 				if errors.Is(claimErr, pgx.ErrNoRows) {

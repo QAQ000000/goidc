@@ -666,7 +666,7 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 			Username     string          `json:"username"`
 			Password     string          `json:"password"`
 			DedicatedIP  string          `json:"dedicatedip"`
-			AssignedIPs  string          `json:"assignedips"`
+			AssignedIPs  json.RawMessage `json:"assignedips"`
 			Port         int             `json:"port"`
 			OS           string          `json:"os"`
 		} `json:"hosts"`
@@ -676,7 +676,7 @@ func (z *zjmf) Sync(ctx context.Context, id int64) (Service, error) {
 	}
 	for _, v := range d.Hosts {
 		if v.ID == id {
-			return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: v.AssignedIPs, Port: v.Port, OS: v.OS}, nil
+			return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: rawIPs(v.AssignedIPs), Port: v.Port, OS: v.OS}, nil
 		}
 	}
 	return Service{}, &Error{Code: "service_missing"}
@@ -701,7 +701,7 @@ func parseHostHeader(raw json.RawMessage, id int64) (Service, bool) {
 			Username      string          `json:"username"`
 			Password      string          `json:"password"`
 			DedicatedIP   string          `json:"dedicatedip"`
-			AssignedIPs   string          `json:"assignedips"`
+			AssignedIPs   json.RawMessage `json:"assignedips"`
 			Port          int             `json:"port"`
 			OS            string          `json:"os"`
 			OSURL         string          `json:"os_url"`
@@ -715,7 +715,27 @@ func parseHostHeader(raw json.RawMessage, id int64) (Service, bool) {
 		return Service{}, false
 	}
 	v := envelope.HostData
-	return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: v.AssignedIPs, Port: v.Port, OS: v.OS, OSURL: v.OSURL, SuspendReason: v.SuspendReason}, true
+	return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: rawIPs(v.AssignedIPs), Port: v.Port, OS: v.OS, OSURL: v.OSURL, SuspendReason: v.SuspendReason}, true
+}
+
+// Magic Cube installations return assignedips as either a string or an array.
+// Normalize both forms into the provider-neutral string field.
+func rawIPs(raw json.RawMessage) string {
+	var value string
+	if json.Unmarshal(raw, &value) == nil {
+		return value
+	}
+	var values []string
+	if json.Unmarshal(raw, &values) == nil {
+		out := values[:0]
+		for _, item := range values {
+			if strings.TrimSpace(item) != "" {
+				out = append(out, strings.TrimSpace(item))
+			}
+		}
+		return strings.Join(out, ",")
+	}
+	return ""
 }
 func (z *zjmf) Execute(ctx context.Context, action string, id int64) (Service, error) {
 	if action == "sync" {
