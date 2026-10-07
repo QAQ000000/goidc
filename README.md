@@ -4,7 +4,7 @@ PHP 财务系统的独立 Go API / Next.js React shadcn/ui / PostgreSQL 18 重�
 
 后台支付渠道和SMTP设置已支持加密存储、版本审计与运行时生效，邮件模板和工单预设补齐配置操作。支付单本地过期后可轮换商户，历史单保留加密凭据用于迟到通知和查单；模拟支付默认关闭。入口、验收链路和仍缺少的配置见 [后台配置](docs/admin-configuration.md)。
 
-开发实例已部署 schema080：电子发票 PDF/XML 文件与线下作废/红冲登记、敏感购买字段加密与隐藏、图文图片与自定义 SEO。组合浏览器、权限/所有权、手机布局、schema077 恢复升级和现场检查通过，详见 [第四批验收](docs/batch4-acceptance.md)。验证码按用户要求关闭；真实支付、供应商和其他领域仍待完成。
+开发实例已部署最新迁移：验证码找回、邮箱注册验证、邮件/短信通知渠道和 SMTP 465 隐式 TLS 已接通。浏览器隔离链路、PG18 回归、race/vet、前端检查构建和现场健康检查通过；真实 SMTP 收件、短信供应商、支付、供应商和其他领域仍待完成。
 
 ## 本地运行
 
@@ -50,11 +50,11 @@ API 还提供客户服务生命周期接口：`GET /api/v1/services`、`POST /ap
 
 登录成功、失败、要求重置密码和注销会写入审计事件（不会记录密码），便于后台审计页追踪认证行为。
 
-登录页提供邮箱密码找回：`POST /api/v1/auth/password-reset/request` 只返回统一的排队响应，令牌仅保存哈希并在 30 分钟后过期；`POST /api/v1/auth/password-reset/confirm` 消费一次性令牌并撤销用户全部会话。邮件进入 `email_outbox`，Worker 只有在配置 `SMTP_HOST`、`SMTP_FROM` 等变量后才会发送，未配置时不会把令牌返回给浏览器。
+登录页提供验证码密码找回：`POST /api/v1/auth/password-reset/request` 返回短期 `challenge_id`，验证码只保存 HMAC，10 分钟过期、单次消费并限制错误尝试；`POST /api/v1/auth/password-reset/confirm` 消费验证码并撤销用户会话、MFA 挑战和 API 密钥。验证码正文进入加密 outbox，由邮件或短信 worker 投递；未配置通知渠道时不会向浏览器返回验证码。注册邮箱验证和账户联系方式验证复用同一挑战接口。
 
 账户页提供 TOTP 两步验证：`POST /api/v1/account/mfa/enroll` 返回一次性密钥和 8 个恢复码，`POST /api/v1/account/mfa/confirm` 确认启用，`POST /api/v1/account/mfa/disable` 需要当前密码及验证码或恢复码。密钥使用 `MFA_ENCRYPTION_KEY`（32 字节、64 位十六进制）以 AES-GCM 加密后保存；登录先返回 5 分钟一次性挑战，验证码通过后才创建会话。恢复码只保存哈希并逐个消费。
 
-管理员可在 `/admin/notifications` 编辑通知模板并查看邮件队列；API 为 `/api/v1/admin/notification-templates` 和 `/api/v1/admin/email-outbox`。模板只支持白名单变量替换，队列列表不会返回邮件正文，失败任务可重新排队。SMTP 凭据仍只从部署环境读取，当前环境未配置真实 SMTP。
+管理员可在 `/admin/notifications` 编辑通知模板并查看邮件队列，在 `/admin/smtp-settings` 配置 SMTP，在 `/admin/sms-settings` 配置短信 HTTP JSON 供应商；API 为 `/api/v1/admin/notification-templates`、`/api/v1/admin/email-outbox`、`/api/v1/admin/smtp-settings` 和 `/api/v1/admin/sms-settings`。凭据使用 AES-GCM 加密，列表不会返回正文或秘密，失败任务可重试。465 端口使用隐式 TLS，587 默认 STARTTLS；短信供应商采用注册表，当前内置 generic HTTP JSON，真实供应商仍需单独验收。
 
 超级管理员可在 `/admin/settings` 配置站点名称、Logo、公司与联系信息、条款/隐私链接、备案及邮箱注册开关。页面品牌、标题、描述与页脚使用公开 `GET /api/v1/site` 数据；管理读写 `/api/v1/admin/site-settings` 只接受超级管理员浏览器会话，保存检查版本并原子写审计。关闭注册保留既有账户登录，排队注册也会重新检查开关。范围与验收见 [站点设置](docs/site-settings.md)。
 

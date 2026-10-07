@@ -2,7 +2,7 @@
 
 ## 源码与范围
 
-旧系统 `app/admin/controller/ConfigGeneralController.php` 的 `getGeneral/postGeneral`、`registerLoginPage`，`app/admin/common/server/ConfigGeneral.php` 及首页登录控制器提供品牌、公司、联系方式、Logo、备案、条款和注册方式的依据。`app/http/middleware/{Check,UserCheck}.php`、`app/home/controller/ViewBaseController.php` 提供维护公告、跳转与管理员会话豁免的依据。新系统迁移公开信息、邮箱注册开关和维护模式；验证码、短信注册、SMTP/SMS 配置及其余业务开关尚未迁移。外部条款链接不代表已记录客户法律同意。
+旧系统 `app/admin/controller/ConfigGeneralController.php` 的 `getGeneral/postGeneral`、`registerLoginPage`，`app/admin/common/server/ConfigGeneral.php` 及首页登录控制器提供品牌、公司、联系方式、Logo、备案、条款和注册方式的依据。`app/http/middleware/{Check,UserCheck}.php`、`app/home/controller/ViewBaseController.php` 提供维护公告、跳转与管理员会话豁免的依据。新系统迁移公开信息、邮箱注册开关、验证码开关和维护模式；SMTP 与短信通知在独立管理页面配置。外部条款链接不代表已记录客户法律同意。
 
 `034_site_settings.sql` 新建单行设置，默认站点名称为智简魔方，使用旧位图生成的深色 `brand-logo.png`，注册开启。原图保留；新图保持原尺寸与透明度，在白底页面可见。不会读取或复制旧库设置、SMTP 凭据，也不会创建客户。
 
