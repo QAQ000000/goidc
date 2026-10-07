@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, Download, GitMerge, Paperclip, Send, StickyNote, Trash2, UserRoundCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,13 @@ function AttachmentRow({ attachment, ticketID, onDelete, admin }: { attachment: 
 }
 
 export function TicketDetailView({ id, admin = false }: { id: number; admin?: boolean }) {
+  const searchParams = useSearchParams();
+  const returnParams = new URLSearchParams();
+  for (const key of ["q", "page", "department"]) {
+    const value = searchParams.get(key);
+    if (value) returnParams.set(key, value);
+  }
+  const returnHref = `${admin ? "/admin" : "/console"}/tickets${returnParams.size ? `?${returnParams}` : ""}`;
   const { data: user } = useResource<User>("/me");
   const { data, error, refresh } = useResource<Ticket>(`/tickets/${id}`);
   const { data: presets } = useResource<TicketReplyPreset[]>(admin && can(user, "tickets.manage") && can(user, "ticket_presets.view") ? "/admin/ticket-reply-presets" : null);
@@ -222,7 +230,7 @@ export function TicketDetailView({ id, admin = false }: { id: number; admin?: bo
   }
 
   return <Workspace title="工单详情" admin={admin}>
-    <Button variant="ghost" className="mb-5" asChild><Link href={admin ? "/admin/tickets" : "/console/tickets"}><ArrowLeft />工单列表</Link></Button>
+    <Button variant="ghost" className="mb-5" asChild><Link href={returnHref}><ArrowLeft />工单列表</Link></Button>
     {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <>
       <div className="flex flex-wrap gap-4 justify-between items-start mb-6"><div><h1 className="page-title break-words">{data.subject}</h1><p className="text-xs text-muted-foreground mt-3 break-all">{data.ticket_no}</p></div><div className="flex gap-2"><Status value={data.status} /><Status value={data.priority} /></div></div>
       {(data.legacy_ticket_no || data.legacy_status_label) && <p className="text-sm text-muted-foreground mb-6 break-words">{data.legacy_ticket_no && <>原工单号：{data.legacy_ticket_no}　</>}{data.legacy_status_label && <>导入时状态：{data.legacy_status_label}</>}</p>}
