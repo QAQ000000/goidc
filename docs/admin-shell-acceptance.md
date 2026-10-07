@@ -1,12 +1,12 @@
 # 管理端主题与公共外壳验收
 
-日期：2026-10-07。范围：`AdminShell`、导航和响应式布局、管理端主题、管理登录及 Portal 主题继承；依据 `docs/admin-frontend-design.md`。
+日期：2026-10-07。范围：`AdminShell`、导航和响应式布局、管理端主题、管理登录、Portal 主题继承，以及客户详情公共身份区和列表 URL 状态；依据 `docs/admin-frontend-design.md`。
 
 ## 变更范围
 
 管理端借鉴 Arco Pro 的蓝色主色、中性灰阶、紧凑控件和导航层级，沿用 Next.js、React、shadcn/ui、Radix 和 lucide-react，没有引入 Arco 依赖。客户中心保留绿色主题。管理员退出返回 `/admin-login`。
 
-本批未修改 Go API、数据库、验证码配置或业务数据。页面内部业务布局和列表筛选恢复仍需后续批次实施。
+本批补充了受 `customers.view` 和客户范围保护的 `GET /api/v1/admin/customers/{id}` 客户摘要接口；客户详情页接入真实摘要、联系人和客户文件入口。列表的 `q/page/department` 状态写入 URL，详情入口和返回按钮保留列表查询参数。未修改数据库、验证码配置或业务数据。
 
 ## 检查结果
 
@@ -24,6 +24,8 @@
 | 客户中心主题隔离 | PASS | 管理端跳至客户中心以及退出后的公共页面均恢复 `--primary: #15705e` |
 | 登录与退出 | PASS | 实际 root 登录成功；最终构建退出返回管理登录，随后 `/api/v1/me` 为 401 |
 | 前端只读权限呈现 | PASS（模拟） | 浏览器临时将 `/me` 响应设为 `role: admin` 和 `customers.view`，仅显示客户导航，隐藏编辑按钮；随后恢复真实响应 |
+| 客户详情摘要与 URL 状态 | PASS | 实际 root 会话访问 `?q=acceptance`，详情 URL 为 `/admin/customers/2?q=acceptance`，返回后搜索框恢复 `acceptance`；摘要接口返回 200、客户 ID 2 |
+| 客户范围详情接口 | PASS | `GET /api/v1/admin/customers/2` 返回摘要；接口 SQL 使用 `admin_customer_allowed`，范围外对象统一 404 |
 | 后端 RBAC 和业务写入回归 | 未验证 | 本批未修改后端；权限响应模拟不构成真实只读账户或 API 拒绝写入的证据；未提交任何业务表单 |
 | 全部业务页面状态与交互 | 未验证 | 本批不是逐页业务验收；错误、空态、超时、冲突、重复提交和完整客户标签页需要后续实施与验收 |
 

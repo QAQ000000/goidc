@@ -7,6 +7,7 @@ import { NOKVMNATPanel } from "./nokvm-nat";
 import { NOKVMCDROMPanel } from "./nokvm-cdrom";
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ServiceDownloads } from "./service-downloads";
 import { ServiceConfigurationChanges } from "./configuration-upgrades";
 import { ServiceActivityPanel } from "./service-activity";
@@ -247,7 +248,7 @@ export function CustomersView() {
           ),
         },
         { key: "status", label: "状态" },
-        { key: "actions", label: "操作", render: (r, refresh) => <CustomerActions row={r} refresh={refresh} /> },
+        { key: "actions", label: "操作", render: (r, refresh, returnQuery) => <CustomerActions row={r} refresh={refresh} returnQuery={returnQuery ? `?${returnQuery}` : ""} /> },
       ]}
     />
   );
@@ -357,10 +358,11 @@ function CustomerActionDialog({ row, title, icon: Icon, children }: { row: Row; 
   return <><Button size="icon-sm" variant="outline" title={title} aria-label={`${title} ${row.username}`} onClick={() => setOpen(true)}><Icon /></Button><Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}><DialogContent className="grid-cols-[minmax(0,1fr)]"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription className="break-all">{String(row.display_name)}</DialogDescription></DialogHeader>{open && children(setBusy)}</DialogContent></Dialog></>;
 }
 
-function CustomerActions({ row, refresh }: { row: Row; refresh: () => void }) {
+function CustomerActions({ row, refresh, returnQuery }: { row: Row; refresh: () => void; returnQuery: string }) {
+  const detailHref = `/admin/customers/${Number(row.id)}${returnQuery}`;
   return (
     <div className="flex items-center gap-2">
-      <Button size="sm" variant="outline" asChild><Link href={`/admin/customers/${Number(row.id)}`}><ContactRound size={14} />联系人</Link></Button>
+      <Button size="sm" variant="outline" asChild><Link href={detailHref}><ContactRound size={14} />联系人</Link></Button>
       <PermissionGate permission="customer_files.view"><Button size="sm" variant="outline" asChild><Link href={`/admin/customers/${Number(row.id)}/files`}>客户文件</Link></Button></PermissionGate>
       <PermissionGate permission="@super"><CustomerSalesAction row={row} refresh={refresh} /></PermissionGate>
       <PermissionGate permission="customers.manage"><CustomerActionDialog row={row} title="编辑客户" icon={Pencil}>{onBusyChange => <CustomerProfileAction row={row} refresh={refresh} onBusyChange={onBusyChange} />}</CustomerActionDialog><CustomerActionDialog row={row} title="重置密码" icon={KeyRound}>{onBusyChange => <CustomerPasswordAction row={row} onBusyChange={onBusyChange} />}</CustomerActionDialog></PermissionGate>
@@ -481,6 +483,38 @@ function CustomerPasswordAction({ row, onBusyChange }: { row: Row; onBusyChange:
 }
 
 type Row = Record<string, unknown>;
+type AdminCustomer = {
+  id: number;
+  username: string;
+  email: string;
+  display_name: string;
+  status: string;
+  balance_cents: number;
+  created_at: string;
+  sales_owner_id: number | null;
+  sales_owner_name: string | null;
+  group_id: number | null;
+  group_name: string | null;
+};
+
+function readAdminListState(kind: string) {
+  const params = new URLSearchParams(window.location.search);
+  const page = Number.parseInt(params.get("page") || "0", 10);
+  return {
+    query: params.get("q") || "",
+    page: Number.isSafeInteger(page) && page >= 0 ? page : 0,
+    department: kind === "tickets" ? params.get("department") || "all" : "all",
+  };
+}
+
+function serializeAdminListState(kind: string, query: string, page: number, department: string) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (page) params.set("page", String(page));
+  if (kind === "tickets" && department !== "all") params.set("department", department);
+  return params.toString();
+}
+
 export function AdminListView({
   kind,
   title,
@@ -499,18 +533,38 @@ export function AdminListView({
   columns: {
     key: string;
     label: string;
-    render?: (row: Row, refresh: () => void) => React.ReactNode;
+    render?: (row: Row, refresh: () => void, returnQuery?: string) => React.ReactNode;
   }[];
 }) {
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [page,setPage] = useState(0);
   const [department, setDepartment] = useState("all");
+  const [urlReady, setUrlReady] = useState(false);
+  const returnQuery = urlReady ? serializeAdminListState(kind, query, page, department) : "";
   const directory = useResource<TicketDepartment[]>(kind === "tickets" && admin ? "/admin/ticket-departments" : null);
   const currentUser = useResource<User>(kind === "tickets" && admin ? "/me" : null);
   const { data, error, refresh } = useResource<Row[]>(
     `${endpoint}?q=${encodeURIComponent(query)}&limit=25&offset=${page*25}${kind === "tickets" ? `&department_id=${department}` : ""}`,
   );
+  useEffect(() => {
+    const apply = () => {
+      const state = readAdminListState(kind);
+      setQuery(state.query);
+      setDraft(state.query);
+      setPage(state.page);
+      setDepartment(state.department);
+      setUrlReady(true);
+    };
+    apply();
+    window.addEventListener("popstate", apply);
+    return () => window.removeEventListener("popstate", apply);
+  }, [kind]);
+  useEffect(() => {
+    if (!urlReady) return;
+    const suffix = serializeAdminListState(kind, query, page, department);
+    window.history.replaceState(null, "", `${window.location.pathname}${suffix ? `?${suffix}` : ""}`);
+  }, [department, kind, page, query, urlReady]);
   return (
     <Workspace title={title} admin={admin}>
       <PageHeading title={title} description={description}>{actions}</PageHeading>
@@ -543,7 +597,7 @@ export function AdminListView({
                 <TableRow key={String(row.id ?? i)}>
                   {columns.map((c) => (
                     <TableCell key={c.key}>
-                      {c.render ? c.render(row, refresh) : String(row[c.key] ?? "-")}
+                      {c.render ? c.render(row, refresh, returnQuery) : String(row[c.key] ?? "-")}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -1081,7 +1135,39 @@ export function AccountView() {
 }
 
 export function AdminCustomerContactsView({ customerId }: { customerId: number }) {
-  return <Workspace title="客户联系人" admin><PageHeading title="客户联系人" description={`客户 #${customerId} 的联系人与通知偏好`}><Button variant="outline" asChild><Link href="/admin/customers"><ArrowUpRight size={16} />返回客户管理</Link></Button></PageHeading><ContactsPanel adminCustomerId={customerId} /></Workspace>;
+  return <AdminCustomerDetailView customerId={customerId} />;
+}
+
+export function AdminCustomerDetailView({ customerId }: { customerId: number }) {
+  const searchParams = useSearchParams();
+  const returnHref = `/admin/customers${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+  const customer = useResource<AdminCustomer>(`/admin/customers/${customerId}`);
+  return <Workspace title="客户详情" admin>
+    {customer.error ? <Failure error={customer.error} retry={customer.refresh} /> : !customer.data ? <Loading /> : <>
+      <PageHeading title={customer.data.display_name || customer.data.username} description={`客户 #${customer.data.id} · ${customer.data.username}`}>
+        <Button variant="outline" asChild><Link href={returnHref}><ArrowUpRight size={16} />返回客户管理</Link></Button>
+      </PageHeading>
+      <section className="data-surface p-5 mb-5">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold break-words">{customer.data.display_name || "未命名客户"}</h2><Status value={customer.data.status} /></div>
+            <p className="text-sm text-muted-foreground mt-2 break-all">{customer.data.email} · 注册于 {date(customer.data.created_at)}</p>
+          </div>
+          <div className="text-left sm:text-right"><p className="text-xs text-muted-foreground">账户余额</p><strong className="money text-2xl block mt-1">{money(customer.data.balance_cents)}</strong></div>
+        </div>
+        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t mt-5 pt-4 text-sm">
+          <div><dt className="text-muted-foreground">客户分组</dt><dd className="mt-1">{customer.data.group_name || "未分组"}</dd></div>
+          <div><dt className="text-muted-foreground">销售归属</dt><dd className="mt-1">{customer.data.sales_owner_name || "无归属"}</dd></div>
+          <div><dt className="text-muted-foreground">账号</dt><dd className="mt-1 break-all">{customer.data.username}</dd></div>
+        </dl>
+      </section>
+      <nav className="flex gap-1 overflow-x-auto border-b mb-5" aria-label="客户详情分区">
+        <span className="border-b-2 border-primary px-4 py-3 text-sm font-medium text-primary whitespace-nowrap" aria-current="page">联系人</span>
+        <Link className="px-4 py-3 text-sm text-muted-foreground hover:text-primary whitespace-nowrap" href={`/admin/customers/${customerId}/files`}>客户文件</Link>
+      </nav>
+      <ContactsPanel adminCustomerId={customerId} />
+    </>}
+  </Workspace>;
 }
 
 function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number }) {

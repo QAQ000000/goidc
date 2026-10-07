@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
@@ -23,6 +24,28 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) customers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	s.list(w, r, "SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name FROM users u LEFT JOIN users owner ON owner.id=u.sales_owner_id LEFT JOIN customer_group_members gm ON gm.customer_id=u.id LEFT JOIN customer_groups g ON g.id=gm.group_id WHERE u.role='customer' AND admin_customer_allowed($4,u.id) AND (u.display_name ILIKE $1 OR u.email ILIKE $1) ORDER BY u.id DESC LIMIT $2 OFFSET $3", "%"+r.URL.Query().Get("q")+"%", limit, offset, identityFrom(r).ID)
+}
+
+func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name FROM users u LEFT JOIN users owner ON owner.id=u.sales_owner_id LEFT JOIN customer_group_members gm ON gm.customer_id=u.id LEFT JOIN customer_groups g ON g.id=gm.group_id WHERE u.role='customer' AND u.id=$1 AND admin_customer_allowed($2,u.id)`, id, identityFrom(r).ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(items) == 0 {
+		writeError(w, http.StatusNotFound, "not_found", "客户不存在")
+		return
+	}
+	write(w, http.StatusOK, items[0])
 }
 
 func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {

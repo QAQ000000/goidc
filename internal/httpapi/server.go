@@ -282,6 +282,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/content-tags/{id}", s.auth(s.adminSaveContentTag, true))
 	mux.HandleFunc("DELETE /api/v1/admin/content-tags/{id}", s.auth(s.adminDeleteContentTag, true))
 	mux.HandleFunc("GET /api/v1/admin/customers", s.auth(s.customers, true))
+	mux.HandleFunc("GET /api/v1/admin/customers/{id}", s.auth(s.adminCustomer, true))
 	mux.HandleFunc("GET /api/v1/admin/sales-owners", s.sessionAuth(s.salesOwners, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/sales-owner", s.sessionAuth(s.assignCustomerSalesOwner, true))
 	mux.HandleFunc("GET /api/v1/admin/orders", s.auth(s.orders, true))
