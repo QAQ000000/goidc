@@ -242,13 +242,22 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	}
 	var groups []struct {
 		Options []struct {
-			ID   int64  `json:"id"`
-			Name string `json:"option_name"`
-			Type int    `json:"option_type"`
-			Sub  []struct {
-				ID       int64                        `json:"id"`
-				Name     string                       `json:"option_name"`
-				Pricings []map[string]json.RawMessage `json:"pricings"`
+			ID           int64  `json:"id"`
+			Name         string `json:"option_name"`
+			Type         int    `json:"option_type"`
+			QtyMinimum   int64  `json:"qty_minimum"`
+			QtyMaximum   int64  `json:"qty_maximum"`
+			QtyStage     int    `json:"qty_stage"`
+			LinkagePID   int64  `json:"linkage_pid"`
+			LinkageTop   int64  `json:"linkage_top_pid"`
+			LinkageLevel string `json:"linkage_level"`
+			Hidden       int    `json:"hidden"`
+			Sub          []struct {
+				ID         int64                        `json:"id"`
+				Name       string                       `json:"option_name"`
+				QtyMinimum int64                        `json:"qty_minimum"`
+				QtyMaximum int64                        `json:"qty_maximum"`
+				Pricings   []map[string]json.RawMessage `json:"pricings"`
 			} `json:"sub"`
 		} `json:"options"`
 	}
@@ -259,13 +268,23 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	for _, group := range groups {
 		for _, raw := range group.Options {
 			o := Option{ID: raw.ID, Name: raw.Name, Type: "select", Required: true}
-			if raw.ID <= 0 || (raw.Type != 1 && raw.Type != 2) || len(raw.Sub) == 0 {
+			// 魔方 DCIM 商品将固定规格暴露为专用 option_type（例如
+			// CPU、内存、磁盘和带宽），但其 sub/pricings 仍是普通单选。
+			// 只有没有数量区间、联动或隐藏状态的规格才可安全归一化；
+			// 可变数量、阶梯价格和高级联动仍保持拒绝。
+			supportedType := raw.Type == 1 || raw.Type == 2 || raw.Type == 4 || raw.Type == 5 || raw.Type == 6 || raw.Type == 8 || raw.Type == 11 || raw.Type == 12 || raw.Type == 13 || raw.Type == 14
+			fixedQuantity := raw.QtyMinimum == 0 && raw.QtyMaximum == 0 && raw.QtyStage == 0 || raw.QtyMinimum > 0 && raw.QtyMinimum == raw.QtyMaximum && raw.QtyStage == 1 && len(raw.Sub) == 1
+			variableDisk := raw.Type == 14 && raw.QtyMinimum == 0 && raw.QtyMaximum > 0 && raw.QtyStage == 1 && len(raw.Sub) == 1 && raw.Sub[0].QtyMinimum == 0 && raw.Sub[0].QtyMaximum == raw.QtyMaximum
+			if raw.ID <= 0 || !supportedType || (!fixedQuantity && !variableDisk) || raw.Hidden != 0 || raw.LinkagePID != 0 || raw.LinkageTop != 0 || (raw.LinkageLevel != "" && raw.LinkageLevel != "0") || len(raw.Sub) == 0 {
 				p.Supported = false
 				p.UnsupportedReason = "unsupported_option_type"
 				continue
 			}
+			if variableDisk {
+				o.Type = "quantity"
+			}
 			for _, sub := range raw.Sub {
-				c := Choice{ID: sub.ID, Name: sub.Name, Prices: map[string]Price{}}
+				c := Choice{ID: sub.ID, Name: sub.Name, MinQty: sub.QtyMinimum, MaxQty: sub.QtyMaximum, Prices: map[string]Price{}}
 				if c.ID <= 0 {
 					p.Supported = false
 					p.UnsupportedReason = "option_schema_invalid"

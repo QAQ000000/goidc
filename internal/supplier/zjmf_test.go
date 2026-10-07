@@ -192,6 +192,41 @@ func TestProductAvailabilityAndPaymentRules(t *testing.T) {
 		})
 	}
 }
+
+func TestDCIMFixedSpecificationOptionsAreSupported(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/zjmf_api_login" {
+			fmt.Fprint(w, `{"status":200,"jwt":"jwt"}`)
+			return
+		}
+		if r.URL.Path != "/cart/get_product_config" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+			return
+		}
+		fmt.Fprint(w, `{"status":200,"data":{"products":{"id":369,"name":"香港1区CN2 2H2G","location_version":79,"pay_type":{"pay_type":"recurring"}},"product_pricings":[{"code":"CNY","monthly":"20.00","quarterly":"60.00","annually":"200.00"}],"config_groups":[{"options":[{"id":33165,"option_name":"area|区域","option_type":12,"qty_minimum":0,"qty_maximum":0,"qty_stage":0,"sub":[{"id":136795,"option_name":"2|香港将军澳","pricings":[{"code":"CNY","monthly":"0.00","quarterly":"0.00","annually":"0.00"}]}]},{"id":33166,"option_name":"os|操作系统","option_type":5,"qty_minimum":0,"qty_maximum":0,"qty_stage":0,"sub":[{"id":136798,"option_name":"67|CentOS","pricings":[{"code":"CNY","monthly":"0.00","quarterly":"0.00","annually":"0.00"}]},{"id":136801,"option_name":"68|Ubuntu","pricings":[{"code":"CNY","monthly":"0.00","quarterly":"0.00","annually":"0.00"}]}]},{"id":33170,"option_name":"bw|带宽","option_type":11,"qty_minimum":20,"qty_maximum":20,"qty_stage":1,"sub":[{"id":136819,"option_name":"带宽","pricings":[{"code":"CNY","monthly":"0.00","quarterly":"0.00","annually":"0.00"}]}]}]}],"customfields":[],"advanced":[]}}`)
+	}))
+	defer srv.Close()
+	a, _ := New(Account{Provider: ProviderZJMF, BaseURL: srv.URL, Username: "user", Password: "pass"})
+	p, err := a.Product(t.Context(), 369)
+	if err != nil || !p.Supported || len(p.Options) != 3 || p.Options[1].Choices[1].ID != 136801 {
+		t.Fatal(p, err)
+	}
+	cost, err := ValidateSelection(p, "monthly", map[int64]string{33165: "136795", 33166: "136801", 33170: "136819"}, nil)
+	if err != nil || cost != 2000 {
+		t.Fatal(cost, err)
+	}
+}
+
+func TestSingleRangeDiskQuantitySelection(t *testing.T) {
+	p := Product{Currency: "CNY", Supported: true, Prices: map[string]Price{"monthly": {AmountCents: 2000}}, Options: []Option{{ID: 14, Type: "quantity", Required: true, Choices: []Choice{{ID: 15, MinQty: 0, MaxQty: 100, Prices: map[string]Price{"monthly": {AmountCents: 10}}}}}}}
+	if cost, err := ValidateSelection(p, "monthly", map[int64]string{14: "30"}, nil); err != nil || cost != 2300 {
+		t.Fatal(cost, err)
+	}
+	if _, err := ValidateSelection(p, "monthly", map[int64]string{14: "101"}, nil); err == nil {
+		t.Fatal("accepted quantity outside range")
+	}
+}
+
 func TestAmbiguousWriteAndSecretFreeError(t *testing.T) {
 	ctx := context.Background()
 	a, _ := fixture(t, "16.00", "/cart/settle")

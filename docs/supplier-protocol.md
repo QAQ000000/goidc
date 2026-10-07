@@ -22,10 +22,15 @@ options, and fields; changing stock alone does not invalidate a binding.
 `Providers()` returns registry metadata for the admin UI. Import and checkout
 both call `ValidateSelection` to require every fixed upstream choice and
 mandatory field, reject unknown IDs, and calculate base, option, and setup
-costs in cents. Dropdown and radio options are supported; quantity, staged
-pricing, OS and advanced linkage remain unsupported. Text and dropdown custom
-fields are supported only without a supplier regex rule. The store seals custom
-field values and never projects them back in binding responses.
+costs in cents. Dropdown and radio options are supported. A DCIM fixed
+specification whose provider-specific `option_type` has no variable range is
+normalized to a regular choice. A single-range disk quantity is also supported
+when it has one choice, no linkage, and a non-staged unit price; the submitted
+integer is checked against the provider range and multiplies the option and
+setup price. Arbitrary interactive quantities, staged pricing, OS linkage and
+advanced linkage remain unsupported. Text and dropdown custom fields are
+supported only without a supplier regex rule. The store seals custom field
+values and never projects them back in binding responses.
 
 Product payment rules accept the legacy JSON string or object form. Recurring
 products expose recurring cycles only; one-time products expose `once` only.
@@ -106,7 +111,7 @@ the current first provider uses username/password.
 Capabilities reserve suspend/resume/terminate/renew, but advertising a flag alone
 does not enable those workflows. Implement and verify the matching store,
 queue, finance and UI contracts before opening a new lifecycle capability.
-Future interactive/quantity configurations likewise require normalized schema
-support and checkout validation. Protocol fixtures and isolated databases prove
+Future interactive quantities, staged pricing and other configurations likewise
+require normalized schema support and checkout validation. Protocol fixtures and isolated databases prove
 the local contracts; a real supplier account remains required for external
 acceptance.

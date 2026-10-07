@@ -26,6 +26,8 @@ type Price struct {
 type Choice struct {
 	ID     int64            `json:"id"`
 	Name   string           `json:"name"`
+	MinQty int64            `json:"min_qty,omitempty"`
+	MaxQty int64            `json:"max_qty,omitempty"`
 	Prices map[string]Price `json:"prices"`
 }
 type Option struct {
@@ -156,14 +158,22 @@ func ValidateSelection(product Product, cycle string, options, fields map[int64]
 		if !present || value == "" {
 			continue
 		}
-		if option.Type != "select" {
+		if option.Type != "select" && option.Type != "quantity" {
 			return 0, &Error{Code: "unsupported_option_type"}
 		}
 		var choice *Choice
-		for i := range option.Choices {
-			if strconv.FormatInt(option.Choices[i].ID, 10) == value {
-				choice = &option.Choices[i]
-				break
+		if option.Type == "quantity" {
+			qty, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || len(option.Choices) != 1 || qty < option.Choices[0].MinQty || qty > option.Choices[0].MaxQty {
+				return 0, &Error{Code: "invalid_option_quantity"}
+			}
+			choice = &option.Choices[0]
+		} else {
+			for i := range option.Choices {
+				if strconv.FormatInt(option.Choices[i].ID, 10) == value {
+					choice = &option.Choices[i]
+					break
+				}
 			}
 		}
 		if choice == nil {
@@ -173,6 +183,14 @@ func ValidateSelection(product Product, cycle string, options, fields map[int64]
 		price, exists := choice.Prices[cycle]
 		if !exists {
 			return 0, &Error{Code: "option_price_missing"}
+		}
+		if option.Type == "quantity" {
+			qty, _ := strconv.ParseInt(value, 10, 64)
+			if qty > 0 && (price.AmountCents > math.MaxInt64/qty || price.SetupCents > math.MaxInt64/qty) {
+				return 0, &Error{Code: "invalid_price"}
+			}
+			price.AmountCents *= qty
+			price.SetupCents *= qty
 		}
 		if price.AmountCents < 0 || price.SetupCents < 0 || base.AmountCents > math.MaxInt64-price.AmountCents || base.SetupCents > math.MaxInt64-price.SetupCents {
 			return 0, &Error{Code: "invalid_price"}
