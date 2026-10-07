@@ -141,6 +141,17 @@ func (s *Store) UpdateSMSSettings(ctx context.Context, actor int64, hash string,
 	if e != nil {
 		return SMSSettings{}, e
 	}
+	tokenValue := ""
+	if len(sealed) > 0 {
+		plain, openErr := smsCrypt(s.ProvisionEncryptionKey, sealed, "token", false)
+		if openErr != nil {
+			return SMSSettings{}, conflict("sms_encryption_unconfigured", "凭据加密密钥未配置")
+		}
+		tokenValue = string(plain)
+	}
+	if e = s.syncChannelInstanceFromLegacy(ctx, tx, "sms-default", "sms", in.Provider, in.Enabled, map[string]any{"endpoint": in.Endpoint}, tokenValue); e != nil {
+		return SMSSettings{}, e
+	}
 	if e = Audit(ctx, tx, actor, "sms.settings_updated", "sms_settings", 1, map[string]any{"version": version + 1}); e != nil {
 		return SMSSettings{}, e
 	}
@@ -190,7 +201,7 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''))`, recipient, sealed, kind, challengeID, expiresAt)
+	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=$3 AND enabled=true ORDER BY sort_order,id LIMIT 1))`, recipient, sealed, kind, challengeID, expiresAt)
 	return e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {

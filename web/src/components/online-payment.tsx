@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "./ui/select";
 
-type Provider = { name: string; label: string; simulation: boolean };
+type Provider = { name: string; label: string; instance_id: string; simulation: boolean };
 export type PaymentRecord = {
   id: number;
   provider: string;
@@ -81,18 +81,19 @@ export function OnlinePayment({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState("");
+  const [selectedInstance, setSelectedInstance] = useState("");
   const keys = useRef<Record<string, string>>({});
   const providers = useResource<Provider[]>(
     open ? "/payment-providers" : null,
     false,
   );
   const options = providers.data ?? [];
-  const provider =
-    selected ||
-    options.find((value) => !value.simulation)?.name ||
-    options[0]?.name ||
-    "";
+  const chosen =
+    options.find((value) => value.instance_id === selectedInstance) ||
+    options.find((value) => !value.simulation) ||
+    options[0];
+  const provider = chosen?.name || "";
+  const instanceID = chosen?.instance_id || "";
   const [checkout, setCheckout] = useState("");
   const pending = invoice.payments?.find(
     (value) =>
@@ -104,15 +105,15 @@ export function OnlinePayment({
   async function create() {
     setBusy(true);
     setError("");
-    keys.current[provider] ??=
+    keys.current[`${provider}:${instanceID}`] ??=
       `web-payment-${invoice.id}-${crypto.randomUUID()}`;
     try {
       const result = await api<{ checkout_url: string }>(
         `/invoices/${invoice.id}/payments`,
         {
           method: "POST",
-          body: JSON.stringify({ provider, expected_version: invoice.version }),
-          headers: { "Idempotency-Key": keys.current[provider] },
+          body: JSON.stringify({ provider, channel_instance_id: instanceID, expected_version: invoice.version }),
+          headers: { "Idempotency-Key": keys.current[`${provider}:${instanceID}`] },
         },
       );
       setCheckout(result.checkout_url);
@@ -161,16 +162,16 @@ export function OnlinePayment({
           <label className="grid gap-2 text-sm">
             支付渠道
             <Select
-              value={provider}
+              value={instanceID}
               disabled={busy}
-              onValueChange={setSelected}
+              onValueChange={setSelectedInstance}
             >
               <SelectTrigger aria-label="支付渠道" className="w-full">
                 <SelectValue placeholder="选择支付渠道" />
               </SelectTrigger>
               <SelectContent>
                 {options.map((value) => (
-                  <SelectItem key={value.name} value={value.name}>
+                  <SelectItem key={`${value.name}:${value.instance_id}`} value={value.instance_id}>
                     {value.label}
                   </SelectItem>
                 ))}

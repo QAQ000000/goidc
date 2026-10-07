@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/codex/zjmfgo/internal/channel"
 )
 
 type EpayConfig struct {
@@ -23,6 +25,19 @@ type EpayConfig struct {
 type EpayGateway struct {
 	EpayConfig
 	Type string
+}
+
+func init() {
+	channel.MustRegister(channel.Descriptor{
+		ID: "epay", Name: "易支付", Category: channel.Payment,
+		Capabilities: []string{"create_intent", "verify_webhook", "query"},
+		Fields: []channel.Field{
+			{Key: "api_url", Label: "网关地址", Type: channel.Text, Required: true},
+			{Key: "pid", Label: "商户 PID", Type: channel.Text, Required: true},
+			{Key: "types", Label: "支付类型", Type: channel.Select, Options: []string{"alipay", "wxpay", "qqpay", "bank"}},
+			{Key: "key", Label: "商户密钥", Type: channel.Text, Required: true, Secret: true},
+		},
+	})
 }
 
 func (g EpayGateway) Name() string { return "epay_" + g.Type }

@@ -20,8 +20,9 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Provider        string `json:"provider"`
-		ExpectedVersion int64  `json:"expected_version"`
+		Provider          string `json:"provider"`
+		ChannelInstanceID string `json:"channel_instance_id"`
+		ExpectedVersion   int64  `json:"expected_version"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -31,6 +32,9 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		input.Provider = "mock"
 	}
 	configuration, err := s.paymentConfiguration(r.Context())
+	if strings.TrimSpace(input.ChannelInstanceID) != "" {
+		configuration, err = s.db.PaymentConfigurationForInstance(r.Context(), strings.TrimSpace(input.ChannelInstanceID), s.paymentFallback())
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -55,7 +59,11 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	result, err := s.db.CreatePaymentIntent(store.WithPaymentConfiguration(r.Context(), configuration), identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
+	paymentContext := store.WithPaymentConfiguration(r.Context(), configuration)
+	if strings.TrimSpace(input.ChannelInstanceID) != "" {
+		paymentContext = store.WithPaymentChannelInstance(paymentContext, strings.TrimSpace(input.ChannelInstanceID))
+	}
+	result, err := s.db.CreatePaymentIntent(paymentContext, identityFrom(r).ID, id, gateway.Name(), intent.ProviderPaymentID, intent.CheckoutURL, key, expected, details.Version)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -114,19 +122,38 @@ func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
-	configuration, err := s.paymentConfiguration(r.Context())
+	items := []map[string]any{}
+	labels := map[string]string{"alipay": "支付宝", "wxpay": "微信支付", "qqpay": "QQ 钱包", "bank": "网银支付"}
+	legacy, legacyErr := s.paymentConfiguration(r.Context())
+	instances, err := s.db.ListChannelInstances(r.Context(), "payment")
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	items := []map[string]any{}
-	if _, ok := configuration.Gateway("mock", false); ok {
-		items = append(items, map[string]any{"name": "mock", "label": "模拟支付", "simulation": true})
-	}
-	labels := map[string]string{"alipay": "支付宝", "wxpay": "微信支付", "qqpay": "QQ 钱包", "bank": "网银支付"}
-	for _, value := range configuration.Types {
-		if _, ok := configuration.Gateway("epay_"+value, false); ok {
-			items = append(items, map[string]any{"name": "epay_" + value, "label": labels[value], "simulation": false})
+	for _, instance := range instances {
+		if !instance.Enabled && instance.ID != "payment-mock-default" {
+			continue
+		}
+		var configuration store.PaymentConfiguration
+		var resolveErr error
+		if instance.ID == "payment-default" || instance.ID == "payment-mock-default" {
+			configuration, resolveErr = legacy, legacyErr
+		} else {
+			configuration, resolveErr = s.db.PaymentConfigurationForInstance(r.Context(), instance.ID, s.paymentFallback())
+		}
+		if resolveErr != nil {
+			continue
+		}
+		if instance.ImplementationID == "mock" {
+			if _, ok := configuration.Gateway("mock", false); ok {
+				items = append(items, map[string]any{"name": "mock", "label": instance.DisplayName, "instance_id": instance.ID, "simulation": true})
+			}
+			continue
+		}
+		for _, value := range configuration.Types {
+			if _, ok := configuration.Gateway("epay_"+value, false); ok {
+				items = append(items, map[string]any{"name": "epay_" + value, "label": labels[value] + " · " + instance.DisplayName, "instance_id": instance.ID, "simulation": false})
+			}
 		}
 	}
 	write(w, 200, items)

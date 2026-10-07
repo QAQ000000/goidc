@@ -122,8 +122,9 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 			return out, err
 		}
 	}
-	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url,credential_snapshot)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL, append([]byte{}, sealed...)).Scan(&out.PaymentID); err != nil {
+	instanceID := paymentChannelInstance(ctx)
+	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url,credential_snapshot)
+VALUES($1,$2,COALESCE(NULLIF($9,''),(SELECT id FROM channel_instances WHERE category='payment' AND implementation_id=CASE WHEN $1='mock' THEN 'mock' ELSE 'epay' END AND enabled=true ORDER BY sort_order,id LIMIT 1)),$3,$4,$5,$6,$7,$8) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL, append([]byte{}, sealed...), instanceID).Scan(&out.PaymentID); err != nil {
 		return out, err
 	}
 	out.Provider, out.ProviderPaymentID, out.InvoiceID, out.CheckoutURL, out.Status = provider, providerPaymentID, invoiceID, checkoutURL, "pending"

@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/channel"
 )
 
 // SMSProvider implements an explicitly registered, compiled-in module protocol.
@@ -32,6 +34,17 @@ func RegisterSMSProvider(name string, p SMSProvider) error {
 	return nil
 }
 func init() { _ = RegisterSMSProvider("generic_http_json", genericHTTPSMS{}) }
+
+func init() {
+	channel.MustRegister(channel.Descriptor{
+		ID: "generic_http_json", Name: "通用 HTTP JSON 短信", Category: channel.SMS,
+		Capabilities: []string{"send"},
+		Fields: []channel.Field{
+			{Key: "endpoint", Label: "HTTPS 接口", Type: channel.Text, Required: true},
+			{Key: "token", Label: "访问令牌", Type: channel.Text, Required: true, Secret: true},
+		},
+	})
+}
 func SendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
 	smsRegistry.RLock()
 	p := smsRegistry.providers[c.Provider]

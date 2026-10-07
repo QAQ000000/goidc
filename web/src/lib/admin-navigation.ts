@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, CreditCard } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, CreditCard, Plug } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -30,6 +30,7 @@ export const adminNavigation = [
   { href: "/admin/smtp-settings", label: "邮件发送", icon: Mail, permission: "@super", group: "system" },
   { href: "/admin/sms-settings", label: "短信发送", icon: MessageSquare, permission: "@super", group: "system" },
   { href: "/admin/payment-settings", label: "支付渠道", icon: CreditCard, permission: "@super", group: "system" },
+  { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
 ];
 
 export const adminNavigationGroups = [

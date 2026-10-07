@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/codex/zjmfgo/internal/channel"
 )
 
 type IntentRequest struct {
@@ -35,6 +37,14 @@ type Gateway interface {
 	CreateIntent(IntentRequest) (Intent, error)
 	VerifySignature(body []byte, signature string) bool
 	DecodeWebhook(body []byte) (Webhook, error)
+}
+
+func init() {
+	channel.MustRegister(channel.Descriptor{
+		ID: "mock", Name: "模拟支付", Category: channel.Payment,
+		Capabilities: []string{"create_intent", "verify_webhook"},
+		Fields:       []channel.Field{{Key: "secret_source", Label: "签名密钥来源", Type: channel.Select, Options: []string{"deployment"}}},
+	})
 }
 
 type MockGateway struct{ Secret []byte }

@@ -15,9 +15,19 @@ import (
 )
 
 type paymentConfigurationKey struct{}
+type paymentChannelInstanceKey struct{}
 
 func WithPaymentConfiguration(ctx context.Context, configuration PaymentConfiguration) context.Context {
 	return context.WithValue(WithPaymentConfigurationVersion(ctx, configuration.Version), paymentConfigurationKey{}, configuration)
+}
+
+func WithPaymentChannelInstance(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, paymentChannelInstanceKey{}, strings.TrimSpace(id))
+}
+
+func paymentChannelInstance(ctx context.Context) string {
+	id, _ := ctx.Value(paymentChannelInstanceKey{}).(string)
+	return strings.TrimSpace(id)
 }
 
 func (s *Store) paymentCredentials(reference string, raw []byte, seal bool) ([]byte, error) {

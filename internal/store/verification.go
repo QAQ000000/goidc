@@ -127,7 +127,7 @@ func (s *Store) IssueVerification(ctx context.Context, tx pgx.Tx, purpose, chann
 		if sealErr != nil {
 			return "", sealErr
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO email_outbox(recipient,subject,body,body_encrypted,kind,expires_at,verification_id) VALUES($1,$2,'',$3,$4,$5,$6)`, recipient, subject, sealed, kind, expires, id); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO email_outbox(recipient,subject,body,body_encrypted,kind,expires_at,verification_id,channel_instance_id) VALUES($1,$2,'',$3,$4,$5,$6,(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1))`, recipient, subject, sealed, kind, expires, id); err != nil {
 			return "", err
 		}
 	}

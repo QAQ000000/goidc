@@ -10,8 +10,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/store"
 )
+
+func init() {
+	channel.MustRegister(channel.Descriptor{
+		ID: "smtp", Name: "SMTP", Category: channel.Mail,
+		Capabilities: []string{"send", "test"},
+		Fields: []channel.Field{
+			{Key: "host", Label: "SMTP 主机", Type: channel.Text, Required: true},
+			{Key: "port", Label: "SMTP 端口", Type: channel.Number, Required: true},
+			{Key: "username", Label: "用户名", Type: channel.Text},
+			{Key: "password", Label: "密码", Type: channel.Text, Secret: true},
+			{Key: "from", Label: "发件地址", Type: channel.Text, Required: true},
+			{Key: "from_name", Label: "发件名称", Type: channel.Text},
+			{Key: "tls_mode", Label: "TLS 模式", Type: channel.Select, Options: []string{"implicit_tls", "starttls", "none"}},
+		},
+	})
+}
 
 type SMTPConfig struct {
 	Host     string

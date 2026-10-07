@@ -176,6 +176,23 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 	if e != nil {
 		return old, e
 	}
+	passwordValue := ""
+	if len(sealed) > 0 {
+		passwordValue, e = smtpOpen(s.ProvisionEncryptionKey, sealed)
+		if e != nil {
+			return old, conflict("smtp_encryption_unconfigured", "凭据加密密钥未配置")
+		}
+	}
+	if e = s.syncChannelInstanceFromLegacy(ctx, tx, "mail-smtp-default", "mail", "smtp", out.Enabled, map[string]any{
+		"host":      out.Host,
+		"port":      out.Port,
+		"username":  out.Username,
+		"from":      out.From,
+		"tls_mode":  out.TLSMode,
+		"from_name": out.FromName,
+	}, passwordValue); e != nil {
+		return old, e
+	}
 	if e = Audit(ctx, tx, actor, "smtp.settings_updated", "smtp_settings", 1, map[string]any{"version": out.Version}); e != nil {
 		return old, e
 	}
@@ -212,7 +229,7 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
 	}
 	var id int64
-	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind) VALUES($1,'SMTP test','SMTP configuration test message.','system') RETURNING id", recipient).Scan(&id); e != nil {
+	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'SMTP test','SMTP configuration test message.','system',(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1)) RETURNING id", recipient).Scan(&id); e != nil {
 		return 0, e
 	}
 	if e = Audit(ctx, tx, actor, "smtp.test_queued", "email_outbox", id, map[string]any{"version": version}); e != nil {

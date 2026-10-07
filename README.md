@@ -54,7 +54,7 @@ API 还提供客户服务生命周期接口：`GET /api/v1/services`、`POST /ap
 
 账户页提供 TOTP 两步验证：`POST /api/v1/account/mfa/enroll` 返回一次性密钥和 8 个恢复码，`POST /api/v1/account/mfa/confirm` 确认启用，`POST /api/v1/account/mfa/disable` 需要当前密码及验证码或恢复码。密钥使用 `MFA_ENCRYPTION_KEY`（32 字节、64 位十六进制）以 AES-GCM 加密后保存；登录先返回 5 分钟一次性挑战，验证码通过后才创建会话。恢复码只保存哈希并逐个消费。
 
-管理员可在 `/admin/notifications` 编辑通知模板并查看邮件队列，在 `/admin/smtp-settings` 配置 SMTP，在 `/admin/sms-settings` 配置短信 HTTP JSON 供应商；API 为 `/api/v1/admin/notification-templates`、`/api/v1/admin/email-outbox`、`/api/v1/admin/smtp-settings` 和 `/api/v1/admin/sms-settings`。凭据使用 AES-GCM 加密，列表不会返回正文或秘密，失败任务可重试。465 端口使用隐式 TLS，587 默认 STARTTLS；短信供应商采用注册表，当前内置 generic HTTP JSON，真实供应商仍需单独验收。
+管理员可在 `/admin/notifications` 编辑通知模板并查看邮件队列，在 `/admin/smtp-settings` 配置 SMTP，在 `/admin/sms-settings` 配置短信 HTTP JSON 供应商，并在 `/admin/channels` 管理编译进 Go 的渠道实例；API 为 `/api/v1/admin/notification-templates`、`/api/v1/admin/email-outbox`、`/api/v1/admin/smtp-settings`、`/api/v1/admin/sms-settings` 和 `/api/v1/admin/channel-instances`。凭据使用 AES-GCM 加密，列表不会返回正文或秘密，失败任务可重试。465 端口使用隐式 TLS，587 默认 STARTTLS；支付下单可绑定具体渠道实例，历史交易使用不可变凭据快照；短信供应商采用注册表，当前内置 generic HTTP JSON，真实供应商仍需单独验收。
 
 超级管理员可在 `/admin/settings` 配置站点名称、Logo、公司与联系信息、条款/隐私链接、备案及邮箱注册开关。页面品牌、标题、描述与页脚使用公开 `GET /api/v1/site` 数据；管理读写 `/api/v1/admin/site-settings` 只接受超级管理员浏览器会话，保存检查版本并原子写审计。关闭注册保留既有账户登录，排队注册也会重新检查开关。范围与验收见 [站点设置](docs/site-settings.md)。
 
