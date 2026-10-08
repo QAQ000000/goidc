@@ -120,9 +120,10 @@ func validateChannelInput(in ChannelInstanceInput, creating bool) (channel.Descr
 	if in.Secret != nil && len(*in.Secret) > 4096 {
 		return channel.Descriptor{}, nil, conflict("invalid_channel_secret", "渠道密钥过长")
 	}
-	if in.Enabled && in.Secret == nil && hasSecretField(desc) {
-		return channel.Descriptor{}, nil, conflict("invalid_channel_secret", "启用渠道需要密钥")
-	}
+	// Secret presence is checked after create/update has resolved the stored
+	// value. An update with a nil Secret intentionally keeps the existing
+	// ciphertext, so validating that condition here would reject the normal
+	// "leave blank to keep" form submission.
 	return desc, encoded, nil
 }
 
