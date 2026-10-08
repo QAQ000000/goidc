@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, Copy, Info, Plus, RefreshCw, Settings2, ToggleLeft, ToggleRight, Trash2, Wrench } from "lucide-react";
+import { CheckCircle2, Copy, Info, Plus, RefreshCw, Send, Settings2, ToggleLeft, ToggleRight, Trash2, Wrench } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
 import { api } from "@/lib/api";
 import { Workspace } from "./workspace";
@@ -66,6 +66,20 @@ export function ChannelInstancesView({ initialCategory = "payment", title = "接
     } catch (error) { setNotice((error as Error).message); }
   }
 
+  async function testInstance(instance: Instance) {
+    const recipient = window.prompt(category === "sms" ? "请输入测试手机号（含国家码）" : "请输入测试邮箱地址", "");
+    if (!recipient?.trim()) return;
+    setNotice("");
+    try {
+      const settingsPath = category === "sms" ? "/admin/sms-settings" : "/admin/smtp-settings";
+      const testPath = category === "sms" ? "/admin/sms-settings/test" : "/admin/smtp-settings/test";
+      const settings = await api<{ version: number; enabled: boolean }>(settingsPath);
+      if (!settings.enabled) throw new Error(`${category === "sms" ? "短信" : "邮件"}发送尚未启用`);
+      await api(testPath, { method: "POST", body: JSON.stringify({ recipient: recipient.trim(), expected_version: settings.version, channel_instance_id: instance.id }) });
+      setNotice(`${category === "sms" ? "测试短信" : "测试邮件"}已加入发送队列`);
+    } catch (error) { setNotice((error as Error).message); }
+  }
+
   return <Workspace title={title} admin>
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -84,7 +98,7 @@ export function ChannelInstancesView({ initialCategory = "payment", title = "接
         <Table>
           <TableHeader><TableRow><TableHead className="w-14">ID</TableHead><TableHead>接口名称</TableHead><TableHead>标识</TableHead><TableHead className="hidden lg:table-cell">能力</TableHead><TableHead>版本</TableHead><TableHead>状态</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
           <TableBody>
-            {rows.map(({ descriptor, instance }, index) => <DirectoryRow key={`${descriptor.id}:${instance?.id ?? "available"}`} index={index + 1} descriptor={descriptor} instance={instance} onInstall={() => setEditor({ descriptor })} onEdit={() => instance && setEditor({ descriptor, initial: instance })} onClone={() => instance && void clone(instance, descriptor)} onRefresh={refresh} />)}
+            {rows.map(({ descriptor, instance }, index) => <DirectoryRow key={`${descriptor.id}:${instance?.id ?? "available"}`} index={index + 1} category={category} descriptor={descriptor} instance={instance} onInstall={() => setEditor({ descriptor })} onEdit={() => instance && setEditor({ descriptor, initial: instance })} onClone={() => instance && void clone(instance, descriptor)} onTest={() => instance && void testInstance(instance)} onRefresh={refresh} />)}
             {!rows.length && <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground">{meta.empty}</TableCell></TableRow>}
           </TableBody>
         </Table>
@@ -95,7 +109,7 @@ export function ChannelInstancesView({ initialCategory = "payment", title = "接
   </Workspace>;
 }
 
-function DirectoryRow({ index, descriptor, instance, onInstall, onEdit, onClone, onRefresh }: { index: number; descriptor: Descriptor; instance?: Instance; onInstall: () => void; onEdit: () => void; onClone: () => void; onRefresh: () => void }) {
+function DirectoryRow({ index, category, descriptor, instance, onInstall, onEdit, onClone, onTest, onRefresh }: { index: number; category: string; descriptor: Descriptor; instance?: Instance; onInstall: () => void; onEdit: () => void; onClone: () => void; onTest: () => void; onRefresh: () => void }) {
   const [busy, setBusy] = useState(false);
   async function remove() {
     if (!instance || !window.confirm("确认卸载此接口实例？历史业务记录仍会保留实例编号。")) return;
@@ -118,7 +132,7 @@ function DirectoryRow({ index, descriptor, instance, onInstall, onEdit, onClone,
     <TableCell className="hidden lg:table-cell"><span className="text-xs text-muted-foreground">{descriptor.capabilities.join(" / ") || "基础配置"}</span></TableCell>
     <TableCell><span className="text-xs">内置</span></TableCell>
     <TableCell>{instance ? <Badge variant={instance.enabled ? "default" : "outline"}>{instance.enabled ? <><CheckCircle2 />启用</> : "已禁用"}</Badge> : <Badge variant="outline">未安装</Badge>}</TableCell>
-    <TableCell><div className="flex justify-end gap-1">{instance ? <><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onEdit}><Settings2 />配置</Button><Button type="button" variant="ghost" size="icon" title={instance.enabled ? "禁用接口" : "启用接口"} aria-label={instance.enabled ? "禁用接口" : "启用接口"} disabled={busy} onClick={() => void toggle()}>{instance.enabled ? <ToggleRight /> : <ToggleLeft />}</Button><Button type="button" variant="ghost" size="icon" title="复制接口实例" aria-label="复制接口实例" disabled={busy} onClick={onClone}><Copy /></Button><Button type="button" variant="ghost" size="icon" title="卸载接口" aria-label="卸载接口" disabled={busy} onClick={() => void remove()}><Trash2 /></Button></> : <Button type="button" variant="outline" size="sm" onClick={onInstall}><Wrench />安装</Button>}</div></TableCell>
+    <TableCell><div className="flex justify-end gap-1">{instance ? <><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={onEdit}><Settings2 />配置</Button>{(category === "sms" || category === "mail") && <Button type="button" variant="ghost" size="sm" disabled={busy || !instance.enabled} onClick={onTest}><Send />测试发送</Button>}<Button type="button" variant="ghost" size="icon" title={instance.enabled ? "禁用接口" : "启用接口"} aria-label={instance.enabled ? "禁用接口" : "启用接口"} disabled={busy} onClick={() => void toggle()}>{instance.enabled ? <ToggleRight /> : <ToggleLeft />}</Button><Button type="button" variant="ghost" size="icon" title="复制接口实例" aria-label="复制接口实例" disabled={busy} onClick={onClone}><Copy /></Button><Button type="button" variant="ghost" size="icon" title="卸载接口" aria-label="卸载接口" disabled={busy} onClick={() => void remove()}><Trash2 /></Button></> : <Button type="button" variant="outline" size="sm" onClick={onInstall}><Wrench />安装</Button>}</div></TableCell>
   </TableRow>;
 }
 

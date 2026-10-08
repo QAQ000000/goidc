@@ -60,8 +60,9 @@ func (s *Server) testSMSSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Recipient       string `json:"recipient"`
-		ExpectedVersion int64  `json:"expected_version"`
+		Recipient         string `json:"recipient"`
+		ExpectedVersion   int64  `json:"expected_version"`
+		ChannelInstanceID string `json:"channel_instance_id"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -85,7 +86,7 @@ func (s *Server) testSMSSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	if e = s.db.QueueSMS(r.Context(), tx, in.Recipient, "短信渠道测试消息", "test", "", time.Now().Add(5*time.Minute)); e != nil {
+	if e = s.db.QueueSMS(r.Context(), tx, in.Recipient, "短信渠道测试消息", "test", "", time.Now().Add(5*time.Minute), in.ChannelInstanceID); e != nil {
 		s.fail(w, r, e)
 		return
 	}

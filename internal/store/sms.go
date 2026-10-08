@@ -238,7 +238,7 @@ type SMSJob struct {
 func (s *Store) QueueSMSVerification(ctx context.Context, tx pgx.Tx, recipient, code, purpose, challengeID string, expiresAt time.Time) error {
 	return s.QueueSMS(ctx, tx, recipient, "验证码："+code, purpose, challengeID, expiresAt)
 }
-func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time) error {
+func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, channelInstanceID ...string) error {
 	if !ValidSMSRecipient(recipient) || len(body) > 4096 || !expiresAt.After(time.Now()) {
 		return conflict("invalid_sms", "短信内容无效")
 	}
@@ -249,11 +249,24 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	if !enabled {
 		return conflict("sms_unavailable", "短信渠道未启用")
 	}
+	instanceID := ""
+	if len(channelInstanceID) > 0 {
+		instanceID = strings.TrimSpace(channelInstanceID[0])
+		if instanceID != "" {
+			var valid bool
+			if e := tx.QueryRow(ctx, `SELECT category='sms' AND enabled FROM channel_instances WHERE id=$1`, instanceID).Scan(&valid); e != nil {
+				return e
+			}
+			if !valid {
+				return conflict("sms_unavailable", "短信渠道未启用")
+			}
+		}
+	}
 	sealed, e := smsCrypt(s.ProvisionEncryptionKey, []byte(body), "body:"+recipient+":"+challengeID, true)
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1))`, recipient, sealed, kind, challengeID, expiresAt)
+	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)))`, recipient, sealed, kind, challengeID, expiresAt, instanceID)
 	return e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {

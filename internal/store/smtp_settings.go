@@ -199,7 +199,7 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 	return out, tx.Commit(ctx)
 }
 
-func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, recipient string, expected int64) (int64, error) {
+func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, recipient string, expected int64, channelInstanceID ...string) (int64, error) {
 	recipient = strings.TrimSpace(recipient)
 	a, e := mail.ParseAddress(recipient)
 	if e != nil || a.Address != recipient || len(recipient) > 254 || expected < 1 || strings.ContainsAny(recipient, "\r\n\x00") {
@@ -228,8 +228,21 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 	if !configured || !enabled {
 		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
 	}
+	instanceID := ""
+	if len(channelInstanceID) > 0 {
+		instanceID = strings.TrimSpace(channelInstanceID[0])
+		if instanceID != "" {
+			var valid bool
+			if e = tx.QueryRow(ctx, `SELECT category='mail' AND implementation_id='smtp' AND enabled FROM channel_instances WHERE id=$1`, instanceID).Scan(&valid); e != nil {
+				return 0, e
+			}
+			if !valid {
+				return 0, conflict("invalid_smtp", "邮件渠道未启用")
+			}
+		}
+	}
 	var id int64
-	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'SMTP test','SMTP configuration test message.','system',(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1)) RETURNING id", recipient).Scan(&id); e != nil {
+	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'SMTP test','SMTP configuration test message.','system',COALESCE(NULLIF($2,''),(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1))) RETURNING id", recipient, instanceID).Scan(&id); e != nil {
 		return 0, e
 	}
 	if e = Audit(ctx, tx, actor, "smtp.test_queued", "email_outbox", id, map[string]any{"version": version}); e != nil {

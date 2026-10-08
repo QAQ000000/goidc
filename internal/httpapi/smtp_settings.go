@@ -62,8 +62,9 @@ func (s *Server) testSMTPSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Recipient       string `json:"recipient"`
-		ExpectedVersion int64  `json:"expected_version"`
+		Recipient         string `json:"recipient"`
+		ExpectedVersion   int64  `json:"expected_version"`
+		ChannelInstanceID string `json:"channel_instance_id"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -73,7 +74,7 @@ func (s *Server) testSMTPSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "请先登录")
 		return
 	}
-	id, e := s.db.QueueSMTPTest(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), in.Recipient, in.ExpectedVersion)
+	id, e := s.db.QueueSMTPTest(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), in.Recipient, in.ExpectedVersion, in.ChannelInstanceID)
 	if e != nil {
 		s.fail(w, r, e)
 		return
