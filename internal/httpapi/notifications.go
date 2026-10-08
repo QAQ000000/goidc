@@ -176,7 +176,7 @@ func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {
 	args := []any{}
 	where := "TRUE"
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if status != "pending" && status != "sending" && status != "sent" && status != "expired" {
+		if status != "pending" && status != "sending" && status != "sent" && status != "expired" && status != "dead_letter" {
 			writeError(w, http.StatusBadRequest, "invalid_email_status", "邮件状态无效")
 			return
 		}
@@ -221,6 +221,10 @@ func (s *Server) retryEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "email_already_sent", "邮件已经发送")
 		return
 	}
+	if status == "sending" {
+		writeError(w, http.StatusConflict, "email_delivery_in_progress", "邮件正在投递，请等待当前任务完成")
+		return
+	}
 	var active bool
 	if err = tx.QueryRow(r.Context(), `SELECT (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM email_outbox WHERE id=$1`, id).Scan(&active); err != nil {
 		s.fail(w, r, err)
@@ -230,11 +234,89 @@ func (s *Server) retryEmail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "email_expired", "验证码邮件已过期，请重新申请验证码")
 		return
 	}
-	if _, err = tx.Exec(r.Context(), "UPDATE email_outbox SET status='pending',locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
+	if _, err = tx.Exec(r.Context(), "UPDATE email_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "email_outbox.retried", "email_outbox", id, map[string]any{}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, map[string]any{"id": id, "status": "pending"})
+}
+
+func (s *Server) smsOutbox(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	args := []any{}
+	where := "TRUE"
+	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+		if status != "pending" && status != "sending" && status != "sent" && status != "expired" && status != "dead_letter" {
+			writeError(w, http.StatusBadRequest, "invalid_sms_status", "短信状态无效")
+			return
+		}
+		args = append(args, status)
+		where += " AND status=$1"
+	}
+	args = append(args, limit, offset)
+	query := "SELECT id,recipient,kind,status,attempts,last_error,available_at,sent_at,created_at FROM sms_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
+	rows, err := s.db.Pool.Query(r.Context(), query, args...)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	write(w, http.StatusOK, items)
+}
+
+func (s *Server) retrySMS(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var status string
+	if err = tx.QueryRow(r.Context(), "SELECT status FROM sms_outbox WHERE id=$1 FOR UPDATE", id).Scan(&status); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if status == "sent" {
+		writeError(w, http.StatusConflict, "sms_already_sent", "短信已经发送")
+		return
+	}
+	if status == "sending" {
+		writeError(w, http.StatusConflict, "sms_delivery_in_progress", "短信正在投递，请等待当前任务完成")
+		return
+	}
+	var active bool
+	if err = tx.QueryRow(r.Context(), `SELECT expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM sms_outbox WHERE id=$1`, id).Scan(&active); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !active || status == "expired" {
+		writeError(w, http.StatusConflict, "sms_expired", "短信已过期，请重新申请验证码")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "UPDATE sms_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "sms_outbox.retried", "sms_outbox", id, map[string]any{}); err != nil {
 		s.fail(w, r, err)
 		return
 	}

@@ -67,15 +67,23 @@ func (s *Store) CompleteEmailJob(ctx context.Context, job EmailJob, sendErr erro
 		_, err := s.Pool.Exec(ctx, "UPDATE email_outbox SET status='sent',body=CASE WHEN verification_id IS NOT NULL THEN '[delivered]' ELSE body END,body_encrypted=''::bytea,locked_at=NULL,last_error='',sent_at=now() WHERE id=$1 AND status='sending' AND attempts=$2", job.ID, job.Attempts)
 		return err
 	}
-	delay := time.Minute
-	if job.Attempts >= 2 {
-		delay = time.Duration(1<<min(job.Attempts-1, 6)) * time.Minute
-	}
-	if job.Attempts >= 5 {
-		delay = 24 * time.Hour
-	}
-	_, err := s.Pool.Exec(ctx, "UPDATE email_outbox SET status='pending',locked_at=NULL,last_error=$2,available_at=now()+$3::interval WHERE id=$1 AND status='sending' AND attempts=$4", job.ID, truncateEmailError(sendErr), fmt.Sprintf("%d seconds", int(delay/time.Second)), job.Attempts)
+	delay := outboxRetryDelay(job.Attempts)
+	_, err := s.Pool.Exec(ctx, `UPDATE email_outbox SET
+status=CASE WHEN attempts>=max_attempts THEN 'dead_letter' ELSE 'pending' END,
+dead_letter_at=CASE WHEN attempts>=max_attempts THEN now() ELSE NULL END,
+locked_at=NULL,last_error=$2,available_at=CASE WHEN attempts>=max_attempts THEN now() ELSE now()+$3::interval END
+WHERE id=$1 AND status='sending' AND attempts=$4`, job.ID, truncateEmailError(sendErr), fmt.Sprintf("%d seconds", int(delay/time.Second)), job.Attempts)
 	return err
+}
+
+func outboxRetryDelay(attempts int) time.Duration {
+	if attempts < 1 {
+		attempts = 1
+	}
+	if attempts > 6 {
+		attempts = 6
+	}
+	return time.Duration(1<<(attempts-1)) * time.Minute
 }
 
 func truncateEmailError(err error) string {

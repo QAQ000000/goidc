@@ -84,6 +84,16 @@ func main() {
 				} else if queued > 0 {
 					log.Info("service expiry notifications queued", "count", queued)
 				}
+				if queued, scheduleErr := db.EnqueueBillingNotifications(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+					log.Error("billing notification scheduling failed", "error", scheduleErr)
+				} else if queued > 0 {
+					log.Info("billing notifications queued", "count", queued)
+				}
+				if queued, scheduleErr := db.EnqueueOverdueServiceSuspensions(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+					log.Error("overdue suspension scheduling failed", "error", scheduleErr)
+				} else if queued > 0 {
+					log.Info("overdue service suspensions queued", "count", queued)
+				}
 			}
 		}
 	}()

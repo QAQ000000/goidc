@@ -373,6 +373,41 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	}
 }
 
+func TestEmailOutboxDeadLetterCanBeRetried(t *testing.T) {
+	db, h := testServer(t)
+	_, admin := user(t, db, h, "dead-letter-admin", "super_admin")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind,max_attempts)
+VALUES('dead-letter@example.test','dead letter','payload','system',5)`); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM email_outbox WHERE recipient='dead-letter@example.test'").Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5; i++ {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE email_outbox SET available_at=now() WHERE id=$1", id); err != nil {
+			t.Fatal(err)
+		}
+		job, err := db.ClaimEmailJob(t.Context())
+		if err != nil || job == nil {
+			t.Fatalf("claim attempt %d: %v", i+1, err)
+		}
+		if err = db.CompleteEmailJob(t.Context(), *job, errors.New("fixture delivery failure")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var status string
+	var attempts int
+	if err := db.Pool.QueryRow(t.Context(), "SELECT status,attempts FROM email_outbox WHERE id=$1", id).Scan(&status, &attempts); err != nil || status != "dead_letter" || attempts != 5 {
+		t.Fatalf("dead letter status=%s attempts=%d err=%v", status, attempts, err)
+	}
+	retry := request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", id), map[string]any{}, admin, "")
+	expect(t, retry, 200)
+	if err := db.Pool.QueryRow(t.Context(), "SELECT status,attempts FROM email_outbox WHERE id=$1", id).Scan(&status, &attempts); err != nil || status != "pending" || attempts != 0 {
+		t.Fatalf("retry status=%s attempts=%d err=%v", status, attempts, err)
+	}
+}
+
 func TestContactsAndCustomerGroupsOwnership(t *testing.T) {
 	db, h := testServer(t)
 	firstID, first := user(t, db, h, "contacts-first", "customer")

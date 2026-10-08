@@ -337,6 +337,12 @@ func (s *Store) CompleteSMSJob(ctx context.Context, o SMSJob, sendErr error) err
 		_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET status='sent',body_encrypted=''::bytea,locked_at=NULL,sent_at=now(),last_error='' WHERE id=$1 AND status='sending' AND attempts=$2`, o.ID, o.Attempts)
 		return e
 	}
-	_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET status=CASE WHEN expires_at<=now() THEN 'expired' WHEN attempts>=5 THEN 'failed' ELSE 'pending' END, body_encrypted=CASE WHEN expires_at<=now() OR attempts>=5 THEN ''::bytea ELSE body_encrypted END,locked_at=NULL,last_error='SMS delivery failed',available_at=now()+interval '1 minute' WHERE id=$1 AND status='sending' AND attempts=$2`, o.ID, o.Attempts)
+	delay := outboxRetryDelay(o.Attempts)
+	_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET
+status=CASE WHEN expires_at<=now() THEN 'expired' WHEN attempts>=max_attempts THEN 'dead_letter' ELSE 'pending' END,
+body_encrypted=CASE WHEN expires_at<=now() THEN ''::bytea ELSE body_encrypted END,
+dead_letter_at=CASE WHEN expires_at<=now() OR attempts>=max_attempts THEN CASE WHEN attempts>=max_attempts THEN now() ELSE NULL END ELSE NULL END,
+locked_at=NULL,last_error=$2,available_at=CASE WHEN expires_at<=now() OR attempts>=max_attempts THEN now() ELSE now()+$3::interval END
+	WHERE id=$1 AND status='sending' AND attempts=$4`, o.ID, "SMS delivery failed", fmt.Sprintf("%d seconds", int(delay/time.Second)), o.Attempts)
 	return e
 }
