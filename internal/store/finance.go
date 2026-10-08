@@ -395,6 +395,9 @@ VALUES($1,'refund',$2,$3,'invoice',$4,$5,'账单退款')`, userID, out.AmountCen
 	if err = Audit(ctx, tx, actorID, "invoice.refunded", "invoice", invoiceID, map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}); err != nil {
 		return out, err
 	}
+	if err = s.ReverseAffiliateCommissions(ctx, tx, invoiceID, actorID, "confirmed invoice refund"); err != nil {
+		return out, err
+	}
 	out.Status = "refunded"
 	out.BalanceCents = balance
 	return out, tx.Commit(ctx)

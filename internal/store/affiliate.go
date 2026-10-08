@@ -372,10 +372,10 @@ ORDER BY c.created_at,c.id LIMIT 1 FOR UPDATE OF c`, sessionHash).Scan(&clickID,
 func (s *Store) AffiliateOverview(ctx context.Context, userID int64) (AffiliateOverview, error) {
 	var out AffiliateOverview
 	err := s.Pool.QueryRow(ctx, `SELECT a.id,a.account_type,a.status,p.id,p.name,
- COALESCE((SELECT sum(amount_cents) FROM affiliate_commission_entries WHERE account_id=a.id AND status='pending'),0),
- COALESCE((SELECT sum(amount_cents) FROM affiliate_commission_entries WHERE account_id=a.id AND status='available'),0),
- COALESCE((SELECT sum(amount_cents) FROM affiliate_commission_entries WHERE account_id=a.id AND status='reserved'),0),
- COALESCE((SELECT sum(amount_cents) FROM affiliate_commission_entries WHERE account_id=a.id AND status='paid'),0),
+ COALESCE((SELECT sum(pending_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
+ COALESCE((SELECT sum(available_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
+ COALESCE((SELECT sum(reserved_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
+ COALESCE((SELECT sum(paid_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
  COALESCE((SELECT count(*) FROM affiliate_attributions WHERE account_id=a.id),0)
 FROM affiliate_accounts a JOIN affiliate_programs p ON p.id=a.program_id WHERE a.user_id=$1`, userID).
 		Scan(&out.AccountID, &out.AccountType, &out.AccountStatus, &out.ProgramID, &out.ProgramName, &out.PendingCents, &out.AvailableCents, &out.ReservedCents, &out.PaidCents, &out.ReferredCount)

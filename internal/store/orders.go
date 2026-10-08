@@ -149,6 +149,13 @@ SELECT coalesce(sum(n),0) FROM stock_updates`, orderID).Scan(&out.StockUnits); e
 	if err = Audit(ctx, tx, actorID, "order.cancelled", "order", orderID, map[string]any{"stock_units_released": out.StockUnits}); err != nil {
 		return out, err
 	}
+	var affiliateInvoiceID int64
+	if err = tx.QueryRow(ctx, "SELECT id FROM invoices WHERE order_id=$1", orderID).Scan(&affiliateInvoiceID); err != nil {
+		return out, err
+	}
+	if err = s.ReverseAffiliateCommissions(ctx, tx, affiliateInvoiceID, actorID, "unpaid order cancelled"); err != nil {
+		return out, err
+	}
 	out.Status = "cancelled"
 	return out, tx.Commit(ctx)
 }

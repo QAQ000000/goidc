@@ -79,6 +79,11 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-timer.C:
+				if released, settleErr := db.SettleAffiliateCommissions(ctx, 100); settleErr != nil && ctx.Err() == nil {
+					log.Error("affiliate commission settlement failed", "error", settleErr)
+				} else if released > 0 {
+					log.Info("affiliate commissions released", "count", released)
+				}
 				if queued, scheduleErr := db.EnqueueServiceExpiryReminders(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
 					log.Error("service expiry notification scheduling failed", "error", scheduleErr)
 				} else if queued > 0 {
