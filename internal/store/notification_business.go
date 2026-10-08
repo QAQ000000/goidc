@@ -116,3 +116,114 @@ func renderPaymentSuccessTemplate(body, invoiceNo, amount string) string {
 	body = strings.ReplaceAll(body, "{{invoice_no}}", invoiceNo)
 	return strings.ReplaceAll(body, "{{amount}}", amount)
 }
+
+// QueueServiceProvisionSuccessNotifications must run in the same transaction
+// that makes a service active. The event key prevents duplicate messages when
+// a supplier callback is followed by a periodic sync.
+func (s *Store) QueueServiceProvisionSuccessNotifications(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	var userID int64
+	var productName, upstreamID, email, phone string
+	var emailVerified, phoneVerified bool
+	if err := tx.QueryRow(ctx, `SELECT s.user_id,p.name,s.upstream_id,u.email,u.email_verified,u.phone,u.phone_verified
+FROM services s JOIN products p ON p.id=s.product_id JOIN users u ON u.id=s.user_id
+WHERE s.id=$1 AND s.status='active'`, serviceID).
+		Scan(&userID, &productName, &upstreamID, &email, &emailVerified, &phone, &phoneVerified); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if emailVerified && strings.TrimSpace(email) != "" {
+		if err := s.queueServiceProvisionEmail(ctx, tx, serviceID, userID, productName, upstreamID, email); err != nil {
+			return err
+		}
+	}
+	if phoneVerified && strings.TrimSpace(phone) != "" {
+		if err := s.queueServiceProvisionSMS(ctx, tx, serviceID, userID, productName, upstreamID, phone); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) queueServiceProvisionEmail(ctx context.Context, tx pgx.Tx, serviceID, userID int64, productName, upstreamID, recipient string) error {
+	var subject, body string
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT subject,body,active FROM notification_templates WHERE channel='email' AND kind='service_provision_success'`).Scan(&subject, &body, &active); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if !active {
+		return nil
+	}
+	var instanceID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	body = renderServiceProvisionTemplate(body, productName, upstreamID)
+	var eventID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
+VALUES($1,$2,'email','service_provision_success',0,CURRENT_DATE)
+ON CONFLICT (service_id,channel,kind) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
+RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	var outboxID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id)
+VALUES($1,$2,$3,'service_provision_success',$4) RETURNING id`, recipient, subject, body, instanceID).Scan(&outboxID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, "UPDATE notification_delivery_events SET email_outbox_id=$2 WHERE id=$1", eventID, outboxID)
+	return err
+}
+
+func (s *Store) queueServiceProvisionSMS(ctx context.Context, tx pgx.Tx, serviceID, userID int64, productName, upstreamID, recipient string) error {
+	var body, templateID string
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT body,provider_template_id,active FROM notification_templates WHERE channel='sms' AND kind='service_provision_success'`).Scan(&body, &templateID, &active); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if !active {
+		return nil
+	}
+	var instanceID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	body = renderServiceProvisionTemplate(body, productName, upstreamID)
+	var eventID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
+VALUES($1,$2,'sms','service_provision_success',0,CURRENT_DATE)
+ON CONFLICT (service_id,channel,kind) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
+RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	outboxID, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, "service_provision_success", "", time.Now().Add(30*24*time.Hour), templateID, instanceID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "UPDATE notification_delivery_events SET sms_outbox_id=$2 WHERE id=$1", eventID, outboxID)
+	return err
+}
+
+func renderServiceProvisionTemplate(body, productName, upstreamID string) string {
+	body = strings.ReplaceAll(body, "{{product_name}}", productName)
+	return strings.ReplaceAll(body, "{{upstream_id}}", upstreamID)
+}

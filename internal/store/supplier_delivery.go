@@ -278,6 +278,11 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 	if j.Action == "sync" && outcome != "succeeded" {
 		outcome, message = "failed", "供应商同步失败，请稍后重试"
 	}
+	if outcome == "succeeded" && (j.Action == "create" || (j.Action == "sync" && current == "provisioning")) {
+		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, j.ServiceID); err != nil {
+			return err
+		}
+	}
 	if outcome == "failed" && j.Action == "create" {
 		if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", j.ServiceID, message); err != nil {
 			return err

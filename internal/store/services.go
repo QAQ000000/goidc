@@ -688,6 +688,11 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 	if err = applyLocalServiceAction(ctx, tx, job, serviceStatus); err != nil {
 		return err
 	}
+	if job.Action == "create" {
+		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, job.ServiceID); err != nil {
+			return err
+		}
+	}
 	resultMode, auditAction := "simulation", "service.simulation.completed"
 	if mode == "nokvm" {
 		resultMode = "local_billing_cycle"
@@ -826,6 +831,11 @@ next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN
 		}
 	} else if err = applyLocalServiceAction(ctx, tx, job, current); err != nil {
 		return out, err
+	}
+	if job.Action == "create" {
+		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
 	}
 	if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='succeeded',result=$2,completed_at=now(),updated_at=now(),last_error='' WHERE id=$1", job.ID, result); err != nil {
 		return out, err

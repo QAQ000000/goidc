@@ -109,6 +109,11 @@ func (s *Store) SyncSupplierHost(ctx context.Context, in SupplierHostSyncInput) 
 	if err = applySupplierRemoteSafely(ctx, tx, ProvisionJob{ServiceID: serviceID, Action: "sync"}, remote, s.ProvisionEncryptionKey); err != nil {
 		return err
 	}
+	if current == "provisioning" && (status == "active" || status == "Active") {
+		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, serviceID); err != nil {
+			return err
+		}
+	}
 	if err = Audit(ctx, tx, 0, "supplier.callback.synced", "service", serviceID, map[string]any{"upstream_id": hostID, "status": status, "type": strings.TrimSpace(in.Type)}); err != nil {
 		return err
 	}
