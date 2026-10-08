@@ -67,9 +67,27 @@ export function Workspace({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const { data: impersonation } = useResource<{ active: boolean; admin_name?: string }>("/auth/impersonation", false);
+  const [impersonationBusy, setImpersonationBusy] = useState(false);
+  const [impersonationError, setImpersonationError] = useState("");
   const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : customerNav;
   const groups = useServiceNavigation(!admin && !!user);
+  async function exitImpersonation() {
+    if (impersonationBusy) return;
+    setImpersonationBusy(true); setImpersonationError("");
+    try {
+      await api("/auth/impersonation/exit", { method: "POST" });
+      router.push("/admin"); router.refresh();
+    } catch (e) {
+      setImpersonationError((e as Error).message);
+      setImpersonationBusy(false);
+    }
+  }
   async function logout() {
+    if (impersonation?.active) {
+      await exitImpersonation();
+      return;
+    }
     try {
       await api("/auth/logout", { method: "POST" });
       router.push(admin ? "/admin-login" : "/login");
@@ -200,6 +218,8 @@ export function Workspace({
           </div>
         </header>
         <main className="content">
+          {impersonation?.active && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>当前以客户身份查看{impersonation.admin_name ? `，原管理员：${impersonation.admin_name}` : ""}。客户操作会按该客户权限执行。</span><Button type="button" variant="outline" size="sm" disabled={impersonationBusy} onClick={() => void exitImpersonation()}>{impersonationBusy ? "返回中..." : "返回管理后台"}</Button></div>}
+          {impersonationError && <p role="alert" className="text-destructive mb-4">{impersonationError}</p>}
           {logoutError && (
             <p role="alert" className="text-destructive mb-4">
               {logoutError}

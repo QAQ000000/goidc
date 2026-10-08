@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, LogIn, Save, Trash2 } from "lucide-react";
 import { api, date, money, type Contact } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
@@ -38,7 +38,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
   const customer = useResource<AdminCustomer>(`/admin/customers/${customerId}`, false);
   return <Workspace title="客户详情" admin>
     {customer.error ? <Failure error={customer.error} retry={customer.refresh} /> : !customer.data ? <Loading /> : <>
-      <header className="flex flex-wrap items-center justify-between gap-3 mb-5"><div><h1 className="text-xl font-semibold break-words">{customer.data.display_name || customer.data.username}</h1><p className="text-sm text-muted-foreground mt-1">客户 #{customer.data.id} · {customer.data.username}</p></div><Button variant="outline" asChild><Link href={returnHref}><ArrowLeft size={16} />返回客户管理</Link></Button></header>
+      <header className="flex flex-wrap items-center justify-between gap-3 mb-5"><div><h1 className="text-xl font-semibold break-words">{customer.data.display_name || customer.data.username}</h1><p className="text-sm text-muted-foreground mt-1">客户 #{customer.data.id} · {customer.data.username}</p></div><div className="flex flex-wrap items-center gap-2"><ImpersonateCustomerButton customerId={customer.data.id} /><Button variant="outline" asChild><Link href={returnHref}><ArrowLeft size={16} />返回客户管理</Link></Button></div></header>
       {tab !== "summary" && <section className="border-b bg-white p-5 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div className="min-w-0">
@@ -65,6 +65,22 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
       {tab === "summary" ? <CustomerSummary customer={customer.data} /> : tab === "profile" ? <CustomerProfile key={`${customer.data.id}:${customer.data.display_name}:${customer.data.email}:${customer.data.status}`} customer={customer.data} saved={customer.refresh} cancelHref={`/admin/customers/${customerId}${backParams.toString() ? `?${backParams.toString()}` : ""}`} /> : tab === "contacts" ? <ContactsPanel adminCustomerId={customerId} /> : tab === "files" ? <CustomerFileManager customerId={customerId} /> : <AdminCustomerRelatedView key={`${customerId}:${tab}`} customerId={customerId} tab={tab} />}
     </>}
   </Workspace>;
+}
+
+function ImpersonateCustomerButton({ customerId }: { customerId: number }) {
+  const router = useRouter();
+  const manage = useAdminPermission("customers.manage");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  async function start() {
+    if (!manage || busy || !window.confirm("将以该客户身份进入前台，原管理员会话会保留，退出后可恢复。继续吗？")) return;
+    setBusy(true); setMessage("");
+    try {
+      await api(`/admin/customers/${customerId}/impersonate`, { method: "POST", body: "{}" });
+      router.push("/console/services"); router.refresh();
+    } catch (error) { setMessage((error as Error).message); setBusy(false); }
+  }
+  return <div className="flex items-center gap-2"><PermissionGate permission="customers.manage"><Button type="button" variant="outline" disabled={busy} onClick={() => void start()}><LogIn size={16} />{busy ? "切换中..." : "以客户身份登录"}</Button></PermissionGate>{message && <span role="alert" className="text-sm text-destructive">{message}</span>}</div>;
 }
 
 function CustomerSummary({ customer }: { customer: AdminCustomer }) {

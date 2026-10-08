@@ -85,6 +85,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, id)
 }
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if _, err := r.Cookie(adminSessionCookie); err == nil {
+		s.exitImpersonation(w, r)
+		return
+	}
 	cookie, _ := r.Cookie("zjmfgo_session")
 	if _, err := s.db.Pool.Exec(r.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookie.Value)); err != nil {
 		s.fail(w, r, err)
