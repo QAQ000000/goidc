@@ -17,13 +17,14 @@ type Field = { key: string; label: string; type: string; required: boolean; secr
 type Descriptor = { id: string; name: string; category: string; capabilities: string[]; fields: Field[] };
 type Instance = { id: string; category: string; implementation_id: string; display_name: string; enabled: boolean; sort_order: number; config: Record<string, unknown>; secret_configured: boolean; version: number; created_at?: string; updated_at?: string };
 type DirectoryItem = { descriptor: Descriptor; instance?: Instance };
-export type ChannelCategory = "payment" | "mail" | "sms" | "oauth" | "provision";
+export type ChannelCategory = "payment" | "mail" | "sms" | "oauth" | "certification" | "provision";
 
 const categories: { id: ChannelCategory; label: string }[] = [
   { id: "payment", label: "支付接口" },
   { id: "mail", label: "邮件接口" },
   { id: "sms", label: "短信接口" },
   { id: "oauth", label: "第三方登录" },
+  { id: "certification", label: "实名认证接口" },
 ];
 
 const categoryText: Record<string, { title: string; description: string; empty: string }> = {
@@ -31,6 +32,7 @@ const categoryText: Record<string, { title: string; description: string; empty: 
   mail: { title: "邮件接口", description: "填写邮件接口配置后，系统可以发送验证码、账单和业务通知。", empty: "当前没有已安装的邮件接口" },
   sms: { title: "短信接口", description: "填写短信接口配置后，系统可以发送注册、登录和安全验证码。", empty: "当前没有已安装的短信接口" },
   oauth: { title: "第三方登录", description: "选择开启第三方登录方式，接口凭据由编译进 Go 的适配器提供。", empty: "当前没有已安装的第三方登录接口" },
+  certification: { title: "实名认证接口", description: "配置实名认证服务商；人工审核和后续芝麻信用等第三方接口共用此目录。", empty: "当前没有已安装的实名认证接口" },
   provision: { title: "开通接口", description: "管理上游开通适配器实例。", empty: "当前没有已安装的开通接口" },
 };
 
