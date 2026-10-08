@@ -184,7 +184,7 @@ func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {
 		where += " AND status=$1"
 	}
 	args = append(args, limit, offset)
-	query := "SELECT id,recipient,subject,kind,status,attempts,last_error,available_at,sent_at,created_at FROM email_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
+	query := "SELECT id,recipient,subject,kind,status,attempts,max_attempts,dead_letter_at,last_error,available_at,sent_at,created_at FROM email_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		s.fail(w, r, err)
@@ -262,7 +262,7 @@ func (s *Server) smsOutbox(w http.ResponseWriter, r *http.Request) {
 		where += " AND status=$1"
 	}
 	args = append(args, limit, offset)
-	query := "SELECT id,recipient,kind,status,attempts,last_error,available_at,sent_at,created_at FROM sms_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
+	query := "SELECT id,recipient,kind,status,attempts,max_attempts,dead_letter_at,last_error,available_at,sent_at,created_at FROM sms_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
 		s.fail(w, r, err)

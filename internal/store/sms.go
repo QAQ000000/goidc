@@ -305,7 +305,11 @@ func (s *Store) queueSMSWithTemplateID(ctx context.Context, tx pgx.Tx, recipient
 	return id, e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
-	_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET status='expired',body_encrypted=''::bytea,locked_at=NULL WHERE status IN ('pending','sending') AND (expires_at<=now() OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND (v.consumed_at IS NOT NULL OR v.expires_at<=now()))); UPDATE sms_outbox SET status='pending',locked_at=NULL,last_error='worker lease expired' WHERE status='sending' AND locked_at<now()-interval '5 minutes'`)
+	_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET status='expired',body_encrypted=''::bytea,locked_at=NULL WHERE status IN ('pending','sending') AND (expires_at<=now() OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND (v.consumed_at IS NOT NULL OR v.expires_at<=now()))); UPDATE sms_outbox SET
+status=CASE WHEN attempts>=max_attempts THEN 'dead_letter' ELSE 'pending' END,
+dead_letter_at=CASE WHEN attempts>=max_attempts THEN now() ELSE NULL END,
+locked_at=NULL,available_at=now(),last_error='worker lease expired'
+WHERE status='sending' AND locked_at<now()-interval '5 minutes'`)
 	return e
 }
 func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {

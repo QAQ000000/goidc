@@ -24,7 +24,10 @@ func (s *Store) RecoverStaleEmailJobs(ctx context.Context) error {
 	if _, err := s.Pool.Exec(ctx, `UPDATE email_outbox SET status='expired',body='[expired]',body_encrypted=''::bytea,locked_at=NULL WHERE status IN ('pending','sending') AND (expires_at<=now() OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND (v.consumed_at IS NOT NULL OR v.expires_at<=now())))`); err != nil {
 		return err
 	}
-	_, err := s.Pool.Exec(ctx, `UPDATE email_outbox SET status='pending',locked_at=NULL,available_at=now(),last_error='worker lease expired'
+	_, err := s.Pool.Exec(ctx, `UPDATE email_outbox SET
+status=CASE WHEN attempts>=max_attempts THEN 'dead_letter' ELSE 'pending' END,
+dead_letter_at=CASE WHEN attempts>=max_attempts THEN now() ELSE NULL END,
+locked_at=NULL,available_at=now(),last_error='worker lease expired'
 WHERE status='sending' AND locked_at<now()-interval '5 minutes'`)
 	return err
 }

@@ -37,10 +37,13 @@ type EmailJob = {
   kind: string;
   status: string;
   attempts: number;
+  max_attempts: number;
+  dead_letter_at: string | null;
   last_error: string;
   sent_at: string | null;
   created_at: string;
 };
+type SMSJob = Omit<EmailJob, "subject">;
 
 export function NotificationsView() {
   return (
@@ -52,9 +55,11 @@ export function NotificationsView() {
 function NotificationManager() {
   const templates = useResource<Template[]>("/admin/notification-templates");
   const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
+  const smsOutbox = useResource<SMSJob[]>("/admin/sms-outbox?limit=50");
   const manage = useAdminPermission("notifications.manage");
   const [tab, setTab] = useState("templates");
   const [templateChannel, setTemplateChannel] = useState<"email" | "sms">("email");
+  const [outboxChannel, setOutboxChannel] = useState<"email" | "sms">("email");
   const [query, setQuery] = useState("");
   const [edit, setEdit] = useState<Template | null>(null);
   const [editingBusy, setEditingBusy] = useState(false);
@@ -62,8 +67,10 @@ function NotificationManager() {
   const refresh = () => {
     templates.refresh();
     outbox.refresh();
+    smsOutbox.refresh();
   };
-  const error = tab === "templates" ? templates.error : outbox.error;
+  const activeOutbox = outboxChannel === "email" ? outbox : smsOutbox;
+  const error = tab === "templates" ? templates.error : activeOutbox.error;
   const list =
     templates.data?.filter((item) => item.channel === templateChannel).filter((item) =>
       `${item.name} ${item.subject} ${item.kind}`
@@ -238,15 +245,23 @@ function NotificationManager() {
             </Table>
           </div>
         )
-      ) : !outbox.data ? (
+      ) : !activeOutbox.data ? (
         <Loading />
       ) : (
+        <>
+        <div className="mb-4 flex border-b">
+          {([['email', '邮件队列'], ['sms', '短信队列']] as const).map(([value, label]) => (
+            <button type="button" key={value} aria-current={outboxChannel === value ? "page" : undefined} className={`border-b-2 px-4 py-2 text-sm ${outboxChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setOutboxChannel(value)}>
+              {label}
+            </button>
+          ))}
+        </div>
         <div className="overflow-x-auto border-y">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>ID</TableHead>
-                <TableHead>收件人 / 主题</TableHead>
+                  <TableHead>{outboxChannel === "email" ? "收件人 / 主题" : "接收号码"}</TableHead>
                 <TableHead>类型</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead>尝试次数</TableHead>
@@ -256,49 +271,48 @@ function NotificationManager() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {outbox.data.map((job) => (
+              {activeOutbox.data.map((job) => (
                 <TableRow key={job.id}>
                   <TableCell>{job.id}</TableCell>
                   <TableCell className="max-w-80 whitespace-normal break-all">
                     <p>{job.recipient}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {job.subject}
-                    </p>
+                    {outboxChannel === "email" && <p className="mt-1 text-xs text-muted-foreground">{(job as EmailJob).subject}</p>}
                   </TableCell>
                   <TableCell>{job.kind}</TableCell>
                   <TableCell>
                     <Status value={job.status} />
                   </TableCell>
-                  <TableCell>{job.attempts}</TableCell>
+                  <TableCell>{job.attempts} / {job.max_attempts}</TableCell>
                   <TableCell>
                     {date(job.created_at)}
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {job.sent_at ? date(job.sent_at) : "尚未发送"}
+                      {job.sent_at ? date(job.sent_at) : job.dead_letter_at ? `转入死信 ${date(job.dead_letter_at)}` : "尚未发送"}
                     </p>
                   </TableCell>
                   <TableCell className="max-w-64 whitespace-normal break-all text-xs text-destructive">
                     {job.last_error || "-"}
                   </TableCell>
                   <TableCell className="text-right">
-                    {manage && job.status !== "sent" && (
-                      <RetryEmail id={job.id} refresh={outbox.refresh} />
+                    {manage && job.status !== "sent" && job.status !== "expired" && (
+                      <RetryOutbox id={job.id} channel={outboxChannel} refresh={activeOutbox.refresh} />
                     )}
                   </TableCell>
                 </TableRow>
               ))}
-              {!outbox.data.length && (
+              {!activeOutbox.data.length && (
                 <TableRow>
                   <TableCell
                     colSpan={8}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    暂无邮件
+                    {outboxChannel === "email" ? "暂无邮件" : "暂无短信"}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
         </div>
+        </>
       )}
     </>
   );
@@ -439,7 +453,7 @@ function TemplateEditor({
     </form>
   );
 }
-function RetryEmail({ id, refresh }: { id: number; refresh: () => void }) {
+function RetryOutbox({ id, channel, refresh }: { id: number; channel: "email" | "sms"; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function retry() {
@@ -447,7 +461,7 @@ function RetryEmail({ id, refresh }: { id: number; refresh: () => void }) {
     setBusy(true);
     setError("");
     try {
-      await api("/admin/email-outbox/" + id + "/retry", {
+      await api(`/admin/${channel}-outbox/${id}/retry`, {
         method: "POST",
         body: "{}",
       });
@@ -464,7 +478,7 @@ function RetryEmail({ id, refresh }: { id: number; refresh: () => void }) {
         size="icon-sm"
         variant="ghost"
         title="重新排队"
-        aria-label={`重新排队邮件 ${id}`}
+        aria-label={`重新排队${channel === "email" ? "邮件" : "短信"} ${id}`}
         disabled={busy}
         onClick={() => void retry()}
       >
