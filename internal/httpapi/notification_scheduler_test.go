@@ -1,0 +1,62 @@
+package httpapi
+
+import (
+	"context"
+	"testing"
+
+	"github.com/codex/zjmfgo/internal/store"
+)
+
+func TestServiceExpiryReminderSchedulingIsIdempotent(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "expiry-reminder-customer", "customer")
+	admin, _ := user(t, db, h, "expiry-reminder-admin", "super_admin")
+	var sessionHash string
+	if err := db.Pool.QueryRow(context.Background(), "SELECT token_hash FROM sessions WHERE user_id=$1", admin).Scan(&sessionHash); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.UpdateSMTPSettings(t.Context(), admin, sessionHash, store.SMTPSettings{
+		Enabled: true, Host: "smtp.example.test", Port: 25, From: "notify@example.test", TLSMode: "none",
+	}, nil, false, 1, store.SMTPRuntimeConfig{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET email_verified=true WHERE id=$1", uid); err != nil {
+		t.Fatal(err)
+	}
+	pid := product(t, db, 10)
+	var orderID, itemID, serviceID int64
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash)
+VALUES('EXP-'||replace(gen_random_uuid()::text,'-',''),$1,'active',1333,'expiry-reminder-order','fixture') RETURNING id`, uid).Scan(&orderID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO order_items(order_id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents)
+VALUES($1,$2,'商品','monthly',1,1234,99,1333) RETURNING id`, orderID, pid).Scan(&itemID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle,status,next_due_at,provision_mode,unit_number,recurring_price_cents)
+VALUES($1,$2,$3,$4,'商品','expiry-reminder.example','monthly','active',CURRENT_DATE+interval '7 days'+interval '12 hours','simulation',1,1234) RETURNING id`, uid, orderID, itemID, pid).Scan(&serviceID); err != nil {
+		t.Fatal(err)
+	}
+	queued, err := db.EnqueueServiceExpiryReminders(t.Context(), 100)
+	if err != nil || queued != 1 {
+		t.Fatalf("first schedule queued=%d err=%v", queued, err)
+	}
+	queued, err = db.EnqueueServiceExpiryReminders(t.Context(), 100)
+	if err != nil || queued != 0 {
+		t.Fatalf("duplicate schedule queued=%d err=%v", queued, err)
+	}
+	var count int
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM email_outbox WHERE kind='service_expiry_reminder'").Scan(&count); err != nil || count != 1 {
+		t.Fatalf("email outbox count=%d err=%v", count, err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE services SET next_due_at=CURRENT_DATE+interval '1 day'+interval '12 hours' WHERE id=$1", serviceID); err != nil {
+		t.Fatal(err)
+	}
+	queued, err = db.EnqueueServiceExpiryReminders(t.Context(), 100)
+	if err != nil || queued != 1 {
+		t.Fatalf("second stage queued=%d err=%v", queued, err)
+	}
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM notification_delivery_events WHERE service_id=$1", serviceID).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("delivery event count=%d err=%v", count, err)
+	}
+}

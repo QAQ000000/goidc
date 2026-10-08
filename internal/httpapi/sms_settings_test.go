@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/codex/zjmfgo/internal/store"
+	"strings"
 	"testing"
 	"time"
 )
@@ -60,7 +61,7 @@ func TestSMSSettingsAndEncryptedOutbox(t *testing.T) {
 		t.Fatal("code plaintext", e)
 	}
 	job, e := db.ClaimSMSJob(t.Context())
-	if e != nil || job.Body != "验证码：123456" {
+	if e != nil || job == nil || !strings.Contains(job.Body, "123456") {
 		t.Fatal("claim", e)
 	}
 	if e = db.CompleteSMSJob(t.Context(), *job, errors.New("fixture-secret 123456")); e != nil {

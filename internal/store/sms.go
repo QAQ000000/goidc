@@ -259,11 +259,16 @@ func (s *Store) QueueSMSVerification(ctx context.Context, tx pgx.Tx, recipient, 
 	return s.queueSMSWithTemplate(ctx, tx, recipient, body, purpose, challengeID, expiresAt, templateID)
 }
 func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, channelInstanceID ...string) error {
-	return s.queueSMSWithTemplate(ctx, tx, recipient, body, kind, challengeID, expiresAt, "", channelInstanceID...)
+	_, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, kind, challengeID, expiresAt, "", channelInstanceID...)
+	return err
 }
 func (s *Store) queueSMSWithTemplate(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, templateID string, channelInstanceID ...string) error {
+	_, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, kind, challengeID, expiresAt, templateID, channelInstanceID...)
+	return err
+}
+func (s *Store) queueSMSWithTemplateID(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, templateID string, channelInstanceID ...string) (int64, error) {
 	if !ValidSMSRecipient(recipient) || len(body) > 4096 || !expiresAt.After(time.Now()) {
-		return conflict("invalid_sms", "短信内容无效")
+		return 0, conflict("invalid_sms", "短信内容无效")
 	}
 	instanceID := ""
 	if len(channelInstanceID) > 0 {
@@ -271,32 +276,33 @@ func (s *Store) queueSMSWithTemplate(ctx context.Context, tx pgx.Tx, recipient, 
 		if instanceID != "" {
 			var valid bool
 			if e := tx.QueryRow(ctx, `SELECT category='sms' AND enabled FROM channel_instances WHERE id=$1`, instanceID).Scan(&valid); e != nil {
-				return e
+				return 0, e
 			}
 			if !valid {
-				return conflict("sms_unavailable", "短信渠道未启用")
+				return 0, conflict("sms_unavailable", "短信渠道未启用")
 			}
 		}
 	} else {
 		var enabled bool
 		if e := tx.QueryRow(ctx, `SELECT enabled FROM sms_settings WHERE id=1`).Scan(&enabled); e != nil {
-			return e
+			return 0, e
 		}
 		if !enabled {
 			if e := tx.QueryRow(ctx, `SELECT COALESCE((SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1),'')`).Scan(&instanceID); e != nil {
-				return e
+				return 0, e
 			}
 			if instanceID == "" {
-				return conflict("sms_unavailable", "短信渠道未启用")
+				return 0, conflict("sms_unavailable", "短信渠道未启用")
 			}
 		}
 	}
 	sealed, e := smsCrypt(s.ProvisionEncryptionKey, []byte(body), "body:"+recipient+":"+challengeID, true)
 	if e != nil {
-		return e
+		return 0, e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id,template_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)),$7)`, recipient, sealed, kind, challengeID, expiresAt, instanceID, templateID)
-	return e
+	var id int64
+	e = tx.QueryRow(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id,template_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)),$7) RETURNING id`, recipient, sealed, kind, challengeID, expiresAt, instanceID, templateID).Scan(&id)
+	return id, e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
 	_, e := s.Pool.Exec(ctx, `UPDATE sms_outbox SET status='expired',body_encrypted=''::bytea,locked_at=NULL WHERE status IN ('pending','sending') AND (expires_at<=now() OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND (v.consumed_at IS NOT NULL OR v.expires_at<=now()))); UPDATE sms_outbox SET status='pending',locked_at=NULL,last_error='worker lease expired' WHERE status='sending' AND locked_at<now()-interval '5 minutes'`)

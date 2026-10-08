@@ -68,6 +68,26 @@ func main() {
 		}()
 	}
 	defer paymentWorker.Wait()
+	var notificationWorker sync.WaitGroup
+	notificationWorker.Add(1)
+	go func() {
+		defer notificationWorker.Done()
+		timer := time.NewTicker(time.Minute)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				if queued, scheduleErr := db.EnqueueServiceExpiryReminders(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+					log.Error("service expiry notification scheduling failed", "error", scheduleErr)
+				} else if queued > 0 {
+					log.Info("service expiry notifications queued", "count", queued)
+				}
+			}
+		}
+	}()
+	defer notificationWorker.Wait()
 	log.Info("provision worker started")
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()

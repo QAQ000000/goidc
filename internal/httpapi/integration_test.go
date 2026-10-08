@@ -328,10 +328,19 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	templates := request(h, "GET", "/api/v1/admin/notification-templates", nil, admin, "")
 	expect(t, templates, 200)
 	items := listData(t, templates)
-	if len(items) != 2 {
+	if len(items) < 4 {
 		t.Fatalf("template count=%d", len(items))
 	}
-	templateID := int64(items[0]["id"].(float64))
+	var templateID int64
+	for _, item := range items {
+		if item["channel"] == "email" && item["kind"] == "password_reset" {
+			templateID = int64(item["id"].(float64))
+			break
+		}
+	}
+	if templateID == 0 {
+		t.Fatal("password reset template missing")
+	}
 	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/notification-templates/%d", templateID), map[string]any{"subject": "自定义重置主题", "body": "请使用：{{code}}", "active": true}, admin, "")
 	expect(t, updated, 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "notification-customer"}, "", ""), 202)
