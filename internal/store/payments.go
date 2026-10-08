@@ -262,6 +262,9 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		if err = s.QueuePaymentSuccessNotifications(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
+		if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, txID); err != nil {
+			return out, err
+		}
 	}
 	if _, err = tx.Exec(ctx, "UPDATE payment_transactions SET status=$2,completed_at=CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE completed_at END,raw_result=$3,next_reconcile_at=NULL,updated_at=now() WHERE id=$1", txID, status, json.RawMessage(raw)); err != nil {
 		return out, err

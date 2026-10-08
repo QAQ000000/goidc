@@ -135,6 +135,9 @@ VALUES($1,'payment',$2,$3,'invoice',$4,$5,'账单支付')`, userID, -out.AmountC
 	if err = s.QueuePaymentSuccessNotifications(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
+	if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, 0); err != nil {
+		return out, err
+	}
 	if err = Audit(ctx, tx, userID, "invoice.paid", "invoice", invoiceID, map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}); err != nil {
 		return out, err
 	}

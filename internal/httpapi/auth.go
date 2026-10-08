@@ -147,6 +147,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		Name             string `json:"display_name"`
 		VerificationID   string `json:"verification_id"`
 		VerificationCode string `json:"verification_code"`
+		AffiliateCode    string `json:"affiliate_code"`
 		CaptchaID        string `json:"captcha_id"`
 		CaptchaAnswer    string `json:"captcha_answer"`
 	}
@@ -222,6 +223,18 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if _, err = tx.Exec(r.Context(), "UPDATE users SET email_verified=$2 WHERE id=$1", id, verified); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	affiliateCode := strings.TrimSpace(input.AffiliateCode)
+	if affiliateCode == "" {
+		if cookie, cookieErr := r.Cookie("zjmfgo_affiliate_code"); cookieErr == nil {
+			affiliateCode = cookie.Value
+		}
+	}
+	if session, cookieErr := r.Cookie("zjmfgo_affiliate_session"); cookieErr == nil && affiliateCode != "" {
+		if err = s.db.ConvertAffiliateClickTx(r.Context(), tx, id, affiliateCode, tokenHash(session.Value)); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	if err = store.Audit(r.Context(), tx, id, "customer.registered", "user", id, map[string]string{}); err != nil {
 		s.fail(w, r, err)
