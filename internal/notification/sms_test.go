@@ -74,3 +74,57 @@ func TestSMSProtocolAndFailurePrivacy(t *testing.T) {
 		t.Fatal("expired message sent")
 	}
 }
+
+func TestIdcsmartSMSProtocol(t *testing.T) {
+	called := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		if r.Method != http.MethodPost || r.Header.Get("api") != "app-123" || r.Header.Get("key") != "private-key" || r.Header.Get("Content-Type") != "application/x-www-form-urlencoded" {
+			t.Errorf("unexpected idcsmart headers: method=%s api=%q key=%q content-type=%q", r.Method, r.Header.Get("api"), r.Header.Get("key"), r.Header.Get("Content-Type"))
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if r.Form.Get("to") != "+8613800138000" || r.Form.Get("content") != "【智简魔方】验证码：123456" || r.Form.Get("template_id") != "" || r.Form.Get("vars") != "" {
+			t.Errorf("unexpected idcsmart form: %#v", r.Form)
+		}
+		_, _ = w.Write([]byte(`{"status":200,"msg":"ok"}`))
+	}))
+	defer target.Close()
+	p := idcsmartSMS{endpoint: target.URL}
+	err := p.Send(context.Background(), store.SMSRuntimeConfig{API: "app-123", Key: "private-key", Sign: "【智简魔方】"}, store.SMSJob{Recipient: "+8613800138000", Body: "验证码：123456", ExpiresAt: time.Now().Add(time.Minute)})
+	if err != nil || !called {
+		t.Fatalf("idcsmart delivery failed: %v", err)
+	}
+}
+
+func TestIdcsmartSMSFailureDoesNotExposeResponse(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = w.Write([]byte(`{"status":500,"msg":"private upstream details"}`))
+	}))
+	defer target.Close()
+	err := (idcsmartSMS{endpoint: target.URL}).Send(context.Background(), store.SMSRuntimeConfig{API: "app-123", Key: "private-key", Sign: "sign"}, store.SMSJob{Recipient: "+8613800138000", Body: "body", ExpiresAt: time.Now().Add(time.Minute)})
+	if err == nil || strings.Contains(err.Error(), "private upstream details") || strings.Contains(err.Error(), "private-key") {
+		t.Fatalf("upstream response leaked: %v", err)
+	}
+}
+
+func TestIdcsmartSign(t *testing.T) {
+	for _, test := range []struct{ input, want string }{
+		{"智简魔方", "【智简魔方】"},
+		{"【智简魔方】", "【智简魔方】"},
+		{"【智简】【魔方】", "【智简魔方】"},
+		{"", ""},
+	} {
+		if got := idcsmartSign(test.input); got != test.want {
+			t.Fatalf("idcsmartSign(%q) = %q, want %q", test.input, got, test.want)
+		}
+	}
+}
+
+func TestIdcsmartStatusOK(t *testing.T) {
+	if !idcsmartStatusOK([]byte(`200`)) || !idcsmartStatusOK([]byte(`"200"`)) || idcsmartStatusOK([]byte(`500`)) || idcsmartStatusOK([]byte(`null`)) {
+		t.Fatal("unexpected idcsmart status parsing")
+	}
+}

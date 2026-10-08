@@ -92,7 +92,10 @@ type SMSSettings struct {
 }
 type SMSRuntimeConfig struct {
 	Provider, Endpoint, Token string
-	Enabled                   bool
+	// API, Sign and Key are used by provider-specific adapters. Token remains
+	// the generic HTTP provider credential for backwards compatibility.
+	API, Sign, Key string
+	Enabled        bool
 }
 
 func (s *Store) SMSSettings(ctx context.Context) (SMSSettings, error) {
@@ -195,18 +198,31 @@ func (s *Store) ResolveSMSConfigForInstance(ctx context.Context, instanceID stri
 	if err := json.Unmarshal(rawConfig, &config); err != nil {
 		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
 	}
-	out := SMSRuntimeConfig{Provider: implementation, Endpoint: configString(config, "endpoint"), Enabled: enabled}
+	out := SMSRuntimeConfig{
+		Provider: implementation,
+		Endpoint: configString(config, "endpoint"),
+		API:      configString(config, "api"),
+		Sign:     configString(config, "sign"),
+		Enabled:  enabled,
+	}
 	if !enabled {
 		return out, nil
 	}
-	if !ValidSMSEndpoint(out.Endpoint) {
+	if implementation != "idcsmart" && !ValidSMSEndpoint(out.Endpoint) {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	}
+	if implementation == "idcsmart" && (out.API == "" || out.Sign == "") {
 		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
 	}
 	secret, err := s.ChannelInstanceSecret(ctx, instanceID)
 	if err != nil || secret == "" {
 		return SMSRuntimeConfig{}, fmt.Errorf("SMS credentials unavailable")
 	}
+	// The compiled-in provider registry decides how this secret is used. Keep
+	// Token populated for the generic adapter and Key for credentialed vendors
+	// such as 智简魔方.
 	out.Token = secret
+	out.Key = secret
 	return out, nil
 }
 
