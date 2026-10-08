@@ -225,9 +225,6 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 	if version != expected {
 		return 0, conflict("version_conflict", "SMTP配置已变更，请重新加载")
 	}
-	if !configured || !enabled {
-		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
-	}
 	instanceID := ""
 	if len(channelInstanceID) > 0 {
 		instanceID = strings.TrimSpace(channelInstanceID[0])
@@ -240,6 +237,9 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 				return 0, conflict("invalid_smtp", "邮件渠道未启用")
 			}
 		}
+	}
+	if instanceID == "" && (!configured || !enabled) {
+		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
 	}
 	var id int64
 	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'SMTP test','SMTP configuration test message.','system',COALESCE(NULLIF($2,''),(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1))) RETURNING id", recipient, instanceID).Scan(&id); e != nil {
@@ -266,10 +266,14 @@ func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfi
 	if err != nil {
 		return SMTPRuntimeConfig{}, err
 	}
-	if !configured {
-		return fallback, nil
-	}
-	if !enabled {
+	if !configured || !enabled {
+		var instanceID string
+		if lookupErr := s.Pool.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); lookupErr == nil {
+			return s.ResolveSMTPConfigForInstance(ctx, instanceID, fallback)
+		}
+		if !configured {
+			return fallback, nil
+		}
 		return SMTPRuntimeConfig{}, nil
 	}
 	pass, e := smtpOpen(s.ProvisionEncryptionKey, sealed)

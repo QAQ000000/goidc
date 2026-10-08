@@ -168,8 +168,15 @@ func (s *Store) ResolveSMSConfig(ctx context.Context) (SMSRuntimeConfig, error) 
 	var o SMSRuntimeConfig
 	var sealed []byte
 	e := s.Pool.QueryRow(ctx, `SELECT enabled,provider,endpoint,token_encrypted FROM sms_settings WHERE id=1`).Scan(&o.Enabled, &o.Provider, &o.Endpoint, &sealed)
-	if e != nil || !o.Enabled {
+	if e != nil {
 		return o, e
+	}
+	if !o.Enabled {
+		var instanceID string
+		if lookupErr := s.Pool.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); lookupErr == nil {
+			return s.ResolveSMSConfigForInstance(ctx, instanceID)
+		}
+		return o, nil
 	}
 	raw, e := smsCrypt(s.ProvisionEncryptionKey, sealed, "token", false)
 	if e != nil {
@@ -242,13 +249,6 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	if !ValidSMSRecipient(recipient) || len(body) > 4096 || !expiresAt.After(time.Now()) {
 		return conflict("invalid_sms", "短信内容无效")
 	}
-	var enabled bool
-	if e := tx.QueryRow(ctx, `SELECT enabled FROM sms_settings WHERE id=1`).Scan(&enabled); e != nil {
-		return e
-	}
-	if !enabled {
-		return conflict("sms_unavailable", "短信渠道未启用")
-	}
 	instanceID := ""
 	if len(channelInstanceID) > 0 {
 		instanceID = strings.TrimSpace(channelInstanceID[0])
@@ -258,6 +258,19 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 				return e
 			}
 			if !valid {
+				return conflict("sms_unavailable", "短信渠道未启用")
+			}
+		}
+	} else {
+		var enabled bool
+		if e := tx.QueryRow(ctx, `SELECT enabled FROM sms_settings WHERE id=1`).Scan(&enabled); e != nil {
+			return e
+		}
+		if !enabled {
+			if e := tx.QueryRow(ctx, `SELECT COALESCE((SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1),'')`).Scan(&instanceID); e != nil {
+				return e
+			}
+			if instanceID == "" {
 				return conflict("sms_unavailable", "短信渠道未启用")
 			}
 		}
