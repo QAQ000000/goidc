@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -205,6 +206,17 @@ WHERE i.status='unpaid' AND NOT i.import_review_required
        OR (i.due_at<now()))
   AND ($2='' OR (CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
                      THEN 'order_payment_reminder' ELSE 'invoice_overdue_reminder' END)=$2)
+  AND EXISTS (
+    SELECT 1 FROM notification_templates t
+    WHERE t.active AND t.kind=CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
+                                  THEN 'order_payment_reminder' ELSE 'invoice_overdue_reminder' END
+      AND ((t.channel='email' AND u.email_verified AND btrim(u.email)<>'' AND EXISTS (
+              SELECT 1 FROM channel_instances c WHERE c.category='mail' AND c.enabled))
+        OR (t.channel='sms' AND u.phone_verified AND btrim(u.phone)<>'' AND EXISTS (
+              SELECT 1 FROM channel_instances c WHERE c.category='sms' AND c.enabled)))
+      AND NOT EXISTS (SELECT 1 FROM notification_delivery_events e
+        WHERE e.invoice_id=i.id AND e.channel=t.channel AND e.kind=t.kind
+          AND e.stage=0 AND e.due_date=CURRENT_DATE))
 ORDER BY i.due_at,i.id
 LIMIT $1`, limit, onlyKind)
 	if err != nil {
@@ -234,6 +246,7 @@ LIMIT $1`, limit, onlyKind)
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	sort.Slice(items, func(i, j int) bool { return items[i].invoiceID < items[j].invoiceID })
 	queued := 0
 	for _, item := range items {
 		if item.emailVerified && strings.TrimSpace(item.email) != "" {
@@ -282,7 +295,7 @@ type billingNotificationCandidate struct {
 }
 
 func (s *Store) enqueueBillingEmail(ctx context.Context, tx pgx.Tx, item billingNotificationCandidate) (bool, error) {
-	valid, err := billingCandidateStillDue(ctx, tx, item)
+	valid, err := billingCandidateStillDue(ctx, tx, &item)
 	if err != nil || !valid {
 		return false, err
 	}
@@ -327,7 +340,7 @@ VALUES($1,$2,$3,$4,now()+interval '7 days',$5) RETURNING id`, item.email, subjec
 }
 
 func (s *Store) enqueueBillingSMS(ctx context.Context, tx pgx.Tx, item billingNotificationCandidate) (bool, error) {
-	valid, err := billingCandidateStillDue(ctx, tx, item)
+	valid, err := billingCandidateStillDue(ctx, tx, &item)
 	if err != nil || !valid {
 		return false, err
 	}
@@ -370,18 +383,20 @@ RETURNING id`, item.userID, item.invoiceID, item.kind).Scan(&eventID); err != ni
 	return true, nil
 }
 
-func billingCandidateStillDue(ctx context.Context, tx pgx.Tx, item billingNotificationCandidate) (bool, error) {
+func billingCandidateStillDue(ctx context.Context, tx pgx.Tx, item *billingNotificationCandidate) (bool, error) {
 	var status string
+	var reviewed bool
 	var dueAt time.Time
-	if err := tx.QueryRow(ctx, "SELECT status,due_at FROM invoices WHERE id=$1 FOR UPDATE", item.invoiceID).Scan(&status, &dueAt); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT status,due_at,amount_cents,import_review_required FROM invoices WHERE id=$1 FOR UPDATE", item.invoiceID).Scan(&status, &dueAt, &item.amountCents, &reviewed); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
 		return false, err
 	}
-	if status != "unpaid" {
+	if status != "unpaid" || reviewed {
 		return false, nil
 	}
+	item.dueAt = dueAt
 	if item.kind == "invoice_overdue_reminder" {
 		return dueAt.Before(time.Now()), nil
 	}
@@ -415,25 +430,21 @@ func (s *Store) EnqueueOverdueServiceSuspensions(ctx context.Context, limit int)
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	// Keep the batch atomic. Lock every invoice before any service, matching
+	// payment settlement and avoiding invoice/service lock inversions.
 	rows, err := tx.Query(ctx, `
-SELECT s.id,COALESCE((SELECT i.id FROM invoices i
- WHERE i.status='unpaid' AND i.due_at<now()-interval '24 hours'
-   AND (i.order_id=s.order_id OR EXISTS(
-     SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
-       AND ii.item_type IN ('renew','service','upgrade')))
- ORDER BY i.due_at,i.id LIMIT 1),0)
-FROM services s
+SELECT s.id,i.id FROM services s
+JOIN invoices i ON i.status='unpaid' AND NOT i.import_review_required
+  AND i.due_at<now()-interval '24 hours'
+  AND (i.order_id=s.order_id OR EXISTS (
+    SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
+      AND ii.item_type IN ('renew','service','upgrade')))
 WHERE s.status='active' AND NOT s.import_review_required
-  AND EXISTS (SELECT 1 FROM invoices i
-    WHERE i.status='unpaid' AND i.due_at<now()-interval '24 hours'
-      AND (i.order_id=s.order_id OR EXISTS(
-        SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
-          AND ii.item_type IN ('renew','service','upgrade'))))
   AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.service_id=s.id
                   AND j.status IN ('pending','running','waiting_manual','waiting_verification'))
-ORDER BY s.id
-LIMIT $1
-FOR UPDATE OF s SKIP LOCKED`, limit)
+  AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.idempotency_key=
+      'overdue-suspend-service-'||s.id::text||'-invoice-'||i.id::text)
+ORDER BY i.id,s.id LIMIT $1`, limit)
 	if err != nil {
 		return 0, err
 	}
@@ -446,31 +457,110 @@ FOR UPDATE OF s SKIP LOCKED`, limit)
 		}
 		candidates = append(candidates, candidate)
 	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
 		return 0, err
 	}
-	rows.Close()
-	queued := 0
 	for _, candidate := range candidates {
-		var status string
-		var dueAt time.Time
-		if err = tx.QueryRow(ctx, "SELECT status,due_at FROM invoices WHERE id=$1 FOR UPDATE", candidate.invoiceID).Scan(&status, &dueAt); err != nil {
+		var invoiceID int64
+		if err = tx.QueryRow(ctx, "SELECT id FROM invoices WHERE id=$1 FOR UPDATE", candidate.invoiceID).Scan(&invoiceID); err != nil {
 			return 0, err
 		}
-		if status != "unpaid" || !dueAt.Before(time.Now().Add(-24*time.Hour)) {
-			continue
+	}
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].serviceID < candidates[j].serviceID })
+	queued := 0
+	for _, candidate := range candidates {
+		ok, err := s.enqueueOverdueServiceSuspension(ctx, tx, candidate.serviceID, candidate.invoiceID)
+		if err != nil {
+			return 0, err
 		}
-		key := fmt.Sprintf("overdue-suspend-service-%d-invoice-%d", candidate.serviceID, candidate.invoiceID)
-		command, insertErr := tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key)
-VALUES($1,'suspend',$2) ON CONFLICT (idempotency_key) DO NOTHING`, candidate.serviceID, key)
-		if insertErr != nil {
-			return 0, insertErr
+		if ok {
+			queued++
 		}
-		queued += int(command.RowsAffected())
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return 0, err
 	}
 	return queued, nil
+}
+
+func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, serviceID, invoiceID int64) (bool, error) {
+	var due bool
+	if err := tx.QueryRow(ctx, `SELECT status='unpaid' AND NOT import_review_required
+      AND due_at<clock_timestamp()-interval '24 hours'
+      FROM invoices WHERE id=$1 FOR UPDATE`, invoiceID).Scan(&due); err != nil {
+		return false, err
+	}
+	if !due {
+		return false, nil
+	}
+	var eligible bool
+	if err := tx.QueryRow(ctx, `SELECT s.status='active' AND NOT s.import_review_required
+      AND EXISTS (SELECT 1 FROM invoices i WHERE i.id=$2 AND (i.order_id=s.order_id OR EXISTS (
+        SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
+          AND ii.item_type IN ('renew','service','upgrade'))))
+      AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.service_id=s.id
+          AND j.status IN ('pending','running','waiting_manual','waiting_verification'))
+      FROM services s WHERE s.id=$1 FOR UPDATE`, serviceID, invoiceID).Scan(&eligible); err != nil {
+		return false, err
+	}
+	if !eligible {
+		return false, nil
+	}
+	// Re-read after the service lock: another scheduler may have inserted a
+	// job while this transaction waited, without changing the service row.
+	var busy bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1
+        AND status IN ('pending','running','waiting_manual','waiting_verification'))`, serviceID).Scan(&busy); err != nil {
+		return false, err
+	}
+	if busy {
+		return false, nil
+	}
+	key := fmt.Sprintf("overdue-suspend-service-%d-invoice-%d", serviceID, invoiceID)
+	command, err := tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key)
+      VALUES($1,'suspend',$2) ON CONFLICT (idempotency_key) DO NOTHING`, serviceID, key)
+	if err != nil {
+		return false, err
+	}
+	return command.RowsAffected() > 0, nil
+}
+
+// Lock the invoice before existing service/job locks. Keys also identify jobs
+// queued by the original 098 implementation; manual suspension is unaffected.
+// External requests remain outside the existing dispatch transaction.
+func lockOverdueSuspensionInvoice(ctx context.Context, tx pgx.Tx, job ProvisionJob) (bool, error) {
+	var key, action string
+	if err := tx.QueryRow(ctx, "SELECT idempotency_key,action FROM provision_jobs WHERE id=$1", job.ID).Scan(&key, &action); err != nil {
+		return false, err
+	}
+	if action != "suspend" || !strings.HasPrefix(key, "overdue-suspend-service-") {
+		return true, nil
+	}
+	var serviceID, invoiceID int64
+	if _, err := fmt.Sscanf(key, "overdue-suspend-service-%d-invoice-%d", &serviceID, &invoiceID); err != nil || serviceID != job.ServiceID || invoiceID < 1 || key != fmt.Sprintf("overdue-suspend-service-%d-invoice-%d", serviceID, invoiceID) {
+		return false, fmt.Errorf("invalid scheduled suspension key")
+	}
+	var due bool
+	err := tx.QueryRow(ctx, `SELECT i.status='unpaid' AND NOT i.import_review_required
+      AND i.due_at<clock_timestamp()-interval '24 hours'
+      AND EXISTS (SELECT 1 FROM services s WHERE s.id=$2 AND (i.order_id=s.order_id OR EXISTS (
+          SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
+            AND ii.item_type IN ('renew','service','upgrade'))))
+      FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID, serviceID).Scan(&due)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	return due, err
+}
+
+// Called only after the normal service/job lease checks under their row locks.
+func cancelObsoleteOverdueSuspension(ctx context.Context, tx pgx.Tx, job ProvisionJob) error {
+	if _, err := tx.Exec(ctx, `UPDATE provision_jobs SET status='cancelled',locked_at=NULL,
+      completed_at=now(),updated_at=now(),last_error='账单已支付或不再符合逾期暂停条件'
+      WHERE id=$1 AND status='running' AND attempts=$2 AND external_started_at IS NULL`, job.ID, job.Attempts); err != nil {
+		return err
+	}
+	return Audit(ctx, tx, 0, "service.overdue_suspension.cancelled", "service", job.ServiceID, map[string]any{"job_id": job.ID})
 }

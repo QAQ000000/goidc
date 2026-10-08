@@ -23,6 +23,10 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 		return err
 	}
 	defer tx.Rollback(ctx)
+	overdueDue, err := lockOverdueSuspensionInvoice(ctx, tx, claimed)
+	if err != nil {
+		return err
+	}
 	var job ProvisionJob
 	if err = tx.QueryRow(ctx, "SELECT id,service_id,action FROM provision_jobs WHERE id=$1", claimed.ID).Scan(&job.ID, &job.ServiceID, &job.Action); err != nil {
 		return err
@@ -43,6 +47,12 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 	}
 	if state != "running" || job.Attempts != claimed.Attempts || !valid || dispatched || mode != "nokvm" || job.ServiceID != claimed.ServiceID || job.Action != claimed.Action {
 		return conflict("job_lease_lost", "任务租约已失效或已发送至供应商")
+	}
+	if !overdueDue {
+		if err = cancelObsoleteOverdueSuspension(ctx, tx, claimed); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	}
 	fail := func(code string) error {
 		_, e := tx.Exec(ctx, "UPDATE provision_jobs SET status='failed',last_error=$2,completed_at=now(),locked_at=NULL,updated_at=now() WHERE id=$1", job.ID, code)

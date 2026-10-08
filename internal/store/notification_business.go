@@ -58,7 +58,7 @@ func (s *Store) queuePaymentSuccessEmail(ctx context.Context, tx pgx.Tx, invoice
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date)
 VALUES(NULL,$1,$2,'email','payment_success',0,CURRENT_DATE)
-ON CONFLICT (invoice_id,channel,kind) WHERE invoice_id IS NOT NULL DO NOTHING
+ON CONFLICT (invoice_id,channel,kind) WHERE invoice_id IS NOT NULL AND kind NOT IN ('order_payment_reminder','invoice_overdue_reminder') DO NOTHING
 RETURNING id`, userID, invoiceID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
@@ -97,7 +97,7 @@ func (s *Store) queuePaymentSuccessSMS(ctx context.Context, tx pgx.Tx, invoiceID
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date)
 VALUES(NULL,$1,$2,'sms','payment_success',0,CURRENT_DATE)
-ON CONFLICT (invoice_id,channel,kind) WHERE invoice_id IS NOT NULL DO NOTHING
+ON CONFLICT (invoice_id,channel,kind) WHERE invoice_id IS NOT NULL AND kind NOT IN ('order_payment_reminder','invoice_overdue_reminder') DO NOTHING
 RETURNING id`, userID, invoiceID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil

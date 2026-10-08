@@ -82,6 +82,10 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 		return err
 	}
 	defer tx.Rollback(ctx)
+	overdueDue, err := lockOverdueSuspensionInvoice(ctx, tx, claimed)
+	if err != nil {
+		return err
+	}
 	var current, upstream, cycle string
 	if err = tx.QueryRow(ctx, "SELECT status,upstream_id,billing_cycle FROM services WHERE id=$1 FOR UPDATE", claimed.ServiceID).Scan(&current, &upstream, &cycle); err != nil {
 		return err
@@ -97,6 +101,12 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	}
 	if state != "running" || attempts != claimed.Attempts || !valid || dispatched {
 		return conflict("job_lease_lost", "任务租约失效，禁止重复发送")
+	}
+	if !overdueDue {
+		if err = cancelObsoleteOverdueSuspension(ctx, tx, claimed); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	}
 	var accountVersion int64
 	var active bool

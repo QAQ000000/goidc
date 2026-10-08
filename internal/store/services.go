@@ -629,6 +629,10 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 		return err
 	}
 	defer tx.Rollback(ctx)
+	overdueDue, err := lockOverdueSuspensionInvoice(ctx, tx, job)
+	if err != nil {
+		return err
+	}
 	if err = lockConfigurationChangeBalance(ctx, tx, job.ID, job.ServiceID); err != nil {
 		return err
 	}
@@ -652,6 +656,12 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 		return conflict("job_lease_lost", "任务租约已失效")
 	}
 	job = actual
+	if !overdueDue {
+		if err = cancelObsoleteOverdueSuspension(ctx, tx, job); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
 	if !allowedServiceAction(serviceStatus, job.Action) {
 		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='failed',last_error=$2,completed_at=now(),updated_at=now() WHERE id=$1`, job.ID, fmt.Sprintf("服务状态 %s 不允许 %s", serviceStatus, job.Action)); err != nil {
 			return err
