@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 )
 
 func affiliateRequestHash(value any) string {
@@ -15,6 +14,9 @@ func affiliateRequestHash(value any) string {
 }
 
 func (s *Server) affiliateClick(w http.ResponseWriter, r *http.Request) {
+	if !s.authLimit(w, r, "affiliate-click", 120) {
+		return
+	}
 	code := strings.TrimSpace(r.PathValue("code"))
 	token := ""
 	if cookie, err := r.Cookie("zjmfgo_affiliate_session"); err == nil {
@@ -33,6 +35,10 @@ func (s *Server) affiliateClick(w http.ResponseWriter, r *http.Request) {
 	result, err := s.db.RecordAffiliateClick(r.Context(), code, tokenHash(token), r.Referer(), r.URL.Path, r.UserAgent())
 	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if !result.Valid {
+		write(w, http.StatusOK, result)
 		return
 	}
 	maxAge := result.AttributionDays * 24 * 60 * 60
@@ -161,7 +167,8 @@ func (s *Server) adminAffiliateAccountStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	var input struct {
-		Status string `json:"status"`
+		Status          string `json:"status"`
+		ExpectedVersion int64  `json:"expected_version"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -170,9 +177,9 @@ func (s *Server) adminAffiliateAccountStatus(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "idempotency_key_required", "请提供幂等键")
 		return
 	}
-	if err := s.db.ApproveAffiliateAccount(r.Context(), identityFrom(r).ID, id, strings.TrimSpace(r.Header.Get("Idempotency-Key")), strings.TrimSpace(input.Status)); err != nil {
+	if err := s.db.ApproveAffiliateAccount(r.Context(), identityFrom(r).ID, id, strings.TrimSpace(r.Header.Get("Idempotency-Key")), strings.TrimSpace(input.Status), input.ExpectedVersion); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"id": id, "status": input.Status, "updated_at": time.Now()})
+	write(w, http.StatusOK, map[string]any{"id": id, "status": input.Status, "version": input.ExpectedVersion + 1})
 }

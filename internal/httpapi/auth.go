@@ -230,7 +230,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 			affiliateCode = cookie.Value
 		}
 	}
-	if session, cookieErr := r.Cookie("zjmfgo_affiliate_session"); cookieErr == nil && affiliateCode != "" {
+	if session, cookieErr := r.Cookie("zjmfgo_affiliate_session"); cookieErr == nil && affiliateCode != "" && verified {
 		if err = s.db.ConvertAffiliateClickTx(r.Context(), tx, id, affiliateCode, tokenHash(session.Value)); err != nil {
 			s.fail(w, r, err)
 			return

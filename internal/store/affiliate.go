@@ -7,8 +7,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -39,6 +41,7 @@ type AffiliateOverview struct {
 }
 
 type AffiliateClickResult struct {
+	Valid           bool   `json:"-"`
 	Recorded        bool   `json:"recorded"`
 	LandingPath     string `json:"landing_path"`
 	AttributionDays int    `json:"attribution_days"`
@@ -66,7 +69,7 @@ func (s *Store) ApplyAffiliateAccount(ctx context.Context, userID int64, key str
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-apply", fmt.Sprintf("%d:%s", userID, key)); err != nil {
+	if err = lockOperationKey(ctx, tx, "affiliate-apply", fmt.Sprint(userID)); err != nil {
 		return nil, err
 	}
 	requestHash := affiliateHash("apply")
@@ -90,6 +93,9 @@ func (s *Store) ApplyAffiliateAccount(ctx context.Context, userID int64, key str
 	}
 	var programID int64
 	if err = tx.QueryRow(ctx, "SELECT id FROM affiliate_programs WHERE status='active' ORDER BY id LIMIT 1").Scan(&programID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, conflict("affiliate_disabled", "推广计划未启用")
+		}
 		return nil, err
 	}
 	if err = tx.QueryRow(ctx, `INSERT INTO affiliate_accounts(user_id,program_id,status) VALUES($1,$2,'pending') RETURNING id`, userID, programID).Scan(&id); err != nil {
@@ -136,7 +142,7 @@ func saveAffiliateOperation(ctx context.Context, tx pgx.Tx, userID int64, operat
 
 func (s *Store) CreateAffiliateLink(ctx context.Context, userID int64, key, requestHash, landingPath, note string, productID *int64) (AffiliateLink, bool, error) {
 	var out AffiliateLink
-	if userID < 1 || len(key) < 8 || len(key) > 128 || len(requestHash) != 64 || !strings.HasPrefix(landingPath, "/") || strings.HasPrefix(landingPath, "//") || strings.ContainsAny(landingPath, "\r\n") || len(landingPath) > 2048 || len(note) > 160 {
+	if userID < 1 || len(key) < 8 || len(key) > 128 || len(requestHash) != 64 || !validAffiliateLandingPath(landingPath) || utf8.RuneCountInString(note) > 160 {
 		return out, false, conflict("invalid_affiliate_link", "推广链接参数无效")
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -156,7 +162,7 @@ func (s *Store) CreateAffiliateLink(ctx context.Context, userID int64, key, requ
 		return out, true, tx.Commit(ctx)
 	}
 	var accountID int64
-	if err = tx.QueryRow(ctx, `SELECT id FROM affiliate_accounts WHERE user_id=$1 AND status='approved' FOR SHARE`, userID).Scan(&accountID); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT a.id FROM affiliate_accounts a JOIN affiliate_programs p ON p.id=a.program_id WHERE a.user_id=$1 AND a.status='approved' AND p.status='active' FOR SHARE OF a,p`, userID).Scan(&accountID); err != nil {
 		if err == pgx.ErrNoRows {
 			return out, false, conflict("affiliate_not_approved", "推广账户尚未审核通过")
 		}
@@ -177,6 +183,9 @@ func (s *Store) CreateAffiliateLink(ctx context.Context, userID int64, key, requ
 	if err = saveAffiliateOperation(ctx, tx, userID, "link.create", key, requestHash, result); err != nil {
 		return out, false, err
 	}
+	if err = Audit(ctx, tx, userID, "affiliate.link.created", "affiliate_link", out.ID, result); err != nil {
+		return out, false, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return out, false, err
 	}
@@ -193,7 +202,7 @@ func mapToAffiliateLink(result map[string]any, out *AffiliateLink) error {
 
 func (s *Store) UpdateAffiliateLink(ctx context.Context, userID, linkID int64, key, requestHash, landingPath, note, status string) (AffiliateLink, error) {
 	var out AffiliateLink
-	if userID < 1 || linkID < 1 || len(key) < 8 || len(key) > 128 || len(requestHash) != 64 || (landingPath != "" && (!strings.HasPrefix(landingPath, "/") || strings.HasPrefix(landingPath, "//") || strings.ContainsAny(landingPath, "\r\n"))) || len(note) > 160 || status != "" && status != "active" && status != "disabled" {
+	if userID < 1 || linkID < 1 || len(key) < 8 || len(key) > 128 || len(requestHash) != 64 || (landingPath != "" && !validAffiliateLandingPath(landingPath)) || utf8.RuneCountInString(note) > 160 || status != "" && status != "active" && status != "disabled" {
 		return out, conflict("invalid_affiliate_link", "推广链接参数无效")
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -201,9 +210,10 @@ func (s *Store) UpdateAffiliateLink(ctx context.Context, userID, linkID int64, k
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-link-update", fmt.Sprintf("%d:%d:%s", userID, linkID, key)); err != nil {
+	if err = lockOperationKey(ctx, tx, "affiliate-link-update", fmt.Sprintf("%d:%s", userID, key)); err != nil {
 		return out, err
 	}
+	requestHash = affiliateHash(fmt.Sprintf("%d:%s", linkID, requestHash))
 	if result, replay, replayErr := affiliateOperation(ctx, tx, userID, "link.update", key, requestHash); replayErr != nil {
 		return out, replayErr
 	} else if replay {
@@ -226,13 +236,16 @@ FROM affiliate_accounts a WHERE l.id=$1 AND a.id=l.account_id AND a.user_id=$2
 	if err = saveAffiliateOperation(ctx, tx, userID, "link.update", key, requestHash, result); err != nil {
 		return out, err
 	}
+	if err = Audit(ctx, tx, userID, "affiliate.link.updated", "affiliate_link", linkID, result); err != nil {
+		return out, err
+	}
 	return out, tx.Commit(ctx)
 }
 
 func (s *Store) ListAffiliateLinks(ctx context.Context, userID int64) ([]AffiliateLink, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT l.id,l.code,l.landing_path,l.product_id,l.note,l.status,
  (SELECT count(*) FROM affiliate_clicks c WHERE c.link_id=l.id),
- (SELECT count(*) FROM affiliate_clicks c WHERE c.link_id=l.id AND c.registered_user_id IS NOT NULL)
+ (SELECT count(*) FROM affiliate_attributions at WHERE at.link_id=l.id)
 FROM affiliate_links l JOIN affiliate_accounts a ON a.id=l.account_id WHERE a.user_id=$1 ORDER BY l.id DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -251,7 +264,7 @@ FROM affiliate_links l JOIN affiliate_accounts a ON a.id=l.account_id WHERE a.us
 
 func (s *Store) RecordAffiliateClick(ctx context.Context, code, sessionHash, referrer, landingPath, clientVersion string) (AffiliateClickResult, error) {
 	result := AffiliateClickResult{LandingPath: "/", AttributionDays: 30}
-	if len(code) < 12 || len(code) > 32 || len(sessionHash) != 64 {
+	if len(code) < 12 || len(code) > 32 || !validAffiliateSessionHash(sessionHash) {
 		return result, nil
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -270,8 +283,9 @@ WHERE l.code=$1 AND l.status='active' AND a.status='approved' AND p.status='acti
 		return result, err
 	}
 	result.LandingPath, result.AttributionDays = target, int(days)
+	result.Valid = true
 	command, err := tx.Exec(ctx, `INSERT INTO affiliate_clicks(link_id,session_hash,referrer,landing_path,client_version)
-VALUES($1,$2,$3,$4,$5) ON CONFLICT (link_id,session_hash,click_day) DO NOTHING`, linkID, sessionHash, truncateAffiliateText(referrer, 2048), truncateAffiliateText(landingPath, 2048), truncateAffiliateText(clientVersion, 120))
+VALUES($1,$2,$3,$4,$5) ON CONFLICT (link_id,session_hash,click_day) DO NOTHING`, linkID, sessionHash, affiliateReferrer(referrer), target, truncateAffiliateText(clientVersion, 120))
 	if err != nil {
 		return result, err
 	}
@@ -280,25 +294,57 @@ VALUES($1,$2,$3,$4,$5) ON CONFLICT (link_id,session_hash,click_day) DO NOTHING`,
 }
 
 func truncateAffiliateText(value string, max int) string {
-	if len(value) > max {
-		return value[:max]
+	value = strings.ToValidUTF8(value, "")
+	runes := []rune(value)
+	if len(runes) > max {
+		return string(runes[:max])
 	}
 	return value
 }
 
+func validAffiliateSessionHash(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == 32 && value == strings.ToLower(value)
+}
+
+func validAffiliateLandingPath(value string) bool {
+	u, err := url.Parse(value)
+	return err == nil && len(value) <= 2048 && strings.HasPrefix(u.Path, "/") && !strings.HasPrefix(u.Path, "//") && u.Host == "" && !u.IsAbs() && !strings.ContainsAny(value+u.Path, "\\\r\n\x00")
+}
+
+func affiliateReferrer(value string) string {
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+		return ""
+	}
+	u.User, u.RawQuery, u.Fragment = nil, "", ""
+	return truncateAffiliateText(u.String(), 2048)
+}
+
 func (s *Store) ConvertAffiliateClickTx(ctx context.Context, tx pgx.Tx, userID int64, code, sessionHash string) error {
-	if userID < 1 || len(code) < 12 || len(sessionHash) != 64 {
+	if userID < 1 || len(code) < 12 || len(code) > 32 || !validAffiliateSessionHash(sessionHash) {
 		return nil
+	}
+	if err := lockOperationKey(ctx, tx, "affiliate-convert", sessionHash); err != nil {
+		return err
+	}
+	if err := lockOperationKey(ctx, tx, "affiliate-convert-user", fmt.Sprint(userID)); err != nil {
+		return err
+	}
+	var existing bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM affiliate_attributions WHERE user_id=$1)
+ OR EXISTS(SELECT 1 FROM affiliate_clicks WHERE session_hash=$2 AND registered_user_id IS NOT NULL)
+ OR EXISTS(SELECT 1 FROM affiliate_clicks WHERE registered_user_id=$1)`, userID, sessionHash).Scan(&existing); err != nil || existing {
+		return err
 	}
 	var clickID, accountID, linkID int64
 	var firstClicked time.Time
 	var source map[string]any
-	var attributionDays int
-	err := tx.QueryRow(ctx, `SELECT c.id,a.id,c.link_id,c.created_at,jsonb_build_object('code',l.code,'landing_path',l.landing_path,'click_id',c.id),p.attribution_days
+	err := tx.QueryRow(ctx, `SELECT c.id,a.id,c.link_id,c.created_at,jsonb_build_object('code',l.code,'landing_path',c.landing_path,'click_id',c.id)
 FROM affiliate_clicks c JOIN affiliate_links l ON l.id=c.link_id JOIN affiliate_accounts a ON a.id=l.account_id JOIN affiliate_programs p ON p.id=a.program_id
-WHERE l.code=$1 AND c.session_hash=$2 AND c.registered_user_id IS NULL AND c.created_at>=now()-(p.attribution_days||' days')::interval
+WHERE c.session_hash=$1 AND c.registered_user_id IS NULL AND c.created_at>=now()-(p.attribution_days * interval '1 day')
   AND l.status='active' AND a.status='approved' AND p.status='active'
-ORDER BY c.created_at,c.id LIMIT 1 FOR UPDATE OF c`, code, sessionHash).Scan(&clickID, &accountID, &linkID, &firstClicked, &source, &attributionDays)
+ORDER BY c.created_at,c.id LIMIT 1 FOR UPDATE OF c`, sessionHash).Scan(&clickID, &accountID, &linkID, &firstClicked, &source)
 	if err == pgx.ErrNoRows {
 		return nil
 	}
@@ -313,18 +359,14 @@ ORDER BY c.created_at,c.id LIMIT 1 FOR UPDATE OF c`, code, sessionHash).Scan(&cl
 		_, err = tx.Exec(ctx, "UPDATE affiliate_clicks SET registered_user_id=$2,converted_at=now() WHERE id=$1", clickID, userID)
 		return err
 	}
-	var existing int64
-	if err = tx.QueryRow(ctx, "SELECT id FROM affiliate_attributions WHERE user_id=$1", userID).Scan(&existing); err == nil {
-		_, err = tx.Exec(ctx, "UPDATE affiliate_clicks SET registered_user_id=$2,converted_at=now() WHERE id=$1", clickID, userID)
-		return err
-	} else if err != pgx.ErrNoRows {
-		return err
-	}
 	if _, err = tx.Exec(ctx, `INSERT INTO affiliate_attributions(user_id,account_id,link_id,click_id,first_clicked_at,source_snapshot) VALUES($1,$2,$3,$4,$5,$6)`, userID, accountID, linkID, clickID, firstClicked, source); err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, "UPDATE affiliate_clicks SET registered_user_id=$2,converted_at=now() WHERE id=$1", clickID, userID)
-	return err
+	if err != nil {
+		return err
+	}
+	return Audit(ctx, tx, userID, "affiliate.attribution.created", "affiliate_account", accountID, source)
 }
 
 func (s *Store) AffiliateOverview(ctx context.Context, userID int64) (AffiliateOverview, error) {
@@ -343,11 +385,11 @@ FROM affiliate_accounts a JOIN affiliate_programs p ON p.id=a.program_id WHERE a
 	return out, err
 }
 
-func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID int64, key, status string) error {
+func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID int64, key, status string, expectedVersion int64) error {
 	if status != "approved" && status != "suspended" && status != "rejected" && status != "closed" {
 		return conflict("invalid_affiliate_status", "推广账户状态无效")
 	}
-	if actorID < 1 || accountID < 1 || len(key) < 8 || len(key) > 128 {
+	if actorID < 1 || accountID < 1 || len(key) < 8 || len(key) > 128 || expectedVersion < 1 {
 		return conflict("invalid_affiliate_request", "推广申请参数无效")
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -355,14 +397,30 @@ func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID 
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-account-status", fmt.Sprintf("%d:%s", accountID, key)); err != nil {
+	var allowed bool
+	if err = tx.QueryRow(ctx, `SELECT u.role='super_admin' OR (u.role='admin' AND coalesce(r.active AND 'affiliates.manage'=ANY(r.permissions),false))
+FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
 		return err
 	}
-	requestHash := affiliateHash(fmt.Sprintf("%d:%s", accountID, status))
+	if !allowed {
+		return conflict("permission_denied", "没有审核推广账户的权限")
+	}
+	if err = lockOperationKey(ctx, tx, "affiliate-account-status", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
+		return err
+	}
+	requestHash := affiliateHash(fmt.Sprintf("%d:%s:%d", accountID, status, expectedVersion))
 	if _, replay, replayErr := affiliateOperation(ctx, tx, actorID, "account.status", key, requestHash); replayErr != nil {
 		return replayErr
 	} else if replay {
 		return tx.Commit(ctx)
+	}
+	var version int64
+	var before string
+	if err = tx.QueryRow(ctx, "SELECT version,status FROM affiliate_accounts WHERE id=$1 FOR UPDATE", accountID).Scan(&version, &before); err != nil {
+		return err
+	}
+	if version != expectedVersion {
+		return conflict("version_conflict", "推广账户已变更，请重新加载")
 	}
 	command, err := tx.Exec(ctx, `UPDATE affiliate_accounts SET status=$2,approved_at=CASE WHEN $2='approved' THEN COALESCE(approved_at,now()) ELSE approved_at END,version=version+1,updated_at=now() WHERE id=$1`, accountID, status)
 	if err != nil {
@@ -371,7 +429,7 @@ func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID 
 	if command.RowsAffected() != 1 {
 		return conflict("affiliate_account_not_found", "推广账户不存在")
 	}
-	if err = Audit(ctx, tx, actorID, "affiliate.account.status_changed", "affiliate_account", accountID, map[string]any{"status": status}); err != nil {
+	if err = Audit(ctx, tx, actorID, "affiliate.account.status_changed", "affiliate_account", accountID, map[string]any{"before_status": before, "status": status, "version": version + 1}); err != nil {
 		return err
 	}
 	if err = saveAffiliateOperation(ctx, tx, actorID, "account.status", key, requestHash, map[string]any{"account_id": accountID, "status": status}); err != nil {
@@ -384,20 +442,42 @@ func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID 
 // It only appends pending commission rows and never updates users.balance_cents.
 func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoiceID, paymentTransactionID int64) error {
 	var referredUser int64
-	if err := tx.QueryRow(ctx, "SELECT user_id FROM invoices WHERE id=$1 FOR SHARE", invoiceID).Scan(&referredUser); err != nil {
+	var invoiceStatus string
+	var invoiceSnapshot json.RawMessage
+	if err := tx.QueryRow(ctx, "SELECT user_id,status,to_jsonb(i) FROM invoices i WHERE id=$1 FOR SHARE", invoiceID).Scan(&referredUser, &invoiceStatus, &invoiceSnapshot); err != nil {
+		return err
+	}
+	if invoiceStatus != "paid" {
+		return nil
+	}
+	// Serialize first/repeat purchase classification for this customer. Payment
+	// and invoice locks stay in their existing caller transactions.
+	if err := lockOperationKey(ctx, tx, "affiliate-commission-customer", fmt.Sprint(referredUser)); err != nil {
+		return err
+	}
+	var recorded bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM affiliate_commission_entries WHERE invoice_id=$1)", invoiceID).Scan(&recorded); err != nil || recorded {
 		return err
 	}
 	var accountID, programID, ruleSetID int64
-	var holdDays int
-	if err := tx.QueryRow(ctx, `SELECT a.id,a.program_id,p.hold_days,rs.id FROM affiliate_attributions at JOIN affiliate_accounts a ON a.id=at.account_id JOIN affiliate_programs p ON p.id=a.program_id JOIN affiliate_rule_sets rs ON rs.program_id=p.id AND rs.effective_to IS NULL WHERE at.user_id=$1 AND at.status='active' AND a.status='approved' AND p.status='active' FOR SHARE OF at,a,p,rs`, referredUser).
-		Scan(&accountID, &programID, &holdDays, &ruleSetID); err != nil {
+	var holdDays, ruleVersion int
+	var defaultJSON json.RawMessage
+	if err := tx.QueryRow(ctx, `SELECT a.id,a.program_id,p.hold_days,rs.id,rs.version,rs.default_rules
+FROM affiliate_attributions at JOIN affiliate_accounts a ON a.id=at.account_id
+JOIN users owner ON owner.id=a.user_id JOIN affiliate_programs p ON p.id=a.program_id
+JOIN affiliate_rule_sets rs ON rs.program_id=p.id JOIN invoices i ON i.id=$2
+WHERE at.user_id=$1 AND at.status='active' AND a.status='approved' AND p.status='active'
+ AND a.user_id<>$1 AND owner.status='active'
+ AND rs.effective_from<=i.created_at AND (rs.effective_to IS NULL OR rs.effective_to>i.created_at)
+FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
+		Scan(&accountID, &programID, &holdDays, &ruleSetID, &ruleVersion, &defaultJSON); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}
 		return err
 	}
-	var defaultRules map[string]map[string]any
-	if err := tx.QueryRow(ctx, "SELECT default_rules FROM affiliate_rule_sets WHERE id=$1", ruleSetID).Scan(&defaultRules); err != nil {
+	var defaultRules map[string]affiliateRule
+	if err := json.Unmarshal(defaultJSON, &defaultRules); err != nil {
 		return err
 	}
 	items, err := affiliateInvoiceItems(ctx, tx, invoiceID)
@@ -409,18 +489,21 @@ func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoic
 		if err != nil {
 			return err
 		}
-		amount := item.BasisCents*int64(rule.RateBPS)/10000 + rule.AmountCents
+		amount, err := affiliateCommissionAmount(item.BasisCents, rule)
+		if err != nil {
+			return err
+		}
 		if rule.MaxCents != nil && amount > *rule.MaxCents {
 			amount = *rule.MaxCents
 		}
 		if amount <= 0 || amount > item.BasisCents {
 			continue
 		}
-		ruleSnapshot := map[string]any{"rule_set_id": ruleSetID, "rule_source": ruleSource, "event_type": item.EventType, "rate_bps": rule.RateBPS, "amount_cents": rule.AmountCents, "max_cents": rule.MaxCents}
-		sourceSnapshot := map[string]any{"invoice_id": invoiceID, "invoice_item_id": item.InvoiceItemID, "order_item_id": item.OrderItemID, "service_id": item.ServiceID, "product_id": item.ProductID, "basis_cents": item.BasisCents, "description": item.Description}
+		ruleSnapshot := map[string]any{"program_id": programID, "rule_set_id": ruleSetID, "rule_version": ruleVersion, "hold_days": holdDays, "rule_source": ruleSource, "event_type": item.EventType, "rate_bps": rule.RateBPS, "amount_cents": rule.AmountCents, "max_cents": rule.MaxCents, "basis": "net_amount", "rounding_remainder_bps": (item.BasisCents % 10000) * int64(rule.RateBPS) % 10000}
+		sourceSnapshot := map[string]any{"invoice_id": invoiceID, "invoice": invoiceSnapshot, "item": item.Snapshot, "invoice_item_id": item.InvoiceItemID, "order_item_id": item.OrderItemID, "service_id": item.ServiceID, "product_id": item.ProductID, "basis_cents": item.BasisCents, "description": item.Description}
 		ruleJSON, _ := json.Marshal(ruleSnapshot)
 		sourceJSON, _ := json.Marshal(sourceSnapshot)
-		key := fmt.Sprintf("affiliate:%d:%d:%s:%d", invoiceID, item.SourceID(), item.EventType, ruleSetID)
+		key := fmt.Sprintf("affiliate:invoice:%d:payment:%d:item:%d:%s:rule:%d:version:%d", invoiceID, paymentTransactionID, item.SourceID(), item.EventType, ruleSetID, ruleVersion)
 		var entryID int64
 		if err = tx.QueryRow(ctx, `INSERT INTO affiliate_commission_entries(account_id,referred_user_id,order_id,invoice_id,order_item_id,invoice_item_id,payment_transaction_id,product_id,event_type,status,amount_cents,basis_cents,rate_bps,available_at,rule_snapshot,source_snapshot,idempotency_key)
 		VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,0),$8,$9,'pending',$10,$11,$12,now()+($13::int * interval '1 day'),$14,$15,$16)
@@ -441,6 +524,7 @@ ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`, accountID, referredUser,
 type affiliateInvoiceItem struct {
 	OrderID, OrderItemID, InvoiceItemID, ServiceID, ProductID, BasisCents int64
 	Description, EventType                                                string
+	Snapshot                                                              json.RawMessage
 }
 
 func (i affiliateInvoiceItem) SourceID() int64 {
@@ -457,13 +541,21 @@ func affiliateInvoiceItems(ctx context.Context, tx pgx.Tx, invoiceID int64) ([]a
 	}
 	items := []affiliateInvoiceItem{}
 	if orderID != nil {
-		rows, err := tx.Query(ctx, `SELECT oi.order_id,oi.id,oi.product_id,oi.total_cents,oi.product_name,
+		rows, err := tx.Query(ctx, `WITH lines AS (
+ SELECT oi.*,sum(total_cents) OVER (ORDER BY id) AS cumulative,
+ sum(total_cents) OVER () AS gross_total FROM order_items oi WHERE oi.order_id=$1
+)
+SELECT oi.order_id,oi.id,oi.product_id,
+(floor(least(current.amount_cents::numeric,oi.gross_total)*oi.cumulative/nullif(oi.gross_total,0))
+ -floor(least(current.amount_cents::numeric,oi.gross_total)*(oi.cumulative-oi.total_cents)/nullif(oi.gross_total,0)))::bigint,
+oi.product_name,
 CASE WHEN EXISTS (
   SELECT 1 FROM invoices prior JOIN order_items prior_item ON prior_item.order_id=prior.order_id
   WHERE prior.user_id=current.user_id AND prior.status='paid' AND prior.id<>current.id
     AND prior_item.product_id=oi.product_id
-) THEN 'reorder' ELSE 'first_purchase' END
-FROM order_items oi JOIN invoices current ON current.order_id=oi.order_id
+) THEN 'reorder' ELSE 'first_purchase' END,
+to_jsonb(oi)-'purchase_fields'-'cumulative'-'gross_total'
+FROM lines oi JOIN invoices current ON current.order_id=oi.order_id
 WHERE oi.order_id=$1 ORDER BY oi.id`, *orderID)
 		if err != nil {
 			return nil, err
@@ -471,21 +563,27 @@ WHERE oi.order_id=$1 ORDER BY oi.id`, *orderID)
 		defer rows.Close()
 		for rows.Next() {
 			var item affiliateInvoiceItem
-			if err = rows.Scan(&item.OrderID, &item.OrderItemID, &item.ProductID, &item.BasisCents, &item.Description, &item.EventType); err != nil {
+			var basis *int64
+			if err = rows.Scan(&item.OrderID, &item.OrderItemID, &item.ProductID, &basis, &item.Description, &item.EventType, &item.Snapshot); err != nil {
 				return nil, err
+			}
+			if basis != nil {
+				item.BasisCents = *basis
 			}
 			items = append(items, item)
 		}
 		return items, rows.Err()
 	}
-	rows, err := tx.Query(ctx, `SELECT ii.id,ii.amount_cents,ii.description,ii.service_id,s.product_id,ii.item_type FROM invoice_items ii LEFT JOIN services s ON s.id=ii.service_id WHERE ii.invoice_id=$1 AND ii.item_type IN ('renew','upgrade') ORDER BY ii.id`, invoiceID)
+	rows, err := tx.Query(ctx, `SELECT ii.id,ii.amount_cents,ii.description,ii.service_id,s.product_id,ii.item_type,to_jsonb(ii)
+FROM invoice_items ii JOIN services s ON s.id=ii.service_id JOIN invoices i ON i.id=ii.invoice_id
+WHERE ii.invoice_id=$1 AND ii.item_type IN ('renew','upgrade') AND s.user_id=i.user_id ORDER BY ii.id`, invoiceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var item affiliateInvoiceItem
-		if err = rows.Scan(&item.InvoiceItemID, &item.BasisCents, &item.Description, &item.ServiceID, &item.ProductID, &item.EventType); err != nil {
+		if err = rows.Scan(&item.InvoiceItemID, &item.BasisCents, &item.Description, &item.ServiceID, &item.ProductID, &item.EventType, &item.Snapshot); err != nil {
 			return nil, err
 		}
 		if item.EventType == "renew" {
@@ -497,12 +595,12 @@ WHERE oi.order_id=$1 ORDER BY oi.id`, *orderID)
 }
 
 type affiliateRule struct {
-	RateBPS     int
-	AmountCents int64
-	MaxCents    *int64
+	RateBPS     int    `json:"rate_bps"`
+	AmountCents int64  `json:"amount_cents"`
+	MaxCents    *int64 `json:"max_cents"`
 }
 
-func affiliateRuleForItem(ctx context.Context, tx pgx.Tx, ruleSetID, productID int64, eventType string, defaults map[string]map[string]any) (affiliateRule, string, error) {
+func affiliateRuleForItem(ctx context.Context, tx pgx.Tx, ruleSetID, productID int64, eventType string, defaults map[string]affiliateRule) (affiliateRule, string, error) {
 	var rule affiliateRule
 	var mode string
 	var max *int64
@@ -522,39 +620,21 @@ func affiliateRuleForItem(ctx context.Context, tx pgx.Tx, ruleSetID, productID i
 	if !ok {
 		return affiliateRule{}, "default", nil
 	}
-	rule = affiliateRule{RateBPS: intValue(value["rate_bps"]), AmountCents: int64Value(value["amount_cents"])}
-	if v, ok := value["max_cents"]; ok {
-		m := int64Value(v)
-		if m > 0 {
-			rule.MaxCents = &m
-		}
-	}
-	return rule, "default", nil
+	return value, "default", nil
 }
 
-func intValue(v any) int {
-	switch n := v.(type) {
-	case float64:
-		return int(n)
-	case int:
-		return n
-	case int64:
-		return int(n)
-	default:
-		return 0
+func affiliateCommissionAmount(basis int64, rule affiliateRule) (int64, error) {
+	if rule.RateBPS < 0 || rule.RateBPS > 10000 || rule.AmountCents < 0 || (rule.RateBPS != 0 && rule.AmountCents != 0) || (rule.MaxCents != nil && *rule.MaxCents <= 0) {
+		return 0, conflict("invalid_affiliate_rule", "推广计佣规则无效")
 	}
-}
-func int64Value(v any) int64 {
-	switch n := v.(type) {
-	case float64:
-		return int64(n)
-	case int:
-		return int64(n)
-	case int64:
-		return n
-	default:
-		return 0
+	if basis <= 0 {
+		return 0, nil
 	}
+	if rule.RateBPS == 0 {
+		return rule.AmountCents, nil
+	}
+	// Split the product so a valid bigint basis never overflows at 10000 bps.
+	return (basis/10000)*int64(rule.RateBPS) + (basis%10000)*int64(rule.RateBPS)/10000, nil
 }
 func nullableAffiliateID(id int64) any {
 	if id == 0 {
@@ -564,7 +644,7 @@ func nullableAffiliateID(id int64) any {
 }
 
 func (s *Store) ListAdminAffiliateAccounts(ctx context.Context, limit, offset int) ([]map[string]any, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT a.id,a.user_id,u.username,u.email,a.account_type,a.status,a.program_id,p.name,a.level,a.created_at,a.updated_at
+	rows, err := s.Pool.Query(ctx, `SELECT a.id,a.user_id,u.username,u.email,a.account_type,a.status,a.program_id,p.name,a.level,a.version,a.created_at,a.updated_at
 FROM affiliate_accounts a JOIN users u ON u.id=a.user_id JOIN affiliate_programs p ON p.id=a.program_id ORDER BY a.id DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if err != nil {
 		return nil, err
