@@ -36,6 +36,7 @@ var AdminPermissions = []Permission{
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
 	{"ticket_presets.view", "预设回复", "读取预设回复"}, {"ticket_presets.manage", "预设回复", "管理预设回复及分类"},
 	{"notifications.view", "通知", "读取模板和邮件队列"}, {"notifications.manage", "通知", "修改模板和重试邮件"},
+	{"certifications.view", "实名认证", "读取实名认证申请和资料"}, {"certifications.manage", "实名认证", "审核实名认证申请"},
 	{"reports.view", "报表", "读取经营报表"}, {"audit.view", "审计", "读取操作日志"}, {"migrations.view", "迁移", "读取迁移记录和复核详情"},
 }
 

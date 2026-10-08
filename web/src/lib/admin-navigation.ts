@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -13,6 +13,7 @@ export const adminNavigation = [
   { href: "/admin/content", label: "新闻与知识库", icon: BookOpen, permission: "content.view", group: "content" },
   { href: "/admin/downloads", label: "下载中心", icon: Download, permission: "downloads.view", group: "content" },
   { href: "/admin/customer-files", label: "客户文件", icon: Download, permission: "customer_files.view", group: "customers" },
+  { href: "/admin/certifications", label: "实名认证", icon: BadgeCheck, permission: "certifications.view", group: "customers" },
   { href: "/admin/orders", label: "订单管理", icon: ClipboardList, permission: "orders.view", group: "orders" },
   { href: "/admin/services", label: "服务主机", icon: Server, permission: "services.view", group: "products" },
   { href: "/admin/cancellations", label: "取消申请", icon: ClipboardCheck, permission: "services.view", group: "orders" },

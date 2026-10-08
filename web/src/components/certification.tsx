@@ -1,0 +1,39 @@
+"use client";
+
+import { useState } from "react";
+import { Check, FileCheck, RefreshCw, X } from "lucide-react";
+import { api, date } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Failure, Loading, Status } from "./common";
+import { Workspace, useAdminPermission } from "./workspace";
+
+type Certification = { id?: number; profile_id?: number; certification_type: "individual" | "company"; status: string; provider_id: string; rejection_reason?: string; version: number; updated_at?: string };
+const typeName = (v: string) => v === "company" ? "企业" : "个人";
+
+export function CertificationView() {
+  const resource = useResource<Certification>("/account/certification");
+  const [kind, setKind] = useState<"individual" | "company">("individual");
+  const [form, setForm] = useState({ name: "", id_number: "", company_name: "", company_registration_number: "" });
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [error, setError] = useState("");
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); if (busy) return; setBusy(true); setError(""); setMessage("");
+    try { await api("/account/certification", { method: "POST", body: JSON.stringify({ type: kind, payload: kind === "company" ? form : { name: form.name, id_number: form.id_number } }) }); setMessage("认证资料已提交，等待审核"); resource.refresh(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  return <Workspace title="实名认证"><div className="max-w-3xl"><div className="mb-6"><h1 className="page-title">实名认证</h1><p className="mt-2 text-sm text-muted-foreground">提交个人或企业资料后由管理员审核。证件信息会加密保存。</p></div>{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <><section className="data-surface p-5 mb-5"><div className="flex items-center justify-between gap-3"><div><p className="text-sm text-muted-foreground">当前状态</p><p className="mt-2 font-medium">{typeName(resource.data.certification_type)}认证 · <Status value={resource.data.status} /></p></div><FileCheck className="text-primary" size={24} /></div>{resource.data.rejection_reason && <p className="mt-4 text-sm text-destructive">驳回原因：{resource.data.rejection_reason}</p>}</section>{resource.data.status !== "approved" && <form onSubmit={submit} className="data-surface p-5 space-y-5"><div className="flex gap-2 border-b"><button type="button" className={`border-b-2 px-4 py-2 text-sm ${kind === "individual" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setKind("individual")}>个人认证</button><button type="button" className={`border-b-2 px-4 py-2 text-sm ${kind === "company" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`} onClick={() => setKind("company")}>企业认证</button></div><div className="grid sm:grid-cols-2 gap-4"><label className="grid gap-2 text-sm">真实姓名<Input required maxLength={120} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label><label className="grid gap-2 text-sm">身份证号/证件号<Input required maxLength={120} value={form.id_number} onChange={e => setForm({ ...form, id_number: e.target.value })} /></label>{kind === "company" && <><label className="grid gap-2 text-sm">企业名称<Input required maxLength={160} value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} /></label><label className="grid gap-2 text-sm">统一社会信用代码<Input required maxLength={80} value={form.company_registration_number} onChange={e => setForm({ ...form, company_registration_number: e.target.value })} /></label></>}</div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}<Button disabled={busy}>{busy ? "提交中" : "提交认证"}</Button></form>}</>}</div></Workspace>;
+}
+
+type AdminRow = Certification & { user_id: number; username: string; display_name: string; email: string; submission_id: number };
+type AdminDetail = Certification & { user_id: number; submission_id: number; submitted_at: string; payload: Record<string, string> };
+export function AdminCertificationsView() {
+  const list = useResource<AdminRow[]>("/admin/certifications?status=pending");
+  const manage = useAdminPermission("certifications.manage");
+  const [selected, setSelected] = useState<AdminDetail | null>(null), [note, setNote] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState("");
+  async function open(id: number) { setError(""); try { setSelected(await api<AdminDetail>(`/admin/certifications/${id}`)); } catch (e) { setError((e as Error).message); } }
+  async function review(decision: "approved" | "rejected") { if (!selected || busy) return; setBusy(true); setError(""); try { await api(`/admin/certifications/${selected.id}/review`, { method: "POST", body: JSON.stringify({ decision, note, expected_version: selected.version }) }); setSelected(null); setNote(""); list.refresh(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); } }
+  return <Workspace title="实名认证审核"><div className="mb-5 flex items-center justify-between"><div><h1 className="page-title">实名认证审核</h1><p className="mt-2 text-sm text-muted-foreground">仅展示待审核申请，敏感资料只在详情中显示。</p></div><Button variant="outline" size="icon" title="刷新" aria-label="刷新" onClick={list.refresh}><RefreshCw size={16} /></Button></div>{error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}{list.error ? <Failure error={list.error} retry={list.refresh} /> : !list.data ? <Loading /> : <div className="data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>客户</TableHead><TableHead>类型</TableHead><TableHead>状态</TableHead><TableHead>提交时间</TableHead><TableHead /></TableRow></TableHeader><TableBody>{list.data.length === 0 ? <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">暂无待审核申请</TableCell></TableRow> : list.data.map(row => <TableRow key={row.id}><TableCell><p className="font-medium">{row.display_name || row.username}</p><p className="text-xs text-muted-foreground">{row.email}</p></TableCell><TableCell>{typeName(row.certification_type)}</TableCell><TableCell><Status value={row.status} /></TableCell><TableCell>{date(row.updated_at ?? "")}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => void open(Number(row.id))}>查看资料</Button></TableCell></TableRow>)}</TableBody></Table></div>}{selected && <section className="data-surface p-5 mt-5"><div className="flex justify-between gap-3"><div><h2 className="font-semibold">认证资料 · {typeName(selected.certification_type)}</h2><p className="text-xs text-muted-foreground mt-1">提交于 {date(selected.submitted_at)}</p></div><Button variant="ghost" size="icon" aria-label="关闭详情" onClick={() => setSelected(null)}><X size={16} /></Button></div><dl className="grid sm:grid-cols-2 gap-4 mt-5 text-sm">{Object.entries(selected.payload).map(([key, value]) => <div key={key}><dt className="text-muted-foreground">{key}</dt><dd className="mt-1 break-all">{value}</dd></div>)}</dl>{manage && <><Textarea className="mt-5" rows={3} maxLength={2000} placeholder="审核备注（驳回时建议填写）" value={note} onChange={e => setNote(e.target.value)} /><div className="flex gap-3 mt-4"><Button disabled={busy} onClick={() => void review("approved")}><Check size={16} />通过</Button><Button disabled={busy} variant="destructive" onClick={() => void review("rejected")}><X size={16} />驳回</Button></div></>}</section>}</Workspace>;
+}

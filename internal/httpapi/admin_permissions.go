@@ -102,6 +102,8 @@ var adminRoutePermissions = func() map[string]string {
 		"ticket_presets.view":         {"GET /api/v1/admin/ticket-reply-presets", "GET /api/v1/admin/ticket-reply-preset-categories"},
 		"ticket_presets.manage":       {"POST /api/v1/admin/ticket-reply-presets", "PATCH /api/v1/admin/ticket-reply-presets/{id}", "DELETE /api/v1/admin/ticket-reply-presets/{id}", "POST /api/v1/admin/ticket-reply-preset-categories", "PATCH /api/v1/admin/ticket-reply-preset-categories/{id}", "DELETE /api/v1/admin/ticket-reply-preset-categories/{id}"},
 		"audit.view":                  {"GET /api/v1/admin/audit"},
+		"certifications.view":         {"GET /api/v1/admin/certifications", "GET /api/v1/admin/certifications/{id}"},
+		"certifications.manage":       {"POST /api/v1/admin/certifications/{id}/review"},
 	}
 	for permission, patterns := range groups {
 		for _, p := range patterns {

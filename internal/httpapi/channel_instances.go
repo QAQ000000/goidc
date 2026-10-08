@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	_ "github.com/codex/zjmfgo/internal/certification"
 	"net/http"
 	"strings"
 

@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ArrowUpRight,
   X,
+  BadgeCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, type User } from "@/lib/api";
@@ -46,6 +47,7 @@ const customerNav = [
   { href: "/console/invoices", label: "我的账单", icon: Receipt },
   { href: "/console/invoice-applications", label: "发票申请", icon: Receipt },
   { href: "/console/account", label: "账户余额", icon: WalletCards },
+  { href: "/console/certification", label: "实名认证", icon: BadgeCheck },
   { href: "/console/tickets", label: "支持工单", icon: MessageSquare },
   { href: "/downloads", label: "下载中心", icon: Download },
   { href: "/console/files", label: "我的文件", icon: Download },
