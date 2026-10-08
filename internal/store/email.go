@@ -10,13 +10,14 @@ import (
 )
 
 type EmailJob struct {
-	ID             int64
-	Recipient      string
-	Subject        string
-	Body           string
-	Kind           string
-	Attempts       int
-	VerificationID string
+	ID                int64
+	Recipient         string
+	Subject           string
+	Body              string
+	Kind              string
+	Attempts          int
+	VerificationID    string
+	ChannelInstanceID string
 }
 
 func (s *Store) RecoverStaleEmailJobs(ctx context.Context) error {
@@ -37,7 +38,7 @@ ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
 )
 UPDATE email_outbox e SET status='sending',attempts=e.attempts+1,locked_at=now()
 FROM candidate c WHERE e.id=c.id
-RETURNING e.id,e.recipient,e.subject,e.body,e.kind,e.attempts,e.body_encrypted,coalesce(e.verification_id,'')`).Scan(&job.ID, &job.Recipient, &job.Subject, &job.Body, &job.Kind, &job.Attempts, &sealed, &job.VerificationID)
+RETURNING e.id,e.recipient,e.subject,e.body,e.kind,e.attempts,e.body_encrypted,coalesce(e.verification_id,''),coalesce(e.channel_instance_id,'')`).Scan(&job.ID, &job.Recipient, &job.Subject, &job.Body, &job.Kind, &job.Attempts, &sealed, &job.VerificationID, &job.ChannelInstanceID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgx.ErrNoRows
 	}

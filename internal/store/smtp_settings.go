@@ -265,3 +265,53 @@ func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfi
 	}
 	return SMTPRuntimeConfig{Host: host, Port: port, Username: user, Password: pass, From: from, TLSMode: tlsMode, FromName: fromName}, nil
 }
+
+// ResolveSMTPConfigForInstance resolves the SMTP channel selected for an
+// outbox row. Empty IDs retain compatibility with legacy singleton rows.
+func (s *Store) ResolveSMTPConfigForInstance(ctx context.Context, instanceID string, fallback SMTPRuntimeConfig) (SMTPRuntimeConfig, error) {
+	if strings.TrimSpace(instanceID) == "" {
+		return s.ResolveSMTPConfig(ctx, fallback)
+	}
+	var category, implementation string
+	var enabled bool
+	var rawConfig []byte
+	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,config FROM channel_instances WHERE id=$1`, instanceID).Scan(&category, &implementation, &enabled, &rawConfig); err != nil {
+		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
+	}
+	if category != "mail" || implementation != "smtp" {
+		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
+	}
+	if !enabled {
+		return SMTPRuntimeConfig{}, nil
+	}
+	var config map[string]any
+	if err := json.Unmarshal(rawConfig, &config); err != nil {
+		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
+	}
+	out := SMTPRuntimeConfig{
+		Host:     configString(config, "host"),
+		Port:     configInt(config, "port"),
+		Username: configString(config, "username"),
+		From:     configString(config, "from"),
+		TLSMode:  configString(config, "tls_mode"),
+		FromName: configString(config, "from_name"),
+	}
+	if out.Port == 0 {
+		if out.TLSMode == "implicit_tls" {
+			out.Port = 465
+		} else {
+			out.Port = 587
+		}
+	}
+	if out.Username != "" {
+		secret, err := s.ChannelInstanceSecret(ctx, instanceID)
+		if err != nil || secret == "" {
+			return SMTPRuntimeConfig{}, fmt.Errorf("SMTP credentials unavailable")
+		}
+		out.Password = secret
+	}
+	if strings.TrimSpace(out.Host) == "" || strings.TrimSpace(out.From) == "" {
+		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
+	}
+	return out, nil
+}

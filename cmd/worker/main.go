@@ -80,10 +80,6 @@ func main() {
 				log.Error("SMS stale recovery failed")
 			}
 			for i := 0; i < 10; i++ {
-				smsRuntime, smsErr := db.ResolveSMSConfig(ctx)
-				if smsErr != nil || !smsRuntime.Enabled {
-					break
-				}
 				job, claimErr := db.ClaimSMSJob(ctx)
 				if errors.Is(claimErr, pgx.ErrNoRows) {
 					break
@@ -97,7 +93,16 @@ func main() {
 					_ = db.RecoverStaleSMSJobs(ctx)
 					continue
 				}
-				sendErr := notification.SendSMS(ctx, smsRuntime, *job)
+				smsRuntime, resolveErr := db.ResolveSMSConfigForInstance(ctx, job.ChannelInstanceID)
+				var sendErr error
+				switch {
+				case resolveErr != nil:
+					sendErr = resolveErr
+				case !smsRuntime.Enabled:
+					sendErr = errors.New("SMS channel disabled")
+				default:
+					sendErr = notification.SendSMS(ctx, smsRuntime, *job)
+				}
 				if completeErr := db.CompleteSMSJob(ctx, *job, sendErr); completeErr != nil {
 					log.Error("SMS completion failed", "job_id", job.ID)
 				}
@@ -108,38 +113,36 @@ func main() {
 			if err = db.RecoverStaleEmailJobs(ctx); err != nil {
 				log.Error("stale email recovery failed", "error", err)
 			}
-			smtpRuntime, smtpErr := db.ResolveSMTPConfig(ctx, smtpFallback)
-			if smtpErr != nil {
-				log.Error("SMTP configuration unavailable")
-			}
-			smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
-			if smtpErr == nil && smtpConfig.Enabled() {
-				for i := 0; i < 10; i++ {
-					smtpRuntime, smtpErr = db.ResolveSMTPConfig(ctx, smtpFallback)
-					if smtpErr != nil || smtpRuntime.Host == "" || smtpRuntime.From == "" {
-						break
-					}
-					smtpConfig = notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
-					job, claimErr := db.ClaimEmailJob(ctx)
-					if errors.Is(claimErr, pgx.ErrNoRows) {
-						break
-					}
-					if claimErr != nil {
-						log.Error("email claim failed", "error", claimErr)
-						break
-					}
-					active, checkErr := db.EmailJobActive(ctx, *job)
-					if checkErr != nil || !active {
-						_ = db.RecoverStaleEmailJobs(ctx)
-						continue
-					}
-					sendErr := smtpConfig.Send(*job)
-					if completeErr := db.CompleteEmailJob(ctx, *job, sendErr); completeErr != nil {
-						log.Error("email completion failed", "job_id", job.ID, "error", completeErr)
-					}
-					if sendErr != nil {
-						log.Error("email delivery failed", "job_id", job.ID, "attempts", job.Attempts, "error", sendErr)
-					}
+			for i := 0; i < 10; i++ {
+				job, claimErr := db.ClaimEmailJob(ctx)
+				if errors.Is(claimErr, pgx.ErrNoRows) {
+					break
+				}
+				if claimErr != nil {
+					log.Error("email claim failed", "error", claimErr)
+					break
+				}
+				active, checkErr := db.EmailJobActive(ctx, *job)
+				if checkErr != nil || !active {
+					_ = db.RecoverStaleEmailJobs(ctx)
+					continue
+				}
+				smtpRuntime, resolveErr := db.ResolveSMTPConfigForInstance(ctx, job.ChannelInstanceID, smtpFallback)
+				smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
+				var sendErr error
+				switch {
+				case resolveErr != nil:
+					sendErr = resolveErr
+				case !smtpConfig.Enabled():
+					sendErr = errors.New("SMTP channel disabled")
+				default:
+					sendErr = smtpConfig.Send(*job)
+				}
+				if completeErr := db.CompleteEmailJob(ctx, *job, sendErr); completeErr != nil {
+					log.Error("email completion failed", "job_id", job.ID, "error", completeErr)
+				}
+				if sendErr != nil {
+					log.Error("email delivery failed", "job_id", job.ID, "attempts", job.Attempts, "error", sendErr)
 				}
 			}
 			if _, err = db.ProcessAutoRenewals(ctx, 20); err != nil {

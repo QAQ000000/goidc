@@ -5,6 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"net"
@@ -175,12 +176,47 @@ func (s *Store) ResolveSMSConfig(ctx context.Context) (SMSRuntimeConfig, error) 
 	return o, nil
 }
 
+// ResolveSMSConfigForInstance resolves the implementation selected for an
+// outbox row. Empty IDs retain compatibility with legacy singleton rows.
+func (s *Store) ResolveSMSConfigForInstance(ctx context.Context, instanceID string) (SMSRuntimeConfig, error) {
+	if strings.TrimSpace(instanceID) == "" {
+		return s.ResolveSMSConfig(ctx)
+	}
+	var category, implementation string
+	var enabled bool
+	var rawConfig []byte
+	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,config FROM channel_instances WHERE id=$1`, instanceID).Scan(&category, &implementation, &enabled, &rawConfig); err != nil {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	}
+	if category != "sms" || !SMSProviderRegistered(implementation) {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	}
+	var config map[string]any
+	if err := json.Unmarshal(rawConfig, &config); err != nil {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	}
+	out := SMSRuntimeConfig{Provider: implementation, Endpoint: configString(config, "endpoint"), Enabled: enabled}
+	if !enabled {
+		return out, nil
+	}
+	if !ValidSMSEndpoint(out.Endpoint) {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	}
+	secret, err := s.ChannelInstanceSecret(ctx, instanceID)
+	if err != nil || secret == "" {
+		return SMSRuntimeConfig{}, fmt.Errorf("SMS credentials unavailable")
+	}
+	out.Token = secret
+	return out, nil
+}
+
 type SMSJob struct {
 	ID                    int64
 	Recipient, Body, Kind string
 	VerificationID        string
 	Attempts              int
 	ExpiresAt             time.Time
+	ChannelInstanceID     string
 }
 
 func (s *Store) QueueSMSVerification(ctx context.Context, tx pgx.Tx, recipient, code, purpose, challengeID string, expiresAt time.Time) error {
@@ -201,7 +237,7 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=$3 AND enabled=true ORDER BY sort_order,id LIMIT 1))`, recipient, sealed, kind, challengeID, expiresAt)
+	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1))`, recipient, sealed, kind, challengeID, expiresAt)
 	return e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
@@ -212,7 +248,7 @@ func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {
 	var o SMSJob
 	var sealed []byte
 	var challenge string
-	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge)
+	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,'')`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID)
 	if e != nil {
 		return nil, e
 	}
