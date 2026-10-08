@@ -693,6 +693,11 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 			return err
 		}
 	}
+	if job.Action == "suspend" && serviceStatus == "active" {
+		if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
+			return err
+		}
+	}
 	resultMode, auditAction := "simulation", "service.simulation.completed"
 	if mode == "nokvm" {
 		resultMode = "local_billing_cycle"
@@ -834,6 +839,11 @@ next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN
 	}
 	if job.Action == "create" {
 		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+	}
+	if job.Action == "suspend" && current == "active" {
+		if err = s.QueueServiceSuspendedNotifications(ctx, tx, serviceID); err != nil {
 			return out, err
 		}
 	}

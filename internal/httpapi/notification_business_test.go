@@ -93,6 +93,20 @@ func TestServiceProvisionSuccessNotificationIsQueuedOnce(t *testing.T) {
 	if err = db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM notification_delivery_events WHERE service_id=$1 AND kind='service_provision_success'`, job.ServiceID).Scan(&events); err != nil || events != 1 {
 		t.Fatalf("duplicate provision event count=%d err=%v", events, err)
 	}
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/actions", job.ServiceID), map[string]any{"action": "suspend"}, customer, "provision-notification-suspend"), 202)
+	suspendJob, err := db.ClaimProvisionJob(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = db.ProcessProvisionJob(t.Context(), *suspendJob); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM notification_delivery_events WHERE service_id=$1 AND channel='email' AND kind='service_suspended'`, job.ServiceID).Scan(&events); err != nil || events != 1 {
+		t.Fatalf("suspension notification events=%d err=%v", events, err)
+	}
+	if err = db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM email_outbox WHERE kind='service_suspended' AND recipient='provision-notification-customer@example.test'`).Scan(&outbox); err != nil || outbox != 1 {
+		t.Fatalf("suspension notification outbox=%d err=%v", outbox, err)
+	}
 }
 
 func containsAll(value string, parts ...string) bool {

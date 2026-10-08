@@ -227,3 +227,108 @@ func renderServiceProvisionTemplate(body, productName, upstreamID string) string
 	body = strings.ReplaceAll(body, "{{product_name}}", productName)
 	return strings.ReplaceAll(body, "{{upstream_id}}", upstreamID)
 }
+
+// QueueServiceSuspendedNotifications records the customer-facing transition
+// after the service row has reached suspended inside the caller transaction.
+func (s *Store) QueueServiceSuspendedNotifications(ctx context.Context, tx pgx.Tx, serviceID int64) error {
+	var userID int64
+	var productName, email, phone string
+	var emailVerified, phoneVerified bool
+	if err := tx.QueryRow(ctx, `SELECT s.user_id,p.name,u.email,u.email_verified,u.phone,u.phone_verified
+FROM services s JOIN products p ON p.id=s.product_id JOIN users u ON u.id=s.user_id
+WHERE s.id=$1 AND s.status='suspended'`, serviceID).
+		Scan(&userID, &productName, &email, &emailVerified, &phone, &phoneVerified); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if emailVerified && strings.TrimSpace(email) != "" {
+		if err := s.queueServiceSuspendedEmail(ctx, tx, serviceID, userID, productName, email); err != nil {
+			return err
+		}
+	}
+	if phoneVerified && strings.TrimSpace(phone) != "" {
+		if err := s.queueServiceSuspendedSMS(ctx, tx, serviceID, userID, productName, phone); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) queueServiceSuspendedEmail(ctx context.Context, tx pgx.Tx, serviceID, userID int64, productName, recipient string) error {
+	var subject, body string
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT subject,body,active FROM notification_templates WHERE channel='email' AND kind='service_suspended'`).Scan(&subject, &body, &active); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if !active {
+		return nil
+	}
+	var instanceID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	body = strings.ReplaceAll(body, "{{product_name}}", productName)
+	var eventID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
+VALUES($1,$2,'email','service_suspended',0,CURRENT_DATE)
+ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
+RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	var outboxID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id)
+VALUES($1,$2,$3,'service_suspended',$4) RETURNING id`, recipient, subject, body, instanceID).Scan(&outboxID); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, "UPDATE notification_delivery_events SET email_outbox_id=$2 WHERE id=$1", eventID, outboxID)
+	return err
+}
+
+func (s *Store) queueServiceSuspendedSMS(ctx context.Context, tx pgx.Tx, serviceID, userID int64, productName, recipient string) error {
+	var body, templateID string
+	var active bool
+	if err := tx.QueryRow(ctx, `SELECT body,provider_template_id,active FROM notification_templates WHERE channel='sms' AND kind='service_suspended'`).Scan(&body, &templateID, &active); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	if !active {
+		return nil
+	}
+	var instanceID string
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	body = strings.ReplaceAll(body, "{{product_name}}", productName)
+	var eventID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
+VALUES($1,$2,'sms','service_suspended',0,CURRENT_DATE)
+ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
+RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return err
+	}
+	outboxID, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, "service_suspended", "", time.Now().Add(30*24*time.Hour), templateID, instanceID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, "UPDATE notification_delivery_events SET sms_outbox_id=$2 WHERE id=$1", eventID, outboxID)
+	return err
+}

@@ -127,6 +127,11 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 				return err
 			}
 		}
+		if j.Action == "suspend" && existing != "" {
+			if err = s.QueueServiceSuspendedNotifications(ctx, tx, serviceID); err != nil {
+				return err
+			}
+		}
 		state = "succeeded"
 	} else if j.Action == "create" {
 		if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error='管理员已核验上游未产生购买结果',version=version+1,updated_at=now() WHERE id=$1", serviceID); err != nil {

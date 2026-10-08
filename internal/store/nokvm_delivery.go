@@ -216,6 +216,11 @@ func (s *Store) finishNOKVMJob(ctx context.Context, job ProvisionJob, result pro
 			return err
 		}
 	}
+	if job.Action == "suspend" && current == "active" {
+		if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
+			return err
+		}
+	}
 	raw, _ := json.Marshal(result)
 	if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='succeeded',result=$2,last_error='',locked_at=NULL,completed_at=now(),updated_at=now() WHERE id=$1", job.ID, raw); err != nil {
 		return err
