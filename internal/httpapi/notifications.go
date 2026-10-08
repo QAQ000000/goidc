@@ -23,7 +23,7 @@ func validNotificationKind(value string) bool {
 
 func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at
-FROM notification_templates ORDER BY id`)
+ ,channel,provider_template_id FROM notification_templates ORDER BY channel,id`)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -41,18 +41,28 @@ FROM notification_templates ORDER BY id`)
 
 func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Kind    string `json:"kind"`
-		Name    string `json:"name"`
-		Subject string `json:"subject"`
-		Body    string `json:"body"`
-		Active  *bool  `json:"active"`
+		Channel            string `json:"channel"`
+		Kind               string `json:"kind"`
+		Name               string `json:"name"`
+		Subject            string `json:"subject"`
+		Body               string `json:"body"`
+		ProviderTemplateID string `json:"provider_template_id"`
+		Active             *bool  `json:"active"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
+	input.Channel = strings.TrimSpace(input.Channel)
+	if input.Channel == "" {
+		input.Channel = "email"
+	}
 	input.Kind = strings.TrimSpace(input.Kind)
 	input.Name, input.Subject, input.Body = strings.TrimSpace(input.Name), strings.TrimSpace(input.Subject), strings.TrimSpace(input.Body)
-	if !validNotificationKind(input.Kind) || input.Name == "" || len(input.Name) > 120 || input.Subject == "" || len(input.Subject) > 240 || input.Body == "" || len(input.Body) > 100000 {
+	input.ProviderTemplateID = strings.TrimSpace(input.ProviderTemplateID)
+	if input.Channel == "sms" && input.Subject == "" {
+		input.Subject = "短信通知"
+	}
+	if (input.Channel != "email" && input.Channel != "sms") || !validNotificationKind(input.Kind) || input.Name == "" || len(input.Name) > 120 || input.Body == "" || len(input.Body) > 100000 || len(input.ProviderTemplateID) > 160 || input.Channel == "email" && (input.Subject == "" || len(input.Subject) > 240) {
 		writeError(w, http.StatusBadRequest, "invalid_notification_template", "通知模板字段无效")
 		return
 	}
@@ -67,8 +77,8 @@ func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Reque
 	}
 	defer tx.Rollback(r.Context())
 	var id int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO notification_templates(kind,name,subject,body,active,updated_by)
-VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, input.Kind, input.Name, input.Subject, input.Body, active, identityFrom(r).ID).Scan(&id)
+	err = tx.QueryRow(r.Context(), `INSERT INTO notification_templates(channel,kind,name,subject,body,provider_template_id,active,updated_by)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.Name, input.Subject, input.Body, input.ProviderTemplateID, active, identityFrom(r).ID).Scan(&id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -81,7 +91,7 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, input.Kind, input.Name, input.Subject, 
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "kind": input.Kind})
+	write(w, http.StatusCreated, map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind})
 }
 
 func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Request) {
@@ -90,15 +100,16 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var input struct {
-		Name    *string `json:"name"`
-		Subject *string `json:"subject"`
-		Body    *string `json:"body"`
-		Active  *bool   `json:"active"`
+		Name               *string `json:"name"`
+		Subject            *string `json:"subject"`
+		Body               *string `json:"body"`
+		ProviderTemplateID *string `json:"provider_template_id"`
+		Active             *bool   `json:"active"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	if input.Name == nil && input.Subject == nil && input.Body == nil && input.Active == nil {
+	if input.Name == nil && input.Subject == nil && input.Body == nil && input.ProviderTemplateID == nil && input.Active == nil {
 		writeError(w, http.StatusBadRequest, "invalid_notification_template", "至少提供一个要修改的字段")
 		return
 	}
@@ -123,18 +134,29 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
+	if input.ProviderTemplateID != nil {
+		*input.ProviderTemplateID = strings.TrimSpace(*input.ProviderTemplateID)
+		if len(*input.ProviderTemplateID) > 160 {
+			writeError(w, http.StatusBadRequest, "invalid_notification_template", "供应商模板 ID 无效")
+			return
+		}
+	}
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var kind string
-	if err = tx.QueryRow(r.Context(), "SELECT kind FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind); err != nil {
+	var kind, channel string
+	if err = tx.QueryRow(r.Context(), "SELECT kind,channel FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),active=COALESCE($5,active),updated_by=$6,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.Active, identityFrom(r).ID); err != nil {
+	if channel == "email" && input.Subject != nil && *input.Subject == "" {
+		writeError(w, http.StatusBadRequest, "invalid_notification_template", "邮件主题无效")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -146,7 +168,7 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"id": id, "kind": kind})
+	write(w, http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind})
 }
 
 func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {

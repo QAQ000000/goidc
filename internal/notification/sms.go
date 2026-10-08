@@ -108,9 +108,7 @@ func (p idcsmartSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j store
 	form := url.Values{}
 	form.Set("to", j.Recipient)
 	form.Set("content", idcsmartSign(c.Sign)+j.Body)
-	// The old plugin always sends these fields. The current verification and
-	// test messages are already rendered text, so template values are empty.
-	form.Set("template_id", "")
+	form.Set("template_id", j.TemplateID)
 	form.Set("vars", "")
 	deadline := time.Now().Add(15 * time.Second)
 	if j.ExpiresAt.Before(deadline) {

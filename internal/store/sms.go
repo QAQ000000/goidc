@@ -236,6 +236,7 @@ func (s *Store) ResolveSMSConfigForInstance(ctx context.Context, instanceID stri
 type SMSJob struct {
 	ID                    int64
 	Recipient, Body, Kind string
+	TemplateID            string
 	VerificationID        string
 	Attempts              int
 	ExpiresAt             time.Time
@@ -243,9 +244,24 @@ type SMSJob struct {
 }
 
 func (s *Store) QueueSMSVerification(ctx context.Context, tx pgx.Tx, recipient, code, purpose, challengeID string, expiresAt time.Time) error {
-	return s.QueueSMS(ctx, tx, recipient, "验证码："+code, purpose, challengeID, expiresAt)
+	kind := "verification_code"
+	if purpose == "password_reset" {
+		kind = "password_reset"
+	}
+	var body, templateID string
+	err := tx.QueryRow(ctx, `SELECT body,provider_template_id FROM notification_templates WHERE channel='sms' AND kind=$1 AND active=true`, kind).Scan(&body, &templateID)
+	if err == nil {
+		body = strings.ReplaceAll(strings.ReplaceAll(body, "{{code}}", code), "{{expires_minutes}}", "10")
+	} else {
+		body = "验证码：" + code
+		templateID = ""
+	}
+	return s.queueSMSWithTemplate(ctx, tx, recipient, body, purpose, challengeID, expiresAt, templateID)
 }
 func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, channelInstanceID ...string) error {
+	return s.queueSMSWithTemplate(ctx, tx, recipient, body, kind, challengeID, expiresAt, "", channelInstanceID...)
+}
+func (s *Store) queueSMSWithTemplate(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, templateID string, channelInstanceID ...string) error {
 	if !ValidSMSRecipient(recipient) || len(body) > 4096 || !expiresAt.After(time.Now()) {
 		return conflict("invalid_sms", "短信内容无效")
 	}
@@ -279,7 +295,7 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	if e != nil {
 		return e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)))`, recipient, sealed, kind, challengeID, expiresAt, instanceID)
+	_, e = tx.Exec(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id,template_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)),$7)`, recipient, sealed, kind, challengeID, expiresAt, instanceID, templateID)
 	return e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
@@ -290,7 +306,7 @@ func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {
 	var o SMSJob
 	var sealed []byte
 	var challenge string
-	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,'')`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID)
+	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,''),coalesce(s.template_id,'')`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID, &o.TemplateID)
 	if e != nil {
 		return nil, e
 	}

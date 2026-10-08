@@ -21,10 +21,12 @@ import { Workspace, useAdminPermission } from "./workspace";
 
 type Template = {
   id: number;
+  channel: "email" | "sms";
   kind: string;
   name: string;
   subject: string;
   body: string;
+  provider_template_id: string;
   active: boolean;
   updated_at: string;
 };
@@ -52,6 +54,7 @@ function NotificationManager() {
   const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
   const manage = useAdminPermission("notifications.manage");
   const [tab, setTab] = useState("templates");
+  const [templateChannel, setTemplateChannel] = useState<"email" | "sms">("email");
   const [query, setQuery] = useState("");
   const [edit, setEdit] = useState<Template | null>(null);
   const [editingBusy, setEditingBusy] = useState(false);
@@ -62,7 +65,7 @@ function NotificationManager() {
   };
   const error = tab === "templates" ? templates.error : outbox.error;
   const list =
-    templates.data?.filter((item) =>
+    templates.data?.filter((item) => item.channel === templateChannel).filter((item) =>
       `${item.name} ${item.subject} ${item.kind}`
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -77,10 +80,10 @@ function NotificationManager() {
           onClick={() => setEdit(null)}
         >
           <ArrowLeft />
-          返回邮件模板
+          返回{edit.channel === "sms" ? "短信" : "邮件"}模板
         </Button>
         <h1 className="page-title mb-5 break-all">
-          {edit.id ? edit.name : "新增邮件模板"}
+          {edit.id ? edit.name : `新增${edit.channel === "sms" ? "短信" : "邮件"}模板`}
         </h1>
         <TemplateEditor
           key={edit.id}
@@ -89,7 +92,7 @@ function NotificationManager() {
           onBusy={setEditingBusy}
           saved={() => {
             setEdit(null);
-            setNotice("邮件模板已保存");
+            setNotice(`${edit.channel === "sms" ? "短信" : "邮件"}模板已保存`);
             templates.refresh();
           }}
         />
@@ -115,10 +118,12 @@ function NotificationManager() {
                 setNotice("");
                 setEdit({
                   id: 0,
+                  channel: templateChannel,
                   kind: "",
                   name: "",
                   subject: "",
                   body: "",
+                  provider_template_id: "",
                   active: false,
                   updated_at: "",
                 });
@@ -132,7 +137,7 @@ function NotificationManager() {
       </div>
       <nav aria-label="通知分区" className="mb-5 flex overflow-x-auto border-b">
         {[
-          ["templates", "邮件模板"],
+          ["templates", "模板管理"],
           ["outbox", "投递队列"],
         ].map(([value, label]) => (
           <button
@@ -152,13 +157,22 @@ function NotificationManager() {
         </p>
       )}
       {tab === "templates" && (
-        <Input
-          className="mb-4 max-w-md"
-          aria-label="搜索邮件模板"
-          placeholder="模板名称、主题或类型"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="flex border-b">
+            {([["email", "邮件模板"], ["sms", "短信模板"]] as const).map(([value, label]) => (
+              <button type="button" key={value} className={`border-b-2 px-4 py-2 text-sm ${templateChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => { setTemplateChannel(value); setQuery(""); }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <Input
+            className="max-w-md"
+            aria-label={`搜索${templateChannel === "sms" ? "短信" : "邮件"}模板`}
+            placeholder="模板名称、主题或类型"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
       )}
       {error ? (
         <Failure error={error} retry={refresh} />
@@ -173,7 +187,7 @@ function NotificationManager() {
                   <TableHead>ID</TableHead>
                   <TableHead>模板名称</TableHead>
                   <TableHead>类型</TableHead>
-                  <TableHead>邮件主题</TableHead>
+                  <TableHead>{templateChannel === "sms" ? "供应商模板 ID" : "邮件主题"}</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>更新时间</TableHead>
                   <TableHead className="text-right">操作</TableHead>
@@ -188,7 +202,7 @@ function NotificationManager() {
                     </TableCell>
                     <TableCell>{item.kind}</TableCell>
                     <TableCell className="max-w-80 whitespace-normal break-all">
-                      {item.subject}
+                      {templateChannel === "sms" ? (item.provider_template_id || "未填写") : item.subject}
                     </TableCell>
                     <TableCell>
                       <Status value={item.active ? "active" : "disabled"} />
@@ -316,9 +330,11 @@ function TemplateEditor({
           method: template.id ? "PATCH" : "POST",
           body: JSON.stringify({
             ...(template.id ? {} : { kind: form.kind }),
+            ...(template.id ? {} : { channel: form.channel }),
             name: form.name,
             subject: form.subject,
             body: form.body,
+            provider_template_id: form.provider_template_id,
             active: form.active,
           }),
         },
@@ -367,18 +383,13 @@ function TemplateEditor({
               />
             </label>
           </div>
-          <label className="grid gap-2 text-sm">
+          {form.channel === "email" ? <label className="grid gap-2 text-sm">
             邮件主题
-            <Input
-              required
-              aria-label="邮件主题"
-              maxLength={240}
-              value={form.subject}
-              onChange={(event) =>
-                setForm({ ...form, subject: event.target.value })
-              }
-            />
-          </label>
+            <Input required aria-label="邮件主题" maxLength={240} value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />
+          </label> : <label className="grid gap-2 text-sm">
+            供应商模板 ID（可选）
+            <Input aria-label="供应商模板 ID" maxLength={160} value={form.provider_template_id} onChange={(event) => setForm({ ...form, provider_template_id: event.target.value })} />
+          </label>}
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={form.active}
@@ -390,11 +401,11 @@ function TemplateEditor({
           </label>
         </section>
         <section className="space-y-4">
-          <h2 className="text-sm font-semibold">邮件正文</h2>
+          <h2 className="text-sm font-semibold">{form.channel === "sms" ? "短信内容" : "邮件正文"}</h2>
           <Textarea
             required
-            aria-label="邮件正文"
-            rows={14}
+            aria-label={form.channel === "sms" ? "短信内容" : "邮件正文"}
+            rows={form.channel === "sms" ? 6 : 14}
             maxLength={100000}
             value={form.body}
             onChange={(event) => setForm({ ...form, body: event.target.value })}

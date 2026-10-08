@@ -116,7 +116,7 @@ func (s *Store) IssueVerification(ctx context.Context, tx pgx.Tx, purpose, chann
 		}
 		var subject, body string
 		var active bool
-		if err = tx.QueryRow(ctx, "SELECT subject,body,active FROM notification_templates WHERE kind=$1", kind).Scan(&subject, &body, &active); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT subject,body,active FROM notification_templates WHERE channel='email' AND kind=$1", kind).Scan(&subject, &body, &active); err != nil {
 			return "", err
 		}
 		if !active || !strings.Contains(body, "{{code}}") || strings.Contains(body, "{{reset_link}}") {
