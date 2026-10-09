@@ -51,6 +51,35 @@
 3. 先完成真实供应商/NOKVM/支付验收，再做兼容映射和切换演练；没有这些证据不进入生产替换评审。
 4. 所有 Go 命令优先使用 `scripts/go.sh`，用 `scripts/check-go-toolchain.sh` 检查版本和 GOROOT，避免本地 Go 与 `/usr/local/btgo` 混用。
 
+## 2026-10-09 P0 生产替换终验结论：NOT READY
+
+本次依据 [`cutover-runbook.md`](cutover-runbook.md) 完成了一次真实旧 MySQL
+只读源到临时 PG18 的冷启动割接预演，目标库为
+`zjmfgo_legacy_dryrun_20261009033303_test`，预演结束后已自动删除。dry-run 和
+完整 apply 均退出 0，覆盖 4 个客户、28 个商品、11 个订单、12 个账单、1 个
+服务、工单附件、邮件模板和商品配置；金额写入整数分，服务交付快照已生成。
+
+预演仍发现 250 条历史复核 issue（孤儿账单分项、旧订单/账单金额不一致、历史
+账单须复核等），4 个迁移客户均显式标记 `password_reset_required=true`，因此
+不能声称旧密码无感兼容登录。issue 和报告保存在被 Git 忽略的
+`output/cutover-rehearsal-20261009033303/`；后续逐账单整数分对比为 12/12 一致、
+总额 1,807,929 分，证据在 `output/cutover-rehearsal-20261009035840-debug/precision-summary.json`。
+正式导入前仍必须逐条处理历史 issue 并重新导出校验快照。
+
+三项 systemd 服务冷启动也已演练：API、Web、Worker 均 active，API `/healthz`
+和 `/readyz`、Next 首页及 `/admin-login` 均返回 200；从 restart 到 ready 约
+397ms，RSS 基线约 API 18MiB、Web 75MiB、Worker 14MiB。证据见
+`output/cutover-rehearsal-20261009033837Z-cold-start/`。
+
+随后对三项 unit 各注入一次受控进程退出，API/Web/Worker 分别在 3.241s、
+3.897s、3.177s 内由 systemd 拉起新 PID 并恢复探针，证据见
+`output/cutover-rehearsal-20261009040834Z-self-heal/`。
+
+结论是 **NOT READY**：真实支付/回调、魔方财务和通知投递尚未形成生产证据，
+历史金额 issue 和密码策略也未完成业务签字，且五分钟回滚尚未在生产副本执行。
+在这些 P0 门槛关闭前，不得挂载切流 Nginx 配置、解除旧 MySQL 只读或停止旧 PHP
+站点。完整时序、Nginx 模板和确定性回滚步骤以 `docs/cutover-runbook.md` 为准。
+
 ## 明确不纳入本阶段
 
 - 不修改 `/www/wwwroot/zjmf-manger-decoded-副本`。
