@@ -77,6 +77,16 @@ func (s *Server) affiliateOverview(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusOK, result)
 }
 
+func (s *Server) affiliateCommissions(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	items, err := s.db.ListAffiliateCommissions(r.Context(), identityFrom(r).ID, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, items)
+}
+
 func (s *Server) applyAffiliate(w http.ResponseWriter, r *http.Request) {
 	result, err := s.db.ApplyAffiliateAccount(r.Context(), identityFrom(r).ID, r.Header.Get("Idempotency-Key"))
 	if err != nil {

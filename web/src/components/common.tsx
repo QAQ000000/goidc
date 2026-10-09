@@ -33,6 +33,10 @@ export function Failure({ error, retry }: { error: Error; retry: () => void }) {
 }
 const names: Record<string, string> = {
   pending: "待处理",
+  available: "可提现",
+  reserved: "提现中",
+  reversed: "已冲正",
+  clawback: "待追缴",
   expired: "本地已过期",
   paid: "已支付",
   unpaid: "待支付",
@@ -62,6 +66,9 @@ const names: Record<string, string> = {
   command_accepted: "已受理",
   credentials_confirmed: "已确认",
   approved: "已通过",
+  submitted: "已提交",
+  reviewing: "审核中",
+  paying: "打款中",
   declined: "已驳回",
   rejected: "已驳回",
   withdrawn: "已撤回",
@@ -74,9 +81,9 @@ export function Status({ value }: { value: string }) {
     <Badge
       variant="outline"
       className={
-        value === "paid" || value === "active" || value === "resolved"
+        value === "paid" || value === "active" || value === "resolved" || value === "available"
           ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-          : value === "pending" || value === "unpaid" || value === "urgent" || value === "queued" || value === "provisioning"
+          : value === "pending" || value === "unpaid" || value === "urgent" || value === "queued" || value === "provisioning" || value === "reserved" || value === "clawback"
             ? "text-amber-700 bg-amber-50 border-amber-200"
             : value === "failed"
               ? "text-destructive bg-red-50 border-red-200"

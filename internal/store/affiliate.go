@@ -27,21 +27,56 @@ type AffiliateLink struct {
 }
 
 type AffiliateOverview struct {
-	AccountID      int64  `json:"account_id"`
-	AccountType    string `json:"account_type"`
-	AccountStatus  string `json:"account_status"`
-	ProgramID      int64  `json:"program_id"`
-	ProgramName    string `json:"program_name"`
-	PendingCents   int64  `json:"pending_cents"`
-	AvailableCents int64  `json:"available_cents"`
-	ReservedCents  int64  `json:"reserved_cents"`
-	PaidCents      int64  `json:"paid_cents"`
-	AttributionID  int64  `json:"attribution_id,omitempty"`
-	ReferredCount  int64  `json:"referred_count"`
+	AccountID        int64  `json:"account_id"`
+	AccountType      string `json:"account_type"`
+	AccountStatus    string `json:"account_status"`
+	ProgramID        int64  `json:"program_id"`
+	ProgramName      string `json:"program_name"`
+	PendingCents     int64  `json:"pending_cents"`
+	AvailableCents   int64  `json:"available_cents"`
+	ReservedCents    int64  `json:"reserved_cents"`
+	PaidCents        int64  `json:"paid_cents"`
+	MinWithdrawCents int64  `json:"min_withdraw_cents"`
+	FeeCents         int64  `json:"fee_cents"`
+	AttributionID    int64  `json:"attribution_id,omitempty"`
+	ReferredCount    int64  `json:"referred_count"`
+}
+
+// ListAffiliateCommissions exposes the immutable commission snapshots and
+// current bucket projection to the customer console. Monetary values remain
+// integer cents; the web client only formats them for display.
+func (s *Store) ListAffiliateCommissions(ctx context.Context, userID int64, limit, offset int) ([]map[string]any, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.Pool.Query(ctx, `
+SELECT c.id,c.invoice_id,i.invoice_no,c.order_id,c.product_id,COALESCE(p.name,''),
+       c.event_type,c.status,c.amount_cents,c.basis_cents,c.rate_bps,
+       c.pending_cents,c.available_cents,c.reserved_cents,c.paid_cents,c.reversed_cents,
+       c.available_at,GREATEST(0,CEIL(EXTRACT(EPOCH FROM (c.available_at-now()))/86400))::int AS days_remaining,
+       c.rule_snapshot,c.source_snapshot,c.created_at
+FROM affiliate_commission_entries c
+JOIN affiliate_accounts a ON a.id=c.account_id
+JOIN invoices i ON i.id=c.invoice_id
+LEFT JOIN products p ON p.id=c.product_id
+WHERE a.user_id=$1
+ORDER BY c.created_at DESC,c.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if result == nil {
+		result = []map[string]any{}
+	}
+	return result, err
 }
 
 type AffiliateClickResult struct {
-	Valid           bool   `json:"-"`
+	Valid           bool   `json:"valid"`
 	Recorded        bool   `json:"recorded"`
 	LandingPath     string `json:"landing_path"`
 	AttributionDays int    `json:"attribution_days"`
@@ -376,9 +411,10 @@ func (s *Store) AffiliateOverview(ctx context.Context, userID int64) (AffiliateO
  COALESCE((SELECT sum(available_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
  COALESCE((SELECT sum(reserved_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
  COALESCE((SELECT sum(paid_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
+ p.min_withdraw_cents,p.fee_cents,
  COALESCE((SELECT count(*) FROM affiliate_attributions WHERE account_id=a.id),0)
 FROM affiliate_accounts a JOIN affiliate_programs p ON p.id=a.program_id WHERE a.user_id=$1`, userID).
-		Scan(&out.AccountID, &out.AccountType, &out.AccountStatus, &out.ProgramID, &out.ProgramName, &out.PendingCents, &out.AvailableCents, &out.ReservedCents, &out.PaidCents, &out.ReferredCount)
+		Scan(&out.AccountID, &out.AccountType, &out.AccountStatus, &out.ProgramID, &out.ProgramName, &out.PendingCents, &out.AvailableCents, &out.ReservedCents, &out.PaidCents, &out.MinWithdrawCents, &out.FeeCents, &out.ReferredCount)
 	if err == pgx.ErrNoRows {
 		return AffiliateOverview{AccountStatus: "none"}, nil
 	}

@@ -155,6 +155,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/affiliate/withdrawals/{id}/payout", s.auth(s.payoutAffiliateWithdrawal, true))
 	mux.HandleFunc("POST /api/v1/admin/affiliate/withdrawals/{id}/target", s.auth(s.affiliatePayoutTarget, true))
 	mux.HandleFunc("GET /api/v1/affiliate/overview", s.auth(s.affiliateOverview, false))
+	mux.HandleFunc("GET /api/v1/affiliate/commissions", s.auth(s.affiliateCommissions, false))
 	mux.HandleFunc("POST /api/v1/affiliate/apply", s.auth(s.applyAffiliate, false))
 	mux.HandleFunc("GET /api/v1/affiliate/links", s.auth(s.affiliateLinks, false))
 	mux.HandleFunc("POST /api/v1/affiliate/links", s.auth(s.affiliateLinks, false))

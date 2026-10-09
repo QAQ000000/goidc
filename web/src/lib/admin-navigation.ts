@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -29,6 +29,7 @@ export const adminNavigation = [
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super", group: "system" },
   { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/channels", label: "接口设置", icon: Plug, permission: "@super", group: "system" },
+  { href: "/admin/affiliate", label: "推广返利", icon: HandCoins, permission: "affiliates.view", group: "finance" },
 ];
 
 export const adminNavigationGroups = [

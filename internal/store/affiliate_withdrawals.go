@@ -551,6 +551,22 @@ func (s *Store) AffiliateWithdrawalDetail(ctx context.Context, actor, id int64, 
 		return nil, err
 	}
 	item["payouts"] = payouts
+	rows, err = s.Pool.Query(ctx, `SELECT a.entry_id,a.amount_cents,a.status,e.status AS commission_status,
+       e.invoice_id,i.invoice_no,e.product_id,COALESCE(p.name,''),e.event_type,
+       e.rule_snapshot,e.available_at
+FROM affiliate_withdrawal_allocations a
+JOIN affiliate_commission_entries e ON e.id=a.entry_id
+JOIN invoices i ON i.id=e.invoice_id
+LEFT JOIN products p ON p.id=e.product_id
+WHERE a.withdrawal_id=$1 ORDER BY a.entry_id`, id)
+	if err != nil {
+		return nil, err
+	}
+	allocations, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		return nil, err
+	}
+	item["allocations"] = allocations
 	return item, nil
 }
 func (s *Store) AffiliatePayoutTarget(ctx context.Context, actor, id int64, reason string) (map[string]string, error) {
