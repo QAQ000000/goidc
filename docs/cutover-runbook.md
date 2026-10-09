@@ -208,6 +208,9 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
   12 账单、1 服务、2 工单、3 附件、33 邮件模板和全部配置子项。
 * PG 中服务交付快照为 1，金额写入 `amount_cents`；旧源的账单/订单不一致、
   孤儿分项和历史复核项被保留为审计 issue，不能当作迁移错误静默吞掉。
+  最新 authcode dry-run 共 245 条 issue：206 条缺失主机、5 条缺失账单引用、
+  21 条订单/账单/服务业务冲突、12 条历史账单及 1 条上游资源核验；分类和处理
+  责任见 `rewrite-readiness.md`。
 * 旧站 `database.authcode` 通过受控环境变量 `LEGACY_CMF_AUTHCODE` 注入后，4 个
   迁移用户均导入 `legacy_cmf$` 临时哈希并设置 `password_reset_required=false`；
   归档的 4 条用户 payload 均不含 `password`。首次正确登录会条件升级为 bcrypt
