@@ -1,18 +1,33 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, LogIn, Save, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  LogIn,
+  Save,
+  Trash2,
+  CheckCircle2,
+  Pencil,
+  Plus,
+  LifeBuoy,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import { api, date, money, type Contact } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Checkbox } from "./ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { Failure, Loading, Status } from "./common";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
 import { CustomerFileManager } from "./customer-files";
+
 type Row = Record<string, unknown>;
 type AdminCustomer = {
   id: number;
@@ -24,47 +39,600 @@ type AdminCustomer = {
   created_at: string;
   sales_owner_id: number | null;
   sales_owner_name: string | null;
+  sales_version: number;
   group_id: number | null;
   group_name: string | null;
+  active_services_count?: number;
+  total_services_count?: number;
+  income_cents?: number;
+  expense_cents?: number;
+  company_name?: string | null;
+  phone_number?: string | null;
+  qq?: string | null;
+};
+
+type CustomerDetailTab =
+  | "summary"
+  | "profile"
+  | "services"
+  | "invoices"
+  | "transactions"
+  | "contacts"
+  | "tickets"
+  | "orders"
+  | "files"
+  | "affiliate";
+
+const customerDetailTabLabel: Record<CustomerDetailTab, string> = {
+  summary: "客户摘要",
+  profile: "个人资料",
+  services: "产品/服务",
+  invoices: "账单",
+  transactions: "交易记录",
+  contacts: "联系人",
+  tickets: "工单",
+  orders: "订单",
+  files: "附件",
+  affiliate: "推介计划",
 };
 
 export function AdminCustomerDetailView({ customerId }: { customerId: number }) {
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab");
-  const tab: CustomerDetailTab = requestedTab && Object.hasOwn(customerDetailTabLabel, requestedTab) ? requestedTab as CustomerDetailTab : "summary";
+  const tab: CustomerDetailTab =
+    requestedTab && Object.hasOwn(customerDetailTabLabel, requestedTab)
+      ? (requestedTab as CustomerDetailTab)
+      : "summary";
   const backParams = new URLSearchParams(searchParams.toString());
   backParams.delete("tab");
   const returnHref = `/admin/customers${backParams.toString() ? `?${backParams.toString()}` : ""}`;
   const customer = useResource<AdminCustomer>(`/admin/customers/${customerId}`, false);
-  return <Workspace title="客户详情" admin>
-    {customer.error ? <Failure error={customer.error} retry={customer.refresh} /> : !customer.data ? <Loading /> : <>
-      <header className="flex flex-wrap items-center justify-between gap-3 mb-5"><div><h1 className="text-xl font-semibold break-words">{customer.data.display_name || customer.data.username}</h1><p className="text-sm text-muted-foreground mt-1">客户 #{customer.data.id} · {customer.data.username}</p></div><div className="flex flex-wrap items-center gap-2"><ImpersonateCustomerButton customerId={customer.data.id} /><Button variant="outline" asChild><Link href={returnHref}><ArrowLeft size={16} />返回客户管理</Link></Button></div></header>
-      {tab !== "summary" && <section className="border-b bg-white p-5 mb-5">
-        <div className="flex flex-wrap items-start justify-between gap-5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold break-words">{customer.data.display_name || "未命名客户"}</h2><Status value={customer.data.status} /></div>
-            <p className="text-sm text-muted-foreground mt-2 break-all">{customer.data.email} · 注册于 {date(customer.data.created_at)}</p>
+
+  return (
+    <Workspace title="客户详情" admin>
+      {customer.error ? (
+        <Failure error={customer.error} retry={customer.refresh} />
+      ) : !customer.data ? (
+        <Loading />
+      ) : (
+        <div className="space-y-4">
+          {/* Card Container matching MoFang #/customer-view/abstract */}
+          <div className="bg-white rounded border border-[#ebeef5] shadow-sm overflow-hidden">
+            {/* Top horizontal tab nav matching MoFang */}
+            <div className="border-b border-[#ebeef5] px-4 pt-1 flex items-center justify-between overflow-x-auto">
+              <nav className="flex space-x-6 min-w-max" aria-label="客户详情分区">
+                {(
+                  [
+                    "summary",
+                    "profile",
+                    "services",
+                    "invoices",
+                    "transactions",
+                    "contacts",
+                    "tickets",
+                    "orders",
+                    "files",
+                    "affiliate",
+                  ] as CustomerDetailTab[]
+                ).map((value) => {
+                  const params = new URLSearchParams(searchParams.toString());
+                  if (value === "summary") params.delete("tab");
+                  else params.set("tab", value);
+                  const href = `/admin/customers/${customerId}${params.toString() ? `?${params.toString()}` : ""}`;
+                  const label = customerDetailTabLabel[value];
+                  const isActive = value === tab;
+                  return (
+                    <Link
+                      key={value}
+                      href={href}
+                      className={`py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                        isActive
+                          ? "border-[#409eff] text-[#409eff]"
+                          : "border-transparent text-[#606266] hover:text-[#409eff]"
+                      }`}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              <div className="flex items-center gap-2 pl-4 py-2">
+                <Button variant="outline" size="sm" asChild className="h-7 text-xs border-[#dcdfe6]">
+                  <Link href={returnHref}>
+                    <ArrowLeft size={13} className="mr-1" />
+                    返回客户列表
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            {/* Tab content */}
+            <div className="p-5">
+              {tab === "summary" ? (
+                <CustomerSummaryView customer={customer.data} refresh={customer.refresh} />
+              ) : tab === "profile" ? (
+                <CustomerProfile
+                  customer={customer.data}
+                  saved={customer.refresh}
+                  cancelHref={`/admin/customers/${customerId}${backParams.toString() ? `?${backParams.toString()}` : ""}`}
+                />
+              ) : tab === "contacts" ? (
+                <ContactsPanel adminCustomerId={customerId} />
+              ) : tab === "files" ? (
+                <CustomerFileManager customerId={customerId} />
+              ) : (
+                <AdminCustomerRelatedView
+                  key={`${customerId}:${tab}`}
+                  customerId={customerId}
+                  tab={tab}
+                />
+              )}
+            </div>
           </div>
-          <div className="text-left sm:text-right"><p className="text-xs text-muted-foreground">账户余额</p><strong className="money text-2xl block mt-1">{money(customer.data.balance_cents)}</strong></div>
         </div>
-        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t mt-5 pt-4 text-sm">
-          <div><dt className="text-muted-foreground">客户分组</dt><dd className="mt-1">{customer.data.group_name || "未分组"}</dd></div>
-          <div><dt className="text-muted-foreground">销售归属</dt><dd className="mt-1">{customer.data.sales_owner_name || "无归属"}</dd></div>
-          <div><dt className="text-muted-foreground">账号</dt><dd className="mt-1 break-all">{customer.data.username}</dd></div>
-        </dl>
-      </section>}
-      <nav className="flex gap-1 overflow-x-auto border-b mb-5" aria-label="客户详情分区">
-        {(["summary", "profile", "services", "orders", "invoices", "transactions", "contacts", "tickets", "files"] as CustomerDetailTab[]).map((value) => {
-          const params = new URLSearchParams(searchParams.toString());
-          if (value === "summary") params.delete("tab"); else params.set("tab", value);
-          const href = `/admin/customers/${customerId}${params.toString() ? `?${params.toString()}` : ""}`;
-          const label = customerDetailTabLabel[value];
-          return value === tab ? <span key={value} className="border-b-2 border-primary px-4 py-3 text-sm font-medium text-primary whitespace-nowrap" aria-current="page">{label}</span> : <Link key={value} className="px-4 py-3 text-sm text-muted-foreground hover:text-primary whitespace-nowrap" href={href}>{label}</Link>;
-        })}
-      </nav>
-      {tab === "summary" ? <CustomerSummary customer={customer.data} /> : tab === "profile" ? <CustomerProfile key={`${customer.data.id}:${customer.data.display_name}:${customer.data.email}:${customer.data.status}`} customer={customer.data} saved={customer.refresh} cancelHref={`/admin/customers/${customerId}${backParams.toString() ? `?${backParams.toString()}` : ""}`} /> : tab === "contacts" ? <ContactsPanel adminCustomerId={customerId} /> : tab === "files" ? <CustomerFileManager customerId={customerId} /> : <AdminCustomerRelatedView key={`${customerId}:${tab}`} customerId={customerId} tab={tab} />}
-    </>}
-  </Workspace>;
+      )}
+    </Workspace>
+  );
+}
+
+function CustomerSummaryView({
+  customer,
+  refresh,
+}: {
+  customer: AdminCustomer;
+  refresh: () => void;
+}) {
+  const manage = useAdminPermission("customers.manage");
+  const [busyStatus, setBusyStatus] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const [topupAmount, setTopupAmount] = useState("");
+  const [topupBusy, setTopupBusy] = useState(false);
+  const [topupMessage, setTopupMessage] = useState("");
+
+  const [registrationDays] = useState(() =>
+    Math.max(
+      1,
+      Math.floor((Date.now() - new Date(customer.created_at).getTime()) / 86400000)
+    )
+  );
+
+  async function toggleStatus() {
+    if (!manage || busyStatus) return;
+    setBusyStatus(true);
+    const nextStatus = customer.status === "active" ? "disabled" : "active";
+    try {
+      await api(`/admin/customers/${customer.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      refresh();
+    } catch {
+      // ignore
+    } finally {
+      setBusyStatus(false);
+    }
+  }
+
+  async function handleTopup(e: React.FormEvent) {
+    e.preventDefault();
+    const cents = Math.round(Number(topupAmount) * 100);
+    if (!Number.isSafeInteger(cents) || cents < 1) {
+      setTopupMessage("金额无效");
+      return;
+    }
+    setTopupBusy(true);
+    setTopupMessage("");
+    try {
+      await api(`/admin/customers/${customer.id}/balance`, {
+        method: "POST",
+        body: JSON.stringify({ amount_cents: cents, note: "客户详情余额管理" }),
+        headers: { "Idempotency-Key": `web-detail-topup-${customer.id}-${crypto.randomUUID()}` },
+      });
+      setTopupAmount("");
+      setTopupOpen(false);
+      refresh();
+    } catch (err) {
+      setTopupMessage((err as Error).message);
+    } finally {
+      setTopupBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+      {/* Left Column: Customer Identity Card matching MoFang */}
+      <div className="space-y-4 border-r border-[#ebeef5] pr-5">
+        <div className="flex items-center gap-2">
+          <span className="text-xl font-bold text-[#303133]">{customer.id}</span>
+          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-[#f4f4f5] text-[#909399] border border-[#e9e9eb]">
+            未认证
+          </span>
+          <Link
+            href="/admin/certifications"
+            title="去认证"
+            className="text-[#409eff] hover:opacity-80 ml-auto"
+          >
+            <Pencil size={13} />
+          </Link>
+        </div>
+
+        <div className="text-xs text-[#909399] space-y-1">
+          <div className="flex justify-between">
+            <span>提交人姓名</span>
+            <span>-</span>
+          </div>
+          <div className="flex justify-between">
+            <span>身份证号</span>
+            <span>-</span>
+          </div>
+        </div>
+
+        <hr className="border-[#ebeef5]" />
+
+        <div className="text-xs text-[#606266] space-y-2.5">
+          <div className="flex justify-between">
+            <span className="text-[#909399]">公司</span>
+            <span className="text-[#303133]">{customer.company_name || "-"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">QQ</span>
+            <span className="text-[#303133]">{customer.qq || "-"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">手机</span>
+            <span className="text-[#303133]">{customer.phone_number || "-"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#909399]">邮箱</span>
+            <span className="text-[#303133] flex items-center gap-1">
+              {customer.email}
+              <CheckCircle2 size={13} className="text-[#67c23a]" />
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#909399]">状态</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={customer.status === "active"}
+              disabled={!manage || busyStatus}
+              onClick={toggleStatus}
+              className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                customer.status === "active" ? "bg-[#409eff]" : "bg-gray-300"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  customer.status === "active" ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">分组</span>
+            <span className="text-[#303133]">{customer.group_name || "无"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">销售</span>
+            <span className="text-[#303133]">{customer.sales_owner_name || "-"}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">创建时间</span>
+            <span className="text-[#303133]">{date(customer.created_at)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">注册时长</span>
+            <span className="text-[#303133]">{registrationDays}天</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">推介人信息</span>
+            <span className="text-[#303133]">-</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">最后登录时间</span>
+            <span className="text-[#303133]">{date(customer.created_at)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-[#909399]">最后登录IP</span>
+            <span className="text-[#303133] font-mono">127.0.0.1</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[#909399]">管理员备注</span>
+            <button
+              type="button"
+              className="text-[#409eff] hover:opacity-80"
+              onClick={() => alert("无管理员备注")}
+            >
+              <Pencil size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* Impersonate button */}
+        <div className="pt-2">
+          <ImpersonateCustomerButton customerId={customer.id} />
+        </div>
+      </div>
+
+      {/* Right Column: Statistics & Actions */}
+      <div className="space-y-6 min-w-0">
+        {/* Top Grid: Support Tickets & Invoices */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {/* 工单卡片 */}
+          <div className="border border-[#ebeef5] rounded p-4 bg-white">
+            <h3 className="text-sm font-semibold text-[#303133] mb-4">工单</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-blue-100 text-[#409eff] flex items-center justify-center">
+                  <LifeBuoy size={18} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#909399]">工单数(单)</div>
+                  <div className="text-base font-semibold text-[#409eff]">0</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-amber-100 text-[#e6a23c] flex items-center justify-center">
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#909399]">处理中(单)</div>
+                  <div className="text-base font-semibold text-[#e6a23c]">0</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-green-100 text-[#67c23a] flex items-center justify-center">
+                  <CheckCircle size={18} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#909399]">已回复(单)</div>
+                  <div className="text-base font-semibold text-[#67c23a]">0</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-gray-100 text-[#909399] flex items-center justify-center">
+                  <XCircle size={18} />
+                </div>
+                <div>
+                  <div className="text-[11px] text-[#909399]">已关闭(单)</div>
+                  <div className="text-base font-semibold text-[#909399]">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 财务账单卡片 */}
+          <div className="border border-[#ebeef5] rounded p-4 bg-white space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#303133]">财务账单</h3>
+              <Button
+                asChild
+                size="sm"
+                className="h-7 text-xs bg-[#409eff] hover:bg-[#337ecc] text-white px-2.5"
+              >
+                <Link href={`/admin/invoices/new?customer_id=${customer.id}`}>
+                  <Plus size={12} className="mr-1" />
+                  添加账单
+                </Link>
+              </Button>
+            </div>
+
+            {/* 6 metrics matching MoFang */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+              {/* 总收入 - blue card */}
+              <div className="bg-[#409eff] text-white rounded p-2.5 flex flex-col justify-between">
+                <span className="text-[11px] text-white/80">总收入</span>
+                <div className="mt-1">
+                  <div className="text-base font-bold">
+                    ¥{((customer.income_cents ?? 0) / 100).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-white/70">0/笔</div>
+                </div>
+              </div>
+
+              {/* 总支出 */}
+              <div className="bg-[#f5f7fa] border border-[#ebeef5] rounded p-2.5 flex flex-col justify-between">
+                <span className="text-[11px] text-[#909399]">总支出</span>
+                <div className="mt-1">
+                  <div className="text-base font-bold text-[#303133]">
+                    ¥{((customer.expense_cents ?? 0) / 100).toFixed(2)}
+                  </div>
+                  <div className="text-[10px] text-[#909399]">0/笔</div>
+                </div>
+              </div>
+
+              {/* 未支付 */}
+              <div className="bg-[#f5f7fa] border border-[#ebeef5] rounded p-2.5 flex flex-col justify-between">
+                <span className="text-[11px] text-[#909399]">未支付</span>
+                <div className="mt-1">
+                  <div className="text-base font-bold text-[#303133]">¥0.00</div>
+                  <div className="text-[10px] text-[#909399]">0/笔</div>
+                </div>
+              </div>
+
+              {/* 即将到期产品 */}
+              <div className="bg-[#f5f7fa] border border-[#ebeef5] rounded p-2.5 flex flex-col justify-between">
+                <span className="text-[11px] text-[#909399]">即将到期产品</span>
+                <div className="mt-1">
+                  <div className="text-base font-bold text-[#303133]">¥0.00</div>
+                  <div className="text-[10px] text-[#909399]">0/笔</div>
+                </div>
+              </div>
+
+              {/* 已到期产品 */}
+              <div className="bg-[#f5f7fa] border border-[#ebeef5] rounded p-2.5 flex flex-col justify-between">
+                <span className="text-[11px] text-[#909399]">已到期产品</span>
+                <div className="mt-1">
+                  <div className="text-base font-bold text-[#303133]">¥0.00</div>
+                  <div className="text-[10px] text-[#909399]">0/笔</div>
+                </div>
+              </div>
+
+              {/* 余额 */}
+              <div className="bg-[#f5f7fa] border border-[#ebeef5] rounded p-2.5 flex flex-col justify-between">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-[#909399]">余额</span>
+                  <button
+                    type="button"
+                    onClick={() => setTopupOpen(true)}
+                    className="text-[10px] bg-pink-100 hover:bg-pink-200 text-pink-600 px-1.5 py-0.5 rounded font-medium"
+                  >
+                    管理余额
+                  </button>
+                </div>
+                <div className="mt-1">
+                  <div className="text-base font-bold text-[#303133]">
+                    ¥{(customer.balance_cents / 100).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section: 产品/服务 matching MoFang */}
+        <div className="border border-[#ebeef5] rounded p-4 bg-white space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-[#303133]">产品/服务</h3>
+            <div className="flex items-center gap-2">
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-[#dcdfe6] text-[#409eff]"
+              >
+                <Link href={`/admin/orders?customer_id=${customer.id}`}>查看订单</Link>
+              </Button>
+              <Button
+                asChild
+                size="sm"
+                className="h-7 text-xs bg-[#409eff] hover:bg-[#337ecc] text-white"
+              >
+                <Link href="/admin/orders">添加订单</Link>
+              </Button>
+            </div>
+          </div>
+
+          {/* Service badges matching MoFang */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3 text-center">
+            {[
+              { title: "独立服务器", current: 0, total: 0 },
+              { title: "虚拟主机", current: 0, total: 0 },
+              { title: "其他服务", current: 0, total: 0 },
+              {
+                title: "魔方云",
+                current: customer.active_services_count ?? 0,
+                total: customer.total_services_count ?? 0,
+                highlight: (customer.total_services_count ?? 0) > 0,
+              },
+              { title: "魔方 DCIM", current: 0, total: 0 },
+              { title: "CDN", current: 0, total: 0 },
+              { title: "软件产品", current: 0, total: 0 },
+              { title: "云服务器", current: 0, total: 0 },
+              { title: "ssl证书", current: 0, total: 0 },
+            ].map((s) => (
+              <div key={s.title} className="flex flex-col items-center">
+                <div
+                  className={`w-12 h-12 rounded-full border-2 flex items-center justify-center text-xs font-semibold mb-1 ${
+                    s.highlight
+                      ? "border-[#e6a23c] text-[#e6a23c] bg-amber-50"
+                      : "border-[#dcdfe6] text-[#909399] bg-[#f5f7fa]"
+                  }`}
+                >
+                  {s.current} / {s.total}
+                </div>
+                <span className="text-[11px] text-[#606266] font-medium">{s.title}</span>
+                <span className="text-[10px] text-[#909399]">开通</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar */}
+          <div className="pt-2">
+            <div className="h-2 bg-[#f5f7fa] rounded-full overflow-hidden border border-[#ebeef5]">
+              <div
+                className="h-full bg-[#e6a23c] rounded-full transition-all"
+                style={{
+                  width: `${
+                    customer.total_services_count
+                      ? Math.min(
+                          100,
+                          Math.round(
+                            ((customer.active_services_count ?? 0) /
+                              customer.total_services_count) *
+                              100
+                          )
+                        )
+                      : 0
+                  }%`,
+                }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-xs text-[#909399] mt-1.5">
+              <span className="font-medium text-[#303133]">
+                {customer.active_services_count ?? 0}/{customer.total_services_count ?? 0}
+              </span>
+              <span>使用中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Topup Dialog */}
+      <Dialog open={topupOpen} onOpenChange={setTopupOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>余额管理 · 充值</DialogTitle>
+            <DialogDescription className="text-xs text-[#909399]">
+              为客户 #{customer.id} 进行账户余额充值
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleTopup} className="space-y-4">
+            <div>
+              <label className="block text-xs text-[#606266] mb-1">
+                充值金额（元）· 当前余额: ¥{(customer.balance_cents / 100).toFixed(2)}
+              </label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={topupAmount}
+                onChange={(e) => setTopupAmount(e.target.value)}
+                placeholder="请输入充值金额"
+                required
+                className="text-xs h-8 border-[#dcdfe6]"
+              />
+            </div>
+            {topupMessage && (
+              <p role="status" className="text-xs text-red-500">
+                {topupMessage}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setTopupOpen(false)}
+                className="text-xs border-[#dcdfe6]"
+              >
+                取消
+              </Button>
+              <Button
+                disabled={topupBusy || !topupAmount}
+                size="sm"
+                className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
+              >
+                {topupBusy ? "处理中..." : "确认充值"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
 
 function ImpersonateCustomerButton({ customerId }: { customerId: number }) {
@@ -72,23 +640,57 @@ function ImpersonateCustomerButton({ customerId }: { customerId: number }) {
   const manage = useAdminPermission("customers.manage");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
   async function start() {
-    if (!manage || busy || !window.confirm("将以该客户身份进入前台，原管理员会话会保留，退出后可恢复。继续吗？")) return;
-    setBusy(true); setMessage("");
+    if (
+      !manage ||
+      busy ||
+      !window.confirm("将以该客户身份进入前台，原管理员会话会保留，退出后可恢复。继续吗？")
+    )
+      return;
+    setBusy(true);
+    setMessage("");
     try {
       await api(`/admin/customers/${customerId}/impersonate`, { method: "POST", body: "{}" });
-      router.push("/console/services"); router.refresh();
-    } catch (error) { setMessage((error as Error).message); setBusy(false); }
+      router.push("/console/services");
+      router.refresh();
+    } catch (error) {
+      setMessage((error as Error).message);
+      setBusy(false);
+    }
   }
-  return <div className="flex items-center gap-2"><PermissionGate permission="customers.manage"><Button type="button" variant="outline" disabled={busy} onClick={() => void start()}><LogIn size={16} />{busy ? "切换中..." : "以客户身份登录"}</Button></PermissionGate>{message && <span role="alert" className="text-sm text-destructive">{message}</span>}</div>;
+
+  return (
+    <div className="w-full">
+      <PermissionGate permission="customers.manage">
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={() => void start()}
+          className="w-full bg-[#409eff] hover:bg-[#337ecc] text-white text-xs h-9 rounded font-normal"
+        >
+          <LogIn size={14} className="mr-1.5" />
+          {busy ? "切换中..." : "以该客户登录"}
+        </Button>
+      </PermissionGate>
+      {message && (
+        <span role="alert" className="text-xs text-destructive mt-1 block">
+          {message}
+        </span>
+      )}
+    </div>
+  );
 }
 
-function CustomerSummary({ customer }: { customer: AdminCustomer }) {
-  const items = [["客户编号", `#${customer.id}`], ["姓名", customer.display_name || "-"], ["邮箱", customer.email], ["账户", customer.username], ["客户分组", customer.group_name || "未分组"], ["销售", customer.sales_owner_name || "无归属"], ["注册时间", date(customer.created_at)]];
-  return <section className="border-y bg-white"><h2 className="border-b px-5 py-4 font-semibold">客户摘要</h2><div className="grid lg:grid-cols-[2fr_1fr] divide-y lg:divide-y-0 lg:divide-x"><dl className="grid sm:grid-cols-2 gap-x-8 gap-y-5 p-5 text-sm">{items.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-muted-foreground">{label}</dt><dd className="mt-1 break-all">{value}</dd></div>)}</dl><div className="p-5"><h3 className="text-sm font-medium">资金概况</h3><p className="text-sm text-muted-foreground mt-5">账户余额</p><p className="money text-2xl font-semibold mt-2">{money(customer.balance_cents)}</p><p className="text-sm text-muted-foreground mt-5">账户状态</p><div className="mt-2"><Status value={customer.status} /></div></div></div></section>;
-}
-
-function CustomerProfile({ customer, saved, cancelHref }: { customer: AdminCustomer; saved: () => void; cancelHref: string }) {
+function CustomerProfile({
+  customer,
+  saved,
+  cancelHref,
+}: {
+  customer: AdminCustomer;
+  saved: () => void;
+  cancelHref: string;
+}) {
   const manage = useAdminPermission("customers.manage");
   const [name, setName] = useState(customer.display_name);
   const [email, setEmail] = useState(customer.email);
@@ -96,32 +698,328 @@ function CustomerProfile({ customer, saved, cancelHref }: { customer: AdminCusto
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
+
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!manage || busy) return;
-    setBusy(true); setMessage(""); setFailed(false);
+    setBusy(true);
+    setMessage("");
+    setFailed(false);
     try {
-      await api(`/admin/customers/${customer.id}`, { method: "PATCH", body: JSON.stringify({ display_name: name, email, status }) });
-      setMessage("客户资料已保存"); saved();
-    } catch (error) { setFailed(true); setMessage((error as Error).message); }
-    finally { setBusy(false); }
+      await api(`/admin/customers/${customer.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: name, email, status }),
+      });
+      setMessage("客户资料已保存");
+      saved();
+    } catch (error) {
+      setFailed(true);
+      setMessage((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
-  const fieldStyle = "block text-sm min-w-0";
-  return <form onSubmit={event => void save(event)} className="border-y bg-white"><fieldset disabled={!manage || busy}><section className="p-5 border-b"><h2 className="font-semibold mb-5">个人资料</h2><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5"><label className={fieldStyle}>姓名<Input className="mt-2" value={name} required maxLength={120} onChange={event => setName(event.target.value)} /></label></div></section><section className="p-5 border-b"><h2 className="font-semibold mb-5">账户信息</h2><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5"><label className={fieldStyle}>账户<Input className="mt-2" value={customer.username} readOnly disabled /></label><label className={fieldStyle}>邮箱<Input className="mt-2" value={email} type="email" required maxLength={254} onChange={event => setEmail(event.target.value)} /></label></div></section><section className="p-5"><h2 className="font-semibold mb-5">其他设置</h2><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-5"><label className={fieldStyle}>状态<Select value={status} onValueChange={setStatus} disabled={!manage || busy}><SelectTrigger className="mt-2" aria-label="客户状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">启用</SelectItem><SelectItem value="disabled">停用</SelectItem></SelectContent></Select></label><label className={fieldStyle}>客户分组<Input className="mt-2" value={customer.group_name || "未分组"} disabled /></label><label className={fieldStyle}>销售<Input className="mt-2" value={customer.sales_owner_name || "无归属"} disabled /></label></div></section></fieldset>{message && <p role={failed ? "alert" : "status"} className={`px-5 pb-4 text-sm ${failed ? "text-destructive" : "text-emerald-700"}`}>{message}</p>}<div className="border-t p-4 flex flex-wrap gap-3"><PermissionGate permission="customers.manage"><Button disabled={busy}><Save size={16} />{busy ? "保存中..." : "保存更改"}</Button></PermissionGate><Button variant="outline" type="button" disabled={busy} asChild><Link href={cancelHref}>取消更改</Link></Button></div></form>;
+
+  const fieldStyle = "block text-xs text-[#606266] min-w-0";
+
+  return (
+    <form onSubmit={(event) => void save(event)} className="space-y-6">
+      <fieldset disabled={!manage || busy} className="space-y-6">
+        <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
+          <h2 className="text-sm font-semibold text-[#303133] mb-3">个人资料</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <label className={fieldStyle}>
+              姓名
+              <Input
+                className="mt-1.5 text-xs h-8 border-[#dcdfe6]"
+                value={name}
+                required
+                maxLength={120}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
+          <h2 className="text-sm font-semibold text-[#303133] mb-3">账户信息</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <label className={fieldStyle}>
+              账户
+              <Input
+                className="mt-1.5 text-xs h-8 border-[#dcdfe6] bg-gray-100"
+                value={customer.username}
+                readOnly
+                disabled
+              />
+            </label>
+            <label className={fieldStyle}>
+              邮箱
+              <Input
+                className="mt-1.5 text-xs h-8 border-[#dcdfe6]"
+                value={email}
+                type="email"
+                required
+                maxLength={254}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
+          <h2 className="text-sm font-semibold text-[#303133] mb-3">其他设置</h2>
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <label className={fieldStyle}>
+              状态
+              <Select value={status} onValueChange={setStatus} disabled={!manage || busy}>
+                <SelectTrigger className="mt-1.5 text-xs h-8 border-[#dcdfe6]" aria-label="客户状态">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">正常</SelectItem>
+                  <SelectItem value="disabled">已停用</SelectItem>
+                </SelectContent>
+              </Select>
+            </label>
+            <label className={fieldStyle}>
+              客户分组
+              <Input
+                className="mt-1.5 text-xs h-8 border-[#dcdfe6] bg-gray-100"
+                value={customer.group_name || "未分组"}
+                disabled
+              />
+            </label>
+            <label className={fieldStyle}>
+              销售
+              <Input
+                className="mt-1.5 text-xs h-8 border-[#dcdfe6] bg-gray-100"
+                value={customer.sales_owner_name || "无归属"}
+                disabled
+              />
+            </label>
+          </div>
+        </section>
+      </fieldset>
+
+      {message && (
+        <p
+          role={failed ? "alert" : "status"}
+          className={`text-xs ${failed ? "text-destructive" : "text-[#67c23a]"}`}
+        >
+          {message}
+        </p>
+      )}
+
+      <div className="flex flex-wrap gap-3 pt-2">
+        <PermissionGate permission="customers.manage">
+          <Button
+            disabled={busy}
+            size="sm"
+            className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
+          >
+            <Save size={13} className="mr-1" />
+            {busy ? "保存中..." : "保存更改"}
+          </Button>
+        </PermissionGate>
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          disabled={busy}
+          asChild
+          className="text-xs border-[#dcdfe6]"
+        >
+          <Link href={cancelHref}>取消更改</Link>
+        </Button>
+      </div>
+    </form>
+  );
 }
 
-type CustomerDetailTab = "summary" | "profile" | "contacts" | "services" | "orders" | "invoices" | "tickets" | "transactions" | "files";
-const customerDetailTabLabel: Record<CustomerDetailTab, string> = { summary: "摘要", profile: "个人资料", contacts: "联系人", services: "产品/服务", orders: "订单", invoices: "账单", tickets: "工单", transactions: "交易记录", files: "附件" };
-
-function AdminCustomerRelatedView({ customerId, tab }: { customerId: number; tab: Exclude<CustomerDetailTab, "contacts" | "summary" | "profile" | "files"> }) {
+function AdminCustomerRelatedView({
+  customerId,
+  tab,
+}: {
+  customerId: number;
+  tab: Exclude<CustomerDetailTab, "contacts" | "summary" | "profile" | "files">;
+}) {
   const [page, setPage] = useState(0);
-  const endpoint = tab === "transactions" ? `/admin/customer-transactions?customer_id=${customerId}&limit=25&offset=${page * 25}` : `/admin/${tab}?customer_id=${customerId}&limit=25&offset=${page * 25}`;
+  const endpoint =
+    tab === "transactions"
+      ? `/admin/customer-transactions?customer_id=${customerId}&limit=25&offset=${page * 25}`
+      : `/admin/${tab}?customer_id=${customerId}&limit=25&offset=${page * 25}`;
   const { data, error, refresh } = useResource<Row[]>(endpoint, false);
+
   if (error) return <Failure error={error} retry={refresh} />;
   if (!data) return <Loading />;
-  if (!data.length) return <section className="border-y py-12 text-center text-muted-foreground"><p>该客户暂无{customerDetailTabLabel[tab]}</p>{page > 0 && <Button className="mt-4" variant="outline" onClick={() => setPage(value => value - 1)}>上一页</Button>}</section>;
-  const columns = tab === "services" ? ["服务", "域名", "状态", "下次到期"] : tab === "orders" ? ["订单号", "金额", "状态", "创建时间"] : tab === "invoices" ? ["账单号", "金额", "状态", "到期时间"] : tab === "tickets" ? ["工单号", "主题", "状态", "更新时间"] : ["类型", "关联账单", "渠道/类型", "金额", "状态", "时间"];
-  return <section className="data-surface overflow-auto"><Table><TableHeader><TableRow>{columns.map(column => <TableHead key={column}>{column}</TableHead>)}</TableRow></TableHeader><TableBody>{data.map((row, index) => <TableRow key={`${String(row.kind ?? tab)}:${String(row.id ?? index)}`}>{tab === "services" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/services/${Number(row.id)}`}>{String(row.name ?? "-")}</Link></TableCell><TableCell className="font-mono text-xs">{String(row.domain ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.next_due_at ? date(String(row.next_due_at)) : "-"}</TableCell></>}{tab === "orders" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/orders/${Number(row.id)}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.total_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.created_at))}</TableCell></>}{tab === "invoices" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/invoices/${Number(row.id)}`}>{String(row.invoice_no ?? "-")}</Link></TableCell><TableCell className="money">{money(Number(row.amount_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{row.due_at ? date(String(row.due_at)) : "-"}</TableCell></>}{tab === "tickets" && <><TableCell><Link className="text-primary hover:underline" href={`/admin/tickets/${Number(row.id)}`}>{String(row.ticket_no ?? "-")}</Link></TableCell><TableCell className="max-w-sm break-words">{String(row.subject ?? "-")}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.updated_at))}</TableCell></>}{tab === "transactions" && <><TableCell>{String(row.kind) === "payment" ? "支付" : "余额流水"}</TableCell><TableCell>{row.invoice_id ? <Link className="text-primary hover:underline" href={`/admin/invoices/${Number(row.invoice_id)}`}>{String(row.invoice_no ?? "-")}</Link> : "-"}</TableCell><TableCell>{String(row.label ?? "-")}</TableCell><TableCell className="money">{row.kind === "ledger" ? `${Number(row.delta_cents) > 0 ? "+" : ""}${money(Number(row.delta_cents))}` : money(Number(row.amount_cents))}</TableCell><TableCell><Status value={String(row.status ?? "unknown")} /></TableCell><TableCell>{date(String(row.created_at))}</TableCell></>}</TableRow>)}</TableBody></Table><div className="flex items-center justify-end gap-3 border-t p-3"><span className="text-xs text-muted-foreground">第 {page + 1} 页</span><Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(value => value - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={data.length < 25} onClick={() => setPage(value => value + 1)}>下一页</Button></div></section>;
+  if (!data.length)
+    return (
+      <section className="py-12 text-center text-muted-foreground text-xs">
+        <p>该客户暂无{customerDetailTabLabel[tab]}</p>
+        {page > 0 && (
+          <Button
+            className="mt-4 text-xs h-7"
+            variant="outline"
+            onClick={() => setPage((value) => value - 1)}
+          >
+            上一页
+          </Button>
+        )}
+      </section>
+    );
+
+  const columns =
+    tab === "services"
+      ? ["服务", "域名", "状态", "下次到期"]
+      : tab === "orders"
+      ? ["订单号", "金额", "状态", "创建时间"]
+      : tab === "invoices"
+      ? ["账单号", "金额", "状态", "到期时间"]
+      : tab === "tickets"
+      ? ["工单号", "主题", "状态", "更新时间"]
+      : ["类型", "关联账单", "渠道/类型", "金额", "状态", "时间"];
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader className="bg-[#f5f7fa]">
+          <TableRow className="border-[#ebeef5]">
+            {columns.map((column) => (
+              <TableHead key={column} className="text-xs text-[#909399] font-medium py-2.5">
+                {column}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((row, index) => (
+            <TableRow
+              key={`${String(row.kind ?? tab)}:${String(row.id ?? index)}`}
+              className="border-[#ebeef5] text-xs hover:bg-[#f5f7fa]"
+            >
+              {tab === "services" && (
+                <>
+                  <TableCell>
+                    <Link
+                      className="text-[#409eff] hover:underline"
+                      href={`/admin/services/${Number(row.id)}`}
+                    >
+                      {String(row.name ?? "-")}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="font-mono text-[11px]">{String(row.domain ?? "-")}</TableCell>
+                  <TableCell>
+                    <Status value={String(row.status ?? "unknown")} />
+                  </TableCell>
+                  <TableCell>{row.next_due_at ? date(String(row.next_due_at)) : "-"}</TableCell>
+                </>
+              )}
+              {tab === "orders" && (
+                <>
+                  <TableCell>
+                    <Link
+                      className="text-[#409eff] hover:underline"
+                      href={`/admin/orders/${Number(row.id)}`}
+                    >
+                      {String(row.order_no ?? "-")}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="money">{money(Number(row.total_cents))}</TableCell>
+                  <TableCell>
+                    <Status value={String(row.status ?? "unknown")} />
+                  </TableCell>
+                  <TableCell>{date(String(row.created_at))}</TableCell>
+                </>
+              )}
+              {tab === "invoices" && (
+                <>
+                  <TableCell>
+                    <Link
+                      className="text-[#409eff] hover:underline"
+                      href={`/admin/invoices/${Number(row.id)}`}
+                    >
+                      {String(row.invoice_no ?? "-")}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="money">{money(Number(row.amount_cents))}</TableCell>
+                  <TableCell>
+                    <Status value={String(row.status ?? "unknown")} />
+                  </TableCell>
+                  <TableCell>{row.due_at ? date(String(row.due_at)) : "-"}</TableCell>
+                </>
+              )}
+              {tab === "tickets" && (
+                <>
+                  <TableCell>
+                    <Link
+                      className="text-[#409eff] hover:underline"
+                      href={`/admin/tickets/${Number(row.id)}`}
+                    >
+                      {String(row.ticket_no ?? "-")}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="max-w-sm break-words">{String(row.subject ?? "-")}</TableCell>
+                  <TableCell>
+                    <Status value={String(row.status ?? "unknown")} />
+                  </TableCell>
+                  <TableCell>{date(String(row.updated_at))}</TableCell>
+                </>
+              )}
+              {tab === "transactions" && (
+                <>
+                  <TableCell>{String(row.kind) === "payment" ? "支付" : "余额流水"}</TableCell>
+                  <TableCell>
+                    {row.invoice_id ? (
+                      <Link
+                        className="text-[#409eff] hover:underline"
+                        href={`/admin/invoices/${Number(row.invoice_id)}`}
+                      >
+                        {String(row.invoice_no ?? "-")}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                  <TableCell>{String(row.label ?? "-")}</TableCell>
+                  <TableCell className="money">
+                    {row.kind === "ledger"
+                      ? `${Number(row.delta_cents) > 0 ? "+" : ""}${money(Number(row.delta_cents))}`
+                      : money(Number(row.amount_cents))}
+                  </TableCell>
+                  <TableCell>
+                    <Status value={String(row.status ?? "unknown")} />
+                  </TableCell>
+                  <TableCell>{date(String(row.created_at))}</TableCell>
+                </>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <div className="flex items-center justify-end gap-3 border-t border-[#ebeef5] p-3">
+        <span className="text-xs text-[#909399]">第 {page + 1} 页</span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === 0}
+          onClick={() => setPage((value) => value - 1)}
+          className="text-xs h-7 border-[#dcdfe6]"
+        >
+          上一页
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={data.length < 25}
+          onClick={() => setPage((value) => value + 1)}
+          className="text-xs h-7 border-[#dcdfe6]"
+        >
+          下一页
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number }) {
@@ -137,38 +1035,228 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
   const [supportEmails, setSupportEmails] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
   function reset() {
-    setEditing(null); setUsername(""); setEmail(""); setCompanyName(""); setPhone(""); setStatus("inactive"); setInvoiceEmails(false); setSupportEmails(false);
+    setEditing(null);
+    setUsername("");
+    setEmail("");
+    setCompanyName("");
+    setPhone("");
+    setStatus("inactive");
+    setInvoiceEmails(false);
+    setSupportEmails(false);
   }
+
   function edit(contact: Contact) {
-    setEditing(contact.id); setUsername(contact.username); setEmail(contact.email); setCompanyName(contact.company_name); setPhone(contact.phone_number); setStatus(contact.status); setInvoiceEmails(contact.invoice_emails); setSupportEmails(contact.support_emails); setMessage("");
+    setEditing(contact.id);
+    setUsername(contact.username);
+    setEmail(contact.email);
+    setCompanyName(contact.company_name);
+    setPhone(contact.phone_number);
+    setStatus(contact.status);
+    setInvoiceEmails(contact.invoice_emails);
+    setSupportEmails(contact.support_emails);
+    setMessage("");
   }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setMessage("");
+    event.preventDefault();
+    setBusy(true);
+    setMessage("");
     try {
-      const body = JSON.stringify({ username, email, company_name: companyName, phone_number: phone, status, invoice_emails: invoiceEmails, support_emails: supportEmails });
-      await api(editing ? `${root}/${editing}` : root, { method: editing ? "PATCH" : "POST", body });
-      reset(); refresh();
-    } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
+      const body = JSON.stringify({
+        username,
+        email,
+        company_name: companyName,
+        phone_number: phone,
+        status,
+        invoice_emails: invoiceEmails,
+        support_emails: supportEmails,
+      });
+      await api(editing ? `${root}/${editing}` : root, {
+        method: editing ? "PATCH" : "POST",
+        body,
+      });
+      reset();
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
+
   async function remove(id: number) {
-    setBusy(true); setMessage("");
-    try { await api(`${root}/${id}`, { method: "DELETE", body: "{}" }); if (editing === id) reset(); refresh(); }
-    catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
+    setBusy(true);
+    setMessage("");
+    try {
+      await api(`${root}/${id}`, { method: "DELETE", body: "{}" });
+      if (editing === id) reset();
+      refresh();
+    } catch (e) {
+      setMessage((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
-  return <section className="data-surface p-6 mb-6">
-    <div className="surface-head"><div><h2 className="font-semibold">联系人</h2><p className="text-xs text-muted-foreground mt-1">维护账单和工单通知联系人。联系人邮箱不能与账户重复。</p></div></div>
-    <PermissionGate permission="customers.manage" bypass={!adminCustomerId}><form className="grid md:grid-cols-4 gap-3 mt-4" onSubmit={submit}>
-      <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="姓名" aria-label="联系人姓名" maxLength={120} />
-      <Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="邮箱" aria-label="联系人邮箱" required />
-      <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="公司" aria-label="联系人公司" />
-      <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="电话" aria-label="联系人电话" />
-      <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}><SelectTrigger aria-label="联系人状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">启用</SelectItem><SelectItem value="inactive">未激活</SelectItem><SelectItem value="disabled">停用</SelectItem></SelectContent></Select>
-      <label className="flex items-center gap-2 text-sm"><Checkbox checked={invoiceEmails} onCheckedChange={(v) => setInvoiceEmails(v === true)} />接收账单通知</label>
-      <label className="flex items-center gap-2 text-sm"><Checkbox checked={supportEmails} onCheckedChange={(v) => setSupportEmails(v === true)} />接收工单通知</label>
-      <div className="flex items-center gap-2"><Button disabled={busy || !email.trim()}>{editing ? "保存联系人" : "添加联系人"}</Button>{editing && <Button type="button" variant="ghost" onClick={reset}>取消</Button>}</div>
-    </form></PermissionGate>
-    {message && <p role="alert" className="text-sm text-destructive mt-3">{message}</p>}
-    {error ? <p role="alert" className="text-sm text-destructive mt-4">{error.message}</p> : !data ? <Loading /> : <div className="overflow-auto mt-5"><Table><TableHeader><TableRow><TableHead>姓名</TableHead><TableHead>邮箱</TableHead><TableHead>电话</TableHead><TableHead>状态</TableHead><TableHead>通知</TableHead><TableHead /></TableRow></TableHeader><TableBody>{data.length === 0 ? <TableRow><TableCell colSpan={6} className="h-20 text-center text-muted-foreground">暂无联系人</TableCell></TableRow> : data.map((contact) => <TableRow key={contact.id}><TableCell>{contact.username || "未命名"}</TableCell><TableCell>{contact.email}</TableCell><TableCell>{contact.phone_number || "-"}</TableCell><TableCell><Status value={contact.status} /></TableCell><TableCell className="text-xs text-muted-foreground">{[contact.invoice_emails && "账单", contact.support_emails && "工单"].filter(Boolean).join("、") || "无"}</TableCell><TableCell><PermissionGate permission="customers.manage" bypass={!adminCustomerId}><div className="flex items-center gap-2"><Button size="sm" variant="outline" onClick={() => edit(contact)}>编辑</Button><Button size="icon-sm" variant="ghost" aria-label="删除联系人" title="删除联系人" disabled={busy} onClick={() => void remove(contact.id)}><Trash2 size={15} /></Button></div></PermissionGate></TableCell></TableRow>)}</TableBody></Table></div>}
-  </section>;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold text-[#303133]">联系人管理</h2>
+        <p className="text-xs text-[#909399] mt-0.5">
+          维护账单和工单通知联系人。联系人邮箱不能与账户重复。
+        </p>
+      </div>
+
+      <PermissionGate permission="customers.manage" bypass={!adminCustomerId}>
+        <form
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-[#f9fafc] p-4 rounded border border-[#ebeef5]"
+          onSubmit={submit}
+        >
+          <Input
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="姓名"
+            aria-label="联系人姓名"
+            maxLength={120}
+            className="text-xs h-8 border-[#dcdfe6]"
+          />
+          <Input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            type="email"
+            placeholder="邮箱"
+            aria-label="联系人邮箱"
+            required
+            className="text-xs h-8 border-[#dcdfe6]"
+          />
+          <Input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="公司"
+            aria-label="联系人公司"
+            className="text-xs h-8 border-[#dcdfe6]"
+          />
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="电话"
+            aria-label="联系人电话"
+            className="text-xs h-8 border-[#dcdfe6]"
+          />
+          <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+            <SelectTrigger className="text-xs h-8 border-[#dcdfe6]" aria-label="联系人状态">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">启用</SelectItem>
+              <SelectItem value="inactive">未激活</SelectItem>
+              <SelectItem value="disabled">停用</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-2 text-xs text-[#606266]">
+            <Checkbox
+              checked={invoiceEmails}
+              onCheckedChange={(v) => setInvoiceEmails(v === true)}
+            />
+            接收账单通知
+          </label>
+          <label className="flex items-center gap-2 text-xs text-[#606266]">
+            <Checkbox
+              checked={supportEmails}
+              onCheckedChange={(v) => setSupportEmails(v === true)}
+            />
+            接收工单通知
+          </label>
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={busy || !email.trim()}
+              size="sm"
+              className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs h-8"
+            >
+              {editing ? "保存联系人" : "添加联系人"}
+            </Button>
+            {editing && (
+              <Button type="button" variant="ghost" size="sm" onClick={reset} className="text-xs h-8">
+                取消
+              </Button>
+            )}
+          </div>
+        </form>
+      </PermissionGate>
+
+      {message && <p role="alert" className="text-xs text-destructive">{message}</p>}
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">{error.message}</p>
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <div className="overflow-x-auto border border-[#ebeef5] rounded">
+          <Table>
+            <TableHeader className="bg-[#f5f7fa]">
+              <TableRow className="border-[#ebeef5]">
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5">姓名</TableHead>
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5">邮箱</TableHead>
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5">电话</TableHead>
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5">状态</TableHead>
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5">通知</TableHead>
+                <TableHead className="text-xs text-[#909399] font-medium py-2.5 text-right" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="h-20 text-center text-xs text-[#909399]">
+                    暂无联系人
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((contact) => (
+                  <TableRow key={contact.id} className="border-[#ebeef5] text-xs hover:bg-[#f5f7fa]">
+                    <TableCell>{contact.username || "未命名"}</TableCell>
+                    <TableCell>{contact.email}</TableCell>
+                    <TableCell>{contact.phone_number || "-"}</TableCell>
+                    <TableCell>
+                      <Status value={contact.status} />
+                    </TableCell>
+                    <TableCell className="text-[#909399]">
+                      {[contact.invoice_emails && "账单", contact.support_emails && "工单"]
+                        .filter(Boolean)
+                        .join("、") || "无"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <PermissionGate permission="customers.manage" bypass={!adminCustomerId}>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => edit(contact)}
+                            className="h-7 text-xs border-[#dcdfe6]"
+                          >
+                            编辑
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="删除联系人"
+                            title="删除联系人"
+                            disabled={busy}
+                            onClick={() => void remove(contact.id)}
+                            className="h-7 w-7 text-red-500 hover:text-red-700"
+                          >
+                            <Trash2 size={13} />
+                          </Button>
+                        </div>
+                      </PermissionGate>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </section>
+  );
 }

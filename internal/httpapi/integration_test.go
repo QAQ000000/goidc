@@ -483,6 +483,46 @@ func TestAdminCanEditAndDisableCustomer(t *testing.T) {
 	}
 }
 
+func TestAdminCanCreateCustomer(t *testing.T) {
+	db, h := testServer(t)
+	_, admin := user(t, db, h, "creator-admin", "super_admin")
+	_, staff := user(t, db, h, "regular-customer", "customer")
+
+	forbidden := request(h, "POST", "/api/v1/admin/customers", map[string]any{
+		"username":     "newcust1",
+		"email":        "newcust1@example.test",
+		"password":     "password123",
+		"display_name": "新客户",
+	}, staff, "")
+	expect(t, forbidden, 403)
+
+	created := request(h, "POST", "/api/v1/admin/customers", map[string]any{
+		"username":     "newcust1",
+		"email":        "newcust1@example.test",
+		"password":     "password123",
+		"display_name": "新客户",
+		"status":       "active",
+		"company_name": "测试网络公司",
+		"phone":        "13800138000",
+	}, admin, "")
+	expect(t, created, 201)
+
+	listed := request(h, "GET", "/api/v1/admin/customers?q=newcust1", nil, admin, "")
+	expect(t, listed, 200)
+	items := listData(t, listed)
+	if len(items) != 1 || items[0]["company_name"] != "测试网络公司" {
+		t.Fatalf("created customer list mismatch: %s", listed.Body.String())
+	}
+
+	conflict := request(h, "POST", "/api/v1/admin/customers", map[string]any{
+		"username":     "newcust1",
+		"email":        "newcust1@example.test",
+		"password":     "password123",
+		"display_name": "重复客户",
+	}, admin, "")
+	expect(t, conflict, 409)
+}
+
 func TestAuthenticationEventsAreAudited(t *testing.T) {
 	db, h := testServer(t)
 	customerID, cookie := user(t, db, h, "audit-login", "customer")

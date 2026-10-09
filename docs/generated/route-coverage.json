@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-09T02:54:17.904Z",
+  "generated_at": "2026-10-09T13:49:15.446Z",
   "source": {
     "legacy_inventory": "docs/generated/legacy-inventory.json",
     "inventory_sha256": "d5873eca5a4c689fa290fbdfa2836364589bddde9976bac641340db654450ba9",
@@ -30,13 +30,13 @@
     "review_manifest": "docs/audit/route-reviews.json",
     "review_manifest_sha256": "74355e85349417619a76d6e93b457906295e7b25ea9540021af96c3c592f4b42",
     "go_router": "internal/httpapi/server.go",
-    "go_router_sha256": "ce892dd6bbd3c859cdd9d006e9d43a95807c062d4ad11afcbd7c42547d4baa63"
+    "go_router_sha256": "794ddcde7eb3694a70ea8398b85e848277452800d50689858eef91489c0803d1"
   },
   "disclaimer": "Source-call counts include duplicates and inactive declarations. covered/frontend_replaced map capabilities/pages, not old URL/payload compatibility. Missing candidates remain missing; source drift is explicit. Only matched with wire tests asserts protocol compatibility.",
   "summary": {
     "legacy_route_calls": 1352,
-    "current_go_route_registrations": 348,
-    "current_go_unique_routes": 348,
+    "current_go_route_registrations": 349,
+    "current_go_unique_routes": 349,
     "exact_method_path_candidates": 1,
     "unreviewed_routes": 0,
     "reviewed_routes": 1352,

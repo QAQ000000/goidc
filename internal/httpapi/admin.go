@@ -8,6 +8,7 @@ import (
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
@@ -24,7 +25,20 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) customers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	s.list(w, r, "SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name FROM users u LEFT JOIN users owner ON owner.id=u.sales_owner_id LEFT JOIN customer_group_members gm ON gm.customer_id=u.id LEFT JOIN customer_groups g ON g.id=gm.group_id WHERE u.role='customer' AND admin_customer_allowed($4,u.id) AND (u.display_name ILIKE $1 OR u.email ILIKE $1) ORDER BY u.id DESC LIMIT $2 OFFSET $3", "%"+r.URL.Query().Get("q")+"%", limit, offset, identityFrom(r).ID)
+	s.list(w, r, `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,
+ u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name,
+ (SELECT count(*) FROM services s WHERE s.user_id=u.id AND s.status='active')::bigint AS active_services_count,
+ (SELECT count(*) FROM services s WHERE s.user_id=u.id)::bigint AS total_services_count,
+ (SELECT coalesce(sum(CASE WHEN l.delta_cents > 0 THEN l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS income_cents,
+ (SELECT coalesce(sum(CASE WHEN l.delta_cents < 0 THEN -l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS expense_cents,
+ (SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1) AS company_name,
+ (SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1) AS phone_number
+ FROM users u
+ LEFT JOIN users owner ON owner.id=u.sales_owner_id
+ LEFT JOIN customer_group_members gm ON gm.customer_id=u.id
+ LEFT JOIN customer_groups g ON g.id=gm.group_id
+ WHERE u.role='customer' AND admin_customer_allowed($4,u.id) AND (u.display_name ILIKE $1 OR u.email ILIKE $1 OR u.username ILIKE $1)
+ ORDER BY u.id DESC LIMIT $2 OFFSET $3`, "%"+r.URL.Query().Get("q")+"%", limit, offset, identityFrom(r).ID)
 }
 
 func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +46,20 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name FROM users u LEFT JOIN users owner ON owner.id=u.sales_owner_id LEFT JOIN customer_group_members gm ON gm.customer_id=u.id LEFT JOIN customer_groups g ON g.id=gm.group_id WHERE u.role='customer' AND u.id=$1 AND admin_customer_allowed($2,u.id)`, id, identityFrom(r).ID)
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,
+ u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name,
+ (SELECT count(*) FROM services s WHERE s.user_id=u.id AND s.status='active')::bigint AS active_services_count,
+ (SELECT count(*) FROM services s WHERE s.user_id=u.id)::bigint AS total_services_count,
+ (SELECT coalesce(sum(CASE WHEN l.delta_cents > 0 THEN l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS income_cents,
+ (SELECT coalesce(sum(CASE WHEN l.delta_cents < 0 THEN -l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS expense_cents,
+ (SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1) AS company_name,
+ (SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1) AS phone_number,
+ (SELECT c.wechat_id FROM customer_contacts c WHERE c.customer_id=u.id AND c.wechat_id != '' ORDER BY c.id ASC LIMIT 1) AS qq
+ FROM users u
+ LEFT JOIN users owner ON owner.id=u.sales_owner_id
+ LEFT JOIN customer_group_members gm ON gm.customer_id=u.id
+ LEFT JOIN customer_groups g ON g.id=gm.group_id
+ WHERE u.role='customer' AND u.id=$1 AND admin_customer_allowed($2,u.id)`, id, identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -139,6 +166,151 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, http.StatusOK, map[string]any{"user_id": id, "status": input.Status})
+}
+
+func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Username     string  `json:"username"`
+		Email        string  `json:"email"`
+		Password     string  `json:"password"`
+		DisplayName  string  `json:"display_name"`
+		Status       *string `json:"status"`
+		GroupID      *int64  `json:"group_id"`
+		SalesOwnerID *int64  `json:"sales_owner_id"`
+		CompanyName  string  `json:"company_name"`
+		Phone        string  `json:"phone"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	email := strings.ToLower(strings.TrimSpace(input.Email))
+	if email == "" || len(email) > 254 {
+		writeError(w, http.StatusBadRequest, "invalid_email", "邮箱格式无效")
+		return
+	}
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email {
+		writeError(w, http.StatusBadRequest, "invalid_email", "邮箱格式无效")
+		return
+	}
+	username := strings.TrimSpace(input.Username)
+	if username == "" {
+		username = strings.Split(email, "@")[0]
+	}
+	if len(username) < 2 || len(username) > 64 {
+		writeError(w, http.StatusBadRequest, "invalid_username", "用户名长度需在2-64位之间")
+		return
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		displayName = username
+	}
+	if len(displayName) > 120 {
+		writeError(w, http.StatusBadRequest, "invalid_customer", "姓名长度无效")
+		return
+	}
+	password := input.Password
+	if len(password) < 6 || len(password) > 128 {
+		writeError(w, http.StatusBadRequest, "invalid_password", "密码长度需在6-128位之间")
+		return
+	}
+	status := "active"
+	if input.Status != nil && *input.Status != "" {
+		if *input.Status != "active" && *input.Status != "disabled" {
+			writeError(w, http.StatusBadRequest, "invalid_status", "客户状态无效")
+			return
+		}
+		status = *input.Status
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	var conflict bool
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE username=$1 OR email=$2)", username, email).Scan(&conflict); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if conflict {
+		writeError(w, http.StatusConflict, "user_conflict", "用户名或邮箱已被使用")
+		return
+	}
+
+	var salesOwnerID *int64
+	if input.SalesOwnerID != nil && *input.SalesOwnerID > 0 {
+		var ownerExists bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='admin' AND sales_enabled)", *input.SalesOwnerID).Scan(&ownerExists); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if ownerExists {
+			salesOwnerID = input.SalesOwnerID
+		}
+	}
+
+	var id int64
+	if err = tx.QueryRow(r.Context(),
+		"INSERT INTO users(username,email,password_hash,display_name,role,status,sales_owner_id,email_verified) VALUES($1,$2,$3,$4,'customer',$5,$6,true) RETURNING id",
+		username, email, string(hash), displayName, status, salesOwnerID).Scan(&id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	if _, err = tx.Exec(r.Context(), "INSERT INTO carts(user_id) VALUES($1)", id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	if input.GroupID != nil && *input.GroupID > 0 {
+		if _, err = tx.Exec(r.Context(), "INSERT INTO customer_group_members(customer_id, group_id) VALUES($1, $2) ON CONFLICT DO NOTHING", id, *input.GroupID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+
+	companyName := strings.TrimSpace(input.CompanyName)
+	phone := strings.TrimSpace(input.Phone)
+	if companyName != "" || phone != "" {
+		if _, err = tx.Exec(r.Context(),
+			"INSERT INTO customer_contacts(customer_id, username, email, company_name, phone_number, status) VALUES($1, $2, $3, $4, $5, 'active') ON CONFLICT DO NOTHING",
+			id, displayName, email, companyName, phone); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.created", "user", id, map[string]any{
+		"username":     username,
+		"email":        email,
+		"display_name": displayName,
+		"status":       status,
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+
+	write(w, http.StatusCreated, map[string]any{
+		"id":           id,
+		"username":     username,
+		"email":        email,
+		"display_name": displayName,
+		"status":       status,
+	})
 }
 
 func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {

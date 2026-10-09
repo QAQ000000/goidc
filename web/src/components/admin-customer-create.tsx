@@ -1,0 +1,440 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { HelpCircle } from "lucide-react";
+import { api, type CustomerGroup } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Workspace } from "./workspace";
+
+type SalesOwner = { id: number; username: string; display_name: string };
+
+export function AdminCustomerCreateView() {
+  const router = useRouter();
+  const groupsResource = useResource<CustomerGroup[]>("/admin/customer-groups", false);
+  const salesResource = useResource<SalesOwner[]>("/admin/sales-owners", false);
+
+  // 个人资料
+  const [name, setName] = useState("");
+  const [gender, setGender] = useState("");
+  const [company, setCompany] = useState("");
+  const [country, setCountry] = useState("中国");
+  const [province, setProvince] = useState("");
+  const [address, setAddress] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [channel, setChannel] = useState("");
+
+  // 账户信息
+  const [phonePrefix, setPhonePrefix] = useState("+86");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [qq, setQq] = useState("");
+  const [password, setPassword] = useState("");
+
+  // 其他设置
+  const [paymentMethod, setPaymentMethod] = useState("bank");
+  const [language, setLanguage] = useState("zh_CN");
+  const [salesOwner, setSalesOwner] = useState("none");
+  const [customerGroup, setCustomerGroup] = useState("none");
+  const [status, setStatus] = useState("active");
+  const [adminNote, setAdminNote] = useState("");
+  const [receiveMarketing, setReceiveMarketing] = useState(true);
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setError("");
+
+    if (!name.trim()) {
+      setError("请输入姓名");
+      return;
+    }
+    if (!email.trim()) {
+      setError("请输入邮箱");
+      return;
+    }
+    if (!password.trim() || password.length < 6) {
+      setError("请输入至少6位密码");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        display_name: name.trim(),
+        username: phone.trim() || email.split("@")[0] || name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        status,
+        company_name: company.trim(),
+        phone: phone.trim() ? `${phonePrefix} ${phone.trim()}` : "",
+      };
+
+      if (customerGroup !== "none") {
+        payload.group_id = Number(customerGroup);
+      }
+      if (salesOwner !== "none") {
+        payload.sales_owner_id = Number(salesOwner);
+      }
+
+      const res = await api<{ id: number }>("/admin/customers", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      router.push(`/admin/customers/${res.id}`);
+      router.refresh();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Workspace title="添加客户" admin>
+      <div className="space-y-5">
+        <h1 className="text-xl font-bold text-[#303133]">添加客户</h1>
+
+        <form onSubmit={submit} className="space-y-5">
+          {/* 个人资料 */}
+          <section className="bg-white rounded border border-[#ebeef5] overflow-hidden shadow-sm">
+            <div className="bg-[#f4f6fa] px-4 py-2.5 border-b border-[#ebeef5]">
+              <h2 className="text-sm font-medium text-[#303133]">个人资料</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">
+                    <span className="text-red-500 mr-1">*</span>姓名
+                  </label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder=""
+                    required
+                    className="h-9 border-[#dcdfe6] focus-visible:border-[#409eff]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">性别</label>
+                  <Select value={gender} onValueChange={setGender}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue placeholder="请选择性别" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">男</SelectItem>
+                      <SelectItem value="female">女</SelectItem>
+                      <SelectItem value="unknown">未知</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">所在公司</label>
+                  <Input
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">国家</label>
+                  <Input
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">省</label>
+                  <Input
+                    value={province}
+                    onChange={(e) => setProvince(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">地址</label>
+                  <Input
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">邮编</label>
+                  <Input
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">了解途径</label>
+                  <Input
+                    value={channel}
+                    onChange={(e) => setChannel(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 账户信息 */}
+          <section className="bg-white rounded border border-[#ebeef5] overflow-hidden shadow-sm">
+            <div className="bg-[#f4f6fa] px-4 py-2.5 border-b border-[#ebeef5]">
+              <h2 className="text-sm font-medium text-[#303133]">账户信息</h2>
+            </div>
+            <div className="p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">手机</label>
+                  <div className="flex">
+                    <Select value={phonePrefix} onValueChange={setPhonePrefix}>
+                      <SelectTrigger className="h-9 w-20 rounded-r-none border-[#dcdfe6] border-r-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="+86">+86</SelectItem>
+                        <SelectItem value="+852">+852</SelectItem>
+                        <SelectItem value="+1">+1</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="请输入手机号码"
+                      className="h-9 rounded-l-none border-[#dcdfe6]"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">
+                    <span className="text-red-500 mr-1">*</span>邮箱
+                  </label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder=""
+                    required
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">QQ</label>
+                  <Input
+                    value={qq}
+                    onChange={(e) => setQq(e.target.value)}
+                    placeholder=""
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">
+                    <span className="text-red-500 mr-1">*</span>密码
+                  </label>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder=""
+                    required
+                    minLength={6}
+                    className="h-9 border-[#dcdfe6]"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* 其他设置 */}
+          <section className="bg-white rounded border border-[#ebeef5] overflow-hidden shadow-sm">
+            <div className="bg-[#f4f6fa] px-4 py-2.5 border-b border-[#ebeef5]">
+              <h2 className="text-sm font-medium text-[#303133]">其他设置</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#606266] mb-1.5">
+                    支付方式
+                    <HelpCircle size={13} className="text-[#909399]" />
+                  </label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank">银行转账</SelectItem>
+                      <SelectItem value="alipay">支付宝</SelectItem>
+                      <SelectItem value="wechat">微信支付</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#606266] mb-1.5">
+                    语言
+                    <HelpCircle size={13} className="text-[#909399]" />
+                  </label>
+                  <Select value={language} onValueChange={setLanguage}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="zh_CN">中文简体</SelectItem>
+                      <SelectItem value="en_US">English</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#606266] mb-1.5">
+                    销售
+                    <HelpCircle size={13} className="text-[#909399]" />
+                  </label>
+                  <Select value={salesOwner} onValueChange={setSalesOwner}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue placeholder="无" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      {salesResource.data?.map((owner) => (
+                        <SelectItem key={owner.id} value={String(owner.id)}>
+                          {owner.display_name || owner.username}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#606266] mb-1.5">
+                    客户分组
+                    <HelpCircle size={13} className="text-[#909399]" />
+                  </label>
+                  <Select value={customerGroup} onValueChange={setCustomerGroup}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue placeholder="无" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">无</SelectItem>
+                      {groupsResource.data?.map((group) => (
+                        <SelectItem key={group.id} value={String(group.id)}>
+                          {group.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="flex items-center gap-1 text-xs font-medium text-[#606266] mb-1.5">
+                    状态
+                    <HelpCircle size={13} className="text-[#909399]" />
+                  </label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger className="h-9 border-[#dcdfe6]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">正常</SelectItem>
+                      <SelectItem value="disabled">已停用</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+                <div>
+                  <label className="block text-xs font-medium text-[#606266] mb-1.5">管理员备注</label>
+                  <Textarea
+                    value={adminNote}
+                    onChange={(e) => setAdminNote(e.target.value)}
+                    rows={2}
+                    className="border-[#dcdfe6] text-xs"
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-4">
+                  <span className="text-xs font-medium text-[#606266]">接收营销信息</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={receiveMarketing}
+                    onClick={() => setReceiveMarketing(!receiveMarketing)}
+                    className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      receiveMarketing ? "bg-[#409eff]" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        receiveMarketing ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {error && (
+            <div role="alert" className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              type="submit"
+              disabled={busy}
+              className="bg-[#409eff] hover:bg-[#337ecc] text-white px-6 h-9 font-normal text-sm rounded shadow-none"
+            >
+              {busy ? "添加中..." : "添加客户"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => router.push("/admin/customers")}
+              className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] px-6 h-9 font-normal text-sm rounded"
+            >
+              返回
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setName("");
+                setEmail("");
+                setPassword("");
+                setPhone("");
+                setCompany("");
+              }}
+              className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] px-6 h-9 font-normal text-sm rounded"
+            >
+              取消添加
+            </Button>
+          </div>
+        </form>
+      </div>
+    </Workspace>
+  );
+}

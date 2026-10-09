@@ -1,6 +1,7 @@
 "use client";
 import { AdminCustomerDetailView, ContactsPanel } from "./admin-customer-detail";
 import { AccountVerification } from "./account-verification";
+import { AdminCustomersView } from "./admin-customers";
 export { AdminCustomerDetailView } from "./admin-customer-detail";
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { SupplierServiceDelivery } from "./supplier-delivery";
@@ -34,11 +35,7 @@ import {
   CreditCard,
   KeyRound,
   Copy,
-  ContactRound,
   Tag,
-  UserRoundCog,
-  Save,
-  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,31 +140,7 @@ function Stat({
 
 
 export function CustomersView() {
-  return (
-    <AdminListView
-      kind="customers"
-      title="客户管理"
-      description="客户账号与余额"
-      endpoint="/admin/customers"
-      actions={<Button variant="outline" asChild><Link href="/admin/customer-groups"><Users size={16} />管理客户分组</Link></Button>}
-      columns={[
-        { key: "id", label: "ID" },
-        { key: "display_name", label: "姓名", render: (r, _refresh, returnQuery) => <Link className="font-medium text-primary hover:underline" href={`/admin/customers/${r.id}${returnQuery ? `?${returnQuery}` : ""}`}>{String(r.display_name || r.username || "未命名客户")}</Link> },
-        { key: "email", label: "邮箱 / 账号", render: (r) => <div><span className="block">{String(r.email || "-")}</span><span className="block text-xs text-muted-foreground">{String(r.username || "-")}</span></div> },
-        { key: "group_name", label: "客户分组", render: (r) => String(r.group_name ?? "未分组") },
-        { key: "status", label: "状态", render: (r) => <Status value={String(r.status)} /> },
-        { key: "sales_owner_name", label: "销售归属", render: (r) => String(r.sales_owner_name ?? "无归属") },
-        {
-          key: "balance_cents",
-          label: "余额",
-          render: (r) => (
-            <span className="money">{money(Number(r.balance_cents))}</span>
-          ),
-        },
-        { key: "actions", label: "操作", render: (r, refresh, returnQuery) => <CustomerActions row={r} refresh={refresh} returnQuery={returnQuery ? `?${returnQuery}` : ""} /> },
-      ]}
-    />
-  );
+  return <AdminCustomersView />;
 }
 
 export function CustomerGroupsView() {
@@ -217,187 +190,6 @@ export function PromoCodesView() {
     catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   return <Workspace title="优惠码" admin><PageHeading title="优惠码" description="配置购买折扣、循环续费和升级优惠"><p className="text-xs text-muted-foreground max-w-sm">升级专用优惠只在商品升级差额上生效，不影响首购、续费或降级返还。</p></PageHeading><PermissionGate permission="promos.manage"><section className="data-surface p-4 mb-5"><h2 className="mb-4 text-sm font-semibold">新增优惠码</h2><form className="grid md:grid-cols-[1fr_8rem_7rem_7rem_auto] gap-3 items-center" onSubmit={create}><label className="grid gap-2 text-sm">优惠码<Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="优惠码" aria-label="优惠码" maxLength={50} required /></label><label className="grid gap-2 text-sm">优惠类型<Select value={discountType} onValueChange={(v) => { setDiscountType(v as typeof discountType); setRecurring(false); setRecurringLimit("0"); }}><SelectTrigger aria-label="优惠类型"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percent">百分比</SelectItem><SelectItem value="fixed">固定金额（分）</SelectItem><SelectItem value="free">免初装费</SelectItem></SelectContent></Select></label><label className="grid gap-2 text-sm">优惠值<Input type="number" min={discountType === "free" ? 0 : 1} max={discountType === "percent" ? 100 : undefined} value={value} onChange={(e) => setValue(e.target.value)} aria-label="优惠值" disabled={discountType === "free"} /></label><label className="grid gap-2 text-sm">最多使用次数<Input type="number" min="0" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} aria-label="最大发码次数" placeholder="不限次数" /></label><Button className="md:self-end" disabled={busy || !code.trim()}><Plus size={16} />新增</Button><label className="flex items-center gap-2 text-sm"><Checkbox checked={oncePerCustomer} onCheckedChange={(v) => setOncePerCustomer(v === true)} />每客户一次</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={onlyNewCustomer} onCheckedChange={(v) => setOnlyNewCustomer(v === true)} />仅新客户</label><label className="flex items-center gap-2 text-sm md:col-span-3"><Checkbox checked={recurring} disabled={discountType === "free" || upgradeOnly || busy} onCheckedChange={(v) => setRecurring(v === true)} />循环续费优惠</label>{recurring&&<label className="grid gap-2 text-sm md:col-span-3">每件服务优惠续费次数（0为不限）<Input type="number" min={0} max={10000} required disabled={busy} value={recurringLimit} onChange={e=>setRecurringLimit(e.target.value)} aria-label="优惠续费次数"/></label>}<label className="flex items-center gap-2 text-sm md:col-span-3"><Checkbox checked={upgradeOnly} disabled={recurring || discountType === "free" || busy} onCheckedChange={(v) => { setUpgradeOnly(v === true); setRecurring(false); }} />仅用于商品升级</label></form>{message && <p role="alert" className="text-sm text-destructive mt-3">{message}</p>}</section></PermissionGate><AdminStatusTabs label="本页优惠码状态" value={promoStatus} states={{active:"已启用",inactive:"已停用"}} onChange={setPromoStatus}/>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <div className="admin-list-surface data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>代码</TableHead><TableHead>类型</TableHead><TableHead>值</TableHead><TableHead>发码次数</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{visiblePromos.length === 0 ? <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">暂无优惠码</TableCell></TableRow> : visiblePromos.map((item) => <TableRow key={item.id}><TableCell>{item.id}</TableCell><TableCell className="font-mono"><Tag size={14} className="inline mr-2" />{item.code}{item.recurring && <span className="block text-xs text-muted-foreground mt-1 font-sans">循环续费 · {item.recurring_limit>0?`${item.recurring_limit} 次 / 件`:"不限次数"}</span>}{item.upgrade_only && <span className="block text-xs text-muted-foreground mt-1 font-sans">仅升级</span>}</TableCell><TableCell>{item.discount_type === "percent" ? "百分比" : item.discount_type === "fixed" ? "固定金额" : "免初装费"}</TableCell><TableCell>{item.discount_type === "percent" ? `${item.value}%` : item.discount_type === "fixed" ? money(item.value) : "初装费"}</TableCell><TableCell>{item.used_count}{item.max_uses > 0 ? ` / ${item.max_uses}` : " / 不限"}</TableCell><TableCell><Status value={item.active ? "active" : "disabled"} /></TableCell><TableCell><PermissionGate permission="promos.manage"><Button size="sm" variant="outline" disabled={busy} onClick={() => void toggle(item)}>{item.active ? "停用" : "启用"}</Button></PermissionGate></TableCell></TableRow>)}</TableBody></Table></div>}</Workspace>;
-}
-
-function CustomerBalanceAction({ row, refresh, onBusyChange }: { row: Row; refresh: () => void; onBusyChange: (busy: boolean) => void }) {
-  const [amount, setAmount] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const cents = Math.round(Number(amount) * 100);
-    if (!Number.isSafeInteger(cents) || cents < 1) {
-      setMessage("金额无效");
-      return;
-    }
-    setBusy(true);
-    onBusyChange(true);
-    setMessage("");
-    try {
-      await api(`/admin/customers/${Number(row.id)}/balance`, {
-        method: "POST",
-        body: JSON.stringify({ amount_cents: cents, note: "管理台充值" }),
-        headers: { "Idempotency-Key": `web-topup-${row.id}-${crypto.randomUUID()}` },
-      });
-      setAmount("");
-      setMessage("已充值");
-      refresh();
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
-    }
-  }
-  return (
-    <form className="flex flex-wrap items-center gap-2" onSubmit={submit}>
-      <Input
-        className="flex-1 min-w-0"
-        type="number"
-        min="0.01"
-        step="0.01"
-        value={amount}
-        onChange={(event) => setAmount(event.target.value)}
-        placeholder="金额"
-        aria-label="充值金额（元）"
-        disabled={busy}
-      />
-      <Button size="sm" variant="outline" disabled={busy}>
-        充值
-      </Button>
-      {message && <p role="status" className="w-full text-sm break-words">{message}</p>}
-    </form>
-  );
-}
-
-function CustomerActionDialog({ row, title, icon: Icon, children }: { row: Row; title: string; icon: typeof Users; children: (onBusyChange: (busy: boolean) => void) => React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  return <><Button size="icon-sm" variant="outline" title={title} aria-label={`${title} ${row.username}`} onClick={() => setOpen(true)}><Icon /></Button><Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}><DialogContent className="grid-cols-[minmax(0,1fr)]"><DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription className="break-all">{String(row.display_name)}</DialogDescription></DialogHeader>{open && children(setBusy)}</DialogContent></Dialog></>;
-}
-
-function CustomerActions({ row, refresh, returnQuery }: { row: Row; refresh: () => void; returnQuery: string }) {
-  const detailHref = `/admin/customers/${Number(row.id)}${returnQuery}`;
-  return (
-    <div className="flex items-center gap-2">
-      <Button size="sm" variant="outline" asChild><Link href={`${detailHref}${detailHref.includes("?") ? "&" : "?"}tab=contacts`}><ContactRound size={14} />联系人</Link></Button>
-      <PermissionGate permission="customer_files.view"><Button size="sm" variant="outline" asChild><Link href={`/admin/customers/${Number(row.id)}/files`}>客户文件</Link></Button></PermissionGate>
-      <PermissionGate permission="@super"><CustomerSalesAction row={row} refresh={refresh} /></PermissionGate>
-      <PermissionGate permission="customers.manage"><CustomerActionDialog row={row} title="编辑客户" icon={Pencil}>{onBusyChange => <CustomerProfileAction row={row} refresh={refresh} onBusyChange={onBusyChange} />}</CustomerActionDialog><CustomerActionDialog row={row} title="重置密码" icon={KeyRound}>{onBusyChange => <CustomerPasswordAction row={row} onBusyChange={onBusyChange} />}</CustomerActionDialog></PermissionGate>
-      <PermissionGate permission="balance.manage"><CustomerActionDialog row={row} title="余额充值" icon={CreditCard}>{onBusyChange => <CustomerBalanceAction row={row} refresh={refresh} onBusyChange={onBusyChange} />}</CustomerActionDialog></PermissionGate>
-    </div>
-  );
-}
-
-type SalesOwner = { id: number; username: string; display_name: string };
-function CustomerSalesAction({ row, refresh }: { row: Row; refresh: () => void }) {
-  const [open, setOpen] = useState(false);
-  const [owner, setOwner] = useState("none");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const directory = useResource<SalesOwner[]>(open ? "/admin/sales-owners" : null, false);
-  const currentOwner = row.sales_owner_id == null ? "none" : String(row.sales_owner_id);
-  const historicalOwner = currentOwner !== "none" && directory.data && !directory.data.some(item => String(item.id) === currentOwner);
-  async function save(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (busy || owner === currentOwner) return;
-    setBusy(true); setError("");
-    try {
-      await api(`/admin/customers/${Number(row.id)}/sales-owner`, { method: "PUT", body: JSON.stringify({ sales_owner_id: owner === "none" ? null : Number(owner), expected_version: Number(row.sales_version) }) });
-      setOpen(false); refresh();
-    } catch (e) { setError((e as Error).message); refresh(); }
-    finally { setBusy(false); }
-  }
-  return <>
-    <Button size="icon-sm" variant="outline" title="调整销售归属" aria-label={`调整 ${row.display_name} 的销售归属`} onClick={() => { setOwner(currentOwner); setError(""); setOpen(true); }}><UserRoundCog /></Button>
-    <Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}><DialogContent className="grid-cols-[minmax(0,1fr)]"><DialogHeader><DialogTitle>销售归属</DialogTitle><DialogDescription className="break-all">{String(row.display_name)}</DialogDescription></DialogHeader>
-      {directory.error ? <Failure error={directory.error} retry={directory.refresh} /> : !directory.data ? <Loading /> : <form onSubmit={save} className="space-y-4"><Select value={owner} onValueChange={setOwner} disabled={busy}><SelectTrigger className="w-full" aria-label="销售管理员"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">无归属</SelectItem>{historicalOwner && <SelectItem value={currentOwner} disabled>{String(row.sales_owner_name)}（不可新分配）</SelectItem>}{directory.data.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.display_name} · {item.username}</SelectItem>)}</SelectContent></Select>
-        {error && <p role="alert" className="text-destructive text-sm">{error}</p>}<div className="flex justify-end"><Button disabled={busy || owner === currentOwner}><Save />{busy ? "保存中" : "保存归属"}</Button></div>
-      </form>}
-    </DialogContent></Dialog>
-  </>;
-}
-
-function CustomerProfileAction({ row, refresh, onBusyChange }: { row: Row; refresh: () => void; onBusyChange: (busy: boolean) => void }) {
-  const canAssignGroup = useAdminPermission("customer_groups.manage");
-  const [displayName, setDisplayName] = useState(String(row.display_name ?? ""));
-  const [email, setEmail] = useState(String(row.email ?? ""));
-  const [status, setStatus] = useState(String(row.status ?? "active"));
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const { data: groups } = useResource<CustomerGroup[]>("/admin/customer-groups");
-  const [groupID, setGroupID] = useState(String(row.group_id ?? "none"));
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    onBusyChange(true);
-    setMessage("");
-    try {
-      await api(`/admin/customers/${Number(row.id)}`, { method: "PATCH", body: JSON.stringify({ display_name: displayName, email, status }) });
-      if (canAssignGroup) await api(`/admin/customers/${Number(row.id)}/group`, { method: "PUT", body: JSON.stringify({ group_id: groupID === "none" ? null : Number(groupID) }) });
-      setMessage("已保存");
-      refresh();
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
-    }
-  }
-  return <form className="space-y-4 min-w-0" onSubmit={submit}><fieldset disabled={busy} className="space-y-4 min-w-0">
-    <label className="grid gap-2 text-sm">姓名<Input value={displayName} onChange={(event) => setDisplayName(event.target.value)} aria-label="客户姓名" maxLength={120} required /></label>
-    <label className="grid gap-2 text-sm">邮箱<Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} aria-label="客户邮箱" maxLength={254} required /></label>
-    <Select value={status} onValueChange={setStatus}><SelectTrigger className="w-full" aria-label="客户状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">启用</SelectItem><SelectItem value="disabled">停用</SelectItem></SelectContent></Select>
-    {canAssignGroup && <Select value={groupID} onValueChange={setGroupID}><SelectTrigger className="w-full" aria-label="客户分组"><SelectValue placeholder="客户分组" /></SelectTrigger><SelectContent><SelectItem value="none">未分组</SelectItem>{groups?.map((group) => <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>)}</SelectContent></Select>}
-    <div className="flex justify-end"><Button disabled={busy}><Save />保存资料</Button></div>
-    {message && <p role="status" className="text-sm break-words">{message}</p>}
-  </fieldset>
-  </form>;
-}
-
-function CustomerPasswordAction({ row, onBusyChange }: { row: Row; onBusyChange: (busy: boolean) => void }) {
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (password.length < 8 || password.length > 72) {
-      setMessage("密码需为 8-72 位");
-      return;
-    }
-    setBusy(true);
-    onBusyChange(true);
-    setMessage("");
-    try {
-      await api(`/admin/customers/${Number(row.id)}/password`, {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      });
-      setPassword("");
-      setMessage("已重置");
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
-    }
-  }
-  return (
-    <form className="flex flex-wrap items-center gap-2" onSubmit={submit}>
-      <Input
-        className="flex-1 min-w-0"
-        type="password"
-        minLength={8}
-        maxLength={72}
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        placeholder="新密码"
-        aria-label="客户新密码"
-        disabled={busy}
-      />
-      <Button size="sm" variant="outline" disabled={busy}>重置密码</Button>
-      {message && <p role="status" className="w-full text-sm break-words">{message}</p>}
-    </form>
-  );
 }
 
 type Row = Record<string, unknown>;
