@@ -328,7 +328,7 @@ WHERE source=$1 AND entity=ANY($2)`, im.sourceName, im.snapshotEntities())
 			return err
 		}
 		r := current[entity][id]
-		if r == nil || checksum(jsonMap(r)) != hash {
+		if r == nil || checksum(jsonMap(archivableRecord(entity, r))) != hash {
 			return fmt.Errorf("source changed: %s/%d; incremental migration requires review", entity, id)
 		}
 		if saved[entity] == nil {
@@ -357,12 +357,25 @@ func deleted(r legacy.Record) bool {
 }
 
 func (im *importer) recordMapped(ctx context.Context, tx pgx.Tx, entity string, r legacy.Record, target, runID int64) error {
-	if err := record(ctx, tx, im.sourceName, entity, sourceID(r), runID, jsonMap(r)); err != nil {
+	if err := record(ctx, tx, im.sourceName, entity, sourceID(r), runID, jsonMap(archivableRecord(entity, r))); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO legacy_id_map(source,entity,legacy_id,target_id) VALUES($1,$2,$3,$4)
 ON CONFLICT(source,entity,legacy_id) DO UPDATE SET target_id=EXCLUDED.target_id`, im.sourceName, entity, sourceID(r), target)
 	return err
+}
+
+func archivableRecord(entity string, r legacy.Record) legacy.Record {
+	if entity != "users" || r["password"] == "" {
+		return r
+	}
+	copy := make(legacy.Record, len(r)-1)
+	for key, value := range r {
+		if key != "password" {
+			copy[key] = value
+		}
+	}
+	return copy
 }
 
 func (im *importer) currencyID() string {

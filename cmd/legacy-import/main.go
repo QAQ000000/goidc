@@ -29,11 +29,12 @@ import (
 const sourceName = "zjmf-manger-decoded"
 
 type importer struct {
-	source       legacy.Snapshot
-	report       legacy.Report
-	sourceName   string
-	uploadRoot   string
-	fileAuthorID int64
+	source         legacy.Snapshot
+	report         legacy.Report
+	sourceName     string
+	uploadRoot     string
+	fileAuthorID   int64
+	legacyAuthCode string
 }
 
 func main() {
@@ -62,7 +63,7 @@ func main() {
 	}
 	report := legacy.Inspect(snapshot, *sourceID)
 	report.Mode = *mode
-	imp := importer{source: snapshot, report: report, sourceName: *sourceID, uploadRoot: *uploadRoot, fileAuthorID: *fileAuthorID}
+	imp := importer{source: snapshot, report: report, sourceName: *sourceID, uploadRoot: *uploadRoot, fileAuthorID: *fileAuthorID, legacyAuthCode: os.Getenv("LEGACY_CMF_AUTHCODE")}
 	if *mode == "dry_run" {
 		if err = legacy.ExpandTicketAttachments(imp.source); err == nil {
 			err = imp.validate()
@@ -319,6 +320,9 @@ func (im *importer) importUsers(ctx context.Context, tx pgx.Tx, out, customerGro
 		if replayed, err := im.replay(ctx, tx, "users", r, out); err != nil {
 			return err
 		} else if replayed {
+			if err = im.upgradeReplayedUser(ctx, tx, r, out[id]); err != nil {
+				return err
+			}
 			continue
 		}
 		var target int64
@@ -326,8 +330,26 @@ func (im *importer) importUsers(ctx context.Context, tx pgx.Tx, out, customerGro
 		if err != nil {
 			return err
 		}
+		legacyHash := strings.TrimSpace(r["password"])
+		resetRequired := true
+		if legacy.ValidCMFPasswordHash(legacyHash) && strings.TrimSpace(im.legacyAuthCode) != "" {
+			hash = legacy.WrapCMFPasswordHash(legacyHash)
+			resetRequired = false
+		}
+		if resetRequired {
+			found := false
+			for _, issue := range im.report.Issues {
+				if issue.Entity == "users" && issue.LegacyID == id && issue.Code == "password_reset_required" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				im.report.Issues = append(im.report.Issues, legacy.Issue{Entity: "users", LegacyID: id, Code: "password_reset_required", Detail: map[string]any{}})
+			}
+		}
 		err = tx.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,status,balance_cents,legacy_source,legacy_id,password_reset_required)
-VALUES($1,$2,$3,$4,$5,0,$6,$7,true) ON CONFLICT (legacy_source,legacy_id) WHERE legacy_source <> '' AND legacy_id IS NOT NULL DO UPDATE SET username=EXCLUDED.username,email=EXCLUDED.email RETURNING id`, "legacy-"+strconv.FormatInt(id, 10), validEmail(r["email"], id), hash, r["username"], mapBoolStatus(r["status"]), im.sourceName, id).Scan(&target)
+VALUES($1,$2,$3,$4,$5,0,$6,$7,$8) ON CONFLICT (legacy_source,legacy_id) WHERE legacy_source <> '' AND legacy_id IS NOT NULL DO UPDATE SET username=EXCLUDED.username,email=EXCLUDED.email,password_hash=EXCLUDED.password_hash,password_reset_required=EXCLUDED.password_reset_required RETURNING id`, "legacy-"+strconv.FormatInt(id, 10), validEmail(r["email"], id), hash, r["username"], mapBoolStatus(r["status"]), im.sourceName, id, resetRequired).Scan(&target)
 		if err != nil {
 			return err
 		}
@@ -356,6 +378,16 @@ VALUES($1,$2,$3,$4,$5,0,$6,$7,true) ON CONFLICT (legacy_source,legacy_id) WHERE 
 		}
 	}
 	return nil
+}
+
+func (im *importer) upgradeReplayedUser(ctx context.Context, tx pgx.Tx, r legacy.Record, target int64) error {
+	legacyHash := strings.TrimSpace(r["password"])
+	if target < 1 || !legacy.ValidCMFPasswordHash(legacyHash) || strings.TrimSpace(im.legacyAuthCode) == "" {
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE users SET password_hash=$2,password_reset_required=false,updated_at=now()
+WHERE id=$1 AND password_reset_required=true`, target, legacy.WrapCMFPasswordHash(legacyHash))
+	return err
 }
 func mapBoolStatus(raw string) string {
 	if raw != "1" {

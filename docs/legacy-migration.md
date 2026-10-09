@@ -2,14 +2,14 @@
 
 ## 范围与状态
 
-`cmd/legacy-audit` 对旧 MySQL 做只读盘点。`cmd/legacy-import` 使用只读、可重复读事务提取明确列出的字段，再向 PostgreSQL 导入核心数据。不会读取密码、支付凭据或 API 令牌，不修改 PHP 文件或 MySQL。
+`cmd/legacy-audit` 对旧 MySQL 做只读盘点。`cmd/legacy-import` 使用只读、可重复读事务提取明确列出的字段，再向 PostgreSQL 导入核心数据。客户记录只读取旧 ThinkCMF 的单向密码哈希（不读取明文）；归档 payload 会剔除 `password` 字段。不会读取支付凭据或 API 令牌，不修改 PHP 文件或 MySQL。
 
 目前仍是迁移演练工具。完整源库有 184 张表，当前读取 30 类核心、商品配置、服务导航、下载资料、邮件模板、客户分组/联系人及工单数据，尚不能据此切换原站点。未向 `zjmfgo_dev` 导入旧数据；管理员迁移复核页面位于 `/admin/migrations`。
 
 | 源表 | 当前处理 |
 | --- | --- |
 | `shd_currencies` | 根据定义查找 CNY 的实际 ID，拒绝其他币种 |
-| `shd_clients` | 导入客户资料与 credit 余额；随机不可知密码并要求重置；状态 0/2 停用 |
+| `shd_clients` | 导入客户资料、credit 余额和旧 ThinkCMF 哈希；配置 `LEGACY_CMF_AUTHCODE` 时首次成功登录自动升级 bcrypt，否则保留随机密码并要求重置；状态 0/2 停用 |
 | `shd_products` | 导入基本商品资料及 groupid 服务归属；旧商品仍全部下架且使用人工模式，等待配置和供应商复核 |
 | `shd_product_config_groups` / `shd_product_config_links` | 保存旧配置容器、商品关联、共享标记和源身份；共享容器关联多个商品时拒绝 apply，要求先拆分复核 |
 | `shd_product_config_options` / `shd_product_config_options_sub` | 将旧配置类型转换为商品配置组/选项，保留数量上下限、步长、单位、排序、隐藏、升级和原始字段；数量组的多个区间子项折叠为一个 Go 数量选项，并用别名表保留旧子项身份；重复显示值使用稳定旧 ID 后缀并保留原值 |
@@ -99,7 +99,8 @@ schema `049_legacy_product_configuration_links.sql` 增加 `legacy_product_confi
 连接凭据从本机环境注入，禁止把实际 DSN 放入源码、报告或命令日志。第一次 apply 应使用独立测试库，核对并演练后再讨论业务库切换。
 
 ```bash
-# 已安全设置 LEGACY_MYSQL_DSN 后，仅做源数据预检
+# 已安全设置 LEGACY_MYSQL_DSN 和旧站 database.authcode 后，仅做源数据预检
+export LEGACY_CMF_AUTHCODE='<旧站 app/config/database.php 的 authcode>'
 go run ./cmd/legacy-import
 
 # DATABASE_URL 必须指向本次演练的独立 PG 库
@@ -111,6 +112,12 @@ go run ./cmd/legacy-import --mode apply --source zjmf-manger-decoded
 ```
 
 不要通过换 source 绕过变更拒绝并向同一目标重复导入。不要清空开发库或用删表模拟回滚。
+
+`LEGACY_CMF_AUTHCODE` 只用于验证旧的 `###md5(md5(authcode+password))` 哈希。导入器将
+格式有效的哈希以 `legacy_cmf$` 临时前缀存入 `users.password_hash`；客户首次登录
+成功后立即生成 bcrypt、清除前缀并关闭 `password_reset_required`。旧哈希不会写入
+`legacy_source_records`，也不会回写旧 MySQL。未设置 authcode、哈希缺失或格式无效
+时，客户继续使用随机不可知密码并要求验证码重置。
 
 ## 已验证证据
 

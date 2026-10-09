@@ -45,7 +45,9 @@ func Inspect(snapshot Snapshot, source string) Report {
 	customerGroups := index(snapshot["customer_groups"])
 	navigationGroups := index(snapshot["service_navigation_groups"])
 	for _, r := range snapshot["users"] {
-		out.issue("users", number(r, "id"), "password_reset_required", nil)
+		if !ValidCMFPasswordHash(strings.TrimSpace(r["password"])) {
+			out.issue("users", number(r, "id"), "password_reset_required", nil)
+		}
 		if group := number(r, "groupid"); group != 0 && customerGroups[group] == nil {
 			out.issue("users", number(r, "id"), "missing_customer_group", map[string]any{"group_id": group})
 		}

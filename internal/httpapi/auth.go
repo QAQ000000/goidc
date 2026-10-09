@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/legacy"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -57,11 +58,32 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	legacyHash := legacy.IsCMFPasswordHash(hash)
 	match := bcrypt.CompareHashAndPassword([]byte(hash), []byte(input.Password))
+	if match != nil && legacyHash {
+		if legacy.VerifyCMFPassword(input.Password, hash, s.cfg.LegacyCMFAuthCode) {
+			match = nil
+		}
+	}
 	if err != nil || match != nil || status != "active" {
 		s.authAudit(r.Context(), id.ID, "auth.login_failed", map[string]any{"username": strings.ToLower(strings.TrimSpace(input.Username)), "remote_addr": r.RemoteAddr})
 		writeError(w, 401, "invalid_credentials", "账号或密码错误")
 		return
+	}
+	if legacyHash && match == nil {
+		upgraded, upgradeErr := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
+		if upgradeErr != nil {
+			s.fail(w, r, upgradeErr)
+			return
+		}
+		if _, upgradeErr = s.db.Pool.Exec(r.Context(), `UPDATE users
+SET password_hash=$2,password_reset_required=false,updated_at=now()
+WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr != nil {
+			s.fail(w, r, upgradeErr)
+			return
+		}
+		resetRequired = false
+		s.authAudit(r.Context(), id.ID, "auth.legacy_password_upgraded", map[string]any{})
 	}
 	if resetRequired {
 		s.authAudit(r.Context(), id.ID, "auth.password_reset_required", map[string]any{"remote_addr": r.RemoteAddr})

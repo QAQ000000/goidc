@@ -208,13 +208,26 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
   12 账单、1 服务、2 工单、3 附件、33 邮件模板和全部配置子项。
 * PG 中服务交付快照为 1，金额写入 `amount_cents`；旧源的账单/订单不一致、
   孤儿分项和历史复核项被保留为审计 issue，不能当作迁移错误静默吞掉。
-* 4 个迁移用户均标记 `password_reset_required=true`，这是安全的显式密码
-  重置策略，不是旧密码无感登录。正式切换前必须准备验证码找回并通知客户；若
-  业务要求旧密码继续可用，需要另行实现并验收密码哈希兼容，当前 P0 不通过。
+* 旧站 `database.authcode` 通过受控环境变量 `LEGACY_CMF_AUTHCODE` 注入后，4 个
+  迁移用户均导入 `legacy_cmf$` 临时哈希并设置 `password_reset_required=false`；
+  归档的 4 条用户 payload 均不含 `password`。首次正确登录会条件升级为 bcrypt
+  并清除临时值。算法和升级路径已有隔离集成测试，但本次真实源没有可用于登录
+  验收的客户明文密码，真实账户登录仍是未验证项。
 * 完整 JSON 报告和 stderr 位于 `output/cutover-rehearsal-20261009033303/`；
   逐账单整数分对比证据位于 `output/cutover-rehearsal-20261009035840-debug/precision-summary.json`，
   12/12 条源账单逐 ID 一致，总额均为 1,807,929 分。该目录不提交敏感凭据。
   报告中的历史 issue 必须由业务负责人逐条确认后才能进入正式 apply。
+
+最新一次只读旧 MySQL 重跑在新的 `_test` PG18 库执行，设置了旧站
+`database.authcode` 的 `LEGACY_CMF_AUTHCODE`：dry-run、apply 均退出 0；4 个
+客户均得到 `legacy_cmf$` 临时哈希，4 条用户源归档均不含 `password` 字段。该
+临时库已删除，旧 MySQL 仍只读未写入。
+
+兼容登录代码构建后又执行了当前二进制的 systemd 验收：`zjmfgo-api`、`zjmfgo-web`
+和 `zjmfgo-worker` 均 active，`/healthz`、`/readyz`、首页和 `/admin-login` 均为
+200；本次启动 PID 分别为 920157、920158、920159，systemd 报告内存约 6.4、
+94.8、4.0 MiB。逐个注入受控 `SIGKILL` 后，新 PID 在约 3.17s、3.74s、3.17s
+内恢复，最终三个探针仍为 200；重启窗口的首次连接拒绝只发生在 Web 尚未监听期间。
 
 本次结果证明了工具能在隔离 PG18 冷启动并完成全实体导入，不证明旧站可以立即
 下线。正式切换前必须重新生成带生产快照校验和的报告，并完成真实支付、上游、

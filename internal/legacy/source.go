@@ -17,7 +17,7 @@ type Snapshot map[string][]Record
 var queries = []struct{ entity, query string }{
 	{"currencies", "SELECT id,code FROM shd_currencies ORDER BY id"},
 	{"customer_groups", "SELECT id,group_name,group_colour,discount_percent,susptermexempt,separateinvoices FROM shd_client_groups ORDER BY id"},
-	{"users", "SELECT id,username,email,status,currency,credit,groupid,create_time,update_time FROM shd_clients ORDER BY id"},
+	{"users", "SELECT id,username,email,password,status,currency,credit,groupid,create_time,update_time FROM shd_clients ORDER BY id"},
 	{"contacts", "SELECT id,uid,username,sex,avatar,companyname,email,wechat_id,country,province,city,region,address1,address2,postcode,phonenumber,permissions,generalemails,invoiceemails,productemails,supportemails,status,create_time,update_time FROM shd_contacts ORDER BY id"},
 	{"products", "SELECT id,name,description,type,hidden,retired,stock_control,qty,pay_type,groupid,create_time,update_time FROM shd_products ORDER BY id"},
 	{"product_config_groups", "SELECT id,name,description,upstream_id,global FROM shd_product_config_groups ORDER BY id"},
