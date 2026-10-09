@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog, Tooltip } from "radix-ui";
-import { ArrowUpRight, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronRight, Home, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
 import type { User } from "@/lib/api";
@@ -41,7 +41,12 @@ function Navigation({ user, path, close }: { user: User | null; path: string; cl
 
 function Brand({ user }: { user: User | null }) {
   return <Link className="admin-brand" href={user ? adminEntry(user) : "/admin"} aria-label="管理控制台首页">
-    <span className="admin-brand-full"><SiteBrand compact /></span>
+    <img
+      src="/assets/admin-header-logo.png"
+      alt="智简魔方"
+      className="admin-header-logo h-[30px] w-auto max-w-[150px] object-contain"
+    />
+    <span className="admin-brand-full sr-only"><SiteBrand compact /></span>
     <LayoutDashboard className="admin-brand-compact" size={24} aria-hidden="true" />
   </Link>;
 }
@@ -81,8 +86,24 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
         })}
       </nav>
       <div className="admin-global-account">
-        <Button className="admin-front-button" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight />客户中心</Link></Button>
-        {user ? <><span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span><span className="admin-user-name" title={user.display_name}>{user.display_name}</span><Button variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut /></Button></> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-muted-foreground" role="status">连接中</span>}
+        <div className="admin-header-search relative hidden md:flex items-center rounded-full bg-white/20 px-3 py-1 text-xs text-white">
+          <Search size={14} className="mr-1.5 opacity-80" />
+          <input
+            type="text"
+            placeholder="请搜索..."
+            className="w-20 bg-transparent text-xs text-white placeholder:text-white/70 outline-none transition-all focus:w-32"
+          />
+        </div>
+        <img src="/assets/country/CN.png" alt="CN" className="h-4 w-6 rounded-sm object-cover hidden sm:inline-block" />
+        {user ? <>
+          <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span>
+          <span className="admin-user-name" title={user.display_name}>{user.display_name}</span>
+          <Link href="/admin" className="admin-header-home-btn text-white/80 hover:text-white hidden sm:inline-flex items-center" title="工作台" aria-label="工作台">
+            <Home size={18} />
+          </Link>
+          <Button className="admin-front-button text-white hover:bg-white/10" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />客户中心</Link></Button>
+          <Button className="text-white hover:bg-white/10" variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut size={16} /></Button>
+        </> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-white/80" role="status">连接中</span>}
       </div>
     </div>
     <aside className="admin-sidebar">
