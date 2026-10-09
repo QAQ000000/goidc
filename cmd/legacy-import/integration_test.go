@@ -69,7 +69,7 @@ func importFixture() legacy.Snapshot {
 		"download_categories": {}, "downloads": {}, "download_products": {}, "customer_files": {},
 		"staff": {}, "ticket_departments": {}, "ticket_statuses": {}, "tickets": {}, "ticket_replies": {}, "ticket_notes": {}, "ticket_attachments": {},
 		"currencies":    {{"id": "7", "code": "CNY"}},
-		"users":         {{"id": "10", "email": "import@example.test", "username": "客户", "status": "1", "currency": "7", "credit": "100.00", "groupid": "0"}, {"id": "11", "email": "closed@example.test", "username": "关闭客户", "status": "2", "currency": "7", "credit": "0.00", "groupid": "0"}},
+		"users":         {{"id": "10", "email": "import@example.test", "username": "客户", "password": "legacy-hash-10", "status": "1", "currency": "7", "credit": "100.00", "groupid": "0"}, {"id": "11", "email": "closed@example.test", "username": "关闭客户", "password": "legacy-hash-11", "status": "2", "currency": "7", "credit": "0.00", "groupid": "0"}},
 		"products":      {{"id": "167", "name": "商品", "description": "说明", "type": "service"}},
 		"prices":        {{"id": "14696", "relid": "167", "currency": "7", "monthly": "40.00", "quarterly": "120.00", "annually": "480.00", "onetime": "-1.00", "msetupfee": "2.00", "qsetupfee": "3.00", "asetupfee": "4.00", "osetupfee": "0.00"}},
 		"orders":        {{"id": "20", "uid": "10", "invoiceid": "30", "ordernum": "IMPORT-20", "amount": "40.00", "status": "Pending", "create_time": "1700000000"}},
@@ -90,6 +90,13 @@ func TestImportPreservesMoneyMappingsAndReplay(t *testing.T) {
 	im := newImporter(snapshot)
 	if err := im.apply(ctx, db.Pool); err != nil {
 		t.Fatal(err)
+	}
+	var archived string
+	if err := db.Pool.QueryRow(ctx, "SELECT payload::text FROM legacy_source_records WHERE entity='users' AND legacy_id=10").Scan(&archived); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(archived, "legacy-hash-10") || strings.Contains(archived, `"password"`) {
+		t.Fatalf("legacy password archived: %s", archived)
 	}
 	var price, fee, orphan int64
 	var disabled, review bool

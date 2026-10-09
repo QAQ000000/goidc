@@ -201,6 +201,13 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
 
 ## 5. 本次冷启动/割接预演结果
 
+当前代码复核的强制集成测试于 2026-10-09 13:41 CST 通过：
+`./scripts/go.sh test ./cmd/legacy-import -count=1`（39.782s），包含真实旧 MySQL
+只读快照、隔离 PG18 schema、全实体导入、整数分核对、复核保护和同快照重放。原始
+测试库自动删除；最新重跑原始输出位于
+`output/cutover-rehearsal-20261009T054102Z-current/`。该目录中的 dry-run/apply
+报告保留源数据复核 issue，不能把退出码 0 解读为业务 issue 已获批准。
+
 使用真实旧 MySQL 的只读账号和旧 `public/upload`，目标为临时 PG18 数据库
 `zjmfgo_legacy_dryrun_20261009033303_test`，结束时已自动 `DROP DATABASE`。
 

@@ -1,6 +1,6 @@
 # PHP 替换准备度与路线图
 
-更新时间：2026-10-07
+更新时间：2026-10-09
 
 这份文档把“能编译、隔离测试通过”和“可以替换旧 PHP 生产站点”分开。当前项目仍处于重构阶段，不能切换旧站点，也没有声称生产等价。
 
@@ -52,6 +52,18 @@
 4. 所有 Go 命令优先使用 `scripts/go.sh`，用 `scripts/check-go-toolchain.sh` 检查版本和 GOROOT，避免本地 Go 与 `/usr/local/btgo` 混用。
 
 ## 2026-10-09 P0 生产替换终验结论：NOT READY
+
+13:41 CST 的当前代码复核重新执行了 `cmd/legacy-import` 全量真实源测试：隔离
+PG18 `_test` 数据库、旧 MySQL 只读事务、完整实体导入和同快照重放均通过，测试
+耗时 39.782s。期间修复了归档循环可能把旧 `password` 写入
+`legacy_source_records` 并导致重放误报 source changed 的缺陷；新增回归断言确认
+归档 payload 不含旧密码。原始测试库在结束时自动删除，旧 MySQL 未写入。
+
+同一工作树随后在新的隔离 PG18 `_test` 库完成
+`./scripts/go.sh test ./internal/httpapi ./internal/store -count=1`（HTTP API
+355.363s、store 0.325s）；legacy-import 及通知/调度专项 race 也通过（分别
+43.447s、10.846s、1.422s）。这些结果证明当前代码的回归和并发安全边界，不解除
+下方的真实外部链路与业务复核闸门。
 
 本次依据 [`cutover-runbook.md`](cutover-runbook.md) 完成了一次真实旧 MySQL
 只读源到临时 PG18 的冷启动割接预演，目标库为

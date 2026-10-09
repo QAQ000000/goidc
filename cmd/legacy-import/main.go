@@ -288,7 +288,7 @@ func (im *importer) apply(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 	for entity, records := range im.source {
 		for _, r := range records {
-			if err = record(ctx, tx, im.sourceName, entity, sourceID(r), runID, jsonMap(r)); err != nil {
+			if err = record(ctx, tx, im.sourceName, entity, sourceID(r), runID, jsonMap(archivableRecord(entity, r))); err != nil {
 				return im.fail(ctx, tx, pool, runID, err)
 			}
 		}
