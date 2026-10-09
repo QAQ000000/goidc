@@ -1,4 +1,11 @@
 import type { Metadata } from "next";
-export const metadata: Metadata = { robots: { index: false, follow: false } };
-import { AuthForm } from "@/components/auth-form";
-export default function Page() { return <AuthForm adminLogin />; }
+import { AdminLoginForm } from "@/components/admin-login-form";
+
+export const metadata: Metadata = {
+  title: "登录 - 财务系统",
+  robots: { index: false, follow: false },
+};
+
+export default function Page() {
+  return <AdminLoginForm />;
+}
