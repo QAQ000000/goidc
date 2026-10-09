@@ -166,6 +166,10 @@ zjmfgo-api`。若 Worker 重启，先检查 provision/outbox 任务的幂等状�
 首页、`/admin-login` 均为 200。原始日志在被 Git 忽略的
 `output/cutover-rehearsal-20261009033837Z-cold-start/`。
 
+提交 `1840b60` 后于 14:04:49 CST 再次执行三单元重启并分别轮询 API/Web：两端
+均在 326ms 内可用，三个 unit active，`/healthz`、`/readyz` 和 `/admin-login`
+均返回 200；systemd 当前 RSS 约 API 6.1MiB、Web 74.0MiB、Worker 4.0MiB。
+
 随后对每个单元注入一次受控 `SIGKILL` 验证自愈：API 3.241s、Web 3.897s、
 Worker 3.177s 内恢复到新 PID 和业务探针，三者最终 active；证据在
 `output/cutover-rehearsal-20261009040834Z-self-heal/`。探针必须允许重启瞬间的

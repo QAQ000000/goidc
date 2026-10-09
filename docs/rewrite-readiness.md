@@ -65,6 +65,10 @@ PG18 `_test` 数据库、旧 MySQL 只读事务、完整实体导入和同快照
 43.447s、10.846s、1.422s）。这些结果证明当前代码的回归和并发安全边界，不解除
 下方的真实外部链路与业务复核闸门。
 
+提交 `1840b60` 后 14:04:49 CST 再次执行三单元重启：API `/readyz` 与 Web
+`/admin-login` 分端点均在 326ms 内可用，三项 unit active，`/healthz`、`/readyz`
+和登录页均为 200；RSS 约 API 6.1MiB、Web 74.0MiB、Worker 4.0MiB。
+
 本次依据 [`cutover-runbook.md`](cutover-runbook.md) 完成了一次真实旧 MySQL
 只读源到临时 PG18 的冷启动割接预演，目标库为
 `zjmfgo_legacy_dryrun_20261009033303_test`，预演结束后已自动删除。dry-run 和
