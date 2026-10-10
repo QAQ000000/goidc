@@ -47,6 +47,7 @@ export const adminNavigation = [
   { href: "/admin/logs/email", label: "邮件日志", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/admin-login", label: "管理员登录日志", icon: History, permission: "audit.view", group: "system" },
   { href: "/admin/logs/cleanup", label: "日志清理", icon: History, permission: "@super", group: "system" },
+  { href: "/admin/logs/system", label: "系统日志", icon: History, permission: "audit.view", group: "system" },
   { href: "/admin/system/runtime", label: "运行环境", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/system/database", label: "数据库状态", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/system/upgrade", label: "升级检查", icon: Settings, permission: "settings.view", group: "system" },
