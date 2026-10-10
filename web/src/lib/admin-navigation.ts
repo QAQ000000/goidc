@@ -25,10 +25,12 @@ export const adminNavigation = [
   { href: "/admin/ticket-presets", label: "预设回复", icon: MessagesSquare, permission: "ticket_presets.view", group: "support" },
   { href: "/admin/audit", label: "操作审计", icon: History, permission: "audit.view", group: "system" },
   { href: "/admin/reports", label: "统计报表", icon: BarChart3, permission: "reports.view", group: "reports" },
-  { href: "/admin/notifications", label: "通知管理", icon: Mail, permission: "notifications.view", group: "support" },
   { href: "/admin/migrations", label: "迁移复核", icon: ClipboardCheck, permission: "migrations.view", group: "system" },
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super", group: "system" },
   { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view", group: "system" },
+  { href: "/admin/auth-settings", label: "注册与验证码", icon: ShieldCheck, permission: "settings.view", group: "system" },
+  { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
+  { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/channels", label: "接口设置", icon: Plug, permission: "@super", group: "system" },
 ];
 

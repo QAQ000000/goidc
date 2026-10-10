@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"net/mail"
 	"net/url"
 	"strings"
@@ -33,17 +34,36 @@ type SiteProfile struct {
 	EmailVerificationRequired bool   `json:"email_verification_required"`
 }
 
-type SiteSettings struct {
-	SiteProfile
-	Version   int64     `json:"version"`
-	UpdatedAt time.Time `json:"updated_at"`
+type SiteAdminSettings struct {
+	DefaultLanguage         string `json:"default_language"`
+	LanguageMenuEnabled     bool   `json:"language_menu_enabled"`
+	RecordsPerPage          int    `json:"records_per_page"`
+	FrontendCreditEnabled   bool   `json:"frontend_credit_enabled"`
+	CustomCustomerIDEnabled bool   `json:"custom_customer_id_enabled"`
+	AdminLoginDays          int    `json:"admin_login_days"`
+	FrontendIPCheck         bool   `json:"frontend_ip_check"`
+	AdminIPCheck            bool   `json:"admin_ip_check"`
+	DebugEnabled            bool   `json:"debug_enabled"`
 }
 
-const siteColumns = `site_name,description,company_name,logo_url,support_email,support_phone,address,support_url,terms_url,privacy_url,record_number,copyright,registration_enabled,maintenance_enabled,maintenance_message,maintenance_url,auth_captcha_enabled,email_verification_required,version,updated_at`
+type SiteSettings struct {
+	SiteProfile
+	AdminSettings SiteAdminSettings `json:"admin_settings"`
+	Version       int64             `json:"version"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+}
+
+const siteColumns = `site_name,description,company_name,logo_url,support_email,support_phone,address,support_url,terms_url,privacy_url,record_number,copyright,registration_enabled,maintenance_enabled,maintenance_message,maintenance_url,auth_captcha_enabled,email_verification_required,admin_settings,version,updated_at`
 
 func scanSite(row pgx.Row) (SiteSettings, error) {
 	var out SiteSettings
-	err := row.Scan(&out.Name, &out.Description, &out.CompanyName, &out.LogoURL, &out.SupportEmail, &out.SupportPhone, &out.Address, &out.SupportURL, &out.TermsURL, &out.PrivacyURL, &out.RecordNumber, &out.Copyright, &out.RegistrationEnabled, &out.MaintenanceEnabled, &out.MaintenanceMessage, &out.MaintenanceURL, &out.AuthCaptchaEnabled, &out.EmailVerificationRequired, &out.Version, &out.UpdatedAt)
+	var rawPreferences []byte
+	err := row.Scan(&out.Name, &out.Description, &out.CompanyName, &out.LogoURL, &out.SupportEmail, &out.SupportPhone, &out.Address, &out.SupportURL, &out.TermsURL, &out.PrivacyURL, &out.RecordNumber, &out.Copyright, &out.RegistrationEnabled, &out.MaintenanceEnabled, &out.MaintenanceMessage, &out.MaintenanceURL, &out.AuthCaptchaEnabled, &out.EmailVerificationRequired, &rawPreferences, &out.Version, &out.UpdatedAt)
+	if err == nil {
+		if unmarshalErr := json.Unmarshal(rawPreferences, &out.AdminSettings); unmarshalErr != nil {
+			err = unmarshalErr
+		}
+	}
 	return out, err
 }
 
@@ -98,12 +118,33 @@ func validateSite(in *SiteProfile) error {
 	return nil
 }
 
-func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHash string, in SiteProfile, expectedVersion int64, captchaEnabled *bool) (SiteSettings, error) {
+func normalizeAdminSettings(in *SiteAdminSettings) error {
+	if in.DefaultLanguage == "" {
+		in.DefaultLanguage = "zh_CN"
+	}
+	if in.DefaultLanguage != "zh_CN" && in.DefaultLanguage != "en_US" {
+		return conflict("invalid_admin_settings", "默认语言无效")
+	}
+	if in.RecordsPerPage != 10 && in.RecordsPerPage != 20 && in.RecordsPerPage != 50 && in.RecordsPerPage != 100 {
+		return conflict("invalid_admin_settings", "每页记录数无效")
+	}
+	if in.AdminLoginDays < 1 || in.AdminLoginDays > 30 {
+		return conflict("invalid_admin_settings", "管理员登录时长必须在 1-30 天之间")
+	}
+	return nil
+}
+
+func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHash string, in SiteProfile, adminSettings *SiteAdminSettings, expectedVersion int64, captchaEnabled *bool) (SiteSettings, error) {
 	if err := validateSite(&in); err != nil {
 		return SiteSettings{}, err
 	}
 	if expectedVersion < 1 {
 		return SiteSettings{}, conflict("invalid_site_version", "请提供有效站点版本")
+	}
+	if adminSettings != nil {
+		if err := normalizeAdminSettings(adminSettings); err != nil {
+			return SiteSettings{}, err
+		}
 	}
 	tx, err := settingsManagementTx(ctx, s, actorID)
 	if err != nil {
@@ -123,7 +164,14 @@ func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHa
 	if captchaEnabled == nil {
 		in.AuthCaptchaEnabled = previous.AuthCaptchaEnabled
 	}
-	out, err := scanSite(tx.QueryRow(ctx, `UPDATE site_settings SET site_name=$1,description=$2,company_name=$3,logo_url=$4,support_email=$5,support_phone=$6,address=$7,support_url=$8,terms_url=$9,privacy_url=$10,record_number=$11,copyright=$12,registration_enabled=$13,maintenance_enabled=$14,maintenance_message=$15,maintenance_url=$16,auth_captcha_enabled=$17,email_verification_required=$18,version=version+1,updated_at=now() WHERE id=1 RETURNING `+siteColumns, in.Name, in.Description, in.CompanyName, in.LogoURL, in.SupportEmail, in.SupportPhone, in.Address, in.SupportURL, in.TermsURL, in.PrivacyURL, in.RecordNumber, in.Copyright, in.RegistrationEnabled, in.MaintenanceEnabled, in.MaintenanceMessage, in.MaintenanceURL, in.AuthCaptchaEnabled, in.EmailVerificationRequired))
+	if adminSettings == nil {
+		adminSettings = &previous.AdminSettings
+	}
+	preferences, err := json.Marshal(adminSettings)
+	if err != nil {
+		return SiteSettings{}, err
+	}
+	out, err := scanSite(tx.QueryRow(ctx, `UPDATE site_settings SET site_name=$1,description=$2,company_name=$3,logo_url=$4,support_email=$5,support_phone=$6,address=$7,support_url=$8,terms_url=$9,privacy_url=$10,record_number=$11,copyright=$12,registration_enabled=$13,maintenance_enabled=$14,maintenance_message=$15,maintenance_url=$16,auth_captcha_enabled=$17,email_verification_required=$18,admin_settings=$19,version=version+1,updated_at=now() WHERE id=1 RETURNING `+siteColumns, in.Name, in.Description, in.CompanyName, in.LogoURL, in.SupportEmail, in.SupportPhone, in.Address, in.SupportURL, in.TermsURL, in.PrivacyURL, in.RecordNumber, in.Copyright, in.RegistrationEnabled, in.MaintenanceEnabled, in.MaintenanceMessage, in.MaintenanceURL, in.AuthCaptchaEnabled, in.EmailVerificationRequired, preferences))
 	if err != nil {
 		return SiteSettings{}, err
 	}

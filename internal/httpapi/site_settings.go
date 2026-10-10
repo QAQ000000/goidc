@@ -29,11 +29,12 @@ func (s *Server) siteSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		store.SiteProfile
-		ExpectedVersion           int64 `json:"expected_version"`
-		RegistrationEnabled       *bool `json:"registration_enabled"`
-		MaintenanceEnabled        *bool `json:"maintenance_enabled"`
-		AuthCaptchaEnabled        *bool `json:"auth_captcha_enabled"`
-		EmailVerificationRequired *bool `json:"email_verification_required"`
+		AdminSettings             *store.SiteAdminSettings `json:"admin_settings"`
+		ExpectedVersion           int64                    `json:"expected_version"`
+		RegistrationEnabled       *bool                    `json:"registration_enabled"`
+		MaintenanceEnabled        *bool                    `json:"maintenance_enabled"`
+		AuthCaptchaEnabled        *bool                    `json:"auth_captcha_enabled"`
+		EmailVerificationRequired *bool                    `json:"email_verification_required"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -73,7 +74,7 @@ func (s *Server) updateSiteSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
 		return
 	}
-	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), input.SiteProfile, input.ExpectedVersion, input.AuthCaptchaEnabled)
+	settings, err := s.db.UpdateSiteSettings(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), input.SiteProfile, input.AdminSettings, input.ExpectedVersion, input.AuthCaptchaEnabled)
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -25,6 +25,7 @@ const categories: { id: ChannelCategory; label: string }[] = [
   { id: "sms", label: "短信接口" },
   { id: "oauth", label: "第三方登录" },
   { id: "certification", label: "实名认证接口" },
+  { id: "provision", label: "开通接口" },
 ];
 
 const categoryText: Record<string, { title: string; description: string; empty: string }> = {

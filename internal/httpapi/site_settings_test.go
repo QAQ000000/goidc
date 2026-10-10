@@ -356,3 +356,38 @@ func TestCaptchaSettingsSessionRevokedWhileWaitingForUserLock(t *testing.T) {
 		t.Fatal("revoked write changed audit history", err)
 	}
 }
+
+func TestSiteAdminSettingsAreVersionedAndNotPublic(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "site-admin-preferences", "super_admin")
+	settings, err := db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := siteInput(settings.SiteProfile, settings.Version)
+	input["admin_settings"] = map[string]any{
+		"default_language":           "en_US",
+		"language_menu_enabled":      true,
+		"records_per_page":           50,
+		"frontend_credit_enabled":    true,
+		"custom_customer_id_enabled": true,
+		"admin_login_days":           14,
+		"frontend_ip_check":          true,
+		"admin_ip_check":             true,
+		"debug_enabled":              false,
+	}
+	response := request(h, "PUT", "/api/v1/admin/site-settings", input, root, "")
+	expect(t, response, 200)
+	updated := data(t, response)
+	if updated["admin_settings"].(map[string]any)["default_language"] != "en_US" || updated["version"] != float64(settings.Version+1) {
+		t.Fatal("admin preferences were not persisted")
+	}
+	invalid := siteInput(settings.SiteProfile, settings.Version+1)
+	invalid["admin_settings"] = map[string]any{"default_language": "zh_CN", "records_per_page": 15, "admin_login_days": 7}
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", invalid, root, ""), 409)
+	public := request(h, "GET", "/api/v1/site", nil, "", "")
+	expect(t, public, 200)
+	if _, exists := data(t, public)["admin_settings"]; exists {
+		t.Fatal("admin preferences leaked into public profile")
+	}
+}

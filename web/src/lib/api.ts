@@ -123,7 +123,18 @@ export type SiteProfile = {
   maintenance_url: string;
   auth_captcha_enabled: boolean;
 };
-export type SiteSettings = SiteProfile & { version: number; updated_at: string };
+export type SiteAdminSettings = {
+  default_language: "zh_CN" | "en_US";
+  language_menu_enabled: boolean;
+  records_per_page: 10 | 20 | 50 | 100;
+  frontend_credit_enabled: boolean;
+  custom_customer_id_enabled: boolean;
+  admin_login_days: number;
+  frontend_ip_check: boolean;
+  admin_ip_check: boolean;
+  debug_enabled: boolean;
+};
+export type SiteSettings = SiteProfile & { admin_settings: SiteAdminSettings; version: number; updated_at: string };
 export type PaymentSettings = {
   enabled: boolean;
   mock_enabled: boolean;
