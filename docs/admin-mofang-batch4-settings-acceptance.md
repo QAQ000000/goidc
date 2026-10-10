@@ -26,7 +26,11 @@
 - `GET /api/v1/admin/system/runtime`、`GET /api/v1/admin/system/about`：通过超级管理员和 `settings.view` 权限测试。
 - `GET /api/v1/admin/system/database`：通过超级管理员、`settings.view` 和未授权回归测试，返回真实数据库状态。
 - `GET /api/v1/admin/notification-templates?channel=email&q=password_reset&limit=1`：通过模板筛选、分页字段和结果数量测试。
+- `GET /api/v1/admin/system/database`：通过 PG18 隔离 schema 的表名筛选、空结果和分页回归，返回表大小与行数估算。
+- `GET /api/v1/admin/jobs`、`GET /api/v1/admin/jobs/queue`：通过 PG18 隔离 schema 的管理员客户范围、通知权限、敏感错误摘要脱敏和筛选分页回归；定时趋势与统一重试仍标记为部分完成。
 
 ## 未验证项
 
 本轮终端 Playwright 启动 Chromium 时因 root 环境缺少 sandbox 支持而退出，未将浏览器四尺寸结果标记为通过。待使用非 root 浏览器会话后，继续验收 1440、1024、390、320 四种宽度，以及设置切换、保存、取消、版本冲突、权限拒绝和移动端无横向溢出。
+
+本轮随后使用系统 Chrome 完成登录页 1440 宽度截图；后台业务页需要有效管理员会话，尚未将 105 页四尺寸结果标记为通过。

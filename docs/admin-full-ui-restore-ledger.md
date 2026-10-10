@@ -32,8 +32,8 @@
 | 22 | 新客户 `#/new-customer` | `/admin/reports?tab=new-clients` | 部分完成 | `GET /admin/reports/new-clients` | `reports.view` / 日期范围 |
 | 23 | 产品收入 `#/product-revenue` | `/admin/reports?tab=products` | 部分完成 | `GET /admin/reports/product-income` | `reports.view` / 产品排行 |
 | 24 | 收入排名 `#/revenue-ranking` | `/admin/reports?tab=ranking` | 部分完成 | `GET /admin/reports/customer-ranking` | `reports.view` / 范围权限 |
-| 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 待实现 | `GET /admin/jobs` | `jobs.view` / 最近运行状态 |
-| 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 待实现 | `GET /admin/jobs/queue` | `jobs.view/manage` / 重试幂等 |
+| 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 部分完成 | `GET /admin/jobs` | `jobs.view` / 实时队列汇总；定时趋势日志待补 |
+| 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
 | 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 待实现 | `GET/POST/PATCH /admin/customer-fields` | `customers.manage` / 字段规则 |
 | 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
@@ -123,7 +123,7 @@
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
-| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统和数据库状态已完成；任务和报表待补 |
+| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态和任务队列基础页已完成；定时趋势、统一重试和报表细节待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |
