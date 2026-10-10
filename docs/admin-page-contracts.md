@@ -66,14 +66,14 @@
 | 58 | [设置 / 关于](#page-58) | #/about | /admin/system/about | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 59 | [设置 / 系统升级](#page-59) | #/system-message | /admin/system/upgrade | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 60 | [设置 / php信息](#page-60) | #/php-message | /admin/system/runtime | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 61 | [设置 / 短信日志](#page-61) | #/sms-log | /admin/logs/sms | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 62 | [设置 / 站内信日志](#page-62) | #/station-letter-log | /admin/logs/inbox | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 63 | [设置 / API日志](#page-63) | #/api-log | /admin/logs/api | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 61 | [设置 / 短信日志](#page-61) | #/sms-log | /admin/logs/sms | 有对应路由、分页 API 和 React 页面；正文脱敏 | 已实现（契约） |
+| 62 | [设置 / 站内信日志](#page-62) | #/station-letter-log | /admin/logs/inbox | 有对应路由、分页 API 和 React 页面；真实空表为空态 | 已实现（契约） |
+| 63 | [设置 / API日志](#page-63) | #/api-log | /admin/logs/api | 有对应路由、认证请求记录和分页 API | 已实现（契约） |
 | 64 | [设置 / 定时任务日志](#page-64) | #/automatic-task-log | /admin/logs/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 65 | [设置 / 日志清理](#page-65) | #/log-cleanup | /admin/logs/cleanup | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 65 | [设置 / 日志清理](#page-65) | #/log-cleanup | /admin/logs/cleanup | 有确认、幂等、权限、审计和保留窗口 | 已实现（契约） |
 | 66 | [设置 / 系统日志](#page-66) | #/system-log | /admin/audit | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 有真实认证审计事件分页 API 和 React 页面 | 已实现（契约） |
+| 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 有对应路由、筛选、分页 API 和 React 页面 | 已实现（契约） |
 | 69 | [设置 / 商品管理](#page-69) | #/product-server | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 70 | [设置 / 流量包管理](#page-70) | #/dcim-traffic | /admin/traffic-products | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 71 | [设置 / 通用接口](#page-71) | #/server-settings | /admin/channels?category=provision | 有对应路由源码；实现完整性未验证 | 未验证 |

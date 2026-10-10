@@ -68,14 +68,14 @@
 | 58 | 关于 `#/about` | `/admin/system/about` | 已完成 | `GET /admin/system/about` | `settings.view` / 真实技术栈和构建信息 |
 | 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 已完成 | `GET /admin/system/upgrade` | `settings.view` / 编译迁移清单与数据库已应用版本差异检查 |
 | 60 | php信息 `#/php-message` | `/admin/system/runtime` | 已完成 | `GET /admin/system/runtime` | `settings.view` / Go、PG18、迁移和运行信息 |
-| 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 待实现 | `GET /admin/sms-outbox` | `notifications.view` |
-| 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 待实现 | `GET /admin/inbox-outbox` | `notifications.view` |
-| 63 | API日志 `#/api-log` | `/admin/logs/api` | 待实现 | `GET /admin/api-logs` | `audit.view` |
+| 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 部分完成 | `GET /admin/logs/sms` | `notifications.view` / 真实出站状态、用户、电话、日期、分页；正文脱敏 |
+| 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 部分完成 | `GET /admin/logs/inbox` | `notifications.view` / 真实表为空态、主题、用户、状态、日期、分页 |
+| 63 | API日志 `#/api-log` | `/admin/logs/api` | 部分完成 | `GET /admin/logs/api` | `audit.view` / 认证请求真实记录、方法、状态码、用户、IP、日期、分页 |
 | 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 部分完成 | `GET /admin/logs/jobs`, `GET /admin/logs/jobs/trend` | `@super` / 真实执行记录、上海日期筛选和趋势；统一重试待补 |
-| 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 待实现 | `POST /admin/logs/cleanup` | `audit.manage` / 二次确认 |
+| 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 部分完成 | `POST /admin/logs/cleanup` | `@super` / 二次确认、24小时保留窗、幂等、审计；四尺寸待验收 |
 | 66 | 系统日志 `#/system-log` | `/admin/audit` | 已完成 | `GET /admin/audit` | `audit.view` / 脱敏载荷 |
-| 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 待实现 | `GET /admin/admin-login-logs` | `audit.view` |
-| 68 | 邮件日志 `#/email-log` | `/admin/logs/email` | 部分完成 | `GET /admin/email-outbox` | `notifications.view` / 重试 |
+| 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 部分完成 | `GET /admin/logs/admin-login` | `audit.view` / 登录、最后访问、注销、用户名、IP、日期、分页；四尺寸待验收 |
+| 68 | 邮件日志 `#/email-log` | `/admin/logs/email` | 部分完成 | `GET /admin/logs/email` | `notifications.view` / 主题、收件人、成功状态、失败原因、用户、日期、分页 |
 | 69 | 商品管理 `#/product-server` | `/admin/products` | 已完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
 | 70 | 流量包管理 `#/dcim-traffic` | `/admin/traffic-products` | 待实现 | `GET/POST/PATCH /admin/traffic-products` | `products.view/manage` |
 | 71 | 通用接口 `#/server-settings` | `/admin/channels?category=provision` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 开通能力 |

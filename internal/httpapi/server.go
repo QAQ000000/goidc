@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -95,6 +96,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/jobs/queue", s.auth(s.adminJobQueue, true))
 	mux.HandleFunc("GET /api/v1/admin/logs/jobs", s.auth(s.adminJobExecutionLog, true))
 	mux.HandleFunc("GET /api/v1/admin/logs/jobs/trend", s.auth(s.adminSchedulerTrend, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/admin-login", s.auth(s.adminLoginLog, true))
+	mux.HandleFunc("POST /api/v1/admin/logs/cleanup", s.auth(s.cleanupLogs, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/sms", s.auth(s.adminSMSLog, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/inbox", s.auth(s.adminInboxLog, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/api", s.auth(s.adminAPILog, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/email", s.auth(s.adminEmailLog, true))
 	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/credit-settings", s.sessionAuth(s.creditSettings, true))
@@ -540,8 +547,43 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 		if bearer != "" {
 			ctx = context.WithValue(ctx, apiKeyAuthKey, true)
 		}
-		next(w, r.WithContext(ctx))
+		started := time.Now()
+		recorder := &apiLogResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		next(recorder, r.WithContext(ctx))
+		// API logging is best effort and never changes the response that was
+		// already delivered to the caller. Query/body secrets are intentionally
+		// excluded; only the normalized route path is retained.
+		var remoteIP net.IP
+		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
+			remoteIP = net.ParseIP(host)
+		} else {
+			remoteIP = net.ParseIP(strings.TrimSpace(r.RemoteAddr))
+		}
+		_, _ = s.db.Pool.Exec(r.Context(), `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip)
+VALUES($1,$2,$3,$4,$5,$6)`, id.ID, r.Method, r.URL.Path, recorder.status, time.Since(started).Milliseconds(), remoteIP)
 	}
+}
+
+type apiLogResponseWriter struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func (w *apiLogResponseWriter) WriteHeader(status int) {
+	if w.wroteHeader {
+		return
+	}
+	w.status = status
+	w.wroteHeader = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *apiLogResponseWriter) Write(body []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(body)
 }
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
