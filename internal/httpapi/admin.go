@@ -437,3 +437,102 @@ func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	s.list(w, r, "SELECT a.id,a.actor_id,u.display_name AS actor_name,a.action,a.entity_type,a.entity_id,a.payload,a.created_at FROM audit_events a LEFT JOIN users u ON u.id=a.actor_id ORDER BY a.id DESC LIMIT $1 OFFSET $2", limit, offset)
 }
+
+// adminLogPage exposes the legacy log views over the authoritative audit/outbox tables.
+func (s *Server) adminLogPage(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	kind := r.URL.Query().Get("kind")
+	if kind == "" {
+		kind = "system"
+	}
+	if kind != "system" && kind != "api" && kind != "login" && kind != "cron" && kind != "message" && kind != "sms" && kind != "email" {
+		writeError(w, 400, "invalid_log_kind", "日志类型无效")
+		return
+	}
+	args := []any{}
+	where := "TRUE"
+	table := "audit_events a LEFT JOIN users u ON u.id=a.actor_id"
+	selectSQL := "a.id,a.created_at,a.action,a.entity_type,a.entity_id,a.payload,u.display_name AS actor_name"
+	if kind == "sms" || kind == "email" {
+		table = kind + "_outbox a"
+		selectSQL = "a.id,a.created_at,a.kind,a.status,a.recipient,a.last_error"
+	}
+	if kind == "api" {
+		where += " AND (a.action LIKE 'api.%' OR a.action LIKE 'http.%')"
+	}
+	if kind == "login" {
+		where += " AND a.action IN ('auth.login_succeeded','auth.login_failed','auth.logout')"
+	}
+	if kind == "cron" {
+		where += " AND (a.action LIKE 'cron.%' OR a.action LIKE 'scheduler.%')"
+	}
+	if kind == "message" {
+		where += " AND (a.action LIKE 'message.%' OR a.action LIKE 'notification.%')"
+	}
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		args = append(args, "%"+q+"%")
+		n := strconv.Itoa(len(args))
+		where += " AND (a.action ILIKE $" + n + " OR a.entity_id ILIKE $" + n + ")"
+	}
+	var total int
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM "+table+" WHERE "+where, args...).Scan(&total); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	args = append(args, limit, offset)
+	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+selectSQL+" FROM "+table+" WHERE "+where+" ORDER BY a.id DESC LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args)), args...)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+}
+
+func (s *Server) cleanupAdminLogs(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Kind    string `json:"kind"`
+		Before  string `json:"before"`
+		Confirm bool   `json:"confirm"`
+	}
+	if !decode(w, r, &in) || !in.Confirm || in.Before == "" {
+		writeError(w, 400, "confirmation_required", "清理日志需要确认和截止时间")
+		return
+	}
+	if in.Kind != "audit" && in.Kind != "sms" && in.Kind != "email" {
+		writeError(w, 400, "invalid_log_kind", "日志类型无效")
+		return
+	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var deleted int64
+	table := in.Kind + "_outbox"
+	if in.Kind == "audit" {
+		table = "audit_events"
+	}
+	err = tx.QueryRow(r.Context(), "WITH gone AS (DELETE FROM "+table+" WHERE created_at < $1::timestamptz RETURNING 1) SELECT count(*) FROM gone", in.Before).Scan(&deleted)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "admin.logs.cleaned", table, deleted, map[string]any{"before": in.Before}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, map[string]any{"deleted": deleted})
+}
