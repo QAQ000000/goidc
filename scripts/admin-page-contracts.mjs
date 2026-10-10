@@ -50,6 +50,8 @@ for (const [i,line] of ledger.split(/\r?\n/).entries()) {
   const jsxNames = [...new Set([...pageText.matchAll(/<([A-Z][\w$]*)\b/g)].map(m=>m[1]))];
   const component = jsxNames.map(name=>({name,source:imports.find(i=>i.name===name)?.source??'页面内定义或未验证',evidence:pageFile?`${pageFile}:${pageText.slice(0,pageText.indexOf('<'+name)).split('\n').length}`:null}));
   const pageBrowserEvidence = browserEvidence.pages.filter(e=>e.newRoute===newRoute);
+  const acceptedWidths = new Set(pageBrowserEvidence.filter(e=>e.result==='PASS').map(e=>e.width));
+  const browserAcceptance = acceptedWidths.size === 4 ? 'PASS（四尺寸）' : acceptedWidths.size ? `部分（${acceptedWidths.size}/4）` : '未验证';
   const sourceLines = pattern => block.split('\n').filter(l=>pattern.test(l)).map(l=>l.trim());
   const backtick = /`([^`]+)`/g;
   const extract = (pattern) => [...block.split('\n').filter(l=>pattern.test(l)).flatMap(l=>[...l.matchAll(backtick)].map(m=>m[1]))];
@@ -64,7 +66,7 @@ for (const [i,line] of ledger.split(/\r?\n/).entries()) {
   const tableNames = [...new Set(stores.filter(s=>storageEvidence.includes(s.file)).flatMap(s=>[...s.text.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE)\s+([a-z_][a-z_0-9]*)/g)].map(m=>m[1])))].sort();
   const migrationEvidence = migrations.filter(m=>tableNames.some(t=>new RegExp(`\\b${t}\\b`).test(m.text))).map(m=>m.file);
   contracts.push({index,legacyNumber:Number(heading[1]),oldHash,title,module,newRoute,pageFile,component:component.length?component:'未验证',
-    pageStatus:{ledger:cells[4],code:pageFile?'有对应路由源码；实现完整性未验证':'未找到对应独立路由文件；实现状态未验证',browserAcceptance:'未验证'},
+    pageStatus:{ledger:cells[4],code:pageFile?'有对应路由源码；实现完整性未验证':'未找到对应独立路由文件；实现状态未验证',browserAcceptance},
     evidence:{specification:`${specPath}:${specLine}`,ledger:`${ledgerPath}:${i+1}`,component:pageFile?`${pageFile}:1`:null},
     realApi:{ledgerClaim:claimedApi,registered:api,status:api.length?'已找到静态路由；逐动作与权限链未验证':'未验证'},
     permission:{ledgerClaim:permissionClaim,registry:permissionEvidence,enforcement:'未验证'},
@@ -89,7 +91,7 @@ const output={schemaVersion:1,source:{ledger:ledgerPath,ledgerSha256:createHash(
 await mkdir('docs/generated',{recursive:true});
 await writeFile('docs/generated/admin-page-contracts.json',JSON.stringify(output,null,2)+'\n');
 const lines=['# 后台 105 页页面契约索引','','运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可复现生成 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。','','[完整机器可读契约](./generated/admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `docs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。','','| # | 模块 / 页面 | 旧 hash | 新路由 | 代码状态 | 浏览器 |','|---:|---|---|---|---|---|'];
-for(const p of contracts)lines.push(`| ${p.index} | [${p.module} / ${p.title}](#page-${p.index}) | ${p.oldHash} | ${p.newRoute} | ${p.pageStatus.code} | 未验证 |`);
+for(const p of contracts)lines.push(`| ${p.index} | [${p.module} / ${p.title}](#page-${p.index}) | ${p.oldHash} | ${p.newRoute} | ${p.pageStatus.code} | ${p.pageStatus.browserAcceptance} |`);
 for(const p of contracts)lines.push('',`<a id="page-${p.index}"></a>`,`## ${p.index}. ${p.title}`,'',`旧规范：[源文档](${p.evidence.specification})；台账：[记录](../${p.evidence.ledger})${p.evidence.component?`；页面：[源码](../${p.evidence.component})`:''}。JSON 中按唯一旧 hash ${p.oldHash} 检索。`);
 await writeFile('docs/admin-page-contracts.md',lines.join('\n')+'\n');
-console.log(JSON.stringify({count:contracts.length,uniqueHashes:new Set(contracts.map(p=>p.oldHash)).size,registeredApiPages:contracts.filter(p=>p.realApi.registered.length).length,routeSourcePages:contracts.filter(p=>p.evidence.component).length,browserAccepted:0}));
+console.log(JSON.stringify({count:contracts.length,uniqueHashes:new Set(contracts.map(p=>p.oldHash)).size,registeredApiPages:contracts.filter(p=>p.realApi.registered.length).length,routeSourcePages:contracts.filter(p=>p.evidence.component).length,browserAccepted:contracts.filter(p=>p.pageStatus.browserAcceptance==='PASS（四尺寸）').length}));

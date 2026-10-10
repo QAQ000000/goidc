@@ -41,9 +41,27 @@ func TestAdminSystemInformationRequiresSettingsViewAndReturnsRuntimeFacts(t *tes
 	if response := request(h, "GET", "/api/v1/admin/system/database", nil, staff, ""); response.Code != 403 {
 		t.Fatalf("missing database settings permission status=%d", response.Code)
 	}
+	expect(t, request(h, "GET", "/api/v1/admin/system/upgrade", nil, staff, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/system/upgrade", nil, "", ""), 401)
 	contentRole(t, db, staffID, "settings.view")
 	response := request(h, "GET", "/api/v1/admin/system/about", nil, staff, "")
 	if response.Code != 200 || data(t, response)["backend"] != "Go API" {
 		t.Fatalf("settings viewer response=%s", response.Body.String())
+	}
+	expect(t, request(h, "GET", "/api/v1/admin/system/upgrade", nil, staff, ""), 200)
+	latest := data(t, upgrade)["latest_available"].(string)
+	if _, err := db.Pool.Exec(t.Context(), "DELETE FROM schema_migrations WHERE version=$1", latest); err != nil {
+		t.Fatal(err)
+	}
+	pending := request(h, "GET", "/api/v1/admin/system/upgrade", nil, root, "")
+	expect(t, pending, 200)
+	result := data(t, pending)
+	versions := result["pending_migrations"].([]any)
+	if result["status"] != "pending" || len(versions) != 1 || versions[0] != latest {
+		t.Fatalf("upgrade missing migration not detected: %s", pending.Body.String())
+	}
+	var count int
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM schema_migrations WHERE version=$1", latest).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("upgrade check mutated database: count=%d err=%v", count, err)
 	}
 }

@@ -1,0 +1,717 @@
+{
+  "date": "2026-10-11",
+  "environment": "隔离 PG18 schema + Next dev :3099；系统 Chrome Playwright",
+  "pages": [
+    {
+      "newRoute": "/admin/system/database",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-database-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "数据库状态",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "ef7863fd9033e90c559ca1a5256fc6d6830de9664458cd8fd58fe18a3228b131"
+    },
+    {
+      "newRoute": "/admin/system/upgrade",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "系统升级检查",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "7a5bf2343a20b0f0050a307ff41aee85ff51ad8a485c96d84d24d7078c75a092"
+    },
+    {
+      "newRoute": "/admin/system/runtime",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-runtime-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "运行环境",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "761111b52975f209c57cfef8709ade561d890a442dcd8b36e46c0f7f947e5106"
+    },
+    {
+      "newRoute": "/admin/system/about",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-about-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "关于系统",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "9b3fdfddfb32a055ce4c750ede47684cb96d4c5b51ae7b5b907b2f7a1a0b19d1"
+    },
+    {
+      "newRoute": "/admin/jobs",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "任务状态概览",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "a72be2e1ea925bfabb249617930a46758a4e619510f54940c6deb099f69a6fdc"
+    },
+    {
+      "newRoute": "/admin/jobs/queue",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "任务队列",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "05e95305c741600ac2775c756c99f1546a213586e3fc5fc2516842ccc7780c46"
+    },
+    {
+      "newRoute": "/admin/logs/jobs",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "定时任务日志",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "770745e83ef9205a54bec39c779f74096b85bcc870730d79ba073360cc90ce7b"
+    },
+    {
+      "newRoute": "/admin/settings",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/settings-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "站点设置",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "eff117154171385724b1361245671b68ca081cc17a76bce420f383466bb52657"
+    },
+    {
+      "newRoute": "/admin/system/database",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-database-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "数据库状态",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "1f5400bed35f8f7422ec3bc7d44fe79456b3f81cfc24c1396111214465bc757a"
+    },
+    {
+      "newRoute": "/admin/system/upgrade",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "系统升级检查",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "63bd2842050013afe69a8c6f6a9a24d10285bbe1f4ef16363199fa46dd5a5f57"
+    },
+    {
+      "newRoute": "/admin/system/runtime",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-runtime-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "运行环境",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "42ac74b71b1d9b524576290df5cf662af860e2eaf61ce824b9bf4bf9e8461970"
+    },
+    {
+      "newRoute": "/admin/system/about",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-about-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "关于系统",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "502bad0878de1c1fbcd40a827f80db7d2579f4af4ae16a405e66adf242ad7af3"
+    },
+    {
+      "newRoute": "/admin/jobs",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "任务状态概览",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "a89a76ddc0a7bb9d2c32a93ecf7d47d6ac5799f2d5318e50fc385ccf8d30736c"
+    },
+    {
+      "newRoute": "/admin/jobs/queue",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "任务队列",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "e13e8c06721c38a36419a532c2c33d05b3dac6352fda9daab22e3a67e2845ebb"
+    },
+    {
+      "newRoute": "/admin/logs/jobs",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "定时任务日志",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "75cf63ed533fb4fbdd30e27fe3514dd5bbd1570bc26d8f8506c42addf47c21e7"
+    },
+    {
+      "newRoute": "/admin/settings",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/settings-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "站点设置",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "a9ceb5454677d58faeb066e467312fb195856250dabb0d97d7bec6b6dc7a1abf"
+    },
+    {
+      "newRoute": "/admin/system/database",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-database-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "数据库状态",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "6a7cc8cf0f8377e6cb47cd980f0cddced32c93a2266817cf283369f6f53a95b9"
+    },
+    {
+      "newRoute": "/admin/system/upgrade",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "系统升级检查",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "98f2c114f0776e33606ccc6b9f484abfbe6483ce3887698f337a6f40b99fd331"
+    },
+    {
+      "newRoute": "/admin/system/runtime",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-runtime-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "运行环境",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "3dcb7e3f15c4b507d135a02018933d39bafd33973c1d8c982e63f43b8be5470d"
+    },
+    {
+      "newRoute": "/admin/system/about",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-about-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "关于系统",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "0662807a7319f519574e97cfa9a3c98f952f1147d2e6291e7e5a2da7b8870de3"
+    },
+    {
+      "newRoute": "/admin/jobs",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "任务状态概览",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "e3d70c2758a26fa283cd5a252d9a0506f7efaab5d2f87078902f2d33f8afdd31"
+    },
+    {
+      "newRoute": "/admin/jobs/queue",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "任务队列",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "2e6beb9de1e34dfcf861f2210a81419b72fb1f12158d2ad09f3fe3444c65c7a4"
+    },
+    {
+      "newRoute": "/admin/logs/jobs",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "定时任务日志",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "c8d72844da092c7ceb8936bdbc7982f3170646dbd84ac2cf90668a21df7ad7c0"
+    },
+    {
+      "newRoute": "/admin/settings",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/settings-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "站点设置",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "99513714826dd71e8072aa33942e4e1f98a9e05d9cb6e51622a64911f82970a0"
+    },
+    {
+      "newRoute": "/admin/system/database",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-database-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "数据库状态",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "2b3375094205fb5dcb8f9d15b1e9d9dae029bb85e070d51eea2c4b76a0dfa435"
+    },
+    {
+      "newRoute": "/admin/system/upgrade",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "系统升级检查",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "005069cf7cff3d92e365b08d249f9040fcf3c9c746767ca83b41c9ba9ddfe480"
+    },
+    {
+      "newRoute": "/admin/system/runtime",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-runtime-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "运行环境",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "70682784b5a60b2e057406d2d5191386f3454265ae20dd087cb213fdc37defce"
+    },
+    {
+      "newRoute": "/admin/system/about",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/system-about-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "关于系统",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "131243d5d153ec71cb013c5a99c9cf5469b8cf883e023c4df89854c16d6d40bc"
+    },
+    {
+      "newRoute": "/admin/jobs",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "任务状态概览",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "5220491593a4670d78b968861050b66cd1e493c7b72cef3fcf1a78fd7a54faa7"
+    },
+    {
+      "newRoute": "/admin/jobs/queue",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "任务队列",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "cfa141c908a082fdda9dfe3b1fef21cf29449f68492b86e676a300e4751d9bed"
+    },
+    {
+      "newRoute": "/admin/logs/jobs",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "定时任务日志",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "4456ddeb58a4df35e39985684b3d8b66338b546bb847458146f74fdc7f5bdab7"
+    },
+    {
+      "newRoute": "/admin/settings",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-restore-20261011/settings-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "未逐张确认全部文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "站点设置",
+        "alerts": []
+      },
+      "scope": "真实API页面加载与布局；交互状态见独立验收文档",
+      "screenshotSha256": "f0adc76a283cfd77701fe1a9497625fa64af7b87f112eabe57a5ff96ced41fb1"
+    }
+  ],
+  "pageErrors": [],
+  "apiFailures": [],
+  "consoleErrors": [],
+  "notes": [
+    "截图保留于本机 output/playwright/admin-restore-20261011，未把屏幕截图体积加入git。",
+    "PASS仅表示已列出的加载布局检查，不代表105页全量业务验收通过。"
+  ]
+}

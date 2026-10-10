@@ -19,5 +19,17 @@ func TestAdminCustomerAffiliateActivityEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	response = request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d/affiliate", customerID), nil, admin, "")
+	// Super administrators retain full customer access regardless of scope.
+	expect(t, response, 200)
+	staffID, staff := user(t, db, h, "customer-affiliate-staff", "admin")
+	contentRole(t, db, staffID, "customers.view")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+		t.Fatal(err)
+	}
+	response = request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d/affiliate", customerID), nil, staff, "")
 	expect(t, response, 404)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, customerID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d/affiliate", customerID), nil, staff, ""), 200)
 }

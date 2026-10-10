@@ -42,6 +42,10 @@ export function useSettingsDraft(form: SiteSettings, baseline: SiteSettings, man
     if (!draft || (draft.baseVersion !== baseline.version && !window.confirm("草稿版本与当前设置不同，确认恢复并逐项检查？"))) return null;
     const safe = Object.fromEntries(Object.keys(baseline).map(k => [k, draft.form[k as keyof SiteSettings] ?? baseline[k as keyof SiteSettings]])) as SiteSettings;
     safe.admin_settings = Object.fromEntries(Object.keys(baseline.admin_settings).map(k => [k, draft.form.admin_settings?.[k as keyof SiteSettings["admin_settings"]] ?? baseline.admin_settings[k as keyof SiteSettings["admin_settings"]]])) as SiteSettings["admin_settings"];
+    // Remove the persisted draft before returning the recovered form. The form
+    // becomes dirty immediately, so leaving the entry in sessionStorage would
+    // persist the recovered values again on the next effect pass.
+    if (key) { try { sessionStorage.removeItem(key); } catch {} }
     setDraft(null);
     return { ...safe, version: baseline.version, updated_at: baseline.updated_at };
   };

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "ledger": "docs/admin-full-ui-restore-ledger.md",
-    "ledgerSha256": "e3863c717011cb1d1a7837ca9474f0b5d4b8744117d670ccffb9585289b777b9",
+    "ledgerSha256": "fd25383745d5dc6713ff911efd6431f7329dd47e9a4a6ad03f4b231e8752b296",
     "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md",
     "specificationSha256": "b16aee6e1139eef7f08eb539d081f4484e3e6aa3eb514bffa202a7d07a5e628c"
   },
@@ -46,7 +46,7 @@
             "method": "GET",
             "path": "/admin/dashboard",
             "handler": "dashboard",
-            "evidence": "internal/httpapi/server.go:253"
+            "evidence": "internal/httpapi/server.go:254"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -175,7 +175,7 @@
             "method": "GET",
             "path": "/admin/customers/page",
             "handler": "customersPage",
-            "evidence": "internal/httpapi/server.go:332"
+            "evidence": "internal/httpapi/server.go:333"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -307,7 +307,7 @@
             "method": "GET",
             "path": "/admin/certifications/page",
             "handler": "adminCertificationsPage",
-            "evidence": "internal/httpapi/server.go:333"
+            "evidence": "internal/httpapi/server.go:334"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -444,13 +444,13 @@
             "method": "GET",
             "path": "/admin/customers/page",
             "handler": "customersPage",
-            "evidence": "internal/httpapi/server.go:332"
+            "evidence": "internal/httpapi/server.go:333"
           },
           {
             "method": "PUT",
             "path": "/admin/customers/{id}/sales-owner",
             "handler": "assignCustomerSalesOwner",
-            "evidence": "internal/httpapi/server.go:349"
+            "evidence": "internal/httpapi/server.go:350"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -836,19 +836,19 @@
             "method": "GET",
             "path": "/admin/affiliate/accounts/page",
             "handler": "adminAffiliateAccountsPage",
-            "evidence": "internal/httpapi/server.go:334"
+            "evidence": "internal/httpapi/server.go:335"
           },
           {
             "method": "GET",
             "path": "/admin/affiliate/attributions/page",
             "handler": "adminAffiliateAttributionsPage",
-            "evidence": "internal/httpapi/server.go:335"
+            "evidence": "internal/httpapi/server.go:336"
           },
           {
             "method": "GET",
             "path": "/admin/affiliate/withdrawals/page",
             "handler": "adminAffiliateWithdrawalsPage",
-            "evidence": "internal/httpapi/server.go:336"
+            "evidence": "internal/httpapi/server.go:337"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -984,7 +984,7 @@
             "method": "GET",
             "path": "/admin/orders",
             "handler": "orders",
-            "evidence": "internal/httpapi/server.go:350"
+            "evidence": "internal/httpapi/server.go:351"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1123,7 +1123,7 @@
             "method": "GET",
             "path": "/admin/orders",
             "handler": "orders",
-            "evidence": "internal/httpapi/server.go:350"
+            "evidence": "internal/httpapi/server.go:351"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1374,7 +1374,7 @@
             "method": "GET",
             "path": "/admin/services/page",
             "handler": "servicesPage",
-            "evidence": "internal/httpapi/server.go:381"
+            "evidence": "internal/httpapi/server.go:382"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1510,7 +1510,7 @@
             "method": "GET",
             "path": "/admin/cancellations",
             "handler": "adminCancellations",
-            "evidence": "internal/httpapi/server.go:401"
+            "evidence": "internal/httpapi/server.go:402"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1645,7 +1645,7 @@
             "method": "GET",
             "path": "/admin/customer-transactions",
             "handler": "adminCustomerTransactions",
-            "evidence": "internal/httpapi/server.go:347"
+            "evidence": "internal/httpapi/server.go:348"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1786,7 +1786,7 @@
             "method": "GET",
             "path": "/admin/invoices/page",
             "handler": "invoices",
-            "evidence": "internal/httpapi/server.go:357"
+            "evidence": "internal/httpapi/server.go:358"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2070,7 +2070,7 @@
             "method": "GET",
             "path": "/admin/affiliate/withdrawals",
             "handler": "adminAffiliateWithdrawals",
-            "evidence": "internal/httpapi/server.go:159"
+            "evidence": "internal/httpapi/server.go:160"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2225,7 +2225,7 @@
             "method": "GET",
             "path": "/admin/invoice-applications",
             "handler": "invoiceApplications",
-            "evidence": "internal/httpapi/server.go:185"
+            "evidence": "internal/httpapi/server.go:186"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2492,7 +2492,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:403"
+            "evidence": "internal/httpapi/server.go:404"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2749,7 +2749,7 @@
             "method": "GET",
             "path": "/admin/reports/income",
             "handler": "incomeReport",
-            "evidence": "internal/httpapi/server.go:275"
+            "evidence": "internal/httpapi/server.go:276"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2877,7 +2877,7 @@
             "method": "GET",
             "path": "/admin/reports/new-clients",
             "handler": "newClientsReport",
-            "evidence": "internal/httpapi/server.go:276"
+            "evidence": "internal/httpapi/server.go:277"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3009,7 +3009,7 @@
             "method": "GET",
             "path": "/admin/reports/product-income",
             "handler": "productIncomeReport",
-            "evidence": "internal/httpapi/server.go:278"
+            "evidence": "internal/httpapi/server.go:279"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3141,7 +3141,7 @@
             "method": "GET",
             "path": "/admin/reports/customer-ranking",
             "handler": "customerRankingReport",
-            "evidence": "internal/httpapi/server.go:277"
+            "evidence": "internal/httpapi/server.go:278"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3255,7 +3255,7 @@
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:530",
@@ -3337,31 +3337,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3384,7 +3497,7 @@
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:545",
@@ -3471,31 +3584,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/jobs-queue-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-queue-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-queue-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-queue-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/jobs-queue-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3518,7 +3744,7 @@
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:563",
@@ -3597,31 +3823,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-database-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-database-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-database-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-database-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-database-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-database-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-database-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-database-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4044,13 +4383,13 @@
             "method": "GET",
             "path": "/admin/customer-groups",
             "handler": "customerGroups",
-            "evidence": "internal/httpapi/server.go:372"
+            "evidence": "internal/httpapi/server.go:373"
           },
           {
             "method": "POST",
             "path": "/admin/customer-groups",
             "handler": "createCustomerGroup",
-            "evidence": "internal/httpapi/server.go:373"
+            "evidence": "internal/httpapi/server.go:374"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4430,13 +4769,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:106"
+            "evidence": "internal/httpapi/server.go:107"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:107"
+            "evidence": "internal/httpapi/server.go:108"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4721,13 +5060,13 @@
             "method": "GET",
             "path": "/admin/promo-codes",
             "handler": "promoCodes",
-            "evidence": "internal/httpapi/server.go:377"
+            "evidence": "internal/httpapi/server.go:378"
           },
           {
             "method": "POST",
             "path": "/admin/promo-codes",
             "handler": "createPromoCode",
-            "evidence": "internal/httpapi/server.go:378"
+            "evidence": "internal/httpapi/server.go:379"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5215,13 +5554,13 @@
             "method": "GET",
             "path": "/admin/ticket-departments",
             "handler": "adminTicketDepartments",
-            "evidence": "internal/httpapi/server.go:405"
+            "evidence": "internal/httpapi/server.go:406"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-departments",
             "handler": "createTicketDepartment",
-            "evidence": "internal/httpapi/server.go:406"
+            "evidence": "internal/httpapi/server.go:407"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5568,7 +5907,7 @@
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:897",
@@ -5686,31 +6025,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/settings-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/settings-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/settings-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/settings-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/settings-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/settings-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/settings-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/settings-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5747,13 +6199,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:106"
+            "evidence": "internal/httpapi/server.go:107"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:107"
+            "evidence": "internal/httpapi/server.go:108"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6175,13 +6627,13 @@
             "method": "GET",
             "path": "/admin/roles",
             "handler": "adminRoles",
-            "evidence": "internal/httpapi/server.go:256"
+            "evidence": "internal/httpapi/server.go:257"
           },
           {
             "method": "POST",
             "path": "/admin/roles",
             "handler": "saveAdminRole",
-            "evidence": "internal/httpapi/server.go:257"
+            "evidence": "internal/httpapi/server.go:258"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6505,13 +6957,13 @@
             "method": "GET",
             "path": "/admin/staff",
             "handler": "adminStaff",
-            "evidence": "internal/httpapi/server.go:260"
+            "evidence": "internal/httpapi/server.go:261"
           },
           {
             "method": "POST",
             "path": "/admin/staff",
             "handler": "saveAdminStaff",
-            "evidence": "internal/httpapi/server.go:261"
+            "evidence": "internal/httpapi/server.go:262"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6644,13 +7096,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:106"
+            "evidence": "internal/httpapi/server.go:107"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:107"
+            "evidence": "internal/httpapi/server.go:108"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6815,13 +7267,13 @@
             "method": "GET",
             "path": "/admin/notification-templates",
             "handler": "notificationTemplates",
-            "evidence": "internal/httpapi/server.go:268"
+            "evidence": "internal/httpapi/server.go:269"
           },
           {
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:269"
+            "evidence": "internal/httpapi/server.go:270"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6988,13 +7440,13 @@
             "method": "GET",
             "path": "/admin/notification-templates",
             "handler": "notificationTemplates",
-            "evidence": "internal/httpapi/server.go:268"
+            "evidence": "internal/httpapi/server.go:269"
           },
           {
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:269"
+            "evidence": "internal/httpapi/server.go:270"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -7134,13 +7586,13 @@
             "method": "GET",
             "path": "/admin/sms-settings",
             "handler": "smsSettings",
-            "evidence": "internal/httpapi/server.go:101"
+            "evidence": "internal/httpapi/server.go:102"
           },
           {
             "method": "PUT",
             "path": "/admin/sms-settings",
             "handler": "updateSMSSettings",
-            "evidence": "internal/httpapi/server.go:102"
+            "evidence": "internal/httpapi/server.go:103"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -7848,7 +8300,7 @@
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1267",
@@ -7929,31 +8381,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-about-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-about-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-about-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-about-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-about-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-about-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-about-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-about-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7976,7 +8541,7 @@
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1280",
@@ -8073,31 +8638,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-upgrade-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-upgrade-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-upgrade-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-upgrade-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-upgrade-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8120,7 +8798,7 @@
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1313",
@@ -8201,31 +8879,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-runtime-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-runtime-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-runtime-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/system-runtime-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-runtime-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-runtime-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-runtime-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/system-runtime-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8256,7 +9047,7 @@
             "method": "GET",
             "path": "/admin/sms-outbox",
             "handler": "smsOutbox",
-            "evidence": "internal/httpapi/server.go:273"
+            "evidence": "internal/httpapi/server.go:274"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8603,15 +9394,15 @@
       "pageFile": "web/src/app/admin/logs/jobs/page.tsx",
       "component": [
         {
-          "name": "AdminJobsView",
-          "source": "@/components/admin-jobs",
+          "name": "AdminSchedulerLogs",
+          "source": "@/components/admin-scheduler-logs",
           "evidence": "web/src/app/admin/logs/jobs/page.tsx:2"
         }
       ],
       "pageStatus": {
         "ledger": "待实现",
         "code": "有对应路由源码；实现完整性未验证",
-        "browserAcceptance": "未验证"
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1380",
@@ -8688,31 +9479,144 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
+      "stateEvidence": [
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "未逐张确认全部文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-restore-20261011/logs-jobs-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
       "viewportResults": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/logs-jobs-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/logs-jobs-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 390,
-          "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/logs-jobs-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-restore-20261011/logs-jobs-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "未逐张确认全部文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8869,7 +9773,7 @@
             "method": "GET",
             "path": "/admin/audit",
             "handler": "auditEvents",
-            "evidence": "internal/httpapi/server.go:424"
+            "evidence": "internal/httpapi/server.go:425"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -9114,7 +10018,7 @@
             "method": "GET",
             "path": "/admin/email-outbox",
             "handler": "emailOutbox",
-            "evidence": "internal/httpapi/server.go:271"
+            "evidence": "internal/httpapi/server.go:272"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -9247,13 +10151,13 @@
             "method": "GET",
             "path": "/admin/products",
             "handler": "adminProducts",
-            "evidence": "internal/httpapi/server.go:279"
+            "evidence": "internal/httpapi/server.go:280"
           },
           {
             "method": "POST",
             "path": "/admin/products",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:303"
+            "evidence": "internal/httpapi/server.go:304"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -9522,13 +10426,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:106"
+            "evidence": "internal/httpapi/server.go:107"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:107"
+            "evidence": "internal/httpapi/server.go:108"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -9698,13 +10602,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:282"
+            "evidence": "internal/httpapi/server.go:283"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:283"
+            "evidence": "internal/httpapi/server.go:284"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -9868,13 +10772,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:282"
+            "evidence": "internal/httpapi/server.go:283"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:283"
+            "evidence": "internal/httpapi/server.go:284"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11025,13 +11929,13 @@
             "method": "POST",
             "path": "/admin/content",
             "handler": "adminCreateContent",
-            "evidence": "internal/httpapi/server.go:315"
+            "evidence": "internal/httpapi/server.go:316"
           },
           {
             "method": "GET",
             "path": "/admin/content",
             "handler": "adminContentList",
-            "evidence": "internal/httpapi/server.go:316"
+            "evidence": "internal/httpapi/server.go:317"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11166,13 +12070,13 @@
             "method": "GET",
             "path": "/admin/content-categories",
             "handler": "adminContentCategories",
-            "evidence": "internal/httpapi/server.go:321"
+            "evidence": "internal/httpapi/server.go:322"
           },
           {
             "method": "POST",
             "path": "/admin/content-categories",
             "handler": "adminSaveContentCategory",
-            "evidence": "internal/httpapi/server.go:322"
+            "evidence": "internal/httpapi/server.go:323"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11302,13 +12206,13 @@
             "method": "POST",
             "path": "/admin/content",
             "handler": "adminCreateContent",
-            "evidence": "internal/httpapi/server.go:315"
+            "evidence": "internal/httpapi/server.go:316"
           },
           {
             "method": "GET",
             "path": "/admin/content",
             "handler": "adminContentList",
-            "evidence": "internal/httpapi/server.go:316"
+            "evidence": "internal/httpapi/server.go:317"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11443,13 +12347,13 @@
             "method": "GET",
             "path": "/admin/content-categories",
             "handler": "adminContentCategories",
-            "evidence": "internal/httpapi/server.go:321"
+            "evidence": "internal/httpapi/server.go:322"
           },
           {
             "method": "POST",
             "path": "/admin/content-categories",
             "handler": "adminSaveContentCategory",
-            "evidence": "internal/httpapi/server.go:322"
+            "evidence": "internal/httpapi/server.go:323"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11740,13 +12644,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:282"
+            "evidence": "internal/httpapi/server.go:283"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:283"
+            "evidence": "internal/httpapi/server.go:284"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -12034,13 +12938,13 @@
             "method": "GET",
             "path": "/admin/products",
             "handler": "adminProducts",
-            "evidence": "internal/httpapi/server.go:279"
+            "evidence": "internal/httpapi/server.go:280"
           },
           {
             "method": "POST",
             "path": "/admin/products",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:303"
+            "evidence": "internal/httpapi/server.go:304"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13133,7 +14037,7 @@
             "method": "POST",
             "path": "/admin/customers",
             "handler": "adminCreateCustomer",
-            "evidence": "internal/httpapi/server.go:337"
+            "evidence": "internal/httpapi/server.go:338"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13271,7 +14175,7 @@
             "method": "GET",
             "path": "/admin/orders",
             "handler": "orders",
-            "evidence": "internal/httpapi/server.go:350"
+            "evidence": "internal/httpapi/server.go:351"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13406,7 +14310,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:403"
+            "evidence": "internal/httpapi/server.go:404"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13543,7 +14447,7 @@
             "method": "POST",
             "path": "/admin/invoices",
             "handler": "saveManualInvoice",
-            "evidence": "internal/httpapi/server.go:360"
+            "evidence": "internal/httpapi/server.go:361"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13846,19 +14750,19 @@
             "method": "GET",
             "path": "/admin/products/page",
             "handler": "adminProductsPage",
-            "evidence": "internal/httpapi/server.go:280"
+            "evidence": "internal/httpapi/server.go:281"
           },
           {
             "method": "GET",
             "path": "/admin/products/{id}",
             "handler": "adminProduct",
-            "evidence": "internal/httpapi/server.go:291"
+            "evidence": "internal/httpapi/server.go:292"
           },
           {
             "method": "PATCH",
             "path": "/admin/products/{id}",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:292"
+            "evidence": "internal/httpapi/server.go:293"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14011,7 +14915,7 @@
             "method": "PATCH",
             "path": "/admin/staff/{id}",
             "handler": "saveAdminStaff",
-            "evidence": "internal/httpapi/server.go:262"
+            "evidence": "internal/httpapi/server.go:263"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14147,7 +15051,7 @@
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:269"
+            "evidence": "internal/httpapi/server.go:270"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"

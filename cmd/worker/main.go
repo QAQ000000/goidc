@@ -60,7 +60,14 @@ func main() {
 					return
 				case <-timer.C:
 					fallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: cfg.PaymentMockEnabled, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
-					if _, checkErr := db.ProcessConfiguredAutomaticPaymentCheck(ctx, fallback); checkErr != nil && ctx.Err() == nil {
+					_, checkErr := db.RunScheduled(ctx, log, "automatic_payment_reconciliation", func(c context.Context) (int, error) {
+						changed, err := db.ProcessConfiguredAutomaticPaymentCheck(c, fallback)
+						if changed {
+							return 1, err
+						}
+						return 0, err
+					})
+					if checkErr != nil && ctx.Err() == nil {
 						log.Error("automatic payment reconciliation failed", "error", checkErr)
 					}
 				}
@@ -94,7 +101,7 @@ func main() {
 				} else if queued > 0 {
 					log.Info("billing notifications queued", "count", queued)
 				}
-				if queued, scheduleErr := db.EnqueueOverdueServiceSuspensions(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+				if queued, scheduleErr := db.RunScheduled(ctx, log, "overdue_service_suspensions", func(c context.Context) (int, error) { return db.EnqueueOverdueServiceSuspensions(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
 					log.Error("overdue suspension scheduling failed", "error", scheduleErr)
 				} else if queued > 0 {
 					log.Info("overdue service suspensions queued", "count", queued)
@@ -180,7 +187,7 @@ func main() {
 					log.Error("email delivery failed", "job_id", job.ID, "attempts", job.Attempts, "error", sendErr)
 				}
 			}
-			if _, err = db.ProcessAutoRenewals(ctx, 20); err != nil {
+			if _, err = db.RunScheduled(ctx, log, "automatic_renewals", func(c context.Context) (int, error) { return db.ProcessAutoRenewals(c, 20) }); err != nil {
 				log.Error("auto renewal processing failed", "error", err)
 			}
 			if err = db.RecoverStaleProvisionJobs(ctx); err != nil {

@@ -71,7 +71,7 @@
 | 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 待实现 | `GET /admin/sms-outbox` | `notifications.view` |
 | 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 待实现 | `GET /admin/inbox-outbox` | `notifications.view` |
 | 63 | API日志 `#/api-log` | `/admin/logs/api` | 待实现 | `GET /admin/api-logs` | `audit.view` |
-| 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 待实现 | `GET /admin/job-logs` | `jobs.view` |
+| 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 部分完成 | `GET /admin/logs/jobs`, `GET /admin/logs/jobs/trend` | `@super` / 真实执行记录、上海日期筛选和趋势；统一重试待补 |
 | 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 待实现 | `POST /admin/logs/cleanup` | `audit.manage` / 二次确认 |
 | 66 | 系统日志 `#/system-log` | `/admin/audit` | 已完成 | `GET /admin/audit` | `audit.view` / 脱敏载荷 |
 | 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 待实现 | `GET /admin/admin-login-logs` | `audit.view` |
@@ -123,7 +123,7 @@
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
-| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态、升级检查和任务队列基础页已完成；定时趋势、统一重试和报表细节待补 |
+| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态、升级检查和任务队列基础页已完成；定时任务真实执行审计、上海日期趋势和四尺寸布局已验收，统一重试、投递结果和报表细节待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |

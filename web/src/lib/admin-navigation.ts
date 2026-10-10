@@ -39,7 +39,6 @@ export const adminNavigation = [
   { href: "/admin/logs/jobs", label: "定时任务日志", icon: History, permission: "@super", group: "system" },
   { href: "/admin/jobs/queue", label: "任务队列", icon: Settings, permission: "jobs.view", group: "system" },
   { href: "/admin/system/about", label: "关于系统", icon: Settings, permission: "settings.view", group: "system" },
-  { href: "/admin/channels", label: "接口设置", icon: Plug, permission: "@super", group: "system" },
 ];
 
 export const adminNavigationGroups = [
