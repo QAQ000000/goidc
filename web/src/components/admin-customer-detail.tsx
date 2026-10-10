@@ -59,6 +59,8 @@ type AdminCustomer = {
   language: string;
   admin_note: string;
   receive_marketing: boolean;
+  custom_fields: Record<string, unknown>;
+  profile_version: number;
 };
 
 type CustomerDetailTab =
@@ -715,6 +717,8 @@ function CustomerProfile({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
+  const definitions = useResource<{items: Array<{field_key:string;label:string;field_type:string;choices:string[];required:boolean;description:string}>}>("/admin/customer-fields?active=true&limit=100", false);
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(customer.custom_fields || {});
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -725,7 +729,7 @@ function CustomerProfile({
     try {
       await api(`/admin/customers/${customer.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ display_name: name, email, status, profile }),
+        body: JSON.stringify({ display_name: name, email, status, profile: { ...profile, custom_fields: customFields, expected_version: customer.profile_version } }),
       });
       setMessage("客户资料已保存");
       saved();
@@ -770,6 +774,8 @@ function CustomerProfile({
             </label>
           </div>
         </section>
+
+        {definitions.data?.items.length ? <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]"><h2 className="text-sm font-semibold text-[#303133] mb-3">自定义字段</h2><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">{definitions.data.items.map((field) => <label key={field.field_key} className={fieldStyle}>{field.label}{field.field_type === "select" ? <Select value={String(customFields[field.field_key] ?? "")} onValueChange={(value) => setCustomFields((v) => ({...v,[field.field_key]:value}))}><SelectTrigger className="mt-1.5 h-8"><SelectValue placeholder={field.description || "请选择"} /></SelectTrigger><SelectContent>{field.choices.map((choice) => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}</SelectContent></Select> : <Input className="mt-1.5 text-xs h-8 border-[#dcdfe6]" type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"} required={field.required} value={String(customFields[field.field_key] ?? "")} onChange={(event) => setCustomFields((v) => ({...v,[field.field_key]: field.field_type === "number" ? Number(event.target.value) : event.target.value}))} />}</label>)}</div></section> : null}
 
         <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
           <h2 className="text-sm font-semibold text-[#303133] mb-3">账户信息</h2>

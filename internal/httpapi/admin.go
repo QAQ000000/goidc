@@ -107,7 +107,7 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
  COALESCE(p.country,'') AS country,COALESCE(p.province,'') AS province,COALESCE(p.address,'') AS address,
  COALESCE(p.postcode,'') AS postcode,COALESCE(p.source_channel,'') AS source_channel,
  COALESCE(p.payment_method,'bank') AS payment_method,COALESCE(p.language,'zh_CN') AS language,
- COALESCE(p.admin_note,'') AS admin_note,COALESCE(p.receive_marketing,true) AS receive_marketing
+ COALESCE(p.admin_note,'') AS admin_note,COALESCE(p.receive_marketing,true) AS receive_marketing,COALESCE(p.custom_fields,'{}'::jsonb) AS custom_fields,COALESCE(p.version,1) AS profile_version
  FROM users u
  LEFT JOIN users owner ON owner.id=u.sales_owner_id
  LEFT JOIN customer_group_members gm ON gm.customer_id=u.id
@@ -222,11 +222,14 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.Profile != nil {
 		if err = saveCustomerProfile(r.Context(), tx, id, *input.Profile); err != nil {
+			if customerProfileFailure(w, r, err) {
+				return
+			}
 			s.fail(w, r, err)
 			return
 		}
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.updated", "user", id, map[string]any{"display_name": input.DisplayName, "email": input.Email, "status": input.Status, "previous_status": currentStatus,"profile_updated":input.Profile!=nil}); err != nil {
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.updated", "user", id, map[string]any{"display_name": input.DisplayName, "email": input.Email, "status": input.Status, "previous_status": currentStatus, "profile_updated": input.Profile != nil}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -389,6 +392,9 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err = saveCustomerProfile(r.Context(), tx, id, input.customerProfileInput); err != nil {
+		if customerProfileFailure(w, r, err) {
+			return
+		}
 		s.fail(w, r, err)
 		return
 	}
