@@ -1,2 +1,2 @@
-import { AdminCertificationsView } from "@/components/certification";
+import { AdminCertificationsView } from "@/components/admin-certifications";
 export default function Page() { return <AdminCertificationsView />; }

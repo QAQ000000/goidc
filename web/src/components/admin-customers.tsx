@@ -24,6 +24,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { Failure, Loading } from "./common";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { AdminPagination } from "./admin-pagination";
 
 type SalesOwner = { id: number; username: string; display_name: string };
 
@@ -58,7 +59,6 @@ export function AdminCustomersView() {
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [jumpPage, setJumpPage] = useState("1");
 
   const groups = useResource<CustomerGroup[]>("/admin/customer-groups", false);
   const salesOwners = useResource<SalesOwner[]>("/admin/sales-owners", false);
@@ -80,13 +80,11 @@ export function AdminCustomersView() {
   });
 
   const totalCount = filteredData.length;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   function handleSearch(e?: React.FormEvent) {
     if (e) e.preventDefault();
     setQuery(draftQuery.trim());
     setPage(0);
-    setJumpPage("1");
   }
 
   function handleReset() {
@@ -96,15 +94,6 @@ export function AdminCustomersView() {
     setStatusFilter("all");
     setSalesFilter("all");
     setPage(0);
-    setJumpPage("1");
-  }
-
-  function handleJump(e: React.FormEvent) {
-    e.preventDefault();
-    const target = parseInt(jumpPage, 10);
-    if (!isNaN(target) && target >= 1 && target <= totalPages) {
-      setPage(target - 1);
-    }
   }
 
   return (
@@ -424,72 +413,16 @@ export function AdminCustomersView() {
                 </Table>
               </div>
 
-              {/* Pagination bar matching MoFang */}
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-[#ebeef5] text-xs text-[#606266]">
-                <div>共 {totalCount} 条</div>
-
-                <div className="flex items-center gap-3">
-                  <Select
-                    value={String(pageSize)}
-                    onValueChange={(val) => {
-                      setPageSize(Number(val));
-                      setPage(0);
-                    }}
-                  >
-                    <SelectTrigger className="h-7 text-xs w-24 border-[#dcdfe6]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="25">25条/页</SelectItem>
-                      <SelectItem value="50">50条/页</SelectItem>
-                      <SelectItem value="100">100条/页</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page === 0}
-                      onClick={() => {
-                        setPage((p) => p - 1);
-                        setJumpPage(String(page));
-                      }}
-                      className="h-7 px-2 text-xs border-[#dcdfe6]"
-                    >
-                      &lt;
-                    </Button>
-                    <span className="px-2 py-1 bg-[#409eff] text-white rounded font-medium text-xs">
-                      {page + 1}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={page + 1 >= totalPages}
-                      onClick={() => {
-                        setPage((p) => p + 1);
-                        setJumpPage(String(page + 2));
-                      }}
-                      className="h-7 px-2 text-xs border-[#dcdfe6]"
-                    >
-                      &gt;
-                    </Button>
-                  </div>
-
-                  <form onSubmit={handleJump} className="flex items-center gap-1.5">
-                    <span>前往</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      value={jumpPage}
-                      onChange={(e) => setJumpPage(e.target.value)}
-                      className="h-7 w-12 text-xs text-center border-[#dcdfe6] p-0"
-                    />
-                    <span>页</span>
-                  </form>
-                </div>
-              </div>
+              <AdminPagination
+                total={totalCount}
+                page={page}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(ps) => {
+                  setPageSize(ps);
+                  setPage(0);
+                }}
+              />
             </>
           )}
         </div>

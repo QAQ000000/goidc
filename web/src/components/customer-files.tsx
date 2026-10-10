@@ -14,6 +14,7 @@ import { Checkbox } from "./ui/checkbox";
 import { Table,TableHeader,TableHead,TableBody,TableRow,TableCell } from "./ui/table";
 import { Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription } from "./ui/dialog";
 import { Loading,Failure } from "./common";
+import { AdminPagination } from "./admin-pagination";
 
 type FilePage<T>={items:T[];total:number};
 type Owner={id:number;username:string;display_name:string;status:string};
@@ -27,19 +28,333 @@ export function CustomerFilesView(){
  return <Workspace title="我的文件"><div className="mb-8"><h1 className="text-2xl font-semibold">我的文件</h1><p className="mt-2 text-muted-foreground text-sm">客服为你提供的专属资料，仅账户本人可访问。<Link href="/downloads" className="ml-2 text-primary">公共下载中心</Link></p></div><form className="flex gap-3 mb-6" onSubmit={e=>{e.preventDefault();setQuery(search);setOffset(0);}}><Input aria-label="搜索我的文件" placeholder="搜索名称、备注或文件名" value={search} onChange={e=>setSearch(e.target.value)}/><Button variant="outline">搜索</Button></form>{message && <p role="alert" className="text-sm text-destructive mb-5">{message}</p>}{files.error ? files.error instanceof ApiError && files.error.code==="downloads_disabled" ? <div className="rounded-lg border p-8 text-center">文件下载暂时关闭</div> : <Failure error={files.error} retry={files.refresh}/> : !files.data ? <Loading/> : <><div className="divide-y border-y">{files.data.items.map(file=><article key={file.id} className="py-6 flex flex-wrap items-start gap-4"><FileDescription file={file}/><Button disabled={busy!==null} aria-label={`下载 ${file.title}`} onClick={()=>void download(file)}><Download size={16}/>{busy===file.id ? "下载中…" : "下载文件"}</Button></article>)}{files.data.items.length===0 && <p className="py-16 text-center text-muted-foreground">暂无专属文件</p>}</div><Pager offset={offset} total={files.data.total} change={setOffset}/></>}</Workspace>;
 }
 export function AdminCustomerFilesView({customerId}:{customerId?:number}){return <Workspace title="客户文件" admin><CustomerFileManager customerId={customerId}/></Workspace>;}
-export function CustomerFileManager({customerId}:{customerId?:number}){
- const [editor,setEditor]=useState<EditorState>({busy:false,dirty:false});
- const manage=useAdminPermission("customer_files.manage");const [customer,setCustomer]=useState(customerId ? String(customerId) : "");const [search,setSearch]=useState("");const [query,setQuery]=useState("");const [offset,setOffset]=useState(0);
- const [selection,setSelection]=useState<AdminCustomerFile[]>([]);const [edit,setEdit]=useState<AdminCustomerFile|null>(null);const [busy,setBusy]=useState(false);const [error,setError]=useState("");
- const root="/admin/customer-files";const files=useResource<FilePage<AdminCustomerFile>>(`${root}?q=${encodeURIComponent(query)}&customer_id=${customer}&limit=20&offset=${offset}`,false);
- function refresh(){files.refresh();setSelection([]);}
- function newFile(){setEdit({id:0,customer_id:Number(customer)||0,title:"",remarks:"",filename:"",mime_type:"",size_bytes:0,sha256:"",downloads:0,created_at:"",updated_at:"",version:0,uploader_id:0,uploader_name:"",customer_name:"",customer_username:""});}
- async function open(id:number){if(busy||editor.busy)return;setBusy(true);setError("");try{setEdit(await api<AdminCustomerFile>(`${root}/${id}`));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function download(file:AdminCustomerFile){if(busy)return;setBusy(true);setError("");try{await fetchDownload(file,`${root}/${file.id}/file`);refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function bulkDelete(){if(busy || !selection.length || !window.confirm(`确认删除选中的 ${selection.length} 个客户文件？`))return;setBusy(true);setError("");try{await api(`${root}/bulk-delete`,{method:"POST",body:JSON.stringify({items:selection.map(f=>({id:f.id,expected_version:f.version}))})});refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- function changePage(value:number){setOffset(value);setSelection([]);}
- return <><div className="flex flex-wrap justify-between gap-4 mb-6"><div><h1 className="text-2xl font-semibold">客户文件</h1><p className="mt-2 text-sm text-muted-foreground">为授权客户上传、维护和转移专属资料。</p>{customerId && <Link href={`/admin/customers/${customerId}`} className="text-sm text-primary">返回客户联系人</Link>}</div>{manage && <Button disabled={busy||editor.busy} onClick={newFile}><Plus size={16}/>上传客户文件</Button>}</div><form className="grid sm:grid-cols-[1fr_2fr_auto] gap-3 mb-5" onSubmit={e=>{e.preventDefault();setQuery(search);setOffset(0);setSelection([]);}}><Input aria-label="筛选客户编号" type="number" min={1} value={customer} placeholder="全部授权客户（可填编号）" onChange={e=>{setCustomer(e.target.value);setOffset(0);setSelection([]);}}/><Input aria-label="搜索客户文件" value={search} placeholder="搜索名称、备注或文件名" onChange={e=>setSearch(e.target.value)}/><Button variant="outline">搜索</Button></form>{manage && <div className="mb-4 flex gap-3 items-center text-sm"><Button variant="destructive" disabled={busy || !selection.length} onClick={()=>void bulkDelete()}><Trash2 size={16}/>删除选中</Button><span>已选择 {selection.length} 个文件</span></div>}{error && <p role="alert" className="mb-4 text-sm text-destructive">{error}</p>}{files.error ? <Failure error={files.error} retry={refresh}/> : !files.data ? <Loading/> : <><div className="overflow-x-auto border-y"><Table><TableHeader><TableRow>{manage&&<TableHead>选择</TableHead>}<TableHead>文件</TableHead><TableHead>客户</TableHead><TableHead>上传人 / 版本</TableHead><TableHead>管理</TableHead></TableRow></TableHeader><TableBody>{files.data.items.map(file=><TableRow key={`${file.id}:${file.version}`}>{manage&&<TableCell><Checkbox aria-label={`选择 ${file.title}`} checked={selection.some(f=>f.id===file.id&&f.version===file.version)} onCheckedChange={value=>setSelection(current=>value?[...current.filter(f=>f.id!==file.id),file]:current.filter(f=>f.id!==file.id))}/></TableCell>}<TableCell className="min-w-60"><FileDescription file={file}/></TableCell><TableCell className="max-w-xs break-words">#{file.customer_id} · {file.customer_name}<p className="text-xs text-muted-foreground">{file.customer_username}</p></TableCell><TableCell>{file.uploader_name}<p className="text-xs text-muted-foreground">版本 {file.version}</p></TableCell><TableCell><div className="flex gap-2"><Button size="sm" variant="outline" disabled={busy} aria-label={`下载客户文件 ${file.title}`} onClick={()=>void download(file)}><Download size={14}/>下载</Button><Button size="sm" variant="outline" disabled={busy} aria-label={`查看客户文件 ${file.title}`} onClick={()=>void open(file.id)}>{manage?"编辑":"查看"}</Button></div></TableCell></TableRow>)}{files.data.items.length===0&&<TableRow><TableCell colSpan={manage?5:4} className="h-28 text-center text-muted-foreground">暂无客户文件</TableCell></TableRow>}</TableBody></Table></div><Pager offset={offset} total={files.data.total} change={changePage}/></>}
- <Dialog open={!!edit} onOpenChange={value=>{if(!value&&canDiscard(editor))setEdit(null);}}><DialogContent className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{edit?.id ? manage ? "编辑客户文件" : "查看客户文件" : "上传客户文件"}</DialogTitle><DialogDescription>仅所属客户可读取。转移文件后原客户将立即失去访问权限。</DialogDescription></DialogHeader>{edit && <CustomerFileForm report={setEditor} key={`${edit.id}:${edit.version}`} initial={edit} manage={manage} saved={refresh} close={()=>setEdit(null)} reload={()=>void open(edit.id)}/>}</DialogContent></Dialog></>;
+export function CustomerFileManager({ customerId }: { customerId?: number }) {
+  const [editor, setEditor] = useState<EditorState>({ busy: false, dirty: false });
+  const manage = useAdminPermission("customer_files.manage");
+  const [customer, setCustomer] = useState(customerId ? String(customerId) : "");
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [selection, setSelection] = useState<AdminCustomerFile[]>([]);
+  const [edit, setEdit] = useState<AdminCustomerFile | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const root = "/admin/customer-files";
+  const files = useResource<FilePage<AdminCustomerFile>>(
+    `${root}?q=${encodeURIComponent(query)}&customer_id=${customer}&limit=20&offset=${offset}`,
+    false
+  );
+
+  function refresh() {
+    files.refresh();
+    setSelection([]);
+  }
+
+  function newFile() {
+    setEdit({
+      id: 0,
+      customer_id: Number(customer) || 0,
+      title: "",
+      remarks: "",
+      filename: "",
+      mime_type: "",
+      size_bytes: 0,
+      sha256: "",
+      downloads: 0,
+      created_at: "",
+      updated_at: "",
+      version: 0,
+      uploader_id: 0,
+      uploader_name: "",
+      customer_name: "",
+      customer_username: "",
+    });
+  }
+
+  async function open(id: number) {
+    if (busy || editor.busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      setEdit(await api<AdminCustomerFile>(`${root}/${id}`));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function download(file: AdminCustomerFile) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      await fetchDownload(file, `${root}/${file.id}/file`);
+      refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function bulkDelete() {
+    if (!busy && selection.length && window.confirm(`确认删除选中的 ${selection.length} 个客户文件？`)) {
+      setBusy(true);
+      setError("");
+      try {
+        await api(`${root}/bulk-delete`, {
+          method: "POST",
+          body: JSON.stringify({ items: selection.map((f) => ({ id: f.id, expected_version: f.version })) }),
+        });
+        refresh();
+      } catch (e) {
+        setError((e as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    }
+  }
+
+  function changePage(value: number) {
+    setOffset(value);
+    setSelection([]);
+  }
+
+  return (
+    <div className="bg-white rounded border border-[#ebeef5] shadow-sm p-4 sm:p-5 space-y-4 max-w-full overflow-hidden">
+      {/* Top guide text matching MoFang */}
+      <div className="text-xs text-[#606266]">
+        为授权客户上传、维护和转移专属资料，仅所属客户可访问。{" "}
+        <a
+          href="https://bbs.idcsmart.com"
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#409eff] hover:underline ml-1"
+        >
+          帮助文档
+        </a>
+      </div>
+
+      {/* Action Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {manage && (
+            <Button
+              disabled={busy || editor.busy}
+              onClick={newFile}
+              size="sm"
+              className="h-8 bg-[#1cb24d] hover:bg-[#169941] text-white text-xs px-3.5 rounded shadow-none font-normal"
+            >
+              <Plus size={14} className="mr-1" />
+              上传客户文件
+            </Button>
+          )}
+          {manage && selection.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => void bulkDelete()}
+              className="h-8 text-xs text-[#f56c6c] border-[#fde2e2] bg-[#fef0f0] hover:bg-[#fde2e2]"
+            >
+              <Trash2 size={13} className="mr-1" />
+              批量删除 ({selection.length})
+            </Button>
+          )}
+        </div>
+
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setQuery(search);
+            setOffset(0);
+            setSelection([]);
+          }}
+        >
+          <Input
+            aria-label="筛选客户编号"
+            type="number"
+            min={1}
+            value={customer}
+            placeholder="客户编号"
+            onChange={(e) => {
+              setCustomer(e.target.value);
+              setOffset(0);
+              setSelection([]);
+            }}
+            className="h-8 w-28 text-xs border-[#dcdfe6]"
+          />
+          <Input
+            aria-label="搜索客户文件"
+            value={search}
+            placeholder="搜索名称或备注"
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-8 w-44 text-xs border-[#dcdfe6]"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="h-8 bg-[#409eff] text-white hover:bg-[#337ecc] text-xs px-3 shadow-none font-normal"
+          >
+            搜索
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 text-[#606266] border-[#dcdfe6]"
+            title="刷新"
+            aria-label="刷新"
+            onClick={refresh}
+          >
+            <RefreshCw size={13} />
+          </Button>
+        </form>
+      </div>
+
+      {error && <p role="alert" className="p-2.5 bg-[#fef0f0] border border-[#fde2e2] text-xs text-[#f56c6c] rounded">{error}</p>}
+
+      {/* Data Table */}
+      {files.error ? (
+        <Failure error={files.error} retry={refresh} />
+      ) : !files.data ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-[#f5f7fa]">
+                <TableRow className="border-b border-[#ebeef5] hover:bg-[#f5f7fa]">
+                  {manage && <TableHead className="w-10 text-center text-xs font-semibold text-[#909399] py-3">选择</TableHead>}
+                  <TableHead className="text-xs font-semibold text-[#909399] py-3">文件名称</TableHead>
+                  <TableHead className="text-xs font-semibold text-[#909399] py-3">所属客户</TableHead>
+                  <TableHead className="text-xs font-semibold text-[#909399] py-3">上传人 / 版本</TableHead>
+                  <TableHead className="text-xs font-semibold text-[#909399] py-3">下载次数</TableHead>
+                  <TableHead className="text-right text-xs font-semibold text-[#909399] py-3 pr-4">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {files.data.items.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={manage ? 6 : 5} className="h-32 text-center text-xs text-[#909399]">
+                      暂无客户文件
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  files.data.items.map((file) => (
+                    <TableRow key={`${file.id}:${file.version}`} className="border-b border-[#ebeef5] hover:bg-[#f5f7fa] text-xs text-[#606266]">
+                      {manage && (
+                        <TableCell className="text-center">
+                          <Checkbox
+                            aria-label={`选择 ${file.title}`}
+                            checked={selection.some((f) => f.id === file.id && f.version === file.version)}
+                            onCheckedChange={(value) =>
+                              setSelection((current) =>
+                                value
+                                  ? [...current.filter((f) => f.id !== file.id), file]
+                                  : current.filter((f) => f.id !== file.id)
+                              )
+                            }
+                          />
+                        </TableCell>
+                      )}
+                      <TableCell className="min-w-52">
+                        <div className="font-medium text-[#303133]">{file.title}</div>
+                        <div className="text-[11px] text-[#909399] mt-0.5">
+                          {file.filename} · {fileSize(file.size_bytes)}
+                        </div>
+                        {file.remarks && <div className="text-[11px] text-[#909399] italic mt-0.5">{file.remarks}</div>}
+                      </TableCell>
+                      <TableCell>
+                        <Link href={`/admin/customers/${file.customer_id}`} className="text-[#409eff] hover:underline font-medium">
+                          #{file.customer_id} {file.customer_name}
+                        </Link>
+                        <div className="text-[11px] text-[#909399]">{file.customer_username}</div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-[#606266]">{file.uploader_name}</span>
+                        <span className="text-[11px] text-[#909399] block">v{file.version}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="tabular-nums font-semibold text-[#303133]">{file.downloads}</span>
+                        <span className="text-[#909399] text-[11px] ml-1">次</span>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            className="h-7 text-xs border-[#dcdfe6] text-[#409eff] hover:border-[#409eff] hover:bg-[#ecf5ff]"
+                            aria-label={`下载客户文件 ${file.title}`}
+                            onClick={() => void download(file)}
+                          >
+                            <Download size={12} className="mr-1" />
+                            下载
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            className="h-7 text-xs border-[#dcdfe6] text-[#606266] hover:border-[#409eff] hover:text-[#409eff]"
+                            aria-label={`查看客户文件 ${file.title}`}
+                            onClick={() => void open(file.id)}
+                          >
+                            {manage ? "编辑" : "查看"}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <AdminPagination
+            total={files.data.total}
+            page={Math.floor(offset / 20)}
+            pageSize={20}
+            onPageChange={(p) => changePage(p * 20)}
+          />
+        </>
+      )}
+
+      <Dialog
+        open={!!edit}
+        onOpenChange={(value) => {
+          if (!value && canDiscard(editor)) setEdit(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-xl max-h-[90dvh] overflow-y-auto bg-white border border-[#ebeef5] rounded shadow-lg p-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b border-[#ebeef5] bg-[#fafafa]">
+            <DialogTitle className="text-sm font-semibold text-[#303133]">
+              {edit?.id ? (manage ? "编辑客户文件" : "查看客户文件") : "上传客户文件"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#909399]">
+              仅所属客户可读取。转移文件后原客户将立即失去访问权限。
+            </DialogDescription>
+          </DialogHeader>
+          {edit && (
+            <div className="p-5">
+              <CustomerFileForm
+                report={setEditor}
+                key={`${edit.id}:${edit.version}`}
+                initial={edit}
+                manage={manage}
+                saved={refresh}
+                close={() => setEdit(null)}
+                reload={() => void open(edit.id)}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
 function CustomerFileForm({initial,manage,saved,close,reload,report}:{report:(state:EditorState)=>void;initial:AdminCustomerFile;manage:boolean;saved:()=>void;close:()=>void;reload:()=>void}){
  const fileInput=useRef<HTMLInputElement>(null);
