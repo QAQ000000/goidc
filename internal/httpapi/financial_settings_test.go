@@ -77,6 +77,14 @@ func TestFinancialSettingsContracts(t *testing.T) {
 	if credit.Code != 200 {
 		t.Fatalf("credit settings: %d %s", credit.Code, credit.Body.String())
 	}
+	creditUpdate := request(h, "PUT", "/api/v1/admin/credit-settings", map[string]any{"enabled": true, "limit_cents": 50000, "auto_recharge": false, "expected_version": 1}, admin, "credit-settings-1")
+	if creditUpdate.Code != 200 {
+		t.Fatalf("credit update: %d %s", creditUpdate.Code, creditUpdate.Body.String())
+	}
+	replay := request(h, "PUT", "/api/v1/admin/credit-settings", map[string]any{"enabled": true, "limit_cents": 50000, "auto_recharge": false, "expected_version": 1}, admin, "credit-settings-1")
+	if replay.Code != 200 || !containsJSON(replay.Body.Bytes(), "replayed") {
+		t.Fatalf("credit replay: %d %s", replay.Code, replay.Body.String())
+	}
 }
 
 func containsJSON(body []byte, needle string) bool { return bytes.Contains(body, []byte(needle)) }
