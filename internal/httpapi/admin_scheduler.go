@@ -31,7 +31,7 @@ func schedulerFilter(r *http.Request) (string, []any, bool) {
 	}
 	for _, key := range []string{"from", "to"} {
 		if raw := r.URL.Query().Get(key); raw != "" {
-			d, e := time.Parse("2006-01-02", raw)
+			d, e := time.ParseInLocation("2006-01-02", raw, time.FixedZone("Asia/Shanghai", 8*60*60))
 			if e != nil {
 				return "", nil, false
 			}
@@ -84,7 +84,7 @@ func (s *Server) adminSchedulerTrend(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_scheduler_filter", "日志筛选参数无效")
 		return
 	}
-	rows, e := s.db.Pool.Query(r.Context(), "SELECT to_char(started_at AT TIME ZONE 'UTC','YYYY-MM-DD') AS \"day\",count(*) total,count(*) FILTER(WHERE status='succeeded') succeeded,count(*) FILTER(WHERE status='failed') failed,count(*) FILTER(WHERE status='running') running,count(*) FILTER(WHERE status='interrupted') interrupted FROM scheduler_runs WHERE "+where+" AND started_at>=now()-interval '31 days' GROUP BY 1 ORDER BY 1", args...)
+	rows, e := s.db.Pool.Query(r.Context(), "SELECT to_char(started_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') AS \"day\",count(*) total,count(*) FILTER(WHERE status='succeeded') succeeded,count(*) FILTER(WHERE status='failed') failed,count(*) FILTER(WHERE status='running') running,count(*) FILTER(WHERE status='interrupted') interrupted FROM scheduler_runs WHERE "+where+" AND started_at>=now()-interval '31 days' GROUP BY 1 ORDER BY 1", args...)
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -97,5 +97,5 @@ func (s *Server) adminSchedulerTrend(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []map[string]any{}
 	}
-	write(w, 200, map[string]any{"items": items, "timezone": "UTC", "window_days": 31})
+	write(w, 200, map[string]any{"items": items, "timezone": "Asia/Shanghai", "window_days": 31})
 }

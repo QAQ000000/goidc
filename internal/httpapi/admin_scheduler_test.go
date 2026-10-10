@@ -70,3 +70,29 @@ func TestSchedulerHistoryLifecycleAndPermissions(t *testing.T) {
 		t.Fatal("business repeated")
 	}
 }
+
+func TestSchedulerTrendUsesShanghaiDateBoundary(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "scheduler-tz-root", "super_admin")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO scheduler_runs(task_key,started_at,finished_at,duration_ms,status,affected_count) VALUES ('billing_notifications','2026-10-09 15:30:00+00','2026-10-09 15:31:00+00',60000,'succeeded',1),('billing_notifications','2026-10-09 16:30:00+00','2026-10-09 16:31:00+00',60000,'failed',0)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, day := range []string{"2026-10-09", "2026-10-10"} {
+		w := request(h, "GET", "/api/v1/admin/logs/jobs?from="+day+"&to="+day, nil, root, "")
+		expect(t, w, 200)
+		if data(t, w)["total"].(float64) != 1 {
+			t.Fatal(w.Body.String())
+		}
+	}
+
+	w := request(h, "GET", "/api/v1/admin/logs/jobs/trend?from=2026-10-10&to=2026-10-10", nil, root, "")
+	expect(t, w, 200)
+	if !strings.Contains(w.Body.String(), `"day":"2026-10-10"`) || strings.Contains(w.Body.String(), `"day":"2026-10-09"`) || !strings.Contains(w.Body.String(), `"timezone":"Asia/Shanghai"`) {
+		t.Fatal(w.Body.String())
+	}
+	w = request(h, "GET", "/api/v1/admin/logs/jobs/trend?from=2026-10-09&to=2026-10-09", nil, root, "")
+	expect(t, w, 200)
+	if !strings.Contains(w.Body.String(), `"day":"2026-10-09"`) || strings.Contains(w.Body.String(), `"day":"2026-10-10"`) {
+		t.Fatal(w.Body.String())
+	}
+}
