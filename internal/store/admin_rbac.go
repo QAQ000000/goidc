@@ -40,6 +40,7 @@ var AdminPermissions = []Permission{
 	{"affiliates.withdrawals.review", "推广返利", "审核提现申请"}, {"affiliates.payout", "推广返利", "登记线下打款及读取收款账户"},
 	{"certifications.view", "实名认证", "读取实名认证申请和资料"}, {"certifications.manage", "实名认证", "审核实名认证申请"},
 	{"reports.view", "报表", "读取经营报表"}, {"audit.view", "审计", "读取操作日志"}, {"migrations.view", "迁移", "读取迁移记录和复核详情"},
+	{"jobs.view", "任务", "读取开通和通知任务队列"},
 }
 
 func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx, error) {
