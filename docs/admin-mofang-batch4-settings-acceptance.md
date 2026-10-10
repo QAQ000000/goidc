@@ -10,6 +10,7 @@
 - 新增 `/admin/auth-settings` 注册登录与验证码入口，并接入全局后台导航和 `settings.view` 权限。
 - 渠道目录增加开通接口分类，继续使用编译进 Go 的注册表和数据库实例配置。
 - 新增运行环境和关于系统入口，将旧版 PHP 信息页转换为 Go、PostgreSQL 18、迁移版本和构建契约的真实只读信息。
+- 新增数据库状态入口，显示 PostgreSQL 版本、数据库大小、迁移版本和连接池状态；通知模板列表支持渠道、关键词和统一分页契约。
 
 ## 验证结果
 
@@ -23,6 +24,8 @@
 - `GET /readyz`：返回 `postgresql18 / ready`。
 - `GET /api/v1/site`：未暴露 `admin_settings`，公开资料响应保持原边界。
 - `GET /api/v1/admin/system/runtime`、`GET /api/v1/admin/system/about`：通过超级管理员和 `settings.view` 权限测试。
+- `GET /api/v1/admin/system/database`：通过超级管理员、`settings.view` 和未授权回归测试，返回真实数据库状态。
+- `GET /api/v1/admin/notification-templates?channel=email&q=password_reset&limit=1`：通过模板筛选、分页字段和结果数量测试。
 
 ## 未验证项
 

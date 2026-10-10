@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,8 +23,32 @@ func validNotificationKind(value string) bool {
 }
 
 func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
+	if channel != "" && channel != "email" && channel != "sms" {
+		writeError(w, http.StatusBadRequest, "invalid_notification_channel", "通知渠道无效")
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	args := []any{}
+	where := []string{"TRUE"}
+	if channel != "" {
+		args = append(args, channel)
+		where = append(where, fmt.Sprintf("channel=$%d", len(args)))
+	}
+	if query != "" {
+		args = append(args, "%"+query+"%")
+		where = append(where, fmt.Sprintf("(name ILIKE $%d OR kind ILIKE $%d OR subject ILIKE $%d)", len(args), len(args), len(args)))
+	}
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM notification_templates WHERE "+whereSQL, args...).Scan(&total); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	args = append(args, limit, offset)
 	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at
- ,channel,provider_template_id FROM notification_templates ORDER BY channel,id`)
+ ,channel,provider_template_id FROM notification_templates WHERE `+whereSQL+` ORDER BY channel,id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -36,7 +61,7 @@ func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []map[string]any{}
 	}
-	write(w, http.StatusOK, items)
+	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
 }
 
 func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Request) {

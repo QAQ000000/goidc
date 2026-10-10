@@ -33,6 +33,7 @@ export const adminNavigation = [
   { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/system/runtime", label: "运行环境", icon: Settings, permission: "settings.view", group: "system" },
+  { href: "/admin/system/database", label: "数据库状态", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/system/about", label: "关于系统", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/channels", label: "接口设置", icon: Plug, permission: "@super", group: "system" },
 ];

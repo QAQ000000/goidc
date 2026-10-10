@@ -327,13 +327,28 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	_, admin := user(t, db, h, "notification-admin", "super_admin")
 	templates := request(h, "GET", "/api/v1/admin/notification-templates", nil, admin, "")
 	expect(t, templates, 200)
-	items := listData(t, templates)
+	page := data(t, templates)
+	items, ok := page["items"].([]any)
+	if !ok {
+		t.Fatalf("template page missing items: %s", templates.Body.String())
+	}
 	if len(items) < 4 {
 		t.Fatalf("template count=%d", len(items))
 	}
+	if page["total"] == nil || page["limit"] == nil || page["offset"] == nil {
+		t.Fatalf("template pagination missing: %s", templates.Body.String())
+	}
+	filtered := request(h, "GET", "/api/v1/admin/notification-templates?channel=email&q=password_reset&limit=1", nil, admin, "")
+	expect(t, filtered, 200)
+	filteredPage := data(t, filtered)
+	filteredItems, ok := filteredPage["items"].([]any)
+	if !ok || len(filteredItems) != 1 || filteredPage["total"] != float64(1) {
+		t.Fatalf("template filtering=%s", filtered.Body.String())
+	}
 	var templateID int64
-	for _, item := range items {
-		if item["channel"] == "email" && item["kind"] == "password_reset" {
+	for _, raw := range items {
+		item, ok := raw.(map[string]any)
+		if ok && item["channel"] == "email" && item["kind"] == "password_reset" {
 			templateID = int64(item["id"].(float64))
 			break
 		}

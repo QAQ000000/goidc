@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, Pencil, Plus, RotateCcw, Save } from "lucide-react";
+import { ArrowLeft, ArrowRight, Pencil, Plus, RotateCcw, Save } from "lucide-react";
 import { api, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
@@ -44,6 +44,7 @@ type EmailJob = {
   created_at: string;
 };
 type SMSJob = Omit<EmailJob, "subject">;
+type TemplatePage = { items: Template[]; total: number; limit: number; offset: number };
 
 export function NotificationsView() {
   return (
@@ -53,14 +54,16 @@ export function NotificationsView() {
   );
 }
 function NotificationManager() {
-  const templates = useResource<Template[]>("/admin/notification-templates");
+  const [templateChannel, setTemplateChannel] = useState<"email" | "sms">("email");
+  const [templatePage, setTemplatePage] = useState(0);
+  const [templateQuery, setTemplateQuery] = useState("");
+  const templateLimit = 25;
+  const templates = useResource<TemplatePage>(`/admin/notification-templates?channel=${templateChannel}&q=${encodeURIComponent(templateQuery)}&limit=${templateLimit}&offset=${templatePage * templateLimit}`, false);
   const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
   const smsOutbox = useResource<SMSJob[]>("/admin/sms-outbox?limit=50");
   const manage = useAdminPermission("notifications.manage");
   const [tab, setTab] = useState("templates");
-  const [templateChannel, setTemplateChannel] = useState<"email" | "sms">("email");
   const [outboxChannel, setOutboxChannel] = useState<"email" | "sms">("email");
-  const [query, setQuery] = useState("");
   const [edit, setEdit] = useState<Template | null>(null);
   const [editingBusy, setEditingBusy] = useState(false);
   const [notice, setNotice] = useState("");
@@ -71,12 +74,7 @@ function NotificationManager() {
   };
   const activeOutbox = outboxChannel === "email" ? outbox : smsOutbox;
   const error = tab === "templates" ? templates.error : activeOutbox.error;
-  const list =
-    templates.data?.filter((item) => item.channel === templateChannel).filter((item) =>
-      `${item.name} ${item.subject} ${item.kind}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-    ) ?? [];
+  const list = templates.data?.items ?? [];
   if (edit)
     return (
       <>
@@ -167,7 +165,7 @@ function NotificationManager() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="flex border-b">
             {([["email", "邮件模板"], ["sms", "短信模板"]] as const).map(([value, label]) => (
-              <button type="button" key={value} className={`border-b-2 px-4 py-2 text-sm ${templateChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => { setTemplateChannel(value); setQuery(""); }}>
+              <button type="button" key={value} className={`border-b-2 px-4 py-2 text-sm ${templateChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => { setTemplateChannel(value); setTemplateQuery(""); setTemplatePage(0); }}>
                 {label}
               </button>
             ))}
@@ -176,8 +174,8 @@ function NotificationManager() {
             className="max-w-md"
             aria-label={`搜索${templateChannel === "sms" ? "短信" : "邮件"}模板`}
             placeholder="模板名称、主题或类型"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            value={templateQuery}
+            onChange={(event) => { setTemplateQuery(event.target.value); setTemplatePage(0); }}
           />
         </div>
       )}
@@ -187,6 +185,7 @@ function NotificationManager() {
         !templates.data ? (
           <Loading />
         ) : (
+          <>
           <div className="overflow-x-auto border-y">
             <Table>
               <TableHeader>
@@ -244,6 +243,14 @@ function NotificationManager() {
               </TableBody>
             </Table>
           </div>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+            <span>{templates.data.total} 个模板</span>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="icon" title="上一页" aria-label="上一页" disabled={templatePage === 0} onClick={() => setTemplatePage((value) => Math.max(0, value - 1))}><ArrowLeft /></Button>
+              <Button type="button" variant="outline" size="icon" title="下一页" aria-label="下一页" disabled={(templatePage + 1) * templateLimit >= templates.data.total} onClick={() => setTemplatePage((value) => value + 1)}><ArrowRight /></Button>
+            </div>
+          </div>
+          </>
         )
       ) : !activeOutbox.data ? (
         <Loading />

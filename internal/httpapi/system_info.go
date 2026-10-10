@@ -31,3 +31,31 @@ func (s *Server) adminSystemAbout(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, http.StatusOK, map[string]any{"product": "智简魔方", "backend": "Go API", "frontend": "Next.js + React", "database": databaseVersion, "go_version": runtime.Version(), "build_version": os.Getenv("ZJMFGO_BUILD_VERSION"), "runtime_contract": "api-v1"})
 }
+
+func (s *Server) adminSystemDatabase(w http.ResponseWriter, r *http.Request) {
+	var database, serverVersion, migration string
+	var sizeBytes int64
+	if err := s.db.Pool.QueryRow(r.Context(), `SELECT current_database(),version(),pg_database_size(current_database()),coalesce((SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1),'')`).Scan(&database, &serverVersion, &sizeBytes, &migration); err != nil {
+		if err == pgx.ErrNoRows {
+			writeError(w, http.StatusServiceUnavailable, "database_unavailable", "数据库信息不可用")
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
+	stat := s.db.Pool.Stat()
+	write(w, http.StatusOK, map[string]any{
+		"status":            "ready",
+		"database":          database,
+		"server_version":    serverVersion,
+		"database_size":     sizeBytes,
+		"migration_version": migration,
+		"pool": map[string]any{
+			"max_connections":      stat.MaxConns(),
+			"total_connections":    stat.TotalConns(),
+			"idle_connections":     stat.IdleConns(),
+			"acquired_connections": stat.AcquiredConns(),
+			"empty_acquires":       stat.EmptyAcquireCount(),
+		},
+	})
+}

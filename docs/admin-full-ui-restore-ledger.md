@@ -34,7 +34,7 @@
 | 24 | 收入排名 `#/revenue-ranking` | `/admin/reports?tab=ranking` | 部分完成 | `GET /admin/reports/customer-ranking` | `reports.view` / 范围权限 |
 | 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 待实现 | `GET /admin/jobs` | `jobs.view` / 最近运行状态 |
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 待实现 | `GET /admin/jobs/queue` | `jobs.view/manage` / 重试幂等 |
-| 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 待实现 | `GET /admin/system/database` | `system.view` / 只读健康 |
+| 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
 | 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 待实现 | `GET/POST/PATCH /admin/customer-fields` | `customers.manage` / 字段规则 |
 | 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 待实现 | `GET/POST/PATCH /admin/customer-levels` | `customers.manage` |
@@ -58,8 +58,8 @@
 | 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 待实现 | `GET/PUT /admin/sales-settings` | `sales.manage` |
 | 49 | 员工管理 `#/admin-management` | `/admin/access?tab=staff` | 部分完成 | `GET/POST/PATCH /admin/staff` | `@super` / 部门范围 |
 | 50 | 接口设置 `#/sms-template/sms` | `/admin/channels?category=sms` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 测试发送 |
-| 51 | 邮件模板 `#/email-list` | `/admin/notifications?channel=email` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` |
-| 52 | 短信模板 `#/sms-template-index` | `/admin/notifications?channel=sms` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` |
+| 51 | 邮件模板 `#/email-list` | `/admin/notifications?channel=email` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |
+| 52 | 短信模板 `#/sms-template-index` | `/admin/notifications?channel=sms` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |
 | 53 | 发送设置 `#/sms-send-settings` | `/admin/sms-settings` | 已完成 | `GET/PUT/POST /admin/sms-settings` | `@super` / 测试短信 |
 | 54 | 二次验证 `#/twice-confirm` | `/admin/security/mfa` | 待实现 | `GET/PUT /admin/security/mfa` | `settings.manage` |
 | 55 | 验证码设置 `#/general-settings/captcha` | `/admin/auth-settings?tab=captcha` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.manage` / 验证码流程 |
@@ -123,7 +123,7 @@
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
-| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境和关于系统已完成；数据库状态、任务和报表待补 |
+| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统和数据库状态已完成；任务和报表待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |
