@@ -1,7 +1,7 @@
-# 定时任务执行日志的最小审计方案
+# 调度执行历史实现与边界
 
-现有 provision_jobs、email_outbox、sms_outbox 是可更新的业务任务状态表，不能证明调度器每次执行、每次失败或重试的历史。当前 /admin/logs/jobs 只展示授权范围内的服务任务终态记录，界面明确标注来源及限制，不伪造用户名、IP 或 cron 日志。
+迁移 104 新增 scheduler_runs，记录固定枚举任务、数据库开始与结束时间、耗时、状态、处理数及固定安全错误码。worker 实际执行佣金结算、服务到期通知入队、账单通知入队、供应商同步入队时，通过 RunScheduled 写入真实调用记录；未回填历史。通知发送、服务外部动作、自动续费和停机调度尚未接入。
 
-后续最小方案是独立 scheduler_runs 表：id、固定枚举 task_key、started_at、finished_at、status（running/succeeded/failed/interrupted）、affected_count、has_error；不存任意 payload、原始异常、令牌或客户详情。调度器执行前创建记录，结束时写入固定状态及计数；进程异常保留 running，恢复时标记 interrupted，不能把未确认的外部动作自动重新执行。使用数据库生成时间和唯一 run_id，写入失败应明确报告，不宣称已审计。只向 super_admin 或独立系统审计权限开放全局调度历史。
+/api/v1/admin/logs/jobs 提供 task/status/from/to 分页过滤；/trend 提供近31天 UTC 日汇总。系统执行历史仅 super_admin 可读，即使拥有 jobs.view 的普通管理员也被拒绝，避免全局任务统计泄露。
 
-接入需要核对每个 worker/调度入口与日志保留策略；不得用业务队列表回填虚构历史。本次未新增调度历史迁移或宣称此方案已经实施。
+审计开始或结束写入失败输出固定 audit_write_failed 日志，业务仍只执行一次，不因审计故障重试。取消执行使用独立有期限上下文保存 interrupted；进程被强制终止可能留下 running，界面标记结束未确认，不将其当成功或自动重试。当前不自动标记历史 running 为 interrupted，避免并行 worker 误判。记录不含原始错误、payload、用户名、IP 或客户数据。数据库角色仍可更新记录，本实现不是防篡改存储。

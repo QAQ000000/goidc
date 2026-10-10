@@ -1,2 +1,2 @@
-import { AdminJobsView } from "@/components/admin-jobs";
-export default function Page() { return <AdminJobsView queue logs />; }
+import { AdminSchedulerLogs } from "@/components/admin-scheduler-logs";
+export default function Page() { return <AdminSchedulerLogs />; }

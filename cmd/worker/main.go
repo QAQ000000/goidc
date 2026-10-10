@@ -79,17 +79,17 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-timer.C:
-				if released, settleErr := db.SettleAffiliateCommissions(ctx, 100); settleErr != nil && ctx.Err() == nil {
+				if released, settleErr := db.RunScheduled(ctx, log, "affiliate_settlement", func(c context.Context) (int, error) { return db.SettleAffiliateCommissions(c, 100) }); settleErr != nil && ctx.Err() == nil {
 					log.Error("affiliate commission settlement failed", "error", settleErr)
 				} else if released > 0 {
 					log.Info("affiliate commissions released", "count", released)
 				}
-				if queued, scheduleErr := db.EnqueueServiceExpiryReminders(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+				if queued, scheduleErr := db.RunScheduled(ctx, log, "service_expiry_notifications", func(c context.Context) (int, error) { return db.EnqueueServiceExpiryReminders(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
 					log.Error("service expiry notification scheduling failed", "error", scheduleErr)
 				} else if queued > 0 {
 					log.Info("service expiry notifications queued", "count", queued)
 				}
-				if queued, scheduleErr := db.EnqueueBillingNotifications(ctx, 100); scheduleErr != nil && ctx.Err() == nil {
+				if queued, scheduleErr := db.RunScheduled(ctx, log, "billing_notifications", func(c context.Context) (int, error) { return db.EnqueueBillingNotifications(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
 					log.Error("billing notification scheduling failed", "error", scheduleErr)
 				} else if queued > 0 {
 					log.Info("billing notifications queued", "count", queued)
@@ -187,7 +187,7 @@ func main() {
 				log.Error("stale job recovery failed", "error", err)
 				continue
 			}
-			if _, err = db.EnqueuePeriodicSupplierSyncs(ctx); err != nil {
+			if _, err = db.RunScheduled(ctx, log, "supplier_sync_schedule", func(c context.Context) (int, error) { n, e := db.EnqueuePeriodicSupplierSyncs(c); return int(n), e }); err != nil {
 				log.Error("periodic supplier sync enqueue failed", "error", err)
 			}
 			for i := 0; i < 20; i++ {
