@@ -9,7 +9,7 @@
   "notes": [
     "无时间戳；同一源码和输入可复现。",
     "台账声称的 API 与源码注册 API 分开；权限登记不等于强制执行。",
-    "源码存在仅记为部分完成，浏览器及四尺寸均保持未验证。",
+    "源码存在仅作为静态路由证据，编译和实现完整性未验证；验收宽度为1440/1024/390/320。",
     "storage/migrations 为保守静态候选，缺少确切调用链时未验证。"
   ],
   "count": 105,
@@ -24,7 +24,7 @@
       "component": "web/src/app/admin/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -103,12 +103,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -125,6 +119,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "特殊记录：原规范名称为控制台概览但内容为登录；新台账 /admin 不是原登录页验收证明。"
@@ -139,7 +139,7 @@
       "component": "web/src/app/admin/customers/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -223,12 +223,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -245,6 +239,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -259,7 +259,7 @@
       "component": "web/src/app/admin/certifications/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -348,12 +348,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -370,6 +364,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -384,7 +384,7 @@
       "component": "web/src/app/admin/customer-resources/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -469,12 +469,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -491,6 +485,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -505,7 +505,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -583,12 +583,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -605,6 +599,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -619,7 +619,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -699,12 +699,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -721,6 +715,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -735,7 +735,7 @@
       "component": "web/src/app/admin/affiliate/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -745,8 +745,27 @@
       },
       "realApi": {
         "ledgerClaim": "GET /admin/affiliate/*/page",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/affiliate/accounts/page",
+            "handler": "adminAffiliateAccountsPage",
+            "evidence": "internal/httpapi/server.go:334"
+          },
+          {
+            "method": "GET",
+            "path": "/admin/affiliate/attributions/page",
+            "handler": "adminAffiliateAttributionsPage",
+            "evidence": "internal/httpapi/server.go:335"
+          },
+          {
+            "method": "GET",
+            "path": "/admin/affiliate/withdrawals/page",
+            "handler": "adminAffiliateWithdrawalsPage",
+            "evidence": "internal/httpapi/server.go:336"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "affiliates.view/manage",
@@ -816,12 +835,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -838,6 +851,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -852,7 +871,7 @@
       "component": "web/src/app/admin/orders/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -943,12 +962,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -965,6 +978,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -979,7 +998,7 @@
       "component": "web/src/app/admin/orders/page.tsx",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1062,12 +1081,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1084,6 +1097,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -1098,7 +1117,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1176,12 +1195,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1198,6 +1211,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1212,7 +1231,7 @@
       "component": "web/src/app/admin/services/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1300,12 +1319,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1322,6 +1335,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1336,7 +1355,7 @@
       "component": "web/src/app/admin/cancellations/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1429,12 +1448,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1451,6 +1464,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1465,7 +1484,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1556,12 +1575,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1578,6 +1591,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1592,7 +1611,7 @@
       "component": "web/src/app/admin/invoices/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1686,12 +1705,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1708,6 +1721,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1722,7 +1741,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1818,12 +1837,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1840,6 +1853,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -1854,7 +1873,7 @@
       "component": "web/src/app/admin/affiliate/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -1959,12 +1978,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -1981,6 +1994,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -1995,7 +2014,7 @@
       "component": "web/src/app/admin/invoice-applications/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2089,12 +2108,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2111,6 +2124,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -2125,7 +2144,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2208,12 +2227,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2230,6 +2243,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -2244,7 +2263,7 @@
       "component": "web/src/app/admin/tickets/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2333,12 +2352,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2355,6 +2368,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -2369,7 +2388,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2447,12 +2466,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2469,6 +2482,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -2483,7 +2502,7 @@
       "component": "web/src/app/admin/reports/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2563,12 +2582,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2585,6 +2598,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -2599,7 +2618,7 @@
       "component": "web/src/app/admin/reports/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2683,12 +2702,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2705,6 +2718,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -2719,7 +2738,7 @@
       "component": "web/src/app/admin/reports/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2803,12 +2822,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2825,6 +2838,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -2839,7 +2858,7 @@
       "component": "web/src/app/admin/reports/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -2919,12 +2938,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -2941,6 +2954,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -2955,7 +2974,7 @@
       "component": "web/src/app/admin/jobs/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3035,12 +3054,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3057,6 +3070,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3071,7 +3090,7 @@
       "component": "web/src/app/admin/jobs/queue/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3157,12 +3176,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3179,6 +3192,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3193,7 +3212,7 @@
       "component": "web/src/app/admin/system/database/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3264,12 +3283,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3286,6 +3299,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3300,7 +3319,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3380,12 +3399,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3402,6 +3415,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3416,7 +3435,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3491,12 +3510,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3513,6 +3526,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3527,7 +3546,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3606,12 +3625,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3628,6 +3641,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3642,7 +3661,7 @@
       "component": "web/src/app/admin/customer-groups/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3737,12 +3756,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3759,6 +3772,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3773,7 +3792,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3845,12 +3864,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3867,6 +3880,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3881,7 +3900,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -3958,12 +3977,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -3980,6 +3993,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -3994,7 +4013,7 @@
       "component": "web/src/app/admin/channels/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4070,12 +4089,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4092,6 +4105,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -4106,7 +4125,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4181,12 +4200,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4203,6 +4216,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4217,7 +4236,7 @@
       "component": "web/src/app/admin/promo-codes/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4313,12 +4332,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4335,6 +4348,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4349,7 +4368,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4425,12 +4444,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4447,6 +4460,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4461,7 +4480,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4533,12 +4552,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4555,6 +4568,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4569,7 +4588,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4641,12 +4660,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4663,6 +4676,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4677,7 +4696,7 @@
       "component": "web/src/app/admin/ticket-departments/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4757,12 +4776,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4779,6 +4792,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4793,7 +4812,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4867,12 +4886,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -4889,6 +4902,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -4903,7 +4922,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -4978,12 +4997,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5000,6 +5013,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5014,7 +5033,7 @@
       "component": "web/src/app/admin/settings/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5094,12 +5113,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5116,6 +5129,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5130,7 +5149,7 @@
       "component": "web/src/app/admin/channels/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5207,12 +5226,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5229,6 +5242,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -5243,7 +5262,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5318,12 +5337,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5340,6 +5353,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5354,7 +5373,7 @@
       "component": "web/src/app/admin/auth-settings/page.tsx",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5427,12 +5446,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5449,6 +5462,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5463,7 +5482,7 @@
       "component": "web/src/app/admin/access/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5539,12 +5558,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5561,6 +5574,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -5575,7 +5594,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5670,12 +5689,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5692,6 +5705,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -5706,7 +5725,7 @@
       "component": "web/src/app/admin/access/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5784,12 +5803,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5806,6 +5819,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -5820,7 +5839,7 @@
       "component": "web/src/app/admin/channels/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -5899,12 +5918,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -5921,6 +5934,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -5935,7 +5954,7 @@
       "component": "web/src/app/admin/notifications/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6050,12 +6069,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6072,6 +6085,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -6086,7 +6105,7 @@
       "component": "web/src/app/admin/notifications/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6184,12 +6203,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6206,6 +6219,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -6220,7 +6239,7 @@
       "component": "web/src/app/admin/sms-settings/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6298,12 +6317,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6320,6 +6333,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -6334,7 +6353,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6408,12 +6427,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6430,6 +6443,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -6444,7 +6463,7 @@
       "component": "web/src/app/admin/auth-settings/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6517,12 +6536,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6539,6 +6552,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -6553,7 +6572,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6632,12 +6651,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6654,6 +6667,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -6668,7 +6687,7 @@
       "component": "web/src/app/admin/migrations/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6745,12 +6764,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6767,6 +6780,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -6781,7 +6800,7 @@
       "component": "web/src/app/admin/system/about/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6853,12 +6872,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6875,6 +6888,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -6889,7 +6908,7 @@
       "component": "web/src/app/admin/system/upgrade/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -6965,12 +6984,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -6987,6 +7000,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7001,7 +7020,7 @@
       "component": "web/src/app/admin/system/runtime/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7073,12 +7092,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7095,6 +7108,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7109,7 +7128,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7195,12 +7214,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7217,6 +7230,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7231,7 +7250,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7306,12 +7325,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7328,6 +7341,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7342,7 +7361,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7418,12 +7437,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7440,6 +7453,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7454,7 +7473,7 @@
       "component": "web/src/app/admin/logs/jobs/page.tsx",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7530,12 +7549,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7552,6 +7565,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7566,7 +7585,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7640,12 +7659,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7662,6 +7675,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7676,7 +7695,7 @@
       "component": "web/src/app/admin/audit/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7760,12 +7779,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7782,6 +7795,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7796,7 +7815,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7873,12 +7892,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -7895,6 +7908,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -7909,7 +7928,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -7994,12 +8013,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8016,6 +8029,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8030,7 +8049,7 @@
       "component": "web/src/app/admin/products/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8129,12 +8148,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8151,6 +8164,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8165,7 +8184,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8251,12 +8270,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8273,6 +8286,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8287,7 +8306,7 @@
       "component": "web/src/app/admin/channels/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8369,12 +8388,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8391,6 +8404,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -8405,7 +8424,7 @@
       "component": "web/src/app/admin/suppliers/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8527,12 +8546,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8549,6 +8562,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -8563,7 +8582,7 @@
       "component": "web/src/app/admin/suppliers/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8684,12 +8703,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8706,6 +8719,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -8720,7 +8739,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8796,12 +8815,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8818,6 +8831,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8832,7 +8851,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -8904,12 +8923,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -8926,6 +8939,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -8940,7 +8959,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9020,12 +9039,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9042,6 +9055,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -9056,7 +9075,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9128,12 +9147,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9150,6 +9163,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -9164,7 +9183,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9236,12 +9255,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9258,6 +9271,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -9272,7 +9291,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9350,12 +9369,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9372,6 +9385,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -9386,7 +9405,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9464,12 +9483,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9486,6 +9499,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -9500,7 +9519,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9578,12 +9597,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9600,6 +9613,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -9614,7 +9633,7 @@
       "component": "web/src/app/admin/content/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9707,12 +9726,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9729,6 +9742,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -9743,7 +9762,7 @@
       "component": "web/src/app/admin/content/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9831,12 +9850,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9853,6 +9866,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -9867,7 +9886,7 @@
       "component": "web/src/app/admin/content/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -9960,12 +9979,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -9982,6 +9995,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -9996,7 +10015,7 @@
       "component": "web/src/app/admin/content/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10084,12 +10103,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10106,6 +10119,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -10120,7 +10139,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10205,12 +10224,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10227,6 +10240,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。"
@@ -10241,7 +10260,7 @@
       "component": "web/src/app/admin/suppliers/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10365,12 +10384,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10387,6 +10400,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -10401,7 +10420,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10481,12 +10500,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10503,6 +10516,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -10517,7 +10536,7 @@
       "component": "web/src/app/admin/products/page.tsx",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10619,12 +10638,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10641,6 +10654,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -10655,7 +10674,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10734,12 +10753,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10756,6 +10769,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -10770,7 +10789,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10860,12 +10879,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10882,6 +10895,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -10896,7 +10915,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -10975,12 +10994,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -10997,6 +11010,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11011,7 +11030,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11088,12 +11107,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11110,6 +11123,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11124,7 +11143,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11203,12 +11222,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11225,6 +11238,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11239,7 +11258,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11311,12 +11330,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11333,6 +11346,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11347,7 +11366,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11419,12 +11438,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11441,6 +11454,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11455,7 +11474,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11520,12 +11539,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11542,6 +11555,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11556,7 +11575,7 @@
       "component": "web/src/app/admin/customers/new/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11567,12 +11586,6 @@
       "realApi": {
         "ledgerClaim": "POST /admin/customers",
         "registered": [
-          {
-            "method": "GET",
-            "path": "/admin/customers",
-            "handler": "customers",
-            "evidence": "internal/httpapi/server.go:331"
-          },
           {
             "method": "POST",
             "path": "/admin/customers",
@@ -11644,12 +11657,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11666,6 +11673,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11680,7 +11693,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11764,12 +11777,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11786,6 +11793,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11800,7 +11813,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "待实现",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11882,12 +11895,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -11904,6 +11911,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -11918,7 +11931,7 @@
       "component": "web/src/app/admin/invoices/new/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -11929,12 +11942,6 @@
       "realApi": {
         "ledgerClaim": "POST /admin/invoices",
         "registered": [
-          {
-            "method": "GET",
-            "path": "/admin/invoices",
-            "handler": "invoices",
-            "evidence": "internal/httpapi/server.go:356"
-          },
           {
             "method": "POST",
             "path": "/admin/invoices",
@@ -12057,12 +12064,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -12079,6 +12080,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -12093,7 +12100,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -12168,12 +12175,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -12190,6 +12191,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -12204,7 +12211,7 @@
       "component": "web/src/app/admin/products/[id]/page.tsx",
       "pageStatus": {
         "ledger": "已完成",
-        "code": "部分完成（有路由源码，完整契约未验证）",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -12215,6 +12222,12 @@
       "realApi": {
         "ledgerClaim": "GET/PATCH /admin/products/{id}",
         "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/products/page",
+            "handler": "adminProductsPage",
+            "evidence": "internal/httpapi/server.go:280"
+          },
           {
             "method": "GET",
             "path": "/admin/products/{id}",
@@ -12318,12 +12331,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -12340,6 +12347,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -12354,7 +12367,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -12431,12 +12444,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -12453,6 +12460,12 @@
           "height": 844,
           "result": "未验证",
           "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "未验证",
+          "screenshots": []
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -12467,7 +12480,7 @@
       "component": "待实现",
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "待实现",
+        "code": "未找到对应独立路由文件；实现状态未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
@@ -12478,12 +12491,6 @@
       "realApi": {
         "ledgerClaim": "POST /admin/notification-templates",
         "registered": [
-          {
-            "method": "GET",
-            "path": "/admin/notification-templates",
-            "handler": "notificationTemplates",
-            "evidence": "internal/httpapi/server.go:268"
-          },
           {
             "method": "POST",
             "path": "/admin/notification-templates",
@@ -12555,12 +12562,6 @@
       },
       "viewportResults": [
         {
-          "width": 1920,
-          "height": 1080,
-          "result": "未验证",
-          "screenshots": []
-        },
-        {
           "width": 1440,
           "height": 900,
           "result": "未验证",
@@ -12575,6 +12576,12 @@
         {
           "width": 390,
           "height": 844,
+          "result": "未验证",
+          "screenshots": []
+        },
+        {
+          "width": 320,
+          "height": 800,
           "result": "未验证",
           "screenshots": []
         }
