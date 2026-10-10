@@ -44,7 +44,7 @@ export function CertificationSettingsView() {
           <button type="button" role="tab" aria-selected={tab === "basic"} className={`border-b-2 px-4 py-2 text-sm ${tab === "basic" ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("basic")}>基础设置</button>
           <button type="button" role="tab" aria-selected={tab === "interface"} className={`border-b-2 px-4 py-2 text-sm ${tab === "interface" ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setTab("interface")}>接口设置</button>
         </div>
-        {tab === "basic" ? <BasicSettings data={resource.data} refresh={resource.refresh} /> : <InterfaceSettings data={resource.data} />}
+        {tab === "basic" ? <BasicSettings key={resource.data.version} data={resource.data} refresh={resource.refresh} /> : <InterfaceSettings data={resource.data} />}
       </>}
     </div>
   </Workspace>;
@@ -91,9 +91,10 @@ function BasicSettings({ data, refresh }: { data: Settings; refresh: () => void 
 }
 
 function InterfaceSettings({ data }: { data: Settings }) {
+  const canManageChannels = useAdminPermission("@super");
   return <section className="space-y-5">
     <div className="rounded-md border bg-muted/25 p-4 text-sm text-muted-foreground">认证接口由 Go 编译进二进制并通过实例配置管理，密钥只显示是否已配置。新增或修改接口实例后，返回本页重新选择默认接口。</div>
     <div className="overflow-x-auto border-y"><table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="px-3 py-3">接口名称</th><th>标识</th><th>状态</th><th>密钥</th><th>版本</th></tr></thead><tbody>{data.instances.map(instance => <tr key={instance.id} className="border-t"><td className="px-3 py-3 font-medium">{instance.display_name}</td><td>{instance.implementation_id}</td><td><Badge variant="outline" className={instance.enabled ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-muted-foreground"}>{instance.enabled ? "启用" : "停用"}</Badge></td><td>{instance.secret_configured ? "已配置" : "未配置"}</td><td>{instance.version}</td></tr>)}{!data.instances.length && <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">暂无认证接口实例</td></tr>}</tbody></table></div>
-    <Button asChild variant="outline"><Link href="/admin/channels?category=certification"><ExternalLink size={16} />管理认证接口</Link></Button>
+    {canManageChannels && <Button asChild variant="outline"><Link href="/admin/channels?category=certification"><ExternalLink size={16} />管理认证接口</Link></Button>}
   </section>;
 }

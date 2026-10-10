@@ -8,6 +8,7 @@ export const adminNavigation = [
   { href: "/admin/certifications", label: "实名认证", icon: BadgeCheck, permission: "certifications.view", group: "customer_mgmt" },
   { href: "/admin/certification-settings", label: "实名认证设置", icon: BadgeCheck, permission: "certifications.view", group: "system" },
   { href: "/admin/customer-groups", label: "客户分组", icon: Users, permission: "customer_groups.view", group: "customer_mgmt" },
+  { href: "/admin/customer-levels", label: "客户等级", icon: Users, permission: "customer_levels.view", group: "customer_mgmt" },
   { href: "/admin/customer-fields", label: "客户自定义字段", icon: UserRoundCog, permission: "customers.manage", group: "customer_mgmt" },
   { href: "/admin/customer-files", label: "客户文件", icon: Download, permission: "customer_files.view", group: "customer_mgmt" },
   { href: "/admin/affiliate", label: "推介计划", icon: HandCoins, permission: "affiliates.view", group: "customer_ops" },

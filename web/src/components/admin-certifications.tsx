@@ -34,24 +34,28 @@ type AdminDetail = Certification & {
   submitted_at: string;
   payload: Record<string, string>;
 };
+type CertificationHistory = { id: number; reviewer_id: number; reviewer_name: string; decision: string; note: string; created_at: string };
 
 export function AdminCertificationsView() {
   const manage = useAdminPermission("certifications.manage");
   const [statusFilter, setStatusFilter] = useState("all");
   const [keyword, setKeyword] = useState("");
   const [activeKeyword, setActiveKeyword] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [providerFilter, setProviderFilter] = useState("all");
   const [page, setPage] = useState(0);
   const pageSize = 25;
 
   const endpoint = `/admin/certifications/page?q=${encodeURIComponent(activeKeyword.trim())}&limit=${pageSize}&offset=${page * pageSize}${
     statusFilter !== "all" ? `&status=${statusFilter}` : ""
-  }`;
+  }${typeFilter !== "all" ? `&certification_type=${typeFilter}` : ""}${providerFilter !== "all" ? `&provider_id=${encodeURIComponent(providerFilter)}` : ""}`;
   const list = useResource<{ items: Certification[]; total: number }>(endpoint, false);
   const lastPage = Math.max(0, Math.ceil((list.data?.total ?? 0) / pageSize) - 1);
   if (list.data && page > lastPage) setPage(lastPage);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminDetail | null>(null);
+  const [history, setHistory] = useState<CertificationHistory[]>([]);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -61,8 +65,12 @@ export function AdminCertificationsView() {
     setActionError("");
     setNote("");
     try {
-      const data = await api<AdminDetail>(`/admin/certifications/${id}`);
+      const [data, entries] = await Promise.all([
+        api<AdminDetail>(`/admin/certifications/${id}`),
+        api<CertificationHistory[]>(`/admin/certifications/${id}/history`),
+      ]);
       setDetail(data);
+      setHistory(entries);
       if (data.rejection_reason) {
         setNote(data.rejection_reason);
       }
@@ -78,6 +86,7 @@ export function AdminCertificationsView() {
     try {
       await api(`/admin/certifications/${detail.id}/review`, {
         method: "POST",
+        headers: { "Idempotency-Key": `certification-review-${detail.id}-${detail.version}-${crypto.randomUUID()}` },
         body: JSON.stringify({
           decision,
           note,
@@ -86,6 +95,7 @@ export function AdminCertificationsView() {
       });
       setSelectedId(null);
       setDetail(null);
+      setHistory([]);
       setNote("");
       list.refresh();
     } catch (e) {
@@ -174,6 +184,11 @@ export function AdminCertificationsView() {
                 <SelectItem value="rejected">已驳回</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={typeFilter} onValueChange={(value) => { setTypeFilter(value); setPage(0); }}>
+              <SelectTrigger className="h-8 w-28 text-xs border-[#dcdfe6]" aria-label="认证类型筛选"><SelectValue placeholder="认证类型" /></SelectTrigger>
+              <SelectContent><SelectItem value="all">全部类型</SelectItem><SelectItem value="individual">个人认证</SelectItem><SelectItem value="company">企业认证</SelectItem></SelectContent>
+            </Select>
+            <Input value={providerFilter === "all" ? "" : providerFilter} onChange={(event) => { setProviderFilter(event.target.value.trim() || "all"); setPage(0); }} placeholder="认证接口" aria-label="认证接口筛选" className="h-8 w-28 text-xs border-[#dcdfe6]" />
             <Button
               variant="outline"
               size="icon"
@@ -408,6 +423,10 @@ export function AdminCertificationsView() {
                       <span>{detail.rejection_reason}</span>
                     </div>
                   )}
+                  <div className="space-y-2 pt-2 border-t border-[#ebeef5]">
+                    <span className="text-xs font-semibold text-[#303133] block">历史记录</span>
+                    {history.length === 0 ? <p className="text-[#909399]">暂无审核记录</p> : <div className="divide-y border border-[#ebeef5] rounded">{history.map(item => <div key={item.id} className="p-2.5 flex flex-wrap items-start justify-between gap-2"><div><span className={item.decision === "approved" ? "text-[#67c23a]" : "text-[#f56c6c]"}>{item.decision === "approved" ? "通过" : "驳回"}</span><span className="ml-2 text-[#606266]">{item.note || "无备注"}</span></div><span className="text-[#909399]">{item.reviewer_name} · {date(item.created_at)}</span></div>)}</div>}
+                  </div>
                 </>
               )}
             </div>
@@ -421,6 +440,7 @@ export function AdminCertificationsView() {
                 onClick={() => {
                   setSelectedId(null);
                   setDetail(null);
+                  setHistory([]);
                 }}
               >
                 关闭

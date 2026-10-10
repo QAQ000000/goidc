@@ -183,10 +183,25 @@ func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, d
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := s.ReviewCertificationTx(ctx, tx, reviewerID, id, decision, note, expected); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// ReviewCertificationTx applies a review inside the caller's transaction so
+// the idempotency journal and the state transition commit atomically.
+func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID, id int64, decision, note string, expected int64) error {
+	if decision != "approved" && decision != "rejected" {
+		return conflict("invalid_certification_review", "审核结果无效")
+	}
+	if len(note) > 2000 {
+		return conflict("invalid_certification_review", "审核备注过长")
+	}
 	var profileID, submissionID, version int64
 	var userID int64
 	var status string
-	err = tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 FOR UPDATE`, id).Scan(&profileID, &userID, &version, &status, &submissionID)
+	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 FOR UPDATE`, id).Scan(&profileID, &userID, &version, &status, &submissionID)
 	if err != nil {
 		return err
 	}
@@ -208,5 +223,5 @@ func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, d
 	if err = Audit(ctx, tx, reviewerID, "certification.reviewed", "certification", id, map[string]any{"user_id": userID, "decision": decision}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }

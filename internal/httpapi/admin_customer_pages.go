@@ -54,13 +54,24 @@ func (s *Server) adminCertificationsPage(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "invalid_certification_status", "认证状态无效")
 		return
 	}
+	kind := strings.TrimSpace(r.URL.Query().Get("certification_type"))
+	if kind != "" && kind != "individual" && kind != "company" {
+		writeError(w, 400, "invalid_certification_type", "认证类型无效")
+		return
+	}
+	provider := strings.TrimSpace(r.URL.Query().Get("provider_id"))
+	if len(provider) > 80 {
+		writeError(w, 400, "invalid_certification_provider", "认证接口无效")
+		return
+	}
 	limit, offset := pagination(r)
 	query := `SELECT p.id,p.user_id,u.username,u.display_name,u.email,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,
  (SELECT max(id) FROM certification_submissions x WHERE x.profile_id=p.id) AS submission_id
  FROM certification_profiles p JOIN users u ON u.id=p.user_id
- WHERE ($1='' OR p.status=$1) AND (u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.email ILIKE $2 OR p.id::text ILIKE $2)
- AND admin_customer_allowed($3,u.id)`
-	s.adminListPage(w, r, query, "updated_at DESC,id DESC", limit, offset, status, "%"+strings.TrimSpace(r.URL.Query().Get("q"))+"%", identityFrom(r).ID)
+ WHERE ($1='' OR p.status=$1) AND ($2='' OR p.certification_type=$2) AND ($3='' OR p.provider_id=$3)
+ AND (u.username ILIKE $4 OR u.display_name ILIKE $4 OR u.email ILIKE $4 OR p.id::text ILIKE $4)
+ AND admin_customer_allowed($5,u.id)`
+	s.adminListPage(w, r, query, "updated_at DESC,id DESC", limit, offset, status, kind, provider, "%"+strings.TrimSpace(r.URL.Query().Get("q"))+"%", identityFrom(r).ID)
 }
 
 // One statement keeps the total and page on the same database snapshot.

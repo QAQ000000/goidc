@@ -23,6 +23,7 @@ var AdminPermissions = []Permission{
 	{"dashboard.view", "工作台", "读取运营汇总"},
 	{"customers.view", "客户", "读取客户和联系人"}, {"customers.manage", "客户", "修改客户、联系人和密码"},
 	{"customer_groups.view", "客户分组", "读取分组"}, {"customer_groups.manage", "客户分组", "管理分组和客户归属"},
+	{"customer_levels.view", "客户等级", "读取客户等级规则"}, {"customer_levels.manage", "客户等级", "管理客户等级规则"},
 	{"promos.view", "优惠码", "读取优惠码"}, {"promos.manage", "优惠码", "管理优惠码"},
 	{"products.view", "产品", "读取商品及目录分组"}, {"products.manage", "产品", "管理商品、价格与目录分组"},
 	{"content.view", "内容", "读取文章与分类"}, {"content.manage", "内容", "管理新闻、知识库及分类"},

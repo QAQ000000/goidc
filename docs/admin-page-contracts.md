@@ -8,7 +8,7 @@
 |---:|---|---|---|---|---|
 | 1 | [概览 / 控制台概览](#page-1) | #/login | /admin | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 2 | [客户 / 客户列表](#page-2) | #/customer-list | /admin/customers | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications | 有分页、筛选、详情、历史和审核 API；个人转企业待补 | 四尺寸验收通过，见客户扩展批次记录 |
 | 4 | [客户 / 客户资源池](#page-4) | #/customer-resources | /admin/customer-resources | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports/sales | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
@@ -33,11 +33,11 @@
 | 25 | [功能 / 定时任务状态](#page-25) | #/timing-results | /admin/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 26 | [功能 / 任务队列](#page-26) | #/statistics-taskQueue | /admin/jobs/queue | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 27 | [功能 / 数据库状态](#page-27) | #/database-message | /admin/system/database | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有真实分页 CRUD、字段规则、权限、审计、幂等和版本冲突；客户资料消费待补 | 四尺寸验收通过，见客户扩展批次记录 |
 | 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | Go API 与 React 页面已实现；基础设置和接口实例状态均来自真实 API | 未验证 |
+| 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 有真实 CRUD、阈值统计、分页、权限、审计、幂等和版本冲突 | 四尺寸验收通过，见客户扩展批次记录 |
+| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 客户分组真实分页 CRUD；商品分组/折扣子页待补 | 四尺寸验收通过，见客户扩展批次记录 |
+| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | Go API 与 React 页面已实现；基础设置和接口实例状态均来自真实 API | 四尺寸验收通过，见客户扩展批次记录 |
 | 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 34 | [设置 / 支付接口](#page-34) | #/payment-interface | /admin/channels?category=payment | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
