@@ -46,7 +46,7 @@
 | 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET/POST/PATCH /admin/promo-codes` | `promos.view/manage` |
 | 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
 | 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 已完成 | `GET/PUT /admin/contract-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
-| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本冲突、审计 |
+| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
 | 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、幂等、版本冲突、审计；完整表单交互待补 |
 | 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 幂等、关联校验、版本冲突、审计；完整表单交互待补 |
