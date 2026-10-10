@@ -14,6 +14,18 @@ func TestAdminSystemInformationRequiresSettingsViewAndReturnsRuntimeFacts(t *tes
 	if data(t, database)["status"] != "ready" {
 		t.Fatalf("database status response=%s", database.Body.String())
 	}
+	filtered := request(h, "GET", "/api/v1/admin/system/database?q=notification_templates&limit=1", nil, root, "")
+	expect(t, filtered, 200)
+	page := data(t, filtered)
+	items := page["items"].([]any)
+	if page["total"] != float64(1) || page["limit"] != float64(1) || len(items) != 1 || items[0].(map[string]any)["name"] != "notification_templates" {
+		t.Fatalf("database table filter failed: %s", filtered.Body.String())
+	}
+	empty := request(h, "GET", "/api/v1/admin/system/database?q=nonexistent_restore_table", nil, root, "")
+	expect(t, empty, 200)
+	if data(t, empty)["total"] != float64(0) || len(data(t, empty)["items"].([]any)) != 0 {
+		t.Fatalf("database table empty failed: %s", empty.Body.String())
+	}
 	if response := request(h, "GET", "/api/v1/admin/system/runtime", nil, "", ""); response.Code != 401 {
 		t.Fatalf("unauthorized runtime status=%d", response.Code)
 	}

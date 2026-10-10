@@ -1,5 +1,5 @@
-import { AdminSystemInfoView } from "@/components/admin-system-info";
+import { AdminDatabaseStatusView } from "@/components/admin-database-status";
 
 export default function DatabaseStatusPage() {
-  return <AdminSystemInfoView mode="database" />;
+  return <AdminDatabaseStatusView />;
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -33,6 +34,12 @@ func (s *Server) adminSystemAbout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) adminSystemDatabase(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(query) > 240 {
+		writeError(w, http.StatusBadRequest, "invalid_database_filter", "表名称搜索过长")
+		return
+	}
 	var database, serverVersion, migration string
 	var sizeBytes int64
 	if err := s.db.Pool.QueryRow(r.Context(), `SELECT current_database(),version(),pg_database_size(current_database()),coalesce((SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1),'')`).Scan(&database, &serverVersion, &sizeBytes, &migration); err != nil {
@@ -44,7 +51,29 @@ func (s *Server) adminSystemDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stat := s.db.Pool.Stat()
+	// Scope to the application's search_path schema, including in isolated tests.
+	// n_live_tup is PostgreSQL's estimate; never claim this as an exact row count.
+	where := ` FROM pg_stat_user_tables WHERE schemaname=current_schema() AND ($1='' OR relname ILIKE '%'||$1||'%')`
+	var total int
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, query).Scan(&total); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT relname AS name,n_live_tup AS estimated_rows,pg_total_relation_size(relid) AS size_bytes`+where+` ORDER BY relname LIMIT $2 OFFSET $3`, query, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
 	write(w, http.StatusOK, map[string]any{
+		"items": items, "total": total, "limit": limit, "offset": offset,
 		"status":            "ready",
 		"database":          database,
 		"server_version":    serverVersion,
