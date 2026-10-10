@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,24 @@ func (s *Store) EnqueueServiceExpiryReminders(ctx context.Context, limit int) (i
 	if limit < 1 || limit > 500 {
 		limit = 100
 	}
+	var enabled bool
+	var raw []byte
+	if err := s.Pool.QueryRow(ctx, `SELECT enabled, settings->'expiry_days' FROM scheduler_task_settings WHERE id=1`).Scan(&enabled, &raw); err != nil {
+		return 0, err
+	}
+	if !enabled {
+		return 0, nil
+	}
+	var expiryDays []int
+	if err := json.Unmarshal(raw, &expiryDays); err != nil || len(expiryDays) == 0 {
+		expiryDays = []int{7, 1}
+	}
+	args := []any{limit}
+	placeholders := make([]string, len(expiryDays))
+	for i, d := range expiryDays {
+		args = append(args, d)
+		placeholders[i] = fmt.Sprintf("$%d", i+2)
+	}
 	rows, err := s.Pool.Query(ctx, `
 SELECT s.id,s.user_id,s.next_due_at,p.name,u.email,u.email_verified,u.phone,u.phone_verified,
        (s.next_due_at::date-CURRENT_DATE)::int AS days_left
@@ -27,9 +46,9 @@ WHERE s.status IN ('active','suspended')
   AND NOT s.import_review_required
   AND s.billing_cycle <> 'once'
   AND s.next_due_at IS NOT NULL
-  AND (s.next_due_at::date-CURRENT_DATE) IN (1,7)
+  AND (s.next_due_at::date-CURRENT_DATE) = ANY(ARRAY[`+strings.Join(placeholders, ",")+`]::int[])
 ORDER BY s.next_due_at,s.id
-LIMIT $1`, limit)
+LIMIT $1`, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -193,6 +212,20 @@ func (s *Store) enqueueBillingNotifications(ctx context.Context, limit int, only
 	if limit < 1 || limit > 500 {
 		limit = 100
 	}
+	var enabled bool
+	var settings struct {
+		BillingGraceDays int `json:"billing_grace_days"`
+	}
+	var raw []byte
+	if err := s.Pool.QueryRow(ctx, `SELECT enabled, settings FROM scheduler_task_settings WHERE id=1`).Scan(&enabled, &raw); err != nil {
+		return 0, err
+	}
+	if !enabled {
+		return 0, nil
+	}
+	if json.Unmarshal(raw, &settings) != nil || settings.BillingGraceDays < 0 || settings.BillingGraceDays > 365 {
+		settings.BillingGraceDays = 0
+	}
 	rows, err := s.Pool.Query(ctx, `
 SELECT i.id,i.user_id,i.invoice_no,i.amount_cents,i.due_at,COALESCE(o.order_no,''),
        CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
@@ -203,7 +236,7 @@ JOIN users u ON u.id=i.user_id
 LEFT JOIN orders o ON o.id=i.order_id
 WHERE i.status='unpaid' AND NOT i.import_review_required
   AND ((o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now())
-       OR (i.due_at<now()))
+       OR (i.due_at < now() - ($3::int * interval '1 day')))
   AND ($2='' OR (CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
                      THEN 'order_payment_reminder' ELSE 'invoice_overdue_reminder' END)=$2)
   AND EXISTS (
@@ -218,7 +251,7 @@ WHERE i.status='unpaid' AND NOT i.import_review_required
         WHERE e.invoice_id=i.id AND e.channel=t.channel AND e.kind=t.kind
           AND e.stage=0 AND e.due_date=CURRENT_DATE))
 ORDER BY i.due_at,i.id
-LIMIT $1`, limit, onlyKind)
+LIMIT $1`, limit, onlyKind, settings.BillingGraceDays)
 	if err != nil {
 		return 0, err
 	}
