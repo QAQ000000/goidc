@@ -35,7 +35,7 @@
 | 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 部分完成 | `GET /admin/jobs` | `jobs.view` / 实时队列汇总；定时趋势日志待补 |
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
-| 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 待实现 | `GET/POST/PATCH /admin/customer-fields` | `customers.manage` / 字段规则 |
+| 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-fields` | `customers.manage` / 字段规则、版本冲突、审计；客户资料消费待补 |
 | 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 待实现 | `GET/POST/PATCH /admin/customer-levels` | `customers.manage` |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups` | 部分完成 | `GET/POST/PATCH /admin/customer-groups` | `customer_groups.view/manage` |
@@ -48,8 +48,8 @@
 | 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 待实现 | `GET/PUT /admin/contract-settings` | `settings.manage` |
 | 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 待实现 | `GET/PUT /admin/credit-settings` | `settings.manage` |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
-| 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 待实现 | `GET/POST/PATCH /admin/ticket-statuses` | `tickets.manage` / 默认状态保护 |
-| 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 待实现 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.manage` |
+| 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、幂等、版本冲突、审计；完整表单交互待补 |
+| 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 幂等、关联校验、版本冲突、审计；完整表单交互待补 |
 | 43 | 常规设置 `#/general-settings/general` | `/admin/settings` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 分区草稿 |
 | 44 | 第三方登录 `#/third-login` | `/admin/channels?category=oauth` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / OAuth 能力 |
 | 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 待实现 | `GET/PUT /admin/job-settings` | `jobs.manage` / 到期和提醒 |

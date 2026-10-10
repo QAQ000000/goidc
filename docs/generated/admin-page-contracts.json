@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "ledger": "docs/admin-full-ui-restore-ledger.md",
-    "ledgerSha256": "fd25383745d5dc6713ff911efd6431f7329dd47e9a4a6ad03f4b231e8752b296",
+    "ledgerSha256": "2b83997fcbb54a01f9bad191097d7a66d4693d9698bf62556ca5a0724789a927",
     "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md",
     "specificationSha256": "b16aee6e1139eef7f08eb539d081f4484e3e6aa3eb514bffa202a7d07a5e628c"
   },
@@ -1374,7 +1374,7 @@
             "method": "GET",
             "path": "/admin/services/page",
             "handler": "servicesPage",
-            "evidence": "internal/httpapi/server.go:382"
+            "evidence": "internal/httpapi/server.go:386"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1510,7 +1510,7 @@
             "method": "GET",
             "path": "/admin/cancellations",
             "handler": "adminCancellations",
-            "evidence": "internal/httpapi/server.go:402"
+            "evidence": "internal/httpapi/server.go:406"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2492,7 +2492,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:404"
+            "evidence": "internal/httpapi/server.go:408"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3972,22 +3972,41 @@
       "title": "自定义客户字段",
       "module": "设置",
       "newRoute": "/admin/customer-fields",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/customer-fields/page.tsx",
+      "component": [
+        {
+          "name": "AdminCustomerCustomFieldsView",
+          "source": "@/components/admin-customer-custom-fields",
+          "evidence": "web/src/app/admin/customer-fields/page.tsx:4"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:579",
         "ledger": "docs/admin-full-ui-restore-ledger.md:38",
-        "component": null
+        "component": "web/src/app/admin/customer-fields/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET/POST/PATCH /admin/customer-fields",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET/POST/PATCH/DELETE /admin/customer-fields",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/customer-fields",
+            "handler": "adminCustomerCustomFields",
+            "evidence": "internal/httpapi/server.go:378"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/customer-fields",
+            "handler": "createCustomerCustomField",
+            "evidence": "internal/httpapi/server.go:379"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "customers.manage",
@@ -5060,13 +5079,13 @@
             "method": "GET",
             "path": "/admin/promo-codes",
             "handler": "promoCodes",
-            "evidence": "internal/httpapi/server.go:378"
+            "evidence": "internal/httpapi/server.go:382"
           },
           {
             "method": "POST",
             "path": "/admin/promo-codes",
             "handler": "createPromoCode",
-            "evidence": "internal/httpapi/server.go:379"
+            "evidence": "internal/httpapi/server.go:383"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5554,13 +5573,13 @@
             "method": "GET",
             "path": "/admin/ticket-departments",
             "handler": "adminTicketDepartments",
-            "evidence": "internal/httpapi/server.go:406"
+            "evidence": "internal/httpapi/server.go:418"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-departments",
             "handler": "createTicketDepartment",
-            "evidence": "internal/httpapi/server.go:407"
+            "evidence": "internal/httpapi/server.go:419"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5663,26 +5682,50 @@
       "title": "工单状态",
       "module": "设置",
       "newRoute": "/admin/ticket-statuses",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/ticket-statuses/page.tsx",
+      "component": [
+        {
+          "name": "TicketStatusesView",
+          "source": "@/components/ticket-rules",
+          "evidence": "web/src/app/admin/ticket-statuses/page.tsx:4"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858",
         "ledger": "docs/admin-full-ui-restore-ledger.md:51",
-        "component": null
+        "component": "web/src/app/admin/ticket-statuses/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET/POST/PATCH /admin/ticket-statuses",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET/POST/PATCH/DELETE /admin/ticket-statuses",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/ticket-statuses",
+            "handler": "ticketStatuses",
+            "evidence": "internal/httpapi/server.go:409"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/ticket-statuses",
+            "handler": "saveTicketStatus",
+            "evidence": "internal/httpapi/server.go:410"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "tickets.manage",
+        "ledgerClaim": "tickets.view/manage",
         "registry": [
+          {
+            "token": "tickets.view",
+            "status": "已登记",
+            "evidence": "internal/store/admin_rbac.go:36"
+          },
           {
             "token": "tickets.manage",
             "status": "已登记",
@@ -5779,26 +5822,50 @@
       "title": "工单传递",
       "module": "设置",
       "newRoute": "/admin/ticket-rules",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/ticket-rules/page.tsx",
+      "component": [
+        {
+          "name": "TicketRulesView",
+          "source": "@/components/ticket-rules",
+          "evidence": "web/src/app/admin/ticket-rules/page.tsx:4"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "未验证"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878",
         "ledger": "docs/admin-full-ui-restore-ledger.md:52",
-        "component": null
+        "component": "web/src/app/admin/ticket-rules/page.tsx:1"
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PATCH/DELETE /admin/ticket-rules",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/ticket-rules",
+            "handler": "ticketRules",
+            "evidence": "internal/httpapi/server.go:413"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/ticket-rules",
+            "handler": "saveTicketRule",
+            "evidence": "internal/httpapi/server.go:414"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "tickets.manage",
+        "ledgerClaim": "tickets.view/manage",
         "registry": [
+          {
+            "token": "tickets.view",
+            "status": "已登记",
+            "evidence": "internal/store/admin_rbac.go:36"
+          },
           {
             "token": "tickets.manage",
             "status": "已登记",
@@ -6706,7 +6773,8 @@
           "db/migrations/094_service_expiry_notifications.sql",
           "db/migrations/099_affiliate_core.sql",
           "db/migrations/100_affiliate_settlement_withdrawals.sql",
-          "db/migrations/101_customer_profiles.sql"
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -7674,7 +7742,8 @@
           "db/migrations/099_affiliate_core.sql",
           "db/migrations/100_affiliate_settlement_withdrawals.sql",
           "db/migrations/101_customer_profiles.sql",
-          "db/migrations/103_notification_template_versions.sql"
+          "db/migrations/103_notification_template_versions.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -9400,7 +9469,7 @@
         }
       ],
       "pageStatus": {
-        "ledger": "待实现",
+        "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
         "browserAcceptance": "PASS（四尺寸）"
       },
@@ -9410,17 +9479,24 @@
         "component": "web/src/app/admin/logs/jobs/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/job-logs",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET /admin/logs/jobs, GET /admin/logs/jobs/trend",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/logs/jobs/trend",
+            "handler": "adminSchedulerTrend",
+            "evidence": "internal/httpapi/server.go:97"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "jobs.view",
+        "ledgerClaim": "@super",
         "registry": [
           {
-            "token": "jobs.view",
-            "status": "已登记",
-            "evidence": "internal/store/admin_rbac.go:43"
+            "token": "@super",
+            "status": "未验证",
+            "evidence": null
           }
         ],
         "enforcement": "未验证"
@@ -9773,7 +9849,7 @@
             "method": "GET",
             "path": "/admin/audit",
             "handler": "auditEvents",
-            "evidence": "internal/httpapi/server.go:425"
+            "evidence": "internal/httpapi/server.go:437"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -10660,7 +10736,8 @@
           "db/migrations/066_nokvm_delivery.sql",
           "db/migrations/075_native_configuration_rules.sql",
           "db/migrations/081_supplier_products.sql",
-          "db/migrations/099_affiliate_core.sql"
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -10830,7 +10907,8 @@
           "db/migrations/066_nokvm_delivery.sql",
           "db/migrations/075_native_configuration_rules.sql",
           "db/migrations/081_supplier_products.sql",
-          "db/migrations/099_affiliate_core.sql"
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -12702,7 +12780,8 @@
           "db/migrations/066_nokvm_delivery.sql",
           "db/migrations/075_native_configuration_rules.sql",
           "db/migrations/081_supplier_products.sql",
-          "db/migrations/099_affiliate_core.sql"
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -14310,7 +14389,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:404"
+            "evidence": "internal/httpapi/server.go:408"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14531,7 +14610,8 @@
           "db/migrations/098_outbox_retry_limits.sql",
           "db/migrations/099_affiliate_core.sql",
           "db/migrations/100_affiliate_settlement_withdrawals.sql",
-          "db/migrations/101_customer_profiles.sql"
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/107_ticket_status_rules.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },

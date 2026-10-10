@@ -24,3 +24,11 @@ ALTER TABLE ticket_statuses ADD COLUMN idempotency_key text NOT NULL DEFAULT '';
 ALTER TABLE ticket_delivery_rules ADD COLUMN idempotency_key text NOT NULL DEFAULT '';
 CREATE UNIQUE INDEX ticket_statuses_idempotency ON ticket_statuses(idempotency_key) WHERE idempotency_key<>'';
 CREATE UNIQUE INDEX ticket_delivery_rules_idempotency ON ticket_delivery_rules(idempotency_key) WHERE idempotency_key<>'';
+CREATE TABLE ticket_mutation_operations (
+ actor_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ idempotency_key text NOT NULL CHECK (char_length(idempotency_key) BETWEEN 8 AND 128),
+ request_hash text NOT NULL CHECK (char_length(request_hash)=64),
+ result jsonb NOT NULL CHECK (jsonb_typeof(result)='object'),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(actor_id,idempotency_key)
+);

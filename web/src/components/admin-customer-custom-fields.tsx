@@ -1,0 +1,50 @@
+"use client";
+
+import { useState } from "react";
+import { Pencil, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { api } from "@/lib/api";
+import { useResource } from "@/hooks/use-resource";
+import { AdminPagination } from "./admin-pagination";
+import { Failure, Loading } from "./common";
+import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { Button } from "./ui/button";
+import { Checkbox } from "./ui/checkbox";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+
+type Field = { id: number; field_key: string; label: string; field_type: string; description: string; validation_pattern: string; choices: string[]; sort_order: number; admin_only: boolean; required: boolean; show_on_register: boolean; active: boolean; version: number };
+type Result = { items: Field[]; total: number; limit: number; offset: number };
+type Form = Omit<Field, "id" | "version"> & { id?: number; version?: number; choicesText: string };
+const types: Record<string, string> = { text: "单行文本", textarea: "多行文本", number: "数字", date: "日期", select: "下拉选择", boolean: "开关" };
+
+function emptyForm(): Form { return { field_key: "", label: "", field_type: "text", description: "", validation_pattern: "", choices: [], choicesText: "", sort_order: 0, admin_only: false, required: false, show_on_register: false, active: true }; }
+
+export function AdminCustomerCustomFieldsView() {
+  const [query, setQuery] = useState({ q: "", field_type: "", active: "", offset: 0, limit: 25 });
+  const resource = useResource<Result>(`/admin/customer-fields?q=${encodeURIComponent(query.q)}&field_type=${query.field_type}&active=${query.active}&offset=${query.offset}&limit=${query.limit}`, false);
+  const manage = useAdminPermission("customers.manage");
+  const [form, setForm] = useState<Form | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  function change(patch: Partial<typeof query>) { setQuery(current => ({ ...current, ...patch, ...(patch.offset === undefined ? { offset: 0 } : {}) })); }
+  function edit(item: Field) { setMessage(""); setForm({ ...item, choicesText: item.choices.join(",") }); }
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); if (!form || busy) return;
+    setBusy(true); setMessage("");
+    try {
+      const choices = form.choicesText.split(",").map(value => value.trim()).filter(Boolean);
+      const body = { field_key: form.field_key, label: form.label, field_type: form.field_type, description: form.description, validation_pattern: form.validation_pattern, choices, sort_order: Number(form.sort_order), admin_only: form.admin_only, required: form.required, show_on_register: form.show_on_register, active: form.active, ...(form.id ? { expected_version: form.version } : {}) };
+      await api(form.id ? `/admin/customer-fields/${form.id}` : "/admin/customer-fields", { method: form.id ? "PATCH" : "POST", body: JSON.stringify(body) });
+      setForm(null); resource.refresh();
+    } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); }
+  }
+  async function remove(item: Field) {
+    if (busy || !window.confirm(`确认删除字段“${item.label}”吗？`)) return;
+    setBusy(true); setMessage("");
+    try { await api(`/admin/customer-fields/${item.id}`, { method: "DELETE", body: JSON.stringify({ expected_version: item.version }) }); resource.refresh(); }
+    catch (error) { setMessage((error as Error).message); } finally { setBusy(false); }
+  }
+  return <Workspace title="客户自定义字段" admin><div className="min-w-0 max-w-full space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="page-title">客户自定义字段</h1><p className="mt-2 text-sm text-muted-foreground">字段会显示在客户资料中；未启用字段不会进入注册或资料表单。</p></div><div className="flex gap-2"><Button variant="outline" size="icon" title="刷新" aria-label="刷新" onClick={resource.refresh}><RefreshCw /></Button><PermissionGate permission="customers.manage"><Button onClick={() => { setMessage(""); setForm(emptyForm()); }}><Plus />添加字段</Button></PermissionGate></div></div><div className="flex flex-wrap gap-3 border-y py-4"><Input aria-label="关键词" placeholder="搜索字段名、标识或描述" value={query.q} onChange={event => change({ q: event.target.value })} /><select aria-label="字段类型" value={query.field_type} onChange={event => change({ field_type: event.target.value })}><option value="">全部类型</option>{Object.entries(types).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select><select aria-label="启用状态" value={query.active} onChange={event => change({ active: event.target.value })}><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></div>{message && !form && <p role="alert" className="text-sm text-destructive">{message}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <><div className="min-w-0 overflow-x-auto"><Table className="min-w-[900px]"><TableHeader><TableRow>{["字段名称","标识","类型","注册显示","必填","状态","排序","操作"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{resource.data.items.map(item => <TableRow key={item.id}><TableCell>{item.label}<div className="text-xs text-muted-foreground">{item.description || "无描述"}</div></TableCell><TableCell className="font-mono text-xs">{item.field_key}</TableCell><TableCell>{types[item.field_type] ?? item.field_type}</TableCell><TableCell>{item.show_on_register ? "是" : "否"}</TableCell><TableCell>{item.required ? "是" : "否"}</TableCell><TableCell>{item.active ? "启用" : "停用"}</TableCell><TableCell>{item.sort_order}</TableCell><TableCell><div className="flex gap-1"><PermissionGate permission="customers.manage"><Button size="icon-sm" variant="ghost" title="编辑" aria-label={`编辑${item.label}`} onClick={() => edit(item)}><Pencil /></Button><Button size="icon-sm" variant="ghost" title="删除" aria-label={`删除${item.label}`} onClick={() => void remove(item)}><Trash2 /></Button></PermissionGate></div></TableCell></TableRow>)}{resource.data.items.length === 0 && <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">暂无客户自定义字段</TableCell></TableRow>}</TableBody></Table></div><AdminPagination total={resource.data.total} page={Math.floor(resource.data.offset / resource.data.limit)} pageSize={resource.data.limit} onPageChange={page => change({ offset: page * resource.data!.limit })} onPageSizeChange={limit => change({ limit, offset: 0 })} /></>}</div><Dialog open={form !== null} onOpenChange={open => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{form?.id ? "编辑客户自定义字段" : "添加客户自定义字段"}</DialogTitle><DialogDescription>保存后会增加字段版本，旧版本提交会被拒绝。</DialogDescription></DialogHeader>{form && <form onSubmit={save} className="space-y-4"><fieldset disabled={busy || !manage} className="space-y-4"><div className="grid sm:grid-cols-2 gap-4"><label className="space-y-2 text-sm"><Label>字段标识</Label><Input required pattern="[a-z][a-z0-9_]{1,63}" maxLength={64} disabled={!!form.id} value={form.field_key} onChange={event => setForm({ ...form, field_key: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>字段名称</Label><Input required maxLength={120} value={form.label} onChange={event => setForm({ ...form, label: event.target.value })} /></label></div><label className="space-y-2 text-sm"><Label>字段类型</Label><select className="h-9 w-full rounded-md border bg-background px-3" value={form.field_type} onChange={event => setForm({ ...form, field_type: event.target.value, choicesText: event.target.value === "select" ? form.choicesText : "" })}>{Object.entries(types).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>{form.field_type === "select" && <label className="space-y-2 text-sm"><Label>选项（逗号分隔）</Label><Input required value={form.choicesText} onChange={event => setForm({ ...form, choicesText: event.target.value })} /></label>}<label className="space-y-2 text-sm"><Label>描述</Label><Input maxLength={500} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>验证正则</Label><Input maxLength={500} value={form.validation_pattern} onChange={event => setForm({ ...form, validation_pattern: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>显示排序</Label><Input type="number" min={-100000} max={100000} value={form.sort_order} onChange={event => setForm({ ...form, sort_order: Number(event.target.value) })} /></label><div className="grid sm:grid-cols-3 gap-3"><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.required} onCheckedChange={checked => setForm({ ...form, required: checked === true })} />必填</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.show_on_register} onCheckedChange={checked => setForm({ ...form, show_on_register: checked === true })} />注册时显示</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.admin_only} onCheckedChange={checked => setForm({ ...form, admin_only: checked === true })} />仅管理员可见</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.active} onCheckedChange={checked => setForm({ ...form, active: checked === true })} />启用</label></div>{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<div className="flex flex-wrap gap-2 border-t pt-4"><Button><Save />{busy ? "保存中" : "保存"}</Button><Button type="button" variant="outline" onClick={() => setForm(null)}>取消</Button></div></fieldset></form>}</DialogContent></Dialog></Workspace>;
+}

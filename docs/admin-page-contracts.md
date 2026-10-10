@@ -33,7 +33,7 @@
 | 25 | [功能 / 定时任务状态](#page-25) | #/timing-results | /admin/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 26 | [功能 / 任务队列](#page-26) | #/statistics-taskQueue | /admin/jobs/queue | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 27 | [功能 / 数据库状态](#page-27) | #/database-message | /admin/system/database | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -46,8 +46,8 @@
 | 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 40 | [设置 / 工单部门](#page-40) | #/work-order-dept | /admin/ticket-departments | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 41 | [设置 / 工单状态](#page-41) | #/work-order-status | /admin/ticket-statuses | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 42 | [设置 / 工单传递](#page-42) | #/work-order-rules | /admin/ticket-rules | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 41 | [设置 / 工单状态](#page-41) | #/work-order-status | /admin/ticket-statuses | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 42 | [设置 / 工单传递](#page-42) | #/work-order-rules | /admin/ticket-rules | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 43 | [设置 / 常规设置](#page-43) | #/general-settings/general | /admin/settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 44 | [设置 / 第三方登录](#page-44) | #/third-login | /admin/channels?category=oauth | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 45 | [设置 / 定时任务](#page-45) | #/automatic-tasks | /admin/job-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -250,7 +250,7 @@
 <a id="page-28"></a>
 ## 28. 自定义客户字段
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:579)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:38)。JSON 中按唯一旧 hash #/customer-custom 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:579)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:38)；页面：[源码](../web/src/app/admin/customer-fields/page.tsx:1)。JSON 中按唯一旧 hash #/customer-custom 检索。
 
 <a id="page-29"></a>
 ## 29. 推介设置
@@ -315,12 +315,12 @@
 <a id="page-41"></a>
 ## 41. 工单状态
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)。JSON 中按唯一旧 hash #/work-order-status 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)；页面：[源码](../web/src/app/admin/ticket-statuses/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-status 检索。
 
 <a id="page-42"></a>
 ## 42. 工单传递
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)。JSON 中按唯一旧 hash #/work-order-rules 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)；页面：[源码](../web/src/app/admin/ticket-rules/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-rules 检索。
 
 <a id="page-43"></a>
 ## 43. 常规设置
