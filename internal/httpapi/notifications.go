@@ -203,6 +203,30 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer tx.Rollback(r.Context())
+	actor := identityFrom(r).ID
+	if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var role string
+	var roleID *int64
+	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if role != "super_admin" {
+		var allowed bool
+		if roleID != nil {
+			if err = tx.QueryRow(r.Context(), "SELECT active AND 'notifications.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+		}
+		if !allowed {
+			writeError(w, http.StatusForbidden, "permission_denied", "没有通知模板管理权限")
+			return
+		}
+	}
 	var kind, channel string
 	var version int64
 	if err = tx.QueryRow(r.Context(), "SELECT kind,channel,version FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel, &version); err != nil {
