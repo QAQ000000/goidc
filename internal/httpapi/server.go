@@ -93,6 +93,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/system/database", s.sessionAuth(s.adminSystemDatabase, true))
 	mux.HandleFunc("GET /api/v1/admin/system/upgrade", s.sessionAuth(s.adminSystemUpgrade, true))
 	mux.HandleFunc("GET /api/v1/admin/jobs", s.auth(s.adminJobs, true))
+	mux.HandleFunc("GET /api/v1/admin/scheduler-settings", s.auth(s.schedulerSettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/scheduler-settings", s.auth(s.updateSchedulerSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/jobs/queue", s.auth(s.adminJobQueue, true))
 	mux.HandleFunc("GET /api/v1/admin/logs/jobs", s.auth(s.adminJobExecutionLog, true))
 	mux.HandleFunc("GET /api/v1/admin/logs/jobs/trend", s.auth(s.adminSchedulerTrend, true))
