@@ -25,7 +25,8 @@ function serializeState(state: ListState, defaultStatus: string) {
   return query ? `?${query}` : "";
 }
 
-export function useAdminListNavigation(enabled: boolean, states: readonly string[], defaultStatus = "all") {
+export function useAdminListNavigation(enabled: boolean, states: readonly string[], defaultStatus = "all", extraDefaults?: Readonly<Record<string, string>>) {
+  const [extra, setExtra] = useState<Record<string, string>>({ ...extraDefaults });
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState(defaultStatus);
@@ -36,6 +37,10 @@ export function useAdminListNavigation(enabled: boolean, states: readonly string
     if (!enabled) return;
     const apply = () => {
       const state = readState(new URLSearchParams(window.location.search), states, defaultStatus);
+      if (extraDefaults) {
+        const params = new URLSearchParams(window.location.search);
+        setExtra(Object.fromEntries(Object.entries(extraDefaults).map(([key, value]) => [key, params.get(key) ?? value])));
+      }
       setQuery(state.query);
       setDraft(state.query);
       setStatus(state.status);
@@ -45,14 +50,16 @@ export function useAdminListNavigation(enabled: boolean, states: readonly string
     apply();
     window.addEventListener("popstate", apply);
     return () => window.removeEventListener("popstate", apply);
-  }, [enabled, states, defaultStatus]);
+  }, [enabled, states, defaultStatus, extraDefaults]);
 
-  const suffix = serializeState({ query, status, page }, defaultStatus);
+  const params = new URLSearchParams(serializeState({ query, status, page }, defaultStatus));
+  for (const [key, value] of Object.entries(extra)) params.set(key, value);
+  const suffix = params.size ? `?${params.toString()}` : "";
   useEffect(() => {
     if (enabled && ready) window.history.replaceState(null, "", `${window.location.pathname}${suffix}`);
   }, [enabled, ready, suffix]);
 
-  return { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix: enabled ? suffix : "" };
+  return { extra, setExtra, query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix: enabled ? suffix : "" };
 }
 
 export function useAdminListReturnHref(path: string, states: readonly string[], defaultStatus = "all") {

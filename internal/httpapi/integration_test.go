@@ -327,7 +327,13 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	_, admin := user(t, db, h, "notification-admin", "super_admin")
 	templates := request(h, "GET", "/api/v1/admin/notification-templates", nil, admin, "")
 	expect(t, templates, 200)
-	page := data(t, templates)
+	legacyItems := listData(t, templates)
+	if len(legacyItems) < 4 {
+		t.Fatal("legacy array contract lost")
+	}
+	pageResponse := request(h, "GET", "/api/v1/admin/notification-templates/page", nil, admin, "")
+	expect(t, pageResponse, 200)
+	page := data(t, pageResponse)
 	items, ok := page["items"].([]any)
 	if !ok {
 		t.Fatalf("template page missing items: %s", templates.Body.String())
@@ -338,7 +344,7 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	if page["total"] == nil || page["limit"] == nil || page["offset"] == nil {
 		t.Fatalf("template pagination missing: %s", templates.Body.String())
 	}
-	filtered := request(h, "GET", "/api/v1/admin/notification-templates?channel=email&q=password_reset&limit=1", nil, admin, "")
+	filtered := request(h, "GET", "/api/v1/admin/notification-templates/page?channel=email&q=password_reset&limit=1", nil, admin, "")
 	expect(t, filtered, 200)
 	filteredPage := data(t, filtered)
 	filteredItems, ok := filteredPage["items"].([]any)
@@ -356,7 +362,7 @@ func TestNotificationTemplateAndOutboxAdministration(t *testing.T) {
 	if templateID == 0 {
 		t.Fatal("password reset template missing")
 	}
-	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/notification-templates/%d", templateID), map[string]any{"subject": "自定义重置主题", "body": "请使用：{{code}}", "active": true}, admin, "")
+	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/notification-templates/%d", templateID), map[string]any{"expected_version": 1, "subject": "自定义重置主题", "body": "请使用：{{code}}", "active": true}, admin, "")
 	expect(t, updated, 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]string{"identifier": "notification-customer"}, "", ""), 202)
 	var body, subject string

@@ -82,7 +82,7 @@ var adminRoutePermissions = func() map[string]string {
 		"dashboard.view":                {"GET /api/v1/admin/dashboard"},
 		"migrations.view":               {"GET /api/v1/admin/migrations/runs", "GET /api/v1/admin/migrations/reviews", "GET /api/v1/admin/migrations/reviews/{entity}/{id}"},
 		"@super":                        {"POST /api/v1/admin/migrations/reviews/{entity}/{id}", "POST /api/v1/admin/ticket-departments", "PATCH /api/v1/admin/ticket-departments/{id}", "DELETE /api/v1/admin/ticket-departments/{id}", "GET /api/v1/admin/permissions", "GET /api/v1/admin/roles", "POST /api/v1/admin/roles", "PATCH /api/v1/admin/roles/{id}", "DELETE /api/v1/admin/roles/{id}", "GET /api/v1/admin/staff", "POST /api/v1/admin/staff", "PATCH /api/v1/admin/staff/{id}"},
-		"notifications.view":            {"GET /api/v1/admin/notification-templates", "GET /api/v1/admin/email-outbox", "GET /api/v1/admin/sms-outbox"},
+		"notifications.view":            {"GET /api/v1/admin/notification-templates/page", "GET /api/v1/admin/notification-templates", "GET /api/v1/admin/email-outbox", "GET /api/v1/admin/sms-outbox"},
 		"notifications.manage":          {"POST /api/v1/admin/notification-templates", "PATCH /api/v1/admin/notification-templates/{id}", "POST /api/v1/admin/email-outbox/{id}/retry", "POST /api/v1/admin/sms-outbox/{id}/retry"},
 		"affiliates.view":               {"GET /api/v1/admin/affiliate/accounts", "GET /api/v1/admin/affiliate/attributions", "GET /api/v1/admin/affiliate/withdrawals", "GET /api/v1/admin/affiliate/withdrawals/{id}"},
 		"affiliates.withdrawals.review": {"POST /api/v1/admin/affiliate/withdrawals/{id}/review"},

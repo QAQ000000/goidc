@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, ArrowRight, Pencil, Plus, RotateCcw, Save } from "lucide-react";
-import { api, date } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Pencil, Plus, RotateCcw, Save } from "lucide-react";
+import { api, ApiError, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
+import { useAdminListNavigation } from "@/hooks/use-admin-list-navigation";
+import { AdminPagination } from "./admin-pagination";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
@@ -20,6 +22,7 @@ import { Failure, Loading, Status } from "./common";
 import { Workspace, useAdminPermission } from "./workspace";
 
 type Template = {
+  version: number;
   id: number;
   channel: "email" | "sms";
   kind: string;
@@ -53,18 +56,23 @@ export function NotificationsView() {
     </Workspace>
   );
 }
+const templateStates = ["all", "active", "disabled"] as const;
+const templateDefaults = { channel: "email", limit: "25" };
 function NotificationManager() {
-  const [templateChannel, setTemplateChannel] = useState<"email" | "sms">("email");
-  const [templatePage, setTemplatePage] = useState(0);
-  const [templateQuery, setTemplateQuery] = useState("");
-  const templateLimit = 25;
-  const templates = useResource<TemplatePage>(`/admin/notification-templates?channel=${templateChannel}&q=${encodeURIComponent(templateQuery)}&limit=${templateLimit}&offset=${templatePage * templateLimit}`, false);
+  const navigation = useAdminListNavigation(true, templateStates, "all", templateDefaults);
+  const templateChannel = navigation.extra.channel === "sms" ? "sms" : "email";
+  const templateLimit = [25, 50, 100].includes(Number(navigation.extra.limit)) ? Number(navigation.extra.limit) : 25;
+  const templatePage = navigation.page;
+  const templateQuery = navigation.query;
+  const setTemplatePage = navigation.setPage;
+  const templates = useResource<TemplatePage>(navigation.ready ? `/admin/notification-templates/page?channel=${templateChannel}&q=${encodeURIComponent(templateQuery)}&status=${navigation.status}&limit=${templateLimit}&offset=${templatePage * templateLimit}` : null, false);
   const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
   const smsOutbox = useResource<SMSJob[]>("/admin/sms-outbox?limit=50");
   const manage = useAdminPermission("notifications.manage");
   const [tab, setTab] = useState("templates");
   const [outboxChannel, setOutboxChannel] = useState<"email" | "sms">("email");
   const [edit, setEdit] = useState<Template | null>(null);
+  const [editingDirty, setEditingDirty] = useState(false);
   const [editingBusy, setEditingBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const refresh = () => {
@@ -82,7 +90,7 @@ function NotificationManager() {
           variant="ghost"
           className="mb-4"
           disabled={editingBusy}
-          onClick={() => setEdit(null)}
+          onClick={() => { if (!editingDirty || window.confirm("模板有未保存的修改，确定返回并丢弃吗？")) { setEdit(null); setEditingDirty(false); } }}
         >
           <ArrowLeft />
           返回{edit.channel === "sms" ? "短信" : "邮件"}模板
@@ -95,6 +103,7 @@ function NotificationManager() {
           template={edit}
           manage={manage}
           onBusy={setEditingBusy}
+          onDirty={setEditingDirty}
           saved={() => {
             setEdit(null);
             setNotice(`${edit.channel === "sms" ? "短信" : "邮件"}模板已保存`);
@@ -122,6 +131,7 @@ function NotificationManager() {
               onClick={() => {
                 setNotice("");
                 setEdit({
+                  version: 1,
                   id: 0,
                   channel: templateChannel,
                   kind: "",
@@ -165,7 +175,7 @@ function NotificationManager() {
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="flex border-b">
             {([["email", "邮件模板"], ["sms", "短信模板"]] as const).map(([value, label]) => (
-              <button type="button" key={value} className={`border-b-2 px-4 py-2 text-sm ${templateChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => { setTemplateChannel(value); setTemplateQuery(""); setTemplatePage(0); }}>
+              <button type="button" key={value} className={`border-b-2 px-4 py-2 text-sm ${templateChannel === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => { navigation.setExtra({ ...navigation.extra, channel: value }); navigation.setQuery(""); setTemplatePage(0); }}>
                 {label}
               </button>
             ))}
@@ -175,8 +185,9 @@ function NotificationManager() {
             aria-label={`搜索${templateChannel === "sms" ? "短信" : "邮件"}模板`}
             placeholder="模板名称、主题或类型"
             value={templateQuery}
-            onChange={(event) => { setTemplateQuery(event.target.value); setTemplatePage(0); }}
+            onChange={(event) => { navigation.setQuery(event.target.value); setTemplatePage(0); }}
           />
+          <select aria-label="模板状态" value={navigation.status} onChange={(event) => { navigation.setStatus(event.target.value); setTemplatePage(0); }} className="rounded border px-3 py-2 text-sm"><option value="all">全部状态</option><option value="active">启用</option><option value="disabled">停用</option></select>
         </div>
       )}
       {error ? (
@@ -243,13 +254,7 @@ function NotificationManager() {
               </TableBody>
             </Table>
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
-            <span>{templates.data.total} 个模板</span>
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" size="icon" title="上一页" aria-label="上一页" disabled={templatePage === 0} onClick={() => setTemplatePage((value) => Math.max(0, value - 1))}><ArrowLeft /></Button>
-              <Button type="button" variant="outline" size="icon" title="下一页" aria-label="下一页" disabled={(templatePage + 1) * templateLimit >= templates.data.total} onClick={() => setTemplatePage((value) => value + 1)}><ArrowRight /></Button>
-            </div>
-          </div>
+          <AdminPagination total={templates.data.total} page={templatePage} pageSize={templateLimit} onPageChange={setTemplatePage} onPageSizeChange={(limit) => { navigation.setExtra({ ...navigation.extra, limit: String(limit) }); setTemplatePage(0); }} />
           </>
         )
       ) : !activeOutbox.data ? (
@@ -329,15 +334,25 @@ function TemplateEditor({
   manage,
   saved,
   onBusy,
+  onDirty,
 }: {
   template: Template;
   manage: boolean;
   saved: () => void;
   onBusy: (value: boolean) => void;
+  onDirty: (value: boolean) => void;
 }) {
   const [form, setForm] = useState(template);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const dirty = JSON.stringify(form) !== JSON.stringify(template);
+  useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (!manage || busy) return;
@@ -350,7 +365,7 @@ function TemplateEditor({
         {
           method: template.id ? "PATCH" : "POST",
           body: JSON.stringify({
-            ...(template.id ? {} : { kind: form.kind }),
+            ...(template.id ? { expected_version: template.version } : { kind: form.kind }),
             ...(template.id ? {} : { channel: form.channel }),
             name: form.name,
             subject: form.subject,
@@ -362,7 +377,7 @@ function TemplateEditor({
       );
       saved();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof ApiError && e.status === 409 ? "模板已被其他管理员修改。请保留所需内容，返回列表刷新后重新编辑。" : (e as Error).message);
     } finally {
       setBusy(false);
       onBusy(false);
@@ -474,7 +489,7 @@ function RetryOutbox({ id, channel, refresh }: { id: number; channel: "email" | 
       });
       refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof ApiError && e.status === 409 ? "模板已被其他管理员修改。请保留所需内容，返回列表刷新后重新编辑。" : (e as Error).message);
     } finally {
       setBusy(false);
     }

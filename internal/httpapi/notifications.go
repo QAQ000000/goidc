@@ -23,6 +23,23 @@ func validNotificationKind(value string) bool {
 }
 
 func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at,channel,provider_template_id,version FROM notification_templates ORDER BY channel,id`)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	write(w, http.StatusOK, items)
+}
+
+func (s *Server) notificationTemplatesPage(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	channel := strings.TrimSpace(r.URL.Query().Get("channel"))
 	if channel != "" && channel != "email" && channel != "sms" {
@@ -40,6 +57,15 @@ func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "%"+query+"%")
 		where = append(where, fmt.Sprintf("(name ILIKE $%d OR kind ILIKE $%d OR subject ILIKE $%d)", len(args), len(args), len(args)))
 	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	if status != "" && status != "all" {
+		if status != "active" && status != "disabled" {
+			writeError(w, 400, "invalid_notification_status", "模板状态无效")
+			return
+		}
+		args = append(args, status == "active")
+		where = append(where, fmt.Sprintf("active=$%d", len(args)))
+	}
 	whereSQL := strings.Join(where, " AND ")
 	var total int
 	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM notification_templates WHERE "+whereSQL, args...).Scan(&total); err != nil {
@@ -48,7 +74,7 @@ func (s *Server) notificationTemplates(w http.ResponseWriter, r *http.Request) {
 	}
 	args = append(args, limit, offset)
 	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at
- ,channel,provider_template_id FROM notification_templates WHERE `+whereSQL+` ORDER BY channel,id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+ ,channel,provider_template_id,version FROM notification_templates WHERE `+whereSQL+` ORDER BY channel,id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -108,7 +134,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.
 		s.fail(w, r, err)
 		return
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.created", "notification_template", id, map[string]any{"kind": input.Kind}); err != nil {
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.created", "notification_template", id, map[string]any{"kind": input.Kind, "version": 1}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -116,7 +142,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind})
+	write(w, http.StatusCreated, map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind, "version": 1})
 }
 
 func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +151,7 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var input struct {
+		ExpectedVersion    *int64  `json:"expected_version"`
 		Name               *string `json:"name"`
 		Subject            *string `json:"subject"`
 		Body               *string `json:"body"`
@@ -132,6 +159,10 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		Active             *bool   `json:"active"`
 	}
 	if !decode(w, r, &input) {
+		return
+	}
+	if input.ExpectedVersion == nil || *input.ExpectedVersion < 1 {
+		writeError(w, 400, "expected_version_required", "请提供模板版本")
 		return
 	}
 	if input.Name == nil && input.Subject == nil && input.Body == nil && input.ProviderTemplateID == nil && input.Active == nil {
@@ -173,15 +204,20 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 	}
 	defer tx.Rollback(r.Context())
 	var kind, channel string
-	if err = tx.QueryRow(r.Context(), "SELECT kind,channel FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel); err != nil {
+	var version int64
+	if err = tx.QueryRow(r.Context(), "SELECT kind,channel,version FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel, &version); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if version != *input.ExpectedVersion {
+		writeError(w, 409, "notification_template_conflict", "模板已被其他管理员修改，请刷新后重新编辑")
 		return
 	}
 	if channel == "email" && input.Subject != nil && *input.Subject == "" {
 		writeError(w, http.StatusBadRequest, "invalid_notification_template", "邮件主题无效")
 		return
 	}
-	if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
+	if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),version=version+1,updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -193,7 +229,7 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind})
+	write(w, http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind, "version": version + 1})
 }
 
 func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {

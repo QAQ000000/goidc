@@ -260,6 +260,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/migrations/reviews", s.auth(s.legacyReviewList, true))
 	mux.HandleFunc("GET /api/v1/admin/migrations/reviews/{entity}/{id}", s.auth(s.legacyReviewDetail, true))
 	mux.HandleFunc("POST /api/v1/admin/migrations/reviews/{entity}/{id}", s.sessionAuth(s.reviewLegacy, true))
+	mux.HandleFunc("GET /api/v1/admin/notification-templates/page", s.auth(s.notificationTemplatesPage, true))
 	mux.HandleFunc("GET /api/v1/admin/notification-templates", s.auth(s.notificationTemplates, true))
 	mux.HandleFunc("POST /api/v1/admin/notification-templates", s.auth(s.createNotificationTemplate, true))
 	mux.HandleFunc("PATCH /api/v1/admin/notification-templates/{id}", s.auth(s.updateNotificationTemplate, true))
