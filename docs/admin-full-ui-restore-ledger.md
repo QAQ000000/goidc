@@ -11,7 +11,7 @@
 | 1 | 控制台概览 `#/login` | `/admin` | 已完成 | `GET /admin/dashboard` | `dashboard.view` / 四尺寸工作台 |
 | 2 | 客户列表 `#/customer-list` | `/admin/customers` | 已完成 | `GET /admin/customers/page` | `customers.view` / 搜索分页返回 |
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications` | 部分完成 | `GET /admin/certifications/page` | `certifications.view` / 审批和历史 |
-| 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 待实现 | `GET/PUT /admin/customer-resources` | `customers.view/manage` / 分配销售 |
+| 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
 | 5 | 我的业绩 `#/sales-statistics` | `/admin/reports/sales` | 部分完成 | `GET /admin/reports/sales` | `reports.view` / 人员和时间筛选 |
 | 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 待实现 | `GET/POST /admin/marketing` | `notifications.view/manage` / 客户与商品条件 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
@@ -119,7 +119,7 @@
 | 批次 | 范围 | 状态 | 证据 |
 |---|---|---|---|
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 待补四尺寸截图和接口契约结果 |
-| 第二批 | 客户扩展 | 待开始 | - |
+| 第二批 | 客户扩展 | 进行中 | 客户资源池已完成；实名、业绩、营销和等级待补 |
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
