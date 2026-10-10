@@ -232,7 +232,7 @@ func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"TRUE"}}
+	f := adminLogFilters{where: []string{"u.role IN ('admin','super_admin')"}}
 	if method := strings.TrimSpace(r.URL.Query().Get("method")); method != "" {
 		method = strings.ToUpper(method)
 		switch method {
