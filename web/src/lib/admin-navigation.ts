@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog, WalletCards, Megaphone } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -10,6 +10,7 @@ export const adminNavigation = [
   { href: "/admin/customer-fields", label: "客户自定义字段", icon: UserRoundCog, permission: "customers.manage", group: "customer_mgmt" },
   { href: "/admin/customer-files", label: "客户文件", icon: Download, permission: "customer_files.view", group: "customer_mgmt" },
   { href: "/admin/affiliate", label: "推介计划", icon: HandCoins, permission: "affiliates.view", group: "customer_ops" },
+  { href: "/admin/marketing", label: "营销推送", icon: Megaphone, permission: "notifications.view", group: "customer_ops" },
   { href: "/admin/promo-codes", label: "优惠码", icon: Tag, permission: "promos.view", group: "finance" },
   { href: "/admin/products", label: "产品目录", icon: Package, permission: "products.view", group: "products" },
   { href: "/admin/catalog-groups", label: "目录分组", icon: Package, permission: "products.view", group: "products" },
@@ -31,6 +32,11 @@ export const adminNavigation = [
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super", group: "system" },
   { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/auth-settings", label: "注册与验证码", icon: ShieldCheck, permission: "settings.view", group: "system" },
+  { href: "/admin/currencies", label: "货币配置", icon: Settings, permission: "settings.view", group: "finance" },
+  { href: "/admin/finance-settings", label: "充值与财务", icon: Settings, permission: "settings.view", group: "finance" },
+  { href: "/admin/invoice-settings", label: "发票设置", icon: Receipt, permission: "settings.view", group: "finance" },
+  { href: "/admin/contract-settings", label: "合同设置", icon: Receipt, permission: "settings.view", group: "finance" },
+  { href: "/admin/credit-settings", label: "信用额设置", icon: WalletCards, permission: "settings.view", group: "finance" },
   { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/sms", label: "短信日志", icon: Mail, permission: "notifications.view", group: "system" },

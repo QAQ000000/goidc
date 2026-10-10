@@ -13,7 +13,7 @@
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications` | 部分完成 | `GET /admin/certifications/page` | `certifications.view` / 审批和历史 |
 | 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
 | 5 | 我的业绩 `#/sales-statistics` | `/admin/reports/sales` | 部分完成 | `GET /admin/reports/sales` | `reports.view` / 人员和时间筛选 |
-| 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 待实现 | `GET/POST /admin/marketing` | `notifications.view/manage` / 客户与商品条件 |
+| 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸浏览器验收待执行 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 已完成 | `GET /admin/orders` | `orders.view/manage` / 状态、批量取消 |
 | 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 待实现 | `GET /admin/orders?kind=renew` | `orders.view` / URL 筛选恢复 |
@@ -40,13 +40,13 @@
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 待实现 | `GET/POST/PATCH /admin/customer-levels` | `customers.manage` |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups` | 部分完成 | `GET/POST/PATCH /admin/customer-groups` | `customer_groups.view/manage` |
 | 32 | 实名设置 `#/authentication-setting` | `/admin/certification-settings` | 部分完成 | `GET/PUT /admin/certification-settings` | `certifications.manage` |
-| 33 | 货币配置 `#/currency-settings` | `/admin/currencies` | 待实现 | `GET/POST/PATCH /admin/currencies` | `settings.manage` |
+| 33 | 货币配置 `#/currency-settings` | `/admin/currencies` | 已完成 | `GET/POST/PATCH/DELETE /admin/currencies`、`POST /admin/currencies/{id}/default` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 34 | 支付接口 `#/payment-interface` | `/admin/channels?category=payment` | 已完成 | `GET/POST/PUT/DELETE /admin/channel-instances` | `@super` / 能力、密钥、启停 |
-| 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 待实现 | `GET/PUT /admin/finance-settings` | `settings.manage` / 版本冲突 |
+| 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET/POST/PATCH /admin/promo-codes` | `promos.view/manage` |
-| 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 待实现 | `GET/PUT /admin/invoice-settings` | `settings.manage` |
-| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 待实现 | `GET/PUT /admin/contract-settings` | `settings.manage` |
-| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 待实现 | `GET/PUT /admin/credit-settings` | `settings.manage` |
+| 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
+| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 已完成 | `GET/PUT /admin/contract-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
+| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本冲突、审计 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
 | 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、幂等、版本冲突、审计；完整表单交互待补 |
 | 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 幂等、关联校验、版本冲突、审计；完整表单交互待补 |
