@@ -37,6 +37,60 @@ func (s *Server) submitCertification(w http.ResponseWriter, r *http.Request) {
 	write(w, http.StatusAccepted, out)
 }
 
+func (s *Server) convertCertificationToCompany(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Payload         map[string]any `json:"payload"`
+		ExpectedVersion int64          `json:"expected_version"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.ExpectedVersion < 1 {
+		writeError(w, http.StatusBadRequest, "invalid_certification_conversion", "请提供有效认证版本")
+		return
+	}
+	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if len(key) < 8 || len(key) > 128 {
+		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "请提供长度为 8 到 128 的幂等键")
+		return
+	}
+	hashBytes, _ := json.Marshal(struct {
+		Payload         map[string]any
+		ExpectedVersion int64
+	}{in.Payload, in.ExpectedVersion})
+	hash := sha256.Sum256(hashBytes)
+	actor := identityFrom(r).ID
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	operation := "certification.convert_company"
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:])); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, http.StatusOK, replay)
+		return
+	}
+	out, err := s.db.ConvertCertificationToCompanyTx(r.Context(), tx, actor, in.Payload, in.ExpectedVersion)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:]), out); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusAccepted, out)
+}
+
 func (s *Server) adminCertifications(w http.ResponseWriter, r *http.Request) {
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
 	if status != "" && status != "unverified" && status != "pending" && status != "approved" && status != "rejected" {

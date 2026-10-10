@@ -8,7 +8,7 @@
 |---:|---|---|---|---|---|
 | 1 | [概览 / 控制台概览](#page-1) | #/login | /admin | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 2 | [客户 / 客户列表](#page-2) | #/customer-list | /admin/customers | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications | 有分页、筛选、详情、历史和审核 API；个人转企业待补 | 四尺寸验收通过，见客户扩展批次记录 |
+| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications、/console/certification | 有分页、筛选、详情、历史、审核和个人转企业 API；企业转换保留个人历史并具备幂等/版本保护 | 四尺寸验收通过，见客户扩展批次记录 |
 | 4 | [客户 / 客户资源池](#page-4) | #/customer-resources | /admin/customer-resources | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports/sales | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |

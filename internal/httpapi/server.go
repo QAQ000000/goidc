@@ -202,6 +202,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/affiliate/links/{id}", s.auth(s.updateAffiliateLink, false))
 	mux.HandleFunc("GET /api/v1/account/certification", s.auth(s.certification, false))
 	mux.HandleFunc("POST /api/v1/account/certification", s.auth(s.submitCertification, false))
+	mux.HandleFunc("POST /api/v1/account/certification/convert-company", s.auth(s.convertCertificationToCompany, false))
 	mux.HandleFunc("GET /api/v1/invoice-profiles", s.auth(s.invoiceProfiles, false))
 	mux.HandleFunc("POST /api/v1/invoice-profiles", s.auth(s.invoiceProfiles, false))
 	mux.HandleFunc("PUT /api/v1/invoice-profiles/{id}", s.auth(s.invoiceProfiles, false))

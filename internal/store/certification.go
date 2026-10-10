@@ -138,6 +138,44 @@ func (s *Store) SubmitCertification(ctx context.Context, userID int64, kind stri
 	return map[string]any{"id": submissionID, "profile_id": profileID, "status": status, "version": version}, nil
 }
 
+// ConvertCertificationToCompanyTx converts an approved individual profile to
+// a company submission without deleting the previous personal history.
+// The caller owns the transaction and must journal idempotency atomically.
+func (s *Store) ConvertCertificationToCompanyTx(ctx context.Context, tx pgx.Tx, userID int64, payload map[string]any, expected int64) (map[string]any, error) {
+	if err := validateCertificationPayload("company", payload); err != nil {
+		return nil, err
+	}
+	var profileID, version int64
+	var kind, status string
+	if err := tx.QueryRow(ctx, `SELECT id,certification_type,status,version FROM certification_profiles WHERE user_id=$1 FOR UPDATE`, userID).Scan(&profileID, &kind, &status, &version); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, conflict("certification_conversion_unavailable", "未找到可转换的个人认证")
+		}
+		return nil, err
+	}
+	if expected < 1 || expected != version {
+		return nil, conflict("version_conflict", "认证状态已变更，请重新加载")
+	}
+	if kind != "individual" || status != "approved" {
+		return nil, conflict("certification_conversion_unavailable", "仅已通过的个人认证可以转为企业认证")
+	}
+	sealed, aad, err := sealCertification(s.ProvisionEncryptionKey, fmt.Sprintf("%d", profileID), payload)
+	if err != nil {
+		return nil, conflict("certification_unconfigured", "认证加密尚未配置")
+	}
+	var submissionID int64
+	if err = tx.QueryRow(ctx, `INSERT INTO certification_submissions(profile_id,user_id,certification_type,provider_id,status,payload_encrypted,payload_aad) VALUES($1,$2,'company','manual','pending',$3,$4) RETURNING id`, profileID, userID, sealed, aad).Scan(&submissionID); err != nil {
+		return nil, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE certification_profiles SET certification_type='company',status='pending',provider_id='manual',rejection_reason='',version=version+1,updated_at=now() WHERE id=$1`, profileID); err != nil {
+		return nil, err
+	}
+	if err = Audit(ctx, tx, userID, "certification.company_conversion_requested", "certification_profile", profileID, map[string]any{"previous_type": kind, "previous_status": status, "submission_id": submissionID, "version": version + 1}); err != nil {
+		return nil, err
+	}
+	return map[string]any{"id": submissionID, "profile_id": profileID, "status": "pending", "version": version + 1}, nil
+}
+
 func (s *Store) AdminCertifications(ctx context.Context, status string, limit, offset int) ([]map[string]any, error) {
 	args := []any{limit, offset}
 	where := ""
