@@ -87,6 +87,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/content-images/{id}", s.contentImage)
 	mux.HandleFunc("GET /api/v1/admin/site-settings", s.sessionAuth(s.siteSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/site-settings", s.sessionAuth(s.updateSiteSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/system/runtime", s.sessionAuth(s.adminSystemRuntime, true))
+	mux.HandleFunc("GET /api/v1/admin/system/about", s.sessionAuth(s.adminSystemAbout, true))
 	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/smtp-settings", s.sessionAuth(s.smtpSettings, true))
