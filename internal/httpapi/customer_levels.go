@@ -56,7 +56,7 @@ func (s *Server) adminCustomerLevels(w http.ResponseWriter, r *http.Request) {
 	}
 	where := ` FROM customer_levels cl WHERE ($2='' OR cl.name ILIKE '%'||$2||'%') AND ($3='' OR cl.active=($3='true'))`
 	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, identityFrom(r).ID, q, active).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM customer_levels cl WHERE ($1='' OR cl.name ILIKE '%'||$1||'%') AND ($2='' OR cl.active=($2='true'))", q, active).Scan(&total); err != nil {
 		s.fail(w, r, err)
 		return
 	}

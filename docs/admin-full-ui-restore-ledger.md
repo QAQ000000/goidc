@@ -39,7 +39,7 @@
 | 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 待实现 | `GET/POST/PATCH /admin/customer-levels` | `customers.manage` |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups` | 部分完成 | `GET/POST/PATCH /admin/customer-groups` | `customer_groups.view/manage` |
-| 32 | 实名设置 `#/authentication-setting` | `/admin/certification-settings` | 部分完成 | `GET/PUT /admin/certification-settings` | `certifications.manage` |
+| 32 | 实名设置 `#/authentication-setting` | `/admin/certification-settings` | 已完成 | `GET/PUT /admin/certification-settings`、`GET /admin/channel-instances?category=certification` | `certifications.view/manage`、版本冲突、幂等和审计 |
 | 33 | 货币配置 `#/currency-settings` | `/admin/currencies` | 已完成 | `GET/POST/PATCH/DELETE /admin/currencies`、`POST /admin/currencies/{id}/default` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 34 | 支付接口 `#/payment-interface` | `/admin/channels?category=payment` | 已完成 | `GET/POST/PUT/DELETE /admin/channel-instances` | `@super` / 能力、密钥、启停 |
 | 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |

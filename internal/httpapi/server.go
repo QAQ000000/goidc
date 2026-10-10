@@ -127,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/invoice-shipping-methods/{id}", s.sessionAuth(s.deleteInvoiceShippingMethod, true))
 	mux.HandleFunc("GET /api/v1/admin/contract-settings", s.sessionAuth(s.contractSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/contract-settings", s.sessionAuth(s.updateContractSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/certification-settings", s.sessionAuth(s.certificationSettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/certification-settings", s.sessionAuth(s.updateCertificationSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/smtp-settings", s.sessionAuth(s.smtpSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/smtp-settings", s.sessionAuth(s.updateSMTPSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/sms-settings", s.sessionAuth(s.smsSettings, true))

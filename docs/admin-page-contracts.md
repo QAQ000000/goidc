@@ -37,7 +37,7 @@
 | 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | Go API 与 React 页面已实现；基础设置和接口实例状态均来自真实 API | 未验证 |
 | 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 34 | [设置 / 支付接口](#page-34) | #/payment-interface | /admin/channels?category=payment | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
