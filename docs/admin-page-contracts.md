@@ -11,7 +11,7 @@
 | 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 4 | [客户 / 客户资源池](#page-4) | #/customer-resources | /admin/customer-resources | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports/sales | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 7 | [客户 / 推介计划](#page-7) | #/customer-promotionplan | /admin/affiliate | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -38,13 +38,13 @@
 | 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 34 | [设置 / 支付接口](#page-34) | #/payment-interface | /admin/channels?category=payment | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 36 | [设置 / 优惠码](#page-36) | #/promo-code | /admin/promo-codes | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 37 | [设置 / 发票设置](#page-37) | #/voucher-setting | /admin/invoice-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 37 | [设置 / 发票设置](#page-37) | #/voucher-setting | /admin/invoice-settings | Go API 与 React 页面已实现，快递方式 CRUD 已接入 | 四尺寸验收通过，见批次记录 |
+| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
+| 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 40 | [设置 / 工单部门](#page-40) | #/work-order-dept | /admin/ticket-departments | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 41 | [设置 / 工单状态](#page-41) | #/work-order-status | /admin/ticket-statuses | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 42 | [设置 / 工单传递](#page-42) | #/work-order-rules | /admin/ticket-rules | 有对应路由源码；实现完整性未验证 | 未验证 |

@@ -688,8 +688,8 @@
       ],
       "pageStatus": {
         "ledger": "部分完成",
-        "code": "页面和真实 API 已实现；浏览器验收待执行",
-        "browserAcceptance": "未验证"
+        "code": "页面和真实 API 已实现；四尺寸浏览器验收通过",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146",
@@ -724,12 +724,20 @@
         "enforcement": "internal/httpapi/admin_permissions.go"
       },
       "storage": {
-        "tables": ["marketing_campaigns", "marketing_campaign_recipients", "marketing_campaign_operations"],
-        "evidence": ["db/migrations/110_marketing_campaigns.sql:3"],
+        "tables": [
+          "marketing_campaigns",
+          "marketing_campaign_recipients",
+          "marketing_campaign_operations"
+        ],
+        "evidence": [
+          "db/migrations/110_marketing_campaigns.sql:3"
+        ],
         "status": "已登记"
       },
       "migrations": {
-        "evidence": ["db/migrations/110_marketing_campaigns.sql"],
+        "evidence": [
+          "db/migrations/110_marketing_campaigns.sql"
+        ],
         "status": "已登记"
       },
       "fields": {
@@ -814,7 +822,7 @@
           "screenshots": []
         }
       ],
-      "note": "真实 API、权限和迁移已登记；未运行浏览器，四尺寸验收仍待执行。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 7,
@@ -4656,12 +4664,18 @@
       "title": "货币配置",
       "module": "设置",
       "newRoute": "/admin/currencies",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/currencies/page.tsx",
+      "component": [
+        {
+          "name": "CurrenciesView",
+          "source": "@/components/financial-settings",
+          "evidence": "web/src/app/admin/currencies/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "已完成",
+        "code": "Go API 与 React 页面已实现",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:705",
@@ -4670,8 +4684,14 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PATCH /admin/currencies",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          "GET /api/v1/admin/currencies",
+          "POST /api/v1/admin/currencies",
+          "PATCH /api/v1/admin/currencies/{id}",
+          "DELETE /api/v1/admin/currencies/{id}",
+          "POST /api/v1/admin/currencies/{id}/default"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -4766,7 +4786,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 34,
@@ -4943,12 +4963,18 @@
       "title": "充值与财务",
       "module": "设置",
       "newRoute": "/admin/finance-settings",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/finance-settings/page.tsx",
+      "component": [
+        {
+          "name": "FinanceSettingsView",
+          "source": "@/components/financial-settings",
+          "evidence": "web/src/app/admin/finance-settings/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "已完成",
+        "code": "Go API 与 React 页面已实现",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:740",
@@ -4957,8 +4983,11 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/finance-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          "GET /api/v1/admin/finance-settings",
+          "PUT /api/v1/admin/finance-settings"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -5057,7 +5086,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 36,
@@ -5210,12 +5239,18 @@
       "title": "发票设置",
       "module": "设置",
       "newRoute": "/admin/invoice-settings",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/invoice-settings/page.tsx",
+      "component": [
+        {
+          "name": "InvoiceSettingsView",
+          "source": "@/components/financial-settings",
+          "evidence": "web/src/app/admin/invoice-settings/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "已完成",
+        "code": "Go API 与 React 页面已实现；快递方式 CRUD 已接入",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:783",
@@ -5224,8 +5259,14 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/invoice-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          "GET /api/v1/admin/invoice-settings",
+          "PUT /api/v1/admin/invoice-settings",
+          "POST /api/v1/admin/invoice-shipping-methods",
+          "PATCH /api/v1/admin/invoice-shipping-methods/{id}",
+          "DELETE /api/v1/admin/invoice-shipping-methods/{id}"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -5319,7 +5360,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 38,
@@ -5328,12 +5369,18 @@
       "title": "合同设置",
       "module": "设置",
       "newRoute": "/admin/contract-settings",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/contract-settings/page.tsx",
+      "component": [
+        {
+          "name": "ContractSettingsView",
+          "source": "@/components/financial-settings",
+          "evidence": "web/src/app/admin/contract-settings/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "已完成",
+        "code": "Go API 与 React 页面已实现",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:806",
@@ -5342,8 +5389,11 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/contract-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          "GET /api/v1/admin/contract-settings",
+          "PUT /api/v1/admin/contract-settings"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -5435,7 +5485,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 39,
@@ -5444,12 +5494,18 @@
       "title": "信用额设置",
       "module": "设置",
       "newRoute": "/admin/credit-settings",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/credit-settings/page.tsx",
+      "component": [
+        {
+          "name": "CreditSettingsView",
+          "source": "@/components/financial-settings",
+          "evidence": "web/src/app/admin/credit-settings/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "已完成",
+        "code": "Go API 与 React 页面已实现",
+        "browserAcceptance": "通过"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:824",
@@ -5458,8 +5514,11 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/credit-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          "GET /api/v1/admin/credit-settings",
+          "PUT /api/v1/admin/credit-settings"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -5551,7 +5610,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "已运行 PG18 隔离数据库和真实 API 的四尺寸浏览器验收，结果见 docs/admin-batch-settings-marketing-acceptance-20261011.md。"
     },
     {
       "index": 40,

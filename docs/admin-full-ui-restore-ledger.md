@@ -13,7 +13,7 @@
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications` | 部分完成 | `GET /admin/certifications/page` | `certifications.view` / 审批和历史 |
 | 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
 | 5 | 我的业绩 `#/sales-statistics` | `/admin/reports/sales` | 部分完成 | `GET /admin/reports/sales` | `reports.view` / 人员和时间筛选 |
-| 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸浏览器验收待执行 |
+| 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸验收已通过 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 已完成 | `GET /admin/orders` | `orders.view/manage` / 状态、批量取消 |
 | 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 待实现 | `GET /admin/orders?kind=renew` | `orders.view` / URL 筛选恢复 |
@@ -118,7 +118,7 @@
 
 | 批次 | 范围 | 状态 | 证据 |
 |---|---|---|---|
-| 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 待补四尺寸截图和接口契约结果 |
+| 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面四尺寸验收见 `docs/admin-batch-settings-marketing-acceptance-20261011.md`；渠道和通知深度仍在补齐 |
 | 第二批 | 客户扩展 | 进行中 | 客户资源池已完成；实名、业绩、营销和等级待补 |
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
