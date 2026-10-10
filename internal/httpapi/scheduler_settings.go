@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
 )
@@ -8,7 +9,7 @@ import (
 func (s *Server) schedulerSettings(w http.ResponseWriter, r *http.Request) {
 	var version int64
 	var enabled bool
-	var settings []byte
+	var settings json.RawMessage
 	var updated any
 	err := s.db.Pool.QueryRow(r.Context(), "SELECT version,enabled,settings,updated_at FROM scheduler_task_settings WHERE id=1").Scan(&version, &enabled, &settings, &updated)
 	if err != nil {
