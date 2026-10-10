@@ -74,6 +74,9 @@ func (s *Server) adminJobQueue(w http.ResponseWriter, r *http.Request) {
 	}
 	args := jobScope(r)
 	where := []string{"TRUE"}
+	if r.URL.Path == "/api/v1/admin/logs/jobs" {
+		where = append(where, "source='provision'", "status IN ('succeeded','failed','cancelled')")
+	}
 	if source != "" {
 		args = append(args, source)
 		where = append(where, fmt.Sprintf("source=$%d", len(args)))
@@ -134,3 +137,6 @@ func validJobStatus(value string) bool {
 		return false
 	}
 }
+
+// Only retained terminal task records, not scheduler-run history.
+func (s *Server) adminJobExecutionLog(w http.ResponseWriter, r *http.Request) { s.adminJobQueue(w, r) }

@@ -47,6 +47,7 @@ func TestAdminJobsPermissionAndSafeSystemQueue(t *testing.T) {
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/jobs", nil, staff, ""), 403)
 	expect(t, request(h, "GET", "/api/v1/admin/jobs/queue", nil, staff, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/logs/jobs", nil, staff, ""), 403)
 }
 
 func TestAdminJobsCustomerScope(t *testing.T) {
@@ -84,6 +85,21 @@ func TestAdminJobsCustomerScope(t *testing.T) {
 	if data(t, w)["total"].(float64) != 1 || len(data(t, w)["items"].([]any)) != 0 {
 		t.Fatal(w.Body.String())
 	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET status='failed',completed_at=now()"); err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "GET", "/api/v1/admin/logs/jobs?q=queue-client&limit=1", nil, staff, "")
+	expect(t, w, 200)
+	if data(t, w)["total"].(float64) != 1 || strings.Contains(w.Body.String(), "queue-client-1") || strings.Contains(w.Body.String(), "SECRET") {
+		t.Fatal(w.Body.String())
+	}
+	w = request(h, "GET", "/api/v1/admin/logs/jobs?offset=1", nil, staff, "")
+	expect(t, w, 200)
+	if len(data(t, w)["items"].([]any)) != 0 || data(t, w)["total"].(float64) != 1 {
+		t.Fatal(w.Body.String())
+	}
+	expect(t, request(h, "GET", "/api/v1/admin/logs/jobs?from=bad", nil, staff, ""), 400)
+
 	if _, err := db.Pool.Exec(t.Context(), `WITH inserted AS (INSERT INTO email_outbox(recipient,subject,body,kind) SELECT u.email,'SECRET_SUBJECT','SECRET_BODY','system' FROM services s JOIN users u ON u.id=s.user_id RETURNING id,recipient)
  INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date,email_outbox_id)
  SELECT s.id,u.id,'email','service_expiry_reminder',1,current_date,i.id FROM services s JOIN users u ON u.id=s.user_id JOIN inserted i ON i.recipient=u.email`); err != nil {

@@ -93,6 +93,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/system/upgrade", s.sessionAuth(s.adminSystemUpgrade, true))
 	mux.HandleFunc("GET /api/v1/admin/jobs", s.auth(s.adminJobs, true))
 	mux.HandleFunc("GET /api/v1/admin/jobs/queue", s.auth(s.adminJobQueue, true))
+	mux.HandleFunc("GET /api/v1/admin/logs/jobs", s.auth(s.adminJobExecutionLog, true))
 	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/smtp-settings", s.sessionAuth(s.smtpSettings, true))
