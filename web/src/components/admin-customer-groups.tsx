@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, Search, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { api, type CustomerGroup } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
@@ -12,8 +13,22 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from ".
 import { Failure, Loading } from "./common";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
+import {
+  CustomerGroupTabs,
+  CustomerProductDiscountsView,
+  CustomerProductGroupsView,
+} from "./admin-customer-product-groups";
 
 export function AdminCustomerGroupsView() {
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab");
+  if (tab === "products") return <CustomerProductGroupsView />;
+  if (tab === "discounts") return <CustomerProductDiscountsView />;
+
+  return <AdminCustomerGroupsListView />;
+}
+
+function AdminCustomerGroupsListView() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
@@ -138,17 +153,7 @@ export function AdminCustomerGroupsView() {
           </a>
         </div>
 
-        {/* Tab navigation matching MoFang */}
-        <div className="border-b border-[#ebeef5]">
-          <div className="flex space-x-6 text-sm font-medium">
-            <button
-              type="button"
-              className="pb-2 px-1 border-b-2 border-[#409eff] text-[#409eff] font-semibold text-xs"
-            >
-              客户分组
-            </button>
-          </div>
-        </div>
+        <CustomerGroupTabs active="customers" />
 
         {/* Action Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3">

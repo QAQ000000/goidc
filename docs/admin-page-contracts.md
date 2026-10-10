@@ -271,6 +271,8 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:656)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:41)；页面：[源码](../web/src/app/admin/customer-groups/page.tsx:1)。JSON 中按唯一旧 hash #/customer-group 检索。
 
+新版使用 `/admin/customer-groups`、`?tab=products` 和 `?tab=discounts` 三个稳定视图。客户组、商品分组和客户组折扣均来自 Go API；列表返回 `items/total/limit/offset`，商品分组写入携带 `expected_version` 与 `Idempotency-Key`，折扣支持百分比、固定分值和清除配置，并记录审计事件。商品分组只引用真实 `products`，删除受外键约束保护；无数据时展示真实空态。
+
 <a id="page-32"></a>
 ## 32. 实名设置
 

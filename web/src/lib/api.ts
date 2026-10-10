@@ -192,6 +192,27 @@ export type CustomerGroup = {
   member_count: number;
   version: number;
 };
+export type CustomerProductGroup = {
+  id: number;
+  name: string;
+  version: number;
+  product_count: number;
+  product_ids: number[];
+  products: { id: number; name: string }[];
+  created_at: string;
+  updated_at: string;
+};
+export type CustomerProductDiscount = {
+  id: number | null;
+  customer_group_id: number;
+  customer_group_name: string;
+  product_group_id: number;
+  product_group_name: string;
+  discount_type: "none" | "percent" | "fixed";
+  discount_percent: number;
+  fixed_discount_cents: number;
+  version: number;
+};
 export type PromoCode = {
   id: number;
   code: string;
