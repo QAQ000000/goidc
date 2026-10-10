@@ -8,7 +8,12 @@ import (
 )
 
 func (s *Server) ticketStatuses(w http.ResponseWriter, r *http.Request) {
-	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,slug,title,sort_order,builtin,active,version FROM ticket_statuses ORDER BY sort_order,id`)
+	limit, offset, ok := serviceActivityPagination(r)
+	if !ok {
+		writeError(w, 400, "invalid_pagination", "分页参数无效")
+		return
+	}
+	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,slug,title,sort_order,builtin,active,version FROM ticket_statuses ORDER BY sort_order,id LIMIT $1 OFFSET $2`, limit, offset)
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -21,7 +26,12 @@ func (s *Server) ticketStatuses(w http.ResponseWriter, r *http.Request) {
 	if out == nil {
 		out = []map[string]any{}
 	}
-	write(w, 200, out)
+	var total int64
+	if e = s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM ticket_statuses`).Scan(&total); e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	write(w, 200, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
 }
 func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -86,7 +96,12 @@ func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, map[string]any{"id": id, "version": version + 1})
 }
 func (s *Server) ticketRules(w http.ResponseWriter, r *http.Request) {
-	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,department_id,product_id,blocked_keywords,auto_reply,active,version FROM ticket_delivery_rules ORDER BY id DESC`)
+	limit, offset, ok := serviceActivityPagination(r)
+	if !ok {
+		writeError(w, 400, "invalid_pagination", "分页参数无效")
+		return
+	}
+	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,department_id,product_id,blocked_keywords,auto_reply,active,version FROM ticket_delivery_rules ORDER BY id DESC LIMIT $1 OFFSET $2`, limit, offset)
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -99,7 +114,12 @@ func (s *Server) ticketRules(w http.ResponseWriter, r *http.Request) {
 	if out == nil {
 		out = []map[string]any{}
 	}
-	write(w, 200, out)
+	var total int64
+	if e = s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM ticket_delivery_rules`).Scan(&total); e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	write(w, 200, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
 }
 func (s *Server) saveTicketRule(w http.ResponseWriter, r *http.Request) {
 	var in struct {
