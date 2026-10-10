@@ -263,6 +263,12 @@ func (s *Store) QueueSMS(ctx context.Context, tx pgx.Tx, recipient, body, kind, 
 	_, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, kind, challengeID, expiresAt, "", channelInstanceID...)
 	return err
 }
+
+// QueueSMSWithID is used by bulk notification workflows that need to retain
+// the outbox row associated with each recipient for progress reporting.
+func (s *Store) QueueSMSWithID(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, channelInstanceID ...string) (int64, error) {
+	return s.queueSMSWithTemplateID(ctx, tx, recipient, body, kind, challengeID, expiresAt, "", channelInstanceID...)
+}
 func (s *Store) queueSMSWithTemplate(ctx context.Context, tx pgx.Tx, recipient, body, kind, challengeID string, expiresAt time.Time, templateID string, channelInstanceID ...string) error {
 	_, err := s.queueSMSWithTemplateID(ctx, tx, recipient, body, kind, challengeID, expiresAt, templateID, channelInstanceID...)
 	return err

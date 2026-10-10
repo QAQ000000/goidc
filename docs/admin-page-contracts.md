@@ -140,7 +140,11 @@
 <a id="page-6"></a>
 ## 6. 营销推送
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:16)。JSON 中按唯一旧 hash #/marketing-push 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:16)。页面：[路由](../web/src/app/admin/marketing/page.tsx:1)；组件：[实现](../web/src/components/marketing-push.tsx:1)。
+
+已实现真实 API：`GET /api/v1/admin/marketing` 返回 `items/total/limit/offset`，`GET /api/v1/admin/marketing/options` 返回销售、商品、供应商、国家和语言选项，`POST /api/v1/admin/marketing/audience-count` 预览受众，`POST/PATCH /api/v1/admin/marketing` 创建/保存草稿，`GET /api/v1/admin/marketing/{id}` 读取详情，`POST /api/v1/admin/marketing/{id}/send` 在版本锁和幂等键保护下创建邮件、短信或站内信真实投递记录。受众条件由 Go 查询 `users`、`customer_profiles`、`services`、`products` 和 `supplier_product_bindings` 计算，保存后以 JSON 快照记录在 `marketing_campaigns`。
+
+权限使用 `notifications.view` / `notifications.manage`；创建、编辑和发送均记录审计，重复幂等键重放原结果，版本不一致返回 `409`。迁移：[110_marketing_campaigns.sql](../db/migrations/110_marketing_campaigns.sql)。当前状态为部分完成，Playwright 四尺寸验收待执行。
 
 <a id="page-7"></a>
 ## 7. 推介计划

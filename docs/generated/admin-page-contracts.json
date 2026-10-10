@@ -678,22 +678,34 @@
       "title": "营销推送",
       "module": "客户",
       "newRoute": "/admin/marketing",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/marketing/page.tsx",
+      "component": [
+        {
+          "name": "MarketingPushView",
+          "source": "@/components/marketing-push",
+          "evidence": "web/src/app/admin/marketing/page.tsx:1"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
+        "ledger": "部分完成",
+        "code": "页面和真实 API 已实现；浏览器验收待执行",
         "browserAcceptance": "未验证"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146",
         "ledger": "docs/admin-full-ui-restore-ledger.md:16",
-        "component": null
+        "component": "web/src/app/admin/marketing/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET/POST /admin/marketing",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET/POST/PATCH /admin/marketing; POST /admin/marketing/audience-count; POST /admin/marketing/{id}/send",
+        "registered": [
+          "GET /api/v1/admin/marketing",
+          "POST /api/v1/admin/marketing",
+          "PATCH /api/v1/admin/marketing/{id}",
+          "POST /api/v1/admin/marketing/audience-count",
+          "POST /api/v1/admin/marketing/{id}/send"
+        ],
+        "status": "已登记"
       },
       "permission": {
         "ledgerClaim": "notifications.view/manage",
@@ -709,16 +721,16 @@
             "evidence": "internal/store/admin_rbac.go:38"
           }
         ],
-        "enforcement": "未验证"
+        "enforcement": "internal/httpapi/admin_permissions.go"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": ["marketing_campaigns", "marketing_campaign_recipients", "marketing_campaign_operations"],
+        "evidence": ["db/migrations/110_marketing_campaigns.sql:3"],
+        "status": "已登记"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": ["db/migrations/110_marketing_campaigns.sql"],
+        "status": "已登记"
       },
       "fields": {
         "legacy": [
@@ -802,7 +814,7 @@
           "screenshots": []
         }
       ],
-      "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
+      "note": "真实 API、权限和迁移已登记；未运行浏览器，四尺寸验收仍待执行。"
     },
     {
       "index": 7,
