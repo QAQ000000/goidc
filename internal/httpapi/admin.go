@@ -5,6 +5,7 @@ import (
 	"net/mail"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -21,25 +22,73 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]int64{"customers": customers, "active_products": products, "pending_orders": orders, "unpaid_invoices": invoices, "open_tickets": tickets, "unpaid_cents": unpaid})
+	result := map[string]any{"customers": customers, "active_products": products, "pending_orders": orders, "unpaid_invoices": invoices, "open_tickets": tickets, "unpaid_cents": unpaid}
+	now := time.Now().In(time.FixedZone("Asia/Shanghai", 8*60*60))
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	year := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT
+ count(*)::bigint AS total_orders,
+ count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $2)::bigint AS today_paid_orders,
+ count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $3)::bigint AS month_paid_orders,
+ count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $4)::bigint AS seven_days_paid_orders,
+ count(*) FILTER (WHERE status='pending' AND created_at >= $4)::bigint AS seven_days_pending_orders,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $2 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS today_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $3 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS month_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $5 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS annual_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS total_income_cents,
+ (SELECT count(*) FROM certification_profiles WHERE status='pending' AND $6::boolean AND admin_customer_allowed($1,user_id)) AS pending_certifications,
+ (SELECT count(*) FROM affiliate_withdrawals w JOIN affiliate_accounts a ON a.id=w.account_id WHERE w.status IN ('submitted','reviewing') AND $7::boolean AND admin_customer_allowed($1,a.user_id)) AS pending_withdrawals,
+ (SELECT count(*) FROM users WHERE role='customer' AND created_at >= $2 AND created_at <= $9 AND admin_customer_allowed($1,id)) AS today_new_clients
+ FROM orders WHERE admin_customer_allowed($1,user_id) AND created_at <= $9 AND $8::boolean`, identityFrom(r).ID, today, month, today.AddDate(0, 0, -6), year, identityFrom(r).can("certifications.view"), identityFrom(r).can("affiliates.view"), true, now)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	aggregate, err := pgx.CollectOneRow(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for key, value := range aggregate {
+		result[key] = value
+	}
+	rows, err = s.db.Pool.Query(r.Context(), `SELECT id,name,domain,next_due_at FROM services WHERE status='active' AND next_due_at >= $2 AND next_due_at < $3 AND $4::boolean AND admin_customer_allowed($1,user_id) ORDER BY next_due_at,id LIMIT 5`, identityFrom(r).ID, now, now.AddDate(0, 0, 30), identityFrom(r).can("services.view"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	expiring, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if expiring == nil {
+		expiring = []map[string]any{}
+	}
+	result["expiring_services"] = expiring
+	write(w, 200, result)
 }
 func (s *Server) customers(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	s.list(w, r, `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,
+	s.list(w, r, customerListSelect+`
+ WHERE u.role='customer' AND admin_customer_allowed($4,u.id) AND (u.display_name ILIKE $1 OR u.email ILIKE $1 OR u.username ILIKE $1)
+ ORDER BY u.id DESC LIMIT $2 OFFSET $3`, "%"+r.URL.Query().Get("q")+"%", limit, offset, identityFrom(r).ID)
+}
+
+const customerListSelect = `SELECT u.id,u.username,u.email,u.display_name,u.status,u.balance_cents,u.created_at,
  u.sales_owner_id,owner.display_name AS sales_owner_name,u.sales_version,g.id AS group_id,g.name AS group_name,
  (SELECT count(*) FROM services s WHERE s.user_id=u.id AND s.status='active')::bigint AS active_services_count,
  (SELECT count(*) FROM services s WHERE s.user_id=u.id)::bigint AS total_services_count,
  (SELECT coalesce(sum(CASE WHEN l.delta_cents > 0 THEN l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS income_cents,
  (SELECT coalesce(sum(CASE WHEN l.delta_cents < 0 THEN -l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS expense_cents,
- (SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1) AS company_name,
- (SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1) AS phone_number
+ coalesce(p.company_name,(SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1)) AS company_name,
+ coalesce(p.phone,(SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1)) AS phone_number
  FROM users u
  LEFT JOIN users owner ON owner.id=u.sales_owner_id
  LEFT JOIN customer_group_members gm ON gm.customer_id=u.id
  LEFT JOIN customer_groups g ON g.id=gm.group_id
- WHERE u.role='customer' AND admin_customer_allowed($4,u.id) AND (u.display_name ILIKE $1 OR u.email ILIKE $1 OR u.username ILIKE $1)
- ORDER BY u.id DESC LIMIT $2 OFFSET $3`, "%"+r.URL.Query().Get("q")+"%", limit, offset, identityFrom(r).ID)
-}
+ LEFT JOIN customer_profiles p ON p.customer_id=u.id`
 
 func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -52,13 +101,18 @@ func (s *Server) adminCustomer(w http.ResponseWriter, r *http.Request) {
  (SELECT count(*) FROM services s WHERE s.user_id=u.id)::bigint AS total_services_count,
  (SELECT coalesce(sum(CASE WHEN l.delta_cents > 0 THEN l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS income_cents,
  (SELECT coalesce(sum(CASE WHEN l.delta_cents < 0 THEN -l.delta_cents ELSE 0 END), 0) FROM balance_ledger l WHERE l.user_id=u.id)::bigint AS expense_cents,
- (SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1) AS company_name,
- (SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1) AS phone_number,
- (SELECT c.wechat_id FROM customer_contacts c WHERE c.customer_id=u.id AND c.wechat_id != '' ORDER BY c.id ASC LIMIT 1) AS qq
+ COALESCE(p.company_name,(SELECT c.company_name FROM customer_contacts c WHERE c.customer_id=u.id AND c.company_name != '' ORDER BY c.id ASC LIMIT 1)) AS company_name,
+ COALESCE(p.phone,(SELECT c.phone_number FROM customer_contacts c WHERE c.customer_id=u.id AND c.phone_number != '' ORDER BY c.id ASC LIMIT 1)) AS phone_number,
+ COALESCE(p.qq,'') AS qq,COALESCE(p.gender,'unknown') AS gender,
+ COALESCE(p.country,'') AS country,COALESCE(p.province,'') AS province,COALESCE(p.address,'') AS address,
+ COALESCE(p.postcode,'') AS postcode,COALESCE(p.source_channel,'') AS source_channel,
+ COALESCE(p.payment_method,'bank') AS payment_method,COALESCE(p.language,'zh_CN') AS language,
+ COALESCE(p.admin_note,'') AS admin_note,COALESCE(p.receive_marketing,true) AS receive_marketing
  FROM users u
  LEFT JOIN users owner ON owner.id=u.sales_owner_id
  LEFT JOIN customer_group_members gm ON gm.customer_id=u.id
  LEFT JOIN customer_groups g ON g.id=gm.group_id
+ LEFT JOIN customer_profiles p ON p.customer_id=u.id
  WHERE u.role='customer' AND u.id=$1 AND admin_customer_allowed($2,u.id)`, id, identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -102,14 +156,15 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		DisplayName *string `json:"display_name"`
-		Email       *string `json:"email"`
-		Status      *string `json:"status"`
+		DisplayName *string               `json:"display_name"`
+		Email       *string               `json:"email"`
+		Status      *string               `json:"status"`
+		Profile     *customerProfileInput `json:"profile"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	if input.DisplayName == nil && input.Email == nil && input.Status == nil {
+	if input.DisplayName == nil && input.Email == nil && input.Status == nil && input.Profile == nil {
 		writeError(w, http.StatusBadRequest, "invalid_customer", "至少提供一个要修改的字段")
 		return
 	}
@@ -132,12 +187,20 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer", "客户状态无效")
 		return
 	}
+	if input.Profile != nil && !input.Profile.valid() {
+		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
+		return
+	}
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, id); err != nil {
 		s.fail(w, r, err)
 		return
@@ -157,7 +220,13 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.updated", "user", id, map[string]any{"display_name": input.DisplayName, "email": input.Email, "status": input.Status, "previous_status": currentStatus}); err != nil {
+	if input.Profile != nil {
+		if err = saveCustomerProfile(r.Context(), tx, id, *input.Profile); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.updated", "user", id, map[string]any{"display_name": input.DisplayName, "email": input.Email, "status": input.Status, "previous_status": currentStatus,"profile_updated":input.Profile!=nil}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -177,8 +246,7 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		Status       *string `json:"status"`
 		GroupID      *int64  `json:"group_id"`
 		SalesOwnerID *int64  `json:"sales_owner_id"`
-		CompanyName  string  `json:"company_name"`
-		Phone        string  `json:"phone"`
+		customerProfileInput
 	}
 	if !decode(w, r, &input) {
 		return
@@ -193,7 +261,7 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_email", "邮箱格式无效")
 		return
 	}
-	username := strings.TrimSpace(input.Username)
+	username := strings.ToLower(strings.TrimSpace(input.Username))
 	if username == "" {
 		username = strings.Split(email, "@")[0]
 	}
@@ -210,8 +278,8 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	password := input.Password
-	if len(password) < 6 || len(password) > 128 {
-		writeError(w, http.StatusBadRequest, "invalid_password", "密码长度需在6-128位之间")
+	if len(password) < 8 || len(password) > 72 {
+		writeError(w, http.StatusBadRequest, "invalid_password", "密码长度需在8-72字节之间")
 		return
 	}
 	status := "active"
@@ -223,6 +291,10 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		status = *input.Status
 	}
 
+	if !input.customerProfileInput.valid() {
+		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
+		return
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		s.fail(w, r, err)
@@ -236,8 +308,32 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
+	super, groupAllowed, salesEnabled, err := lockCustomerManager(requestFileContext(r), tx, identityFrom(r).ID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if (input.GroupID != nil && !groupAllowed) || (input.SalesOwnerID != nil && !super) {
+		writeError(w, 403, "permission_denied", "没有设置客户分组或销售归属的权限")
+		return
+	}
+	if (input.GroupID != nil && *input.GroupID < 1) || (input.SalesOwnerID != nil && *input.SalesOwnerID < 1) {
+		writeError(w, 400, "invalid_assignment", "客户分组或销售归属无效")
+		return
+	}
+	if input.GroupID != nil {
+		var groupID int64
+		if err = tx.QueryRow(r.Context(), "SELECT id FROM customer_groups WHERE id=$1 FOR SHARE", *input.GroupID).Scan(&groupID); err != nil {
+			if err == pgx.ErrNoRows {
+				writeError(w, 400, "invalid_group", "客户分组不存在")
+			} else {
+				s.fail(w, r, err)
+			}
+			return
+		}
+	}
 	var conflict bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE username=$1 OR email=$2)", username, email).Scan(&conflict); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE lower(username)=$1 OR lower(email)=$2)", username, email).Scan(&conflict); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -249,13 +345,27 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var salesOwnerID *int64
 	if input.SalesOwnerID != nil && *input.SalesOwnerID > 0 {
 		var ownerExists bool
-		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='admin' AND sales_enabled)", *input.SalesOwnerID).Scan(&ownerExists); err != nil {
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='admin' AND status='active' AND sales_enabled)", *input.SalesOwnerID).Scan(&ownerExists); err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		if ownerExists {
-			salesOwnerID = input.SalesOwnerID
+		if !ownerExists {
+			writeError(w, 400, "invalid_sales_owner", "销售负责人不存在或已停用")
+			return
 		}
+		salesOwnerID = input.SalesOwnerID
+	} else if !super && salesEnabled {
+		actor := identityFrom(r).ID
+		salesOwnerID = &actor
+	}
+	var scopeAllowed bool
+	if err = tx.QueryRow(r.Context(), "SELECT admin_customer_owner_allowed($1,$2)", identityFrom(r).ID, salesOwnerID).Scan(&scopeAllowed); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !scopeAllowed {
+		writeError(w, 403, "permission_denied", "当前客户范围不允许创建无归属客户，请联系管理员开启销售身份")
+		return
 	}
 
 	var id int64
@@ -278,6 +388,10 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err = saveCustomerProfile(r.Context(), tx, id, input.customerProfileInput); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	companyName := strings.TrimSpace(input.CompanyName)
 	phone := strings.TrimSpace(input.Phone)
 	if companyName != "" || phone != "" {

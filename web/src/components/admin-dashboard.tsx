@@ -12,7 +12,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
-import type { User } from "@/lib/api";
+import { money, type User } from "@/lib/api";
+import { can as hasAdminPermission } from "@/lib/admin-navigation";
 import { Failure } from "./common";
 import { Workspace } from "./workspace";
 
@@ -23,12 +24,19 @@ type DashboardSummary = {
   unpaid_invoices: number;
   open_tickets: number;
   unpaid_cents: number;
-};
-
-type IncomeReport = {
-  year: number;
-  months: { month: string; income_cents: number; invoice_count: number }[];
-  total: { income_cents: number; invoice_count: number };
+  total_orders: number;
+  today_paid_orders: number;
+  month_paid_orders: number;
+  seven_days_paid_orders: number;
+  seven_days_pending_orders: number;
+  today_income_cents: number;
+  month_income_cents: number;
+  annual_income_cents: number;
+  total_income_cents: number;
+  pending_certifications: number;
+  pending_withdrawals: number;
+  today_new_clients: number;
+  expiring_services: ServiceItem[];
 };
 
 type DailyReport = {
@@ -71,18 +79,9 @@ type ServiceItem = {
   domain?: string;
   product_name?: string;
   status: string;
-  next_due_date?: string;
+  next_due_at?: string;
+  name?: string;
   customer_name?: string;
-};
-
-type CertificationItem = {
-  id: number;
-  status?: string;
-};
-
-type WithdrawalItem = {
-  id: number;
-  status?: string;
 };
 
 const DEFAULT_CARDS: Record<string, boolean> = {
@@ -108,61 +107,48 @@ export function AdminDashboard() {
 }
 
 function DashboardContent() {
-  const now = new Date();
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
   const user = useResource<User>("/me");
   const summary = useResource<DashboardSummary>("/admin/dashboard");
-  const income = useResource<IncomeReport>(`/admin/reports/income?year=${year}`);
-  const daily = useResource<DailyReport>(`/admin/reports/new-clients?year=${year}&month=${month}`);
-  const audit = useResource<AuditEvent[]>("/admin/audit");
-  const tickets = useResource<TicketItem[]>("/admin/tickets");
-  const services = useResource<ServiceItem[]>("/admin/services");
-  const certs = useResource<CertificationItem[]>("/admin/certifications");
-  const withdrawals = useResource<WithdrawalItem[]>("/admin/affiliate/withdrawals");
+  const can = (permission: string) => hasAdminPermission(user.data, permission);
+  const daily = useResource<DailyReport>(can("reports.view") ? `/admin/reports/new-clients?year=${year}&month=${month}` : null, false);
+  const audit = useResource<AuditEvent[]>(can("audit.view") ? "/admin/audit" : null, false);
+  const tickets = useResource<TicketItem[]>(can("tickets.view") ? "/admin/tickets?status=open" : null, false);
 
   const [cardsVisible, setCardsVisible] = useState<Record<string, boolean>>(DEFAULT_CARDS);
   const [showConfigPopover, setShowConfigPopover] = useState(false);
 
   const refreshAll = () => {
     summary.refresh();
-    income.refresh();
     daily.refresh();
     audit.refresh();
     tickets.refresh();
-    services.refresh();
-    certs.refresh();
-    withdrawals.refresh();
   };
 
   const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
   const formattedDate = `${year}年${month}月${now.getDate()}日，${weekdays[now.getDay()]}`;
-  const displayName = user.data?.display_name || user.data?.username || "admin123";
+  const displayName = user.data?.display_name || user.data?.username || "";
 
   // Calculate order counts
-  const todayStr = `${year}-${String(month).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const todayDay = daily.data?.days.find(d => d.date === todayStr);
-  const todayPaidOrders = todayDay?.paid_orders ?? 0;
-  const monthPaidOrders = daily.data?.days.reduce((acc, d) => acc + (d.paid_orders || 0), 0) ?? 0;
+  const todayPaidOrders = summary.data?.today_paid_orders;
+  const monthPaidOrders = summary.data?.month_paid_orders;
 
   // Past 7 days paid
-  const dailyDays = daily.data?.days ?? [];
-  const todayIndex = dailyDays.findIndex(d => d.date === todayStr);
-  const past7Days = todayIndex === -1 ? dailyDays.slice(-7) : dailyDays.slice(Math.max(0, todayIndex - 6), todayIndex + 1);
 
-  const sevenDaysPaidOrders = past7Days.reduce((acc, d) => acc + (d.paid_orders || 0), 0);
-  const sevenDaysPendingOrders = summary.data?.pending_orders ?? 0;
-  const totalOrders = (summary.data?.pending_orders ?? 0) + monthPaidOrders;
+  const sevenDaysPaidOrders = summary.data?.seven_days_paid_orders;
+  const sevenDaysPendingOrders = summary.data?.seven_days_pending_orders;
+  const totalOrders = summary.data?.total_orders;
 
   // Income summary
-  const currentMonthStr = `${year}-${String(month).padStart(2, "0")}`;
-  const currentMonthIncome = income.data?.months.find(m => m.month === currentMonthStr)?.income_cents ?? 0;
-  const totalIncomeCents = income.data?.total.income_cents ?? 0;
+  const currentMonthIncome = summary.data?.month_income_cents ?? 0;
+  const totalIncomeCents = summary.data?.total_income_cents ?? 0;
 
   // Real name certs pending count
-  const certsPendingCount = certs.data?.filter(c => c.status === "pending" || !c.status).length ?? 0;
-  const withdrawalsPendingCount = withdrawals.data?.filter(w => w.status === "pending").length ?? 0;
+  const certsPendingCount = can("certifications.view") ? summary.data?.pending_certifications : "无权限";
+  const withdrawalsPendingCount = can("affiliates.view") ? summary.data?.pending_withdrawals : "无权限";
 
   // Open tickets
   const openTicketsList = (tickets.data ?? [])
@@ -170,16 +156,16 @@ function DashboardContent() {
     .slice(0, 5);
 
   // Expiring services in next 30 days
-  const expiringServicesList = (services.data ?? [])
-    .filter(s => s.status === "active" && s.next_due_date)
-    .slice(0, 5);
+  const expiringServicesList = summary.data?.expiring_services ?? [];
 
   // Today new customers
-  const todayNewClients = todayDay?.new_clients ?? 0;
+  const todayNewClients = summary.data?.today_new_clients;
 
   if (summary.error) {
     return <Failure error={summary.error} retry={summary.refresh} />;
   }
+  if (user.error) return <Failure error={user.error} retry={user.refresh} />;
+  if (!summary.data || !user.data) return <p role="status">正在加载工作台…</p>;
 
   return (
     <div className="w-full space-y-4">
@@ -189,8 +175,6 @@ function DashboardContent() {
           您好，{displayName}！今日，{formattedDate}
         </div>
         <div className="relative flex items-center gap-2 mt-1 sm:mt-0">
-          <span>当前版本：3.7.7 （最新版本：3.7.9）</span>
-          <span className="text-primary hover:underline cursor-pointer">更新</span>
           <button
             type="button"
             className="p-1 hover:text-primary transition-colors"
@@ -297,7 +281,7 @@ function DashboardContent() {
                   <FileText size={20} />
                 </div>
                 <div className="ml-4 min-w-0">
-                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{summary.data?.open_tickets ?? 0}</div>
+                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{can("tickets.view") ? summary.data?.open_tickets : "无权限"}</div>
                   <div className="text-xs text-[#999999] mt-0.5">待处理工单</div>
                 </div>
               </Link>
@@ -344,19 +328,19 @@ function DashboardContent() {
             </div>
             <div className="grid grid-cols-2 gap-y-4 gap-x-2">
               <div>
-                <div className="text-2xl text-[#f38900] font-normal mb-1 tabular-nums">0</div>
+                <div className="text-2xl text-[#f38900] font-normal mb-1 tabular-nums">{money(summary.data.today_income_cents)}</div>
                 <div className="text-xs text-[#999999]">今日收入</div>
               </div>
               <div>
-                <div className="text-2xl text-[#0089f0] font-normal mb-1 tabular-nums">{Math.floor(currentMonthIncome / 100)}</div>
+                <div className="text-2xl text-[#0089f0] font-normal mb-1 tabular-nums">{money(currentMonthIncome)}</div>
                 <div className="text-xs text-[#999999]">本月收入</div>
               </div>
               <div>
-                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{Math.floor(totalIncomeCents / 100)}</div>
+                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{money(summary.data.annual_income_cents)}</div>
                 <div className="text-xs text-[#999999]">今年收入</div>
               </div>
               <div>
-                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{Math.floor(totalIncomeCents / 100)}</div>
+                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{money(totalIncomeCents)}</div>
                 <div className="text-xs text-[#999999]">总收入</div>
               </div>
             </div>
@@ -378,22 +362,12 @@ function DashboardContent() {
             <div className="flex items-center justify-center gap-6 text-xs text-[#666666] mb-3">
               <div className="flex items-center gap-1.5">
                 <span className="h-2.5 w-6 rounded-sm bg-[#2e53e9]" />
-                <span>金额(元)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-[#316eea]" />
-                <span className="h-0.5 w-4 bg-[#316eea]" />
-                <span>订单(笔)</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-[#52c41a]" />
-                <span className="h-0.5 w-4 bg-[#52c41a]" />
-                <span>上月订单(笔)</span>
+                <span>已付订单(笔)</span>
               </div>
             </div>
 
             {/* Interactive SVG Chart */}
-            <TradeStatsChart daily={daily.data} month={month} />
+            {!can("reports.view") ? <p>无报表查看权限</p> : daily.error ? <Failure error={daily.error} retry={daily.refresh} /> : !daily.data ? <p>正在加载…</p> : <TradeStatsChart daily={daily.data} month={month} />}
           </section>
         )}
 
@@ -408,14 +382,14 @@ function DashboardContent() {
             </div>
 
             <div className="space-y-4">
-              {audit.data && audit.data.length > 0 ? (
+              {!can("audit.view") ? <p>无审计查看权限</p> : audit.error ? <Failure error={audit.error} retry={audit.refresh} /> : !audit.data ? <p>正在加载…</p> : audit.data.length > 0 ? (
                 audit.data.slice(0, 5).map(item => (
                   <div key={item.id} className="text-xs border-b border-gray-50 pb-2.5 last:border-none last:pb-0">
                     <div className="text-[#333333] font-normal leading-relaxed break-words">
                       {formatAuditAction(item)}
                     </div>
                     <div className="flex items-center justify-between text-[#999999] mt-1.5">
-                      <span>127.0.0.1</span>
+                      <span>{item.actor_name || "系统"}</span>
                       <span>{formatDateTime(item.created_at)}</span>
                     </div>
                   </div>
@@ -434,17 +408,16 @@ function DashboardContent() {
         {cardsVisible.onlineAdmins && (
           <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-black">在线管理员</span>
+              <span className="text-sm font-semibold text-black">当前管理员</span>
               <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
             </div>
-            <div className="text-xs text-[#666666] mb-4">在线人数: 1</div>
+            <div className="text-xs text-[#666666] mb-4">当前管理员</div>
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-full bg-[#ebf1ff] text-[#2e53e9] font-semibold text-base flex items-center justify-center shrink-0">
                 {Array.from(displayName)[0] || "A"}
               </div>
               <div className="min-w-0">
                 <div className="text-sm text-[#333333] font-normal">{displayName}</div>
-                <div className="text-xs text-[#999999] mt-0.5">最近: 1秒前</div>
               </div>
             </div>
           </section>
@@ -457,12 +430,12 @@ function DashboardContent() {
               <span className="text-sm font-semibold text-black">即将到期</span>
               <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
             </div>
-            {expiringServicesList.length > 0 ? (
+            {!can("services.view") ? <p>无服务查看权限</p> : expiringServicesList.length > 0 ? (
               <div className="space-y-3">
                 {expiringServicesList.map(s => (
                   <div key={s.id} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-none">
-                    <span className="text-[#333333] truncate max-w-[180px]">{s.domain || s.product_name || `服务 #${s.id}`}</span>
-                    <span className="text-[#999999] shrink-0">{s.next_due_date?.slice(0, 10)}</span>
+                    <span className="text-[#333333] truncate max-w-[180px]">{s.domain || s.name || `服务 #${s.id}`}</span>
+                    <span className="text-[#999999] shrink-0">{s.next_due_at ? new Date(s.next_due_at).toLocaleDateString("zh-CN", {timeZone:"Asia/Shanghai"}) : ""}</span>
                   </div>
                 ))}
               </div>
@@ -482,7 +455,7 @@ function DashboardContent() {
               <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
             </div>
             <div className="flex flex-col items-center justify-center py-6">
-              <img src="/assets/empty.svg" alt="暂无数据" width={100} height={100} className="opacity-80" />
+              <span className="text-xs text-[#999999]">销量排行暂未提供</span>
             </div>
           </section>
         )}
@@ -502,7 +475,7 @@ function DashboardContent() {
                 <span className="text-sm font-medium text-[#316eea] mr-1">{todayNewClients}</span>今日新增
               </div>
               <div>
-                <span className="text-sm font-medium text-[#f38900] mr-1">0</span>当前在线数量
+                <span className="text-sm font-medium text-[#f38900] mr-1">未提供</span>当前在线数量
               </div>
               <div>
                 <span className="text-sm font-medium text-[#333333] mr-1">{summary.data?.customers ?? 0}</span>系统总计数量
@@ -522,7 +495,7 @@ function DashboardContent() {
               <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
             </div>
             <div className="flex flex-col items-center justify-center py-6">
-              <img src="/assets/empty.svg" alt="暂无数据" width={100} height={100} className="opacity-80" />
+              <span className="text-xs text-[#999999]">员工销量排行暂未提供</span>
             </div>
           </section>
         )}
@@ -535,7 +508,7 @@ function DashboardContent() {
               <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
             </div>
             <div className="space-y-3">
-              {openTicketsList.length > 0 ? (
+              {!can("tickets.view") ? <p>无工单查看权限</p> : tickets.error ? <Failure error={tickets.error} retry={tickets.refresh} /> : !tickets.data ? <p>正在加载…</p> : openTicketsList.length > 0 ? (
                 openTicketsList.map(t => (
                   <div key={t.id} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 min-w-0 pr-2">
@@ -568,7 +541,7 @@ function DashboardContent() {
 // Interactive SVG chart for 交易统计
 function TradeStatsChart({ daily, month }: { daily: DailyReport | null | undefined; month: number }) {
   const days = daily?.days ?? [];
-  const count = Math.max(days.length, 31);
+  const count = Math.max(days.length, 2);
   const maxOrder = Math.max(1, ...days.map(d => Math.max(d.new_orders || 0, d.paid_orders || 0)));
 
   // SVG dimensions
@@ -600,7 +573,7 @@ function TradeStatsChart({ daily, month }: { daily: DailyReport | null | undefin
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
             const y = padTop + chartH * (1 - ratio);
-            const valLeft = (ratio * 1).toFixed(1);
+            const valLeft = (ratio * maxOrder).toFixed(0);
             const valRight = (ratio * maxOrder).toFixed(0);
             return (
               <g key={i}>
@@ -616,7 +589,7 @@ function TradeStatsChart({ daily, month }: { daily: DailyReport | null | undefin
           })}
 
           {/* Axis Labels */}
-          <text x={padLeft - 8} y={padTop - 6} textAnchor="end" fill="#666666" fontSize="11">元</text>
+          <text x={padLeft - 8} y={padTop - 6} textAnchor="end" fill="#666666" fontSize="11">笔</text>
           <text x={width - padRight + 8} y={padTop - 6} textAnchor="start" fill="#666666" fontSize="11">笔</text>
 
           {/* X Axis bottom baseline */}
@@ -628,10 +601,10 @@ function TradeStatsChart({ daily, month }: { daily: DailyReport | null | undefin
           </text>
 
           {/* Days on X Axis */}
-          {Array.from({ length: 31 }, (_, i) => {
+          {Array.from({ length: days.length }, (_, i) => {
             const dayNum = i + 1;
-            const x = padLeft + (i / 30) * chartW;
-            const isLabel = dayNum === 1 || dayNum % 3 === 0 || dayNum === 31;
+            const x = padLeft + (i / (count - 1)) * chartW;
+            const isLabel = dayNum === 1 || dayNum % 3 === 0 || dayNum === days.length;
             return (
               <g key={i}>
                 <line x1={x} y1={padTop + chartH} x2={x} y2={padTop + chartH + 4} stroke="#dcdfe6" strokeWidth="1" />
@@ -662,7 +635,7 @@ function formatAuditAction(item: AuditEvent): string {
   if (action === "supplier.delivery.succeeded") return `模块命令:交付成功#Host ID:${item.entity_id}`;
   if (action === "supplier.delivery.failed") return `模块命令:交付失败#Host ID:${item.entity_id}`;
   if (action.includes("customer.impersonated")) return `以该客户登录 - User ID:${item.entity_id} - 成功`;
-  if (action.includes("product")) return `添加产品:1 - Product ID:${item.entity_id}`;
+  if (action.includes("product")) return `${action} - Product ID:${item.entity_id}`;
   if (action.includes("service")) return `主机配置修改 Host ID:${item.entity_id}`;
   if (action.includes("order")) return `订单变更 Order ID:${item.entity_id}`;
   if (action.includes("invoice")) return `账单变更 Invoice ID:${item.entity_id}`;

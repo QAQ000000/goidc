@@ -43,10 +43,12 @@ export function AdminCertificationsView() {
   const [page, setPage] = useState(0);
   const pageSize = 25;
 
-  const endpoint = `/admin/certifications?limit=${pageSize}&offset=${page * pageSize}${
+  const endpoint = `/admin/certifications/page?q=${encodeURIComponent(activeKeyword.trim())}&limit=${pageSize}&offset=${page * pageSize}${
     statusFilter !== "all" ? `&status=${statusFilter}` : ""
   }`;
-  const list = useResource<Certification[]>(endpoint);
+  const list = useResource<{ items: Certification[]; total: number }>(endpoint, false);
+  const lastPage = Math.max(0, Math.ceil((list.data?.total ?? 0) / pageSize) - 1);
+  if (list.data && page > lastPage) setPage(lastPage);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<AdminDetail | null>(null);
@@ -93,17 +95,7 @@ export function AdminCertificationsView() {
     }
   }
 
-  // Filter client-side by keyword if search is active
-  const filteredData = (list.data ?? []).filter((item) => {
-    if (!activeKeyword.trim()) return true;
-    const q = activeKeyword.trim().toLowerCase();
-    return (
-      item.username.toLowerCase().includes(q) ||
-      (item.display_name && item.display_name.toLowerCase().includes(q)) ||
-      (item.email && item.email.toLowerCase().includes(q)) ||
-      String(item.id).includes(q)
-    );
-  });
+  const filteredData = list.data?.items ?? [];
 
   return (
     <Workspace title="实名认证" admin>
@@ -155,6 +147,7 @@ export function AdminCertificationsView() {
                 onClick={() => {
                   setKeyword("");
                   setActiveKeyword("");
+                  setPage(0);
                 }}
               >
                 重置
@@ -301,7 +294,7 @@ export function AdminCertificationsView() {
             </div>
 
             <AdminPagination
-              total={filteredData.length}
+              total={list.data?.total ?? 0}
               page={page}
               pageSize={pageSize}
               onPageChange={setPage}

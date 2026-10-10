@@ -121,6 +121,22 @@ func TestAffiliateSettlementReleaseWithdrawReviewPayoutAndReplay(t *testing.T) {
 	f.overview(t, 0, amount, 0, 0)
 	id := f.withdraw(t, 50, "settlement-withdraw-one")
 	f.overview(t, 0, amount-50, 50, 0)
+	for _, kind := range []string{"withdrawals", "attributions"} {
+		page := request(f.h, "GET", "/api/v1/admin/affiliate/"+kind+"/page?limit=1&search=affiliate", nil, f.admin, "")
+		expect(t, page, 200)
+		result := data(t, page)
+		if result["total"].(float64) != 1 || len(result["items"].([]any)) != 1 {
+			t.Fatalf("%s page=%v", kind, result)
+		}
+		if kind == "withdrawals" && (result["pending_count"].(float64) != 1 || strings.Contains(page.Body.String(), "6222021234567890123")) {
+			t.Fatal("withdrawal page count or masking invalid")
+		}
+		next := request(f.h, "GET", "/api/v1/admin/affiliate/"+kind+"/page?limit=1&offset=1&search=affiliate", nil, f.admin, "")
+		expect(t, next, 200)
+		if data(t, next)["total"].(float64) != 1 || len(data(t, next)["items"].([]any)) != 0 {
+			t.Fatalf("%s offset page=%s", kind, next.Body.String())
+		}
+	}
 	replay := request(f.h, "POST", "/api/v1/affiliate/withdrawals", store.AffiliateWithdrawalInput{AmountCents: 50, Method: "bank", Target: "6222021234567890123", Holder: "测试收款人"}, f.owner, "settlement-withdraw-one")
 	expect(t, replay, 200)
 	if int64(data(t, replay)["id"].(float64)) != id {
@@ -141,15 +157,28 @@ func TestAffiliateSettlementReleaseWithdrawReviewPayoutAndReplay(t *testing.T) {
 	}
 	_, outsider := user(t, f.db, f.h, "withdrawal-outsider", "customer")
 	expect(t, request(f.h, "GET", fmt.Sprintf("/api/v1/affiliate/withdrawals/%d", id), nil, outsider, ""), 404)
+	targetPath := fmt.Sprintf("/api/v1/admin/affiliate/withdrawals/%d/target", id)
+	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": "offline payout"}, f.admin, ""), 409)
 	f.review(t, id, "approved", 1, "settlement-review-one")
+	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": " "}, f.admin, ""), 409)
+	_, viewer := user(t, f.db, f.h, "withdrawal-target-viewer", "admin")
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['affiliates.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='withdrawal-target-viewer')"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": "offline payout"}, viewer, ""), 403)
 	target := request(f.h, "POST", fmt.Sprintf("/api/v1/admin/affiliate/withdrawals/%d/target", id), map[string]any{"reason": "offline payout"}, f.admin, "")
 	expect(t, target, 200)
 	if target.Header().Get("Cache-Control") != "no-store" || data(t, target)["target"] != "6222021234567890123" {
 		t.Fatal("target access invalid")
 	}
+	var targetAudits int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='affiliate.withdrawal.target_read' AND entity_id=$1 AND payload->>'reason'='offline payout'", fmt.Sprint(id)).Scan(&targetAudits); err != nil || targetAudits != 1 {
+		t.Fatalf("target audit count=%d err=%v", targetAudits, err)
+	}
 	path := fmt.Sprintf("/api/v1/admin/affiliate/withdrawals/%d/payout", id)
 	input := settlementPayoutInput()
 	expect(t, request(f.h, "POST", path, input, f.admin, "settlement-payout-one"), 200)
+	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": "offline payout"}, f.admin, ""), 409)
 	expect(t, request(f.h, "POST", path, input, f.admin, "settlement-payout-one"), 200)
 	expect(t, request(f.h, "POST", path, input, f.admin, "settlement-payout-other"), 409)
 	f.overview(t, 0, amount-50, 0, 50)

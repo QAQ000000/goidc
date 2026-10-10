@@ -63,23 +63,12 @@ export function AdminCustomersView() {
   const groups = useResource<CustomerGroup[]>("/admin/customer-groups", false);
   const salesOwners = useResource<SalesOwner[]>("/admin/sales-owners", false);
 
-  const endpoint = `/admin/customers?q=${encodeURIComponent(query)}&limit=${pageSize}&offset=${page * pageSize}`;
-  const { data, error, refresh } = useResource<AdminCustomer[]>(endpoint);
-
-  const filteredData = (data ?? []).filter((item) => {
-    if (groupFilter !== "all") {
-      if (groupFilter === "none" && item.group_id != null) return false;
-      if (groupFilter !== "none" && String(item.group_id) !== groupFilter) return false;
-    }
-    if (statusFilter !== "all" && item.status !== statusFilter) return false;
-    if (salesFilter !== "all") {
-      if (salesFilter === "none" && item.sales_owner_id != null) return false;
-      if (salesFilter !== "none" && String(item.sales_owner_id) !== salesFilter) return false;
-    }
-    return true;
-  });
-
-  const totalCount = filteredData.length;
+  const endpoint = `/admin/customers/page?q=${encodeURIComponent(query)}&limit=${pageSize}&offset=${page * pageSize}&group_id=${groupFilter}&sales_owner_id=${salesFilter}${statusFilter === "all" ? "" : `&status=${statusFilter}`}`;
+  const { data, error, refresh } = useResource<{ items: AdminCustomer[]; total: number }>(endpoint, false);
+  const filteredData = data?.items ?? [];
+  const totalCount = data?.total ?? 0;
+  const lastPage = Math.max(0, Math.ceil(totalCount / pageSize) - 1);
+  if (data && page > lastPage) setPage(lastPage);
 
   function handleSearch(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -174,7 +163,7 @@ export function AdminCustomersView() {
 
               <div>
                 <label className="block text-xs text-[#606266] mb-1">客户分组</label>
-                <Select value={groupFilter} onValueChange={setGroupFilter}>
+                <Select value={groupFilter} onValueChange={(value) => { setGroupFilter(value); setPage(0); }}>
                   <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
                     <SelectValue placeholder="全部分组" />
                   </SelectTrigger>
@@ -192,7 +181,7 @@ export function AdminCustomersView() {
 
               <div>
                 <label className="block text-xs text-[#606266] mb-1">状态</label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setPage(0); }}>
                   <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
                     <SelectValue placeholder="全部状态" />
                   </SelectTrigger>
@@ -206,7 +195,7 @@ export function AdminCustomersView() {
 
               <div>
                 <label className="block text-xs text-[#606266] mb-1">销售归属</label>
-                <Select value={salesFilter} onValueChange={setSalesFilter}>
+                <Select value={salesFilter} onValueChange={(value) => { setSalesFilter(value); setPage(0); }}>
                   <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
                     <SelectValue placeholder="全部销售" />
                   </SelectTrigger>

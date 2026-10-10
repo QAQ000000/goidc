@@ -216,7 +216,7 @@ INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-op
 		t.Fatalf("migration grants=%d err=%v", len(grants), err)
 	}
 	for _, p := range store.AdminPermissions {
-        if p.Code == "content.view" || p.Code == "downloads.view" || p.Code == "downloads.manage" || p.Code == "customer_files.view" || p.Code == "customer_files.manage" || p.Code == "invoices.manage" || p.Code == "invoice_applications.view" || p.Code == "invoice_applications.manage" || p.Code == "payments.reconcile" || p.Code == "settings.view" || p.Code == "settings.manage" || p.Code == "certifications.view" || p.Code == "certifications.manage" || p.Code == "affiliates.view" || p.Code == "affiliates.manage" || p.Code == "affiliates.withdrawals.review" || p.Code == "affiliates.payout" { // Introduced after 031; never expand old roles implicitly.
+		if p.Code == "content.view" || p.Code == "downloads.view" || p.Code == "downloads.manage" || p.Code == "customer_files.view" || p.Code == "customer_files.manage" || p.Code == "invoices.manage" || p.Code == "invoice_applications.view" || p.Code == "invoice_applications.manage" || p.Code == "payments.reconcile" || p.Code == "settings.view" || p.Code == "settings.manage" || p.Code == "certifications.view" || p.Code == "certifications.manage" || p.Code == "affiliates.view" || p.Code == "affiliates.manage" || p.Code == "affiliates.withdrawals.review" || p.Code == "affiliates.payout" { // Introduced after 031; never expand old roles implicitly.
 			for _, grant := range grants {
 				if grant == p.Code {
 					t.Fatalf("later permission implicitly granted: %s", grant)

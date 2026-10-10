@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Search, RefreshCw, Check, Pause, Eye, CreditCard } from "lucide-react";
 import { api, date, money } from "@/lib/api";
@@ -102,12 +102,20 @@ const statusLabels: Record<string, { label: string; cls: string }> = {
 };
 
 export function AdminAffiliateView() {
-  const accounts = useResource<AdminAccount[]>("/admin/affiliate/accounts?limit=100", false);
-  const attributions = useResource<Attribution[]>("/admin/affiliate/attributions?limit=100", false);
-  const withdrawals = useResource<Withdrawal[]>("/admin/affiliate/withdrawals?limit=100", false);
-
   const [tab, setTab] = useState<"accounts" | "withdrawals" | "attributions">("accounts");
   const [keyword, setKeyword] = useState("");
+  const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  type Page<T> = { items: T[]; total: number; pending_count: number };
+  const query = `limit=${pageSize}&offset=${page * pageSize}&search=${encodeURIComponent(keyword)}&status=${status === "all" ? "" : status}`;
+  const accounts = useResource<Page<AdminAccount>>(`/admin/affiliate/accounts/page?${tab === "accounts" ? query : "limit=1"}`, false);
+  const attributions = useResource<Page<Attribution>>(`/admin/affiliate/attributions/page?${tab === "attributions" ? query : "limit=1"}`, false);
+  const withdrawals = useResource<Page<Withdrawal>>(`/admin/affiliate/withdrawals/page?${tab === "withdrawals" ? query : "limit=1"}`, false);
+  const current = tab === "accounts" ? accounts : tab === "withdrawals" ? withdrawals : attributions;
+  const lastPage = Math.max(0, Math.ceil((current.data?.total ?? 0) / pageSize) - 1);
+  if (current.data && page > lastPage) setPage(lastPage);
+  function changeTab(value: typeof tab) { setTab(value); setPage(0); setStatus("all"); }
   const [selectedWithdrawal, setSelectedWithdrawal] = useState<Withdrawal | null>(null);
   const [payoutDialogWithdrawal, setPayoutDialogWithdrawal] = useState<Withdrawal | null>(null);
 
@@ -140,39 +148,7 @@ export function AdminAffiliateView() {
     }
   }
 
-  // Filter accounts
-  const filteredAccounts = (accounts.data ?? []).filter((a) => {
-    if (!keyword.trim()) return true;
-    const q = keyword.trim().toLowerCase();
-    return (
-      a.username.toLowerCase().includes(q) ||
-      a.email.toLowerCase().includes(q) ||
-      a.name.toLowerCase().includes(q) ||
-      String(a.id).includes(q)
-    );
-  });
-
-  // Filter withdrawals
-  const filteredWithdrawals = (withdrawals.data ?? []).filter((w) => {
-    if (!keyword.trim()) return true;
-    const q = keyword.trim().toLowerCase();
-    return w.withdrawal_no.toLowerCase().includes(q) || String(w.id).includes(q);
-  });
-
-  // Filter attributions
-  const filteredAttributions = (attributions.data ?? []).filter((at) => {
-    if (!keyword.trim()) return true;
-    const q = keyword.trim().toLowerCase();
-    return (
-      at.username.toLowerCase().includes(q) ||
-      at.affiliate_username.toLowerCase().includes(q) ||
-      String(at.id).includes(q)
-    );
-  });
-
-  const pendingWithdrawalCount = (withdrawals.data ?? []).filter(
-    (w) => w.status === "submitted" || w.status === "reviewing"
-  ).length;
+  const pendingWithdrawalCount = withdrawals.data?.pending_count ?? 0;
 
   return (
     <Workspace title="推介计划" admin>
@@ -200,9 +176,9 @@ export function AdminAffiliateView() {
                   ? "border-[#409eff] text-[#409eff] font-semibold"
                   : "border-transparent text-[#606266] hover:text-[#409eff]"
               }`}
-              onClick={() => setTab("accounts")}
+              onClick={() => changeTab("accounts")}
             >
-              推介计划 ({accounts.data?.length ?? 0})
+              推介计划 ({accounts.data?.total ?? 0})
             </button>
             <button
               type="button"
@@ -211,7 +187,7 @@ export function AdminAffiliateView() {
                   ? "border-[#409eff] text-[#409eff] font-semibold"
                   : "border-transparent text-[#606266] hover:text-[#409eff]"
               }`}
-              onClick={() => setTab("withdrawals")}
+              onClick={() => changeTab("withdrawals")}
             >
               <span>提现审核</span>
               {pendingWithdrawalCount > 0 && (
@@ -227,9 +203,9 @@ export function AdminAffiliateView() {
                   ? "border-[#409eff] text-[#409eff] font-semibold"
                   : "border-transparent text-[#606266] hover:text-[#409eff]"
               }`}
-              onClick={() => setTab("attributions")}
+              onClick={() => changeTab("attributions")}
             >
-              归因关系 ({attributions.data?.length ?? 0})
+              归因关系 ({attributions.data?.total ?? 0})
             </button>
           </div>
         </div>
@@ -240,7 +216,7 @@ export function AdminAffiliateView() {
             <div className="relative">
               <Input
                 value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
+                onChange={(e) => { setKeyword(e.target.value); setPage(0); }}
                 placeholder="搜索账号、计划或申请单号"
                 className="h-8 w-60 text-xs border-[#dcdfe6] pr-8"
                 aria-label="搜索关键字"
@@ -255,11 +231,18 @@ export function AdminAffiliateView() {
                 variant="outline"
                 size="sm"
                 className="h-8 text-xs border-[#dcdfe6]"
-                onClick={() => setKeyword("")}
+                onClick={() => { setKeyword(""); setPage(0); }}
               >
                 清空
               </Button>
             )}
+            <Select value={status} onValueChange={(value) => { setStatus(value); setPage(0); }}>
+              <SelectTrigger className="h-8 w-32 text-xs" aria-label="状态筛选"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                {(tab === "accounts" ? [["pending", "待审批"], ["approved", "已开通"], ["suspended", "已暂停"], ["rejected", "已驳回"], ["closed", "已关闭"]] : tab === "attributions" ? [["active", "有效"], ["unassigned", "未分配"], ["review", "待复核"]] : Object.entries(statusLabels).map(([value, meta]) => [value, meta.label])).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <Button
@@ -288,7 +271,7 @@ export function AdminAffiliateView() {
         {/* Table Content */}
         {tab === "accounts" && (
           <AccountsTable
-            data={filteredAccounts}
+            data={accounts.data?.items ?? []}
             error={accounts.error}
             loading={!accounts.data}
             busy={busy}
@@ -299,9 +282,10 @@ export function AdminAffiliateView() {
 
         {tab === "withdrawals" && (
           <WithdrawalsTable
-            data={filteredWithdrawals}
+            data={withdrawals.data?.items ?? []}
             error={withdrawals.error}
             loading={!withdrawals.data}
+            onRefresh={withdrawals.refresh}
             onReview={(item) => setSelectedWithdrawal(item)}
             onPayout={(item) => setPayoutDialogWithdrawal(item)}
           />
@@ -309,11 +293,14 @@ export function AdminAffiliateView() {
 
         {tab === "attributions" && (
           <AttributionsTable
-            data={filteredAttributions}
+            data={attributions.data?.items ?? []}
             error={attributions.error}
             loading={!attributions.data}
+            onRefresh={attributions.refresh}
           />
         )}
+
+        <AdminPagination total={current.data?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(0); }} />
 
         {/* Review Dialog */}
         {selectedWithdrawal && (
@@ -360,12 +347,9 @@ function AccountsTable({
   onRefresh: () => void;
   onChangeStatus: (item: AdminAccount, status: string) => Promise<void>;
 }) {
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
   if (error) return <Failure error={error} retry={onRefresh} />;
   if (loading) return <Loading />;
-
-  const paged = data.slice(page * pageSize, (page + 1) * pageSize);
+  const paged = data;
 
   return (
     <>
@@ -481,13 +465,6 @@ function AccountsTable({
           </TableBody>
         </Table>
       </div>
-      <AdminPagination
-        total={data.length}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-      />
     </>
   );
 }
@@ -498,19 +475,18 @@ function WithdrawalsTable({
   loading,
   onReview,
   onPayout,
+  onRefresh,
 }: {
   data: Withdrawal[];
   error: Error | null;
   loading: boolean;
   onReview: (item: Withdrawal) => void;
   onPayout: (item: Withdrawal) => void;
+  onRefresh: () => void;
 }) {
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-  if (error) return <Failure error={error} retry={() => {}} />;
+  if (error) return <Failure error={error} retry={onRefresh} />;
   if (loading) return <Loading />;
-
-  const paged = data.slice(page * pageSize, (page + 1) * pageSize);
+  const paged = data;
 
   return (
     <>
@@ -609,13 +585,6 @@ function WithdrawalsTable({
           </TableBody>
         </Table>
       </div>
-      <AdminPagination
-        total={data.length}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-      />
     </>
   );
 }
@@ -624,17 +593,16 @@ function AttributionsTable({
   data,
   error,
   loading,
+  onRefresh,
 }: {
   data: Attribution[];
   error: Error | null;
   loading: boolean;
+  onRefresh: () => void;
 }) {
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-  if (error) return <Failure error={error} retry={() => {}} />;
+  if (error) return <Failure error={error} retry={onRefresh} />;
   if (loading) return <Loading />;
-
-  const paged = data.slice(page * pageSize, (page + 1) * pageSize);
+  const paged = data;
 
   return (
     <>
@@ -705,13 +673,6 @@ function AttributionsTable({
           </TableBody>
         </Table>
       </div>
-      <AdminPagination
-        total={data.length}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-      />
     </>
   );
 }
@@ -937,6 +898,7 @@ function OfflinePayoutDialog({
   onClose: () => void;
   onPaid: () => void;
 }) {
+  const detail = useResource<WithdrawalDetail>(`/admin/affiliate/withdrawals/${item.id}`, false);
   const [payoutRef, setPayoutRef] = useState("");
   const [payoutChannel, setPayoutChannel] = useState("");
   const [proofHash, setProofHash] = useState("");
@@ -946,7 +908,7 @@ function OfflinePayoutDialog({
 
   async function handlePayout(e: React.FormEvent) {
     e.preventDefault();
-    if (busy || parentBusy) return;
+    if (busy || parentBusy || !detail.data || detail.data.status !== "approved" || !payoutNote.trim()) return;
     setBusy(true);
     setError("");
 
@@ -959,7 +921,7 @@ function OfflinePayoutDialog({
           channel: payoutChannel,
           proof_hash: proofHash,
           note: payoutNote,
-          expected_version: item.version,
+          expected_version: detail.data.version,
           confirmed: true,
         }),
       });
@@ -996,6 +958,7 @@ function OfflinePayoutDialog({
               {money(item.payout_cents)}
             </span>
           </div>
+          {detail.error ? <Failure error={detail.error} retry={detail.refresh} /> : !detail.data ? <Loading /> : detail.data.status !== "approved" ? <p role="alert">申请状态已变化，请关闭并刷新列表。</p> : <PermissionGate permission="affiliates.payout"><PayoutTarget id={item.id} /></PermissionGate>}
 
           <div className="space-y-1">
             <label className="font-medium text-[#303133] block">
@@ -1043,8 +1006,9 @@ function OfflinePayoutDialog({
           </div>
 
           <div className="space-y-1">
-            <label className="font-medium text-[#303133] block">打款备注</label>
+            <label className="font-medium text-[#303133] block">打款备注（必填）</label>
             <Textarea
+              required
               rows={2}
               maxLength={1000}
               value={payoutNote}
@@ -1071,9 +1035,11 @@ function OfflinePayoutDialog({
               className="h-8 bg-[#008080] hover:bg-[#006666] text-white text-xs px-4"
               disabled={
                 busy ||
+                !detail.data || detail.data.status !== "approved" ||
+                !payoutNote.trim() ||
                 !payoutRef.trim() ||
                 !payoutChannel.trim() ||
-                proofHash.length !== 64
+                !/^[0-9a-f]{64}$/.test(proofHash)
               }
             >
               确认登记打款
@@ -1083,4 +1049,29 @@ function OfflinePayoutDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+function PayoutTarget({ id }: { id: number }) {
+  const [reason, setReason] = useState("");
+  const [target, setTarget] = useState<{ target: string; holder: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const active = useRef(true);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  async function reveal() {
+    if (!reason.trim() || busy) return;
+    setBusy(true); setError(""); setTarget(null);
+    try {
+      const result = await api<{ target: string; holder: string }>(`/admin/affiliate/withdrawals/${id}/target`, { method: "POST", cache: "no-store", body: JSON.stringify({ reason: reason.trim() }) });
+      if (active.current) setTarget(result);
+    } catch (e) { if (active.current) setError((e as Error).message); }
+    finally { if (active.current) setBusy(false); }
+  }
+  return <div className="space-y-2 border-b pb-3">
+    <label htmlFor={`target-reason-${id}`}>收款资料查看用途</label>
+    <Input id={`target-reason-${id}`} value={reason} maxLength={1000} onChange={(e) => setReason(e.target.value)} />
+    <Button type="button" variant="outline" disabled={busy || !reason.trim()} onClick={() => void reveal()}><Eye size={14} />{busy ? "读取中" : "查看完整收款资料"}</Button>
+    {error && <p role="alert" className="text-red-600">{error}</p>}
+    {target && <div className="break-all"><p>收款人：{target.holder}</p><p>收款账号：{target.target}</p><Button type="button" variant="outline" onClick={() => { setTarget(null); setReason(""); }}>隐藏资料</Button></div>}
+  </div>;
 }

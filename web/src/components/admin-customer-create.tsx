@@ -9,14 +9,20 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Workspace } from "./workspace";
+import { Workspace, useAdminPermission } from "./workspace";
 
 type SalesOwner = { id: number; username: string; display_name: string };
 
 export function AdminCustomerCreateView() {
+  return <Workspace title="添加客户" admin><CustomerCreateForm /></Workspace>;
+}
+
+function CustomerCreateForm() {
   const router = useRouter();
-  const groupsResource = useResource<CustomerGroup[]>("/admin/customer-groups", false);
-  const salesResource = useResource<SalesOwner[]>("/admin/sales-owners", false);
+  const groupAllowed = useAdminPermission("customer_groups.manage");
+  const salesAllowed = useAdminPermission("@super");
+  const groupsResource = useResource<CustomerGroup[]>(groupAllowed ? "/admin/customer-groups" : null, false);
+  const salesResource = useResource<SalesOwner[]>(salesAllowed ? "/admin/sales-owners" : null, false);
 
   // 个人资料
   const [name, setName] = useState("");
@@ -60,8 +66,9 @@ export function AdminCustomerCreateView() {
       setError("请输入邮箱");
       return;
     }
-    if (!password.trim() || password.length < 6) {
-      setError("请输入至少6位密码");
+    const passwordBytes = new TextEncoder().encode(password).length;
+    if (passwordBytes < 8 || passwordBytes > 72) {
+      setError("密码长度需在8-72字节之间");
       return;
     }
 
@@ -71,16 +78,19 @@ export function AdminCustomerCreateView() {
         display_name: name.trim(),
         username: phone.trim() || email.split("@")[0] || name.trim(),
         email: email.trim(),
-        password: password.trim(),
+        password,
         status,
         company_name: company.trim(),
         phone: phone.trim() ? `${phonePrefix} ${phone.trim()}` : "",
+        gender: gender || "unknown", country, province, address, postcode,
+        source_channel: channel, qq, payment_method: paymentMethod, language,
+        admin_note: adminNote, receive_marketing: receiveMarketing,
       };
 
-      if (customerGroup !== "none") {
+      if (groupAllowed && customerGroup !== "none") {
         payload.group_id = Number(customerGroup);
       }
-      if (salesOwner !== "none") {
+      if (salesAllowed && salesOwner !== "none") {
         payload.sales_owner_id = Number(salesOwner);
       }
 
@@ -98,7 +108,7 @@ export function AdminCustomerCreateView() {
   }
 
   return (
-    <Workspace title="添加客户" admin>
+    <>
       <div className="space-y-5">
         <h1 className="text-xl font-bold text-[#303133]">添加客户</h1>
 
@@ -256,7 +266,6 @@ export function AdminCustomerCreateView() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder=""
                     required
-                    minLength={6}
                     className="h-9 border-[#dcdfe6]"
                   />
                 </div>
@@ -309,7 +318,7 @@ export function AdminCustomerCreateView() {
                     销售
                     <HelpCircle size={13} className="text-[#909399]" />
                   </label>
-                  <Select value={salesOwner} onValueChange={setSalesOwner}>
+                  <Select value={salesOwner} onValueChange={setSalesOwner} disabled={!salesAllowed}>
                     <SelectTrigger className="h-9 border-[#dcdfe6]">
                       <SelectValue placeholder="无" />
                     </SelectTrigger>
@@ -329,7 +338,7 @@ export function AdminCustomerCreateView() {
                     客户分组
                     <HelpCircle size={13} className="text-[#909399]" />
                   </label>
-                  <Select value={customerGroup} onValueChange={setCustomerGroup}>
+                  <Select value={customerGroup} onValueChange={setCustomerGroup} disabled={!groupAllowed}>
                     <SelectTrigger className="h-9 border-[#dcdfe6]">
                       <SelectValue placeholder="无" />
                     </SelectTrigger>
@@ -435,6 +444,6 @@ export function AdminCustomerCreateView() {
           </div>
         </form>
       </div>
-    </Workspace>
+    </>
   );
 }

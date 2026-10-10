@@ -62,6 +62,11 @@ var adminRoutePermissions = func() map[string]string {
 	m["DELETE /api/v1/admin/service-groups/{id}"] = "products.manage"
 	m["PUT /api/v1/admin/products/{id}/service-group"] = "products.manage"
 	m["GET /api/v1/admin/services/page"] = "services.view"
+	m["GET /api/v1/admin/customers/page"] = "customers.view"
+	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
+	m["GET /api/v1/admin/affiliate/accounts/page"] = "affiliates.view"
+	m["GET /api/v1/admin/affiliate/attributions/page"] = "affiliates.view"
+	m["GET /api/v1/admin/affiliate/withdrawals/page"] = "affiliates.view"
 	m["PUT /api/v1/admin/products/{id}/configuration-upgrade-policy"] = "products.manage"
 	m["GET /api/v1/admin/products/{id}/upgrade-targets"] = "products.view"
 	m["PUT /api/v1/admin/products/{id}/upgrade-targets"] = "products.manage"
@@ -85,7 +90,7 @@ var adminRoutePermissions = func() map[string]string {
 		"products.manage":               {"POST /api/v1/admin/products", "PATCH /api/v1/admin/products/{id}", "POST /api/v1/admin/products/{id}/duplicate", "POST /api/v1/admin/products/{id}/pricing", "POST /api/v1/admin/products/{id}/option-groups", "PUT /api/v1/admin/products/{id}/option-groups/{group_id}", "DELETE /api/v1/admin/products/{id}/option-groups/{group_id}", "POST /api/v1/admin/products/{id}/option-groups/{group_id}/options", "PUT /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}", "DELETE /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}", "PUT /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}/price-tiers", "POST /api/v1/admin/catalog-groups/{kind}", "PUT /api/v1/admin/catalog-groups/{kind}/{id}", "DELETE /api/v1/admin/catalog-groups/{kind}/{id}"},
 		"content.view":                  {"GET /api/v1/admin/content", "GET /api/v1/admin/content/{id}", "GET /api/v1/admin/content-categories", "GET /api/v1/admin/content-tags"},
 		"content.manage":                {"POST /api/v1/admin/content", "PUT /api/v1/admin/content/{id}", "POST /api/v1/admin/content/{id}/images", "DELETE /api/v1/admin/content/{id}", "POST /api/v1/admin/content-categories", "PUT /api/v1/admin/content-categories/{id}", "DELETE /api/v1/admin/content-categories/{id}", "POST /api/v1/admin/content-tags", "PUT /api/v1/admin/content-tags/{id}", "DELETE /api/v1/admin/content-tags/{id}"},
-		"customers.view":                {"GET /api/v1/admin/customers", "GET /api/v1/admin/customers/{id}", "GET /api/v1/admin/customers/{id}/contacts"},
+		"customers.view":                {"GET /api/v1/admin/customers", "GET /api/v1/admin/customers/{id}", "GET /api/v1/admin/customers/{id}/contacts", "GET /api/v1/admin/customers/{id}/affiliate"},
 		"customers.manage":              {"POST /api/v1/admin/customers", "POST /api/v1/admin/customers/{id}/password", "PATCH /api/v1/admin/customers/{id}", "POST /api/v1/admin/customers/{id}/impersonate", "POST /api/v1/admin/customers/{id}/contacts", "PATCH /api/v1/admin/customers/{id}/contacts/{contact_id}", "DELETE /api/v1/admin/customers/{id}/contacts/{contact_id}"},
 		"customer_groups.view":          {"GET /api/v1/admin/customer-groups"},
 		"customer_groups.manage":        {"POST /api/v1/admin/customer-groups", "PATCH /api/v1/admin/customer-groups/{id}", "DELETE /api/v1/admin/customer-groups/{id}", "PUT /api/v1/admin/customers/{id}/group"},

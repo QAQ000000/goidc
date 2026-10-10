@@ -49,6 +49,16 @@ type AdminCustomer = {
   company_name?: string | null;
   phone_number?: string | null;
   qq?: string | null;
+  gender: string;
+  country: string;
+  province: string;
+  address: string;
+  postcode: string;
+  source_channel: string;
+  payment_method: string;
+  language: string;
+  admin_note: string;
+  receive_marketing: boolean;
 };
 
 type CustomerDetailTab =
@@ -332,22 +342,23 @@ function CustomerSummaryView({
           </div>
           <div className="flex justify-between">
             <span className="text-[#909399]">最后登录时间</span>
-            <span className="text-[#303133]">{date(customer.created_at)}</span>
+            <span className="text-[#303133]">-</span>
           </div>
           <div className="flex justify-between">
             <span className="text-[#909399]">最后登录IP</span>
-            <span className="text-[#303133] font-mono">127.0.0.1</span>
+            <span className="text-[#303133] font-mono">-</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#909399]">管理员备注</span>
-            <button
-              type="button"
+            <Link
+              href={`/admin/customers/${customer.id}?tab=profile`}
+              title="编辑管理员备注"
               className="text-[#409eff] hover:opacity-80"
-              onClick={() => alert("无管理员备注")}
             >
               <Pencil size={13} />
-            </button>
+            </Link>
           </div>
+          {customer.admin_note && <p className="text-xs whitespace-pre-wrap break-words text-[#606266]">{customer.admin_note}</p>}
         </div>
 
         {/* Impersonate button */}
@@ -695,6 +706,12 @@ function CustomerProfile({
   const [name, setName] = useState(customer.display_name);
   const [email, setEmail] = useState(customer.email);
   const [status, setStatus] = useState(customer.status);
+  const [profile, setProfile] = useState({
+    gender: customer.gender, company_name: customer.company_name || "", phone: customer.phone_number || "",
+    qq: customer.qq || "", country: customer.country, province: customer.province, address: customer.address,
+    postcode: customer.postcode, source_channel: customer.source_channel, payment_method: customer.payment_method,
+    language: customer.language, admin_note: customer.admin_note, receive_marketing: customer.receive_marketing,
+  });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
@@ -708,7 +725,7 @@ function CustomerProfile({
     try {
       await api(`/admin/customers/${customer.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ display_name: name, email, status }),
+        body: JSON.stringify({ display_name: name, email, status, profile }),
       });
       setMessage("客户资料已保存");
       saved();
@@ -721,6 +738,10 @@ function CustomerProfile({
   }
 
   const fieldStyle = "block text-xs text-[#606266] min-w-0";
+  const textFields = [
+    ["company_name", "所在公司"], ["phone", "手机"], ["qq", "QQ"], ["country", "国家"],
+    ["province", "省"], ["address", "地址"], ["postcode", "邮编"], ["source_channel", "了解途径"],
+  ] as const;
 
   return (
     <form onSubmit={(event) => void save(event)} className="space-y-6">
@@ -728,6 +749,15 @@ function CustomerProfile({
         <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
           <h2 className="text-sm font-semibold text-[#303133] mb-3">个人资料</h2>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {textFields.map(([key, label]) => <label key={key} className={fieldStyle}>{label}
+              <Input className="mt-1.5 text-xs h-8 border-[#dcdfe6]" value={profile[key]} onChange={event => setProfile(previous => ({...previous, [key]: event.target.value}))} />
+            </label>)}
+            <label className={fieldStyle}>性别
+              <Select value={profile.gender} onValueChange={value => setProfile(previous => ({...previous, gender: value}))}>
+                <SelectTrigger className="mt-1.5 h-8"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="unknown">未知</SelectItem><SelectItem value="male">男</SelectItem><SelectItem value="female">女</SelectItem></SelectContent>
+              </Select>
+            </label>
             <label className={fieldStyle}>
               姓名
               <Input
@@ -770,6 +800,22 @@ function CustomerProfile({
         <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
           <h2 className="text-sm font-semibold text-[#303133] mb-3">其他设置</h2>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <label className={fieldStyle}>默认支付方式
+              <Select value={profile.payment_method} onValueChange={value => setProfile(previous => ({...previous, payment_method: value}))}>
+                <SelectTrigger className="mt-1.5 h-8"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="bank">银行转账</SelectItem><SelectItem value="alipay">支付宝</SelectItem><SelectItem value="wechat">微信支付</SelectItem></SelectContent>
+              </Select>
+            </label>
+            <label className={fieldStyle}>语言
+              <Select value={profile.language} onValueChange={value => setProfile(previous => ({...previous, language: value}))}>
+                <SelectTrigger className="mt-1.5 h-8"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="zh_CN">中文简体</SelectItem><SelectItem value="en_US">English</SelectItem></SelectContent>
+              </Select>
+            </label>
+            <label className={fieldStyle}>管理员备注
+              <textarea className="mt-1.5 w-full rounded border border-[#dcdfe6] p-2" value={profile.admin_note} maxLength={4000} onChange={event => setProfile(previous => ({...previous, admin_note: event.target.value}))} />
+            </label>
+            <label className="flex items-center gap-2 text-xs"><Checkbox checked={profile.receive_marketing} onCheckedChange={value => setProfile(previous => ({...previous, receive_marketing: value === true}))} />接收营销信息</label>
             <label className={fieldStyle}>
               状态
               <Select value={status} onValueChange={setStatus} disabled={!manage || busy}>
@@ -848,6 +894,8 @@ function AdminCustomerRelatedView({
   const endpoint =
     tab === "transactions"
       ? `/admin/customer-transactions?customer_id=${customerId}&limit=25&offset=${page * 25}`
+      : tab === "affiliate"
+      ? `/admin/customers/${customerId}/affiliate?limit=25&offset=${page * 25}`
       : `/admin/${tab}?customer_id=${customerId}&limit=25&offset=${page * 25}`;
   const { data, error, refresh } = useResource<Row[]>(endpoint, false);
 
@@ -878,6 +926,8 @@ function AdminCustomerRelatedView({
       ? ["账单号", "金额", "状态", "到期时间"]
       : tab === "tickets"
       ? ["工单号", "主题", "状态", "更新时间"]
+      : tab === "affiliate"
+      ? ["类型", "关联单据", "项目", "金额", "状态", "时间"]
       : ["类型", "关联账单", "渠道/类型", "金额", "状态", "时间"];
 
   return (
@@ -991,6 +1041,16 @@ function AdminCustomerRelatedView({
                     <Status value={String(row.status ?? "unknown")} />
                   </TableCell>
                   <TableCell>{date(String(row.created_at))}</TableCell>
+                </>
+              )}
+              {tab === "affiliate" && (
+                <>
+                  <TableCell>{({ affiliate_account: "推广账户", affiliate_attribution: "推荐归因", affiliate_commission: "佣金", affiliate_withdrawal: "提现" } as Record<string, string>)[String(row.kind)] ?? "推广"}</TableCell>
+                  <TableCell>{String(row.invoice_no || "-")}</TableCell>
+                  <TableCell>{String(row.label ?? "-")}</TableCell>
+                  <TableCell className="money">{money(Number(row.amount_cents ?? 0))}</TableCell>
+                  <TableCell><Status value={String(row.status ?? "unknown")} /></TableCell>
+                  <TableCell>{row.created_at ? date(String(row.created_at)) : "-"}</TableCell>
                 </>
               )}
             </TableRow>
