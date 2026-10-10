@@ -23,7 +23,7 @@ export function AdminJobsView({queue=false}:{queue?:boolean}) {
  useEffect(()=>{const restore=()=>setParams(new URLSearchParams(window.location.search));restore();window.addEventListener("popstate",restore);return ()=>window.removeEventListener("popstate",restore);},[]);
  const query=params?.toString()??"";
  const resource=useResource<Result|Summary>(queue ? (params ? `/admin/jobs/queue?${query}` : null) : "/admin/jobs",false);
- function change(key:string,value:string){const next=new URLSearchParams(params??undefined);value?next.set(key,value):next.delete(key);if(key!=="offset")next.delete("offset");window.history.replaceState(null,"",`${window.location.pathname}?${next}`);setParams(next);}
+ function change(key:string,value:string){const next=new URLSearchParams(params??undefined);if(value)next.set(key,value);else next.delete(key);if(key!=="offset")next.delete("offset");window.history.replaceState(null,"",`${window.location.pathname}?${next}`);setParams(next);}
  const limit=Number(params?.get("limit"))||25;
  const page=Math.floor((Number(params?.get("offset"))||0)/limit);
  return <Workspace admin title={queue?"任务队列":"任务状态概览"}><div className="space-y-5"><div className="flex justify-between gap-3"><div><h1 className="page-title">{queue?"任务队列":"任务状态概览"}</h1><p className="mt-2 text-sm text-muted-foreground">仅显示当前账号有权查看的服务及通知任务。概览为队列实时汇总，不代表定时任务执行日志。</p><p className="mt-2 text-sm text-muted-foreground">部分完成：定时执行趋势、逐次日志及统一重试尚未实现。失败任务请进入对应业务页核验，避免重复执行外部动作。</p></div><Button variant="outline" size="icon" aria-label="刷新任务" onClick={resource.refresh}><RefreshCw /></Button></div>
