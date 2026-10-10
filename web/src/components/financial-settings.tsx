@@ -42,7 +42,7 @@ function CurrencyEditor({ data, refresh }: { data: any; refresh: () => void }) {
 }
 
 export function FinanceSettingsView() { return <SettingsFrame title="充值与财务" path="/admin/finance-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="finance" />}</SettingsFrame>; }
-export function InvoiceSettingsView() { return <SettingsFrame title="发票设置" path="/admin/invoice-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="invoice" />}</SettingsFrame>; }
+export function InvoiceSettingsView() { return <SettingsFrame title="发票设置" path="/admin/invoice-settings">{(data, refresh) => <SingletonForm key={`${data.version}-${(data.shipping_methods ?? []).map((m: any) => `${m.id}:${m.version}`).join(",")}`} data={data} refresh={refresh} kind="invoice" />}</SettingsFrame>; }
 export function ContractSettingsView() { return <SettingsFrame title="合同设置" path="/admin/contract-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="contract" />}</SettingsFrame>; }
 export function CreditSettingsView() { return <SettingsFrame title="信用额设置" path="/admin/credit-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="credit" />}</SettingsFrame>; }
 
