@@ -370,6 +370,159 @@ func (s *Server) updateInvoiceSettings(w http.ResponseWriter, r *http.Request) {
 	s.updateSingletonSettings(w, r, "invoice.settings_updated", "invoice_settings", in.ExpectedVersion, map[string]any{"enabled": *in.Enabled, "rate_percent": in.RatePercent}, `UPDATE invoice_settings SET enabled=$1,rate_bps=$2,version=version+1,updated_at=now() WHERE id=1 AND version=$3 RETURNING version`, *in.Enabled, bps, in.ExpectedVersion)
 }
 
+type shippingMethodInput struct {
+	Name            string `json:"name"`
+	PriceCents      int64  `json:"price_cents"`
+	Active          *bool  `json:"active"`
+	ExpectedVersion int64  `json:"expected_version"`
+}
+
+func (s *Server) saveInvoiceShippingMethod(w http.ResponseWriter, r *http.Request) {
+	var in shippingMethodInput
+	if !decode(w, r, &in) {
+		return
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || len(in.Name) > 120 || in.PriceCents < 0 {
+		writeError(w, 400, "invalid_shipping_method", "快递名称或价格无效")
+		return
+	}
+	created := r.Method == http.MethodPost
+	id := int64(0)
+	if !created {
+		var ok bool
+		id, ok = pathID(w, r)
+		if !ok {
+			return
+		}
+		if in.ExpectedVersion < 1 {
+			writeError(w, 400, "invalid_shipping_method", "请提供有效版本")
+			return
+		}
+	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(struct {
+		ID    int64
+		Input shippingMethodInput
+	}{id, in})
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "invoice.shipping.save", key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, 200, replay)
+		return
+	}
+	var version int64
+	if created {
+		if in.Active == nil {
+			in.Active = boolPtr(true)
+		}
+		err = tx.QueryRow(r.Context(), `INSERT INTO invoice_shipping_methods(name,price_cents,active) VALUES($1,$2,$3) RETURNING id,version`, in.Name, in.PriceCents, *in.Active).Scan(&id, &version)
+	} else {
+		err = tx.QueryRow(r.Context(), `UPDATE invoice_shipping_methods SET name=$1,price_cents=$2,active=coalesce($3,active),version=version+1,updated_at=now() WHERE id=$4 AND version=$5 RETURNING id,version`, in.Name, in.PriceCents, in.Active, id, in.ExpectedVersion).Scan(&id, &version)
+	}
+	if err != nil {
+		if !created && errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, 409, "version_conflict", "快递方式已变更，请重新加载")
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
+	result := map[string]any{"id": id, "version": version}
+	if err = store.Audit(r.Context(), tx, actor, "invoice.shipping_updated", "invoice_shipping_methods", id, in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, "invoice.shipping.save", key, hash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, map[bool]int{true: 201, false: 200}[created], result)
+}
+
+func (s *Server) deleteInvoiceShippingMethod(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		ExpectedVersion int64 `json:"expected_version"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	if in.ExpectedVersion < 1 {
+		writeError(w, 400, "invalid_shipping_method", "请提供有效版本")
+		return
+	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(struct {
+		ID      int64
+		Version int64
+	}{id, in.ExpectedVersion})
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "invoice.shipping.delete", key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, 200, replay)
+		return
+	}
+	var version int64
+	if err = tx.QueryRow(r.Context(), `SELECT version FROM invoice_shipping_methods WHERE id=$1 FOR UPDATE`, id).Scan(&version); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if version != in.ExpectedVersion {
+		writeError(w, 409, "version_conflict", "快递方式已变更，请重新加载")
+		return
+	}
+	if _, err = tx.Exec(r.Context(), `DELETE FROM invoice_shipping_methods WHERE id=$1`, id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	result := map[string]any{"id": id, "deleted": true}
+	if err = store.Audit(r.Context(), tx, actor, "invoice.shipping_deleted", "invoice_shipping_methods", id, in); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, "invoice.shipping.delete", key, hash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, result)
+}
+
 func (s *Server) contractSettings(w http.ResponseWriter, r *http.Request) {
 	var enabled bool
 	var version int64
