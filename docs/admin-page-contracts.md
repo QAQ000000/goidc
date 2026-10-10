@@ -36,7 +36,7 @@
 | 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有真实分页 CRUD、字段规则、权限、审计、幂等和版本冲突；客户资料消费待补 | 四尺寸验收通过，见客户扩展批次记录 |
 | 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 有真实 CRUD、阈值统计、分页、权限、审计、幂等和版本冲突 | 四尺寸验收通过，见客户扩展批次记录 |
-| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups | 客户分组真实分页 CRUD；商品分组/折扣子页待补 | 四尺寸验收通过，见客户扩展批次记录 |
+| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups、?tab=products、?tab=discounts | 客户组、商品分组和折扣均有真实分页 API；商品分组/折扣支持权限、审计、幂等和版本冲突 | 代码契约已验证；商品分组/折扣浏览器待验收 |
 | 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | Go API 与 React 页面已实现；基础设置和接口实例状态均来自真实 API | 四尺寸验收通过，见客户扩展批次记录 |
 | 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 34 | [设置 / 支付接口](#page-34) | #/payment-interface | /admin/channels?category=payment | 有对应路由源码；实现完整性未验证 | 未验证 |
