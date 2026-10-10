@@ -311,6 +311,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/sms-outbox", s.auth(s.smsOutbox, true))
 	mux.HandleFunc("POST /api/v1/admin/sms-outbox/{id}/retry", s.auth(s.retrySMS, true))
 	mux.HandleFunc("GET /api/v1/admin/reports/income", s.auth(s.incomeReport, true))
+	mux.HandleFunc("GET /api/v1/admin/reports/sales", s.auth(s.salesReport, true))
+	mux.HandleFunc("GET /api/v1/admin/reports/tickets", s.auth(s.ticketReport, true))
 	mux.HandleFunc("GET /api/v1/admin/reports/new-clients", s.auth(s.newClientsReport, true))
 	mux.HandleFunc("GET /api/v1/admin/reports/customer-ranking", s.auth(s.customerRankingReport, true))
 	mux.HandleFunc("GET /api/v1/admin/reports/product-income", s.auth(s.productIncomeReport, true))

@@ -78,6 +78,7 @@ export function DashboardView() {
 }
 
 type IncomeReport = { year: number; months: { month: string; income_cents: number; invoice_count: number }[]; total: { income_cents: number; invoice_count: number } };
+type ExtraReport = { items: Record<string, unknown>[]; year: number; month?: number };
 type DailyReport = { year: number; month: number; days: { date: string; new_clients: number; new_orders: number; paid_orders: number; new_tickets: number; ticket_replies: number; cancellation_requests: number }[] };
 type ProductIncomeReport = { year: number; month: number; products: { product_id: number; name: string; new_order_amount_cents: number; new_order_count: number; renewal_amount_cents: number; renewal_order_count: number; total_amount_cents: number }[] };
 type CustomerRanking = { user_id: number; display_name: string; income_cents: number; expense_cents: number; net_cents: number }[];
@@ -92,8 +93,8 @@ export function ReportsView() {
   const daily = useResource<DailyReport>(`/admin/reports/new-clients?year=${period.year}&month=${period.month}`, false);
   const products = useResource<ProductIncomeReport>(`/admin/reports/product-income?year=${period.year}&month=${period.month}`, false);
   const ranking = useResource<CustomerRanking>("/admin/reports/customer-ranking", false);
-  const error = income.error ?? daily.error ?? products.error ?? ranking.error;
-  const refresh = () => { income.refresh(); daily.refresh(); products.refresh(); ranking.refresh(); };
+  const error = income.error ?? daily.error ?? products.error ?? ranking.error ?? sales.error ?? ticketStats.error;
+  const refresh = () => { income.refresh(); daily.refresh(); products.refresh(); ranking.refresh(); sales.refresh(); ticketStats.refresh(); };
   return (
     <Workspace title="统计报表" admin>
       <PageHeading title="统计报表" description="收入、客户、产品和服务运营数据">
@@ -103,7 +104,7 @@ export function ReportsView() {
           <Button disabled={!Number.isInteger(Number(year)) || Number(year) < 2000 || Number(year) > now.getFullYear() + 1} onClick={() => setPeriod({ year: Number(year), month: Number(month) })}><Search size={15} />查询</Button>
         </div>
       </PageHeading>
-      <div className="mb-4 flex overflow-x-auto border-b" role="group" aria-label="报表分类">{Object.entries({ income: "收入", customers: "客户", products: "产品", daily: "每日运营" }).map(([key, label]) => <button key={key} type="button" aria-pressed={reportTab === key} className={`shrink-0 border-b-2 px-5 py-3 text-sm ${reportTab === key ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setReportTab(key)}>{label}</button>)}</div>
+      <div className="mb-4 flex overflow-x-auto border-b" role="group" aria-label="报表分类">{Object.entries({ income: "收入", customers: "客户", products: "产品", daily: "每日运营", sales: "我的业绩", tickets: "工单统计" }).map(([key, label]) => <button key={key} type="button" aria-pressed={reportTab === key} className={`shrink-0 border-b-2 px-5 py-3 text-sm ${reportTab === key ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`} onClick={() => setReportTab(key)}>{label}</button>)}</div>
       {error ? <Failure error={error} retry={refresh} /> : !income.data || !daily.data || !products.data || !ranking.data ? <Loading /> : (
         <>
           <div className="stat-grid mb-6"><Stat icon={Receipt} label={`${period.year} 年收入`} value={money(income.data.total.income_cents)} /><Stat icon={ClipboardList} label="已支付账单" value={income.data.total.invoice_count} /><Stat icon={Users} label={`${period.month} 月新客户`} value={daily.data.days.reduce((total, item) => total + item.new_clients, 0)} /><Stat icon={Package} label={`${period.month} 月产品收入`} value={money(products.data.products.reduce((total, item) => total + item.total_amount_cents, 0))} /></div>
