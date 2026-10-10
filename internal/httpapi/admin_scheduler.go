@@ -13,7 +13,7 @@ func schedulerFilter(r *http.Request) (string, []any, bool) {
 	args := []any{}
 	if key := r.URL.Query().Get("task"); key != "" {
 		switch key {
-		case "affiliate_settlement", "service_expiry_notifications", "billing_notifications", "supplier_sync_schedule":
+		case "affiliate_settlement", "service_expiry_notifications", "billing_notifications", "supplier_sync_schedule", "overdue_service_suspensions", "automatic_renewals", "automatic_payment_reconciliation":
 		default:
 			return "", nil, false
 		}

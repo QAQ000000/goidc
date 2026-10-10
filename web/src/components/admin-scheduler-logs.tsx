@@ -8,7 +8,7 @@ import {Failure,Loading} from "./common";
 import {Button} from "./ui/button";
 import {Input} from "./ui/input";
 import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from "./ui/table";
-const tasks:Record<string,string>={affiliate_settlement:"推介佣金结算",service_expiry_notifications:"服务到期通知调度",billing_notifications:"账单通知调度",supplier_sync_schedule:"供应商同步调度",automatic_payment_reconciliation:"自动支付查单",overdue_service_suspensions:"逾期暂停入队",automatic_renewals:"自动续费处理"};
+const tasks:Record<string,string>={affiliate_settlement:"推介佣金结算",service_expiry_notifications:"服务到期通知调度",billing_notifications:"账单通知调度",supplier_sync_schedule:"供应商同步调度",overdue_service_suspensions:"逾期暂停入队",automatic_renewals:"自动续费处理",automatic_payment_reconciliation:"自动支付查单"};
 const states:Record<string,string>={running:"运行中 / 结束未确认",succeeded:"成功",failed:"失败",interrupted:"已中断"};
 type Run={id:number;task_key:string;started_at:string;finished_at:string|null;duration_ms:number|null;status:string;affected_count:number|null;error_code:string};
 type Result={items:Run[];total:number};

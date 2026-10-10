@@ -1,6 +1,6 @@
 CREATE TABLE scheduler_runs (
  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
- task_key text NOT NULL CHECK(task_key IN ('affiliate_settlement','service_expiry_notifications','billing_notifications','supplier_sync_schedule')),
+ task_key text NOT NULL CHECK(task_key IN ('affiliate_settlement','service_expiry_notifications','billing_notifications','supplier_sync_schedule','overdue_service_suspensions','automatic_renewals','automatic_payment_reconciliation')),
  started_at timestamptz NOT NULL DEFAULT clock_timestamp(),
  finished_at timestamptz,
  duration_ms bigint CHECK(duration_ms >= 0),
