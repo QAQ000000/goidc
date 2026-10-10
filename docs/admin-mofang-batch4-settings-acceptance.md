@@ -9,6 +9,7 @@
 - 站点设置继续使用版本号和 `expected_version`，后台偏好不会进入公开 `/api/v1/site` 响应。
 - 新增 `/admin/auth-settings` 注册登录与验证码入口，并接入全局后台导航和 `settings.view` 权限。
 - 渠道目录增加开通接口分类，继续使用编译进 Go 的注册表和数据库实例配置。
+- 新增运行环境和关于系统入口，将旧版 PHP 信息页转换为 Go、PostgreSQL 18、迁移版本和构建契约的真实只读信息。
 
 ## 验证结果
 
@@ -21,6 +22,7 @@
 - API 服务、Web 服务、worker：已重启并为 active。
 - `GET /readyz`：返回 `postgresql18 / ready`。
 - `GET /api/v1/site`：未暴露 `admin_settings`，公开资料响应保持原边界。
+- `GET /api/v1/admin/system/runtime`、`GET /api/v1/admin/system/about`：通过超级管理员和 `settings.view` 权限测试。
 
 ## 未验证项
 
