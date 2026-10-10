@@ -28,6 +28,7 @@
 - `GET /api/v1/admin/notification-templates?channel=email&q=password_reset&limit=1`：通过模板筛选、分页字段和结果数量测试。
 - `GET /api/v1/admin/system/database`：通过 PG18 隔离 schema 的表名筛选、空结果和分页回归，返回表大小与行数估算。
 - `GET /api/v1/admin/jobs`、`GET /api/v1/admin/jobs/queue`：通过 PG18 隔离 schema 的管理员客户范围、通知权限、敏感错误摘要脱敏和筛选分页回归；定时趋势与统一重试仍标记为部分完成。
+- `GET /api/v1/admin/system/upgrade`：通过 PG18 隔离 schema 的迁移清单比较、最新已应用版本和权限回归；接口只读，不提供浏览器内迁移动作。
 
 ## 未验证项
 

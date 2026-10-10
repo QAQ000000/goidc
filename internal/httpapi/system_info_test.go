@@ -5,10 +5,14 @@ import "testing"
 func TestAdminSystemInformationRequiresSettingsViewAndReturnsRuntimeFacts(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "system-info-root", "super_admin")
-	for _, path := range []string{"/api/v1/admin/system/runtime", "/api/v1/admin/system/about", "/api/v1/admin/system/database"} {
+	for _, path := range []string{"/api/v1/admin/system/runtime", "/api/v1/admin/system/about", "/api/v1/admin/system/database", "/api/v1/admin/system/upgrade"} {
 		if response := request(h, "GET", path, nil, root, ""); response.Code != 200 {
 			t.Fatalf("%s status=%d body=%s", path, response.Code, response.Body.String())
 		}
+	}
+	upgrade := request(h, "GET", "/api/v1/admin/system/upgrade", nil, root, "")
+	if data(t, upgrade)["status"] != "up_to_date" {
+		t.Fatalf("migration upgrade status=%s", upgrade.Body.String())
 	}
 	database := request(h, "GET", "/api/v1/admin/system/database", nil, root, "")
 	if data(t, database)["status"] != "ready" {

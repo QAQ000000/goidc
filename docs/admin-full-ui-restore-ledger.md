@@ -66,7 +66,7 @@
 | 56 | 黑名单列表 `#/black-list` | `/admin/blacklist` | 待实现 | `GET/POST/DELETE /admin/blacklist` | `security.view/manage` |
 | 57 | 数据迁移 `#/data-migration` | `/admin/migrations` | 部分完成 | `GET/POST /admin/migrations` | `migrations.view/manage` |
 | 58 | 关于 `#/about` | `/admin/system/about` | 已完成 | `GET /admin/system/about` | `settings.view` / 真实技术栈和构建信息 |
-| 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 待实现 | `GET /admin/system/upgrade` | `system.manage` / 只读检查 |
+| 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 已完成 | `GET /admin/system/upgrade` | `settings.view` / 编译迁移清单与数据库已应用版本差异检查 |
 | 60 | php信息 `#/php-message` | `/admin/system/runtime` | 已完成 | `GET /admin/system/runtime` | `settings.view` / Go、PG18、迁移和运行信息 |
 | 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 待实现 | `GET /admin/sms-outbox` | `notifications.view` |
 | 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 待实现 | `GET /admin/inbox-outbox` | `notifications.view` |
@@ -123,7 +123,7 @@
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
-| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态和任务队列基础页已完成；定时趋势、统一重试和报表细节待补 |
+| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态、升级检查和任务队列基础页已完成；定时趋势、统一重试和报表细节待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |

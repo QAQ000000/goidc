@@ -34,6 +34,7 @@ export const adminNavigation = [
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/system/runtime", label: "运行环境", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/system/database", label: "数据库状态", icon: Settings, permission: "settings.view", group: "system" },
+  { href: "/admin/system/upgrade", label: "升级检查", icon: Settings, permission: "settings.view", group: "system" },
   { href: "/admin/jobs", label: "任务状态", icon: Settings, permission: "jobs.view", group: "system" },
   { href: "/admin/jobs/queue", label: "任务队列", icon: Settings, permission: "jobs.view", group: "system" },
   { href: "/admin/system/about", label: "关于系统", icon: Settings, permission: "settings.view", group: "system" },
