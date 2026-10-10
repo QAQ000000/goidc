@@ -18,6 +18,11 @@ func TestAdminCustomerCustomFieldsVersionedCRUDAndPermission(t *testing.T) {
 	body := map[string]any{"field_key": "company_code", "label": "公司代码", "field_type": "select", "description": "客户内部编号", "choices": []string{"A", "B"}, "sort_order": 2, "required": true, "show_on_register": true, "active": true}
 	created := request(h, "POST", "/api/v1/admin/customer-fields", body, root, "custom-field-create")
 	expect(t, created, 201)
+	replayedCreate := request(h, "POST", "/api/v1/admin/customer-fields", body, root, "custom-field-create")
+	expect(t, replayedCreate, 200)
+	if data(t, replayedCreate)["id"] != data(t, created)["id"] {
+		t.Fatalf("idempotent create returned a different id: %s", replayedCreate.Body.String())
+	}
 	duplicate := request(h, "POST", "/api/v1/admin/customer-fields", body, root, "custom-field-duplicate")
 	expect(t, duplicate, 409)
 	id := int64(data(t, created)["id"].(float64))
@@ -29,6 +34,7 @@ func TestAdminCustomerCustomFieldsVersionedCRUDAndPermission(t *testing.T) {
 	}
 	path := fmt.Sprintf("/api/v1/admin/customer-fields/%d", id)
 	updated := map[string]any{"field_key": "company_code", "label": "公司代码（更新）", "field_type": "select", "description": "更新描述", "choices": []string{"A", "B", "C"}, "sort_order": 1, "required": false, "show_on_register": true, "active": true, "expected_version": 1}
+	expect(t, request(h, "PATCH", path, updated, root, "custom-field-update"), 200)
 	expect(t, request(h, "PATCH", path, updated, root, "custom-field-update"), 200)
 	expect(t, request(h, "PATCH", path, updated, root, "custom-field-stale"), 409)
 	expect(t, request(h, "DELETE", path, map[string]any{"expected_version": 1}, root, "custom-field-delete-stale"), 409)

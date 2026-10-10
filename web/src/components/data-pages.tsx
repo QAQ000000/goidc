@@ -144,7 +144,7 @@ export function CustomersView() {
 }
 
 export function CustomerGroupsView() {
-  const { data, error, refresh } = useResource<CustomerGroup[]>("/admin/customer-groups");
+  const { data, error, refresh } = useResource<CustomerGroup[]>("/admin/customer-groups?options=true");
   const [name, setName] = useState("");
   const [color, setColor] = useState("#64748b");
   const [discount, setDiscount] = useState("0");
@@ -153,12 +153,12 @@ export function CustomerGroupsView() {
   const [busy, setBusy] = useState(false);
   async function create(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
-    try { await api("/admin/customer-groups", { method: "POST", body: JSON.stringify({ name, color, discount_percent: Number(discount), separate_invoices: separateInvoices }) }); setName(""); setDiscount("0"); setSeparateInvoices(false); refresh(); }
+    try { await api("/admin/customer-groups", { method: "POST", headers: { "Idempotency-Key": `customer-group-create-legacy-${crypto.randomUUID()}` }, body: JSON.stringify({ name, color, discount_percent: Number(discount), separate_invoices: separateInvoices }) }); setName(""); setDiscount("0"); setSeparateInvoices(false); refresh(); }
     catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   async function remove(id: number) {
     setBusy(true); setMessage("");
-    try { await api(`/admin/customer-groups/${id}`, { method: "DELETE", body: "{}" }); refresh(); }
+    try { const group = data?.find(item => item.id === id); if (!group) throw new Error("分组已刷新，请重试"); await api(`/admin/customer-groups/${id}`, { method: "DELETE", headers: { "Idempotency-Key": `customer-group-delete-legacy-${id}-${group.version}-${crypto.randomUUID()}` }, body: JSON.stringify({ expected_version: group.version }) }); refresh(); }
     catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   return <Workspace title="客户分组" admin><PageHeading title="客户分组" description="设置客户折扣和账单属性"><Button variant="outline" asChild><Link href="/admin/customers"><ArrowUpRight size={16} />返回客户管理</Link></Button></PageHeading><PermissionGate permission="customer_groups.manage"><section className="data-surface p-6 mb-6"><form className="grid md:grid-cols-[1fr_5rem_7rem_auto_auto] gap-3 items-center" onSubmit={create}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="分组名称" aria-label="分组名称" required maxLength={120} /><Input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="分组颜色" className="p-1 h-9" /><Input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="折扣 %" aria-label="折扣百分比" /><label className="flex items-center gap-2 text-sm whitespace-nowrap"><Checkbox checked={separateInvoices} onCheckedChange={(v) => setSeparateInvoices(v === true)} />拆分账单</label><Button disabled={busy || !name.trim()}><Plus size={16} />新增分组</Button></form>{message && <p role="alert" className="text-sm text-destructive mt-3">{message}</p>}</section></PermissionGate>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <div className="data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>名称</TableHead><TableHead>折扣</TableHead><TableHead>账单</TableHead><TableHead>客户数</TableHead><TableHead /></TableRow></TableHeader><TableBody>{data.length === 0 ? <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">暂无分组</TableCell></TableRow> : data.map((group) => <TableRow key={group.id}><TableCell><span className="inline-block w-3 h-3 rounded-sm mr-2" style={{ backgroundColor: group.color }} />{group.name}</TableCell><TableCell>{group.discount_percent}%</TableCell><TableCell>{group.separate_invoices ? "拆分" : "合并"}</TableCell><TableCell>{group.member_count}</TableCell><TableCell><PermissionGate permission="customer_groups.manage"><Button size="icon-sm" variant="ghost" aria-label={`删除${group.name}`} title="删除分组" disabled={busy || group.member_count > 0} onClick={() => void remove(group.id)}><Trash2 size={15} /></Button></PermissionGate></TableCell></TableRow>)}</TableBody></Table></div>}</Workspace>;

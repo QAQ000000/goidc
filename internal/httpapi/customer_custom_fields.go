@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
@@ -129,19 +130,38 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.customerCustomFieldFailure(w, r, err)
 		return
 	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(in)
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_custom_field.create", key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, http.StatusOK, replay)
+		return
+	}
 	var id int64
 	err = tx.QueryRow(r.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active).Scan(&id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_custom_field.created", "customer_custom_field", id, map[string]any{"field_key": in.FieldKey}); err != nil {
+	result := map[string]any{"id": id, "version": 1}
+	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.created", "customer_custom_field", id, map[string]any{"field_key": in.FieldKey}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, "customer_custom_field.create", key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -149,7 +169,7 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "version": 1})
+	write(w, http.StatusCreated, result)
 }
 
 func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -165,12 +185,30 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.customerCustomFieldFailure(w, r, err)
 		return
 	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(struct {
+		ID    int64
+		Input customFieldInput
+	}{id, in})
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
+	operation := "customer_custom_field.update:" + strconv.FormatInt(id, 10)
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, http.StatusOK, replay)
+		return
+	}
 	var version int64
 	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
 		if err == pgx.ErrNoRows {
@@ -188,7 +226,12 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_custom_field.updated", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+	result := map[string]any{"id": id, "version": version + 1}
+	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.updated", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -196,7 +239,7 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"id": id, "version": version + 1})
+	write(w, http.StatusOK, result)
 }
 
 func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -214,12 +257,30 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid_customer_custom_field", "版本无效")
 		return
 	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(struct {
+		ID              int64
+		ExpectedVersion int64
+	}{id, in.ExpectedVersion})
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
+	operation := "customer_custom_field.delete:" + strconv.FormatInt(id, 10)
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, http.StatusOK, replay)
+		return
+	}
 	var version int64
 	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
 		if err == pgx.ErrNoRows {
@@ -237,7 +298,12 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_custom_field.deleted", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+	result := map[string]any{"id": id, "deleted": true}
+	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.deleted", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -245,5 +311,5 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+	write(w, http.StatusOK, result)
 }

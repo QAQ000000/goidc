@@ -14,10 +14,13 @@ import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
 
 export function AdminCustomerGroupsView() {
-  const { data, error, refresh } = useResource<CustomerGroup[]>("/admin/customer-groups");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [search, setSearch] = useState("");
+  const endpoint = `/admin/customer-groups?q=${encodeURIComponent(search.trim())}&limit=${pageSize}&offset=${page * pageSize}`;
+  const { data, error, refresh } = useResource<{ items: CustomerGroup[]; total: number }>(endpoint);
   const manage = useAdminPermission("customer_groups.manage");
 
-  const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<CustomerGroup | null>(null);
 
@@ -62,17 +65,20 @@ export function AdminCustomerGroupsView() {
       if (editingGroup) {
         await api(`/admin/customer-groups/${editingGroup.id}`, {
           method: "PATCH",
+          headers: { "Idempotency-Key": `customer-group-update-${editingGroup.id}-${editingGroup.version}-${crypto.randomUUID()}` },
           body: JSON.stringify({
             name,
             color,
             discount_percent: Number(discount),
             separate_invoices: separateInvoices,
             suspend_delete_exempt: suspendDeleteExempt,
+            expected_version: editingGroup.version,
           }),
         });
       } else {
         await api("/admin/customer-groups", {
           method: "POST",
+          headers: { "Idempotency-Key": `customer-group-create-${crypto.randomUUID()}` },
           body: JSON.stringify({
             name,
             color,
@@ -103,7 +109,8 @@ export function AdminCustomerGroupsView() {
     try {
       await api(`/admin/customer-groups/${group.id}`, {
         method: "DELETE",
-        body: "{}",
+        headers: { "Idempotency-Key": `customer-group-delete-${group.id}-${group.version}-${crypto.randomUUID()}` },
+        body: JSON.stringify({ expected_version: group.version }),
       });
       refresh();
     } catch (err) {
@@ -113,16 +120,7 @@ export function AdminCustomerGroupsView() {
     }
   }
 
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-
-  const filteredGroups = (data ?? []).filter((g) => {
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return g.name.toLowerCase().includes(q) || String(g.id).includes(q);
-  });
-
-  const pagedGroups = filteredGroups.slice(page * pageSize, (page + 1) * pageSize);
+  const groups = data?.items ?? [];
 
   return (
     <Workspace title="客户分组" admin>
@@ -218,14 +216,14 @@ export function AdminCustomerGroupsView() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pagedGroups.length === 0 ? (
+                  {groups.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={7} className="h-32 text-center text-xs text-[#909399]">
                         暂无数据
                       </TableCell>
                     </TableRow>
                   ) : (
-                    pagedGroups.map((group) => (
+                    groups.map((group) => (
                       <TableRow
                         key={group.id}
                         className="border-b border-[#ebeef5] hover:bg-[#f5f7fa] text-xs text-[#606266]"
@@ -296,7 +294,7 @@ export function AdminCustomerGroupsView() {
             </div>
 
             <AdminPagination
-              total={filteredGroups.length}
+              total={data?.total ?? 0}
               page={page}
               pageSize={pageSize}
               onPageChange={setPage}

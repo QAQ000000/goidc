@@ -60,7 +60,7 @@ export function AdminCustomersView() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
 
-  const groups = useResource<CustomerGroup[]>("/admin/customer-groups", false);
+  const groups = useResource<CustomerGroup[]>("/admin/customer-groups?options=true", false);
   const salesOwners = useResource<SalesOwner[]>("/admin/sales-owners", false);
 
   const endpoint = `/admin/customers/page?q=${encodeURIComponent(query)}&limit=${pageSize}&offset=${page * pageSize}&group_id=${groupFilter}&sales_owner_id=${salesFilter}${statusFilter === "all" ? "" : `&status=${statusFilter}`}`;
@@ -645,7 +645,7 @@ function CustomerProfileAction({
   const [status, setStatus] = useState(row.status || "active");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const { data: groups } = useResource<CustomerGroup[]>("/admin/customer-groups");
+  const { data: groups } = useResource<CustomerGroup[]>("/admin/customer-groups?options=true");
   const [groupID, setGroupID] = useState(String(row.group_id ?? "none"));
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {

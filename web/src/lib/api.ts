@@ -190,6 +190,7 @@ export type CustomerGroup = {
   suspend_delete_exempt: boolean;
   separate_invoices: boolean;
   member_count: number;
+  version: number;
 };
 export type PromoCode = {
   id: number;

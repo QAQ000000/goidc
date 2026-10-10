@@ -21,7 +21,7 @@ function CustomerCreateForm() {
   const router = useRouter();
   const groupAllowed = useAdminPermission("customer_groups.manage");
   const salesAllowed = useAdminPermission("@super");
-  const groupsResource = useResource<CustomerGroup[]>(groupAllowed ? "/admin/customer-groups" : null, false);
+  const groupsResource = useResource<CustomerGroup[]>(groupAllowed ? "/admin/customer-groups?options=true" : null, false);
   const salesResource = useResource<SalesOwner[]>(salesAllowed ? "/admin/sales-owners" : null, false);
 
   // 个人资料
