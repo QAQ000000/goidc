@@ -7,7 +7,11 @@ const ledgerPath = process.argv[2] ?? 'docs/admin-full-ui-restore-ledger.md';
 const specPath = process.argv[3] ?? '/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md';
 const ledger = await readFile(ledgerPath, 'utf8');
 const spec = await readFile(specPath, 'utf8');
-const specLines = spec.split(/\r?\n/);
+const browserEvidencePath = process.argv[4] ?? 'docs/admin-restore-browser-evidence.json';
+let browserEvidence = {pages:[]};
+try { browserEvidence = JSON.parse(await readFile(browserEvidencePath,'utf8')); }
+catch(error) { if(error.code !== 'ENOENT') throw error; }
+if(!Array.isArray(browserEvidence.pages)) throw Error('browser evidence pages must be an array');
 const server = await readFile('internal/httpapi/server.go', 'utf8');
 const rbac = await readFile('internal/store/admin_rbac.go', 'utf8');
 async function files(dir) {
@@ -23,7 +27,7 @@ const storeFiles = (await files('internal/store')).filter(p=>p.endsWith('.go')&&
 const stores = await Promise.all(storeFiles.map(async file=>({file,text:await readFile(file,'utf8')})));
 const migrationFiles = (await files('db/migrations')).filter(p=>p.endsWith('.sql'));
 const migrations = await Promise.all(migrationFiles.map(async file=>({file,text:await readFile(file,'utf8')})));
-const registered = [...server.matchAll(/mux\.HandleFunc\("(GET|POST|PUT|PATCH|DELETE) \/api\/v1(\/admin[^"\s]*)",\s*s\.auth\(s\.(\w+)/g)].map(m=>({method:m[1],path:m[2],handler:m[3],evidence:`internal/httpapi/server.go:${server.slice(0,m.index).split('\n').length}`}));
+const registered = [...server.matchAll(/mux\.HandleFunc\("(GET|POST|PUT|PATCH|DELETE) \/api\/v1(\/admin[^"\s]*)",\s*s\.(?:auth|sessionAuth)\(s\.(\w+)/g)].map(m=>({method:m[1],path:m[2],handler:m[3],evidence:`internal/httpapi/server.go:${server.slice(0,m.index).split('\n').length}`}));
 const headings = [...spec.matchAll(/^####\s+(\d+)\.\s+(.*?)\s+\(`(#[^`]+)`\)/gm)];
 const contracts = [];
 for (const [i,line] of ledger.split(/\r?\n/).entries()) {
@@ -41,7 +45,12 @@ for (const [i,line] of ledger.split(/\r?\n/).entries()) {
   const newRoute = cells[3].replaceAll('`','');
   const routePath = newRoute.split('?')[0].replace(/\{([^}]+)\}/g,'[$1]');
   const pageFile = pageFiles.find(p=>p===`web/src/app${routePath}/page.tsx`)??null;
-  // Route presence is a static artifact check, not a compilation or acceptance result.
+  const pageText = pageFile ? await readFile(pageFile,'utf8') : '';
+  const imports = [...pageText.matchAll(/import\s+(?:\{([^}]+)\}|([A-Za-z_$][\w$]*))\s+from\s+["']([^"']+)["']/g)].flatMap(m=>(m[1]?m[1].split(',').map(s=>s.trim().split(/\s+as\s+/).at(-1)):[m[2]]).map(name=>({name,source:m[3]})));
+  const jsxNames = [...new Set([...pageText.matchAll(/<([A-Z][\w$]*)\b/g)].map(m=>m[1]))];
+  const component = jsxNames.map(name=>({name,source:imports.find(i=>i.name===name)?.source??'页面内定义或未验证',evidence:pageFile?`${pageFile}:${pageText.slice(0,pageText.indexOf('<'+name)).split('\n').length}`:null}));
+  const pageBrowserEvidence = browserEvidence.pages.filter(e=>e.newRoute===newRoute);
+  const sourceLines = pattern => block.split('\n').filter(l=>pattern.test(l)).map(l=>l.trim());
   const backtick = /`([^`]+)`/g;
   const extract = (pattern) => [...block.split('\n').filter(l=>pattern.test(l)).flatMap(l=>[...l.matchAll(backtick)].map(m=>m[1]))];
   const claimedApi = cells[5].replaceAll('`','');
@@ -54,20 +63,24 @@ for (const [i,line] of ledger.split(/\r?\n/).entries()) {
   const storageEvidence = stores.filter(s=>api.some(a=>new RegExp(`func \\(s \\*Store\\) ${a.handler[0].toUpperCase()+a.handler.slice(1)}\\b`).test(s.text))).map(s=>s.file);
   const tableNames = [...new Set(stores.filter(s=>storageEvidence.includes(s.file)).flatMap(s=>[...s.text.matchAll(/\b(?:FROM|JOIN|INTO|UPDATE)\s+([a-z_][a-z_0-9]*)/g)].map(m=>m[1])))].sort();
   const migrationEvidence = migrations.filter(m=>tableNames.some(t=>new RegExp(`\\b${t}\\b`).test(m.text))).map(m=>m.file);
-  contracts.push({index,legacyNumber:Number(heading[1]),oldHash,title,module,newRoute,component:pageFile??'待实现',
+  contracts.push({index,legacyNumber:Number(heading[1]),oldHash,title,module,newRoute,pageFile,component:component.length?component:'未验证',
     pageStatus:{ledger:cells[4],code:pageFile?'有对应路由源码；实现完整性未验证':'未找到对应独立路由文件；实现状态未验证',browserAcceptance:'未验证'},
     evidence:{specification:`${specPath}:${specLine}`,ledger:`${ledgerPath}:${i+1}`,component:pageFile?`${pageFile}:1`:null},
     realApi:{ledgerClaim:claimedApi,registered:api,status:api.length?'已找到静态路由；逐动作与权限链未验证':'未验证'},
     permission:{ledgerClaim:permissionClaim,registry:permissionEvidence,enforcement:'未验证'},
     storage:{tables:tableNames,evidence:storageEvidence,status:storageEvidence.length?'静态候选，调用链未验证':'未验证'},
     migrations:{evidence:migrationEvidence,status:migrationEvidence.length?'表名关联候选，逐页适用性未验证':'未验证'},
-    fields:{legacy:extract(/列定义|表单|字段.*控件/),current:'未验证'},
+    fields:{legacy:extract(/列定义|表单|字段.*控件/),sourceLines:sourceLines(/列定义|字段|表单|控件类型|输入控件/),current:'未验证'},
     filters:{legacy:extract(/筛选项/),current:'未验证'},
     bulkActions:{legacy:extract(/批量/),current:'未验证'},
     dialogs:{legacy:block.split('\n').filter(l=>/弹窗：|抽屉：/.test(l)).map(l=>l.trim()),current:'未验证'},
     validations:{legacy:block.split('\n').filter(l=>/校验|必填|验证规则/.test(l)).map(l=>l.trim()),current:'未验证'},
     stateCoverage:{loading:'未验证',empty:'未验证',error:'未验证',permissionDenied:'未验证',conflict:'未验证',success:'未验证'},
-    viewportResults:[{width:1440,height:900},{width:1024,height:768},{width:390,height:844},{width:320,height:800}].map(size=>({...size,result:'未验证',screenshots:[]})),
+    stateEvidence:pageBrowserEvidence.map(e=>({width:e.width,height:e.height,checks:e.checks??{},result:e.result??'未验证',screenshot:e.screenshot??null,source:browserEvidencePath})),
+    viewportResults:[{width:1440,height:900},{width:1024,height:768},{width:390,height:844},{width:320,height:800}].map(size=>{
+      const matches=pageBrowserEvidence.filter(e=>e.width===size.width);
+      return matches.length?{...size,height:matches.at(-1).height??size.height,result:matches.at(-1).result??'未验证',screenshots:matches.map(e=>e.screenshot).filter(Boolean),evidence:matches.map(e=>({source:browserEvidencePath,checks:e.checks??{}}))}:{...size,result:'未验证',screenshots:[]};
+    }),
     note:oldHash==='#/login'?'特殊记录：原规范名称为控制台概览但内容为登录；新台账 /admin 不是原登录页验收证明。':newRoute.includes('?')?'共享路由的 query 子视图需单独验收；文件存在不证明筛选/页签已实现。':'未运行浏览器；未验证项不得解释为功能不存在或验收通过。'
   });
 }
@@ -75,7 +88,7 @@ if(contracts.length!==105||new Set(contracts.map(p=>p.oldHash)).size!==105)throw
 const output={schemaVersion:1,source:{ledger:ledgerPath,ledgerSha256:createHash('sha256').update(ledger).digest('hex'),specification:specPath,specificationSha256:createHash('sha256').update(spec).digest('hex')},notes:['无时间戳；同一源码和输入可复现。','台账声称的 API 与源码注册 API 分开；权限登记不等于强制执行。','源码存在仅作为静态路由证据，编译和实现完整性未验证；验收宽度为1440/1024/390/320。','storage/migrations 为保守静态候选，缺少确切调用链时未验证。'],count:contracts.length,pages:contracts};
 await mkdir('docs/generated',{recursive:true});
 await writeFile('docs/generated/admin-page-contracts.json',JSON.stringify(output,null,2)+'\n');
-const lines=['# 后台 105 页页面契约索引','','运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径]` 可复现生成 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。','','[完整机器可读契约](./generated/admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及所有截图结果为未验证。旧规范绝对路径仅用于来源引用，并非部署配置。','','| # | 模块 / 页面 | 旧 hash | 新路由 | 代码状态 | 浏览器 |','|---:|---|---|---|---|---|'];
+const lines=['# 后台 105 页页面契约索引','','运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可复现生成 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。','','[完整机器可读契约](./generated/admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `docs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。','','| # | 模块 / 页面 | 旧 hash | 新路由 | 代码状态 | 浏览器 |','|---:|---|---|---|---|---|'];
 for(const p of contracts)lines.push(`| ${p.index} | [${p.module} / ${p.title}](#page-${p.index}) | ${p.oldHash} | ${p.newRoute} | ${p.pageStatus.code} | 未验证 |`);
 for(const p of contracts)lines.push('',`<a id="page-${p.index}"></a>`,`## ${p.index}. ${p.title}`,'',`旧规范：[源文档](${p.evidence.specification})；台账：[记录](../${p.evidence.ledger})${p.evidence.component?`；页面：[源码](../${p.evidence.component})`:''}。JSON 中按唯一旧 hash ${p.oldHash} 检索。`);
 await writeFile('docs/admin-page-contracts.md',lines.join('\n')+'\n');

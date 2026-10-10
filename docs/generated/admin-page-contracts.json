@@ -21,7 +21,14 @@
       "title": "控制台概览",
       "module": "概览",
       "newRoute": "/admin",
-      "component": "web/src/app/admin/page.tsx",
+      "pageFile": "web/src/app/admin/page.tsx",
+      "component": [
+        {
+          "name": "DashboardView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -70,6 +77,12 @@
           "input",
           "账号"
         ],
+        "sourceLines": [
+          "- **输入控件**：账号输入框（支持邮箱/手机/用户名）、密码输入框（带明文/密文切换小眼睛图标）、图形验证码输入框及图片、记住密码 Checkbox、忘记密码 Link。",
+          "- **交互流程**：提交表单后前端校验必填项，请求 `POST /admin123/login`，登录成功保存 Token 并拉取通用配置与用户信息，跳转首页。",
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `input` (占位符: `账号`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -101,6 +114,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -136,7 +150,14 @@
       "title": "客户列表",
       "module": "客户",
       "newRoute": "/admin/customers",
-      "component": "web/src/app/admin/customers/page.tsx",
+      "pageFile": "web/src/app/admin/customers/page.tsx",
+      "component": [
+        {
+          "name": "CustomersView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/customers/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -192,6 +213,10 @@
           "销售",
           "信用额（已用/总计）"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 10 列)**：",
+          "* **列定义**：`ID` | `姓名` | `手机号/邮箱` | `服务` | `收入/支出` | `余额` | `客户分组` | `状态` | `销售` | `信用额（已用/总计）`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -221,6 +246,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -256,7 +282,14 @@
       "title": "实名认证",
       "module": "客户",
       "newRoute": "/admin/certifications",
-      "component": "web/src/app/admin/certifications/page.tsx",
+      "pageFile": "web/src/app/admin/certifications/page.tsx",
+      "component": [
+        {
+          "name": "AdminCertificationsView",
+          "source": "@/components/admin-certifications",
+          "evidence": "web/src/app/admin/certifications/page.tsx:2"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -311,6 +344,10 @@
           "提交时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`ID` | `姓名` | `实名认证名称` | `身份证号码` | `认证方式` | `认证类型` | `状态/原因` | `提交时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -346,6 +383,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -381,7 +419,14 @@
       "title": "客户资源池",
       "module": "客户",
       "newRoute": "/admin/customer-resources",
-      "component": "web/src/app/admin/customer-resources/page.tsx",
+      "pageFile": "web/src/app/admin/customer-resources/page.tsx",
+      "component": [
+        {
+          "name": "AdminCustomerResourcesView",
+          "source": "@/components/admin-customer-resources",
+          "evidence": "web/src/app/admin/customer-resources/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -400,6 +445,12 @@
             "path": "/admin/customers/page",
             "handler": "customersPage",
             "evidence": "internal/httpapi/server.go:332"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/customers/{id}/sales-owner",
+            "handler": "assignCustomerSalesOwner",
+            "evidence": "internal/httpapi/server.go:349"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -432,6 +483,10 @@
           "余额",
           "创建时间",
           "添加销售"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `客户名` | `收入` | `余额` | `创建时间` | `添加销售`"
         ],
         "current": "未验证"
       },
@@ -467,6 +522,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -502,7 +558,8 @@
       "title": "我的业绩",
       "module": "客户",
       "newRoute": "/admin/reports/sales",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -548,6 +605,10 @@
           "提成",
           "类型"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`客户` | `产品` | `金额` | `账单编号` | `账单支付时间` | `提成` | `类型`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -581,6 +642,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -616,7 +678,8 @@
       "title": "营销推送",
       "module": "客户",
       "newRoute": "/admin/marketing",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -664,6 +727,21 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **营销信息总开关**：控件类型 `switch`",
+          "* **客户**：控件类型 `checkbox` (占位符: `请输入关键词`; 提示: *全部*)",
+          "* **客户状态**：控件类型 `select`",
+          "* **销售**：控件类型 `select` (提示: *无数据*)",
+          "* **语言**：控件类型 `select`",
+          "* **国家**：控件类型 `select`",
+          "* **注册时长**：控件类型 `input`",
+          "* **商品名称**：控件类型 `checkbox` (占位符: `请输入关键词`; 提示: *全部*)",
+          "* **主机状态**：控件类型 `select`",
+          "* **商品接口**：控件类型 `checkbox` (占位符: `请输入关键词`; 提示: *全部*)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -697,6 +775,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -732,7 +811,14 @@
       "title": "推介计划",
       "module": "客户",
       "newRoute": "/admin/affiliate",
-      "component": "web/src/app/admin/affiliate/page.tsx",
+      "pageFile": "web/src/app/admin/affiliate/page.tsx",
+      "component": [
+        {
+          "name": "AdminAffiliateView",
+          "source": "@/components/admin-affiliate",
+          "evidence": "web/src/app/admin/affiliate/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -802,6 +888,10 @@
           "总佣金",
           "已提现佣金"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `姓名(公司名)` | `访问数量` | `注册数量` | `订购数量` | `总佣金` | `已提现佣金`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -833,6 +923,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -868,7 +959,14 @@
       "title": "产品订单",
       "module": "业务",
       "newRoute": "/admin/orders",
-      "component": "web/src/app/admin/orders/page.tsx",
+      "pageFile": "web/src/app/admin/orders/page.tsx",
+      "component": [
+        {
+          "name": "OrdersView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/orders/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -929,6 +1027,10 @@
           "客户备注",
           "提成/销售"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 10 列)**：",
+          "* **列定义**：`ID` | `客户名` | `产品` | `IP` | `下单时间` | `金额` | `付款状态/付款方式` | `状态` | `客户备注` | `提成/销售`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -960,6 +1062,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -995,7 +1098,14 @@
       "title": "续费订单",
       "module": "业务",
       "newRoute": "/admin/orders?kind=renew",
-      "component": "web/src/app/admin/orders/page.tsx",
+      "pageFile": "web/src/app/admin/orders/page.tsx",
+      "component": [
+        {
+          "name": "OrdersView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/orders/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "待实现",
         "code": "有对应路由源码；实现完整性未验证",
@@ -1048,6 +1158,10 @@
           "金额",
           "付款方式"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `客户名` | `产品` | `IP` | `续费时间` | `金额` | `付款方式`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1079,6 +1193,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1114,7 +1229,8 @@
       "title": "流量包订单",
       "module": "业务",
       "newRoute": "/admin/traffic-orders",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -1161,6 +1277,10 @@
           "支付方式",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `客户名` | `产品` | `时间` | `金额` | `付款状态` | `支付方式` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1193,6 +1313,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1228,7 +1349,14 @@
       "title": "业务列表",
       "module": "业务",
       "newRoute": "/admin/services",
-      "component": "web/src/app/admin/services/page.tsx",
+      "pageFile": "web/src/app/admin/services/page.tsx",
+      "component": [
+        {
+          "name": "ServicesView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/services/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -1285,6 +1413,10 @@
           "状态",
           "销售"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 11 列)**：",
+          "* **列定义**：`ID` | `客户` | `产品名称（主机名）` | `IP` | `类型` | `购买时间` | `到期时间` | `周期` | `价格` | `状态` | `销售`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1317,6 +1449,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1352,7 +1485,14 @@
       "title": "产品暂停请求",
       "module": "业务",
       "newRoute": "/admin/cancellations",
-      "component": "web/src/app/admin/cancellations/page.tsx",
+      "pageFile": "web/src/app/admin/cancellations/page.tsx",
+      "component": [
+        {
+          "name": "CancellationsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/cancellations/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -1413,6 +1553,10 @@
           "执行状态",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 10 列)**：",
+          "* **列定义**：`姓名` | `产品` | `IP` | `类型(立即、到期)` | `原因` | `请求时间` | `删除时间` | `产品状态` | `执行状态` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1446,6 +1590,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1481,7 +1626,8 @@
       "title": "交易流水",
       "module": "财务",
       "newRoute": "/admin/transactions",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -1540,6 +1686,12 @@
           "总支出",
           "总结余"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`客户名` | `时间` | `付款方式` | `描述` | `金额` | `销售` | `流水号` | `类型` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 4 列)**：",
+          "* **列定义**：`币种` | `总收入` | `总支出` | `总结余`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1573,6 +1725,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1608,7 +1761,14 @@
       "title": "账单管理",
       "module": "财务",
       "newRoute": "/admin/invoices",
-      "component": "web/src/app/admin/invoices/page.tsx",
+      "pageFile": "web/src/app/admin/invoices/page.tsx",
+      "component": [
+        {
+          "name": "InvoiceListView",
+          "source": "@/components/transactions",
+          "evidence": "web/src/app/admin/invoices/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -1670,6 +1830,10 @@
           "账单类型",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 11 列)**：",
+          "* **列定义**：`账单#` | `客户名` | `账单生成日` | `账单支付日` | `账单逾期日` | `总计` | `付款方式` | `销售` | `状态` | `账单类型` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1703,6 +1867,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1738,7 +1903,8 @@
       "title": "信用额管理",
       "module": "财务",
       "newRoute": "/admin/credit",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -1802,6 +1968,14 @@
           "未出账金额",
           "当月还款状态"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`账单#` | `客户名` | `产品` | `金额` | `付款时间` | `状态`",
+          "- **表格列与数据字段 (Table 2，共 7 列)**：",
+          "* **列定义**：`客户名` | `账单号` | `应还金额` | `已还金额` | `还款日期` | `付款时间` | `状态`",
+          "- **表格列与数据字段 (Table 3，共 7 列)**：",
+          "* **列定义**：`ID` | `客户名` | `手机号/邮箱` | `当前余额` | `账单待还金额` | `未出账金额` | `当月还款状态`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1835,6 +2009,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -1870,7 +2045,14 @@
       "title": "提现审核",
       "module": "财务",
       "newRoute": "/admin/affiliate?tab=withdrawals",
-      "component": "web/src/app/admin/affiliate/page.tsx",
+      "pageFile": "web/src/app/admin/affiliate/page.tsx",
+      "component": [
+        {
+          "name": "AdminAffiliateView",
+          "source": "@/components/admin-affiliate",
+          "evidence": "web/src/app/admin/affiliate/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -1941,6 +2123,12 @@
           "拒绝原因",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`ID` | `姓名(公司名)` | `金额` | `类型` | `操作人` | `状态` | `拒绝原因` | `时间` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 11 列)**：",
+          "* **列定义**：`ID` | `昵称` | `金额` | `收款方式` | `收款人` | `收款账号` | `提交时间` | `状态` | `操作人` | `拒绝原因` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -1976,6 +2164,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2011,7 +2200,14 @@
       "title": "发票列表",
       "module": "财务",
       "newRoute": "/admin/invoice-applications",
-      "component": "web/src/app/admin/invoice-applications/page.tsx",
+      "pageFile": "web/src/app/admin/invoice-applications/page.tsx",
+      "component": [
+        {
+          "name": "InvoiceApplicationListView",
+          "source": "@/components/invoice-applications",
+          "evidence": "web/src/app/admin/invoice-applications/page.tsx:5"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2072,6 +2268,10 @@
           "状态",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 10 列)**：",
+          "* **列定义**：`发票ID` | `用户名` | `发票抬头` | `开具类型` | `发票金额` | `邮寄地址` | `申请时间` | `审核时间` | `状态` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2106,6 +2306,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2141,7 +2342,8 @@
       "title": "合同列表",
       "module": "财务",
       "newRoute": "/admin/contracts",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -2192,6 +2394,10 @@
           "合同状态",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `客户` | `产品信息` | `付款时间` | `产品状态` | `合同状态` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2225,6 +2431,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2260,7 +2467,14 @@
       "title": "工单列表",
       "module": "工单",
       "newRoute": "/admin/tickets",
-      "component": "web/src/app/admin/tickets/page.tsx",
+      "pageFile": "web/src/app/admin/tickets/page.tsx",
+      "component": [
+        {
+          "name": "TicketsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/tickets/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2319,6 +2533,10 @@
           "提交时间",
           "上次回复"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `工单标题` | `提交人` | `状态` | `处理人` | `部门` | `提交时间` | `上次回复`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2350,6 +2568,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2385,7 +2604,8 @@
       "title": "工单统计",
       "module": "工单",
       "newRoute": "/admin/reports/tickets",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -2432,6 +2652,10 @@
           "4分",
           "5分"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`处理人` | `处理工单数` | `总分` | `1分` | `2分` | `3分` | `4分` | `5分`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2464,6 +2688,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2499,7 +2724,14 @@
       "title": "年度收入统计",
       "module": "功能",
       "newRoute": "/admin/reports?tab=annual",
-      "component": "web/src/app/admin/reports/page.tsx",
+      "pageFile": "web/src/app/admin/reports/page.tsx",
+      "component": [
+        {
+          "name": "ReportsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/reports/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2549,6 +2781,10 @@
           "支出",
           "剩余"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`时间` | `收入` | `支出` | `剩余`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2580,6 +2816,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2615,7 +2852,14 @@
       "title": "新客户",
       "module": "功能",
       "newRoute": "/admin/reports?tab=new-clients",
-      "component": "web/src/app/admin/reports/page.tsx",
+      "pageFile": "web/src/app/admin/reports/page.tsx",
+      "component": [
+        {
+          "name": "ReportsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/reports/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2668,6 +2912,10 @@
           "回复的工单",
           "取消请求"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`日期` | `新客户` | `新订单` | `完成订单` | `新建工单` | `回复的工单` | `取消请求`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2700,6 +2948,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2735,7 +2984,14 @@
       "title": "产品收入",
       "module": "功能",
       "newRoute": "/admin/reports?tab=products",
-      "component": "web/src/app/admin/reports/page.tsx",
+      "pageFile": "web/src/app/admin/reports/page.tsx",
+      "component": [
+        {
+          "name": "ReportsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/reports/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2787,6 +3043,10 @@
           "续费数量",
           "总金额"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`产品` | `新订购收入` | `新订购数量` | `续费收入` | `续费数量` | `总金额`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2820,6 +3080,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2855,7 +3116,14 @@
       "title": "收入排名",
       "module": "功能",
       "newRoute": "/admin/reports?tab=ranking",
-      "component": "web/src/app/admin/reports/page.tsx",
+      "pageFile": "web/src/app/admin/reports/page.tsx",
+      "component": [
+        {
+          "name": "ReportsView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/reports/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -2906,6 +3174,10 @@
           "支出",
           "剩余"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`ID` | `客户名称` | `收入` | `支出` | `剩余`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -2936,6 +3208,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -2971,7 +3244,14 @@
       "title": "定时任务状态",
       "module": "功能",
       "newRoute": "/admin/jobs",
-      "component": "web/src/app/admin/jobs/page.tsx",
+      "pageFile": "web/src/app/admin/jobs/page.tsx",
+      "component": [
+        {
+          "name": "AdminJobsView",
+          "source": "@/components/admin-jobs",
+          "evidence": "web/src/app/admin/jobs/page.tsx:2"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -3021,6 +3301,11 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3052,6 +3337,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3087,7 +3373,14 @@
       "title": "任务队列",
       "module": "功能",
       "newRoute": "/admin/jobs/queue",
-      "component": "web/src/app/admin/jobs/queue/page.tsx",
+      "pageFile": "web/src/app/admin/jobs/queue/page.tsx",
+      "component": [
+        {
+          "name": "AdminJobsView",
+          "source": "@/components/admin-jobs",
+          "evidence": "web/src/app/admin/jobs/queue/page.tsx:2"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -3141,6 +3434,10 @@
           "最后操作时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`客户` | `产品` | `动作` | `描述` | `来源` | `状态` | `最后操作时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3174,6 +3471,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3209,7 +3507,14 @@
       "title": "数据库状态",
       "module": "功能",
       "newRoute": "/admin/system/database",
-      "component": "web/src/app/admin/system/database/page.tsx",
+      "pageFile": "web/src/app/admin/system/database/page.tsx",
+      "component": [
+        {
+          "name": "AdminDatabaseStatusView",
+          "source": "@/components/admin-database-status",
+          "evidence": "web/src/app/admin/system/database/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -3222,8 +3527,15 @@
       },
       "realApi": {
         "ledgerClaim": "GET /admin/system/database",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/system/database",
+            "handler": "adminSystemDatabase",
+            "evidence": "internal/httpapi/server.go:92"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view",
@@ -3250,6 +3562,10 @@
           "表名称",
           "表行数",
           "表大小"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 3 列)**：",
+          "* **列定义**：`表名称` | `表行数` | `表大小`"
         ],
         "current": "未验证"
       },
@@ -3281,6 +3597,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3316,7 +3633,8 @@
       "title": "自定义客户字段",
       "module": "设置",
       "newRoute": "/admin/customer-fields",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -3362,6 +3680,22 @@
           "select",
           "请选择字段类型"
         ],
+        "sourceLines": [
+          "#### 28. 自定义客户字段 (`#/customer-custom`)",
+          "* 自定义客户字段 此处可以设置自定义字段，并在客户个人资料中显示。 字段名称 字段类型 描述 向客户显示的描述 验证 正则表达式验证字符串 选项 只对 下拉 有效-用英文半角逗号分隔 显示排序 其他设置 仅管理员可见 必填 注册时显示 提交",
+          "* 筛选项：**字段名称**（占位符：`请输入...`）",
+          "* 筛选项：**字段类型**（占位符：`请选择字段类型`）",
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **字段名称**：控件类型 `input`",
+          "* **字段类型**：控件类型 `select` (占位符: `请选择字段类型`)",
+          "* **描述**：控件类型 `input`",
+          "* **验证**：控件类型 `input`",
+          "* **选项**：控件类型 `input`",
+          "* **显示排序**：控件类型 `input`",
+          "* **其他设置**：控件类型 `checkbox`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3397,6 +3731,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3432,7 +3767,8 @@
       "title": "推介设置",
       "module": "设置",
       "newRoute": "/admin/affiliate/settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -3475,6 +3811,24 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **推介计划**：控件类型 `switch`",
+          "* **激活赠送金额**：控件类型 `input` (占位符: `请输入激活推介计划赠送的金额`)",
+          "* **推介返利类型**：控件类型 `select` (占位符: `请选择推介计划比例类型`)",
+          "* **推介计划比例**：控件类型 `input` (占位符: `请输入推介计划比例`; 提示: *%*)",
+          "* **应邀返利**：控件类型 `switch`",
+          "* **推荐链接cookie有效期**：控件类型 `input` (占位符: `请输入推荐链接cookie有效期`; 提示: *天*)",
+          "* **提现最低金额**：控件类型 `input` (占位符: `请输入提现最低金额`)",
+          "* **提现必须实名**：控件类型 `switch`",
+          "* **推荐佣金延迟天数**：控件类型 `input` (占位符: `请输入延迟订单支付的天数`)",
+          "* **是否开启二次订购**：控件类型 `switch`",
+          "* **二次订单比例类型**：控件类型 `select` (占位符: `请选择二次订单比例类型`)",
+          "* **二次订单比例**：控件类型 `input` (占位符: `请输入二次订单比例`; 提示: *%*)",
+          "* **是否开启续费**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3508,6 +3862,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3543,7 +3898,8 @@
       "title": "客户等级",
       "module": "设置",
       "newRoute": "/admin/customer-levels",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -3590,6 +3946,10 @@
           "最近续费次数",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`客户等级` | `收入` | `购买商品数量` | `累计登录次数` | `最近登录次数` | `续费次数` | `最近续费次数` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3623,6 +3983,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3658,7 +4019,14 @@
       "title": "客户分组与折扣",
       "module": "设置",
       "newRoute": "/admin/customer-groups",
-      "component": "web/src/app/admin/customer-groups/page.tsx",
+      "pageFile": "web/src/app/admin/customer-groups/page.tsx",
+      "component": [
+        {
+          "name": "AdminCustomerGroupsView",
+          "source": "@/components/admin-customer-groups",
+          "evidence": "web/src/app/admin/customer-groups/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -3720,6 +4088,12 @@
           "组名称",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 3 列)**：",
+          "* **列定义**：`客户组名称` | `组颜色` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 2 列)**：",
+          "* **列定义**：`组名称` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3754,6 +4128,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3789,7 +4164,8 @@
       "title": "实名设置",
       "module": "设置",
       "newRoute": "/admin/certification-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -3832,6 +4208,18 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **实名认证**：控件类型 `switch`",
+          "* **高级设置**：控件类型 `switch`",
+          "* **自动更新姓名**：控件类型 `switch`",
+          "* **认证手机号必须与绑定一致**：控件类型 `switch`",
+          "* **人工审核通过自动发送短息**：控件类型 `switch`",
+          "* **未认证暂停产品**：控件类型 `switch`",
+          "* **上传认证文件**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3862,6 +4250,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -3897,7 +4286,8 @@
       "title": "货币配置",
       "module": "设置",
       "newRoute": "/admin/currencies",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -3943,6 +4333,10 @@
           "汇率",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `货币代码` | `前缀（例如：￥）` | `后缀` | `格式` | `汇率` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -3975,6 +4369,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4010,7 +4405,14 @@
       "title": "支付接口",
       "module": "设置",
       "newRoute": "/admin/channels?category=payment",
-      "component": "web/src/app/admin/channels/page.tsx",
+      "pageFile": "web/src/app/admin/channels/page.tsx",
+      "component": [
+        {
+          "name": "ChannelInstancesView",
+          "source": "@/components/channel-instances",
+          "evidence": "web/src/app/admin/channels/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -4023,8 +4425,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PUT/DELETE /admin/channel-instances",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/channel-instances",
+            "handler": "channelInstances",
+            "evidence": "internal/httpapi/server.go:106"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/channel-instances",
+            "handler": "createChannelInstance",
+            "evidence": "internal/httpapi/server.go:107"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -4038,13 +4453,44 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "channel_instances",
+          "email_outbox",
+          "payment_settings",
+          "payment_transactions",
+          "sms_outbox",
+          "sms_settings",
+          "smtp_settings"
+        ],
+        "evidence": [
+          "internal/store/channel_instances.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/011_payment_pending_guard.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/060_epay_transactions.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/067_payment_monitoring.sql",
+          "db/migrations/084_payment_settings.sql",
+          "db/migrations/085_smtp_settings.sql",
+          "db/migrations/086_payment_mock_default.sql",
+          "db/migrations/087_payment_expiry_credentials.sql",
+          "db/migrations/088_smtp_tls.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/090_sms_channels.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -4056,6 +4502,10 @@
           "版本",
           "状态",
           "操作"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `插件名称` | `标识` | `描述` | `作者` | `版本` | `状态` | `操作`"
         ],
         "current": "未验证"
       },
@@ -4087,6 +4537,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4122,7 +4573,8 @@
       "title": "充值与财务",
       "module": "设置",
       "newRoute": "/admin/finance-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4165,6 +4617,16 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **是否启用充值**：控件类型 `switch`",
+          "* **最小金额**：控件类型 `input` (提示: *单笔充值的最小金额*)",
+          "* **最大金额**：控件类型 `input` (提示: *单笔充值的最大金额*)",
+          "* **最高余额**：控件类型 `input` (提示: *输入客户可以添加进余额的最大金额*)",
+          "* **需要已激活的订单**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4198,6 +4660,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4233,7 +4696,14 @@
       "title": "优惠码",
       "module": "设置",
       "newRoute": "/admin/promo-codes",
-      "component": "web/src/app/admin/promo-codes/page.tsx",
+      "pageFile": "web/src/app/admin/promo-codes/page.tsx",
+      "component": [
+        {
+          "name": "PromoCodesView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/promo-codes/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -4299,6 +4769,10 @@
           "失效时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`ID` | `优惠码` | `类型` | `价值` | `循环优惠` | `已使用次数 / 最大使用次数` | `开始时间` | `失效时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4330,6 +4804,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4365,7 +4840,8 @@
       "title": "发票设置",
       "module": "设置",
       "newRoute": "/admin/invoice-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4408,6 +4884,10 @@
           "快递价格",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`ID` | `快递名称` | `快递价格` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4442,6 +4922,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4477,7 +4958,8 @@
       "title": "合同设置",
       "module": "设置",
       "newRoute": "/admin/contract-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4520,6 +5002,12 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **合同功能**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4550,6 +5038,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4585,7 +5074,8 @@
       "title": "信用额设置",
       "module": "设置",
       "newRoute": "/admin/credit-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4628,6 +5118,12 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **信用额总开关**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4658,6 +5154,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4693,7 +5190,14 @@
       "title": "工单部门",
       "module": "设置",
       "newRoute": "/admin/ticket-departments",
-      "component": "web/src/app/admin/ticket-departments/page.tsx",
+      "pageFile": "web/src/app/admin/ticket-departments/page.tsx",
+      "component": [
+        {
+          "name": "TicketDepartmentsView",
+          "source": "@/components/ticket-departments",
+          "evidence": "web/src/app/admin/ticket-departments/page.tsx:7"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -4712,6 +5216,12 @@
             "path": "/admin/ticket-departments",
             "handler": "adminTicketDepartments",
             "evidence": "internal/httpapi/server.go:405"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/ticket-departments",
+            "handler": "createTicketDepartment",
+            "evidence": "internal/httpapi/server.go:406"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4744,6 +5254,10 @@
           "自动回复",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`部门名称` | `描述` | `是否隐藏` | `自动回复` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4774,6 +5288,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4809,7 +5324,8 @@
       "title": "工单状态",
       "module": "设置",
       "newRoute": "/admin/ticket-statuses",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4852,6 +5368,10 @@
           "排序",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`ID` | `标题` | `排序` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4884,6 +5404,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -4919,7 +5440,8 @@
       "title": "工单传递",
       "module": "设置",
       "newRoute": "/admin/ticket-rules",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -4963,6 +5485,10 @@
           "自动回复",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`部门` | `产品` | `屏蔽关键字` | `自动回复` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -4995,6 +5521,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5030,7 +5557,14 @@
       "title": "常规设置",
       "module": "设置",
       "newRoute": "/admin/settings",
-      "component": "web/src/app/admin/settings/page.tsx",
+      "pageFile": "web/src/app/admin/settings/page.tsx",
+      "component": [
+        {
+          "name": "SiteSettingsView",
+          "source": "@/components/site-settings",
+          "evidence": "web/src/app/admin/settings/page.tsx:7"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5043,8 +5577,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/site-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/site-settings",
+            "handler": "siteSettings",
+            "evidence": "internal/httpapi/server.go:88"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/site-settings",
+            "handler": "updateSiteSettings",
+            "evidence": "internal/httpapi/server.go:89"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view/manage",
@@ -5063,13 +5610,23 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "site_settings"
+        ],
+        "evidence": [
+          "internal/store/site_settings.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/034_site_settings.sql",
+          "db/migrations/035_site_maintenance.sql",
+          "db/migrations/076_auth_captcha.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/102_site_admin_settings.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -5077,6 +5634,24 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **品牌名**：控件类型 `input` (占位符: `请输入品牌名`)",
+          "* **系统链接**：控件类型 `input` (占位符: `请输入您的安装地址`)",
+          "* **网站域名**：控件类型 `input` (占位符: `请输入您网站主页的链接地址`)",
+          "* **默认语言 支持中英两种语言，可以修改public/lang文件夹中的语言文本翻译成自己的语言。**：控件类型 `select` (占位符: `请选择默认语言`)",
+          "* **启用语言选择菜单**：控件类型 `switch`",
+          "* **每页显示记录**：控件类型 `select` (占位符: `请选择每页显示条数`)",
+          "* **前台信用额**：控件类型 `switch`",
+          "* **自定义起始客户ID**：控件类型 `switch`",
+          "* **后台管理目录路径**：控件类型 `input`",
+          "* **管理员登录时长(天)**：控件类型 `input`",
+          "* **前台登录IP检查 开启后登录前台时会检测IP与原登录IP是否一致，不一致则无法登录并提醒。**：控件类型 `switch`",
+          "* **后台登录IP检查**：控件类型 `switch`",
+          "* **维护模式 启用此选项将阻止客户访问客户端并显示下面设置的维护模式消息。**：控件类型 `switch`"
         ],
         "current": "未验证"
       },
@@ -5111,6 +5686,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5146,7 +5722,14 @@
       "title": "第三方登录",
       "module": "设置",
       "newRoute": "/admin/channels?category=oauth",
-      "component": "web/src/app/admin/channels/page.tsx",
+      "pageFile": "web/src/app/admin/channels/page.tsx",
+      "component": [
+        {
+          "name": "ChannelInstancesView",
+          "source": "@/components/channel-instances",
+          "evidence": "web/src/app/admin/channels/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5159,8 +5742,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PUT /admin/channel-instances",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/channel-instances",
+            "handler": "channelInstances",
+            "evidence": "internal/httpapi/server.go:106"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/channel-instances",
+            "handler": "createChannelInstance",
+            "evidence": "internal/httpapi/server.go:107"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -5174,13 +5770,44 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "channel_instances",
+          "email_outbox",
+          "payment_settings",
+          "payment_transactions",
+          "sms_outbox",
+          "sms_settings",
+          "smtp_settings"
+        ],
+        "evidence": [
+          "internal/store/channel_instances.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/011_payment_pending_guard.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/060_epay_transactions.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/067_payment_monitoring.sql",
+          "db/migrations/084_payment_settings.sql",
+          "db/migrations/085_smtp_settings.sql",
+          "db/migrations/086_payment_mock_default.sql",
+          "db/migrations/087_payment_expiry_credentials.sql",
+          "db/migrations/088_smtp_tls.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/090_sms_channels.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -5191,6 +5818,10 @@
           "最新版本",
           "状态",
           "操作"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `名称` | `开发者` | `当前版本` | `最新版本` | `状态` | `操作`"
         ],
         "current": "未验证"
       },
@@ -5224,6 +5855,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5259,7 +5891,8 @@
       "title": "定时任务",
       "module": "设置",
       "newRoute": "/admin/job-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -5302,6 +5935,24 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **定时任务执行时间**：控件类型 `select` (占位符: `您希望在每天何时执行`)",
+          "* **产品/服务到期暂停**：控件类型 `switch`",
+          "* **产品暂停通知**：控件类型 `switch`",
+          "* **支付后自动解除暂停**：控件类型 `switch`",
+          "* **产品解除暂停通知**：控件类型 `switch`",
+          "* **产品/服务到期后自动删除**：控件类型 `switch`",
+          "* **续费通知并生成账单**：控件类型 `input` (占位符: `请填写数字`; 提示: *天*)",
+          "* **账单未付款提醒邮件**：控件类型 `switch`",
+          "* **第一次提醒**：控件类型 `switch`",
+          "* **第二次提醒**：控件类型 `switch`",
+          "* **第三次提醒**：控件类型 `switch`",
+          "* **自动关闭工单**：控件类型 `switch`",
+          "* **自动取消/删除订单**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -5335,6 +5986,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5370,7 +6022,14 @@
       "title": "注册登录",
       "module": "设置",
       "newRoute": "/admin/auth-settings",
-      "component": "web/src/app/admin/auth-settings/page.tsx",
+      "pageFile": "web/src/app/admin/auth-settings/page.tsx",
+      "component": [
+        {
+          "name": "SiteSettingsView",
+          "source": "@/components/site-settings",
+          "evidence": "web/src/app/admin/auth-settings/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "待实现",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5414,6 +6073,17 @@
           "高级搜索",
           "input"
         ],
+        "sourceLines": [
+          "- **状态/分类切换标签 (Tabs)**：`基础设置` | `注册时选填字段`",
+          "* 注册登录 基础设置注册时选填字段 国际电话总开关 客户注册 手机 邮箱 客户登录 手机 邮箱 ID 邮箱注册是否需要验证 保存更改 取消更改",
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **客户注册**：控件类型 `checkbox`",
+          "* **客户登录**：控件类型 `checkbox`",
+          "* **邮箱注册是否需要验证**：控件类型 `switch`",
+          "* **注册时选填字段**：控件类型 `input`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -5444,6 +6114,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5479,7 +6150,14 @@
       "title": "分组权限",
       "module": "设置",
       "newRoute": "/admin/access?tab=roles",
-      "component": "web/src/app/admin/access/page.tsx",
+      "pageFile": "web/src/app/admin/access/page.tsx",
+      "component": [
+        {
+          "name": "AdminAccessView",
+          "source": "@/components/admin-access",
+          "evidence": "web/src/app/admin/access/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5492,8 +6170,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PATCH/DELETE /admin/roles",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/roles",
+            "handler": "adminRoles",
+            "evidence": "internal/httpapi/server.go:256"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/roles",
+            "handler": "saveAdminRole",
+            "evidence": "internal/httpapi/server.go:257"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -5507,13 +6198,65 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "admin_roles",
+          "admin_ticket_departments",
+          "api_keys",
+          "carts",
+          "mfa_challenges",
+          "password_reset_tokens",
+          "sessions",
+          "ticket_departments",
+          "users"
+        ],
+        "evidence": [
+          "internal/store/admin_rbac.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/003_finance_ledger.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/016_public_content.sql",
+          "db/migrations/017_ticket_departments.sql",
+          "db/migrations/018_api_keys.sql",
+          "db/migrations/019_customer_contacts_groups.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/021_ticket_attachments.sql",
+          "db/migrations/022_ticket_workflow.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/026_notification_templates.sql",
+          "db/migrations/028_mfa.sql",
+          "db/migrations/029_mfa_recovery_codes.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/032_ticket_department_scope.sql",
+          "db/migrations/033_customer_sales_scope.sql",
+          "db/migrations/036_content_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/042_customer_files.sql",
+          "db/migrations/045_legacy_tickets.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/065_upgrade_promotions.sql",
+          "db/migrations/078_invoice_e_files.sql",
+          "db/migrations/080_content_rich_seo.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/093_certification.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/101_customer_profiles.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -5523,6 +6266,10 @@
           "状态",
           "组成员",
           "操作"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `分组名称` | `说明` | `状态` | `组成员` | `操作`"
         ],
         "current": "未验证"
       },
@@ -5556,6 +6303,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5591,7 +6339,8 @@
       "title": "销售设置",
       "module": "设置",
       "newRoute": "/admin/sales-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -5651,6 +6400,14 @@
           "查看所有人业绩开启后可在我的业绩中查看其他销售人员的业绩信息",
           "仅自己客户工单提醒开启后，只会收到自己客户的工单提醒邮件"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`组名称` | `新购提成比例` | `续费提成比例` | `升降级提成比例` | `包含续费计算` | `计算升降级` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 3 列)**：",
+          "* **列定义**：`营业额是指销售名下客户购买产品的交易流水总额。` | `额外提成奖励当销售达到营业额X后，设置额外增加的提成比例。` | `操作`",
+          "- **表格列与数据字段 (Table 3，共 11 列)**：",
+          "* **列定义**：`ID` | `真实姓名` | `邮箱` | `用户名` | `管理员分组` | `是否销售设置管理员是否是销售员。` | `下单时可选开启后，用户在前台下单时可选择此销售人员进行对接。` | `只能查看自己客户是指销售只能查看自己的客户、订单、业务列表以及未关联销售的客户。` | `未分配客户所有人可见打开则未关联销售的客户可以被所有人看见` | `查看所有人业绩开启后可在我的业绩中查看其他销售人员的业绩信息` | `仅自己客户工单提醒开启后，只会收到自己客户的工单提醒邮件`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -5687,6 +6444,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5722,7 +6480,14 @@
       "title": "员工管理",
       "module": "设置",
       "newRoute": "/admin/access?tab=staff",
-      "component": "web/src/app/admin/access/page.tsx",
+      "pageFile": "web/src/app/admin/access/page.tsx",
+      "component": [
+        {
+          "name": "AdminAccessView",
+          "source": "@/components/admin-access",
+          "evidence": "web/src/app/admin/access/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5735,8 +6500,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PATCH /admin/staff",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/staff",
+            "handler": "adminStaff",
+            "evidence": "internal/httpapi/server.go:260"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/staff",
+            "handler": "saveAdminStaff",
+            "evidence": "internal/httpapi/server.go:261"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -5770,6 +6548,10 @@
           "销售是否启用",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`ID` | `真实名称` | `邮件地址` | `用户名` | `管理员角色` | `分配到的部门` | `是否是销售` | `销售是否启用` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -5801,6 +6583,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5836,7 +6619,14 @@
       "title": "接口设置",
       "module": "设置",
       "newRoute": "/admin/channels?category=sms",
-      "component": "web/src/app/admin/channels/page.tsx",
+      "pageFile": "web/src/app/admin/channels/page.tsx",
+      "component": [
+        {
+          "name": "ChannelInstancesView",
+          "source": "@/components/channel-instances",
+          "evidence": "web/src/app/admin/channels/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -5849,8 +6639,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PUT /admin/channel-instances",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/channel-instances",
+            "handler": "channelInstances",
+            "evidence": "internal/httpapi/server.go:106"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/channel-instances",
+            "handler": "createChannelInstance",
+            "evidence": "internal/httpapi/server.go:107"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -5864,13 +6667,44 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "channel_instances",
+          "email_outbox",
+          "payment_settings",
+          "payment_transactions",
+          "sms_outbox",
+          "sms_settings",
+          "smtp_settings"
+        ],
+        "evidence": [
+          "internal/store/channel_instances.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/011_payment_pending_guard.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/060_epay_transactions.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/067_payment_monitoring.sql",
+          "db/migrations/084_payment_settings.sql",
+          "db/migrations/085_smtp_settings.sql",
+          "db/migrations/086_payment_mock_default.sql",
+          "db/migrations/087_payment_expiry_credentials.sql",
+          "db/migrations/088_smtp_tls.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/090_sms_channels.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -5882,6 +6716,10 @@
           "最新版本",
           "状态",
           "操作"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `接口名称` | `支持方向` | `开发者` | `当前版本` | `最新版本` | `状态` | `操作`"
         ],
         "current": "未验证"
       },
@@ -5916,6 +6754,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -5951,7 +6790,14 @@
       "title": "邮件模板",
       "module": "设置",
       "newRoute": "/admin/notifications?channel=email",
-      "component": "web/src/app/admin/notifications/page.tsx",
+      "pageFile": "web/src/app/admin/notifications/page.tsx",
+      "component": [
+        {
+          "name": "NotificationsView",
+          "source": "@/components/notifications",
+          "evidence": "web/src/app/admin/notifications/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6032,6 +6878,20 @@
           "模板名称",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`",
+          "- **表格列与数据字段 (Table 3，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`",
+          "- **表格列与数据字段 (Table 4，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`",
+          "- **表格列与数据字段 (Table 5，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`",
+          "- **表格列与数据字段 (Table 6，共 4 列)**：",
+          "* **列定义**：`ID` | `状态` | `模板名称` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -6067,6 +6927,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6102,7 +6963,14 @@
       "title": "短信模板",
       "module": "设置",
       "newRoute": "/admin/notifications?channel=sms",
-      "component": "web/src/app/admin/notifications/page.tsx",
+      "pageFile": "web/src/app/admin/notifications/page.tsx",
+      "component": [
+        {
+          "name": "NotificationsView",
+          "source": "@/components/notifications",
+          "evidence": "web/src/app/admin/notifications/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6166,6 +7034,10 @@
           "审核状态",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`编号` | `模板ID` | `类型` | `模板标题` | `模板内容` | `审核状态` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -6201,6 +7073,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6236,7 +7109,14 @@
       "title": "发送设置",
       "module": "设置",
       "newRoute": "/admin/sms-settings",
-      "component": "web/src/app/admin/sms-settings/page.tsx",
+      "pageFile": "web/src/app/admin/sms-settings/page.tsx",
+      "component": [
+        {
+          "name": "ChannelInstancesView",
+          "source": "@/components/channel-instances",
+          "evidence": "web/src/app/admin/sms-settings/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6249,8 +7129,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT/POST /admin/sms-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/sms-settings",
+            "handler": "smsSettings",
+            "evidence": "internal/httpapi/server.go:101"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/sms-settings",
+            "handler": "updateSMSSettings",
+            "evidence": "internal/httpapi/server.go:102"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -6264,13 +7157,74 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "c",
+          "channel_instances",
+          "notification_templates",
+          "sms_outbox",
+          "sms_settings",
+          "users",
+          "verification_challenges"
+        ],
+        "evidence": [
+          "internal/store/sms.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/003_finance_ledger.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/016_public_content.sql",
+          "db/migrations/017_ticket_departments.sql",
+          "db/migrations/018_api_keys.sql",
+          "db/migrations/019_customer_contacts_groups.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/021_ticket_attachments.sql",
+          "db/migrations/022_ticket_workflow.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/026_notification_templates.sql",
+          "db/migrations/027_fix_password_reset_template.sql",
+          "db/migrations/028_mfa.sql",
+          "db/migrations/029_mfa_recovery_codes.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/032_ticket_department_scope.sql",
+          "db/migrations/033_customer_sales_scope.sql",
+          "db/migrations/037_catalog_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/042_customer_files.sql",
+          "db/migrations/043_download_category_tree.sql",
+          "db/migrations/046_legacy_email_templates.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/065_upgrade_promotions.sql",
+          "db/migrations/078_invoice_e_files.sql",
+          "db/migrations/080_content_rich_seo.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/090_sms_channels.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/093_certification.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/095_payment_success_notifications.sql",
+          "db/migrations/096_service_provision_notifications.sql",
+          "db/migrations/097_service_suspended_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/103_notification_template_versions.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -6278,6 +7232,24 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **短信开关**：控件类型 `switch`",
+          "* **切换供应商**：控件类型 `select` (占位符: `请选择`)",
+          "* **账号绑定提示（用户）**：控件类型 `switch` (占位符: `请选择账号绑定提示（用户）`)",
+          "* **注册成功**：控件类型 `switch` (占位符: `请选择注册成功`)",
+          "* **成功绑定提醒(客户)**：控件类型 `switch` (占位符: `请选择成功绑定提醒(客户)`)",
+          "* **登录短信提醒**：控件类型 `switch` (占位符: `请选择登录短信提醒`)",
+          "* **解除暂停提醒(用户)**：控件类型 `switch` (占位符: `请选择解除暂停提醒(用户)`)",
+          "* **信用额账单未支付暂停产品**：控件类型 `switch` (占位符: `请选择信用额账单未支付暂停产品`)",
+          "* **未实名暂停产品**：控件类型 `switch` (占位符: `请选择未实名暂停产品`)",
+          "* **续费成功提醒(用户)**：控件类型 `switch` (占位符: `请选择续费成功提醒(用户)`)",
+          "* **未续期产品删除提醒(用户)**：控件类型 `switch` (占位符: `请选择未续期产品删除提醒(用户)`)",
+          "* **产品开通提醒(用户)**：控件类型 `switch` (占位符: `请选择产品开通提醒(用户)`)",
+          "* **产品暂停**：控件类型 `switch` (占位符: `请选择产品暂停`)"
         ],
         "current": "未验证"
       },
@@ -6315,6 +7287,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6350,7 +7323,8 @@
       "title": "二次验证",
       "module": "设置",
       "newRoute": "/admin/security/mfa",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -6393,6 +7367,13 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **会员中心开启二次验证**：控件类型 `switch` (提示: *该功能后台开启后, 需要用户前台手动开启该功能即可生效二次验证*)",
+          "* **后台二次验证是否开启**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -6425,6 +7406,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6460,7 +7442,14 @@
       "title": "验证码设置",
       "module": "设置",
       "newRoute": "/admin/auth-settings?tab=captcha",
-      "component": "web/src/app/admin/auth-settings/page.tsx",
+      "pageFile": "web/src/app/admin/auth-settings/page.tsx",
+      "component": [
+        {
+          "name": "SiteSettingsView",
+          "source": "@/components/site-settings",
+          "evidence": "web/src/app/admin/auth-settings/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6473,8 +7462,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/site-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/site-settings",
+            "handler": "siteSettings",
+            "evidence": "internal/httpapi/server.go:88"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/site-settings",
+            "handler": "updateSiteSettings",
+            "evidence": "internal/httpapi/server.go:89"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.manage",
@@ -6488,13 +7490,23 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "site_settings"
+        ],
+        "evidence": [
+          "internal/store/site_settings.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/034_site_settings.sql",
+          "db/migrations/035_site_maintenance.sql",
+          "db/migrations/076_auth_captcha.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/102_site_admin_settings.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -6502,6 +7514,14 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **验证码方式**：控件类型 `select` (占位符: `请选择`)",
+          "* **图形验证码是否开启**：控件类型 `switch`",
+          "* **是否自动启动验证码**：控件类型 `switch`"
         ],
         "current": "未验证"
       },
@@ -6534,6 +7554,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6569,7 +7590,8 @@
       "title": "黑名单列表",
       "module": "设置",
       "newRoute": "/admin/blacklist",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -6619,6 +7641,10 @@
           "登录时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `用户名` | `操作类型` | `IP` | `登录时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -6649,6 +7675,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6684,7 +7711,14 @@
       "title": "数据迁移",
       "module": "设置",
       "newRoute": "/admin/migrations",
-      "component": "web/src/app/admin/migrations/page.tsx",
+      "pageFile": "web/src/app/admin/migrations/page.tsx",
+      "component": [
+        {
+          "name": "LegacyReviewsView",
+          "source": "@/components/legacy-reviews",
+          "evidence": "web/src/app/admin/migrations/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6732,6 +7766,11 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -6762,6 +7801,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6797,7 +7837,14 @@
       "title": "关于",
       "module": "设置",
       "newRoute": "/admin/system/about",
-      "component": "web/src/app/admin/system/about/page.tsx",
+      "pageFile": "web/src/app/admin/system/about/page.tsx",
+      "component": [
+        {
+          "name": "AdminSystemInfoView",
+          "source": "@/components/admin-system-info",
+          "evidence": "web/src/app/admin/system/about/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6810,8 +7857,15 @@
       },
       "realApi": {
         "ledgerClaim": "GET /admin/system/about",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/system/about",
+            "handler": "adminSystemAbout",
+            "evidence": "internal/httpapi/server.go:91"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view",
@@ -6839,6 +7893,11 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)"
         ],
         "current": "未验证"
       },
@@ -6870,6 +7929,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -6905,7 +7965,14 @@
       "title": "系统升级",
       "module": "设置",
       "newRoute": "/admin/system/upgrade",
-      "component": "web/src/app/admin/system/upgrade/page.tsx",
+      "pageFile": "web/src/app/admin/system/upgrade/page.tsx",
+      "component": [
+        {
+          "name": "AdminSystemUpgradeView",
+          "source": "@/components/admin-system-upgrade",
+          "evidence": "web/src/app/admin/system/upgrade/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -6918,8 +7985,15 @@
       },
       "realApi": {
         "ledgerClaim": "GET /admin/system/upgrade",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/system/upgrade",
+            "handler": "adminSystemUpgrade",
+            "evidence": "internal/httpapi/server.go:93"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view",
@@ -6947,6 +8021,23 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **授权类型**：控件类型 `input` (提示: *专业版*)",
+          "* **授权状态**：控件类型 `input`",
+          "* **授权码**：控件类型 `input` (提示: *更换授权码*)",
+          "* **服务支持到期时间**：控件类型 `input`",
+          "* **授权到期时间**：控件类型 `input`",
+          "* **已授权模块**：控件类型 `input` (提示: *拉取授权*)",
+          "* **授权服务器ip**：控件类型 `input` (提示: *127.0.0.1*)",
+          "* **授权域名**：控件类型 `input` (提示: *127.0.0.2*)",
+          "* **系统识别码**：控件类型 `input` (提示: *cd5fa920d1b8713a2905daac591ab63e*)",
+          "* **最新版本**：控件类型 `input` (提示: *更新内容3.7.9*)",
+          "* **当前版本**：控件类型 `input` (提示: *3.7.7-beta*)",
+          "* **正在使用**：控件类型 `radio`"
         ],
         "current": "未验证"
       },
@@ -6982,6 +8073,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7017,7 +8109,14 @@
       "title": "php信息",
       "module": "设置",
       "newRoute": "/admin/system/runtime",
-      "component": "web/src/app/admin/system/runtime/page.tsx",
+      "pageFile": "web/src/app/admin/system/runtime/page.tsx",
+      "component": [
+        {
+          "name": "AdminSystemInfoView",
+          "source": "@/components/admin-system-info",
+          "evidence": "web/src/app/admin/system/runtime/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -7030,8 +8129,15 @@
       },
       "realApi": {
         "ledgerClaim": "GET /admin/system/runtime",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/system/runtime",
+            "handler": "adminSystemRuntime",
+            "evidence": "internal/httpapi/server.go:90"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view",
@@ -7059,6 +8165,11 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)"
         ],
         "current": "未验证"
       },
@@ -7090,6 +8201,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7125,7 +8237,8 @@
       "title": "短信日志",
       "module": "设置",
       "newRoute": "/admin/logs/sms",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7179,6 +8292,10 @@
           "失败原因",
           "IP"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `时间` | `短信内容` | `用户名` | `电话` | `是否成功` | `失败原因` | `IP`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7212,6 +8329,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7247,7 +8365,8 @@
       "title": "站内信日志",
       "module": "设置",
       "newRoute": "/admin/logs/inbox",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7290,6 +8409,10 @@
           "用户",
           "状态"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`发送时间` | `标题` | `用户` | `状态`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7323,6 +8446,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7358,7 +8482,8 @@
       "title": "API日志",
       "module": "设置",
       "newRoute": "/admin/logs/api",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7402,6 +8527,10 @@
           "用户名",
           "IP"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`ID` | `时间` | `描述` | `用户名` | `IP`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7435,6 +8564,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7470,7 +8600,14 @@
       "title": "定时任务日志",
       "module": "设置",
       "newRoute": "/admin/logs/jobs",
-      "component": "web/src/app/admin/logs/jobs/page.tsx",
+      "pageFile": "web/src/app/admin/logs/jobs/page.tsx",
+      "component": [
+        {
+          "name": "AdminJobsView",
+          "source": "@/components/admin-jobs",
+          "evidence": "web/src/app/admin/logs/jobs/page.tsx:2"
+        }
+      ],
       "pageStatus": {
         "ledger": "待实现",
         "code": "有对应路由源码；实现完整性未验证",
@@ -7514,6 +8651,10 @@
           "用户名",
           "IP地址"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`ID` | `时间` | `描述` | `用户名` | `IP地址`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7547,6 +8688,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7582,7 +8724,8 @@
       "title": "日志清理",
       "module": "设置",
       "newRoute": "/admin/logs/cleanup",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7625,6 +8768,14 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **选择日志**：控件类型 `select` (占位符: `请选择日志`)",
+          "* **日志总条数**：控件类型 `input`",
+          "* **删除**：控件类型 `input` (占位符: `请选择时间`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7657,6 +8808,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7692,7 +8844,14 @@
       "title": "系统日志",
       "module": "设置",
       "newRoute": "/admin/audit",
-      "component": "web/src/app/admin/audit/page.tsx",
+      "pageFile": "web/src/app/admin/audit/page.tsx",
+      "component": [
+        {
+          "name": "AuditView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/audit/page.tsx:3"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -7744,6 +8903,10 @@
           "用户名",
           "IP地址"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `时间` | `描述` | `来源` | `用户名` | `IP地址`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7777,6 +8940,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7812,7 +8976,8 @@
       "title": "管理员登录日志",
       "module": "设置",
       "newRoute": "/admin/logs/admin-login",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7857,6 +9022,10 @@
           "用户名",
           "IP地址"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `登录时间` | `最后访问` | `注销时间` | `用户名` | `IP地址`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -7890,6 +9059,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -7925,7 +9095,8 @@
       "title": "邮件日志",
       "module": "设置",
       "newRoute": "/admin/logs/email",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -7978,6 +9149,10 @@
           "失败原因",
           "IP"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`ID` | `时间` | `主题` | `收件人` | `是否成功` | `失败原因` | `IP`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8011,6 +9186,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8046,7 +9222,14 @@
       "title": "商品管理",
       "module": "设置",
       "newRoute": "/admin/products",
-      "component": "web/src/app/admin/products/page.tsx",
+      "pageFile": "web/src/app/admin/products/page.tsx",
+      "component": [
+        {
+          "name": "CatalogAdminView",
+          "source": "@/components/catalog-admin",
+          "evidence": "web/src/app/admin/products/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -8110,6 +9293,10 @@
           "自动开通",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 7 列)**：",
+          "* **列定义**：`商品名称` | `类型` | `定价` | `库存` | `已开通/总数量` | `自动开通` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8146,6 +9333,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8181,7 +9369,8 @@
       "title": "流量包管理",
       "module": "设置",
       "newRoute": "/admin/traffic-products",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -8233,6 +9422,10 @@
           "创建时间",
           "管理"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `流量包名称` | `流量（GB）` | `价格` | `启用` | `已售/库存` | `创建时间` | `管理`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8268,6 +9461,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8303,7 +9497,14 @@
       "title": "通用接口",
       "module": "设置",
       "newRoute": "/admin/channels?category=provision",
-      "component": "web/src/app/admin/channels/page.tsx",
+      "pageFile": "web/src/app/admin/channels/page.tsx",
+      "component": [
+        {
+          "name": "ChannelInstancesView",
+          "source": "@/components/channel-instances",
+          "evidence": "web/src/app/admin/channels/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -8316,8 +9517,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/POST/PUT /admin/channel-instances",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/channel-instances",
+            "handler": "channelInstances",
+            "evidence": "internal/httpapi/server.go:106"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/channel-instances",
+            "handler": "createChannelInstance",
+            "evidence": "internal/httpapi/server.go:107"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -8331,13 +9545,44 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "channel_instances",
+          "email_outbox",
+          "payment_settings",
+          "payment_transactions",
+          "sms_outbox",
+          "sms_settings",
+          "smtp_settings"
+        ],
+        "evidence": [
+          "internal/store/channel_instances.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/011_payment_pending_guard.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/060_epay_transactions.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/067_payment_monitoring.sql",
+          "db/migrations/084_payment_settings.sql",
+          "db/migrations/085_smtp_settings.sql",
+          "db/migrations/086_payment_mock_default.sql",
+          "db/migrations/087_payment_expiry_credentials.sql",
+          "db/migrations/088_smtp_tls.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/090_sms_channels.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -8353,6 +9598,12 @@
           "接口分组使用数量 已使用/总数",
           "分配方式",
           "操作"
+        ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `接口名称` | `服务器模块` | `接口分组名` | `IP地址` | `产品数量` | `状态` | `操作`",
+          "- **表格列与数据字段 (Table 2，共 4 列)**：",
+          "* **列定义**：`分组组名称` | `接口分组使用数量 已使用/总数` | `分配方式` | `操作`"
         ],
         "current": "未验证"
       },
@@ -8386,6 +9637,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8421,7 +9673,14 @@
       "title": "魔方DCIM",
       "module": "设置",
       "newRoute": "/admin/suppliers?kind=dcim",
-      "component": "web/src/app/admin/suppliers/page.tsx",
+      "pageFile": "web/src/app/admin/suppliers/page.tsx",
+      "component": [
+        {
+          "name": "SuppliersView",
+          "source": "@/components/suppliers-admin",
+          "evidence": "web/src/app/admin/suppliers/page.tsx:9"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -8510,6 +9769,10 @@
           "区域",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `连接成功` | `IP` | `服务器数量` | `区域` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8544,6 +9807,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8579,7 +9843,14 @@
       "title": "魔方云",
       "module": "设置",
       "newRoute": "/admin/suppliers?kind=cloud",
-      "component": "web/src/app/admin/suppliers/page.tsx",
+      "pageFile": "web/src/app/admin/suppliers/page.tsx",
+      "component": [
+        {
+          "name": "SuppliersView",
+          "source": "@/components/suppliers-admin",
+          "evidence": "web/src/app/admin/suppliers/page.tsx:9"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -8667,6 +9938,10 @@
           "服务器数量",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`ID` | `名称` | `IP` | `服务器数量` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8701,6 +9976,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8736,7 +10012,8 @@
       "title": "全局可配置项",
       "module": "设置",
       "newRoute": "/admin/configurable-options",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -8780,6 +10057,10 @@
           "产品",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 5 列)**：",
+          "* **列定义**：`ID` | `组名` | `描述` | `产品` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8813,6 +10094,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8848,7 +10130,8 @@
       "title": "商品订购设置",
       "module": "设置",
       "newRoute": "/admin/order-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -8891,6 +10174,13 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **购买时强制手机绑定**：控件类型 `switch`",
+          "* **购买时强制实名认证**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -8921,6 +10211,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -8956,7 +10247,8 @@
       "title": "基础信息",
       "module": "设置",
       "newRoute": "/admin/site-settings?tab=basic",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -8969,8 +10261,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/site-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/site-settings",
+            "handler": "siteSettings",
+            "evidence": "internal/httpapi/server.go:88"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/site-settings",
+            "handler": "updateSiteSettings",
+            "evidence": "internal/httpapi/server.go:89"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view/manage",
@@ -8989,13 +10294,23 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "site_settings"
+        ],
+        "evidence": [
+          "internal/store/site_settings.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/034_site_settings.sql",
+          "db/migrations/035_site_maintenance.sql",
+          "db/migrations/076_auth_captcha.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/102_site_admin_settings.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -9003,6 +10318,24 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **手机**：控件类型 `input` (占位符: `请输入手机号`)",
+          "* **qq**：控件类型 `input` (占位符: `请输入qq`)",
+          "* **地址**：控件类型 `input` (占位符: `请输入地址`)",
+          "* **备案号**：控件类型 `input` (占位符: `请输入备案号`)",
+          "* **坐标**：控件类型 `input` (占位符: `请输入坐标(x,y): (106.313324,29.543593)`)",
+          "* **官网LOGO**：控件类型 `input` (占位符: `请输入`)",
+          "* **关键字**：控件类型 `input` (占位符: `请输入描述关键字`)",
+          "* **描述**：控件类型 `input` (占位符: `请输入描述`)",
+          "* **公司简介**：控件类型 `textarea` (占位符: `请输入公司简介`)",
+          "* **头部**：控件类型 `textarea` (占位符: `请输入`)",
+          "* **底部**：控件类型 `textarea` (占位符: `请输入`)",
+          "* **是否开启登录页头底部**：控件类型 `switch`",
+          "* **挂件**：控件类型 `textarea` (占位符: `请输入`)"
         ],
         "current": "未验证"
       },
@@ -9037,6 +10370,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9072,7 +10406,8 @@
       "title": "主题模板",
       "module": "设置",
       "newRoute": "/admin/theme-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -9115,6 +10450,13 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **是否开启主题模板**：控件类型 `switch`",
+          "* **选择主题模板样式**：控件类型 `radio`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9145,6 +10487,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9180,7 +10523,8 @@
       "title": "官网自定义字段",
       "module": "设置",
       "newRoute": "/admin/site-fields",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -9222,6 +10566,13 @@
           "字段内容",
           "管理"
         ],
+        "sourceLines": [
+          "#### 78. 官网自定义字段 (`#/custom-template-fields`)",
+          "* 官网自定义字段 用于在官网主题模板中，调用的自定义字段 添加字段 字段名 字段内容 管理 暂无数据 共 0 条 1 前往页",
+          "- **功能操作按钮组**：`添加字段`[success]",
+          "- **表格列与数据字段 (Table 1，共 3 列)**：",
+          "* **列定义**：`字段名` | `字段内容` | `管理`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9253,6 +10604,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9288,7 +10640,8 @@
       "title": "导航管理",
       "module": "设置",
       "newRoute": "/admin/navigation",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -9331,6 +10684,10 @@
           "类型",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`序号` | `导航名称` | `类型` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9367,6 +10724,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9402,7 +10760,8 @@
       "title": "友情链接",
       "module": "设置",
       "newRoute": "/admin/friendly-links",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -9447,6 +10806,10 @@
           "状态",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `名称` | `地址` | `标签` | `状态` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9481,6 +10844,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9516,7 +10880,8 @@
       "title": "文件分组",
       "module": "设置",
       "newRoute": "/admin/file-groups",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -9563,6 +10928,10 @@
           "下载次数",
           "创建时间"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`文件名` | `描述` | `文件类型` | `需要登录` | `需要购买` | `隐藏` | `下载次数` | `创建时间`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9595,6 +10964,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9630,7 +11000,14 @@
       "title": "新闻列表",
       "module": "设置",
       "newRoute": "/admin/content?kind=news",
-      "component": "web/src/app/admin/content/page.tsx",
+      "pageFile": "web/src/app/admin/content/page.tsx",
+      "component": [
+        {
+          "name": "ContentAdminView",
+          "source": "@/components/content-admin",
+          "evidence": "web/src/app/admin/content/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -9693,6 +11070,10 @@
           "隐藏",
           "管理"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `标题` | `分类` | `发布时间` | `隐藏` | `管理`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9724,6 +11105,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9759,7 +11141,14 @@
       "title": "新闻分类",
       "module": "设置",
       "newRoute": "/admin/content?tab=categories",
-      "component": "web/src/app/admin/content/page.tsx",
+      "pageFile": "web/src/app/admin/content/page.tsx",
+      "component": [
+        {
+          "name": "ContentAdminView",
+          "source": "@/components/content-admin",
+          "evidence": "web/src/app/admin/content/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -9815,6 +11204,10 @@
           "隐藏",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`ID` | `分类名称` | `隐藏` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9848,6 +11241,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -9883,7 +11277,14 @@
       "title": "帮助列表",
       "module": "设置",
       "newRoute": "/admin/content?kind=help",
-      "component": "web/src/app/admin/content/page.tsx",
+      "pageFile": "web/src/app/admin/content/page.tsx",
+      "component": [
+        {
+          "name": "ContentAdminView",
+          "source": "@/components/content-admin",
+          "evidence": "web/src/app/admin/content/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -9946,6 +11347,10 @@
           "隐藏",
           "管理"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 6 列)**：",
+          "* **列定义**：`ID` | `标题` | `分类` | `发布时间` | `隐藏` | `管理`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -9977,6 +11382,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10012,7 +11418,14 @@
       "title": "帮助分类",
       "module": "设置",
       "newRoute": "/admin/content?tab=categories&kind=help",
-      "component": "web/src/app/admin/content/page.tsx",
+      "pageFile": "web/src/app/admin/content/page.tsx",
+      "component": [
+        {
+          "name": "ContentAdminView",
+          "source": "@/components/content-admin",
+          "evidence": "web/src/app/admin/content/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -10068,6 +11481,10 @@
           "隐藏",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 4 列)**：",
+          "* **列定义**：`ID` | `分类名称` | `隐藏` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10101,6 +11518,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10136,7 +11554,8 @@
       "title": "基础设置",
       "module": "设置",
       "newRoute": "/admin/site-settings?tab=display",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -10149,8 +11568,21 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PUT /admin/site-settings",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/site-settings",
+            "handler": "siteSettings",
+            "evidence": "internal/httpapi/server.go:88"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/site-settings",
+            "handler": "updateSiteSettings",
+            "evidence": "internal/httpapi/server.go:89"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "settings.view/manage",
@@ -10169,13 +11601,23 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "site_settings"
+        ],
+        "evidence": [
+          "internal/store/site_settings.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/034_site_settings.sql",
+          "db/migrations/035_site_maintenance.sql",
+          "db/migrations/076_auth_captcha.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/102_site_admin_settings.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -10186,6 +11628,21 @@
           "input",
           "select",
           "请选择字段类型"
+        ],
+        "sourceLines": [
+          "* 自定义客户字段 此处可以设置自定义字段，并在客户个人资料中显示。 字段名称 字段类型 描述 向客户显示的描述 验证 正则表达式验证字符串 选项 只对 下拉 有效-用英文半角逗号分隔 显示排序 其他设置 仅管理员可见 必填 注册时显示 提交",
+          "* 筛选项：**字段名称**（占位符：`请输入...`）",
+          "* 筛选项：**字段类型**（占位符：`请选择字段类型`）",
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **字段名称**：控件类型 `input`",
+          "* **字段类型**：控件类型 `select` (占位符: `请选择字段类型`)",
+          "* **描述**：控件类型 `input`",
+          "* **验证**：控件类型 `input`",
+          "* **选项**：控件类型 `input`",
+          "* **显示排序**：控件类型 `input`",
+          "* **其他设置**：控件类型 `checkbox`"
         ],
         "current": "未验证"
       },
@@ -10222,6 +11679,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10257,7 +11715,14 @@
       "title": "供应商管理",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers",
-      "component": "web/src/app/admin/suppliers/page.tsx",
+      "pageFile": "web/src/app/admin/suppliers/page.tsx",
+      "component": [
+        {
+          "name": "SuppliersView",
+          "source": "@/components/suppliers-admin",
+          "evidence": "web/src/app/admin/suppliers/page.tsx:9"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -10349,6 +11814,10 @@
           "描述",
           "管理"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 9 列)**：",
+          "* **列定义**：`名称` | `类型` | `接口地址` | `可售/已设置商品` | `产品数量(正常/总)` | `状态` | `余额` | `描述` | `管理`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10382,6 +11851,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10417,7 +11887,8 @@
       "title": "商品管理",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/catalog",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -10464,6 +11935,10 @@
           "利润",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`商品名称` | `定价` | `供应商库存` | `已开通/总数量` | `供应商` | `售价` | `利润` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10498,6 +11973,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10533,7 +12009,14 @@
       "title": "产品管理",
       "module": "资源与商店",
       "newRoute": "/admin/products",
-      "component": "web/src/app/admin/products/page.tsx",
+      "pageFile": "web/src/app/admin/products/page.tsx",
+      "component": [
+        {
+          "name": "CatalogAdminView",
+          "source": "@/components/catalog-admin",
+          "evidence": "web/src/app/admin/products/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "部分完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -10602,6 +12085,10 @@
           "销售",
           "状态"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 12 列)**：",
+          "* **列定义**：`ID` | `产品名称(主机名)` | `供应商` | `客户` | `IP` | `类型` | `购买时间` | `到期时间` | `续费价格/周期` | `利润` | `销售` | `状态`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10636,6 +12123,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10671,7 +12159,8 @@
       "title": "任务队列",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/jobs",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -10718,6 +12207,10 @@
           "最后操作时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`客户` | `产品` | `动作` | `描述` | `来源` | `状态` | `最后操作时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10751,6 +12244,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10786,7 +12280,8 @@
       "title": "服务器列表",
       "module": "资源与商店",
       "newRoute": "/admin/resources",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -10841,6 +12336,10 @@
           "到期时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 11 列)**：",
+          "* **列定义**：`重装/破解` | `电源` | `IP` | `配置` | `备注` | `用户名/密码` | `供应商` | `成本` | `关联客户（产品）` | `到期时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10877,6 +12376,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -10912,7 +12412,8 @@
       "title": "订单列表",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/orders",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -10961,6 +12462,10 @@
           "客户备注",
           "提成/销售"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 10 列)**：",
+          "* **列定义**：`ID` | `客户名` | `产品` | `IP` | `下单时间` | `金额` | `付款状态/付款方式` | `状态` | `客户备注` | `提成/销售`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -10992,6 +12497,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11027,7 +12533,8 @@
       "title": "续费订单",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/renewals",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11074,6 +12581,10 @@
           "付款方式",
           "成本"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`ID` | `客户名` | `产品` | `IP` | `续费时间` | `金额` | `付款方式` | `成本`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11105,6 +12616,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11140,7 +12652,8 @@
       "title": "任务队列",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/tasks",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11187,6 +12700,10 @@
           "最后操作时间",
           "操作"
         ],
+        "sourceLines": [
+          "- **表格列与数据字段 (Table 1，共 8 列)**：",
+          "* **列定义**：`客户` | `产品` | `动作` | `描述` | `来源` | `状态` | `最后操作时间` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11220,6 +12737,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11255,7 +12773,8 @@
       "title": "API设置",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/api-settings",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11298,6 +12817,12 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **是否开启资源API**：控件类型 `switch`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11328,6 +12853,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11363,7 +12889,8 @@
       "title": "我的应用",
       "module": "资源与商店",
       "newRoute": "/admin/apps",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11406,6 +12933,11 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11436,6 +12968,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11471,7 +13004,8 @@
       "title": "应用商店",
       "module": "资源与商店",
       "newRoute": "/admin/apps/store",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11509,6 +13043,7 @@
       },
       "fields": {
         "legacy": [],
+        "sourceLines": [],
         "current": "未验证"
       },
       "filters": {
@@ -11537,6 +13072,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11572,7 +13108,14 @@
       "title": "添加客户",
       "module": "客户管理",
       "newRoute": "/admin/customers/new",
-      "component": "web/src/app/admin/customers/new/page.tsx",
+      "pageFile": "web/src/app/admin/customers/new/page.tsx",
+      "component": [
+        {
+          "name": "AdminCustomerCreateView",
+          "source": "@/components/admin-customer-create",
+          "evidence": "web/src/app/admin/customers/new/page.tsx:4"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -11622,6 +13165,24 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **姓名**：控件类型 `input`",
+          "* **性别**：控件类型 `select` (占位符: `请选择性别`)",
+          "* **所在公司**：控件类型 `input`",
+          "* **国家**：控件类型 `input`",
+          "* **省**：控件类型 `input`",
+          "* **地址**：控件类型 `input`",
+          "* **邮编**：控件类型 `input`",
+          "* **了解途径**：控件类型 `input`",
+          "* **手机**：控件类型 `select` (占位符: `请选择`)",
+          "* **邮箱**：控件类型 `input`",
+          "* **QQ**：控件类型 `input`",
+          "* **密码**：控件类型 `input`",
+          "* **支付方式**：控件类型 `select` (占位符: `请选择支付方式`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11655,6 +13216,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11690,7 +13252,8 @@
       "title": "新建订单",
       "module": "订单管理",
       "newRoute": "/admin/orders/new",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11740,6 +13303,19 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **客户**：控件类型 `input` (占位符: `请输入用户`)",
+          "* **支付方式**：控件类型 `select` (占位符: `请选择付款方式`)",
+          "* **优惠码**：控件类型 `select` (占位符: `请选择优惠码`; 提示: *无数据*)",
+          "* **产品/服务**：控件类型 `select` (占位符: `请选择产品/服务`)",
+          "* **付款周期**：控件类型 `select` (占位符: `请选择付款周期`; 提示: *无数据*)",
+          "* **数量**：控件类型 `input` (占位符: `请输入数量`)",
+          "* **内部价格(首次)**：控件类型 `input` (占位符: `请输入内部价格`)",
+          "* **内部价格(续费)**：控件类型 `input` (占位符: `请输入内部价格`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11775,6 +13351,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11810,7 +13387,8 @@
       "title": "新建工单",
       "module": "工单管理",
       "newRoute": "/admin/tickets/new",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "待实现",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -11860,6 +13438,17 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **客户名**：控件类型 `input` (占位符: `请输入用户`)",
+          "* **处理部门**：控件类型 `select` (占位符: `请选择部门`)",
+          "* **优先级**：控件类型 `select` (占位符: `请选择优先级`)",
+          "* **工单标题**：控件类型 `input` (占位符: `请输入工单标题`)",
+          "* **工单内容**：控件类型 `textarea`",
+          "* **附件**：控件类型 `input`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -11893,6 +13482,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -11928,7 +13518,14 @@
       "title": "开具发票",
       "module": "发票管理",
       "newRoute": "/admin/invoices/new",
-      "component": "web/src/app/admin/invoices/new/page.tsx",
+      "pageFile": "web/src/app/admin/invoices/new/page.tsx",
+      "component": [
+        {
+          "name": "ManualInvoiceEditorView",
+          "source": "@/components/manual-invoices",
+          "evidence": "web/src/app/admin/invoices/new/page.tsx:2"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -12036,6 +13633,7 @@
       },
       "fields": {
         "legacy": [],
+        "sourceLines": [],
         "current": "未验证"
       },
       "filters": {
@@ -12062,6 +13660,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -12097,7 +13696,8 @@
       "title": "添加商品分组",
       "module": "商品设置",
       "newRoute": "/admin/catalog-groups/new",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -12140,6 +13740,18 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **分组类型**：控件类型 `radio`",
+          "* **一级分组**：控件类型 `select` (占位符: `请选择`)",
+          "* **商品组名称**：控件类型 `input` (占位符: `请输入商品组名称`)",
+          "* **商品组标题**：控件类型 `input` (占位符: `例如：选择您的完美的计划`)",
+          "* **商品组标语**：控件类型 `input` (占位符: `例如：凭我们30天退款保证,您千万不要错过!`)",
+          "* **订购表格模板**：控件类型 `radio`",
+          "* **是否隐藏**：控件类型 `radio`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -12173,6 +13785,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -12208,7 +13821,14 @@
       "title": "编辑商品配置",
       "module": "商品设置",
       "newRoute": "/admin/products/{id}",
-      "component": "web/src/app/admin/products/[id]/page.tsx",
+      "pageFile": "web/src/app/admin/products/[id]/page.tsx",
+      "component": [
+        {
+          "name": "ProductEditorView",
+          "source": "@/components/product-editor",
+          "evidence": "web/src/app/admin/products/[id]/page.tsx:8"
+        }
+      ],
       "pageStatus": {
         "ledger": "已完成",
         "code": "有对应路由源码；实现完整性未验证",
@@ -12292,6 +13912,13 @@
           "应用优惠码",
           "操作"
         ],
+        "sourceLines": [
+          "- **状态/分类切换标签 (Tabs)**：`详 情` | `定 价` | `试 用` | `自动开通` | `产品配置` | `升级选项` | `自定义字段` | `商品推介计划` | `文件下载` | `链接`",
+          "- **表格列与数据字段 (Table 1，共 3 列)**：",
+          "* **列定义**：`币种` | `初装费成本` | `价格成本`",
+          "- **表格列与数据字段 (Table 2，共 18 列)**：",
+          "* **列定义**：`ID` | `分组ID` | `配置项名称` | `配置项类型` | `排序` | `隐藏勾选后，该项在会员中心被隐藏，客户无法看到` | `允许升降级` | `应用优惠码` | `操作` | `ID` | `分组ID` | `配置项名称` | `配置项类型` | `排序` | `隐藏勾选后，该项在会员中心被隐藏，客户无法看到` | `允许升降级` | `应用优惠码` | `操作`"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -12329,6 +13956,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -12364,7 +13992,8 @@
       "title": "编辑管理员",
       "module": "人员管理",
       "newRoute": "/admin/access/staff/{id}",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -12377,8 +14006,15 @@
       },
       "realApi": {
         "ledgerClaim": "GET/PATCH /admin/staff/{id}",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "PATCH",
+            "path": "/admin/staff/{id}",
+            "handler": "saveAdminStaff",
+            "evidence": "internal/httpapi/server.go:262"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "@super",
@@ -12406,6 +14042,20 @@
           "请选择...",
           "input",
           "高级搜索"
+        ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **员工角色**：控件类型 `select` (占位符: `请选择员工角色`)",
+          "* **用户名**：控件类型 `input` (占位符: `请输入用户名`)",
+          "* **真实姓名**：控件类型 `input` (占位符: `请输入真实姓名`)",
+          "* **邮箱**：控件类型 `input` (占位符: `请输入邮箱`)",
+          "* **密码**：控件类型 `input` (占位符: `请输入密码`)",
+          "* **确认密码**：控件类型 `input` (占位符: `请输入确认密码`)",
+          "* **语言**：控件类型 `select` (占位符: `请选择语言`)",
+          "* **工单部门**：控件类型 `checkbox`",
+          "* **工单签名**：控件类型 `textarea` (占位符: `请输入工单签名`)"
         ],
         "current": "未验证"
       },
@@ -12442,6 +14092,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
@@ -12477,7 +14128,8 @@
       "title": "创建短信模板",
       "module": "短信邮件",
       "newRoute": "/admin/notifications/new?channel=sms",
-      "component": "待实现",
+      "pageFile": null,
+      "component": "未验证",
       "pageStatus": {
         "ledger": "部分完成",
         "code": "未找到对应独立路由文件；实现状态未验证",
@@ -12527,6 +14179,17 @@
           "input",
           "高级搜索"
         ],
+        "sourceLines": [
+          "- **表单配置项 (Form Items)**：",
+          "* **无标题字段**：控件类型 `select` (占位符: `请选择...`)",
+          "* **无标题字段**：控件类型 `input` (占位符: `高级搜索`)",
+          "* **选择区域**：控件类型 `radio`",
+          "* **短信供应商**：控件类型 `select` (占位符: `请选择短信供应商`)",
+          "* **标题**：控件类型 `input` (占位符: `请输入标题`)",
+          "* **内容**：控件类型 `textarea` (占位符: `请输入内容`)",
+          "* **描述**：控件类型 `input` (提示: *国内短信按照 70 字节为一条计费，超过 70 字节，按照每 67 字计费一条，最终在一条短信内呈现。*)",
+          "* **备注**：控件类型 `input` (占位符: `请输入备注`)"
+        ],
         "current": "未验证"
       },
       "filters": {
@@ -12560,6 +14223,7 @@
         "conflict": "未验证",
         "success": "未验证"
       },
+      "stateEvidence": [],
       "viewportResults": [
         {
           "width": 1440,
