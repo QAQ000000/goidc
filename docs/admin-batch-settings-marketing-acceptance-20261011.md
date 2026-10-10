@@ -33,3 +33,9 @@
 - `111_marketing_campaigns.sql`：营销活动、受众投递记录、操作幂等记录，并放宽邮件 outbox 类型约束以支持营销投递。
 
 105 页台账和页面契约已同步更新；本批页面状态为“部分完成”，仍需后续补齐旧版字段深度和完整危险操作浏览器流程。
+
+## 开发运行环境
+
+- 开发库已应用 `110_financial_settings.sql` 和 `111_marketing_campaigns.sql`。
+- API 已重启在 `127.0.0.1:8088`，Next.js 已重启在 `0.0.0.0:3088`。
+- `GET /readyz` 返回 PostgreSQL 18 ready；未认证访问新管理 API 返回统一 `401 unauthorized`。
