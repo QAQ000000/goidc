@@ -34,7 +34,7 @@ func (s *Server) currencies(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	active := strings.TrimSpace(r.URL.Query().Get("active"))
 	where := `($1='' OR code ILIKE '%'||$1||'%' OR name ILIKE '%'||$1||'%') AND ($2='' OR active=($2='true'))`
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,code,name,prefix,suffix,format,exchange_rate,active,is_default,version,created_at,updated_at FROM currencies WHERE `+where+` ORDER BY is_default DESC,id LIMIT $3 OFFSET $4`, q, active, limit, offset)
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,code,name,prefix,suffix,format,exchange_rate::float8 AS exchange_rate,active,is_default,version,created_at,updated_at FROM currencies WHERE `+where+` ORDER BY is_default DESC,id LIMIT $3 OFFSET $4`, q, active, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
