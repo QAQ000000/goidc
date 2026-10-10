@@ -52,6 +52,27 @@ func TestFinancialSettingsContracts(t *testing.T) {
 			t.Fatalf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}
+	shipping := request(h, "POST", "/api/v1/admin/invoice-shipping-methods", map[string]any{"name": "顺丰", "price_cents": 1200, "active": true}, admin, "shipping-create-1")
+	if shipping.Code != 201 {
+		t.Fatalf("shipping create: %d %s", shipping.Code, shipping.Body.String())
+	}
+	var shippingBody struct {
+		Data struct {
+			ID      int64 `json:"id"`
+			Version int64 `json:"version"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(shipping.Body).Decode(&shippingBody); err != nil {
+		t.Fatal(err)
+	}
+	invoice := request(h, "GET", "/api/v1/admin/invoice-settings", nil, admin, "")
+	if invoice.Code != 200 || !containsJSON(invoice.Body.Bytes(), "顺丰") {
+		t.Fatalf("shipping list: %d %s", invoice.Code, invoice.Body.String())
+	}
+	removed := request(h, "DELETE", fmt.Sprintf("/api/v1/admin/invoice-shipping-methods/%d", shippingBody.Data.ID), map[string]any{"expected_version": shippingBody.Data.Version}, admin, "shipping-delete-1")
+	if removed.Code != 200 {
+		t.Fatalf("shipping delete: %d %s", removed.Code, removed.Body.String())
+	}
 	credit := request(h, "GET", "/api/v1/admin/credit-settings", nil, admin, "")
 	if credit.Code != 200 {
 		t.Fatalf("credit settings: %d %s", credit.Code, credit.Body.String())
