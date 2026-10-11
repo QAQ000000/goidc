@@ -256,7 +256,7 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.Profile != nil {
-		if _, exists := input.Profile["custom_fields"]; exists && string(input.Profile["custom_fields"]) == "null" {
+		if value, exists := input.Profile["custom_fields"]; exists && strings.TrimSpace(string(value)) == "null" {
 			writeError(w, 400, "invalid_custom_field", "客户字段不能为null")
 			return
 		}
@@ -265,7 +265,7 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		var merged map[string]json.RawMessage
 		_ = json.Unmarshal(raw, &merged)
 		for k, v := range input.Profile {
-			if string(v) == "null" {
+			if strings.TrimSpace(string(v)) == "null" {
 				writeError(w, 400, "invalid_profile", "客户资料字段不能为null")
 				return
 			}
@@ -355,7 +355,7 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if input.CustomFieldValues != nil {
-		if strings.TrimSpace(string(input.CustomFieldValues)) == "null" || json.Unmarshal(input.CustomFieldValues, &input.CustomFieldValues) != nil {
+		if strings.TrimSpace(string(input.CustomFieldValues)) == "null" {
 			writeError(w, 400, "invalid_custom_field", "客户字段必须为对象")
 			return
 		}

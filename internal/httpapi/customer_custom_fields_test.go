@@ -2,8 +2,42 @@ package httpapi
 
 import (
 	"fmt"
+	"net/http/httptest"
+	"sync"
 	"testing"
 )
+
+func TestAdminCustomerCustomFieldConcurrentIdempotency(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "custom-fields-idempotency-root", "super_admin")
+	body := map[string]any{"field_key": "concurrent_field", "label": "并发字段", "field_type": "text", "active": true}
+	start := make(chan struct{})
+	responses := make(chan *httptest.ResponseRecorder, 2)
+	var workers sync.WaitGroup
+	workers.Add(2)
+	for range 2 {
+		go func() {
+			defer workers.Done()
+			<-start
+			responses <- request(h, "POST", "/api/v1/admin/customer-fields", body, root, "custom-field-concurrent-key")
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(responses)
+	ids := map[float64]bool{}
+	codes := map[int]int{}
+	for response := range responses {
+		codes[response.Code]++
+		if response.Code != 200 && response.Code != 201 {
+			t.Fatalf("concurrent idempotent create status=%d body=%s", response.Code, response.Body.String())
+		}
+		ids[data(t, response)["id"].(float64)] = true
+	}
+	if len(ids) != 1 || codes[200] != 1 || codes[201] != 1 {
+		t.Fatalf("concurrent idempotent replay mismatch: ids=%v codes=%v", ids, codes)
+	}
+}
 
 func TestAdminCustomerCustomFieldsVersionedCRUDAndPermission(t *testing.T) {
 	db, h := testServer(t)
