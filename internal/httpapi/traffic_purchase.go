@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 // serviceTrafficProducts only lists packages applicable to the caller's live
@@ -53,13 +55,20 @@ func (s *Server) buyTrafficProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%d:%s:%s", actor, op, key)); err != nil {
+	// The unique order key is scoped to the customer, including purchases on
+	// different services. Lock that same scope before checking any replay.
+	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("traffic:%d:%s", actor, key)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	// Serialize same keys before replay lookup to avoid duplicate invoices.
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("traffic:%d:%d:%s", actor, serviceID, key)); err != nil {
+	var existingServiceID, existingProductID int64
+	err = tx.QueryRow(r.Context(), "SELECT service_id,traffic_product_id FROM traffic_orders WHERE user_id=$1 AND idempotency_key=$2", actor, key).Scan(&existingServiceID, &existingProductID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.fail(w, r, err)
+		return
+	}
+	if err == nil && (existingServiceID != serviceID || existingProductID != in.TrafficProductID) {
+		writeError(w, 409, "idempotency_conflict", "此幂等键已用于其他服务或流量包")
 		return
 	}
 	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {

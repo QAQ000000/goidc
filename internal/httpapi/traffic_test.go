@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -180,4 +181,60 @@ func TestTrafficOrdersPurchaseListCancelAndPermissions(t *testing.T) {
 	if data(t, detail)["status"] != "cancelled" {
 		t.Fatal(data(t, detail))
 	}
+}
+
+// Purchases share the unique customer/key scope even across services. One
+// concurrent request must win, while the other returns a conflict, not a 500.
+func TestTrafficPurchaseIdempotencyAcrossServices(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "traffic-key-root", "super_admin")
+	uid, customer := user(t, db, h, "traffic-key-customer", "customer")
+	pid := product(t, db, 20)
+	var serviceIDs []int64
+	for range 2 {
+		v, item := add(t, h, customer, pid, 1)
+		w := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: v, ItemIDs: []int64{item}}, customer, fmt.Sprintf("traffic-key-service-%d", len(serviceIDs)))
+		expect(t, w, 201)
+		var sid int64
+		if err := db.Pool.QueryRow(t.Context(), "UPDATE services SET status='active' WHERE order_id=$1 RETURNING id", int64(data(t, w)["order_id"].(float64))).Scan(&sid); err != nil {
+			t.Fatal(err)
+		}
+		serviceIDs = append(serviceIDs, sid)
+	}
+	created := request(h, "POST", "/api/v1/admin/traffic-products", map[string]any{"name": "并发跨服务流量包", "capacity_gb": 10, "price_cents": 100, "active": true, "stock": 2}, root, "traffic-key-package")
+	expect(t, created, 201)
+	tid := int64(data(t, created)["id"].(float64))
+	in := map[string]any{"traffic_product_id": tid, "expected_version": 1}
+	key := strings.Repeat("k", 128)
+	var wg sync.WaitGroup
+	codes := make(chan int, 2)
+	for _, sid := range serviceIDs {
+		wg.Add(1)
+		go func(sid int64) {
+			defer wg.Done()
+			codes <- request(h, "POST", fmt.Sprintf("/api/v1/services/%d/traffic-orders", sid), in, customer, key).Code
+		}(sid)
+	}
+	wg.Wait()
+	close(codes)
+	counts := map[int]int{}
+	for code := range codes {
+		counts[code]++
+	}
+	if counts[201] != 1 || counts[409] != 1 {
+		t.Fatal(counts)
+	}
+	var winningService, rows, invoices, stock, sold int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT min(service_id),count(*) FROM traffic_orders WHERE user_id=$1 AND idempotency_key=$2", uid, key).Scan(&winningService, &rows); err != nil || rows != 1 {
+		t.Fatal(rows, err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM invoices WHERE user_id=$1 AND idempotency_key LIKE 'traffic:%'", uid).Scan(&invoices); err != nil || invoices != 1 {
+		t.Fatal(invoices, err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), "SELECT stock,sold_count FROM traffic_products WHERE id=$1", tid).Scan(&stock, &sold); err != nil || stock != 1 || sold != 1 {
+		t.Fatal(stock, sold, err)
+	}
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/traffic-orders", winningService), in, customer, key), 200)
+	in["traffic_product_id"] = tid + 1
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/traffic-orders", winningService), in, customer, key), 409)
 }
