@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
 )
@@ -81,5 +82,93 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 	contentRole(t, db, staffID, "customers.view")
 	for _, path := range []string{"orders/page", "renewal-orders"} {
 		expect(t, request(h, "GET", "/api/v1/admin/"+path, nil, staff, ""), 403)
+	}
+}
+
+func TestAdminOrderPagesShanghaiDatesPaymentStateAndVersion(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "order-date-root", "super_admin")
+	uid, _ := user(t, db, h, "order-date-customer", "customer")
+	zone := time.FixedZone("Asia/Shanghai", 8*3600)
+	start := time.Date(2026, 10, 10, 0, 0, 0, 0, zone)
+	var insideID, reviewID int64
+	for n, created := range []time.Time{start.Add(-time.Microsecond), start, start.Add(24*time.Hour - time.Microsecond), start.Add(24 * time.Hour)} {
+		var id int64
+		review := "approved"
+		if n == 2 {
+			review = "pending"
+		}
+		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO orders(order_no,user_id,total_cents,idempotency_key,request_hash,created_at,review_status) VALUES($1,$2,100,$1,'date-fixture',$3,$4) RETURNING id`, fmt.Sprintf("DATE-ORDER-%d", n), uid, created, review).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if n == 1 {
+			insideID = id
+		}
+		if n == 2 {
+			reviewID = id
+		}
+	}
+	for _, path := range []string{"/api/v1/admin/orders", "/api/v1/admin/orders/page"} {
+		query := "?date_from=2026-10-10&date_to=2026-10-10"
+		w := request(h, "GET", path+query, nil, root, "")
+		expect(t, w, 200)
+		var rows []map[string]any
+		if path == "/api/v1/admin/orders" {
+			rows = listData(t, w)
+		} else {
+			if data(t, w)["total"] != float64(2) {
+				t.Fatalf("Shanghai day total: %s", w.Body.String())
+			}
+			for _, value := range data(t, w)["items"].([]any) {
+				rows = append(rows, value.(map[string]any))
+			}
+		}
+		if len(rows) != 2 {
+			t.Fatalf("Shanghai date boundaries %s: %s", path, w.Body.String())
+		}
+		for _, row := range rows {
+			if row["id"] != float64(insideID) && row["id"] != float64(reviewID) {
+				t.Fatalf("outside day included: %#v", row)
+			}
+			if row["version"] != float64(1) {
+				t.Fatalf("version absent: %#v", row)
+			}
+		}
+		for _, invalid := range []string{"date_from=2026-02-30", "date_to=bad", "date_from=2026-10-11&date_to=2026-10-10", "payment_status=unknown"} {
+			expect(t, request(h, "GET", path+"?"+invalid, nil, root, ""), 400)
+		}
+	}
+	w := request(h, "GET", "/api/v1/admin/orders/page?status=review_pending", nil, root, "")
+	expect(t, w, 200)
+	if data(t, w)["total"] != float64(1) || data(t, w)["items"].([]any)[0].(map[string]any)["id"] != float64(reviewID) {
+		t.Fatalf("review filter: %s", w.Body.String())
+	}
+	for n, paymentStatus := range []string{"unpaid", "paid", "cancelled", "refunded"} {
+		var id int64
+		orderStatus := "pending"
+		if paymentStatus != "unpaid" {
+			orderStatus = paymentStatus
+		}
+		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO orders(order_no,user_id,total_cents,idempotency_key,request_hash,status,created_at) VALUES($1,$2,100,$1,'payment-state-fixture',$3,$4) RETURNING id`, fmt.Sprintf("PAYMENT-STATE-%d", n), uid, orderStatus, start.Add(24*time.Hour)).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(t.Context(), `INSERT INTO invoices(invoice_no,user_id,order_id,status,amount_cents,idempotency_key) VALUES($1,$2,$3,$4,100,$1)`, fmt.Sprintf("PAYMENT-INVOICE-%d", n), uid, id, paymentStatus); err != nil {
+			t.Fatal(err)
+		}
+		w := request(h, "GET", "/api/v1/admin/orders/page?payment_status="+paymentStatus, nil, root, "")
+		expect(t, w, 200)
+		if data(t, w)["total"] != float64(1) || data(t, w)["items"].([]any)[0].(map[string]any)["id"] != float64(id) {
+			t.Fatalf("payment %s: %s", paymentStatus, w.Body.String())
+		}
+	}
+	w = request(h, "GET", "/api/v1/admin/orders/page?payment_status=deferred", nil, root, "")
+	expect(t, w, 200)
+	if data(t, w)["total"] != float64(4) {
+		t.Fatalf("deferred filter: %s", w.Body.String())
+	}
+	page := request(h, "GET", "/api/v1/admin/orders/page?date_from=2026-10-10&date_to=2026-10-10&limit=1&offset=1", nil, root, "")
+	expect(t, page, 200)
+	if data(t, page)["total"] != float64(2) || len(data(t, page)["items"].([]any)) != 1 || data(t, page)["offset"] != float64(1) {
+		t.Fatalf("date count/paging mismatch: %s", page.Body.String())
 	}
 }

@@ -307,7 +307,7 @@ func TestEpayPendingGuardsAndServiceSettlement(t *testing.T) {
 			expect(t, request(f.h, "POST", path+"/pay", map[string]any{}, f.customer, "epay-expired-balance"), 409)
 			if kind == "order" {
 				expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/orders/%d/cancel", order), map[string]any{}, f.customer, "epay-order-cancel"), 409)
-				expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/cancel", order), map[string]any{}, f.root, "epay-admin-cancel"), 409)
+				expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/cancel", order), map[string]any{"expected_version": orderVersion(t, f.db, order)}, f.root, "epay-admin-cancel"), 409)
 			}
 			if kind == "upgrade" {
 				expect(t, request(f.h, "DELETE", fmt.Sprintf("/api/v1/services/%d/configuration-changes/%d", f.sid, change), nil, f.customer, ""), 409)

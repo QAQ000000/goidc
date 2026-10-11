@@ -103,9 +103,9 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 			{"PATCH", fmt.Sprintf("%s/contacts/%d", customerPath, r.contact), map[string]any{"email": "sales-root@example.test"}, ""},
 			{"DELETE", fmt.Sprintf("%s/contacts/%d", customerPath, r.contact), nil, ""},
 			{"GET", fmt.Sprintf("/api/v1/admin/orders/%d", r.pending), nil, ""},
-			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", r.pending), map[string]any{"notes": "blocked"}, ""},
-			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/cancel", r.pending), map[string]any{}, "sales-blocked-order"},
-			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", r.paid), map[string]any{"decision": "approved", "note": "scope test"}, "sales-blocked-review"},
+			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", r.pending), map[string]any{"notes": "blocked", "expected_version": orderVersion(t, db, r.pending)}, "sales-blocked-notes"},
+			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/cancel", r.pending), map[string]any{"expected_version": orderVersion(t, db, r.pending)}, "sales-blocked-order"},
+			{"POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", r.paid), map[string]any{"decision": "approved", "note": "scope test", "expected_version": orderVersion(t, db, r.paid)}, "sales-blocked-review"},
 			{"POST", fmt.Sprintf("/api/v1/admin/invoices/%d/refund", r.invoice), map[string]any{}, "sales-blocked-refund"},
 			{"GET", fmt.Sprintf("/api/v1/admin/services/%d", r.service), nil, ""},
 			{"POST", fmt.Sprintf("/api/v1/admin/services/%d/actions", r.service), map[string]any{"action": "suspend"}, "sales-blocked-action"},
@@ -121,8 +121,8 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 	}
 	own := items[0]
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d/contacts/%d", own.customer, own.contact), map[string]any{"username": "Updated"}, staff, ""), 200)
-	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", own.pending), map[string]any{"notes": "allowed"}, staff, ""), 200)
-	bulk := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", map[string]any{"order_ids": []int64{own.pending, items[1].pending}}, staff, "sales-bulk-cancel")
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", own.pending), map[string]any{"notes": "allowed", "expected_version": orderVersion(t, db, own.pending)}, staff, "sales-owned-notes"), 200)
+	bulk := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", map[string]any{"order_ids": []int64{own.pending, items[1].pending}, "expected_versions": orderVersions(t, db, own.pending, items[1].pending)}, staff, "sales-bulk-cancel")
 	expect(t, bulk, 200)
 	var foreignStatus string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT status FROM orders WHERE id=$1", items[1].pending).Scan(&foreignStatus); err != nil || foreignStatus != "pending" {
@@ -292,7 +292,7 @@ func TestCustomerScopeServiceReplayAfterTransfer(t *testing.T) {
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID), map[string]any{"amount_cents": 2000}, root, "sales-service-credit"), 201)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoiceID), map[string]any{}, customer, "sales-service-pay"), 201)
 	reviewPath := fmt.Sprintf("/api/v1/admin/orders/%d/review", orderID)
-	review := map[string]any{"decision": "approved", "note": "review scope"}
+	review := map[string]any{"decision": "approved", "note": "review scope", "expected_version": orderVersion(t, db, orderID)}
 	expect(t, request(h, "POST", reviewPath, review, staff, "sales-service-review"), 201)
 	job, err := db.ClaimProvisionJob(t.Context())
 	if err != nil || job == nil {

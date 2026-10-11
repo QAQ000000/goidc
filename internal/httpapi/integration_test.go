@@ -915,7 +915,10 @@ func TestAdminOrderFilterAndBulkCancellation(t *testing.T) {
 	if rows := listData(t, filtered); len(rows) != 2 {
 		t.Fatalf("filtered orders=%d, want 2", len(rows))
 	}
-	bulk := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", map[string]any{"order_ids": []int64{firstID, secondID, 999999999}}, admin, "bulk-cancel-1")
+	expectedVersions := orderVersions(t, db, firstID, secondID)
+	expectedVersions[999999999] = 1
+	bulkBody := map[string]any{"order_ids": []int64{firstID, secondID, 999999999}, "expected_versions": expectedVersions}
+	bulk := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", bulkBody, admin, "bulk-cancel-1")
 	expect(t, bulk, 200)
 	bulkData := data(t, bulk)
 	if bulkData["succeeded"] != float64(2) || bulkData["failed"] != float64(1) {
@@ -925,7 +928,7 @@ func TestAdminOrderFilterAndBulkCancellation(t *testing.T) {
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM orders WHERE id=ANY($1) AND status='cancelled'", []int64{firstID, secondID}).Scan(&cancelled); err != nil || cancelled != 2 {
 		t.Fatalf("cancelled orders=%d err=%v", cancelled, err)
 	}
-	replay := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", map[string]any{"order_ids": []int64{firstID, secondID, 999999999}}, admin, "bulk-cancel-1")
+	replay := request(h, "POST", "/api/v1/admin/orders/bulk-cancel", bulkBody, admin, "bulk-cancel-1")
 	expect(t, replay, 200)
 	if data(t, replay)["succeeded"] != float64(2) {
 		t.Fatalf("bulk replay: %s", replay.Body.String())
@@ -1003,7 +1006,8 @@ FROM orders o JOIN services s ON s.order_id=o.id WHERE o.id=$1`, orderID).Scan(&
 	if len(data(t, detail)["items"].([]any)) != 1 {
 		t.Fatalf("order detail items missing: %s", detail.Body.String())
 	}
-	approved := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", orderID), map[string]string{"decision": "approved", "note": "资料核验通过"}, admin, "review-required-approve")
+	reviewBody := map[string]any{"decision": "approved", "note": "资料核验通过", "expected_version": orderVersion(t, db, orderID)}
+	approved := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", orderID), reviewBody, admin, "review-required-approve")
 	expect(t, approved, 201)
 	if data(t, approved)["queued_services"] != float64(1) {
 		t.Fatalf("approval did not queue service: %s", approved.Body.String())
@@ -1015,12 +1019,12 @@ FROM orders o JOIN services s ON s.order_id=o.id WHERE o.id=$1`, orderID).Scan(&
 	if review != "approved" || orderStatus != "active" || serviceStatus != "queued" || jobs != 1 {
 		t.Fatalf("after review status=%s order=%s service=%s jobs=%d", review, orderStatus, serviceStatus, jobs)
 	}
-	replay := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", orderID), map[string]string{"decision": "approved", "note": "资料核验通过"}, admin, "review-required-approve")
+	replay := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/review", orderID), reviewBody, admin, "review-required-approve")
 	expect(t, replay, 200)
 	if !data(t, replay)["replayed"].(bool) {
 		t.Fatal("review replay flag missing")
 	}
-	notes := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", orderID), map[string]string{"notes": "需要保留人工审核凭据"}, admin, "")
+	notes := request(h, "POST", fmt.Sprintf("/api/v1/admin/orders/%d/notes", orderID), map[string]any{"notes": "需要保留人工审核凭据", "expected_version": orderVersion(t, db, orderID)}, admin, "review-required-notes")
 	expect(t, notes, 200)
 	if data(t, notes)["notes"] != "需要保留人工审核凭据" {
 		t.Fatalf("notes not saved: %s", notes.Body.String())
