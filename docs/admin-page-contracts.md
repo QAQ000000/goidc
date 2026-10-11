@@ -396,7 +396,11 @@
 <a id="page-56"></a>
 ## 56. 黑名单列表
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1237)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:66)。JSON 中按唯一旧 hash #/black-list 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1237)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:66)；页面：[路由](../web/src/app/admin/blacklist/page.tsx:1)；组件：[实现](../web/src/components/admin-blacklist.tsx:1)。JSON 中按唯一旧 hash #/black-list 检索。
+
+页面使用 `GET /api/v1/admin/blacklist` 返回 `items/total/limit/offset`，支持关键词和生效状态筛选。超级管理员或拥有 `security.manage` 的管理员可添加用户名/IP 登录阻断、填写来源 IP、原因和永久/定时解封时间；保存通过 `Idempotency-Key`，服务端写入审计并在更新/删除时校验 `expected_version`，冲突返回 `409`。解除操作必须确认，删除后列表重新读取真实空态。登录链路在认证前检查有效黑名单；管理员连续三次失败会自动创建 3 小时用户名阻断并记录安全审计。密钥、密码和原始认证凭据不写入黑名单表。
+
+页面状态覆盖初始加载、真实空态、API 错误、筛选、添加成功、重复/冲突错误和解除确认；数据来自 Go API，不使用静态行。Playwright 四尺寸（1440x900、1024x768、390x844、320x800）无横向溢出，截图见 [本批验收](admin-batch-security-acceptance-20261011.md)。
 
 <a id="page-57"></a>
 ## 57. 数据迁移

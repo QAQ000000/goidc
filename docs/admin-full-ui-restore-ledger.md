@@ -63,7 +63,7 @@
 | 53 | 发送设置 `#/sms-send-settings` | `/admin/sms-settings` | 已完成 | `GET/PUT/POST /admin/sms-settings` | `@super` / 测试短信 |
 | 54 | 二次验证 `#/twice-confirm` | `/admin/security/mfa` | 待实现 | `GET/PUT /admin/security/mfa` | `settings.manage` |
 | 55 | 验证码设置 `#/general-settings/captcha` | `/admin/auth-settings?tab=captcha` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.manage` / 验证码流程 |
-| 56 | 黑名单列表 `#/black-list` | `/admin/blacklist` | 待实现 | `GET/POST/DELETE /admin/blacklist` | `security.view/manage` |
+| 56 | 黑名单列表 `#/black-list` | `/admin/blacklist` | 已完成 | `GET/POST/PATCH/DELETE /admin/blacklist` | `security.view/manage` / 手动用户名/IP 阻断、连续三次管理员登录失败自动封禁、确认解除、幂等、审计、版本冲突；四尺寸验收通过 |
 | 57 | 数据迁移 `#/data-migration` | `/admin/migrations` | 部分完成 | `GET/POST /admin/migrations` | `migrations.view/manage` |
 | 58 | 关于 `#/about` | `/admin/system/about` | 已完成 | `GET /admin/system/about` | `settings.view` / 真实技术栈和构建信息 |
 | 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 已完成 | `GET /admin/system/upgrade` | `settings.view` / 编译迁移清单与数据库已应用版本差异检查 |

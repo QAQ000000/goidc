@@ -41,6 +41,7 @@ var AdminPermissions = []Permission{
 	{"affiliates.withdrawals.review", "推广返利", "审核提现申请"}, {"affiliates.payout", "推广返利", "登记线下打款及读取收款账户"},
 	{"certifications.view", "实名认证", "读取实名认证申请和资料"}, {"certifications.manage", "实名认证", "审核实名认证申请"},
 	{"sales.view", "销售", "读取销售设置、提成组和业绩范围"}, {"sales.manage", "销售", "管理销售分配、提成组、阶梯和人员绑定"},
+	{"security.view", "安全", "读取登录黑名单和安全事件"}, {"security.manage", "安全", "管理登录黑名单和解除登录阻断"},
 	{"reports.view", "报表", "读取经营报表"}, {"audit.view", "审计", "读取操作日志"}, {"migrations.view", "迁移", "读取迁移记录和复核详情"},
 	{"jobs.view", "任务", "读取开通和通知任务队列"},
 }
