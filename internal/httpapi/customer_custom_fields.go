@@ -142,6 +142,10 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_custom_field.create", key, hash); e != nil {
 		s.fail(w, r, e)
 		return
@@ -200,6 +204,10 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	operation := "customer_custom_field.update:" + strconv.FormatInt(id, 10)
 	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
 		s.fail(w, r, e)
@@ -272,6 +280,10 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	operation := "customer_custom_field.delete:" + strconv.FormatInt(id, 10)
 	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
 		s.fail(w, r, e)

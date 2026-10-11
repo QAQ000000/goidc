@@ -477,6 +477,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/customer-product-discounts", s.auth(s.adminCustomerProductDiscounts, true))
 	mux.HandleFunc("PUT /api/v1/admin/customer-product-discounts", s.auth(s.saveCustomerProductDiscount, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/group", s.auth(s.assignCustomerGroup, true))
+	mux.HandleFunc("GET /api/v1/admin/customer-field-definitions", s.auth(s.customerFieldDefinitions, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-fields", s.auth(s.adminCustomerCustomFields, true))
 	mux.HandleFunc("POST /api/v1/admin/customer-fields", s.auth(s.createCustomerCustomField, true))
 	mux.HandleFunc("PATCH /api/v1/admin/customer-fields/{id}", s.auth(s.updateCustomerCustomField, true))
@@ -631,7 +632,11 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 		}
 		if admin {
 			permission, known := adminRoutePermissions[r.Pattern]
-			if !known || (permission == "@super" && id.Role != "super_admin") || (permission != "@super" && !id.can(permission)) {
+			allowed := id.can(permission)
+			if r.Pattern == "GET /api/v1/admin/customer-field-definitions" {
+				allowed = id.can("customers.view") || id.can("customers.manage")
+			}
+			if !known || (permission == "@super" && id.Role != "super_admin") || (permission != "@super" && !allowed) {
 				writeError(w, 403, "permission_denied", "没有执行此操作的权限")
 				return
 			}

@@ -485,7 +485,7 @@ func TestAdminCanEditAndDisableCustomer(t *testing.T) {
 	db, h := testServer(t)
 	customerID, customer := user(t, db, h, "editable-customer", "customer")
 	_, admin := user(t, db, h, "editable-admin", "super_admin")
-	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"display_name": "已更新客户", "email": "updated-customer@example.test", "status": "active"}, admin, "")
+	updated := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]any{"display_name": "已更新客户", "email": "updated-customer@example.test", "status": "active", "expected_version": 1}, admin, "customer-edit-integration-key")
 	expect(t, updated, 200)
 	var name, email, status string
 	if err := db.Pool.QueryRow(context.Background(), "SELECT display_name,email,status FROM users WHERE id=$1", customerID).Scan(&name, &email, &status); err != nil {
@@ -495,14 +495,14 @@ func TestAdminCanEditAndDisableCustomer(t *testing.T) {
 		t.Fatalf("customer update mismatch name=%s email=%s status=%s", name, email, status)
 	}
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"display_name": "越权修改"}, customer, ""), 403)
-	disabled := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"status": "disabled"}, admin, "")
+	disabled := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]any{"status": "disabled", "expected_version": 2}, admin, "customer-disable-integration-key")
 	expect(t, disabled, 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 401)
 	var sessions int
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM sessions WHERE user_id=$1", customerID).Scan(&sessions); err != nil || sessions != 0 {
 		t.Fatalf("disabled customer sessions=%d err=%v", sessions, err)
 	}
-	reenabled := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"status": "active"}, admin, "")
+	reenabled := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]any{"status": "active", "expected_version": 3}, admin, "customer-enable-integration-key")
 	expect(t, reenabled, 200)
 	var auditCount int
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM audit_events WHERE action='customer.updated' AND entity_id=$1", fmt.Sprint(customerID)).Scan(&auditCount); err != nil || auditCount != 3 {
@@ -531,7 +531,7 @@ func TestAdminCanCreateCustomer(t *testing.T) {
 		"status":       "active",
 		"company_name": "测试网络公司",
 		"phone":        "13800138000",
-	}, admin, "")
+	}, admin, "customer-create-integration-key")
 	expect(t, created, 201)
 
 	listed := request(h, "GET", "/api/v1/admin/customers?q=newcust1", nil, admin, "")
@@ -546,7 +546,7 @@ func TestAdminCanCreateCustomer(t *testing.T) {
 		"email":        "newcust1@example.test",
 		"password":     "password123",
 		"display_name": "重复客户",
-	}, admin, "")
+	}, admin, "customer-create-integration-key")
 	expect(t, conflict, 409)
 }
 

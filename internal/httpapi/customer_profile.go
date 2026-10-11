@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/codex/zjmfgo/internal/store"
@@ -14,32 +17,35 @@ import (
 )
 
 type customerProfileInput struct {
-	Gender           string         `json:"gender"`
-	CompanyName      string         `json:"company_name"`
-	Phone            string         `json:"phone"`
-	QQ               string         `json:"qq"`
-	Country          string         `json:"country"`
-	Province         string         `json:"province"`
-	Address          string         `json:"address"`
-	Postcode         string         `json:"postcode"`
-	SourceChannel    string         `json:"source_channel"`
-	PaymentMethod    string         `json:"payment_method"`
-	Language         string         `json:"language"`
-	AdminNote        string         `json:"admin_note"`
-	ReceiveMarketing *bool          `json:"receive_marketing"`
-	CustomFields     map[string]any `json:"custom_fields"`
-	ExpectedVersion  int64          `json:"expected_version"`
+	Gender              string         `json:"gender"`
+	CompanyName         string         `json:"company_name"`
+	Phone               string         `json:"phone"`
+	QQ                  string         `json:"qq"`
+	Country             string         `json:"country"`
+	Province            string         `json:"province"`
+	Address             string         `json:"address"`
+	Postcode            string         `json:"postcode"`
+	SourceChannel       string         `json:"source_channel"`
+	PaymentMethod       string         `json:"payment_method"`
+	Language            string         `json:"language"`
+	AdminNote           string         `json:"admin_note"`
+	ReceiveMarketing    *bool          `json:"receive_marketing"`
+	CustomFields        map[string]any `json:"custom_fields"`
+	ExpectedVersion     int64          `json:"expected_version"`
+	CustomFieldsVersion int64          `json:"custom_fields_version"`
 }
 
-func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values map[string]any) (map[string]any, error) {
-	if values == nil {
-		return map[string]any{}, nil
+// Nil means retain existing values, but never bypass active required fields.
+// Catalogue row locks prevent definition changes until the profile commits.
+func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values, previous map[string]any, expected int64) (map[string]any, error) {
+	var version int64
+	if err := tx.QueryRow(ctx, "SELECT version FROM customer_field_catalogue WHERE id=1 FOR SHARE").Scan(&version); err != nil {
+		return nil, err
 	}
-	rows, err := tx.Query(ctx, `SELECT field_key,field_type,validation_pattern,choices,required,active FROM customer_custom_fields WHERE active ORDER BY id`)
+	rows, err := tx.Query(ctx, `SELECT field_key,field_type,validation_pattern,choices,required FROM customer_custom_fields WHERE active ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	type customDef struct {
 		typ, pattern string
 		choices      []string
@@ -47,28 +53,65 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values map[str
 	}
 	allowed := map[string]customDef{}
 	for rows.Next() {
-		var key, typ, pattern string
-		var choices []string
-		var required, active bool
-		if err := rows.Scan(&key, &typ, &pattern, &choices, &required, &active); err != nil {
+		var key string
+		var def customDef
+		if err := rows.Scan(&key, &def.typ, &def.pattern, &def.choices, &def.required); err != nil {
+			rows.Close()
 			return nil, err
 		}
-		allowed[key] = customDef{typ, pattern, choices, required}
+		allowed[key] = def
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if (values != nil || len(allowed) > 0 || expected > 0) && expected != version {
+		return nil, &store.Conflict{Code: "stale_customer_fields", Message: "客户字段定义已变化，请刷新后重试"}
 	}
 	out := map[string]any{}
+	// Retain values for definitions that have been disabled or deleted.
+	for key, value := range previous {
+		if _, active := allowed[key]; !active || values == nil {
+			out[key] = value
+		}
+	}
 	for key, value := range values {
 		def, ok := allowed[key]
 		if !ok {
-			return nil, fmt.Errorf("invalid_custom_field")
-		}
-		text := fmt.Sprint(value)
-		switch def.typ {
-		case "text", "textarea", "date", "select":
-			if _, ok := value.(string); !ok {
+			old, exists := previous[key]
+			if !exists || !reflect.DeepEqual(old, value) {
 				return nil, fmt.Errorf("invalid_custom_field")
 			}
+			continue
+		}
+		if value == nil {
+			if def.required {
+				return nil, fmt.Errorf("invalid_custom_field")
+			}
+			out[key] = nil
+			continue
+		}
+		text := fmt.Sprint(value)
+		empty := false
+		switch def.typ {
+		case "text", "textarea", "date", "select":
+			str, ok := value.(string)
+			if !ok || strings.ContainsRune(str, 0) || utf8.RuneCountInString(str) > 5000 {
+				return nil, fmt.Errorf("invalid_custom_field")
+			}
+			empty = strings.TrimSpace(str) == ""
+			if empty && def.required {
+				return nil, fmt.Errorf("invalid_custom_field")
+			}
+			if !empty && def.typ == "date" {
+				if _, err := time.Parse("2006-01-02", str); err != nil {
+					return nil, fmt.Errorf("invalid_custom_field")
+				}
+			}
 		case "number":
-			if _, ok := value.(float64); !ok {
+			n, ok := value.(float64)
+			if !ok || math.IsNaN(n) || math.IsInf(n, 0) {
 				return nil, fmt.Errorf("invalid_custom_field")
 			}
 		case "boolean":
@@ -76,10 +119,10 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values map[str
 				return nil, fmt.Errorf("invalid_custom_field")
 			}
 		}
-		if def.typ == "select" {
+		if !empty && def.typ == "select" {
 			found := false
-			for _, c := range def.choices {
-				if text == c {
+			for _, choice := range def.choices {
+				if text == choice {
 					found = true
 				}
 			}
@@ -87,7 +130,7 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values map[str
 				return nil, fmt.Errorf("invalid_custom_field")
 			}
 		}
-		if def.pattern != "" {
+		if !empty && def.pattern != "" {
 			matched, e := regexp.MatchString(def.pattern, text)
 			if e != nil || !matched {
 				return nil, fmt.Errorf("invalid_custom_field")
@@ -95,9 +138,25 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values map[str
 		}
 		out[key] = value
 	}
+	// Nil retains active values, which must still match the current definition.
+	if values == nil && len(previous) > 0 {
+		retained := map[string]any{}
+		for key, value := range previous {
+			if _, ok := allowed[key]; ok {
+				retained[key] = value
+			}
+		}
+		if len(retained) > 0 {
+			return validateCustomerCustomFields(ctx, tx, retained, previous, expected)
+		}
+	}
 	for key, def := range allowed {
 		if def.required {
-			if _, ok := out[key]; !ok {
+			value, ok := out[key]
+			if !ok || value == nil {
+				return nil, fmt.Errorf("invalid_custom_field")
+			}
+			if text, ok := value.(string); ok && strings.TrimSpace(text) == "" {
 				return nil, fmt.Errorf("invalid_custom_field")
 			}
 		}
@@ -137,7 +196,18 @@ func saveCustomerProfile(ctx context.Context, tx pgx.Tx, id int64, p customerPro
 	if p.ReceiveMarketing != nil {
 		marketing = *p.ReceiveMarketing
 	}
-	custom, err := validateCustomerCustomFields(ctx, tx, p.CustomFields)
+	var previous map[string]any
+	var previousRaw []byte
+	err := tx.QueryRow(ctx, "SELECT custom_fields FROM customer_profiles WHERE customer_id=$1 FOR UPDATE", id).Scan(&previousRaw)
+	if err != nil && err != pgx.ErrNoRows {
+		return err
+	}
+	if len(previousRaw) > 0 {
+		if err = json.Unmarshal(previousRaw, &previous); err != nil {
+			return err
+		}
+	}
+	custom, err := validateCustomerCustomFields(ctx, tx, p.CustomFields, previous, p.CustomFieldsVersion)
 	if err != nil {
 		return err
 	}

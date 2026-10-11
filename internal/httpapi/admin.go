@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/mail"
 	"strconv"
@@ -156,10 +157,11 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		DisplayName *string               `json:"display_name"`
-		Email       *string               `json:"email"`
-		Status      *string               `json:"status"`
-		Profile     *customerProfileInput `json:"profile"`
+		DisplayName     *string                    `json:"display_name"`
+		Email           *string                    `json:"email"`
+		Status          *string                    `json:"status"`
+		Profile         map[string]json.RawMessage `json:"profile"`
+		ExpectedVersion int64                      `json:"expected_version"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -187,10 +189,26 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer", "客户状态无效")
 		return
 	}
-	if input.Profile != nil && !input.Profile.valid() {
-		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
+	if value, exists := input.Profile["expected_version"]; exists {
+		var nested int64
+		if err := json.Unmarshal(value, &nested); err != nil || (input.ExpectedVersion > 0 && input.ExpectedVersion != nested) {
+			writeError(w, 400, "invalid_profile", "资料版本无效")
+			return
+		}
+		input.ExpectedVersion = nested
+	}
+	if input.ExpectedVersion < 1 {
+		writeError(w, 409, "customer_version_required", "请提交当前客户资料版本")
 		return
 	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	payloadHash := settingMutationHash(struct {
+		ID    int64
+		Input any
+	}{id, input})
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
@@ -205,10 +223,65 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	operation := "customer.update:" + strconv.FormatInt(id, 10)
+	if err = lockCustomerMutation(r, tx, identityFrom(r).ID, operation, key); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if replay, replayed, e := loadSettingReplayTx(r, tx, identityFrom(r).ID, operation, key, payloadHash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		if e = tx.Commit(r.Context()); e != nil {
+			s.fail(w, r, e)
+			return
+		}
+		write(w, 200, replay)
+		return
+	}
 	var currentStatus string
 	if err = tx.QueryRow(r.Context(), "SELECT status FROM users WHERE id=$1 AND role='customer' FOR UPDATE", id).Scan(&currentStatus); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	profile, err := currentCustomerProfile(r, tx, id)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if profile.ExpectedVersion != input.ExpectedVersion {
+		writeError(w, 409, "stale_customer_profile", "客户资料已更新，请刷新后重试")
+		return
+	}
+	if input.Profile != nil {
+		if _, exists := input.Profile["custom_fields"]; exists && string(input.Profile["custom_fields"]) == "null" {
+			writeError(w, 400, "invalid_custom_field", "客户字段不能为null")
+			return
+		}
+		// Merge only explicitly submitted profile properties, retaining existing data.
+		raw, _ := json.Marshal(profile)
+		var merged map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &merged)
+		for k, v := range input.Profile {
+			if string(v) == "null" {
+				writeError(w, 400, "invalid_profile", "客户资料字段不能为null")
+				return
+			}
+			if _, known := merged[k]; !known {
+				writeError(w, 400, "invalid_profile", "未知客户资料字段")
+				return
+			}
+			merged[k] = v
+		}
+		raw, _ = json.Marshal(merged)
+		if err = json.Unmarshal(raw, &profile); err != nil || !profile.valid() {
+			writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
+			return
+		}
+		// An omitted custom_fields means preserve, but still validate required values.
+		if _, present := input.Profile["custom_fields"]; !present {
+			profile.CustomFields = nil
+		}
 	}
 	if _, err = tx.Exec(r.Context(), `UPDATE users SET display_name=COALESCE($2,display_name),email=COALESCE($3,email),status=COALESCE($4,status),updated_at=now() WHERE id=$1`, id, input.DisplayName, input.Email, input.Status); err != nil {
 		s.fail(w, r, err)
@@ -221,7 +294,7 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if input.Profile != nil {
-		if err = saveCustomerProfile(r.Context(), tx, id, *input.Profile); err != nil {
+		if err = saveCustomerProfile(r.Context(), tx, id, profile); err != nil {
 			if customerProfileFailure(w, r, err) {
 				return
 			}
@@ -233,26 +306,44 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	if input.Profile == nil {
+		if _, err = tx.Exec(r.Context(), "UPDATE customer_profiles SET version=version+1,updated_at=now() WHERE customer_id=$1", id); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	result := map[string]any{"user_id": id, "profile_version": input.ExpectedVersion + 1, "replayed": false}
+	if err = saveSettingOperationTx(r, tx, identityFrom(r).ID, operation, key, payloadHash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"user_id": id, "status": input.Status})
+	write(w, http.StatusOK, result)
 }
 
 func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Username     string  `json:"username"`
-		Email        string  `json:"email"`
-		Password     string  `json:"password"`
-		DisplayName  string  `json:"display_name"`
-		Status       *string `json:"status"`
-		GroupID      *int64  `json:"group_id"`
-		SalesOwnerID *int64  `json:"sales_owner_id"`
+		Username          string          `json:"username"`
+		Email             string          `json:"email"`
+		Password          string          `json:"password"`
+		DisplayName       string          `json:"display_name"`
+		Status            *string         `json:"status"`
+		GroupID           *int64          `json:"group_id"`
+		SalesOwnerID      *int64          `json:"sales_owner_id"`
+		CustomFieldValues json.RawMessage `json:"custom_fields"`
 		customerProfileInput
 	}
 	if !decode(w, r, &input) {
 		return
+	}
+	if input.CustomFieldValues != nil {
+		if string(input.CustomFieldValues) == "null" || json.Unmarshal(input.CustomFieldValues, &input.CustomFields) != nil {
+			writeError(w, 400, "invalid_custom_field", "客户字段必须为对象")
+			return
+		}
 	}
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	if email == "" || len(email) > 254 {
@@ -298,6 +389,11 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
 		return
 	}
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	payloadHash := settingMutationHash(input)
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		s.fail(w, r, err)
@@ -322,6 +418,30 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	}
 	if (input.GroupID != nil && *input.GroupID < 1) || (input.SalesOwnerID != nil && *input.SalesOwnerID < 1) {
 		writeError(w, 400, "invalid_assignment", "客户分组或销售归属无效")
+		return
+	}
+	if err = lockCustomerMutation(r, tx, identityFrom(r).ID, "customer.create", key); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if replay, replayed, e := loadSettingReplayTx(r, tx, identityFrom(r).ID, "customer.create", key, payloadHash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		customerID := int64(replay["id"].(float64))
+		if e = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); e != nil {
+			s.fail(w, r, e)
+			return
+		}
+		if e = tx.Commit(r.Context()); e != nil {
+			s.fail(w, r, e)
+			return
+		}
+		write(w, 200, replay)
+		return
+	}
+	if input.ExpectedVersion != 0 {
+		writeError(w, 400, "invalid_profile", "新客户不应提供资料版本")
 		return
 	}
 	if input.GroupID != nil {
@@ -419,18 +539,16 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	result := map[string]any{"id": id, "username": username, "email": email, "display_name": displayName, "status": status, "profile_version": 1, "replayed": false}
+	if err = saveSettingOperationTx(r, tx, identityFrom(r).ID, "customer.create", key, payloadHash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-
-	write(w, http.StatusCreated, map[string]any{
-		"id":           id,
-		"username":     username,
-		"email":        email,
-		"display_name": displayName,
-		"status":       status,
-	})
+	write(w, http.StatusCreated, result)
 }
 
 func (s *Server) auditEvents(w http.ResponseWriter, r *http.Request) {

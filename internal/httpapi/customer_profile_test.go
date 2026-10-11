@@ -32,14 +32,14 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 		for k, v := range assignment {
 			in[k] = v
 		}
-		expect(t, request(h, "POST", "/api/v1/admin/customers", in, staff, ""), 403)
+		expect(t, request(h, "POST", "/api/v1/admin/customers", in, staff, "customer-profile-test-key"), 403)
 	}
 	for _, assignment := range []map[string]any{{"group_id": 999999}, {"sales_owner_id": 999999}} {
 		in := base("invalid")
 		for k, v := range assignment {
 			in[k] = v
 		}
-		expect(t, request(h, "POST", "/api/v1/admin/customers", in, root, ""), 400)
+		expect(t, request(h, "POST", "/api/v1/admin/customers", in, root, "customer-profile-test-key"), 400)
 	}
 	in := base("MixedCase")
 	profile := map[string]any{"gender": "female", "company_name": "Example Ltd", "phone": "+86 13800138000", "qq": "123456", "country": "中国", "province": "广东", "address": "测试地址", "postcode": "12345", "source_channel": "朋友推荐", "payment_method": "wechat", "language": "en_US", "admin_note": "客户备注", "receive_marketing": false}
@@ -48,7 +48,7 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 	}
 	in["group_id"] = group
 	in["sales_owner_id"] = ownerID
-	created := request(h, "POST", "/api/v1/admin/customers", in, root, "")
+	created := request(h, "POST", "/api/v1/admin/customers", in, root, "customer-profile-test-key")
 	expect(t, created, 201)
 	id := int64(data(t, created)["id"].(float64))
 	if data(t, created)["username"] != "mixedcase" {
@@ -66,15 +66,16 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 		}
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "MixedCase", "password": " password123 "}, "", ""), 200)
-	expect(t, request(h, "POST", "/api/v1/admin/customers", base("MIXEDCASE"), root, ""), 409)
+	expect(t, request(h, "POST", "/api/v1/admin/customers", base("MIXEDCASE"), root, "customer-profile-duplicate-key"), 409)
+	profile["expected_version"] = 1
 	profile["qq"] = "654321"
 	profile["admin_note"] = "修改备注"
-	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", id), map[string]any{"profile": profile}, root, ""), 200)
+	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", id), map[string]any{"profile": profile}, root, "customer-profile-update-key"), 200)
 	got = data(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d", id), nil, root, ""))
 	if got["qq"] != "654321" || got["admin_note"] != "修改备注" {
 		t.Fatal(got)
 	}
-	owned := request(h, "POST", "/api/v1/admin/customers", base("staff-created"), staff, "")
+	owned := request(h, "POST", "/api/v1/admin/customers", base("staff-created"), staff, "customer-profile-staff-key")
 	expect(t, owned, 201)
 	ownedID := int64(data(t, owned)["id"].(float64))
 	got = data(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d", ownedID), nil, staff, ""))
@@ -84,11 +85,11 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 	for i, password := range []string{strings.Repeat("a", 73), "short", strings.Repeat("界", 25)} {
 		invalid := base(fmt.Sprintf("invalid-password-%d", i))
 		invalid["password"] = password
-		expect(t, request(h, "POST", "/api/v1/admin/customers", invalid, root, ""), 400)
+		expect(t, request(h, "POST", "/api/v1/admin/customers", invalid, root, "customer-profile-unicode-key"), 400)
 	}
 	valid := base("unicode-password")
 	valid["password"] = strings.Repeat("界", 24)
-	response := request(h, "POST", "/api/v1/admin/customers", valid, root, "")
+	response := request(h, "POST", "/api/v1/admin/customers", valid, root, "customer-profile-unicode-key")
 	expect(t, response, 201)
 	var hash string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT password_hash FROM users WHERE id=$1", int64(data(t, response)["id"].(float64))).Scan(&hash); err != nil {
@@ -112,7 +113,7 @@ func TestCustomerCreationRechecksRevokedRoleAfterLock(t *testing.T) {
 	}
 	done := make(chan int, 1)
 	go func() {
-		done <- request(h, "POST", "/api/v1/admin/customers", map[string]any{"username": "revoked-created", "email": "revoked-created@example.test", "password": "password123"}, staff, "").Code
+		done <- request(h, "POST", "/api/v1/admin/customers", map[string]any{"username": "revoked-created", "email": "revoked-created@example.test", "password": "password123"}, staff, "customer-profile-revoked-key").Code
 	}()
 	deadline := time.Now().Add(8 * time.Second)
 	for {

@@ -117,6 +117,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["POST /api/v1/admin/channel-instances"] = "@super"
 	m["PUT /api/v1/admin/channel-instances/{id}"] = "@super"
 	m["DELETE /api/v1/admin/channel-instances/{id}"] = "@super"
+	m["GET /api/v1/admin/customer-field-definitions"] = "customers.view"
 	m["GET /api/v1/admin/sales-owners"] = "@super"
 	m["PUT /api/v1/admin/customers/{id}/sales-owner"] = "@super"
 	m["GET /api/v1/admin/sales-settings"] = "sales.view"
