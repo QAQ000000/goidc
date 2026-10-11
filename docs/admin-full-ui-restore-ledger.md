@@ -16,7 +16,7 @@
 | 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸验收已通过 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 已完成 | `GET /admin/orders` | `orders.view/manage` / 状态、批量取消 |
-| 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 待实现 | `GET /admin/orders?kind=renew` | `orders.view` / URL 筛选恢复 |
+| 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 已完成 | `GET /admin/renewal-orders` | `orders.view` / 续费账单、客户范围、状态/关键词筛选、分页；四尺寸验收 |
 | 10 | 流量包订单 `#/dcim-traffic-log` | `/admin/traffic-orders` | 待实现 | `GET /admin/traffic-orders` | `orders.view` / 资源订单字段 |
 | 11 | 业务列表 `#/customer-product` | `/admin/services` | 已完成 | `GET /admin/services/page` | `services.view` / 状态页签 |
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |

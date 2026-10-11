@@ -161,6 +161,8 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:212)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:19)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/renewal-order 检索。
 
+新版通过 `GET /api/v1/admin/renewal-orders` 从 `invoice_items.item_type='renew'` 读取真实续费账单，返回 `items/total/limit/offset`，并关联客户、服务域名、续费时间、付款渠道和账单状态。`kind=renew` 保留状态、关键词和分页 URL；续费行只提供账单详情入口，不复用普通订单取消/审核动作。权限使用 `orders.view`，服务端继续执行客户范围校验。
+
 <a id="page-10"></a>
 ## 10. 流量包订单
 

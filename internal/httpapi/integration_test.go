@@ -1624,6 +1624,19 @@ func TestServiceRenewalInvoiceAndPayment(t *testing.T) {
 	renew := request(h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", serviceID), map[string]any{}, customer, "renew-service-key")
 	expect(t, renew, 201)
 	renewInvoiceID := int64(data(t, renew)["invoice_id"].(float64))
+	list := request(h, "GET", "/api/v1/admin/renewal-orders?status=pending&q=renew-owner&limit=25&offset=0", nil, admin, "")
+	expect(t, list, 200)
+	listPayload := data(t, list)
+	items, ok := listPayload["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("renewal order list missing pending invoice: %s", list.Body.String())
+	}
+	firstRenewal := items[0].(map[string]any)
+	if int64(firstRenewal["invoice_id"].(float64)) != renewInvoiceID || firstRenewal["status"] != "pending" {
+		t.Fatalf("renewal order list mismatch: %s", list.Body.String())
+	}
+	customerList := request(h, "GET", "/api/v1/admin/renewal-orders", nil, customer, "")
+	expect(t, customerList, 403)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", serviceID), map[string]any{}, customer, "renew-service-key-2"), 409)
 	replay := request(h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", serviceID), map[string]any{}, customer, "renew-service-key")
 	expect(t, replay, 200)

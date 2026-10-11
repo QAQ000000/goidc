@@ -426,6 +426,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/sales-owners", s.sessionAuth(s.salesOwners, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/sales-owner", s.sessionAuth(s.assignCustomerSalesOwner, true))
 	mux.HandleFunc("GET /api/v1/admin/orders", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/renewal-orders", s.auth(s.renewalOrders, true))
 	mux.HandleFunc("GET /api/v1/admin/orders/{id}", s.auth(s.adminOrderDetail, true))
 	mux.HandleFunc("POST /api/v1/admin/orders/{id}/cancel", s.auth(s.cancelOrder, true))
 	mux.HandleFunc("POST /api/v1/admin/orders/{id}/review", s.auth(s.reviewOrder, true))

@@ -422,6 +422,34 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	query := fmt.Sprintf("SELECT %s%s ORDER BY o.id DESC LIMIT $%d OFFSET $%d", projection, from, len(args)-1, len(args))
 	s.list(w, r, query, args...)
 }
+
+// renewalOrders exposes renewal invoices as a stable admin list. Renewals do
+// not create rows in orders, so the invoice item is the immutable record and
+// the service/product joins provide the business context for the table.
+func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
+	limit, offset := pagination(r)
+	args := []any{true, identityFrom(r).ID}
+	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2)) AND ii.item_type='renew'"
+	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
+		if status != "pending" && status != "paid" && status != "cancelled" && status != "refunded" {
+			writeError(w, http.StatusBadRequest, "invalid_status", "续费订单状态无效")
+			return
+		}
+		args = append(args, status)
+		where += fmt.Sprintf(" AND CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END=$%d", len(args))
+	}
+	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
+		if len(q) > 120 {
+			writeError(w, http.StatusBadRequest, "invalid_query", "搜索条件过长")
+			return
+		}
+		args = append(args, "%"+q+"%")
+		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR ii.description ILIKE $%d OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
+	}
+	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id ORDER BY pt.id DESC LIMIT 1), '') AS payment_method"
+	from := " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id WHERE " + where
+	s.transactionPage(w, r, projection, from, "ii.id", args, limit, offset)
+}
 func (s *Server) invoices(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	args := []any{adminRoute(r), identityFrom(r).ID}

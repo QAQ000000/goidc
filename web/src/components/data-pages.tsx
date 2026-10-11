@@ -12,6 +12,7 @@ import { NOKVMNATPanel } from "./nokvm-nat";
 import { NOKVMCDROMPanel } from "./nokvm-cdrom";
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ServiceDownloads } from "./service-downloads";
 import { ServiceConfigurationChanges } from "./configuration-upgrades";
 import { ServiceActivityPanel } from "./service-activity";
@@ -69,8 +70,11 @@ import { catalogSelectStyle } from "./catalog-admin";
 import { AdminDashboard } from "./admin-dashboard";
 import { AdminStatusTabs } from "./admin-status-tabs";
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
+import { AdminPagination } from "./admin-pagination";
 
 const adminOrderStates = ["pending", "paid", "active", "cancelled", "refunded"] as const;
+const adminRenewalStates = ["pending", "paid", "cancelled", "refunded"] as const;
+const renewalListDefaults = { kind: "renew" } as const;
 const adminServiceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
 export function DashboardView() {
@@ -399,7 +403,8 @@ function SearchForm({
 }
 
 export function OrdersView({ admin = false }: { admin?: boolean }) {
-  if (admin) return <AdminOrdersView />;
+  const searchParams = useSearchParams();
+  if (admin) return searchParams.get("kind") === "renew" ? <AdminRenewalOrdersView /> : <AdminOrdersView />;
   const path = admin ? "/admin/orders" : "/orders";
   return (
     <AdminListView
@@ -434,6 +439,49 @@ export function OrdersView({ admin = false }: { admin?: boolean }) {
         { key: "actions", label: "操作", render: (r) => <OrderCancelAction row={r} admin={admin} /> },
       ]}
     />
+  );
+}
+
+function AdminRenewalOrdersView() {
+  const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(true, adminRenewalStates, "all", renewalListDefaults);
+  const params = new URLSearchParams({ q: query, limit: "25", offset: String(page * 25) });
+  if (status !== "all") params.set("status", status);
+  const resource = useResource<{ items: Row[]; total: number; limit: number; offset: number }>(ready ? `/admin/renewal-orders?${params.toString()}` : null, false);
+  const data = resource.data;
+  return (
+    <Workspace title="续费订单" admin>
+      <PageHeading title="续费订单" description="查看客户服务续费账单和付款状态" />
+      <AdminStatusTabs label="续费订单状态" value={status} states={{ pending: "待支付", paid: "已支付", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="账单号、客户、产品或邮箱" />
+      </div>
+      {resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !data ? <Loading /> : (
+        <div className="admin-list-surface data-surface overflow-auto">
+          <Table>
+            <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>客户</TableHead><TableHead>产品</TableHead><TableHead>IP/服务域名</TableHead><TableHead>续费时间</TableHead><TableHead>金额</TableHead><TableHead>付款方式</TableHead><TableHead>账单状态</TableHead></TableRow></TableHeader>
+            <TableBody>
+              {data.items.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">暂无续费订单</TableCell></TableRow>}
+              {data.items.map((row, index) => {
+                const id = Number(row.id ?? index);
+                const invoiceID = Number(row.invoice_id);
+                const serviceDomain = String(row.service_domain ?? "-");
+                return <TableRow key={String(row.id ?? index)}>
+                  <TableCell className="font-mono text-xs">{invoiceID > 0 ? <Link className="text-primary hover:underline" href={`/admin/invoices/${invoiceID}${suffix}`}>{String(row.order_no ?? id)}</Link> : String(row.order_no ?? id)}</TableCell>
+                  <TableCell><span className="font-medium">{String(row.customer_name ?? "-")}</span></TableCell>
+                  <TableCell>{String(row.product_name ?? "-")}</TableCell>
+                  <TableCell className="font-mono text-xs">{serviceDomain}</TableCell>
+                  <TableCell>{date(String(row.due_at ?? row.created_at))}</TableCell>
+                  <TableCell><span className="money">{money(Number(row.total_cents ?? 0))}</span></TableCell>
+                  <TableCell>{String(row.payment_method ?? row.provider ?? "-")}</TableCell>
+                  <TableCell><Status value={String(row.status ?? "pending")} /></TableCell>
+                </TableRow>;
+              })}
+            </TableBody>
+          </Table>
+          <AdminPagination total={Number(data.total ?? 0)} page={Math.floor(Number(data.offset ?? 0) / Math.max(1, Number(data.limit ?? 25)))} pageSize={Number(data.limit ?? 25)} onPageChange={setPage} />
+        </div>
+      )}
+    </Workspace>
   );
 }
 
