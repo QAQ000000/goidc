@@ -238,3 +238,36 @@ func TestTrafficPurchaseIdempotencyAcrossServices(t *testing.T) {
 	in["traffic_product_id"] = tid + 1
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/traffic-orders", winningService), in, customer, key), 409)
 }
+
+func TestTrafficCancellationReplayRespectsRevokedCustomerScope(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "traffic-scope-root", "super_admin")
+	staffID, staff := user(t, db, h, "traffic-scope-staff", "admin")
+	uid, customer := user(t, db, h, "traffic-scope-customer", "customer")
+	contentRole(t, db, staffID, "orders.view", "orders.manage", "customers.view")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+		t.Fatal(err)
+	}
+	salesAssignment(t, h, root, uid, staffID, 1)
+	pid := product(t, db, 20)
+	sid := trafficService(t, db, h, customer, pid)
+	created := request(h, "POST", "/api/v1/admin/traffic-products", map[string]any{"name": "范围撤权测试流量包", "capacity_gb": 10, "price_cents": 100, "active": true, "stock": 1}, root, "traffic-scope-package")
+	expect(t, created, 201)
+	tid := int64(data(t, created)["id"].(float64))
+	purchase := request(h, "POST", fmt.Sprintf("/api/v1/services/%d/traffic-orders", sid), map[string]any{"traffic_product_id": tid, "expected_version": 1}, customer, "traffic-scope-purchase")
+	expect(t, purchase, 201)
+	oid := int64(data(t, purchase)["id"].(float64))
+	path := fmt.Sprintf("/api/v1/admin/traffic-orders/%d/cancel", oid)
+	in := map[string]any{"expected_version": 1}
+	expect(t, request(h, "POST", path, in, staff, "traffic-scope-cancel"), 200)
+	expect(t, request(h, "POST", path, in, staff, "traffic-scope-cancel"), 200)
+	salesAssignment(t, h, root, uid, nil, 2)
+	expect(t, request(h, "POST", path, in, staff, "traffic-scope-cancel"), 404)
+	var stock, sold, audits int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT stock,sold_count FROM traffic_products WHERE id=$1", tid).Scan(&stock, &sold); err != nil || stock != 1 || sold != 0 {
+		t.Fatal(stock, sold, err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='traffic_order.cancelled' AND entity_id=$1", fmt.Sprint(oid)).Scan(&audits); err != nil || audits != 1 {
+		t.Fatal(audits, err)
+	}
+}

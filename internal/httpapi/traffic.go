@@ -357,14 +357,6 @@ func (s *Server) cancelTrafficOrder(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
 	var invoiceID int64
 	var customerID int64
 	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM traffic_orders WHERE id=$1", id).Scan(&customerID); err != nil {
@@ -373,6 +365,14 @@ func (s *Server) cancelTrafficOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	if err = store.LockAdminCustomer(r.Context(), tx, actor, customerID); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+		s.fail(w, r, e)
+		return
+	} else if replayed {
+		_ = tx.Commit(r.Context())
+		write(w, http.StatusOK, replay)
 		return
 	}
 	if err = tx.QueryRow(r.Context(), "SELECT invoice_id FROM traffic_orders WHERE id=$1 AND admin_customer_allowed($2,user_id)", id, actor).Scan(&invoiceID); err != nil {
