@@ -477,3 +477,65 @@ FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 WHERE o.id=$
 		t.Fatalf("retry after audit recovery failed: %+v", after)
 	}
 }
+
+func TestOrderMutationsWaitingVerificationProtectsExternalResources(t *testing.T) {
+	for _, operation := range []string{"cancel", "delete_pending", "delete_cancelled"} {
+		t.Run(operation, func(t *testing.T) {
+			f := newMutationOrderFixture(t)
+			id, invoice := f.order(t, "mutation-uncertain-order", 2)
+			path := fmt.Sprintf("/api/v1/admin/orders/%d", id)
+			if operation == "delete_cancelled" {
+				// Even a locally cancelled service may still have an unresolved
+				// external request. Deletion must check the job independently.
+				expect(t, request(f.h, "POST", path+"/cancel", map[string]any{"expected_version": orderVersion(t, f.db, id)}, f.root, "mutation-uncertain-local-cancel"), http.StatusCreated)
+			}
+			var jobID int64
+			if err := f.db.Pool.QueryRow(t.Context(), `INSERT INTO provision_jobs(service_id,action,status,idempotency_key,attempts,external_started_at,last_error,result)
+SELECT id,'create','waiting_verification','mutation-uncertain-external-job',1,now(),'上游超时，等待人工核验','{"command_accepted":true}'::jsonb FROM services WHERE order_id=$1 ORDER BY id LIMIT 1 RETURNING id`, id).Scan(&jobID); err != nil {
+				t.Fatal(err)
+			}
+			type state struct {
+				version, serviceVersions                         int64
+				orderStatus, invoiceStatus, jobStatus, jobResult string
+				deleted, externalStarted                         bool
+				stock, services, released, receipts, audits      int
+			}
+			readState := func() state {
+				t.Helper()
+				var out state
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT o.version,o.status,o.deleted_at IS NOT NULL,i.status,p.stock,j.status,j.external_started_at IS NOT NULL,j.result::text,
+(SELECT count(*) FROM services WHERE order_id=o.id),
+(SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
+(SELECT coalesce(sum(version),0) FROM services WHERE order_id=o.id),
+(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.cancelled','order.deleted'))
+FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 JOIN provision_jobs j ON j.id=$4 WHERE o.id=$1`, id, invoice, f.productID, jobID).Scan(&out.version, &out.orderStatus, &out.deleted, &out.invoiceStatus, &out.stock, &out.jobStatus, &out.externalStarted, &out.jobResult, &out.services, &out.released, &out.serviceVersions, &out.receipts, &out.audits); err != nil {
+					t.Fatal(err)
+				}
+				return out
+			}
+			before := readState()
+			if before.jobStatus != "waiting_verification" || !before.externalStarted || before.deleted || before.services != 2 {
+				t.Fatalf("invalid uncertain external result fixture: %+v", before)
+			}
+			wantStatus, wantInvoice, wantStock, wantReleased := "pending", "unpaid", 10, 0
+			if operation == "delete_cancelled" {
+				wantStatus, wantInvoice, wantStock, wantReleased = "cancelled", "cancelled", 12, 2
+			}
+			if before.orderStatus != wantStatus || before.invoiceStatus != wantInvoice || before.stock != wantStock || before.released != wantReleased {
+				t.Fatalf("unexpected state before %s protection: %+v", operation, before)
+			}
+			method := "DELETE"
+			body := map[string]any{"expected_version": before.version, "reason": "外部结果未确认不能删除"}
+			if operation == "cancel" {
+				method = "POST"
+				path += "/cancel"
+				delete(body, "reason")
+			}
+			expect(t, request(f.h, method, path, body, f.root, "mutation-uncertain-blocked-key"), http.StatusConflict)
+			if after := readState(); after != before {
+				t.Fatalf("blocked %s changed order, inventory or unresolved job: before=%+v after=%+v", operation, before, after)
+			}
+		})
+	}
+}
