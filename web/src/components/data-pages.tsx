@@ -78,7 +78,6 @@ export function DashboardView() {
 }
 
 type IncomeReport = { year: number; months: { month: string; income_cents: number; invoice_count: number }[]; total: { income_cents: number; invoice_count: number } };
-type ExtraReport = { items: Record<string, unknown>[]; year: number; month?: number };
 type DailyReport = { year: number; month: number; days: { date: string; new_clients: number; new_orders: number; paid_orders: number; new_tickets: number; ticket_replies: number; cancellation_requests: number }[] };
 type ProductIncomeReport = { year: number; month: number; products: { product_id: number; name: string; new_order_amount_cents: number; new_order_count: number; renewal_amount_cents: number; renewal_order_count: number; total_amount_cents: number }[] };
 type CustomerRanking = { user_id: number; display_name: string; income_cents: number; expense_cents: number; net_cents: number }[];
@@ -91,6 +90,34 @@ export function ReportsView() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [period, setPeriod] = useState({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  const [reportReady, setReportReady] = useState(false);
+  useEffect(() => {
+    const restore = () => {
+      const params = new URLSearchParams(window.location.search);
+      const current = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+      const requestedYear = Number(params.get("year") ?? current.getFullYear());
+      const requestedMonth = Number(params.get("month") ?? current.getMonth() + 1);
+      const restoredYear = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= current.getFullYear() + 1 ? requestedYear : current.getFullYear();
+      const restoredMonth = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : current.getMonth() + 1;
+      const tab = params.get("tab") ?? "income";
+      setReportTab(["income", "customers", "products", "daily", "sales", "tickets"].includes(tab) ? tab : "income");
+      setYear(String(restoredYear));
+      setMonth(String(restoredMonth));
+      setPeriod({ year: restoredYear, month: restoredMonth });
+      setReportReady(true);
+    };
+    restore();
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  useEffect(() => {
+    if (!reportReady) return;
+    const params = new URLSearchParams(window.location.search);
+    params.set("tab", reportTab);
+    params.set("year", String(period.year));
+    params.set("month", String(period.month));
+    window.history.replaceState(null, "", `${window.location.pathname}?${params}${window.location.hash}`);
+  }, [reportReady, reportTab, period]);
   const income = useResource<IncomeReport>(`/admin/reports/income?year=${period.year}`, false);
   const daily = useResource<DailyReport>(`/admin/reports/new-clients?year=${period.year}&month=${period.month}`, false);
   const products = useResource<ProductIncomeReport>(`/admin/reports/product-income?year=${period.year}&month=${period.month}`, false);
@@ -117,8 +144,8 @@ export function ReportsView() {
             <section hidden={reportTab !== "customers"} className="data-surface p-4"><div className="surface-head"><div><h2 className="font-semibold">客户收入排名</h2><p className="text-xs text-muted-foreground mt-1">按净流水排序，展示前十名</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>客户</TableHead><TableHead>收入</TableHead><TableHead>支出</TableHead><TableHead>净额</TableHead></TableRow></TableHeader><TableBody>{ranking.data.length === 0 ? <TableRow><TableCell colSpan={4} className="h-20 text-center text-muted-foreground">暂无流水</TableCell></TableRow> : ranking.data.map((item) => <TableRow key={item.user_id}><TableCell>{item.display_name}</TableCell><TableCell className="money">{money(item.income_cents)}</TableCell><TableCell className="money">{money(item.expense_cents)}</TableCell><TableCell className="money">{money(item.net_cents)}</TableCell></TableRow>)}</TableBody></Table></div></section>
             <section hidden={reportTab !== "products"} className="data-surface p-4 xl:col-span-2"><div className="surface-head"><div><h2 className="font-semibold">产品收入</h2><p className="text-xs text-muted-foreground mt-1">{period.year} 年 {period.month} 月已支付新购和续费</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>产品</TableHead><TableHead>新购收入</TableHead><TableHead>新购订单</TableHead><TableHead>续费收入</TableHead><TableHead>续费订单</TableHead><TableHead>合计</TableHead></TableRow></TableHeader><TableBody>{products.data.products.length === 0 ? <TableRow><TableCell colSpan={6} className="h-20 text-center text-muted-foreground">暂无产品收入</TableCell></TableRow> : products.data.products.map((item) => <TableRow key={item.product_id}><TableCell>{item.name}</TableCell><TableCell className="money">{money(item.new_order_amount_cents)}</TableCell><TableCell>{item.new_order_count}</TableCell><TableCell className="money">{money(item.renewal_amount_cents)}</TableCell><TableCell>{item.renewal_order_count}</TableCell><TableCell className="money font-medium">{money(item.total_amount_cents)}</TableCell></TableRow>)}</TableBody></Table></div></section>
             <section hidden={reportTab !== "daily"} className="data-surface p-4 xl:col-span-2"><div className="surface-head"><div><h2 className="font-semibold">每日运营概览</h2><p className="text-xs text-muted-foreground mt-1">新客户、订单、工单和取消申请</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>日期</TableHead><TableHead>新客户</TableHead><TableHead>新订单</TableHead><TableHead>已支付订单</TableHead><TableHead>新工单</TableHead><TableHead>工单回复</TableHead><TableHead>取消申请</TableHead></TableRow></TableHeader><TableBody>{daily.data.days.length === 0 ? <TableRow><TableCell colSpan={7} className="h-20 text-center text-muted-foreground">暂无每日运营数据</TableCell></TableRow> : daily.data.days.map((item) => <TableRow key={item.date}><TableCell>{item.date}</TableCell><TableCell>{item.new_clients}</TableCell><TableCell>{item.new_orders}</TableCell><TableCell>{item.paid_orders}</TableCell><TableCell>{item.new_tickets}</TableCell><TableCell>{item.ticket_replies}</TableCell><TableCell>{item.cancellation_requests}</TableCell></TableRow>)}</TableBody></Table></div></section>
-            <section hidden={reportTab !== "sales"} className="data-surface p-4"><div className="surface-head"><div><h2 className="font-semibold">我的业绩</h2><p className="text-xs text-muted-foreground mt-1">按销售归属统计订单和已支付收入</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>销售</TableHead><TableHead>订单数</TableHead><TableHead>收入</TableHead></TableRow></TableHeader><TableBody>{sales.data.items.length === 0 ? <TableRow><TableCell colSpan={3} className="h-20 text-center text-muted-foreground">暂无业绩数据</TableCell></TableRow> : sales.data.items.map(item => <TableRow key={item.sales_owner_id}><TableCell>{item.sales_owner_name}</TableCell><TableCell>{item.order_count}</TableCell><TableCell className="money">{money(item.income_cents)}</TableCell></TableRow>)}</TableBody></Table></div></section>
-            <section hidden={reportTab !== "tickets"} className="data-surface p-4 xl:col-span-2"><div className="surface-head"><div><h2 className="font-semibold">工单统计</h2><p className="text-xs text-muted-foreground mt-1">按上海时区日期统计工单和待处理数量</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>日期</TableHead><TableHead>工单数</TableHead><TableHead>待处理</TableHead></TableRow></TableHeader><TableBody>{ticketStats.data.items.length === 0 ? <TableRow><TableCell colSpan={3} className="h-20 text-center text-muted-foreground">暂无工单数据</TableCell></TableRow> : ticketStats.data.items.map(item => <TableRow key={item.date}><TableCell>{item.date}</TableCell><TableCell>{item.ticket_count}</TableCell><TableCell>{item.open_count}</TableCell></TableRow>)}</TableBody></Table></div></section>
+            <section hidden={reportTab !== "sales"} className="data-surface p-4"><div className="surface-head"><div><h2 className="font-semibold">我的业绩</h2><p className="text-xs text-muted-foreground mt-1">{period.year} 年按销售归属统计新订单和期间已支付账单收入</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>销售</TableHead><TableHead>订单数</TableHead><TableHead>收入</TableHead></TableRow></TableHeader><TableBody>{sales.data.items.length === 0 ? <TableRow><TableCell colSpan={3} className="h-20 text-center text-muted-foreground">暂无业绩数据</TableCell></TableRow> : sales.data.items.map(item => <TableRow key={item.sales_owner_id}><TableCell>{item.sales_owner_name}</TableCell><TableCell>{item.order_count}</TableCell><TableCell className="money">{money(item.income_cents)}</TableCell></TableRow>)}</TableBody></Table></div></section>
+            <section hidden={reportTab !== "tickets"} className="data-surface p-4 xl:col-span-2"><div className="surface-head"><div><h2 className="font-semibold">工单统计</h2><p className="text-xs text-muted-foreground mt-1">{period.year} 年 {period.month} 月按上海时区统计工单和当前待处理数量</p></div></div><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>日期</TableHead><TableHead>工单数</TableHead><TableHead>待处理</TableHead></TableRow></TableHeader><TableBody>{ticketStats.data.items.length === 0 ? <TableRow><TableCell colSpan={3} className="h-20 text-center text-muted-foreground">暂无工单数据</TableCell></TableRow> : ticketStats.data.items.map(item => <TableRow key={item.date}><TableCell>{item.date}</TableCell><TableCell>{item.ticket_count}</TableCell><TableCell>{item.open_count}</TableCell></TableRow>)}</TableBody></Table></div></section>
           </div>
         </>
       )}
