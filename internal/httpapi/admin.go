@@ -189,6 +189,22 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer", "客户状态无效")
 		return
 	}
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// Resolve the customer scope before validating concurrency or idempotency
+	// input, so a caller cannot use malformed/missing fields to probe records.
 	if value, exists := input.Profile["expected_version"]; exists {
 		var nested int64
 		if err := json.Unmarshal(value, &nested); err != nil || (input.ExpectedVersion > 0 && input.ExpectedVersion != nested) {
@@ -209,20 +225,6 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input any
 	}{id, input})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	operation := "customer.update:" + strconv.FormatInt(id, 10)
 	if err = lockCustomerMutation(r, tx, identityFrom(r).ID, operation, key); err != nil {
 		s.fail(w, r, err)
@@ -326,21 +328,46 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Username          string          `json:"username"`
-		Email             string          `json:"email"`
-		Password          string          `json:"password"`
-		DisplayName       string          `json:"display_name"`
-		Status            *string         `json:"status"`
-		GroupID           *int64          `json:"group_id"`
-		SalesOwnerID      *int64          `json:"sales_owner_id"`
-		CustomFieldValues json.RawMessage `json:"custom_fields"`
-		customerProfileInput
+		Username            string          `json:"username"`
+		Email               string          `json:"email"`
+		Password            string          `json:"password"`
+		DisplayName         string          `json:"display_name"`
+		Status              *string         `json:"status"`
+		GroupID             *int64          `json:"group_id"`
+		SalesOwnerID        *int64          `json:"sales_owner_id"`
+		Gender              string          `json:"gender"`
+		CompanyName         string          `json:"company_name"`
+		Phone               string          `json:"phone"`
+		QQ                  string          `json:"qq"`
+		Country             string          `json:"country"`
+		Province            string          `json:"province"`
+		Address             string          `json:"address"`
+		Postcode            string          `json:"postcode"`
+		SourceChannel       string          `json:"source_channel"`
+		PaymentMethod       string          `json:"payment_method"`
+		Language            string          `json:"language"`
+		AdminNote           string          `json:"admin_note"`
+		ReceiveMarketing    *bool           `json:"receive_marketing"`
+		CustomFieldValues   json.RawMessage `json:"custom_fields"`
+		CustomFieldsVersion int64           `json:"custom_fields_version"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
 	if input.CustomFieldValues != nil {
-		if string(input.CustomFieldValues) == "null" || json.Unmarshal(input.CustomFieldValues, &input.CustomFields) != nil {
+		if strings.TrimSpace(string(input.CustomFieldValues)) == "null" || json.Unmarshal(input.CustomFieldValues, &input.CustomFieldValues) != nil {
+			writeError(w, 400, "invalid_custom_field", "客户字段必须为对象")
+			return
+		}
+	}
+	profile := customerProfileInput{
+		Gender: input.Gender, CompanyName: input.CompanyName, Phone: input.Phone, QQ: input.QQ,
+		Country: input.Country, Province: input.Province, Address: input.Address, Postcode: input.Postcode,
+		SourceChannel: input.SourceChannel, PaymentMethod: input.PaymentMethod, Language: input.Language,
+		AdminNote: input.AdminNote, ReceiveMarketing: input.ReceiveMarketing, CustomFieldsVersion: input.CustomFieldsVersion,
+	}
+	if input.CustomFieldValues != nil {
+		if err := json.Unmarshal(input.CustomFieldValues, &profile.CustomFields); err != nil || profile.CustomFields == nil {
 			writeError(w, 400, "invalid_custom_field", "客户字段必须为对象")
 			return
 		}
@@ -385,7 +412,7 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		status = *input.Status
 	}
 
-	if !input.customerProfileInput.valid() {
+	if !profile.valid() {
 		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
 		return
 	}
@@ -438,10 +465,6 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		write(w, 200, replay)
-		return
-	}
-	if input.ExpectedVersion != 0 {
-		writeError(w, 400, "invalid_profile", "新客户不应提供资料版本")
 		return
 	}
 	if input.GroupID != nil {
@@ -511,15 +534,15 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err = saveCustomerProfile(r.Context(), tx, id, input.customerProfileInput); err != nil {
+	if err = saveCustomerProfile(r.Context(), tx, id, profile); err != nil {
 		if customerProfileFailure(w, r, err) {
 			return
 		}
 		s.fail(w, r, err)
 		return
 	}
-	companyName := strings.TrimSpace(input.CompanyName)
-	phone := strings.TrimSpace(input.Phone)
+	companyName := strings.TrimSpace(profile.CompanyName)
+	phone := strings.TrimSpace(profile.Phone)
 	if companyName != "" || phone != "" {
 		if _, err = tx.Exec(r.Context(),
 			"INSERT INTO customer_contacts(customer_id, username, email, company_name, phone_number, status) VALUES($1, $2, $3, $4, $5, 'active') ON CONFLICT DO NOTHING",

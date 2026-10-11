@@ -89,6 +89,9 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 	}
 	for _, r := range items[1:] {
 		customerPath := fmt.Sprintf("/api/v1/admin/customers/%d", r.customer)
+		// Scope denial takes precedence over required profile version and
+		// idempotency input; foreign customer existence must not be observable.
+		expect(t, request(h, "PATCH", customerPath, map[string]any{"display_name": "missing concurrency metadata"}, staff, ""), 404)
 		for _, operation := range []struct {
 			method, path string
 			body         any
