@@ -321,12 +321,12 @@
 <a id="page-41"></a>
 ## 41. 工单状态
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)；页面：[源码](../web/src/app/admin/ticket-statuses/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-status 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)；页面：[源码](../web/src/app/admin/ticket-statuses/page.tsx:1)。真实列表、创建编辑删除、默认状态保护、幂等、版本冲突和审计已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/work-order-status 检索。
 
 <a id="page-42"></a>
 ## 42. 工单传递
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)；页面：[源码](../web/src/app/admin/ticket-rules/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-rules 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)；页面：[源码](../web/src/app/admin/ticket-rules/page.tsx:1)。真实空态、创建编辑删除、关联校验、幂等、版本冲突和审计已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/work-order-rules 检索。
 
 <a id="page-43"></a>
 ## 43. 常规设置
@@ -425,27 +425,27 @@
 <a id="page-61"></a>
 ## 61. 短信日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1326)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:71)。JSON 中按唯一旧 hash #/sms-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1326)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:71)。页面支持真实日志筛选、脱敏字段、分页和空态，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/sms-log 检索。
 
 <a id="page-62"></a>
 ## 62. 站内信日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1344)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:72)。JSON 中按唯一旧 hash #/station-letter-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1344)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:72)。页面支持真实空态、筛选、状态、分页和四尺寸布局验收，证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/station-letter-log 检索。
 
 <a id="page-63"></a>
 ## 63. API日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1362)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:73)。JSON 中按唯一旧 hash #/api-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1362)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:73)。页面支持方法、状态码、用户名、关键词、日期筛选及分页，真实记录和移动端布局已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/api-log 检索。
 
 <a id="page-64"></a>
 ## 64. 定时任务日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1380)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:74)；页面：[源码](../web/src/app/admin/logs/jobs/page.tsx:1)。JSON 中按唯一旧 hash #/automatic-task-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1380)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:74)；页面：[源码](../web/src/app/admin/logs/jobs/page.tsx:1)。页面支持任务/状态/上海日期筛选、真实执行分页和31日趋势，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/automatic-task-log 检索。
 
 <a id="page-65"></a>
 ## 65. 日志清理
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1398)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:75)。JSON 中按唯一旧 hash #/log-cleanup 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1398)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:75)。页面支持日志类型、时间、不可恢复确认、危险操作二次确认和幂等提交，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/log-cleanup 检索。
 
 <a id="page-66"></a>
 ## 66. 系统日志

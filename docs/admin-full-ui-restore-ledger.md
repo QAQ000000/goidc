@@ -48,8 +48,8 @@
 | 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 已完成 | `GET/PUT /admin/contract-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
-| 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、幂等、版本冲突、审计；完整表单交互待补 |
-| 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 幂等、关联校验、版本冲突、审计；完整表单交互待补 |
+| 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、创建编辑删除确认、幂等、版本冲突、审计；四尺寸浏览器验收 |
+| 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 真实空态、创建编辑删除确认、幂等、关联校验、版本冲突、审计；四尺寸浏览器验收 |
 | 43 | 常规设置 `#/general-settings/general` | `/admin/settings` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 分区草稿 |
 | 44 | 第三方登录 `#/third-login` | `/admin/channels?category=oauth` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / OAuth 能力 |
 | 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 已完成 | `GET/PUT /admin/scheduler-settings` | `@super` / 到期和账单提醒、版本冲突、幂等；四尺寸已验收 |
@@ -68,11 +68,11 @@
 | 58 | 关于 `#/about` | `/admin/system/about` | 已完成 | `GET /admin/system/about` | `settings.view` / 真实技术栈和构建信息 |
 | 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 已完成 | `GET /admin/system/upgrade` | `settings.view` / 编译迁移清单与数据库已应用版本差异检查 |
 | 60 | php信息 `#/php-message` | `/admin/system/runtime` | 已完成 | `GET /admin/system/runtime` | `settings.view` / Go、PG18、迁移和运行信息 |
-| 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 部分完成 | `GET /admin/logs/sms` | `notifications.view` / 真实出站状态、用户、电话、日期、分页；正文脱敏 |
-| 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 部分完成 | `GET /admin/logs/inbox` | `notifications.view` / 真实表为空态、主题、用户、状态、日期、分页 |
-| 63 | API日志 `#/api-log` | `/admin/logs/api` | 部分完成 | `GET /admin/logs/api` | `audit.view` / 认证请求真实记录、方法、状态码、用户、IP、日期、分页 |
-| 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 部分完成 | `GET /admin/logs/jobs`, `GET /admin/logs/jobs/trend` | `@super` / 真实执行记录、上海日期筛选和趋势；统一重试待补 |
-| 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 部分完成 | `POST /admin/logs/cleanup` | `@super` / 二次确认、24小时保留窗、幂等、审计；四尺寸待验收 |
+| 61 | 短信日志 `#/sms-log` | `/admin/logs/sms` | 已完成 | `GET /admin/logs/sms` | `notifications.view` / 真实出站状态、用户、电话、日期、筛选、分页、正文脱敏；四尺寸浏览器验收 |
+| 62 | 站内信日志 `#/station-letter-log` | `/admin/logs/inbox` | 已完成 | `GET /admin/logs/inbox` | `notifications.view` / 真实表为空态、主题、用户、状态、日期、筛选、分页；四尺寸浏览器验收 |
+| 63 | API日志 `#/api-log` | `/admin/logs/api` | 已完成 | `GET /admin/logs/api` | `audit.view` / 认证请求真实记录、方法、状态码、用户、IP、日期、关键词筛选、分页；四尺寸浏览器验收 |
+| 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 已完成 | `GET /admin/logs/jobs`, `GET /admin/logs/jobs/trend` | `@super` / 真实执行记录、上海日期筛选、分页和31日趋势；四尺寸浏览器验收 |
+| 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 已完成 | `POST /admin/logs/cleanup` | `@super` / 二次确认、24小时保留窗、幂等、审计、移动端表单验收 |
 | 66 | 系统日志 `#/system-log` | `/admin/logs/system` | 已完成 | `GET /admin/logs?kind=system` | `audit.view` / 安全元数据、搜索分页、真实空态；四尺寸已验收 |
 | 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 部分完成 | `GET /admin/logs/admin-login` | `audit.view` / 登录、最后访问、注销、用户名、IP、日期、分页；四尺寸待验收 |
 | 68 | 邮件日志 `#/email-log` | `/admin/logs/email` | 部分完成 | `GET /admin/logs/email` | `notifications.view` / 主题、收件人、成功状态、失败原因、用户、日期、分页 |
