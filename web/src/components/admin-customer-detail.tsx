@@ -16,7 +16,7 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
-import { api, date, money, type Contact } from "@/lib/api";
+import { api, date, money, type Contact, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { Failure, Loading, Status } from "./common";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { CustomerFieldInputs, customerFieldValues, useCustomerFieldDefinitions, useCustomerMutation, useCustomerDraft, CustomerDraftNotice, CustomerMutationMessage } from "./customer-field-inputs";
 import { CustomerFileManager } from "./customer-files";
 
 type Row = Record<string, unknown>;
@@ -166,6 +167,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
                 <CustomerSummaryView customer={customer.data} refresh={customer.refresh} />
               ) : tab === "profile" ? (
                 <CustomerProfile
+                  key={`${customerId}:${customer.data.profile_version}`}
                   customer={customer.data}
                   saved={customer.refresh}
                   cancelHref={`/admin/customers/${customerId}${backParams.toString() ? `?${backParams.toString()}` : ""}`}
@@ -714,31 +716,34 @@ function CustomerProfile({
     postcode: customer.postcode, source_channel: customer.source_channel, payment_method: customer.payment_method,
     language: customer.language, admin_note: customer.admin_note, receive_marketing: customer.receive_marketing,
   });
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [failed, setFailed] = useState(false);
-  const definitions = useResource<{items: Array<{field_key:string;label:string;field_type:string;choices:string[];required:boolean;description:string}>}>("/admin/customer-fields?active=true&limit=100", false);
+  const user = useResource<User>("/me", false);
+  const definitions = useCustomerFieldDefinitions(true);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(customer.custom_fields || {});
-
+  const [profileVersion, setProfileVersion] = useState(customer.profile_version);
+  const mutation = useCustomerMutation();
+  const { busy, uncertain } = mutation;
+  const [message, setMessage] = useState("");
+  const snapshot = { name, email, status, profile, customFields };
+  const [initial] = useState(JSON.stringify(snapshot));
+  const dirty = initial !== JSON.stringify(snapshot);
+  const draft = useCustomerDraft(manage && user.data ? `customer-profile:${user.data.id}:${customer.id}` : null, snapshot, dirty);
+  const router = useRouter();
+  function cancel() { if (busy || dirty && !window.confirm("确认取消更改并丢弃草稿？")) return; draft.leave(); router.push(cancelHref); }
+  function restoreDraft() {
+    if (!draft.draft) return;
+    setName(draft.draft.name); setEmail(draft.draft.email); setStatus(draft.draft.status); setProfile(draft.draft.profile); setCustomFields(draft.draft.customFields); draft.clear();
+  }
+  async function updateVersion() {
+    try { const latest = await api<AdminCustomer>(`/admin/customers/${customer.id}`); setProfileVersion(latest.profile_version); definitions.refresh(); setMessage("最新版本已读取，草稿已保留。请核对后重新保存。"); } catch (e) { mutation.setError((e as Error).message); }
+  }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!manage || busy) return;
-    setBusy(true);
+    if (!manage || busy || !definitions.ready && !uncertain) return;
     setMessage("");
-    setFailed(false);
     try {
-      await api(`/admin/customers/${customer.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ display_name: name, email, status, profile: { ...profile, custom_fields: customFields, expected_version: customer.profile_version } }),
-      });
-      setMessage("客户资料已保存");
-      saved();
-    } catch (error) {
-      setFailed(true);
-      setMessage((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
+      const result = await mutation.run(`/admin/customers/${customer.id}`, "PATCH", uncertain ? {} : { display_name: name, email, status, expected_version: profileVersion, profile: { ...profile, custom_fields: customerFieldValues(definitions.fields, customFields), custom_fields_version: definitions.version } });
+      if (result) { draft.leave(); setMessage("客户资料已保存"); saved(); }
+    } catch (e) { mutation.setError((e as Error).message); }
   }
 
   const fieldStyle = "block text-xs text-[#606266] min-w-0";
@@ -749,7 +754,8 @@ function CustomerProfile({
 
   return (
     <form onSubmit={(event) => void save(event)} className="space-y-6">
-      <fieldset disabled={!manage || busy} className="space-y-6">
+      <CustomerDraftNotice available={!!draft.draft} restore={restoreDraft} discard={draft.clear} disabled={mutation.frozen} />
+      <fieldset disabled={!manage || mutation.frozen} className="space-y-6">
         <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
           <h2 className="text-sm font-semibold text-[#303133] mb-3">个人资料</h2>
           <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -775,7 +781,7 @@ function CustomerProfile({
           </div>
         </section>
 
-        {definitions.data?.items.length ? <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]"><h2 className="text-sm font-semibold text-[#303133] mb-3">自定义字段</h2><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">{definitions.data.items.map((field) => <label key={field.field_key} className={fieldStyle}>{field.label}{field.field_type === "select" ? <Select value={String(customFields[field.field_key] ?? "")} onValueChange={(value) => setCustomFields((v) => ({...v,[field.field_key]:value}))}><SelectTrigger className="mt-1.5 h-8"><SelectValue placeholder={field.description || "请选择"} /></SelectTrigger><SelectContent>{field.choices.map((choice) => <SelectItem key={choice} value={choice}>{choice}</SelectItem>)}</SelectContent></Select> : <Input className="mt-1.5 text-xs h-8 border-[#dcdfe6]" type={field.field_type === "number" ? "number" : field.field_type === "date" ? "date" : "text"} required={field.required} value={String(customFields[field.field_key] ?? "")} onChange={(event) => setCustomFields((v) => ({...v,[field.field_key]: field.field_type === "number" ? Number(event.target.value) : event.target.value}))} />}</label>)}</div></section> : null}
+
 
         <section className="bg-[#f9fafc] p-4 rounded border border-[#ebeef5]">
           <h2 className="text-sm font-semibold text-[#303133] mb-3">账户信息</h2>
@@ -854,24 +860,20 @@ function CustomerProfile({
         </section>
       </fieldset>
 
-      {message && (
-        <p
-          role={failed ? "alert" : "status"}
-          className={`text-xs ${failed ? "text-destructive" : "text-[#67c23a]"}`}
-        >
-          {message}
-        </p>
-      )}
+        <CustomerFieldInputs definitions={definitions} values={customFields} onChange={setCustomFields} disabled={!manage || mutation.frozen} />
+      <CustomerMutationMessage mutation={mutation} />
+      {message && <p role="status" className="text-xs text-green-700">{message}</p>}
+      {mutation.conflict && <Button type="button" variant="outline" disabled={busy} onClick={() => void updateVersion()}>读取最新版本，保留当前输入</Button>}
 
       <div className="flex flex-wrap gap-3 pt-2">
         <PermissionGate permission="customers.manage">
           <Button
-            disabled={busy}
+            disabled={busy || !definitions.ready && !uncertain}
             size="sm"
             className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
           >
             <Save size={13} className="mr-1" />
-            {busy ? "保存中..." : "保存更改"}
+            {uncertain ? "使用原请求重试" : busy ? "保存中..." : "保存更改"}
           </Button>
         </PermissionGate>
         <Button
@@ -879,10 +881,10 @@ function CustomerProfile({
           size="sm"
           type="button"
           disabled={busy}
-          asChild
+          onClick={cancel}
           className="text-xs border-[#dcdfe6]"
         >
-          <Link href={cancelHref}>取消更改</Link>
+          取消更改
         </Button>
       </div>
     </form>

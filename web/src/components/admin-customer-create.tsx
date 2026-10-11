@@ -3,13 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { HelpCircle } from "lucide-react";
-import { api, type CustomerGroup } from "@/lib/api";
+import { type CustomerGroup, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Workspace, useAdminPermission } from "./workspace";
+import { CustomerFieldInputs, customerFieldValues, useCustomerFieldDefinitions, useCustomerMutation, useCustomerDraft, CustomerDraftNotice, CustomerMutationMessage, customerListSuffix } from "./customer-field-inputs";
 
 type SalesOwner = { id: number; username: string; display_name: string };
 
@@ -19,6 +20,8 @@ export function AdminCustomerCreateView() {
 
 function CustomerCreateForm() {
   const router = useRouter();
+  const manage = useAdminPermission("customers.manage");
+  const user = useResource<User>("/me", false);
   const groupAllowed = useAdminPermission("customer_groups.manage");
   const salesAllowed = useAdminPermission("@super");
   const groupsResource = useResource<CustomerGroup[]>(groupAllowed ? "/admin/customer-groups?options=true" : null, false);
@@ -49,14 +52,26 @@ function CustomerCreateForm() {
   const [status, setStatus] = useState("active");
   const [adminNote, setAdminNote] = useState("");
   const [receiveMarketing, setReceiveMarketing] = useState(true);
-
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const definitions = useCustomerFieldDefinitions(manage);
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
+  const mutation = useCustomerMutation();
+  const { busy, uncertain, setError } = mutation;
+  const snapshot = { name, gender, company, country, province, address, postcode, channel, phonePrefix, phone, email, qq, paymentMethod, language, salesOwner, customerGroup, status, adminNote, receiveMarketing, customFields };
+  const [initial] = useState(JSON.stringify(snapshot));
+  const dirty = initial !== JSON.stringify(snapshot) || !!password;
+  const draft = useCustomerDraft(manage && user.data ? `customer-create:${user.data.id}` : null, snapshot, dirty);
+  function restoreDraft() {
+    const value = draft.draft; if (!value) return;
+    setName(value.name); setGender(value.gender); setCompany(value.company); setCountry(value.country); setProvince(value.province); setAddress(value.address); setPostcode(value.postcode); setChannel(value.channel); setPhonePrefix(value.phonePrefix); setPhone(value.phone); setEmail(value.email); setQq(value.qq); setPaymentMethod(value.paymentMethod); setLanguage(value.language); setSalesOwner(value.salesOwner); setCustomerGroup(value.customerGroup); setStatus(value.status); setAdminNote(value.adminNote); setReceiveMarketing(value.receiveMarketing); setCustomFields(value.customFields); setPassword(""); draft.clear();
+  }
+  function cancel() { if (busy || dirty && !window.confirm("确认取消添加客户并丢弃草稿？")) return; draft.leave(); router.push(`/admin/customers${customerListSuffix()}`); }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !manage) return;
+    if (uncertain) { const res = await mutation.run<{id: number}>("/admin/customers", "POST", {}); if (res) { draft.leave(); router.push(`/admin/customers/${res.id}${customerListSuffix()}`); router.refresh(); } return; }
     setError("");
+    if (!definitions.ready) { setError(definitions.error?.message ?? "客户字段仍在加载，请稍后重试"); return; }
 
     if (!name.trim()) {
       setError("请输入姓名");
@@ -72,8 +87,9 @@ function CustomerCreateForm() {
       return;
     }
 
-    setBusy(true);
     try {
+      let dynamicFields: Record<string, unknown>;
+      try { dynamicFields = customerFieldValues(definitions.fields, customFields); } catch (err) { setError((err as Error).message); return; }
       const payload: Record<string, unknown> = {
         display_name: name.trim(),
         username: phone.trim() || email.split("@")[0] || name.trim(),
@@ -85,6 +101,7 @@ function CustomerCreateForm() {
         gender: gender || "unknown", country, province, address, postcode,
         source_channel: channel, qq, payment_method: paymentMethod, language,
         admin_note: adminNote, receive_marketing: receiveMarketing,
+        custom_fields: dynamicFields, custom_fields_version: definitions.version,
       };
 
       if (groupAllowed && customerGroup !== "none") {
@@ -94,25 +111,21 @@ function CustomerCreateForm() {
         payload.sales_owner_id = Number(salesOwner);
       }
 
-      const res = await api<{ id: number }>("/admin/customers", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      router.push(`/admin/customers/${res.id}`);
-      router.refresh();
-    } catch (err) {
-      setError((err as Error).message);
-      setBusy(false);
-    }
+      const res = await mutation.run<{ id: number }>("/admin/customers", "POST", payload);
+      if (res) { draft.leave(); router.push(`/admin/customers/${res.id}${customerListSuffix()}`); router.refresh(); }
+    } catch (err) { setError((err as Error).message); }
   }
+
+  if (!manage) return <p role="alert">没有添加客户权限。</p>;
 
   return (
     <>
       <div className="space-y-5">
         <h1 className="text-xl font-bold text-[#303133]">添加客户</h1>
 
+        <CustomerDraftNotice available={!!draft.draft} restore={restoreDraft} discard={draft.clear} disabled={mutation.frozen} />
         <form onSubmit={submit} className="space-y-5">
+          <fieldset disabled={mutation.frozen} className="min-w-0 space-y-5">
           {/* 个人资料 */}
           <section className="bg-white rounded border border-[#ebeef5] overflow-hidden shadow-sm">
             <div className="bg-[#f4f6fa] px-4 py-2.5 border-b border-[#ebeef5]">
@@ -403,25 +416,23 @@ function CustomerCreateForm() {
             </div>
           </section>
 
-          {error && (
-            <div role="alert" className="p-3 bg-red-50 border border-red-200 text-red-600 text-xs rounded">
-              {error}
-            </div>
-          )}
-
-          <div className="flex items-center gap-3 pt-2">
+          </fieldset>
+          <CustomerFieldInputs definitions={definitions} values={customFields} onChange={setCustomFields} disabled={busy || uncertain} />
+          <CustomerMutationMessage mutation={mutation} />
+          {mutation.conflict && <Button type="button" variant="outline" onClick={definitions.refresh}>更新字段版本，保留当前输入</Button>}
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <Button
               type="submit"
-              disabled={busy}
+              disabled={busy || !definitions.ready && !uncertain}
               className="bg-[#409eff] hover:bg-[#337ecc] text-white px-6 h-9 font-normal text-sm rounded shadow-none"
             >
-              {busy ? "添加中..." : "添加客户"}
+              {uncertain ? "使用原请求重试" : busy ? "添加中..." : "添加客户"}
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={busy}
-              onClick={() => router.push("/admin/customers")}
+              onClick={cancel}
               className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] px-6 h-9 font-normal text-sm rounded"
             >
               返回
@@ -430,13 +441,7 @@ function CustomerCreateForm() {
               type="button"
               variant="outline"
               disabled={busy}
-              onClick={() => {
-                setName("");
-                setEmail("");
-                setPassword("");
-                setPhone("");
-                setCompany("");
-              }}
+              onClick={cancel}
               className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] px-6 h-9 font-normal text-sm rounded"
             >
               取消添加
