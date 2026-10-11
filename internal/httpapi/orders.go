@@ -7,11 +7,17 @@ func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var input struct{}
+	var input struct {
+		ExpectedVersion *int64 `json:"expected_version"`
+	}
 	if !decode(w, r, &input) {
 		return
 	}
-	result, err := s.db.CancelOrder(r.Context(), identityFrom(r).ID, id, adminRoute(r), r.Header.Get("Idempotency-Key"))
+	var versions []int64
+	if input.ExpectedVersion != nil {
+		versions = append(versions, *input.ExpectedVersion)
+	}
+	result, err := s.db.CancelOrder(r.Context(), identityFrom(r).ID, id, adminRoute(r), r.Header.Get("Idempotency-Key"), versions...)
 	if err != nil {
 		s.fail(w, r, err)
 		return

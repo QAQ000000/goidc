@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type OrderReviewResult struct {
@@ -11,10 +13,11 @@ type OrderReviewResult struct {
 	ReviewStatus   string `json:"review_status"`
 	OrderStatus    string `json:"order_status"`
 	QueuedServices int64  `json:"queued_services"`
+	Version        int64  `json:"version"`
 	Replayed       bool   `json:"replayed"`
 }
 
-func (s *Store) ReviewOrder(ctx context.Context, actorID, orderID int64, decision, note, key string) (OrderReviewResult, error) {
+func (s *Store) ReviewOrder(ctx context.Context, actorID, orderID int64, decision, note, key string, expectedVersion ...int64) (OrderReviewResult, error) {
 	var out OrderReviewResult
 	decision = strings.ToLower(strings.TrimSpace(decision))
 	note = strings.TrimSpace(note)
@@ -26,23 +29,39 @@ func (s *Store) ReviewOrder(ctx context.Context, actorID, orderID int64, decisio
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "order-review", fmt.Sprintf("%d:%s", orderID, key)); err != nil {
+	if err = requireAdminOrdersManager(ctx, tx, actorID); err != nil {
 		return out, err
 	}
-	var currentReview, orderStatus, invoiceStatus string
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "order", orderID); err != nil {
 		return out, err
 	}
-	if err = tx.QueryRow(ctx, `SELECT o.review_status,o.status,i.status
-FROM orders o JOIN invoices i ON i.order_id=o.id WHERE o.id=$1 FOR UPDATE`, orderID).
-		Scan(&currentReview, &orderStatus, &invoiceStatus); err != nil {
+	hash, replay, err := orderOperationStart(ctx, tx, actorID, orderID, "review", key, struct {
+		Decision, Note string
+		Expected       []int64
+	}{decision, note, expectedVersion}, &out)
+	if err != nil {
 		return out, err
 	}
-	out.OrderID, out.ReviewStatus, out.OrderStatus = orderID, currentReview, orderStatus
-	if currentReview == decision {
+	if replay {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
 	}
+	var currentReview, orderStatus, invoiceStatus string
+	err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE order_id=$1 FOR UPDATE", orderID).Scan(&invoiceStatus)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	var deleted bool
+	if err = tx.QueryRow(ctx, "SELECT review_status,status,version,deleted_at IS NOT NULL FROM orders WHERE id=$1 FOR UPDATE", orderID).Scan(&currentReview, &orderStatus, &out.Version, &deleted); err != nil {
+		return out, err
+	}
+	if err = checkOrderVersion(out.Version, expectedVersion); err != nil {
+		return out, err
+	}
+	if deleted {
+		return out, conflict("order_deleted", "订单已删除")
+	}
+	out.OrderID, out.ReviewStatus, out.OrderStatus = orderID, currentReview, orderStatus
 	if currentReview != "pending" {
 		return out, conflict("order_review_not_pending", "订单当前不需要审核")
 	}
@@ -57,7 +76,7 @@ FROM orders o JOIN invoices i ON i.order_id=o.id WHERE o.id=$1 FOR UPDATE`, orde
 			return out, err
 		}
 		out.ReviewStatus = "rejected"
-		return out, tx.Commit(ctx)
+		return s.finishOrderReview(ctx, tx, actorID, orderID, key, hash, out)
 	}
 	if _, err = tx.Exec(ctx, "UPDATE orders SET review_status='approved',status='active',notes=CASE WHEN $2='' THEN notes ELSE $2 END,updated_at=now() WHERE id=$1", orderID, note); err != nil {
 		return out, err
@@ -77,5 +96,15 @@ SELECT count(*) FROM inserted`, orderID).Scan(&out.QueuedServices); err != nil {
 		return out, err
 	}
 	out.ReviewStatus, out.OrderStatus = "approved", "active"
+	return s.finishOrderReview(ctx, tx, actorID, orderID, key, hash, out)
+}
+
+func (s *Store) finishOrderReview(ctx context.Context, tx pgx.Tx, actor, id int64, key, hash string, out OrderReviewResult) (OrderReviewResult, error) {
+	if err := tx.QueryRow(ctx, "SELECT version FROM orders WHERE id=$1", id).Scan(&out.Version); err != nil {
+		return out, err
+	}
+	if err := saveOrderOperation(ctx, tx, actor, id, "review", key, hash, out); err != nil {
+		return out, err
+	}
 	return out, tx.Commit(ctx)
 }

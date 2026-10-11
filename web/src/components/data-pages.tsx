@@ -72,9 +72,9 @@ import { AdminStatusTabs } from "./admin-status-tabs";
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { AdminPagination } from "./admin-pagination";
 
-const adminOrderStates = ["pending", "paid", "active", "cancelled", "refunded"] as const;
+const adminOrderStates = ["review_pending", "pending", "paid", "active", "cancelled", "refunded"] as const;
 const adminRenewalStates = ["pending", "paid", "cancelled", "refunded"] as const;
-const orderListDefaults = { limit: "25", customer_id: "" } as const;
+const orderListDefaults = { limit: "25", customer_id: "", date_from: "", date_to: "", payment_status: "" } as const;
 const renewalListDefaults = { kind: "renew", ...orderListDefaults } as const;
 const adminServiceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
@@ -454,7 +454,7 @@ function AdminRenewalOrdersView() {
   return (
     <Workspace title="续费订单" admin>
       <PageHeading title="续费订单" description="查看客户服务续费账单和付款状态"><Button variant="outline" asChild><Link href="/admin/orders">产品订单</Link></Button></PageHeading>
-      <AdminStatusTabs label="续费订单状态" value={status} states={{ pending: "待支付", paid: "已支付", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
+      <AdminStatusTabs label="续费订单状态" value={status} states={{ review_pending: "待核验", pending: "待支付", paid: "已支付", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="账单号、客户、产品或邮箱" />
       </div>
@@ -493,51 +493,52 @@ function AdminOrdersView() {
   const [selected, setSelected] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [advanced,setAdvanced] = useState(false);
   const pageSize = [25, 50, 100].includes(Number(extra.limit)) ? Number(extra.limit) : 25;
   const params = new URLSearchParams({ q: query, limit: String(pageSize), offset: String(page * pageSize) });
   if (/^[1-9]\d*$/.test(extra.customer_id ?? "")) params.set("customer_id", extra.customer_id);
   if (status !== "all") params.set("status", status);
+  for(const key of ["date_from","date_to","payment_status"]) if(extra[key])params.set(key,extra[key]);
   const { data: result, error, refresh } = useResource<{ items: Row[]; total: number; limit: number; offset: number }>(ready ? `/admin/orders/page?${params.toString()}` : null, false);
   const data = result?.items;
-  const cancellable = (data ?? []).filter((row) => String(row.status) === "pending").map((row) => Number(row.id));
-  const visibleSelected = selected.filter((id) => cancellable.includes(id));
-  const allSelected = cancellable.length > 0 && cancellable.every((id) => selected.includes(id));
-
-  function toggle(id: number, checked: boolean) {
-    setSelected((current) => checked ? [...new Set([...current, id])] : current.filter((value) => value !== id));
-  }
-  async function bulkCancel() {
-    if (visibleSelected.length === 0 || !window.confirm(`确认取消所选 ${visibleSelected.length} 个待支付订单？取消后会释放预留库存。`)) return;
+  const selectable = (data ?? []).map((row) => Number(row.id));
+  const visibleSelected = selected.filter(id => selectable.includes(id));
+  const allSelected = selectable.length > 0 && selectable.every(id => selected.includes(id));
+  function toggle(id: number, checked: boolean) { setSelected(current => checked ? [...new Set([...current,id])] : current.filter(value => value !== id)); }
+  async function bulkAction(action: "cancel" | "review" | "delete") {
+    if (!visibleSelected.length) return;
+    let reason = "";
+    if (action === "delete") { reason = window.prompt("填写删除原因（至少3字）。待付款订单会取消并释放库存，账单与审计记录保留。")?.trim() ?? ""; if (reason.length < 3) return; }
+    if (!window.confirm(`确认${action === "cancel" ? "取消" : action === "review" ? "核验通过" : "删除"}所选 ${visibleSelected.length} 个订单？不可处理的订单会逐项返回原因。`)) return;
     setBusy(true); setMessage("");
     try {
-      const result = await api<{ succeeded: number; failed: number }>("/admin/orders/bulk-cancel", {
-        method: "POST",
-        body: JSON.stringify({ order_ids: visibleSelected }),
-        headers: { "Idempotency-Key": `web-order-bulk-cancel-${crypto.randomUUID()}` },
-      });
-      setMessage(`已处理 ${result.succeeded} 个订单${result.failed ? `，${result.failed} 个未取消` : ""}`);
+      const versions = Object.fromEntries((data ?? []).filter(row => visibleSelected.includes(Number(row.id))).map(row => [String(row.id),Number(row.version)]));
+      const result = await api<{ succeeded: number; failed: number; items: { order_id: number; error?: string }[] }>(`/admin/orders/bulk-${action}`, { method: "POST", body: JSON.stringify({ order_ids: visibleSelected, expected_versions: versions, ...(action === "review" ? {decision:"approved",note:"管理员批量核验通过"} : action === "delete" ? {reason} : {}) }), headers: { "Idempotency-Key": `web-order-bulk-${action}-${crypto.randomUUID()}` } });
+      setMessage(`成功 ${result.succeeded} 个，失败 ${result.failed} 个${result.failed ? "：" + result.items.filter(item => item.error).map(item => `#${item.order_id} ${item.error}`).join("；") : ""}`);
       setSelected([]); refresh();
     } catch (e) { setMessage((e as Error).message); }
     finally { setBusy(false); }
   }
+
   return (
     <Workspace title="订单管理" admin>
-      <PageHeading title="订单管理" description="筛选订单并批量处理待支付订单"><Button variant="outline" asChild><Link href="/admin/orders?kind=renew">续费订单</Link></Button></PageHeading>
-      <AdminStatusTabs label="订单状态" value={status} states={{ pending: "待支付", paid: "已支付", active: "已启用", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
+      <PageHeading title="订单管理" description="查询订单、核验交付与管理订单历史"><div className="flex flex-wrap gap-2"><PermissionGate permission="orders.manage"><Button asChild><Link href={`/admin/orders/new${suffix}`}><Plus size={16} />添加新订单</Link></Button></PermissionGate><Button variant="outline" asChild><Link href="/admin/orders?kind=renew">续费订单</Link></Button></div></PageHeading>
+      <AdminStatusTabs label="订单状态" value={status} states={{ review_pending: "待核验", pending: "待支付", paid: "已支付", active: "已启用", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="订单号、客户名称或邮箱" />
-        {message && <span className="text-sm text-muted-foreground" role="status">{message}</span>}
+        <Button variant="outline" onClick={() => setAdvanced(value => !value)} aria-expanded={advanced}>高级搜索</Button>{message && <span className="text-sm text-muted-foreground break-words" role="status">{message}</span>}
       </div>
+      {advanced&&<section className="data-surface p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-5"><label className="text-sm min-w-0">客户ID<Input aria-label="筛选客户ID" type="number" min={1} value={extra.customer_id} onChange={e=>{setExtra({...extra,customer_id:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">开始日期<Input aria-label="订单开始日期" type="date" value={extra.date_from} onChange={e=>{setExtra({...extra,date_from:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">结束日期<Input aria-label="订单结束日期" type="date" value={extra.date_to} onChange={e=>{setExtra({...extra,date_to:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">付款状态<select aria-label="订单付款状态" className={catalogSelectStyle} value={extra.payment_status} onChange={e=>{setExtra({...extra,payment_status:e.target.value});setPage(0);}}><option value="">全部</option><option value="deferred">未生成账单</option><option value="unpaid">待付款</option><option value="paid">已支付</option><option value="cancelled">已取消</option><option value="refunded">已退款</option></select></label><Button variant="outline" onClick={()=>{setExtra({...orderListDefaults});setPage(0);}}>清除高级筛选</Button></section>}
       {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : (
         <div className="admin-list-surface data-surface overflow-auto">
           <Table>
-            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? cancellable : [])} aria-label="选择待支付订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>产品 / 服务域名</TableHead><TableHead>金额 / 付款</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>订单备注</TableHead><TableHead>客户销售</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? selectable : [])} aria-label="选择当前页订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>产品 / 服务域名</TableHead><TableHead>IP 地址</TableHead><TableHead>金额 / 付款</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>订单备注</TableHead><TableHead>客户销售</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data.length === 0 && <TableRow><TableCell colSpan={11} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
-              {data.map((row, i) => { const id = Number(row.id); const pending = String(row.status) === "pending"; return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} disabled={!pending} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><div className="max-w-64 whitespace-normal break-words">{String(row.product_names || "-")}<span className="block text-xs text-muted-foreground">{String(row.service_domains || "-")}</span></div></TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span><span className="block text-xs text-muted-foreground"><Status value={String(row.invoice_status ?? "unpaid")} /> · {String(row.payment_method || "-")}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.notes || "-")}</TableCell><TableCell>{String(row.sales_owner_name || "-")}</TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin refresh={refresh} /></div></TableCell></TableRow>; })}
+              {data.length === 0 && <TableRow><TableCell colSpan={12} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
+              {data.map((row, i) => { const id = Number(row.id); return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><div className="max-w-64 whitespace-normal break-words">{String(row.product_names || "-")}<span className="block text-xs text-muted-foreground">{String(row.service_domains || "-")}</span></div></TableCell><TableCell className="font-mono text-xs">{String(row.service_ips || "-")}</TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span><span className="block text-xs text-muted-foreground">{row.invoice_id == null ? "未生成账单" : <Status value={String(row.invoice_status)} />} · {String(row.payment_method || "-")}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.notes || "-")}</TableCell><TableCell>{String(row.sales_owner_name || "-")}</TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin refresh={refresh} /><OrderDeleteAction row={row} refresh={refresh} /></div></TableCell></TableRow>; })}
             </TableBody>
           </Table>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkCancel()}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button></PermissionGate><div className="min-w-0 flex-1"><AdminPagination total={result?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={size => { setExtra({ ...extra, limit: String(size) }); setPage(0); }} /></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><div className="flex flex-wrap gap-2"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkAction("cancel")}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button><Button size="sm" disabled={busy || !visibleSelected.length} onClick={() => void bulkAction("review")}>核验通过</Button><Button variant="destructive" size="sm" disabled={busy || !visibleSelected.length} onClick={() => void bulkAction("delete")}>删除订单</Button></PermissionGate></div><div className="min-w-0 basis-72 flex-1"><AdminPagination total={result?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={size => { setExtra({ ...extra, limit: String(size) }); setPage(0); }} /></div></div>
         </div>
       )}
     </Workspace>
@@ -553,7 +554,7 @@ function OrderCancelAction({ row, admin, refresh }: { row: Row; admin: boolean; 
     if (!window.confirm("确认取消此订单？取消后会释放预留库存。")) return;
     setBusy(true); setMessage("");
     try {
-      await api(`${admin ? "/admin" : ""}/orders/${Number(row.id)}/cancel`, { method: "POST", body: "{}", headers: { "Idempotency-Key": `web-order-cancel-${row.id}-${crypto.randomUUID()}` } });
+      await api(`${admin ? "/admin" : ""}/orders/${Number(row.id)}/cancel`, { method: "POST", body: JSON.stringify(admin ? {expected_version: Number(row.version)} : {}), headers: { "Idempotency-Key": `web-order-cancel-${row.id}-${crypto.randomUUID()}` } });
       setMessage("已取消"); refresh?.();
     } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
@@ -564,16 +565,36 @@ function OrderReviewAction({ row, refresh }: { row: Row; refresh: () => void }) 
   const allowed = useAdminPermission("orders.manage");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  if (!allowed || String(row.review_status) !== "pending") return null;
+  if (!allowed || String(row.review_status) !== "pending" || String(row.invoice_status) !== "paid") return null;
   async function decide(decision: "approved" | "rejected") {
     if (!window.confirm(decision === "approved" ? "确认审核通过此订单并继续交付？" : "确认驳回此订单？")) return;
     setBusy(true); setMessage("");
     try {
-      await api(`/admin/orders/${Number(row.id)}/review`, { method: "POST", body: JSON.stringify({ decision, note: decision === "approved" ? "管理员审核通过" : "管理员审核驳回" }), headers: { "Idempotency-Key": `web-order-review-${row.id}-${decision}-${crypto.randomUUID()}` } });
+      await api(`/admin/orders/${Number(row.id)}/review`, { method: "POST", body: JSON.stringify({ expected_version: Number(row.version), decision, note: decision === "approved" ? "管理员审核通过" : "管理员审核驳回" }), headers: { "Idempotency-Key": `web-order-review-${row.id}-${decision}-${crypto.randomUUID()}` } });
       setMessage(decision === "approved" ? "已通过" : "已驳回"); refresh();
     } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   return <div className="flex flex-wrap items-center gap-2"><Button size="sm" disabled={busy} onClick={() => void decide("approved")}>通过</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void decide("rejected")}>驳回</Button>{message && <span className="text-xs text-muted-foreground whitespace-nowrap">{message}</span>}</div>;
+}
+
+function OrderDeleteAction({row,refresh}:{row:Row;refresh:()=>void}) {
+ const allowed = useAdminPermission("orders.manage");
+ const [busy,setBusy] = useState(false); const [message,setMessage] = useState("");
+ if (!allowed || !["pending","cancelled","refunded"].includes(String(row.status))) return null;
+ async function remove() {
+  const reason = window.prompt("填写删除原因（3至500字）。待付款订单会取消，财务与资源历史保留。")?.trim();
+  if (!reason || reason.length < 3 || !window.confirm("确认删除此订单？订单将从常规列表移除。")) return;
+  setBusy(true);setMessage("");
+  try { await api(`/admin/orders/${row.id}`, {method:"DELETE",body:JSON.stringify({expected_version:Number(row.version),reason}),headers:{"Idempotency-Key":`web-order-delete-${row.id}-${crypto.randomUUID()}`}});refresh(); }
+  catch(e){setMessage((e as Error).message);} finally{setBusy(false);}
+ }
+ return <div className="flex flex-wrap gap-2"><Button size="sm" variant="destructive" disabled={busy} onClick={() => void remove()}><Trash2 size={14}/>删除</Button>{message&&<span role="status" className="text-xs break-words">{message}</span>}</div>;
+}
+function DeferredOrderInvoice({row,refresh}:{row:Row;refresh:()=>void}) {
+ const allowed = useAdminPermission("orders.manage");const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");
+ if (!allowed || row.invoice_id != null || row.status !== "pending") return null;
+ async function generate(){if(!window.confirm("确认按订单已保存的金额生成待付款账单？"))return;setBusy(true);try{await api(`/admin/orders/${row.id}/invoice`,{method:"POST",body:JSON.stringify({expected_version:Number(row.version)}),headers:{"Idempotency-Key":`web-order-invoice-${row.id}-${crypto.randomUUID()}`}});refresh();}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
+ return <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void generate()}>生成账单</Button>{message&&<span role="status" className="text-xs break-words">{message}</span>}</div>;
 }
 
 function OrderConfigurationSnapshot({item}:{item:Row}){
@@ -584,17 +605,18 @@ export function OrderDetailView({ id }: { id: number }) {
   const backHref = useAdminListReturnHref("/admin/orders", adminOrderStates, "all", orderListDefaults);
   const { data, error, refresh } = useResource<Row>(`/admin/orders/${id}`);
   const [note, setNote] = useState<string | null>(null);
+  const [noteVersion,setNoteVersion] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   async function saveNotes(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true); setMessage("");
     try {
-      await api(`/admin/orders/${id}/notes`, { method: "POST", body: JSON.stringify({ notes: note ?? String(data?.notes ?? "") }) });
-      setMessage("备注已保存"); refresh();
+      await api(`/admin/orders/${id}/notes`, { method: "POST", body: JSON.stringify({ expected_version: noteVersion ?? Number(data?.version), notes: note ?? String(data?.notes ?? "") }), headers: {"Idempotency-Key":`web-order-notes-${id}-${crypto.randomUUID()}`} });
+      setMessage("备注已保存"); setNote(null); setNoteVersion(null); refresh();
     } catch (e) { setMessage((e as Error).message); } finally { setSaving(false); }
   }
-  return <Workspace title="订单详情" admin><Button variant="ghost" className="mb-4" asChild><Link href={backHref}><ArrowUpRight size={16} />返回订单列表</Link></Button>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <><PageHeading title={String(data.order_no)} description={`客户：${String(data.display_name)} · 创建于 ${date(String(data.created_at))}`}><div className="flex items-center gap-2"><Status value={String(data.status)} /><Status value={String(data.review_status ?? "approved")} /><OrderReviewAction row={data} refresh={refresh} /></div></PageHeading><div className="grid md:grid-cols-3 gap-3 mb-5"><section className="data-surface p-4"><p className="text-xs text-muted-foreground">订单金额</p><p className="money text-xl font-semibold mt-2">{money(Number(data.total_cents))}</p></section><section className="data-surface p-4"><p className="text-xs text-muted-foreground">账单</p><p className="mt-2">{String(data.invoice_no)} · <Status value={String(data.invoice_status)} /></p></section><section className="data-surface p-4"><p className="text-xs text-muted-foreground">客户邮箱</p><p className="mt-2 break-all">{String(data.email)}</p></section></div><div className="mb-4 flex flex-wrap gap-2"><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${data.user_id}`}>客户摘要</Link></Button></PermissionGate>{data.invoice_id != null && <PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${data.invoice_id}`}>关联账单</Link></Button></PermissionGate>}</div><div className="grid xl:grid-cols-2 gap-4"><section className="data-surface p-6"><h2 className="font-semibold">订单项目</h2><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>产品</TableHead><TableHead>账期</TableHead><TableHead>数量</TableHead><TableHead>金额</TableHead></TableRow></TableHeader><TableBody>{(data.items as Row[]).map((item) => <TableRow key={String(item.id)}><TableCell>{String(item.product_name)}<OrderConfigurationSnapshot item={item}/><RenewalBenefitDetails terms={{renewal_discount_percent:Number(item.renewal_discount_percent),renewal_fixed_discount_cents:Number(item.renewal_fixed_discount_cents),renewal_discount_limit:Number(item.renewal_discount_limit),renewal_promo_code:String(item.renewal_promo_code??"")}}/><PurchaseFieldDetails fields={Array.isArray(item.purchase_fields)?item.purchase_fields as PurchaseFieldSnapshot[]:[]}/></TableCell><TableCell>{String(item.billing_cycle)}</TableCell><TableCell>{String(item.quantity)}</TableCell><TableCell className="money">{money(Number(item.total_cents))}</TableCell></TableRow>)}</TableBody></Table></div></section><section className="data-surface p-6"><h2 className="font-semibold">服务实例</h2><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>服务</TableHead><TableHead>域名</TableHead><TableHead>状态</TableHead></TableRow></TableHeader><TableBody>{(data.services as Row[]).map((service) => <TableRow key={String(service.id)}><TableCell><PermissionGate permission="services.view"><Link className="text-primary hover:underline" href={`/admin/services/${service.id}`}>{String(service.name)}</Link></PermissionGate></TableCell><TableCell className="font-mono text-xs">{String(service.domain)}</TableCell><TableCell><Status value={String(service.status)} /></TableCell></TableRow>)}</TableBody></Table></div></section></div><section className="data-surface p-6 mt-5"><h2 className="font-semibold">管理员备注</h2><PermissionFields permission="orders.manage"><form className="mt-4 space-y-3" onSubmit={(event) => void saveNotes(event)}><Textarea value={note ?? String(data.notes ?? "")} onChange={(event) => setNote(event.target.value)} rows={5} maxLength={5000} aria-label="订单备注" /><div className="flex items-center gap-3"><Button disabled={saving}>{saving ? "保存中" : "保存备注"}</Button>{message && <span className="text-sm text-muted-foreground" role="status">{message}</span>}</div></form></PermissionFields></section></> }</Workspace>;
+  return <Workspace title="订单详情" admin><Button variant="ghost" className="mb-4" asChild><Link href={backHref}><ArrowUpRight size={16} />返回订单列表</Link></Button>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <><PageHeading title={String(data.order_no)} description={`客户：${String(data.display_name)} · 创建于 ${date(String(data.created_at))}`}><div className="flex flex-wrap items-center gap-2"><Status value={String(data.status)} /><Status value={String(data.review_status ?? "approved")} /><OrderReviewAction row={data} refresh={refresh} /><OrderCancelAction row={data} admin refresh={refresh} /><Button variant="outline" size="sm" onClick={refresh}>刷新订单</Button><OrderDeleteAction row={data} refresh={() => window.location.assign(backHref)} /></div></PageHeading><div className="grid md:grid-cols-3 gap-3 mb-5"><section className="data-surface p-4"><p className="text-xs text-muted-foreground">订单金额</p><p className="money text-xl font-semibold mt-2">{money(Number(data.total_cents))}</p></section><section className="data-surface p-4"><p className="text-xs text-muted-foreground">账单</p><p className="mt-2">{data.invoice_id == null ? "尚未生成账单" : <>{String(data.invoice_no)} · <Status value={String(data.invoice_status)} /></>}</p></section><section className="data-surface p-4"><p className="text-xs text-muted-foreground">客户邮箱</p><p className="mt-2 break-all">{String(data.email)}</p></section></div><div className="mb-4 flex flex-wrap gap-2"><DeferredOrderInvoice row={data} refresh={refresh}/><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${data.user_id}`}>客户摘要</Link></Button></PermissionGate>{data.invoice_id != null && <PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${data.invoice_id}`}>关联账单</Link></Button></PermissionGate>}</div><div className="grid xl:grid-cols-2 gap-4"><section className="data-surface p-6"><h2 className="font-semibold">订单项目</h2><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>产品</TableHead><TableHead>账期</TableHead><TableHead>数量</TableHead><TableHead>金额</TableHead></TableRow></TableHeader><TableBody>{(data.items as Row[]).map((item) => <TableRow key={String(item.id)}><TableCell>{String(item.product_name)}<OrderConfigurationSnapshot item={item}/>{item.first_price_override_cents != null && <p className="text-xs text-muted-foreground">首次内部价格：{money(Number(item.first_price_override_cents))}</p>}{item.renewal_price_override_cents != null && <p className="text-xs text-muted-foreground">续费内部价格：{money(Number(item.renewal_price_override_cents))}</p>}<RenewalBenefitDetails terms={{renewal_discount_percent:Number(item.renewal_discount_percent),renewal_fixed_discount_cents:Number(item.renewal_fixed_discount_cents),renewal_discount_limit:Number(item.renewal_discount_limit),renewal_promo_code:String(item.renewal_promo_code??"")}}/><PurchaseFieldDetails fields={Array.isArray(item.purchase_fields)?item.purchase_fields as PurchaseFieldSnapshot[]:[]}/></TableCell><TableCell>{String(item.billing_cycle)}</TableCell><TableCell>{String(item.quantity)}</TableCell><TableCell className="money">{money(Number(item.total_cents))}</TableCell></TableRow>)}</TableBody></Table></div></section><section className="data-surface p-6"><h2 className="font-semibold">服务实例</h2><div className="overflow-auto mt-4"><Table><TableHeader><TableRow><TableHead>服务</TableHead><TableHead>域名</TableHead><TableHead>状态</TableHead></TableRow></TableHeader><TableBody>{(data.services as Row[]).map((service) => <TableRow key={String(service.id)}><TableCell><PermissionGate permission="services.view"><Link className="text-primary hover:underline" href={`/admin/services/${service.id}`}>{String(service.name)}</Link></PermissionGate></TableCell><TableCell className="font-mono text-xs">{String(service.domain)}</TableCell><TableCell><Status value={String(service.status)} /></TableCell></TableRow>)}</TableBody></Table></div></section></div><section className="data-surface p-4 mt-5"><h2 className="font-semibold">建单信息</h2><dl className="grid sm:grid-cols-2 gap-3 mt-3 text-sm"><div><dt className="text-muted-foreground">付款偏好</dt><dd>{String(data.payment_provider || "由客户付款时选择")}</dd></div><div><dt className="text-muted-foreground">订单通知</dt><dd>{({not_requested:"未请求发送",queued:"已加入发送队列",skipped_unverified:"未发送：客户邮箱尚未验证",skipped_channel:"未发送：邮件渠道未启用",skipped_template:"未发送：通知模板未启用"} as Record<string,string>)[String(data.email_status)] ?? String(data.email_status || "-")}</dd></div></dl></section><section className="data-surface p-6 mt-5"><h2 className="font-semibold">管理员备注</h2><PermissionFields permission="orders.manage"><form className="mt-4 space-y-3" onSubmit={(event) => void saveNotes(event)}><Textarea value={note ?? String(data.notes ?? "")} onChange={(event) => {setNote(event.target.value);if(noteVersion === null)setNoteVersion(Number(data.version));}} rows={5} maxLength={5000} aria-label="订单备注" /><div className="flex items-center gap-3"><Button disabled={saving}>{saving ? "保存中" : "保存备注"}</Button><Button type="button" variant="outline" disabled={saving} onClick={() => {setNote(null);setNoteVersion(null);setMessage("");refresh();}}>取消修改</Button>{message && <span className="text-sm text-muted-foreground" role="status">{message}</span>}</div></form></PermissionFields></section></> }</Workspace>;
 }
 
 export function ServicesView({ admin = false, groupId }: { admin?: boolean; groupId?: number }) {
@@ -1068,7 +1090,7 @@ function CancellationDecision({ row, refresh }: { row: Row; refresh: () => void 
   const status = String(row.status);
   async function decide(decision: "approved" | "declined") {
     setBusy(true); setMessage("");
-    try { await api(`/admin/cancellations/${Number(row.id)}/decision`, { method: "POST", body: JSON.stringify({ decision, note: decision === "approved" ? "审核通过" : "审核驳回" }) }); setMessage("已处理"); setDecision(null); refresh(); }
+    try { await api(`/admin/cancellations/${Number(row.id)}/decision`, { method: "POST", body: JSON.stringify({ expected_version: Number(row.version), decision, note: decision === "approved" ? "审核通过" : "审核驳回" }) }); setMessage("已处理"); setDecision(null); refresh(); }
     catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   if (!allowed || status !== "pending") return <span className="text-xs text-muted-foreground">{message || "-"}</span>;

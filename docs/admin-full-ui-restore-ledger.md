@@ -15,7 +15,7 @@
 | 5 | 我的业绩 `#/sales-statistics` | `/admin/reports?tab=sales` | 已完成 | `GET /admin/reports/sales?year=` | `reports.view` / 年份、URL 标签恢复、真实空态；四尺寸已验收 |
 | 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸验收已通过 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
-| 8 | 产品订单 `#/order-list` | `/admin/orders` | 部分完成 | `GET /admin/orders/page` | `orders.view/manage` / 真实总数分页、产品/服务域名/付款/订单备注/客户销售、客户范围、URL页容量恢复、审核/取消确认；四尺寸已验收；新建/删除与订单写入版本保护待补 |
+| 8 | 产品订单 `#/order-list` | `/admin/orders` | 部分完成 | `GET /admin/orders/page` + `POST /admin/orders/{id}/notes` + `POST /admin/orders/{id}/cancel` + `POST /admin/orders/{id}/review` + `DELETE /admin/orders/{id}` + `POST /admin/orders/bulk-*` | `orders.view/manage` / 真实分页、客户/日期/付款筛选、IP、URL恢复、创建入口、确认和逐项批量结果；事务授权/范围、版本、幂等、审计和软删除保留历史；四尺寸验收；客户资料备注与订单提成计算/展示仍待补；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 | 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 已完成 | `GET /admin/renewal-orders` | `orders.view` / 续费账单、客户范围/客户ID、状态/关键词筛选、总数/页容量、详情返回上下文；四尺寸验收 |
 | 10 | 流量包订单 `#/dcim-traffic-log` | `/admin/traffic-orders` | 部分完成 | `GET /admin/traffic-orders` + `GET /admin/traffic-orders/{id}` + `POST /admin/traffic-orders/{id}/cancel` + `POST /admin/traffic-orders/{id}/delivery-verification` | `orders.view/manage`、`services.manage` / 真实购买→账单→支付→待人工交付；客户范围、状态/关键词筛选、分页、详情、取消/退款返库存；版本冲突、幂等、审计；PG18专项通过，四尺寸浏览器通过，目录CRUD/取消/删除确认/筛选URL恢复已验收；[验收](admin-batch-traffic-acceptance-20261011.md)；自动资源交付未实现 |
 | 11 | 业务列表 `#/customer-product` | `/admin/services` | 已完成 | `GET /admin/services/page` | `services.view` / 状态页签 |
@@ -106,7 +106,7 @@
 | 96 | 我的应用 `#/app-store` | `/admin/apps` | 待实现 | `GET /admin/apps` | `apps.view` |
 | 97 | 应用商店 `#/app-store/app-list` | `/admin/apps/store` | 待实现 | `GET /admin/apps/store` | `apps.view` |
 | 98 | 添加客户 `#/customer-add` | `/admin/customers/new` | 已完成 | `POST /admin/customers` | `customers.manage` / 校验和返回 |
-| 99 | 新建订单 `#/add-order` | `/admin/orders/new` | 待实现 | `GET/POST /admin/orders` | `orders.manage` |
+| 99 | 新建订单 `#/add-order` | `/admin/orders/new` | 部分完成 | `GET /admin/orders/create-options` + `POST /admin/orders/quote` + `POST /admin/orders` + `POST /admin/orders/{id}/invoice` | `orders.manage` / 真实客户/商品搜索分页、多商品/配置/数量/资料、首次续费覆盖、优惠码报价校验、付款偏好、确认/账单/邮件选项、草稿恢复/取消、版本/幂等/权限/审计；四尺寸与延期账单链路通过；旧优惠码目录弹窗待补；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 | 100 | 新建工单 `#/add-support-ticket` | `/admin/tickets/new` | 待实现 | `GET/POST /admin/tickets` | `tickets.manage` |
 | 101 | 开具发票 `#/invoice` | `/admin/invoices/new` | 已完成 | `POST /admin/invoices` | `invoices.manage` |
 | 102 | 添加商品分组 `#/add-product-group` | `/admin/catalog-groups/new` | 部分完成 | `POST /admin/catalog-groups` | `products.manage` |
@@ -120,11 +120,11 @@
 |---|---|---|---|
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面四尺寸验收见 `docs/admin-batch-settings-marketing-acceptance-20261011.md`；渠道和通知深度仍在补齐 |
 | 第二批 | 客户扩展 | 进行中 | 客户资源池已完成；实名、业绩、营销和等级待补 |
-| 第三批 | 业务与订单 | 待开始 | - |
+| 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除已交付；客户资料备注、订单提成计算/展示和自动流量交付待补；[订单验收](admin-batch-admin-orders-acceptance-20261011.md)、[流量包验收](admin-batch-traffic-acceptance-20261011.md) |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
 | 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |
-| 第十批 | 创建与编辑页 | 待开始 | - |
+| 第十批 | 创建与编辑页 | 进行中 | 新建订单真实报价/创建/延期出账与四尺寸验收已完成，优惠码目录弹窗及其余创建编辑页继续补齐；[验收](admin-batch-admin-orders-acceptance-20261011.md) |

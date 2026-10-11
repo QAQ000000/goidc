@@ -1025,6 +1025,166 @@
         "scrollWidth": 320
       },
       "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-1440.png",
+      "screenshotSha256": "ca6fcd67e5d97e9bfa045dd33ae92b6e4586c61c683263331c46dcd7c1bbe025",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-1024.png",
+      "screenshotSha256": "730746c2a1883b4d4822885f3f96265a1b56a70a2b68afd975dfba78e932764d",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-390.png",
+      "screenshotSha256": "8234bee94456921f66408f189cc455ef19e3cbb60962a0e70b6e4d4ade5ad2a3",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-320.png",
+      "screenshotSha256": "ea82fdee0e0fd87bae319b0878bdcbe5b7e434db185d0c6a6b39d7702dd4ebce",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders/new",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-1440.png",
+      "screenshotSha256": "f4ba3e6bfe65571af730f0c4513eeee07059124f576fcfb775a4d21794c72d7d",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders/new",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-1024.png",
+      "screenshotSha256": "d823e56bd064132af658dd7648a3871913620909792732557ec88e541c6d0ef8",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders/new",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-390.png",
+      "screenshotSha256": "aecd5e047c9a0a556e7345749f186adecbe055958cf6b4a29fd65f32b2328799",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders/new",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "environment": "运行PG18 schema123 + Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-320.png",
+      "screenshotSha256": "20bc6145d4eb72df4008d38e604309aba9a4adb9949925c49cfb977214d79689",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
     }
   ],
   "pageErrors": [],
@@ -1032,6 +1192,7 @@
   "consoleErrors": [],
   "notes": [
     "截图保留于本机 output/playwright/admin-restore-20261011，未把屏幕截图体积加入git。",
-    "PASS仅表示已列出的加载布局检查，不代表105页全量业务验收通过。"
+    "PASS仅表示已列出的加载布局检查，不代表105页全量业务验收通过。",
+    "2026-10-11 schema123订单批次：PASS仅指最终稳定阶段的四尺寸布局；原过程包含预期409、重启500及会话恢复失败，详见订单批次验收。"
   ]
 }

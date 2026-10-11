@@ -13,7 +13,7 @@
 | 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports?tab=sales | 报表页销售标签使用真实 API，并恢复年份和标签 URL | 已验收 |
 | 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 7 | [客户 / 推介计划](#page-7) | #/customer-promotionplan | /admin/affiliate | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 真实总数分页/客户范围/详情返回已补齐，写操作版本保护及新建删除仍待补 | PASS（四尺寸） |
+| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 真实报价创建、延期出账、版本化单笔/批量操作和软删除已补齐；客户资料备注/订单提成计算待补 | PASS（四尺寸） |
 | 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 真实续费分页/客户范围/已付款渠道/详情返回 | PASS（四尺寸） |
 | 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 有对应路由源码；真实支付后待人工交付，自动上游交付未实现 | PASS（四尺寸，空订单） |
 | 11 | [业务 / 业务列表](#page-11) | #/customer-product | /admin/services | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -104,7 +104,7 @@
 | 96 | [资源与商店 / 我的应用](#page-96) | #/app-store | /admin/apps | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 97 | [资源与商店 / 应用商店](#page-97) | #/app-store/app-list | /admin/apps/store | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 98 | [客户管理 / 添加客户](#page-98) | #/customer-add | /admin/customers/new | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 99 | [订单管理 / 新建订单](#page-99) | #/add-order | /admin/orders/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 99 | [订单管理 / 新建订单](#page-99) | #/add-order | /admin/orders/new | 真实多产品报价/创建/延期出账、库存、草稿和授权保护；优惠码目录弹窗待补 | PASS（四尺寸） |
 | 100 | [工单管理 / 新建工单](#page-100) | #/add-support-ticket | /admin/tickets/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 101 | [发票管理 / 开具发票](#page-101) | #/invoice | /admin/invoices/new | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 102 | [商品设置 / 添加商品分组](#page-102) | #/add-product-group | /admin/catalog-groups/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -156,7 +156,7 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:195)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:18)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/order-list 检索。
 
-普通列表使用 `GET /api/v1/admin/orders/page` 的真实总数分页，显示产品快照、服务域名、金额/付款、订单备注和客户销售归属。状态、关键词、客户ID、页容量和分页保留URL；审核/取消具备确认，但新建、删除和写操作版本保护尚未完全补齐，台账保持部分完成。
+普通列表使用真实总数分页、客户范围、上海日期/付款筛选与URL恢复，显示产品快照、域名/IP、金额/付款、内部备注和客户销售归属。单笔/批量备注、取消、审核和软删除具备事务权限重检、版本、幂等、审计与确认；延期出账和新建入口已接入。客户资料备注投影和订单销售提成计算/展示仍待补，台账保持部分完成，见[本批验收](admin-batch-admin-orders-acceptance-20261011.md)。
 
 <a id="page-9"></a>
 ## 9. 续费订单
@@ -638,6 +638,8 @@
 ## 99. 新建订单
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2092)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:109)。JSON 中按唯一旧 hash #/add-order 检索。
+
+`AdminOrderCreatePage`使用真实客户/商品搜索和配置，报价哈希绑定价格/渠道/版本，确认后以幂等键创建。未付款不开通，延期账单可在详情生成；价格为整数分，购买资料不进入草稿缓存。旧优惠码目录与添加弹窗仍待还原。四尺寸及创建→出账→备注409→取消→审计软删除见[验收](admin-batch-admin-orders-acceptance-20261011.md)。
 
 <a id="page-100"></a>
 ## 100. 新建工单

@@ -63,9 +63,9 @@ func (s *Server) customerOrderDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
-	rows, err := tx.Query(ctx, `SELECT o.id,o.order_no,o.status,o.review_status,o.total_cents,o.currency,o.promo_code,o.discount_cents,o.created_at,o.updated_at,
+	rows, err := tx.Query(ctx, `SELECT o.version,o.id,o.order_no,o.status,o.review_status,o.total_cents,o.currency,o.promo_code,o.discount_cents,o.created_at,o.updated_at,
  i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.amount_cents,i.paid_at,i.due_at
- FROM orders o LEFT JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE o.id=$1 AND o.user_id=$2`, id, uid)
+ FROM orders o LEFT JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE o.id=$1 AND o.user_id=$2 AND o.deleted_at IS NULL`, id, uid)
 	if err != nil {
 		s.fail(w, r, err)
 		return

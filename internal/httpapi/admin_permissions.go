@@ -181,7 +181,7 @@ var adminRoutePermissions = func() map[string]string {
 		"customer_levels.view":          {"GET /api/v1/admin/customer-levels"},
 		"customer_levels.manage":        {"POST /api/v1/admin/customer-levels", "PATCH /api/v1/admin/customer-levels/{id}", "DELETE /api/v1/admin/customer-levels/{id}"},
 		"orders.view":                   {"GET /api/v1/admin/orders", "GET /api/v1/admin/orders/{id}", "GET /api/v1/admin/renewal-orders"},
-		"orders.manage":                 {"POST /api/v1/admin/orders/{id}/cancel", "POST /api/v1/admin/orders/{id}/review", "POST /api/v1/admin/orders/{id}/notes", "POST /api/v1/admin/orders/bulk-cancel"},
+		"orders.manage":                 {"GET /api/v1/admin/orders/create-options", "POST /api/v1/admin/orders/quote", "POST /api/v1/admin/orders", "POST /api/v1/admin/orders/{id}/invoice", "DELETE /api/v1/admin/orders/{id}", "POST /api/v1/admin/orders/bulk-review", "POST /api/v1/admin/orders/bulk-delete", "POST /api/v1/admin/orders/{id}/cancel", "POST /api/v1/admin/orders/{id}/review", "POST /api/v1/admin/orders/{id}/notes", "POST /api/v1/admin/orders/bulk-cancel"},
 		"invoices.view":                 {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}", "GET /api/v1/admin/customer-transactions"},
 		"invoices.manage":               {"GET /api/v1/admin/invoice-customers", "POST /api/v1/admin/invoices", "PUT /api/v1/admin/invoices/{id}", "POST /api/v1/admin/invoices/{id}/cancel", "POST /api/v1/admin/invoices/merge"},
 		"invoices.refund":               {"POST /api/v1/admin/invoices/{id}/refund"},

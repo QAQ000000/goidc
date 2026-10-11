@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "ledger": "docs/admin-full-ui-restore-ledger.md",
-    "ledgerSha256": "5d34402a596f935ba7c99d9b7bef72a29b0727b934429ed8bad5dfc3273e1555",
+    "ledgerSha256": "54cb293d894be0867ec05838cfae8dbf2ddafb2b21de980959f454dc079eab21",
     "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md",
     "specificationSha256": "b16aee6e1139eef7f08eb539d081f4484e3e6aa3eb514bffa202a7d07a5e628c"
   },
@@ -996,13 +996,55 @@
         "component": "web/src/app/admin/orders/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/orders/page",
+        "ledgerClaim": "GET /admin/orders/page + POST /admin/orders/{id}/notes + POST /admin/orders/{id}/cancel + POST /admin/orders/{id}/review + DELETE /admin/orders/{id} + POST /admin/orders/bulk-*",
         "registered": [
+          {
+            "method": "DELETE",
+            "path": "/admin/orders/{id}",
+            "handler": "deleteOrder",
+            "evidence": "internal/httpapi/server.go:434"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/bulk-review",
+            "handler": "bulkReviewOrders",
+            "evidence": "internal/httpapi/server.go:435"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/bulk-delete",
+            "handler": "bulkDeleteOrders",
+            "evidence": "internal/httpapi/server.go:436"
+          },
           {
             "method": "GET",
             "path": "/admin/orders/page",
             "handler": "orders",
-            "evidence": "internal/httpapi/server.go:431"
+            "evidence": "internal/httpapi/server.go:438"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/{id}/cancel",
+            "handler": "cancelOrder",
+            "evidence": "internal/httpapi/server.go:449"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/{id}/review",
+            "handler": "reviewOrder",
+            "evidence": "internal/httpapi/server.go:450"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/{id}/notes",
+            "handler": "updateOrderNotes",
+            "evidence": "internal/httpapi/server.go:451"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/bulk-cancel",
+            "handler": "bulkCancelOrders",
+            "evidence": "internal/httpapi/server.go:452"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1024,13 +1066,87 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "counts",
+          "inserted",
+          "invoices",
+          "order_batch_requests",
+          "order_operation_receipts",
+          "orders",
+          "payment_transactions",
+          "products",
+          "provision_jobs",
+          "queued",
+          "released",
+          "services",
+          "stock_updates"
+        ],
+        "evidence": [
+          "internal/store/order_mutations.go",
+          "internal/store/order_review.go",
+          "internal/store/orders.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/006_service_delivery.sql",
+          "db/migrations/007_legacy_import_issues.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/009_service_renewals.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/011_payment_pending_guard.sql",
+          "db/migrations/012_product_pricing.sql",
+          "db/migrations/013_product_options.sql",
+          "db/migrations/014_auto_renewal.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/025_order_review.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/037_catalog_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/045_legacy_tickets.sql",
+          "db/migrations/048_legacy_product_configuration.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/055_service_product_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/060_epay_transactions.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/062_recurring_promotions.sql",
+          "db/migrations/063_product_purchase_fields.sql",
+          "db/migrations/064_limited_renewal_benefits.sql",
+          "db/migrations/066_nokvm_delivery.sql",
+          "db/migrations/067_payment_monitoring.sql",
+          "db/migrations/068_nokvm_power.sql",
+          "db/migrations/069_nokvm_password.sql",
+          "db/migrations/070_nokvm_reinstall.sql",
+          "db/migrations/071_nokvm_storage.sql",
+          "db/migrations/072_nokvm_nat.sql",
+          "db/migrations/073_nokvm_cdrom.sql",
+          "db/migrations/075_native_configuration_rules.sql",
+          "db/migrations/081_supplier_products.sql",
+          "db/migrations/082_supplier_actions.sql",
+          "db/migrations/083_supplier_console.sql",
+          "db/migrations/087_payment_expiry_credentials.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/095_payment_success_notifications.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/107_ticket_status_rules.sql",
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/116_customer_product_groups.sql",
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -1132,15 +1248,68 @@
           "result": "PASS",
           "screenshot": "output/playwright/admin-batch-orders-followup-20261011/orders-320.png",
           "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1440,
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 1024,
+          "height": 768,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-list-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         }
       ],
       "viewportResults": [
         {
           "width": 1440,
-          "height": 1000,
+          "height": 900,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-batch-orders-followup-20261011/orders-1440.png"
+            "output/playwright/admin-batch-orders-followup-20261011/orders-1440.png",
+            "output/playwright/admin-batch-order-create-20261011/order-list-1440.png"
           ],
           "evidence": [
             {
@@ -1151,15 +1320,25 @@
                 "noApiFailures": true,
                 "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
               }
+            },
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
             }
           ]
         },
         {
           "width": 1024,
-          "height": 900,
+          "height": 768,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-batch-orders-followup-20261011/orders-1024.png"
+            "output/playwright/admin-batch-orders-followup-20261011/orders-1024.png",
+            "output/playwright/admin-batch-order-create-20261011/order-list-1024.png"
           ],
           "evidence": [
             {
@@ -1169,6 +1348,15 @@
                 "noConsoleErrors": true,
                 "noApiFailures": true,
                 "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+              }
+            },
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
               }
             }
           ]
@@ -1178,7 +1366,8 @@
           "height": 844,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-batch-orders-followup-20261011/orders-390.png"
+            "output/playwright/admin-batch-orders-followup-20261011/orders-390.png",
+            "output/playwright/admin-batch-order-create-20261011/order-list-390.png"
           ],
           "evidence": [
             {
@@ -1189,15 +1378,25 @@
                 "noApiFailures": true,
                 "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
               }
+            },
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
             }
           ]
         },
         {
           "width": 320,
-          "height": 700,
+          "height": 800,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-batch-orders-followup-20261011/orders-320.png"
+            "output/playwright/admin-batch-orders-followup-20261011/orders-320.png",
+            "output/playwright/admin-batch-order-create-20261011/order-list-320.png"
           ],
           "evidence": [
             {
@@ -1207,6 +1406,15 @@
                 "noConsoleErrors": true,
                 "noApiFailures": true,
                 "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+              }
+            },
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
               }
             }
           ]
@@ -1246,7 +1454,7 @@
             "method": "GET",
             "path": "/admin/renewal-orders",
             "handler": "renewalOrders",
-            "evidence": "internal/httpapi/server.go:432"
+            "evidence": "internal/httpapi/server.go:439"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1482,25 +1690,25 @@
             "method": "GET",
             "path": "/admin/traffic-orders",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:437"
+            "evidence": "internal/httpapi/server.go:444"
           },
           {
             "method": "GET",
             "path": "/admin/traffic-orders/{id}",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:438"
+            "evidence": "internal/httpapi/server.go:445"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-orders/{id}/cancel",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:439"
+            "evidence": "internal/httpapi/server.go:446"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-orders/{id}/delivery-verification",
             "handler": "verifyTrafficDelivery",
-            "evidence": "internal/httpapi/server.go:440"
+            "evidence": "internal/httpapi/server.go:447"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1743,7 +1951,7 @@
             "method": "GET",
             "path": "/admin/services/page",
             "handler": "servicesPage",
-            "evidence": "internal/httpapi/server.go:481"
+            "evidence": "internal/httpapi/server.go:488"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1879,7 +2087,7 @@
             "method": "GET",
             "path": "/admin/cancellations",
             "handler": "adminCancellations",
-            "evidence": "internal/httpapi/server.go:501"
+            "evidence": "internal/httpapi/server.go:508"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2155,7 +2363,7 @@
             "method": "GET",
             "path": "/admin/invoices/page",
             "handler": "invoices",
-            "evidence": "internal/httpapi/server.go:447"
+            "evidence": "internal/httpapi/server.go:454"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2861,7 +3069,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:503"
+            "evidence": "internal/httpapi/server.go:510"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4379,13 +4587,13 @@
             "method": "GET",
             "path": "/admin/customer-fields",
             "handler": "adminCustomerCustomFields",
-            "evidence": "internal/httpapi/server.go:473"
+            "evidence": "internal/httpapi/server.go:480"
           },
           {
             "method": "POST",
             "path": "/admin/customer-fields",
             "handler": "createCustomerCustomField",
-            "evidence": "internal/httpapi/server.go:474"
+            "evidence": "internal/httpapi/server.go:481"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4802,13 +5010,13 @@
             "method": "GET",
             "path": "/admin/customer-product-discounts",
             "handler": "adminCustomerProductDiscounts",
-            "evidence": "internal/httpapi/server.go:470"
+            "evidence": "internal/httpapi/server.go:477"
           },
           {
             "method": "PUT",
             "path": "/admin/customer-product-discounts",
             "handler": "saveCustomerProductDiscount",
-            "evidence": "internal/httpapi/server.go:471"
+            "evidence": "internal/httpapi/server.go:478"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5264,7 +5472,8 @@
           "db/migrations/098_notification_scheduling_outbox.sql",
           "db/migrations/098_outbox_retry_limits.sql",
           "db/migrations/099_affiliate_core.sql",
-          "db/migrations/111_marketing_campaigns.sql"
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -5516,13 +5725,13 @@
             "method": "GET",
             "path": "/admin/promo-codes",
             "handler": "promoCodes",
-            "evidence": "internal/httpapi/server.go:477"
+            "evidence": "internal/httpapi/server.go:484"
           },
           {
             "method": "POST",
             "path": "/admin/promo-codes",
             "handler": "createPromoCode",
-            "evidence": "internal/httpapi/server.go:478"
+            "evidence": "internal/httpapi/server.go:485"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6067,13 +6276,13 @@
             "method": "GET",
             "path": "/admin/ticket-departments",
             "handler": "adminTicketDepartments",
-            "evidence": "internal/httpapi/server.go:513"
+            "evidence": "internal/httpapi/server.go:520"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-departments",
             "handler": "createTicketDepartment",
-            "evidence": "internal/httpapi/server.go:514"
+            "evidence": "internal/httpapi/server.go:521"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6201,13 +6410,13 @@
             "method": "GET",
             "path": "/admin/ticket-statuses",
             "handler": "ticketStatuses",
-            "evidence": "internal/httpapi/server.go:504"
+            "evidence": "internal/httpapi/server.go:511"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-statuses",
             "handler": "saveTicketStatus",
-            "evidence": "internal/httpapi/server.go:505"
+            "evidence": "internal/httpapi/server.go:512"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6341,13 +6550,13 @@
             "method": "GET",
             "path": "/admin/ticket-rules",
             "handler": "ticketRules",
-            "evidence": "internal/httpapi/server.go:508"
+            "evidence": "internal/httpapi/server.go:515"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-rules",
             "handler": "saveTicketRule",
-            "evidence": "internal/httpapi/server.go:509"
+            "evidence": "internal/httpapi/server.go:516"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6819,7 +7028,8 @@
           "db/migrations/098_notification_scheduling_outbox.sql",
           "db/migrations/098_outbox_retry_limits.sql",
           "db/migrations/099_affiliate_core.sql",
-          "db/migrations/111_marketing_campaigns.sql"
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -7294,7 +7504,9 @@
           "db/migrations/110_financial_settings.sql",
           "db/migrations/111_marketing_campaigns.sql",
           "db/migrations/118_sales_settings.sql",
-          "db/migrations/121_traffic_packets.sql"
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -7754,7 +7966,8 @@
           "db/migrations/098_notification_scheduling_outbox.sql",
           "db/migrations/098_outbox_retry_limits.sql",
           "db/migrations/099_affiliate_core.sql",
-          "db/migrations/111_marketing_campaigns.sql"
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -8281,7 +8494,9 @@
           "db/migrations/110_financial_settings.sql",
           "db/migrations/111_marketing_campaigns.sql",
           "db/migrations/118_sales_settings.sql",
-          "db/migrations/121_traffic_packets.sql"
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -10989,25 +11204,25 @@
             "method": "GET",
             "path": "/admin/traffic-products",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:433"
+            "evidence": "internal/httpapi/server.go:440"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-products",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:434"
+            "evidence": "internal/httpapi/server.go:441"
           },
           {
             "method": "PATCH",
             "path": "/admin/traffic-products/{id}",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:435"
+            "evidence": "internal/httpapi/server.go:442"
           },
           {
             "method": "DELETE",
             "path": "/admin/traffic-products/{id}",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:436"
+            "evidence": "internal/httpapi/server.go:443"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11312,7 +11527,8 @@
           "db/migrations/098_notification_scheduling_outbox.sql",
           "db/migrations/098_outbox_retry_limits.sql",
           "db/migrations/099_affiliate_core.sql",
-          "db/migrations/111_marketing_campaigns.sql"
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -12846,7 +13062,9 @@
           "db/migrations/111_marketing_campaigns.sql",
           "db/migrations/116_customer_product_groups.sql",
           "db/migrations/118_sales_settings.sql",
-          "db/migrations/121_traffic_packets.sql"
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -15194,26 +15412,50 @@
       "title": "新建订单",
       "module": "订单管理",
       "newRoute": "/admin/orders/new",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/orders/new/page.tsx",
+      "component": [
+        {
+          "name": "AdminOrderCreateView",
+          "source": "@/components/admin-order-create",
+          "evidence": "web/src/app/admin/orders/new/page.tsx:9"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2092",
         "ledger": "docs/admin-full-ui-restore-ledger.md:109",
-        "component": null
+        "component": "web/src/app/admin/orders/new/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET/POST /admin/orders",
+        "ledgerClaim": "GET /admin/orders/create-options + POST /admin/orders/quote + POST /admin/orders + POST /admin/orders/{id}/invoice",
         "registered": [
           {
             "method": "GET",
-            "path": "/admin/orders",
-            "handler": "orders",
+            "path": "/admin/orders/create-options",
+            "handler": "adminOrderCreateOptions",
             "evidence": "internal/httpapi/server.go:430"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/quote",
+            "handler": "adminOrderQuote",
+            "evidence": "internal/httpapi/server.go:431"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders",
+            "handler": "createAdminOrder",
+            "evidence": "internal/httpapi/server.go:432"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/orders/{id}/invoice",
+            "handler": "createDeferredOrderInvoice",
+            "evidence": "internal/httpapi/server.go:433"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -15230,13 +15472,102 @@
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "admin_order_creation_receipts",
+          "admin_roles",
+          "channel_instances",
+          "email_outbox",
+          "invoices",
+          "notification_templates",
+          "orders",
+          "payment_settings",
+          "product_prices",
+          "products",
+          "users"
+        ],
+        "evidence": [
+          "internal/store/admin_order_create.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/003_finance_ledger.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/006_service_delivery.sql",
+          "db/migrations/007_legacy_import_issues.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/009_service_renewals.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/012_product_pricing.sql",
+          "db/migrations/013_product_options.sql",
+          "db/migrations/016_public_content.sql",
+          "db/migrations/017_ticket_departments.sql",
+          "db/migrations/018_api_keys.sql",
+          "db/migrations/019_customer_contacts_groups.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/021_ticket_attachments.sql",
+          "db/migrations/022_ticket_workflow.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/025_order_review.sql",
+          "db/migrations/026_notification_templates.sql",
+          "db/migrations/027_fix_password_reset_template.sql",
+          "db/migrations/028_mfa.sql",
+          "db/migrations/029_mfa_recovery_codes.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/032_ticket_department_scope.sql",
+          "db/migrations/033_customer_sales_scope.sql",
+          "db/migrations/036_content_management.sql",
+          "db/migrations/037_catalog_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/042_customer_files.sql",
+          "db/migrations/046_legacy_email_templates.sql",
+          "db/migrations/048_legacy_product_configuration.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/055_service_product_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/063_product_purchase_fields.sql",
+          "db/migrations/064_limited_renewal_benefits.sql",
+          "db/migrations/065_upgrade_promotions.sql",
+          "db/migrations/066_nokvm_delivery.sql",
+          "db/migrations/075_native_configuration_rules.sql",
+          "db/migrations/078_invoice_e_files.sql",
+          "db/migrations/080_content_rich_seo.sql",
+          "db/migrations/081_supplier_products.sql",
+          "db/migrations/084_payment_settings.sql",
+          "db/migrations/086_payment_mock_default.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/091_channel_instances.sql",
+          "db/migrations/092_sms_notification_templates.sql",
+          "db/migrations/093_certification.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/095_payment_success_notifications.sql",
+          "db/migrations/096_service_provision_notifications.sql",
+          "db/migrations/097_service_suspended_notifications.sql",
+          "db/migrations/098_notification_scheduling_outbox.sql",
+          "db/migrations/098_outbox_retry_limits.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/103_notification_template_versions.sql",
+          "db/migrations/107_ticket_status_rules.sql",
+          "db/migrations/108_log_records.sql",
+          "db/migrations/109_log_cleanup_operations.sql",
+          "db/migrations/110_financial_settings.sql",
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/116_customer_product_groups.sql",
+          "db/migrations/118_sales_settings.sql",
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -15293,31 +15624,136 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
-      "viewportResults": [
+      "stateEvidence": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 1024,
           "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
           "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
           "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noConsoleErrors": true,
+            "noApiFailures": true,
+            "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-batch-order-create-20261011/order-create-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
+      "viewportResults": [
+        {
+          "width": 1440,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-batch-order-create-20261011/order-create-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
+            }
+          ]
+        },
+        {
+          "width": 1024,
+          "height": 768,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-batch-order-create-20261011/order-create-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
+            }
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-batch-order-create-20261011/order-create-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
+            }
+          ]
+        },
+        {
+          "width": 320,
+          "height": 800,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-batch-order-create-20261011/order-create-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noConsoleErrors": true,
+                "noApiFailures": true,
+                "visualReview": "人工复核创建/列表1440与320；1024/390完成布局测量和截图，未逐张人工审阅"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -15348,7 +15784,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:503"
+            "evidence": "internal/httpapi/server.go:510"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -15485,7 +15921,7 @@
             "method": "POST",
             "path": "/admin/invoices",
             "handler": "saveManualInvoice",
-            "evidence": "internal/httpapi/server.go:450"
+            "evidence": "internal/httpapi/server.go:457"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -15576,7 +16012,9 @@
           "db/migrations/110_financial_settings.sql",
           "db/migrations/111_marketing_campaigns.sql",
           "db/migrations/118_sales_settings.sql",
-          "db/migrations/121_traffic_packets.sql"
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },

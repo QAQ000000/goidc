@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -381,7 +382,7 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	uid := identityFrom(r).ID
 	limit, offset := pagination(r)
 	admin := adminRoute(r)
-	where := "(($1::boolean AND admin_customer_allowed($2,o.user_id)) OR (NOT $1::boolean AND o.user_id=$2))"
+	where := "o.deleted_at IS NULL AND (($1::boolean AND admin_customer_allowed($2,o.user_id)) OR (NOT $1::boolean AND o.user_id=$2))"
 	args := []any{admin, uid}
 	if admin && r.URL.Query().Get("customer_id") != "" {
 		customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
@@ -393,13 +394,17 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 		where += fmt.Sprintf(" AND o.user_id=$%d", len(args))
 	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		valid := map[string]bool{"pending": true, "paid": true, "active": true, "cancelled": true, "refunded": true}
+		valid := map[string]bool{"pending": true, "paid": true, "active": true, "cancelled": true, "refunded": true, "review_pending": true}
 		if !valid[status] {
 			writeError(w, http.StatusBadRequest, "invalid_status", "订单状态无效")
 			return
 		}
-		args = append(args, status)
-		where += fmt.Sprintf(" AND o.status=$%d", len(args))
+		if status == "review_pending" {
+			where += " AND o.review_status='pending' AND o.deleted_at IS NULL"
+		} else {
+			args = append(args, status)
+			where += fmt.Sprintf(" AND o.status=$%d", len(args))
+		}
 	}
 	if query := strings.TrimSpace(r.URL.Query().Get("q")); query != "" {
 		if len(query) > 120 {
@@ -409,9 +414,49 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "%"+query+"%")
 		where += fmt.Sprintf(" AND (o.order_no ILIKE $%d OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.product_name ILIKE $%d) OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
 	}
-	projection := "o.id,o.order_no,o.user_id,u.display_name AS customer_name,o.status,o.review_status,o.total_cents,o.currency,o.created_at,i.id AS invoice_id,i.status AS invoice_status"
 	if admin {
-		projection += `,o.notes,COALESCE((SELECT string_agg(oi.product_name,'、' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id),'') AS product_names,COALESCE((SELECT string_agg(s.domain,'、' ORDER BY s.id) FROM services s WHERE s.order_id=o.id),'') AS service_domains,COALESCE((SELECT display_name FROM users WHERE id=u.sales_owner_id),'') AS sales_owner_name,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method`
+		zone := time.FixedZone("Asia/Shanghai", 8*3600)
+		var start, end time.Time
+		for _, field := range []string{"date_from", "date_to"} {
+			raw := r.URL.Query().Get(field)
+			if raw == "" {
+				continue
+			}
+			value, err := time.ParseInLocation("2006-01-02", raw, zone)
+			if err != nil {
+				writeError(w, 400, "invalid_order_date", "日期筛选无效")
+				return
+			}
+			if field == "date_from" {
+				start = value
+				args = append(args, value)
+				where += fmt.Sprintf(" AND o.created_at >= $%d", len(args))
+			} else {
+				end = value
+				args = append(args, value.AddDate(0, 0, 1))
+				where += fmt.Sprintf(" AND o.created_at < $%d", len(args))
+			}
+		}
+		if !start.IsZero() && !end.IsZero() && end.Before(start) {
+			writeError(w, 400, "invalid_order_date", "结束日期不能早于开始日期")
+			return
+		}
+		if paymentStatus := r.URL.Query().Get("payment_status"); paymentStatus != "" {
+			if paymentStatus != "deferred" && paymentStatus != "unpaid" && paymentStatus != "paid" && paymentStatus != "cancelled" && paymentStatus != "refunded" {
+				writeError(w, 400, "invalid_payment_status", "付款状态无效")
+				return
+			}
+			if paymentStatus == "deferred" {
+				where += " AND i.id IS NULL"
+			} else {
+				args = append(args, paymentStatus)
+				where += fmt.Sprintf(" AND i.status=$%d", len(args))
+			}
+		}
+	}
+	projection := "o.version,o.id,o.order_no,o.user_id,u.display_name AS customer_name,o.status,o.review_status,o.total_cents,o.currency,o.created_at,i.id AS invoice_id,i.status AS invoice_status"
+	if admin {
+		projection += `,o.notes,o.invoice_deferred,o.payment_provider,o.payment_channel_instance_id,COALESCE((SELECT string_agg(DISTINCT nullif(s.resource_info->>'dedicated_ip',''),'、') FROM services s WHERE s.order_id=o.id),'') AS service_ips,COALESCE((SELECT string_agg(oi.product_name,'、' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id),'') AS product_names,COALESCE((SELECT string_agg(s.domain,'、' ORDER BY s.id) FROM services s WHERE s.order_id=o.id),'') AS service_domains,COALESCE((SELECT display_name FROM users WHERE id=u.sales_owner_id),'') AS sales_owner_name,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method`
 	}
 	from := " FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE " + where
 	if strings.HasSuffix(r.URL.Path, "/page") {
