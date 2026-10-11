@@ -99,7 +99,8 @@ export function ReportsView() {
       const requestedMonth = Number(params.get("month") ?? current.getMonth() + 1);
       const restoredYear = Number.isInteger(requestedYear) && requestedYear >= 2000 && requestedYear <= current.getFullYear() + 1 ? requestedYear : current.getFullYear();
       const restoredMonth = Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12 ? requestedMonth : current.getMonth() + 1;
-      const tab = params.get("tab") ?? "income";
+      const requestedTab = params.get("tab") ?? "income";
+      const tab = ({ annual: "income", "new-clients": "daily", ranking: "customers" } as Record<string, string>)[requestedTab] ?? requestedTab;
       setReportTab(["income", "customers", "products", "daily", "sales", "tickets"].includes(tab) ? tab : "income");
       setYear(String(restoredYear));
       setMonth(String(restoredMonth));

@@ -54,20 +54,24 @@ export function LogCleanupView() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState<{ body: string; key: string } | null>(null);
   async function submit() {
     if (!before || !ack || busy) return;
     if (!window.confirm("清理后无法恢复，确认继续吗？")) return;
     setBusy(true); setError(""); setMessage("");
     try {
-      const result = await api<{ deleted: number }>("/admin/logs/cleanup", { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() }, body: JSON.stringify({ log_type: kind, before: new Date(before).toISOString(), acknowledged: true }) });
+      const body = JSON.stringify({ log_type: kind, before: new Date(before).toISOString(), acknowledged: true });
+      const mutation = attempt?.body === body ? attempt : { body, key: crypto.randomUUID() };
+      setAttempt(mutation);
+      const result = await api<{ deleted: number }>("/admin/logs/cleanup", { method: "POST", headers: { "Idempotency-Key": mutation.key }, body });
       setMessage(`已清理 ${result.deleted} 条日志`); setAck(false);
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
   return <Workspace admin title="日志清理"><div className="max-w-2xl space-y-5"><h1 className="page-title">日志清理</h1><p className="text-sm text-muted-foreground">仅删除截止时间以前已完成的历史日志，进行中的投递和任务会保留。</p>
-    <div className="space-y-4 rounded border bg-card p-5"><label className="block text-sm">选择日志<select className="mt-1 h-9 w-full rounded border bg-background px-2" value={kind} onChange={e => setKind(e.target.value)}><option value="audit">系统审计日志</option><option value="email">邮件日志</option><option value="sms">短信日志</option><option value="scheduler">定时任务日志</option></select></label>
-      <label className="block text-sm">删除此时间以前的记录<Input type="datetime-local" value={before} onChange={e => setBefore(e.target.value)} /></label>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />我确认该操作不可恢复</label>
+    <div className="space-y-4 rounded border bg-card p-5"><label className="block text-sm">选择日志<select disabled={busy} className="mt-1 h-9 w-full rounded border bg-background px-2" value={kind} onChange={e => setKind(e.target.value)}><option value="audit">系统审计日志</option><option value="email">邮件日志</option><option value="sms">短信日志</option><option value="scheduler">定时任务日志</option></select></label>
+      <label className="block text-sm">删除此时间以前的记录<Input disabled={busy} type="datetime-local" value={before} onChange={e => setBefore(e.target.value)} /></label>
+      <label className="flex items-center gap-2 text-sm"><input disabled={busy} type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} />我确认该操作不可恢复</label>
       <Button disabled={busy || !before || !ack} onClick={submit}>{busy ? "提交中..." : "提交清理"}</Button>
       {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}{error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     </div></div></Workspace>;

@@ -10,7 +10,7 @@
 | 2 | [客户 / 客户列表](#page-2) | #/customer-list | /admin/customers | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications、/console/certification | 有分页、筛选、详情、历史、审核和个人转企业 API；企业转换保留个人历史并具备幂等/版本保护 | 四尺寸验收通过，见客户扩展批次记录 |
 | 4 | [客户 / 客户资源池](#page-4) | #/customer-resources | /admin/customer-resources | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports/sales | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports?tab=sales | 报表页销售标签使用真实 API，并恢复年份和标签 URL | 已验收 |
 | 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 7 | [客户 / 推介计划](#page-7) | #/customer-promotionplan | /admin/affiliate | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -25,7 +25,7 @@
 | 17 | [财务 / 发票列表](#page-17) | #/invoice-audit | /admin/invoice-applications | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 18 | [财务 / 合同列表](#page-18) | #/contracts_audit | /admin/contracts | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 19 | [工单 / 工单列表](#page-19) | #/support-ticket | /admin/tickets | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 20 | [工单 / 工单统计](#page-20) | #/support-statistics | /admin/reports/tickets | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 20 | [工单 / 工单统计](#page-20) | #/support-statistics | /admin/reports?tab=tickets | 报表页工单标签使用真实 API，按上海日期和部门范围统计 | 已验收 |
 | 21 | [功能 / 年度收入统计](#page-21) | #/annual-statistics | /admin/reports?tab=annual | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 22 | [功能 / 新客户](#page-22) | #/new-customer | /admin/reports?tab=new-clients | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 23 | [功能 / 产品收入](#page-23) | #/product-revenue | /admin/reports?tab=products | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -50,7 +50,7 @@
 | 42 | [设置 / 工单传递](#page-42) | #/work-order-rules | /admin/ticket-rules | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 43 | [设置 / 常规设置](#page-43) | #/general-settings/general | /admin/settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 44 | [设置 / 第三方登录](#page-44) | #/third-login | /admin/channels?category=oauth | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 45 | [设置 / 定时任务](#page-45) | #/automatic-tasks | /admin/job-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 45 | [设置 / 定时任务](#page-45) | #/automatic-tasks | /admin/job-settings | 真实 GET/PUT scheduler-settings，版本冲突和幂等保存 | 已验收 |
 | 46 | [设置 / 注册登录](#page-46) | #/login-register | /admin/auth-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 47 | [设置 / 分组权限](#page-47) | #/permissions-managment | /admin/access?tab=roles | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 48 | [设置 / 销售设置](#page-48) | #/sales-management | /admin/sales-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -71,7 +71,7 @@
 | 63 | [设置 / API日志](#page-63) | #/api-log | /admin/logs/api | 有对应路由、认证请求记录和分页 API | 已实现（契约） |
 | 64 | [设置 / 定时任务日志](#page-64) | #/automatic-task-log | /admin/logs/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 65 | [设置 / 日志清理](#page-65) | #/log-cleanup | /admin/logs/cleanup | 有确认、幂等、权限、审计和保留窗口 | 已实现（契约） |
-| 66 | [设置 / 系统日志](#page-66) | #/system-log | /admin/audit | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 66 | [设置 / 系统日志](#page-66) | #/system-log | /admin/logs/system | 安全审计元数据列表、搜索和分页，要求 audit.view | 已验收 |
 | 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 有真实认证审计事件分页 API 和 React 页面 | 已实现（契约） |
 | 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 有对应路由、筛选、分页 API 和 React 页面 | 已实现（契约） |
 | 69 | [设置 / 商品管理](#page-69) | #/product-server | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -135,7 +135,7 @@
 <a id="page-5"></a>
 ## 5. 我的业绩
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:128)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:15)。JSON 中按唯一旧 hash #/sales-statistics 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:128)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:15)。页面使用 `/admin/reports?tab=sales` 的真实销售报表标签，调用 `GET /api/v1/admin/reports/sales?year=`，支持 URL 年份/标签恢复和真实空态。JSON 中按唯一旧 hash #/sales-statistics 检索。
 
 <a id="page-6"></a>
 ## 6. 营销推送
@@ -214,7 +214,7 @@
 <a id="page-20"></a>
 ## 20. 工单统计
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:443)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:30)。JSON 中按唯一旧 hash #/support-statistics 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:443)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:30)。页面使用 `/admin/reports?tab=tickets` 的真实工单统计标签，调用 `GET /api/v1/admin/reports/tickets?year=&month=`，按上海日期和部门权限过滤。JSON 中按唯一旧 hash #/support-statistics 检索。
 
 <a id="page-21"></a>
 ## 21. 年度收入统计
@@ -341,7 +341,7 @@
 <a id="page-45"></a>
 ## 45. 定时任务
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:950)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:55)。JSON 中按唯一旧 hash #/automatic-tasks 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:950)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:55)。页面 `/admin/job-settings` 调用 `GET/PUT /api/v1/admin/scheduler-settings`，设置到期和账单提醒；写入带版本冲突、幂等键和审计。JSON 中按唯一旧 hash #/automatic-tasks 检索。
 
 <a id="page-46"></a>
 ## 46. 注册登录
@@ -446,7 +446,7 @@
 <a id="page-66"></a>
 ## 66. 系统日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1419)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:76)；页面：[源码](../web/src/app/admin/audit/page.tsx:1)。JSON 中按唯一旧 hash #/system-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1419)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:76)；页面：[源码](../web/src/app/admin/logs/[kind]/page.tsx:1)。系统日志页面 `/admin/logs/system` 调用 `GET /api/v1/admin/logs?kind=system`，只返回审计安全元数据，支持关键词和分页并要求 `audit.view`。JSON 中按唯一旧 hash #/system-log 检索。
 
 <a id="page-67"></a>
 ## 67. 管理员登录日志

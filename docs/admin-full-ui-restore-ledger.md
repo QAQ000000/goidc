@@ -12,7 +12,7 @@
 | 2 | 客户列表 `#/customer-list` | `/admin/customers` | 已完成 | `GET /admin/customers/page` | `customers.view` / 搜索分页返回 |
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications`、`/console/certification` | 已完成 | `GET /admin/certifications/page`、`GET /admin/certifications/{id}`、`GET /admin/certifications/{id}/history`、`POST /admin/certifications/{id}/review`、`POST /account/certification/convert-company` | `certifications.view/manage` / 状态、类型、接口筛选；审批历史；个人转企业事务、幂等和版本冲突 |
 | 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
-| 5 | 我的业绩 `#/sales-statistics` | `/admin/reports/sales` | 部分完成 | `GET /admin/reports/sales` | `reports.view` / 人员和时间筛选 |
+| 5 | 我的业绩 `#/sales-statistics` | `/admin/reports?tab=sales` | 已完成 | `GET /admin/reports/sales?year=` | `reports.view` / 年份、URL 标签恢复、真实空态；四尺寸已验收 |
 | 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸验收已通过 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 已完成 | `GET /admin/orders` | `orders.view/manage` / 状态、批量取消 |
@@ -27,7 +27,7 @@
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
 | 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 待实现 | `GET/POST /admin/contracts` | `contracts.view/manage` |
 | 19 | 工单列表 `#/support-ticket` | `/admin/tickets` | 已完成 | `GET /admin/tickets` | `tickets.view/manage` / 部门范围 |
-| 20 | 工单统计 `#/support-statistics` | `/admin/reports/tickets` | 待实现 | `GET /admin/reports/tickets` | `reports.view` / 状态趋势 |
+| 20 | 工单统计 `#/support-statistics` | `/admin/reports?tab=tickets` | 已完成 | `GET /admin/reports/tickets?year=&month=` | `reports.view` / 上海日期、部门范围、真实空态；四尺寸已验收 |
 | 21 | 年度收入统计 `#/annual-statistics` | `/admin/reports?tab=annual` | 部分完成 | `GET /admin/reports/income` | `reports.view` / 年份切换 |
 | 22 | 新客户 `#/new-customer` | `/admin/reports?tab=new-clients` | 部分完成 | `GET /admin/reports/new-clients` | `reports.view` / 日期范围 |
 | 23 | 产品收入 `#/product-revenue` | `/admin/reports?tab=products` | 部分完成 | `GET /admin/reports/product-income` | `reports.view` / 产品排行 |
@@ -52,7 +52,7 @@
 | 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 部分完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 幂等、关联校验、版本冲突、审计；完整表单交互待补 |
 | 43 | 常规设置 `#/general-settings/general` | `/admin/settings` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 分区草稿 |
 | 44 | 第三方登录 `#/third-login` | `/admin/channels?category=oauth` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / OAuth 能力 |
-| 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 待实现 | `GET/PUT /admin/job-settings` | `jobs.manage` / 到期和提醒 |
+| 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 已完成 | `GET/PUT /admin/scheduler-settings` | `@super` / 到期和账单提醒、版本冲突、幂等；四尺寸已验收 |
 | 46 | 注册登录 `#/login-register` | `/admin/auth-settings` | 待实现 | `GET/PUT /admin/auth-settings` | `settings.manage` |
 | 47 | 分组权限 `#/permissions-managment` | `/admin/access?tab=roles` | 部分完成 | `GET/POST/PATCH/DELETE /admin/roles` | `@super` / 权限矩阵 |
 | 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 待实现 | `GET/PUT /admin/sales-settings` | `sales.manage` |
@@ -73,7 +73,7 @@
 | 63 | API日志 `#/api-log` | `/admin/logs/api` | 部分完成 | `GET /admin/logs/api` | `audit.view` / 认证请求真实记录、方法、状态码、用户、IP、日期、分页 |
 | 64 | 定时任务日志 `#/automatic-task-log` | `/admin/logs/jobs` | 部分完成 | `GET /admin/logs/jobs`, `GET /admin/logs/jobs/trend` | `@super` / 真实执行记录、上海日期筛选和趋势；统一重试待补 |
 | 65 | 日志清理 `#/log-cleanup` | `/admin/logs/cleanup` | 部分完成 | `POST /admin/logs/cleanup` | `@super` / 二次确认、24小时保留窗、幂等、审计；四尺寸待验收 |
-| 66 | 系统日志 `#/system-log` | `/admin/audit` | 已完成 | `GET /admin/audit` | `audit.view` / 脱敏载荷 |
+| 66 | 系统日志 `#/system-log` | `/admin/logs/system` | 已完成 | `GET /admin/logs?kind=system` | `audit.view` / 安全元数据、搜索分页、真实空态；四尺寸已验收 |
 | 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 部分完成 | `GET /admin/logs/admin-login` | `audit.view` / 登录、最后访问、注销、用户名、IP、日期、分页；四尺寸待验收 |
 | 68 | 邮件日志 `#/email-log` | `/admin/logs/email` | 部分完成 | `GET /admin/logs/email` | `notifications.view` / 主题、收件人、成功状态、失败原因、用户、日期、分页 |
 | 69 | 商品管理 `#/product-server` | `/admin/products` | 已完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
@@ -123,7 +123,7 @@
 | 第三批 | 业务与订单 | 待开始 | - |
 | 第四批 | 财务与合同 | 待开始 | - |
 | 第五批 | 工单与通知 | 待开始 | - |
-| 第六批 | 报表与任务运维 | 进行中 | Go 运行环境、关于系统、数据库状态、升级检查和任务队列基础页已完成；定时任务真实执行审计、上海日期趋势和四尺寸布局已验收，统一重试、投递结果和报表细节待补 |
+| 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
 | 第七批 | 权限、员工与销售 | 待开始 | - |
 | 第八批 | 内容与官网配置 | 待开始 | - |
 | 第九批 | 供应商与资源商店 | 待开始 | - |
