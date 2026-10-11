@@ -55,7 +55,7 @@
 | 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 已完成 | `GET/PUT /admin/scheduler-settings` | `@super` / 到期和账单提醒、版本冲突、幂等；四尺寸已验收 |
 | 46 | 注册登录 `#/login-register` | `/admin/auth-settings` | 待实现 | `GET/PUT /admin/auth-settings` | `settings.manage` |
 | 47 | 分组权限 `#/permissions-managment` | `/admin/access?tab=roles` | 部分完成 | `GET/POST/PATCH/DELETE /admin/roles` | `@super` / 权限矩阵 |
-| 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 待实现 | `GET/PUT /admin/sales-settings` | `sales.manage` |
+| 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 部分完成 | `GET/PUT /admin/sales-settings`、`GET/POST/PATCH/DELETE /admin/sales-commission-groups`、`GET/POST/PATCH/DELETE /admin/sales-commission-tiers`、`GET/PATCH /admin/sales-staff` | `sales.view/manage` / 提成组、阶梯、销售人员绑定、版本冲突、幂等和审计；浏览器四尺寸待验收 |
 | 49 | 员工管理 `#/admin-management` | `/admin/access?tab=staff` | 部分完成 | `GET/POST/PATCH /admin/staff` | `@super` / 部门范围 |
 | 50 | 接口设置 `#/sms-template/sms` | `/admin/channels?category=sms` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 测试发送 |
 | 51 | 邮件模板 `#/email-list` | `/admin/notifications?channel=email` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |

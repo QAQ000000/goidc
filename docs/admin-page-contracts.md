@@ -356,7 +356,7 @@
 <a id="page-48"></a>
 ## 48. 销售设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1021)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:58)。JSON 中按唯一旧 hash #/sales-management 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1021)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:58)；页面：[源码](../web/src/app/admin/sales-settings/page.tsx:1)。页面的商品提成、阶梯、人员设置和销售分配均调用真实接口；写请求使用 `sales.view/manage` 权限、版本号、幂等键和审计记录，暂无数据显示真实空态。JSON 中按唯一旧 hash #/sales-management 检索。
 
 <a id="page-49"></a>
 ## 49. 员工管理
