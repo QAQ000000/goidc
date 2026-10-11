@@ -28,7 +28,10 @@ func (s *Store) EnqueueServiceExpiryReminders(ctx context.Context, limit int) (i
 	}
 	var expiryDays []int
 	if err := json.Unmarshal(raw, &expiryDays); err != nil || len(expiryDays) == 0 {
-		expiryDays = []int{7, 1}
+		expiryDays = []int{}
+	}
+	if len(expiryDays) == 0 {
+		return 0, nil
 	}
 	args := []any{limit}
 	placeholders := make([]string, len(expiryDays))
@@ -263,6 +266,7 @@ LIMIT $1`, limit, onlyKind, settings.BillingGraceDays)
 			rows.Close()
 			return 0, err
 		}
+		item.graceDays = settings.BillingGraceDays
 		items = append(items, item)
 	}
 	if err = rows.Err(); err != nil {
@@ -321,6 +325,7 @@ type billingNotificationCandidate struct {
 	invoiceID, userID, amountCents int64
 	dueAt                          time.Time
 	invoiceNo, orderNo, kind       string
+	graceDays                      int
 	email                          string
 	emailVerified                  bool
 	phone                          string
@@ -431,7 +436,7 @@ func billingCandidateStillDue(ctx context.Context, tx pgx.Tx, item *billingNotif
 	}
 	item.dueAt = dueAt
 	if item.kind == "invoice_overdue_reminder" {
-		return dueAt.Before(time.Now()), nil
+		return dueAt.Before(time.Now().Add(-time.Duration(item.graceDays) * 24 * time.Hour)), nil
 	}
 	var orderStatus string
 	if err := tx.QueryRow(ctx, "SELECT COALESCE(o.status,'') FROM invoices i LEFT JOIN orders o ON o.id=i.order_id WHERE i.id=$1", item.invoiceID).Scan(&orderStatus); err != nil {
