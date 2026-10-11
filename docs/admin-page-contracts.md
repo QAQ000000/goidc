@@ -168,6 +168,10 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:228)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:20)。JSON 中按唯一旧 hash #/dcim-traffic-log 检索。
 
+新版 `/admin/traffic-orders` 从 `traffic_orders` 读取真实购买快照，列表返回 `items/total/limit/offset`，支持订单号/客户/产品关键词、状态、分页、详情和待支付取消。取消需要 `expected_version`，由 `orders.manage` 权限、幂等键、客户范围和审计事务共同保护；不存在购买记录时返回真实空态，不从普通订单表伪造流量包数据。
+
+客户本人活动/暂停服务通过 `/console/services/{id}/traffic` 购买适用目录项，生成 `invoice_items.item_type='traffic'` 的独立账单并占用库存。现有支付结算只将订单转为已支付/待人工交付，不改变服务到期时间或虚增流量；管理员必须在资源端实际交付后按 `services.manage` 记录核验。未交付取消/退款单次释放库存，已核验交付拒绝自动退款。
+
 <a id="page-11"></a>
 ## 11. 业务列表
 
@@ -473,6 +477,8 @@
 ## 70. 流量包管理
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1497)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:80)。JSON 中按唯一旧 hash #/dcim-traffic 检索。
+
+新版 `/admin/traffic-products` 维护 `traffic_products` 目录及 `traffic_product_products` 适用产品关系，列表返回 `items/total/limit/offset`，展示容量 GB、整数分价格、启用状态、已售/库存、关联产品和创建时间。创建/编辑/删除均使用 `products.manage`、幂等键、版本校验和审计；已有订单的目录项拒绝删除并要求停用。页面支持真实空态、关键词/状态筛选、分页、保存/取消和移动端横向滚动保护。
 
 <a id="page-71"></a>
 ## 71. 通用接口

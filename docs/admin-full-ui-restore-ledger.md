@@ -17,7 +17,7 @@
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 已完成 | `GET /admin/orders` | `orders.view/manage` / 状态、批量取消 |
 | 9 | 续费订单 `#/renewal-order` | `/admin/orders?kind=renew` | 已完成 | `GET /admin/renewal-orders` | `orders.view` / 续费账单、客户范围、状态/关键词筛选、分页；四尺寸验收 |
-| 10 | 流量包订单 `#/dcim-traffic-log` | `/admin/traffic-orders` | 待实现 | `GET /admin/traffic-orders` | `orders.view` / 资源订单字段 |
+| 10 | 流量包订单 `#/dcim-traffic-log` | `/admin/traffic-orders` | 部分完成 | `GET /api/v1/admin/traffic-orders`, `GET /api/v1/admin/traffic-orders/{id}`, `POST /api/v1/admin/traffic-orders/{id}/cancel`, `POST /api/v1/admin/traffic-orders/{id}/delivery-verification` | `orders.view/manage`、`services.manage` / 真实购买→账单→支付→待人工交付；客户范围、状态/关键词筛选、分页、详情、取消/退款返库存；版本冲突、幂等、审计；PG18专项通过，四尺寸浏览器待验收；自动资源交付未实现 |
 | 11 | 业务列表 `#/customer-product` | `/admin/services` | 已完成 | `GET /admin/services/page` | `services.view` / 状态页签 |
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
 | 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/customer-transactions` | `invoices.view` / 金额和渠道筛选 |
@@ -77,7 +77,7 @@
 | 67 | 管理员登录日志 `#/system-admin-log` | `/admin/logs/admin-login` | 部分完成 | `GET /admin/logs/admin-login` | `audit.view` / 登录、最后访问、注销、用户名、IP、日期、分页；四尺寸待验收 |
 | 68 | 邮件日志 `#/email-log` | `/admin/logs/email` | 部分完成 | `GET /admin/logs/email` | `notifications.view` / 主题、收件人、成功状态、失败原因、用户、日期、分页 |
 | 69 | 商品管理 `#/product-server` | `/admin/products` | 已完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
-| 70 | 流量包管理 `#/dcim-traffic` | `/admin/traffic-products` | 待实现 | `GET/POST/PATCH /admin/traffic-products` | `products.view/manage` |
+| 70 | 流量包管理 `#/dcim-traffic` | `/admin/traffic-products` | 部分完成 | `GET/POST/PATCH/DELETE /api/v1/admin/traffic-products` | `products.view/manage` / 真实目录、容量/整数分价格/启停、库存/已售、适用产品搜索分页、分页；有订单删除保护、版本冲突、并发幂等、审计；PG18专项通过，四尺寸浏览器待验收 |
 | 71 | 通用接口 `#/server-settings` | `/admin/channels?category=provision` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 开通能力 |
 | 72 | 魔方DCIM `#/dcim` | `/admin/suppliers?kind=dcim` | 部分完成 | `GET/POST /admin/suppliers` | `products.view/manage` |
 | 73 | 魔方云 `#/zjmfcloud` | `/admin/suppliers?kind=cloud` | 部分完成 | `GET/POST /admin/suppliers` | `products.view/manage` |
