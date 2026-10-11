@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Calculator, Trash2 } from "lucide-react";
-import { api, ApiError, money, type Product, type User } from "@/lib/api";
+import { api, ApiError, money, type Product, type PromoCode, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, resolveProductOptions } from "@/lib/product-options";
 import { Workspace, useAdminPermission } from "./workspace";
@@ -38,6 +38,8 @@ export function AdminOrderCreateView() { return <Workspace title="新建订单" 
 function OrderForm() {
   const router = useRouter();
   const manage = useAdminPermission("orders.manage");
+  const promoView = useAdminPermission("promos.view");
+  const promoManage = useAdminPermission("promos.manage");
   const user = useResource<User>("/me", false);
   const options = useResource<Options>(manage ? "/admin/orders/create-options" : null, false);
   const [customerQuery, setCustomerQuery] = useState("");
@@ -46,12 +48,19 @@ function OrderForm() {
   const [productQuery, setProductQuery] = useState("");
   const [productOffset, setProductOffset] = useState(0);
   const products = useResource<Page<Product>>(manage ? `/admin/orders/create-options?kind=products&q=${encodeURIComponent(productQuery)}&limit=10&offset=${productOffset}` : null, false);
+  const [promoDirectoryOpen, setPromoDirectoryOpen] = useState(false);
+  const [createPromoOpen, setCreatePromoOpen] = useState(false);
+  const [promoQuery, setPromoQuery] = useState("");
+  const [promoStatus, setPromoStatus] = useState("active");
+  const [promoOffset, setPromoOffset] = useState(0);
+  const promoDirectory = useResource<Page<PromoCode>>(promoView && promoDirectoryOpen ? `/admin/promo-codes/page?q=${encodeURIComponent(promoQuery)}&active=${promoStatus}&order_eligible=true&limit=10&offset=${promoOffset}` : null, false);
   const [catalog, setCatalog] = useState<Record<number, Product>>({});
   const [form, setForm] = useState<Draft>(blank);
   const [savedDraft, setSavedDraft] = useState<Draft | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [busy, setBusy] = useState<"quote" | "submit" | "restore" | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [quote, setQuote] = useState<{ value: Quote; fingerprint: string } | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [uncertain, setUncertain] = useState(false);
@@ -100,7 +109,7 @@ function OrderForm() {
     return safe.size ? `?${safe.toString()}` : "";
   }
   function clearDraft() { if (draftKey) { try { sessionStorage.removeItem(draftKey); } catch {} } setSavedDraft(null); }
-  function change(patch: Partial<Draft>) { setForm(current => ({ ...current, ...patch })); setError(""); setQuote(null); setConfirm(false); submitKey.current = ""; }
+  function change(patch: Partial<Draft>) { const next = { ...form, ...patch }; latest.current = JSON.stringify(next); setForm(next); setError(""); setNotice(""); setQuote(null); setConfirm(false); submitKey.current = ""; }
   function lineChange(key: string, patch: Partial<Line>) { change({ lines: form.lines.map(line => line.key === key ? { ...line, ...patch } : line) }); }
   function addProduct(product: Product) {
     if (totalQuantity >= 100) { setError("每笔订单最多创建 100 项服务，请先减少已选产品数量。"); return; }
@@ -120,16 +129,16 @@ function OrderForm() {
       setForm({ ...savedDraft, lines: savedDraft.lines.map(line => ({ ...line, fields: {} })) }); setQuote(null); clearDraft();
     } catch (e) { setError((e as Error).message); } finally { setBusy(null); }
   }
-  function payload() {
-    if (!form.customer) throw new Error("请选择客户");
-    if (!form.lines.length) throw new Error("请选择至少一个产品/服务");
-    if (totalQuantity > 100) throw new Error("每笔订单最多创建 100 项服务，请减少产品数量");
-    const provider = options.data?.payment_providers.find(item => `${item.name}:${item.instance_id}` === form.payment);
-    if (form.payment && !provider) throw new Error("支付渠道已不可用，请重新选择");
+  function payload(draft: Draft = form) {
+    if (!draft.customer) throw new Error("请选择客户");
+    if (!draft.lines.length) throw new Error("请选择至少一个产品/服务");
+    if (draft.lines.reduce((total, line) => total + line.quantity, 0) > 100) throw new Error("每笔订单最多创建 100 项服务，请减少产品数量");
+    const provider = options.data?.payment_providers.find(item => `${item.name}:${item.instance_id}` === draft.payment);
+    if (draft.payment && !provider) throw new Error("支付渠道已不可用，请重新选择");
     return {
-      customer_id: form.customer.id, payment_provider: provider?.name ?? "", channel_instance_id: provider?.instance_id ?? "",
-      confirmed: form.confirmed, generate_invoice: form.generate_invoice, send_email: form.send_email, notes: form.notes, promo_code: form.promo.trim(),
-      items: form.lines.map(line => {
+      customer_id: draft.customer.id, payment_provider: provider?.name ?? "", channel_instance_id: provider?.instance_id ?? "",
+      confirmed: draft.confirmed, generate_invoice: draft.generate_invoice, send_email: draft.send_email, notes: draft.notes, promo_code: draft.promo.trim(),
+      items: draft.lines.map(line => {
         const product = catalog[line.product_id]; if (!product) throw new Error("商品信息尚未加载");
         if (!Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 100) throw new Error(`${product.name} 数量需为 1 至 100`);
         const groups = product.option_groups ?? []; const resolved = resolveProductOptions(groups, line.selected);
@@ -142,16 +151,24 @@ function OrderForm() {
         }));
         const ruleError = configurationRuleError(product.configuration_rules, groups, resolved.ids, quantities); if (ruleError) throw new Error(ruleError);
         const first = cents(line.first); const renewal = cents(line.renewal);
-        if (form.promo.trim() && (first !== undefined || renewal !== undefined)) throw new Error("内部价格覆盖与优惠码不能同时使用");
+        if (draft.promo.trim() && (first !== undefined || renewal !== undefined)) throw new Error("内部价格覆盖与优惠码不能同时使用");
         return { product_id: product.id, expected_revision: product.revision, billing_cycle: line.billing_cycle, quantity: line.quantity, option_ids: resolved.ids, option_quantities: quantities, purchase_fields: purchaseFieldValues(product.purchase_field_definitions ?? [], line.fields), ...(first !== undefined ? { first_price_override_cents: first } : {}), ...(renewal !== undefined ? { renewal_price_override_cents: renewal } : {}) };
       }),
     };
   }
-  async function calculate() {
+  async function calculate(draft: Draft = form) {
     if (frozen || !manage) return;
-    setBusy("quote"); setError(""); setQuote(null); const snapshot = fingerprint;
-    try { const result = await api<Quote>("/admin/orders/quote", { method: "POST", body: JSON.stringify(payload()) }); if (latest.current === snapshot) { setQuote({ value: result, fingerprint: snapshot }); submitKey.current = `admin-order-${crypto.randomUUID()}`; } }
+    setBusy("quote"); setError(""); setNotice(""); setQuote(null); const snapshot = JSON.stringify(draft); latest.current = snapshot;
+    try { const result = await api<Quote>("/admin/orders/quote", { method: "POST", body: JSON.stringify(payload(draft)) }); if (latest.current === snapshot) { setQuote({ value: result, fingerprint: snapshot }); submitKey.current = `admin-order-${crypto.randomUUID()}`; } }
     catch (e) { setError((e as Error).message); } finally { setBusy(null); }
+  }
+  function applyPromo(code: string) {
+    const next = { ...form, promo: code };
+    change({ promo: code });
+    setPromoDirectoryOpen(false);
+    setCreatePromoOpen(false);
+    if (next.customer && next.lines.length) void calculate(next);
+    else setNotice("优惠码已带入订单。选择客户和商品后，请重新报价验证。");
   }
   async function submit() {
     if (!currentQuote || busy || !manage) return;
@@ -176,7 +193,7 @@ function OrderForm() {
         <section className="min-w-0 rounded border bg-background p-4 space-y-4"><h2 className="font-medium">客户与付款信息</h2>
           <label className="grid min-w-0 gap-2 text-sm">客户搜索<Input aria-label="客户搜索" placeholder="请输入用户姓名或邮箱" value={customerQuery} onChange={event => { setCustomerQuery(event.target.value); setCustomerOffset(0); }} /></label>
           {customers.error ? <Failure error={customers.error} retry={customers.refresh} /> : !customers.data ? <Loading /> : <><label className="grid min-w-0 gap-2 text-sm">客户<select aria-label="客户" className={selectClass} value={form.customer?.id ?? ""} onChange={event => change({ customer: customers.data?.items.find(item => item.id === Number(event.target.value)) ?? form.customer })}><option value="" disabled>请选择客户</option>{form.customer && !customers.data.items.some(item => item.id === form.customer?.id) && <option value={form.customer.id}>{form.customer.name} · {form.customer.email}</option>}{customers.data.items.map(item => <option key={item.id} value={item.id}>{item.name} · {item.email}{item.status !== "active" ? "（停用）" : ""}</option>)}</select></label><SearchPager total={customers.data.total} offset={customerOffset} onChange={setCustomerOffset} label="客户" /></>}
-          <div className="grid min-w-0 gap-4 sm:grid-cols-2"><label className="grid min-w-0 gap-2 text-sm">支付方式<select aria-label="支付方式" className={selectClass} value={form.payment} onChange={event => change({ payment: event.target.value })}><option value="">由客户付款时选择</option>{options.data.payment_providers.map(item => <option key={`${item.name}:${item.instance_id}`} value={`${item.name}:${item.instance_id}`}>{item.label}{item.simulation ? "（模拟）" : ""}</option>)}</select></label><label className="grid min-w-0 gap-2 text-sm">优惠码<Input aria-label="优惠码" maxLength={120} value={form.promo} onChange={event => change({ promo: event.target.value })} placeholder="输入后重新报价验证" /></label></div>
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2"><label className="grid min-w-0 gap-2 text-sm">支付方式<select aria-label="支付方式" className={selectClass} value={form.payment} onChange={event => change({ payment: event.target.value })}><option value="">由客户付款时选择</option>{options.data.payment_providers.map(item => <option key={`${item.name}:${item.instance_id}`} value={`${item.name}:${item.instance_id}`}>{item.label}{item.simulation ? "（模拟）" : ""}</option>)}</select></label><div className="grid min-w-0 gap-2 text-sm"><span>优惠码</span><div className="flex min-w-0 flex-wrap gap-2"><Input className="min-w-24 flex-1" aria-label="优惠码" maxLength={120} value={form.promo} onChange={event => change({ promo: event.target.value })} placeholder="输入优惠码" />{promoView && <Button type="button" variant="outline" onClick={() => setPromoDirectoryOpen(true)}>选择</Button>}{promoManage && <Button type="button" variant="outline" onClick={() => setCreatePromoOpen(true)}>新增</Button>}</div><p className="text-xs text-muted-foreground">优惠码由后端在报价时按客户、商品和使用规则验证。</p></div></div>
           <div className="flex flex-wrap gap-5">{([['confirmed','订单确认'],['generate_invoice','生成账单'],['send_email','发送邮件']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-2 text-sm"><Checkbox checked={form[key]} disabled={key === "send_email" && !options.data?.mail_enabled} onCheckedChange={value => change({ [key]: value === true })} />{label}</label>)}</div><p className="text-xs text-muted-foreground">订单确认仅决定审核状态。付款成功后才进入开通流程。{!options.data.mail_enabled && " 邮件渠道未启用。"}</p>
           <label className="grid gap-2 text-sm">内部备注<Textarea aria-label="内部备注" value={form.notes} maxLength={5000} onChange={event => change({ notes: event.target.value })} /></label>
         </section>
@@ -188,12 +205,87 @@ function OrderForm() {
         </section>
       </fieldset>
       <aside className="min-w-0 rounded border bg-background p-4 space-y-4 self-start xl:sticky xl:top-20"><h2 className="font-medium">订单详情</h2>{currentQuote ? <><div className="divide-y">{currentQuote.items.map((item,index) => <div key={`${item.product_id}-${index}`} className="py-3 text-sm space-y-1"><p className="font-medium break-words">{item.name} × {item.quantity}</p><p className="text-xs text-muted-foreground">{cycles[item.billing_cycle] ?? item.billing_cycle} · 首次 {money(item.unit_first_cents)} / 件</p><p className="text-xs text-muted-foreground">续费 {money(item.unit_recurring_cents)} / 件</p><p className="text-right tabular-nums">{money(item.total_cents)}</p></div>)}</div><dl className="space-y-3 text-sm"><Amount label="小计" value={currentQuote.subtotal_cents} /><Amount label="优惠" value={currentQuote.discount_cents} /><Amount label="总计" value={currentQuote.total_cents} /></dl><p className="text-xs text-muted-foreground">{currentQuote.review_status === "pending" ? "订单需审核" : "订单已确认"} · {currentQuote.generate_invoice ? "生成待支付账单" : "账单延期生成"}</p></> : <p className="py-6 text-sm text-muted-foreground">{form.lines.length ? "尚未报价，或订单信息已变更。请重新报价后提交。" : "未选择项目"}</p>}
-        {error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
+        {notice && <p role="status" className="text-sm text-muted-foreground break-words">{notice}</p>}{error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
         <Button type="submit" className="w-full" disabled={frozen || !form.customer || !form.lines.length}><Calculator size={16} />{busy === "quote" ? "报价中…" : "重新报价"}</Button><Button type="button" className="w-full" disabled={busy !== null || !currentQuote} onClick={() => setConfirm(true)}>{uncertain ? "使用原请求重试" : "提交订单"}</Button><Button type="button" className="w-full" variant="outline" disabled={busy !== null} onClick={cancel}>取消</Button>
       </aside>
     </form>}
+    <PromoDirectoryDialog open={promoDirectoryOpen} onOpenChange={setPromoDirectoryOpen} query={promoQuery} onQueryChange={value => { setPromoQuery(value); setPromoOffset(0); }} status={promoStatus} onStatusChange={value => { setPromoStatus(value); setPromoOffset(0); }} page={promoDirectory.data} error={promoDirectory.error} refresh={promoDirectory.refresh} offset={promoOffset} onOffsetChange={setPromoOffset} onChoose={applyPromo} />
+    <PromoCodeCreateDialog open={createPromoOpen} onOpenChange={setCreatePromoOpen} onCreated={applyPromo} />
     <Dialog open={confirm} onOpenChange={open => { if (busy !== "submit") setConfirm(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>确认提交订单</DialogTitle><DialogDescription>请确认客户、产品配置和最终金额。提交后可在订单详情查看账单与邮件投递结果。</DialogDescription></DialogHeader><div className="text-sm space-y-3"><p className="break-words">客户：{form.customer?.name} · {form.customer?.email}</p><p>商品：{form.lines.length} 个产品项目，共 {totalQuantity} 项服务</p><p className="font-semibold">总计：{currentQuote ? money(currentQuote.total_cents) : "请重新报价"}</p><p>{form.generate_invoice ? "生成账单" : "暂不生成账单"} · {form.send_email ? "请求发送订单邮件" : "不发送订单邮件"}</p></div><DialogFooter><Button variant="outline" type="button" disabled={busy === "submit"} onClick={() => setConfirm(false)}>取消</Button><Button type="button" disabled={busy !== null || !currentQuote} onClick={submit}>{busy === "submit" ? "提交中…" : "确定"}</Button></DialogFooter></DialogContent></Dialog>
   </div>;
+}
+
+function promoUnavailableReason(item: PromoCode): string {
+  if (!item.active) return "已停用";
+  const now = Date.now();
+  if (item.starts_at && Date.parse(item.starts_at) > now) return "尚未开始";
+  if (item.expires_at && Date.parse(item.expires_at) <= now) return "已过期";
+  if (item.max_uses > 0 && item.used_count >= item.max_uses) return "已达到使用上限";
+  return "";
+}
+
+function promoDiscount(item: PromoCode): string {
+  if (item.discount_type === "percent") return `优惠 ${item.value}%`;
+  if (item.discount_type === "fixed") return `优惠 ${money(item.value)}`;
+  return "免初装费";
+}
+
+function PromoDirectoryDialog({ open, onOpenChange, query, onQueryChange, status, onStatusChange, page, error, refresh, offset, onOffsetChange, onChoose }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  query: string;
+  onQueryChange: (value: string) => void;
+  status: string;
+  onStatusChange: (value: string) => void;
+  page: Page<PromoCode> | null;
+  error: Error | null;
+  refresh: () => void;
+  offset: number;
+  onOffsetChange: (value: number) => void;
+  onChoose: (code: string) => void;
+}) {
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="overflow-y-auto sm:max-w-2xl" style={{ maxHeight: "90dvh" }}><DialogHeader><DialogTitle>选择优惠码</DialogTitle><DialogDescription>目录只显示非升级专用优惠。客户、商品和账期限制仍由服务端报价校验。</DialogDescription></DialogHeader>
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]"><label className="grid gap-2 text-sm">搜索优惠码<Input aria-label="搜索优惠码目录" value={query} maxLength={120} onChange={event => onQueryChange(event.target.value)} placeholder="输入代码或备注" /></label><label className="grid gap-2 text-sm">状态<select aria-label="优惠码状态筛选" className={selectClass} value={status} onChange={event => onStatusChange(event.target.value)}><option value="active">已启用</option><option value="inactive">已停用</option><option value="all">全部状态</option></select></label></div>
+    {error ? <Failure error={error} retry={refresh} /> : !page ? <Loading /> : <><div className="max-h-[48dvh] space-y-2 overflow-y-auto" aria-live="polite">{page.items.length === 0 ? <p className="rounded border py-10 text-center text-sm text-muted-foreground">没有匹配的优惠码</p> : page.items.map(item => {
+      const unavailable = promoUnavailableReason(item);
+      return <article key={item.id} className="flex min-w-0 flex-wrap items-start justify-between gap-3 rounded border p-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-mono font-semibold break-all">{item.code}</span><span className="text-sm text-primary">{promoDiscount(item)}</span><span className={`text-xs ${unavailable ? "text-muted-foreground" : "text-emerald-700"}`}>{unavailable || "基础状态正常"}</span></div><p className="mt-1 text-xs text-muted-foreground">{item.recurring ? `循环续费${item.recurring_limit > 0 ? ` · ${item.recurring_limit} 次` : " · 不限次数"}` : "首购优惠"}{item.once_per_customer ? " · 每客户一次" : ""}{item.only_new_customer ? " · 仅新客户" : item.only_old_customer ? " · 仅老客户" : ""}</p>{(item.applies_product_ids.length > 0 || item.requires_product_ids.length > 0 || item.cycles.length > 0 || item.notes) && <p className="mt-1 break-words text-xs text-muted-foreground">{item.applies_product_ids.length > 0 ? `指定商品 ID：${item.applies_product_ids.join(", ")}` : "适用于全部商品"}{item.requires_product_ids.length > 0 ? ` · 需拥有商品 ID：${item.requires_product_ids.join(", ")}` : ""}{item.cycles.length > 0 ? ` · 账期：${item.cycles.map(cycle => cycles[cycle] ?? cycle).join("、")}` : ""}{item.notes ? ` · ${item.notes}` : ""}</p>}<p className="mt-1 text-xs text-muted-foreground">已使用 {item.used_count}{item.max_uses > 0 ? ` / ${item.max_uses}` : " / 不限"}</p></div><Button type="button" size="sm" variant="outline" disabled={!!unavailable} onClick={() => onChoose(item.code)}>应用</Button></article>;
+    })}</div><div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"><span>共 {page.total} 个优惠码</span><div className="flex gap-2"><Button type="button" size="sm" variant="outline" disabled={offset === 0} onClick={() => onOffsetChange(Math.max(0, offset - page.limit))}>上一页</Button><Button type="button" size="sm" variant="outline" disabled={offset + page.limit >= page.total} onClick={() => onOffsetChange(offset + page.limit)}>下一页</Button></div></div></>}
+    <DialogFooter><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>关闭</Button></DialogFooter>
+  </DialogContent></Dialog>;
+}
+
+type NewPromoDraft = { code: string; discountType: "percent" | "fixed" | "free"; value: string; maxUses: string; audience: "all" | "new" | "old"; oncePerCustomer: boolean; recurring: boolean; recurringLimit: string; cycles: string[]; notes: string };
+const blankPromoDraft = (): NewPromoDraft => ({ code: "", discountType: "percent", value: "10", maxUses: "0", audience: "all", oncePerCustomer: false, recurring: false, recurringLimit: "0", cycles: [], notes: "" });
+
+function PromoCodeCreateDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: (code: string) => void }) {
+  const [draft, setDraft] = useState<NewPromoDraft>(blankPromoDraft);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  function update(patch: Partial<NewPromoDraft>) { setDraft(current => ({ ...current, ...patch })); setError(""); }
+  function changeOpen(next: boolean) { if (busy) return; if (!next) { setDraft(blankPromoDraft()); setError(""); } onOpenChange(next); }
+  async function create(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      const result = await api<{ id: number; code: string }>("/admin/promo-codes", { method: "POST", body: JSON.stringify({ code: draft.code.trim().toUpperCase(), discount_type: draft.discountType, value: draft.discountType === "free" ? 0 : Number(draft.value), max_uses: Number(draft.maxUses), only_new_customer: draft.audience === "new", only_old_customer: draft.audience === "old", once_per_customer: draft.oncePerCustomer, recurring: draft.discountType !== "free" && draft.recurring, recurring_limit: draft.recurring && draft.discountType !== "free" ? Number(draft.recurringLimit) : 0, cycles: draft.cycles, upgrade_only: false, notes: draft.notes.trim() }) });
+      setDraft(blankPromoDraft());
+      onOpenChange(false);
+      onCreated(result.code);
+    } catch (cause) { setError((cause as Error).message); }
+    finally { setBusy(false); }
+  }
+  const cycleOptions = [["monthly", "月付"], ["quarterly", "季付"], ["annually", "年付"], ["once", "一次性"]] as const;
+  return <Dialog open={open} onOpenChange={changeOpen}><DialogContent className="overflow-y-auto sm:max-w-2xl" style={{ maxHeight: "90dvh" }}><DialogHeader><DialogTitle>新增优惠码</DialogTitle><DialogDescription>创建后会自动选入当前订单。报价仍会检查客户、商品、账期、时间与剩余次数。</DialogDescription></DialogHeader><form className="space-y-4" onSubmit={event => void create(event)}>
+    <div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">优惠码<Input aria-label="新优惠码" required pattern="[A-Za-z0-9](?:[A-Za-z0-9_]|-){2,49}" maxLength={50} autoComplete="off" value={draft.code} onChange={event => update({ code: event.target.value.toUpperCase() })} placeholder="如 NEWUSER10" /></label><label className="grid gap-2 text-sm">优惠类型<select aria-label="新优惠码类型" className={selectClass} value={draft.discountType} onChange={event => { const discountType = event.target.value as NewPromoDraft["discountType"]; update({ discountType, ...(discountType === "free" ? { recurring: false, recurringLimit: "0" } : {}) }); }}><option value="percent">百分比</option><option value="fixed">固定金额（分）</option><option value="free">免初装费</option></select></label>
+      <label className="grid gap-2 text-sm">{draft.discountType === "percent" ? "折扣比例（%）" : draft.discountType === "fixed" ? "固定优惠金额（分）" : "优惠值"}<Input aria-label="新优惠码优惠值" type="number" inputMode="numeric" min={draft.discountType === "free" ? 0 : 1} max={draft.discountType === "percent" ? 100 : undefined} required disabled={draft.discountType === "free"} value={draft.value} onChange={event => update({ value: event.target.value })} /></label><label className="grid gap-2 text-sm">最多使用次数<Input aria-label="新优惠码最多使用次数" type="number" min={0} max={1000000000} required value={draft.maxUses} onChange={event => update({ maxUses: event.target.value })} /><span className="text-xs text-muted-foreground">0 表示不限次数</span></label>
+      <label className="grid gap-2 text-sm">客户范围<select aria-label="优惠码客户范围" className={selectClass} value={draft.audience} onChange={event => update({ audience: event.target.value as NewPromoDraft["audience"] })}><option value="all">所有客户</option><option value="new">仅新客户</option><option value="old">仅老客户</option></select></label><label className="flex items-center gap-2 self-end pb-2 text-sm"><Checkbox checked={draft.oncePerCustomer} onCheckedChange={value => update({ oncePerCustomer: value === true })} />每位客户限用一次</label>
+    </div>
+    <fieldset className="space-y-2"><legend className="text-sm font-medium">适用账期</legend><p className="text-xs text-muted-foreground">未选择时不限制账期。</p><div className="flex flex-wrap gap-x-5 gap-y-2">{cycleOptions.map(([cycle, label]) => <label key={cycle} className="flex items-center gap-2 text-sm"><Checkbox checked={draft.cycles.includes(cycle)} onCheckedChange={checked => update({ cycles: checked === true ? [...draft.cycles, cycle] : draft.cycles.filter(item => item !== cycle) })} />{label}</label>)}</div></fieldset>
+    <div className="grid gap-4 sm:grid-cols-2"><label className="flex items-center gap-2 text-sm"><Checkbox checked={draft.recurring} disabled={draft.discountType === "free"} onCheckedChange={checked => update({ recurring: checked === true })} />用于循环续费</label>{draft.recurring && <label className="grid gap-2 text-sm">每件服务优惠续费次数<Input aria-label="优惠续费次数" type="number" min={0} max={10000} required value={draft.recurringLimit} onChange={event => update({ recurringLimit: event.target.value })} /><span className="text-xs text-muted-foreground">0 表示不限次数</span></label>}</div>
+    <label className="grid gap-2 text-sm">内部备注<Textarea aria-label="优惠码内部备注" maxLength={2000} rows={2} value={draft.notes} onChange={event => update({ notes: event.target.value })} /></label>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => changeOpen(false)}>取消</Button><Button type="submit" disabled={busy || !draft.code.trim()}>{busy ? "创建中…" : "创建并应用"}</Button></DialogFooter>
+  </form></DialogContent></Dialog>;
 }
 
 function SearchPager({ total, offset, onChange, label }: { total: number; offset: number; onChange: (offset: number) => void; label: string }) {

@@ -23,7 +23,7 @@ func (s *Server) adminOrderDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := tx.Query(r.Context(), `SELECT o.id,o.order_no,o.user_id,u.username,u.email,u.display_name,
-o.invoice_deferred,o.payment_provider,o.payment_channel_instance_id,o.send_order_email,o.email_status,o.version,o.status,o.review_status,o.notes,o.total_cents,o.currency,o.created_at,o.updated_at,
+COALESCE((SELECT cp.admin_note FROM customer_profiles cp WHERE cp.customer_id=o.user_id),'') AS customer_note,o.invoice_deferred,o.payment_provider,o.payment_channel_instance_id,o.send_order_email,o.email_status,o.version,o.status,o.review_status,o.notes,o.total_cents,o.currency,o.created_at,o.updated_at,
 i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.amount_cents,i.paid_at,i.due_at
 FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id WHERE o.id=$1 AND o.deleted_at IS NULL`, id)
 	if err != nil {

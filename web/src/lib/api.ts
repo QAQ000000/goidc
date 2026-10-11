@@ -383,6 +383,7 @@ export type Cart = {
   } | null;
 };
 export type Ticket = {
+  created_at: string;
   admin_access: boolean;
   id: number;
   ticket_no: string;

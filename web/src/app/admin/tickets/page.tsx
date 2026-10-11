@@ -1,4 +1,2 @@
-import { TicketsView } from "@/components/data-pages";
-export default function Page() {
-  return <TicketsView admin />;
-}
+import { AdminTicketsView } from "@/components/admin-tickets";
+export default function Page(){return <AdminTicketsView/>;}

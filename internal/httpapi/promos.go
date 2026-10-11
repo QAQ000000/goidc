@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -183,6 +184,56 @@ func validPromoInput(input *promoAdminInput) (*time.Time, *time.Time, error) {
 
 func (s *Server) promoCodes(w http.ResponseWriter, r *http.Request) {
 	s.list(w, r, `SELECT id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,recurring_limit,upgrade_only,active,notes,created_at,updated_at FROM promo_codes ORDER BY id DESC`)
+}
+
+// promoCodesPage is the searchable, paginated contract used by admin pickers.
+// Keep promoCodes above as the legacy array contract for existing screens.
+func (s *Server) promoCodesPage(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 120 {
+		writeError(w, http.StatusBadRequest, "invalid_query", "搜索条件过长")
+		return
+	}
+	active := r.URL.Query().Get("active")
+	if active == "" {
+		active = "all"
+	}
+	if active != "all" && active != "active" && active != "inactive" {
+		writeError(w, http.StatusBadRequest, "invalid_status", "优惠码状态筛选无效")
+		return
+	}
+	orderEligible := false
+	if raw := r.URL.Query().Get("order_eligible"); raw != "" {
+		var err error
+		orderEligible, err = strconv.ParseBool(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_filter", "订单优惠筛选无效")
+			return
+		}
+	}
+	limit, offset := pagination(r)
+	where := `($1='' OR code ILIKE '%'||$1||'%' OR notes ILIKE '%'||$1||'%')
+AND ($2='all' OR active=($2='active'))
+AND (NOT $3 OR NOT upgrade_only)`
+	var total int64
+	if err := s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM promo_codes WHERE `+where, q, active, orderEligible).Scan(&total); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,recurring_limit,upgrade_only,active,notes,created_at,updated_at FROM promo_codes WHERE `+where+` ORDER BY id DESC LIMIT $4 OFFSET $5`, q, active, orderEligible, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
 }
 
 func (s *Server) createPromoCode(w http.ResponseWriter, r *http.Request) {

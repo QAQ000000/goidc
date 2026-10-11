@@ -60,7 +60,7 @@ function AttachmentRow({ attachment, ticketID, onDelete, admin }: { attachment: 
 export function TicketDetailView({ id, admin = false }: { id: number; admin?: boolean }) {
   const searchParams = useSearchParams();
   const returnParams = new URLSearchParams();
-  for (const key of ["q", "page", "department"]) {
+  for (const key of ["q", "page", "department", "status", "limit", "customer_id", "priority"]) {
     const value = searchParams.get(key);
     if (value) returnParams.set(key, value);
   }

@@ -152,6 +152,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["DELETE /api/v1/admin/traffic-products/{id}"] = "products.manage"
 	m["GET /api/v1/admin/traffic-orders"] = "orders.view"
 	m["GET /api/v1/admin/orders/page"] = "orders.view"
+	m["POST /api/v1/admin/orders/commission"] = "orders.view"
 	m["GET /api/v1/admin/traffic-orders/{id}"] = "orders.view"
 	m["POST /api/v1/admin/traffic-orders/{id}/cancel"] = "orders.manage"
 	m["POST /api/v1/admin/traffic-orders/{id}/delivery-verification"] = "services.manage"
@@ -189,12 +190,12 @@ var adminRoutePermissions = func() map[string]string {
 		"invoice_applications.manage":   {"POST /api/v1/admin/invoice-applications/{id}/review", "POST /api/v1/admin/invoice-applications/{id}/adjust", "POST /api/v1/admin/invoice-applications/{id}/document", "POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document"},
 		"invoice_applications.view":     {"GET /api/v1/admin/invoice-applications", "GET /api/v1/admin/invoice-applications/{id}", "GET /api/v1/admin/invoice-applications/{id}/documents/{document_id}/file"},
 		"balance.manage":                {"POST /api/v1/admin/customers/{id}/balance"},
-		"promos.view":                   {"GET /api/v1/admin/promo-codes"},
+		"promos.view":                   {"GET /api/v1/admin/promo-codes", "GET /api/v1/admin/promo-codes/page"},
 		"promos.manage":                 {"POST /api/v1/admin/promo-codes", "PATCH /api/v1/admin/promo-codes/{id}"},
 		"services.view":                 {"GET /api/v1/admin/services", "GET /api/v1/admin/services/{id}", "GET /api/v1/admin/cancellations"},
 		"services.manage":               {"POST /api/v1/admin/services/{id}/actions", "POST /api/v1/admin/services/{id}/delivery", "POST /api/v1/admin/cancellations/{id}/decision"},
-		"tickets.view":                  {"GET /api/v1/admin/ticket-departments", "GET /api/v1/admin/tickets", "GET /api/v1/admin/ticket-assignees", "GET /api/v1/admin/tickets/{id}/notes", "GET /api/v1/admin/ticket-statuses", "GET /api/v1/admin/ticket-rules"},
-		"tickets.manage":                {"PATCH /api/v1/admin/tickets/{id}/assignment", "POST /api/v1/admin/tickets/{id}/receive", "POST /api/v1/admin/tickets/{id}/transfer", "POST /api/v1/admin/tickets/merge", "POST /api/v1/admin/tickets/{id}/notes", "DELETE /api/v1/admin/tickets/{id}/notes/{note_id}", "POST /api/v1/admin/ticket-statuses", "PATCH /api/v1/admin/ticket-statuses/{id}", "DELETE /api/v1/admin/ticket-statuses/{id}", "POST /api/v1/admin/ticket-rules", "PATCH /api/v1/admin/ticket-rules/{id}", "DELETE /api/v1/admin/ticket-rules/{id}"},
+		"tickets.view":                  {"GET /api/v1/admin/ticket-departments", "GET /api/v1/admin/tickets", "GET /api/v1/admin/tickets/page", "GET /api/v1/admin/ticket-assignees", "GET /api/v1/admin/tickets/{id}/notes", "GET /api/v1/admin/ticket-statuses", "GET /api/v1/admin/ticket-rules"},
+		"tickets.manage":                {"GET /api/v1/admin/tickets/create-options", "POST /api/v1/admin/tickets", "PATCH /api/v1/admin/tickets/{id}/assignment", "POST /api/v1/admin/tickets/{id}/receive", "POST /api/v1/admin/tickets/{id}/transfer", "POST /api/v1/admin/tickets/merge", "POST /api/v1/admin/tickets/{id}/notes", "DELETE /api/v1/admin/tickets/{id}/notes/{note_id}", "POST /api/v1/admin/ticket-statuses", "PATCH /api/v1/admin/ticket-statuses/{id}", "DELETE /api/v1/admin/ticket-statuses/{id}", "POST /api/v1/admin/ticket-rules", "PATCH /api/v1/admin/ticket-rules/{id}", "DELETE /api/v1/admin/ticket-rules/{id}"},
 		"ticket_presets.view":           {"GET /api/v1/admin/ticket-reply-presets", "GET /api/v1/admin/ticket-reply-preset-categories"},
 		"ticket_presets.manage":         {"POST /api/v1/admin/ticket-reply-presets", "PATCH /api/v1/admin/ticket-reply-presets/{id}", "DELETE /api/v1/admin/ticket-reply-presets/{id}", "POST /api/v1/admin/ticket-reply-preset-categories", "PATCH /api/v1/admin/ticket-reply-preset-categories/{id}", "DELETE /api/v1/admin/ticket-reply-preset-categories/{id}"},
 		"audit.view":                    {"GET /api/v1/admin/audit", "GET /api/v1/admin/logs"},

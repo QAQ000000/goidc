@@ -27,9 +27,15 @@ import { useServiceNavigation } from "@/hooks/use-service-navigation";
 import { serviceIcon } from "@/lib/service-icons";
 import { AdminShell } from "./admin-shell";
 
-const AccessContext = createContext<User | null>(null);
+type AccessContextValue = { user: User | null; error: Error | null; refresh: () => void };
+const AccessContext = createContext<AccessContextValue | null>(null);
+export function AdminAccessProvider({ initialUser, children }: { initialUser: User; children: React.ReactNode }) {
+  const { data, error, refresh } = useResource<User>("/me", false);
+  const value = { user: data ?? (error ? null : initialUser), error, refresh };
+  return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;
+}
 export function useAdminPermission(permission: string) {
-  return can(useContext(AccessContext), permission);
+  return can(useContext(AccessContext)?.user ?? null, permission);
 }
 export function PermissionGate({ permission, children, bypass = false }: { permission: string; children: React.ReactNode; bypass?: boolean }) {
   const allowed = useAdminPermission(permission);
@@ -63,7 +69,11 @@ export function Workspace({
   title: string;
   admin?: boolean;
 }) {
-  const { data: user, error, refresh } = useResource<User>("/me");
+  const access = useContext(AccessContext);
+  const customerResource = useResource<User>(admin ? null : "/me");
+  const user = admin ? access?.user ?? null : customerResource.data;
+  const error = admin ? access?.error ?? null : customerResource.error;
+  const refresh = admin ? access?.refresh ?? customerResource.refresh : customerResource.refresh;
   const path = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -98,10 +108,10 @@ export function Workspace({
     }
   }
   if (admin) {
-    return <AccessContext.Provider value={user}><AdminShell title={title} user={user} error={error} refresh={refresh} logout={logout} logoutError={logoutError}>{children}</AdminShell></AccessContext.Provider>;
+    return <AdminShell title={title} user={user} error={error} refresh={refresh} logout={logout} logoutError={logoutError}>{children}</AdminShell>;
   }
   return (
-    <AccessContext.Provider value={user}><div className="workspace">
+    <AccessContext.Provider value={{ user, error, refresh }}><div className="workspace">
       {open && (
         <button
           className="fixed inset-0 bg-black/20 z-30 sm:hidden"

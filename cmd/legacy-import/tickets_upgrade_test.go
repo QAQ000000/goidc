@@ -56,7 +56,7 @@ func TestTicketMigrationPreservesExistingThreadsAndAttachments(t *testing.T) {
 		if new {
 			common = "-'legacy_source'-'legacy_id'"
 			departments = common + "-'customer_visible'"
-			tickets = common + "-'service_id'-'legacy_status_label'-'legacy_ticket_no'"
+			tickets = common + "-'service_id'-'legacy_status_label'-'legacy_ticket_no'-'created_by'-'cc'-'send_initial_email'-'initial_email_status'"
 			attachments = common + "-'reply_id'-'note_id'"
 		}
 		return `SELECT jsonb_build_object('departments',(SELECT jsonb_agg(to_jsonb(d)` + departments + ` ORDER BY id) FROM ticket_departments d),'tickets',(SELECT jsonb_agg(to_jsonb(t)` + tickets + ` ORDER BY id) FROM tickets t),'replies',(SELECT jsonb_agg(to_jsonb(r)` + common + ` ORDER BY id) FROM ticket_replies r),'notes',(SELECT jsonb_agg(to_jsonb(n)` + common + ` ORDER BY id) FROM ticket_notes n),'files',(SELECT jsonb_agg(to_jsonb(a)` + attachments + ` ORDER BY id) FROM ticket_attachments a),'scope',(SELECT jsonb_agg(to_jsonb(s) ORDER BY user_id,department_id) FROM admin_ticket_departments s))::text`

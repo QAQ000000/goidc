@@ -45,6 +45,12 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 			}
 		}
 	}
+	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO customer_profiles(customer_id,admin_note) VALUES($1,'客户资料独立备注')", ownID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE orders SET notes='订单独立备注' WHERE user_id=$1", ownID); err != nil {
+		t.Fatal(err)
+	}
 	for _, path := range []string{"orders/page", "renewal-orders"} {
 		base := "/api/v1/admin/" + path
 		check := func(cookie, query string, total, items, offset int) map[string]any {
@@ -60,6 +66,9 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 		check(root, "limit=1&offset=1", 4, 1, 1)
 		d := check(staff, "limit=1&offset=1", 2, 1, 1)
 		row := d["items"].([]any)[0].(map[string]any)
+		if path == "orders/page" && (row["customer_note"] != "客户资料独立备注" || row["notes"] != "订单独立备注") {
+			t.Fatalf("customer/order notes mixed: %#v", row)
+		}
 		if row["user_id"] != float64(ownID) {
 			t.Fatal("scope leak", row)
 		}

@@ -77,6 +77,8 @@ const adminRenewalStates = ["pending", "paid", "cancelled", "refunded"] as const
 const orderListDefaults = { limit: "25", customer_id: "", date_from: "", date_to: "", payment_status: "" } as const;
 const renewalListDefaults = { kind: "renew", ...orderListDefaults } as const;
 const adminServiceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
+type OrderCommissionPreview = { order_id: number; sales_owner_name: string; invoice_status: string; basis_cents: number; purchase_rate_bps: number; tier_extra_rate_bps: number; monthly_turnover_cents: number; commission_cents: number; status: string };
+const commissionStatusLabels: Record<string, string> = { calculated: "按当前规则估算", not_invoiced: "未出账单", not_paid: "未付款", unassigned: "未分配销售", sales_inactive: "销售已停用", commission_group_unavailable: "无有效提成组" };
 
 export function DashboardView() {
   return <AdminDashboard />;
@@ -490,9 +492,11 @@ function AdminRenewalOrdersView() {
 
 function AdminOrdersView() {
   const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix, extra, setExtra } = useAdminListNavigation(true, adminOrderStates, "all", orderListDefaults);
+  const canViewSales = useAdminPermission("sales.view");
   const [selected, setSelected] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [commissionRequest, setCommissionRequest] = useState<{ key: string; items: Record<number, OrderCommissionPreview>; error: string } | null>(null);
   const [advanced,setAdvanced] = useState(false);
   const pageSize = [25, 50, 100].includes(Number(extra.limit)) ? Number(extra.limit) : 25;
   const params = new URLSearchParams({ q: query, limit: String(pageSize), offset: String(page * pageSize) });
@@ -501,6 +505,24 @@ function AdminOrdersView() {
   for(const key of ["date_from","date_to","payment_status"]) if(extra[key])params.set(key,extra[key]);
   const { data: result, error, refresh } = useResource<{ items: Row[]; total: number; limit: number; offset: number }>(ready ? `/admin/orders/page?${params.toString()}` : null, false);
   const data = result?.items;
+  const orderIDsKey = (data ?? []).map(row => Number(row.id)).join(",");
+  useEffect(() => {
+    let current = true;
+    if (!canViewSales || !orderIDsKey) return () => { current = false; };
+    const orderIDs = orderIDsKey.split(",").map(Number);
+    void api<{ items: OrderCommissionPreview[]; total_commission_cents: number }>("/admin/orders/commission", { method: "POST", body: JSON.stringify({ order_ids: orderIDs }) })
+      .then(result => {
+        if (!current) return;
+        setCommissionRequest({ key: orderIDsKey, items: Object.fromEntries(result.items.map(item => [item.order_id, item])), error: "" });
+      })
+      .catch(error => { if (current) setCommissionRequest({ key: orderIDsKey, items: {}, error: error instanceof Error ? error.message : "提成预估读取失败" }); });
+    return () => { current = false; };
+  }, [canViewSales, orderIDsKey]);
+  const commissionMatches = commissionRequest?.key === orderIDsKey;
+  const commissionByOrder = commissionMatches ? commissionRequest.items : {};
+  const commissionLoading = canViewSales && Boolean(orderIDsKey) && !commissionMatches;
+  const commissionError = commissionMatches ? commissionRequest.error : "";
+  const commissionTotal = Object.values(commissionByOrder).reduce((sum, item) => sum + Number(item.commission_cents || 0), 0);
   const selectable = (data ?? []).map((row) => Number(row.id));
   const visibleSelected = selected.filter(id => selectable.includes(id));
   const allSelected = selectable.length > 0 && selectable.every(id => selected.includes(id));
@@ -526,16 +548,16 @@ function AdminOrdersView() {
       <AdminStatusTabs label="订单状态" value={status} states={{ review_pending: "待核验", pending: "待支付", paid: "已支付", active: "已启用", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="订单号、客户名称或邮箱" />
-        <Button variant="outline" onClick={() => setAdvanced(value => !value)} aria-expanded={advanced}>高级搜索</Button>{message && <span className="text-sm text-muted-foreground break-words" role="status">{message}</span>}
+        <Button variant="outline" onClick={() => setAdvanced(value => !value)} aria-expanded={advanced}>高级搜索</Button>{message && <span className="text-sm text-muted-foreground break-words" role="status">{message}</span>}{canViewSales && data?.length && !commissionLoading && !commissionError && commissionMatches && <span className="text-sm text-muted-foreground">当前页提成预估合计：<strong className="money">{money(commissionTotal)}</strong></span>}{commissionError && canViewSales && <span className="text-sm text-destructive" role="status">提成预估暂不可用：{commissionError}</span>}
       </div>
       {advanced&&<section className="data-surface p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 mb-5"><label className="text-sm min-w-0">客户ID<Input aria-label="筛选客户ID" type="number" min={1} value={extra.customer_id} onChange={e=>{setExtra({...extra,customer_id:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">开始日期<Input aria-label="订单开始日期" type="date" value={extra.date_from} onChange={e=>{setExtra({...extra,date_from:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">结束日期<Input aria-label="订单结束日期" type="date" value={extra.date_to} onChange={e=>{setExtra({...extra,date_to:e.target.value});setPage(0);}}/></label><label className="text-sm min-w-0">付款状态<select aria-label="订单付款状态" className={catalogSelectStyle} value={extra.payment_status} onChange={e=>{setExtra({...extra,payment_status:e.target.value});setPage(0);}}><option value="">全部</option><option value="deferred">未生成账单</option><option value="unpaid">待付款</option><option value="paid">已支付</option><option value="cancelled">已取消</option><option value="refunded">已退款</option></select></label><Button variant="outline" onClick={()=>{setExtra({...orderListDefaults});setPage(0);}}>清除高级筛选</Button></section>}
       {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : (
         <div className="admin-list-surface data-surface overflow-auto">
           <Table>
-            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? selectable : [])} aria-label="选择当前页订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>产品 / 服务域名</TableHead><TableHead>IP 地址</TableHead><TableHead>金额 / 付款</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>订单备注</TableHead><TableHead>客户销售</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? selectable : [])} aria-label="选择当前页订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>产品 / 服务域名</TableHead><TableHead>IP 地址</TableHead><TableHead>金额 / 付款</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>客户资料备注</TableHead><TableHead>订单备注</TableHead><TableHead>{canViewSales ? "提成 / 销售" : "客户销售"}</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data.length === 0 && <TableRow><TableCell colSpan={12} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
-              {data.map((row, i) => { const id = Number(row.id); return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><div className="max-w-64 whitespace-normal break-words">{String(row.product_names || "-")}<span className="block text-xs text-muted-foreground">{String(row.service_domains || "-")}</span></div></TableCell><TableCell className="font-mono text-xs">{String(row.service_ips || "-")}</TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span><span className="block text-xs text-muted-foreground">{row.invoice_id == null ? "未生成账单" : <Status value={String(row.invoice_status)} />} · {String(row.payment_method || "-")}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.notes || "-")}</TableCell><TableCell>{String(row.sales_owner_name || "-")}</TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin refresh={refresh} /><OrderDeleteAction row={row} refresh={refresh} /></div></TableCell></TableRow>; })}
+              {data.length === 0 && <TableRow><TableCell colSpan={13} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
+              {data.map((row, i) => { const id = Number(row.id); const commission = commissionByOrder[id]; return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><div className="max-w-64 whitespace-normal break-words">{String(row.product_names || "-")}<span className="block text-xs text-muted-foreground">{String(row.service_domains || "-")}</span></div></TableCell><TableCell className="font-mono text-xs">{String(row.service_ips || "-")}</TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span><span className="block text-xs text-muted-foreground">{row.invoice_id == null ? "未生成账单" : <Status value={String(row.invoice_status)} />} · {String(row.payment_method || "-")}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.customer_note || "-")}</TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.notes || "-")}</TableCell><TableCell><span>{String(row.sales_owner_name || "-")}</span>{canViewSales && <span className="mt-1 block text-xs text-muted-foreground">{commissionLoading ? "计算中…" : commission ? <><strong className="money">{money(Number(commission.commission_cents))}</strong><span className="ml-1">{commissionStatusLabels[commission.status] ?? commission.status}</span></> : commissionError ? "预估读取失败" : "—"}</span>}</TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin refresh={refresh} /><OrderDeleteAction row={row} refresh={refresh} /></div></TableCell></TableRow>; })}
             </TableBody>
           </Table>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><div className="flex flex-wrap gap-2"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkAction("cancel")}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button><Button size="sm" disabled={busy || !visibleSelected.length} onClick={() => void bulkAction("review")}>核验通过</Button><Button variant="destructive" size="sm" disabled={busy || !visibleSelected.length} onClick={() => void bulkAction("delete")}>删除订单</Button></PermissionGate></div><div className="min-w-0 basis-72 flex-1"><AdminPagination total={result?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={size => { setExtra({ ...extra, limit: String(size) }); setPage(0); }} /></div></div>
