@@ -83,12 +83,12 @@
 | 73 | 魔方云 `#/zjmfcloud` | `/admin/suppliers?kind=cloud` | 部分完成 | `GET/POST /admin/suppliers` | `products.view/manage` |
 | 74 | 全局可配置项 `#/configurable-option` | `/admin/configurable-options` | 待实现 | `GET/POST/PATCH /admin/configurable-options` | `products.manage` |
 | 75 | 商品订购设置 `#/order-product` | `/admin/order-settings` | 待实现 | `GET/PUT /admin/order-settings` | `settings.manage` |
-| 76 | 基础信息 `#/base-info` | `/admin/site-settings?tab=basic` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` |
-| 77 | 主题模板 `#/theme-template` | `/admin/theme-settings` | 待实现 | `GET/PUT /admin/theme-settings` | `settings.manage` |
-| 78 | 官网自定义字段 `#/custom-template-fields` | `/admin/site-fields` | 待实现 | `GET/POST/PATCH /admin/site-fields` | `content.manage` |
-| 79 | 导航管理 `#/menu_manage` | `/admin/navigation` | 待实现 | `GET/POST/PATCH/DELETE /admin/navigation` | `content.manage` |
-| 80 | 友情链接 `#/friendly_link` | `/admin/friendly-links` | 待实现 | `GET/POST/PATCH/DELETE /admin/friendly-links` | `content.manage` |
-| 81 | 文件分组 `#/service-support` | `/admin/file-groups` | 待实现 | `GET/POST/PATCH/DELETE /admin/file-groups` | `downloads.manage` |
+| 76 | 基础信息 `#/base-info` | `/admin/site-settings?tab=basic` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 版本、审计和四尺寸验收沿用站点设置批次 |
+| 77 | 主题模板 `#/theme-template` | `/admin/theme-settings` | 已完成 | `GET/PUT /admin/theme-settings` | `settings.view/manage` / 120 迁移、幂等、版本冲突、审计；四尺寸验收 |
+| 78 | 官网自定义字段 `#/custom-template-fields` | `/admin/site-fields` | 已完成 | `GET/POST/PATCH/DELETE /admin/site-fields` | `content.view/manage` / 真实分页 CRUD、幂等、版本冲突、审计；四尺寸验收 |
+| 79 | 导航管理 `#/menu_manage` | `/admin/navigation` | 已完成 | `GET/POST/PATCH/DELETE /admin/navigation` | `content.view/manage` / 父子循环保护、真实 CRUD、幂等、版本冲突、审计；四尺寸验收 |
+| 80 | 友情链接 `#/friendly_link` | `/admin/friendly-links` | 已完成 | `GET/POST/PATCH/DELETE /admin/friendly-links` | `content.view/manage` / HTTPS 校验、真实 CRUD、幂等、版本冲突、审计；四尺寸验收 |
+| 81 | 文件分组 `#/service-support` | `/admin/file-groups` | 已完成 | `GET/POST/PUT/DELETE /admin/file-groups` | `downloads.view/manage` / 复用下载分类、真实分页 CRUD、版本冲突、审计；四尺寸验收 |
 | 82 | 新闻列表 `#/news-list` | `/admin/content?kind=news` | 部分完成 | `GET/POST/PUT /admin/content` | `content.view/manage` |
 | 83 | 新闻分类 `#/news-category` | `/admin/content?tab=categories` | 部分完成 | `GET/POST/PUT /admin/content-categories` | `content.manage` |
 | 84 | 帮助列表 `#/help-list` | `/admin/content?kind=help` | 部分完成 | `GET/POST/PUT /admin/content` | `content.view/manage` |

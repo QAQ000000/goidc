@@ -500,30 +500,42 @@
 <a id="page-76"></a>
 ## 76. 基础信息
 
+已实现 `/admin/site-settings?tab=basic`，沿用站点设置版本化保存、权限和审计契约；本批补充证据见 `admin-batch-content-site-acceptance-20261011.md`。
+
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1626)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:86)。JSON 中按唯一旧 hash #/base-info 检索。
 
 <a id="page-77"></a>
 ## 77. 主题模板
+
+`/admin/theme-settings` 展示模板、主色、Logo 样式、页脚和版本；编辑保存携带 `expected_version` 与 `Idempotency-Key`，无权限时隐藏写操作。
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1659)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:87)。JSON 中按唯一旧 hash #/theme-template 检索。
 
 <a id="page-78"></a>
 ## 78. 官网自定义字段
 
+`/admin/site-fields` 支持关键词/状态筛选、分页、创建、编辑、启停、删除确认和 409 版本冲突。
+
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1678)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:88)。JSON 中按唯一旧 hash #/custom-template-fields 检索。
 
 <a id="page-79"></a>
 ## 79. 导航管理
+
+`/admin/navigation` 支持父项、链接、图标、排序、启停和新窗口；数据库触发器拒绝循环父子关系。
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1696)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:89)。JSON 中按唯一旧 hash #/menu_manage 检索。
 
 <a id="page-80"></a>
 ## 80. 友情链接
 
+`/admin/friendly-links` 支持 HTTPS 链接、Logo、说明、排序、启停、分页及版本化 CRUD。
+
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1723)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:90)。JSON 中按唯一旧 hash #/friendly_link 检索。
 
 <a id="page-81"></a>
 ## 81. 文件分组
+
+`/admin/file-groups` 复用下载中心分类数据，支持层级筛选、分页和下载分类的版本化 CRUD。
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1743)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:91)。JSON 中按唯一旧 hash #/service-support 检索。
 
