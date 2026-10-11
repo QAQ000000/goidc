@@ -411,7 +411,7 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	}
 	projection := "o.id,o.order_no,o.user_id,u.display_name AS customer_name,o.status,o.review_status,o.total_cents,o.currency,o.created_at,i.id AS invoice_id,i.status AS invoice_status"
 	if admin {
-		projection += ",o.notes"
+		projection += `,o.notes,COALESCE((SELECT string_agg(oi.product_name,'、' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id),'') AS product_names,COALESCE((SELECT string_agg(s.domain,'、' ORDER BY s.id) FROM services s WHERE s.order_id=o.id),'') AS service_domains,COALESCE((SELECT display_name FROM users WHERE id=u.sales_owner_id),'') AS sales_owner_name,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method`
 	}
 	from := " FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE " + where
 	if strings.HasSuffix(r.URL.Path, "/page") {
@@ -430,6 +430,15 @@ func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	args := []any{true, identityFrom(r).ID}
 	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2)) AND ii.item_type='renew'"
+	if value := r.URL.Query().Get("customer_id"); value != "" {
+		customerID, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || customerID < 1 {
+			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
+			return
+		}
+		args = append(args, customerID)
+		where += fmt.Sprintf(" AND i.user_id=$%d", len(args))
+	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
 		if status != "pending" && status != "paid" && status != "cancelled" && status != "refunded" {
 			writeError(w, http.StatusBadRequest, "invalid_status", "续费订单状态无效")
@@ -446,8 +455,8 @@ func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
 		args = append(args, "%"+q+"%")
 		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR ii.description ILIKE $%d OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
 	}
-	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id ORDER BY pt.id DESC LIMIT 1), '') AS payment_method"
-	from := " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id WHERE " + where
+	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method"
+	from := " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id AND s.user_id=i.user_id WHERE " + where
 	s.transactionPage(w, r, projection, from, "ii.id", args, limit, offset)
 }
 func (s *Server) invoices(w http.ResponseWriter, r *http.Request) {

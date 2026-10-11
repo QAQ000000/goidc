@@ -83,7 +83,7 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 		}
 	} else if orderID == 0 {
 		var renewal bool
-		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=$1 AND item_type IN ('renew','upgrade') AND service_id IS NOT NULL)", invoiceID).Scan(&renewal); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=$1 AND item_type IN ('renew','upgrade','traffic') AND service_id IS NOT NULL)", invoiceID).Scan(&renewal); err != nil {
 			return out, err
 		}
 		if !renewal {
@@ -257,11 +257,20 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 	}
 	var renewalServiceID int64
 	var upgradeID int64
+	var traffic bool
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM traffic_orders WHERE invoice_id=$1)", invoiceID).Scan(&traffic); err != nil {
+		return out, err
+	}
+	if traffic {
+		if err = ReleaseTrafficInvoice(ctx, tx, invoiceID, "refunded"); err != nil {
+			return out, err
+		}
+	}
 	if kind == "manual" {
 		if err = requireManualInvoiceValid(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
-	} else if orderID == 0 {
+	} else if orderID == 0 && !traffic {
 		if err = tx.QueryRow(ctx, "SELECT service_id FROM invoice_items WHERE invoice_id=$1 AND item_type IN ('renew','upgrade') AND service_id IS NOT NULL LIMIT 1", invoiceID).Scan(&renewalServiceID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return out, conflict("invoice_not_refundable", "账单没有可退款的服务关联")
@@ -272,7 +281,7 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
 		return out, err
 	}
-	if orderID == 0 && kind != "manual" {
+	if orderID == 0 && kind != "manual" && !traffic {
 		if _, err = tx.Exec(ctx, "SELECT id FROM services WHERE id=$1 FOR UPDATE", renewalServiceID); err != nil {
 			return out, err
 		}
@@ -316,7 +325,7 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 			return out, err
 		}
 	}
-	if orderID == 0 && upgradeID == 0 && kind != "manual" {
+	if orderID == 0 && upgradeID == 0 && kind != "manual" && !traffic {
 		var cycle string
 		if err = tx.QueryRow(ctx, "SELECT billing_cycle FROM services WHERE id=$1 FOR UPDATE", renewalServiceID).Scan(&cycle); err != nil {
 			return out, err

@@ -186,6 +186,9 @@ func settleServiceInvoice(ctx context.Context, tx pgx.Tx, invoiceID int64) error
 	if kind == "manual" {
 		return requireManualInvoiceValid(ctx, tx, invoiceID)
 	}
+	if traffic, err := settleTrafficInvoice(ctx, tx, invoiceID); traffic || err != nil {
+		return err
+	}
 	var upgrade bool
 	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM service_configuration_changes WHERE invoice_id=$1)", invoiceID).Scan(&upgrade); err != nil {
 		return err

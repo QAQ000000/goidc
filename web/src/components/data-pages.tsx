@@ -74,7 +74,8 @@ import { AdminPagination } from "./admin-pagination";
 
 const adminOrderStates = ["pending", "paid", "active", "cancelled", "refunded"] as const;
 const adminRenewalStates = ["pending", "paid", "cancelled", "refunded"] as const;
-const renewalListDefaults = { kind: "renew" } as const;
+const orderListDefaults = { limit: "25", customer_id: "" } as const;
+const renewalListDefaults = { kind: "renew", ...orderListDefaults } as const;
 const adminServiceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
 export function DashboardView() {
@@ -443,14 +444,16 @@ export function OrdersView({ admin = false }: { admin?: boolean }) {
 }
 
 function AdminRenewalOrdersView() {
-  const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(true, adminRenewalStates, "all", renewalListDefaults);
-  const params = new URLSearchParams({ q: query, limit: "25", offset: String(page * 25) });
+  const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix, extra, setExtra } = useAdminListNavigation(true, adminRenewalStates, "all", renewalListDefaults);
+  const pageSize = [25, 50, 100].includes(Number(extra.limit)) ? Number(extra.limit) : 25;
+  const params = new URLSearchParams({ q: query, limit: String(pageSize), offset: String(page * pageSize) });
+  if (/^[1-9]\d*$/.test(extra.customer_id ?? "")) params.set("customer_id", extra.customer_id);
   if (status !== "all") params.set("status", status);
   const resource = useResource<{ items: Row[]; total: number; limit: number; offset: number }>(ready ? `/admin/renewal-orders?${params.toString()}` : null, false);
   const data = resource.data;
   return (
     <Workspace title="续费订单" admin>
-      <PageHeading title="续费订单" description="查看客户服务续费账单和付款状态" />
+      <PageHeading title="续费订单" description="查看客户服务续费账单和付款状态"><Button variant="outline" asChild><Link href="/admin/orders">产品订单</Link></Button></PageHeading>
       <AdminStatusTabs label="续费订单状态" value={status} states={{ pending: "待支付", paid: "已支付", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="账单号、客户、产品或邮箱" />
@@ -458,7 +461,7 @@ function AdminRenewalOrdersView() {
       {resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !data ? <Loading /> : (
         <div className="admin-list-surface data-surface overflow-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>客户</TableHead><TableHead>产品</TableHead><TableHead>IP/服务域名</TableHead><TableHead>续费时间</TableHead><TableHead>金额</TableHead><TableHead>付款方式</TableHead><TableHead>账单状态</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>账单号</TableHead><TableHead>客户</TableHead><TableHead>产品</TableHead><TableHead>IP/服务域名</TableHead><TableHead>下单时间</TableHead><TableHead>金额</TableHead><TableHead>付款方式</TableHead><TableHead>账单状态</TableHead></TableRow></TableHeader>
             <TableBody>
               {data.items.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">暂无续费订单</TableCell></TableRow>}
               {data.items.map((row, index) => {
@@ -468,17 +471,17 @@ function AdminRenewalOrdersView() {
                 return <TableRow key={String(row.id ?? index)}>
                   <TableCell className="font-mono text-xs">{invoiceID > 0 ? <Link className="text-primary hover:underline" href={`/admin/invoices/${invoiceID}${suffix}`}>{String(row.order_no ?? id)}</Link> : String(row.order_no ?? id)}</TableCell>
                   <TableCell><span className="font-medium">{String(row.customer_name ?? "-")}</span></TableCell>
-                  <TableCell>{String(row.product_name ?? "-")}</TableCell>
-                  <TableCell className="font-mono text-xs">{serviceDomain}</TableCell>
-                  <TableCell>{date(String(row.due_at ?? row.created_at))}</TableCell>
+                  <TableCell><div className="max-w-80 whitespace-normal break-words">{String(row.product_name ?? "-")}</div></TableCell>
+                  <TableCell className="font-mono text-xs"><div className="max-w-48 whitespace-normal break-all">{serviceDomain}</div></TableCell>
+                  <TableCell>{date(String(row.created_at))}</TableCell>
                   <TableCell><span className="money">{money(Number(row.total_cents ?? 0))}</span></TableCell>
-                  <TableCell>{String(row.payment_method ?? row.provider ?? "-")}</TableCell>
+                  <TableCell>{String(row.payment_method || row.provider || "-")}</TableCell>
                   <TableCell><Status value={String(row.status ?? "pending")} /></TableCell>
                 </TableRow>;
               })}
             </TableBody>
           </Table>
-          <AdminPagination total={Number(data.total ?? 0)} page={Math.floor(Number(data.offset ?? 0) / Math.max(1, Number(data.limit ?? 25)))} pageSize={Number(data.limit ?? 25)} onPageChange={setPage} />
+          <AdminPagination total={Number(data.total ?? 0)} page={Math.floor(Number(data.offset ?? 0) / Math.max(1, Number(data.limit ?? 25)))} pageSize={Number(data.limit ?? 25)} onPageChange={setPage} onPageSizeChange={size => { setExtra({ ...extra, limit: String(size) }); setPage(0); }} />
         </div>
       )}
     </Workspace>
@@ -486,13 +489,16 @@ function AdminRenewalOrdersView() {
 }
 
 function AdminOrdersView() {
-  const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(true, adminOrderStates);
+  const { query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix, extra, setExtra } = useAdminListNavigation(true, adminOrderStates, "all", orderListDefaults);
   const [selected, setSelected] = useState<number[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const params = new URLSearchParams({ q: query, limit: "25", offset: String(page * 25) });
+  const pageSize = [25, 50, 100].includes(Number(extra.limit)) ? Number(extra.limit) : 25;
+  const params = new URLSearchParams({ q: query, limit: String(pageSize), offset: String(page * pageSize) });
+  if (/^[1-9]\d*$/.test(extra.customer_id ?? "")) params.set("customer_id", extra.customer_id);
   if (status !== "all") params.set("status", status);
-  const { data, error, refresh } = useResource<Row[]>(ready ? `/admin/orders?${params.toString()}` : null, false);
+  const { data: result, error, refresh } = useResource<{ items: Row[]; total: number; limit: number; offset: number }>(ready ? `/admin/orders/page?${params.toString()}` : null, false);
+  const data = result?.items;
   const cancellable = (data ?? []).filter((row) => String(row.status) === "pending").map((row) => Number(row.id));
   const visibleSelected = selected.filter((id) => cancellable.includes(id));
   const allSelected = cancellable.length > 0 && cancellable.every((id) => selected.includes(id));
@@ -501,7 +507,7 @@ function AdminOrdersView() {
     setSelected((current) => checked ? [...new Set([...current, id])] : current.filter((value) => value !== id));
   }
   async function bulkCancel() {
-    if (visibleSelected.length === 0) return;
+    if (visibleSelected.length === 0 || !window.confirm(`确认取消所选 ${visibleSelected.length} 个待支付订单？取消后会释放预留库存。`)) return;
     setBusy(true); setMessage("");
     try {
       const result = await api<{ succeeded: number; failed: number }>("/admin/orders/bulk-cancel", {
@@ -516,7 +522,7 @@ function AdminOrdersView() {
   }
   return (
     <Workspace title="订单管理" admin>
-      <PageHeading title="订单管理" description="筛选订单并批量处理待支付订单" />
+      <PageHeading title="订单管理" description="筛选订单并批量处理待支付订单"><Button variant="outline" asChild><Link href="/admin/orders?kind=renew">续费订单</Link></Button></PageHeading>
       <AdminStatusTabs label="订单状态" value={status} states={{ pending: "待支付", paid: "已支付", active: "已启用", cancelled: "已取消", refunded: "已退款" }} onChange={value => { setStatus(value); setPage(0); }} />
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <SearchForm value={draft} setValue={setDraft} submit={() => { setQuery(draft); setPage(0); }} placeholder="订单号、客户名称或邮箱" />
@@ -525,29 +531,30 @@ function AdminOrdersView() {
       {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : (
         <div className="admin-list-surface data-surface overflow-auto">
           <Table>
-            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? cancellable : [])} aria-label="选择待支付订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>金额</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead className="w-12"><PermissionGate permission="orders.manage"><Checkbox checked={allSelected} onCheckedChange={(checked) => setSelected(checked ? cancellable : [])} aria-label="选择待支付订单" /></PermissionGate></TableHead><TableHead>订单号</TableHead><TableHead>客户</TableHead><TableHead>产品 / 服务域名</TableHead><TableHead>金额 / 付款</TableHead><TableHead>创建时间</TableHead><TableHead>订单状态</TableHead><TableHead>审核</TableHead><TableHead>订单备注</TableHead><TableHead>客户销售</TableHead><TableHead>操作</TableHead></TableRow></TableHeader>
             <TableBody>
-              {data.length === 0 && <TableRow><TableCell colSpan={8} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
-              {data.map((row, i) => { const id = Number(row.id); const pending = String(row.status) === "pending"; return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} disabled={!pending} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin /></div></TableCell></TableRow>; })}
+              {data.length === 0 && <TableRow><TableCell colSpan={11} className="h-32 text-center text-muted-foreground">暂无记录</TableCell></TableRow>}
+              {data.map((row, i) => { const id = Number(row.id); const pending = String(row.status) === "pending"; return <TableRow key={String(row.id ?? i)}><TableCell><PermissionGate permission="orders.manage"><Checkbox checked={selected.includes(id)} disabled={!pending} onCheckedChange={(checked) => toggle(id, checked === true)} aria-label={`选择订单 ${String(row.order_no ?? id)}`} /></PermissionGate></TableCell><TableCell className="font-mono text-xs"><Link className="text-primary hover:underline" href={`/admin/orders/${id}${suffix}`}>{String(row.order_no ?? "-")}</Link></TableCell><TableCell>{String(row.customer_name ?? "-")}</TableCell><TableCell><div className="max-w-64 whitespace-normal break-words">{String(row.product_names || "-")}<span className="block text-xs text-muted-foreground">{String(row.service_domains || "-")}</span></div></TableCell><TableCell><span className="money">{money(Number(row.total_cents))}</span><span className="block text-xs text-muted-foreground"><Status value={String(row.invoice_status ?? "unpaid")} /> · {String(row.payment_method || "-")}</span></TableCell><TableCell>{date(String(row.created_at))}</TableCell><TableCell><Status value={String(row.status)} /></TableCell><TableCell><Status value={String(row.review_status ?? "approved")} /></TableCell><TableCell className="max-w-56 whitespace-normal break-words">{String(row.notes || "-")}</TableCell><TableCell>{String(row.sales_owner_name || "-")}</TableCell><TableCell><div className="flex flex-wrap items-center gap-2"><OrderReviewAction row={row} refresh={refresh} /><OrderCancelAction row={row} admin refresh={refresh} /></div></TableCell></TableRow>; })}
             </TableBody>
           </Table>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkCancel()}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button></PermissionGate><div className="ml-auto flex items-center gap-3"><span className="text-xs text-muted-foreground">第 {page + 1} 页</span><Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((v) => v - 1)}>上一页</Button><Button variant="outline" size="sm" disabled={data.length < 25} onClick={() => setPage((v) => v + 1)}>下一页</Button></div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t p-3"><PermissionGate permission="orders.manage"><Button variant="destructive" size="sm" disabled={busy || visibleSelected.length === 0} onClick={() => void bulkCancel()}><Ban size={15} />批量取消 {visibleSelected.length ? `(${visibleSelected.length})` : ""}</Button></PermissionGate><div className="min-w-0 flex-1"><AdminPagination total={result?.total ?? 0} page={page} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={size => { setExtra({ ...extra, limit: String(size) }); setPage(0); }} /></div></div>
         </div>
       )}
     </Workspace>
   );
 }
 
-function OrderCancelAction({ row, admin }: { row: Row; admin: boolean }) {
+function OrderCancelAction({ row, admin, refresh }: { row: Row; admin: boolean; refresh?: () => void }) {
   const allowed = useAdminPermission("orders.manage");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   if ((admin && !allowed) || String(row.status) !== "pending") return <span className="text-xs text-muted-foreground">-</span>;
   async function cancel() {
+    if (!window.confirm("确认取消此订单？取消后会释放预留库存。")) return;
     setBusy(true); setMessage("");
     try {
       await api(`${admin ? "/admin" : ""}/orders/${Number(row.id)}/cancel`, { method: "POST", body: "{}", headers: { "Idempotency-Key": `web-order-cancel-${row.id}-${crypto.randomUUID()}` } });
-      setMessage("已取消");
+      setMessage("已取消"); refresh?.();
     } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
   return <div className="flex items-center gap-2"><Button size="sm" variant="destructive" disabled={busy} onClick={cancel}><Ban size={14} />取消订单</Button>{message && <span className="text-xs text-muted-foreground whitespace-nowrap">{message}</span>}</div>;
@@ -559,6 +566,7 @@ function OrderReviewAction({ row, refresh }: { row: Row; refresh: () => void }) 
   const [message, setMessage] = useState("");
   if (!allowed || String(row.review_status) !== "pending") return null;
   async function decide(decision: "approved" | "rejected") {
+    if (!window.confirm(decision === "approved" ? "确认审核通过此订单并继续交付？" : "确认驳回此订单？")) return;
     setBusy(true); setMessage("");
     try {
       await api(`/admin/orders/${Number(row.id)}/review`, { method: "POST", body: JSON.stringify({ decision, note: decision === "approved" ? "管理员审核通过" : "管理员审核驳回" }), headers: { "Idempotency-Key": `web-order-review-${row.id}-${decision}-${crypto.randomUUID()}` } });
@@ -573,7 +581,7 @@ function OrderConfigurationSnapshot({item}:{item:Row}){
  return <div className="text-xs text-muted-foreground mt-2 space-y-1">{snapshot.map(option=><p className="whitespace-normal break-all" key={String(option.id)}>{String(option.group_name)}：{String(option.label)}（{String(option.value)}）{Number(option.quantity??1)>1?` × ${option.quantity}`:""} · 周期增减 {money(Number(option.price_delta_cents))} · 初装增减 {money(Number(option.setup_delta_cents))}</p>)}{snapshot.length===0&&Array.isArray(item.config_options)&&item.config_options.length>0&&<p>历史配置编号：{item.config_options.join("、")}；未保留名称快照。</p>}</div>;
 }
 export function OrderDetailView({ id }: { id: number }) {
-  const backHref = useAdminListReturnHref("/admin/orders", adminOrderStates);
+  const backHref = useAdminListReturnHref("/admin/orders", adminOrderStates, "all", orderListDefaults);
   const { data, error, refresh } = useResource<Row>(`/admin/orders/${id}`);
   const [note, setNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -635,6 +643,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
         <>
           <PageHeading title={data.name} description={`服务 #${data.id} · ${data.domain}`}>
             <Status value={data.status} />
+            {["active", "suspended"].includes(data.status) && <Button variant="outline" asChild><Link href={`/console/services/${id}/traffic`}>购买流量包</Link></Button>}
           </PageHeading>
           <div className="grid md:grid-cols-2 gap-5 mb-8">
             <section className="data-surface p-6"><p className="text-xs text-muted-foreground">上游标识</p><p className="font-mono mt-2 break-all">{data.upstream_id || "尚未分配"}</p><p className="text-xs text-muted-foreground mt-5">登录用户名</p><p className="mt-2">{data.username || "尚未分配"}</p></section>

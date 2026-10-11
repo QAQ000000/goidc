@@ -4,7 +4,7 @@ import { RenewalBenefitDetails,renewalBenefitLabel } from "./renewal-benefit";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
@@ -1078,7 +1078,9 @@ export function InvoiceDetailView({
   id: number;
   admin?: boolean;
 }) {
-  const returnHref = useAdminListReturnHref(`${admin ? "/admin" : "/console"}/invoices`, invoiceStatusValues);
+  const searchParams = useSearchParams();
+  const renewal = admin && searchParams.get("kind") === "renew";
+  const returnHref = useAdminListReturnHref(renewal ? "/admin/orders" : `${admin ? "/admin" : "/console"}/invoices`, renewal ? ["pending", "paid", "cancelled", "refunded"] : invoiceStatusValues, "all", renewal ? { kind: "renew", limit: "25", customer_id: "" } : undefined);
   const { data, error, refresh } = useResource<Invoice>(
     `${admin ? "/admin" : ""}/invoices/${id}`,
     false,
@@ -1093,7 +1095,7 @@ export function InvoiceDetailView({
       <Button variant="ghost" className="mb-5" asChild>
         <Link href={admin ? returnHref : "/console/invoices"}>
           <ArrowLeft />
-          返回账单列表
+          {renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
       </Button>
       {error ? (

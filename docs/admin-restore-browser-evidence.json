@@ -705,6 +705,326 @@
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
       "screenshotSha256": "f0adc76a283cfd77701fe1a9497625fa64af7b87f112eabe57a5ff96ced41fb1"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1440,
+      "height": 1000,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/orders-1440.png",
+      "screenshotSha256": "98c65d75c66f85f2bb4b298ed2d07936d81d2796fdb2f3e8df637bfb2f27e206",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/orders-1024.png",
+      "screenshotSha256": "e43850c43d9a1dbb389a6378556e8669a6c646dd8873ac332b9de53bcf89a687",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/orders-390.png",
+      "screenshotSha256": "dd8d868df0b7f564e520f290740c4461bd3a649dd8a18d2bee51084f5c981047",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 320,
+      "height": 700,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/orders-320.png",
+      "screenshotSha256": "9667f6f5927c888a56aad3d67432f74e2a76a363a7a8a129dc22e4ffe21a5509",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders?kind=renew",
+      "width": 1440,
+      "height": 1000,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/renewal-1440.png",
+      "screenshotSha256": "4a723f1d0b03709fd3cb996cd47a6091ba0ebd6aab1c45e659ba45ab2a289c49",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders?kind=renew",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/renewal-1024.png",
+      "screenshotSha256": "9036c4b8f5dad68553c3abd4f8f3497da1a14c16eb85aa8cfa2f4b00cc6f0bbe",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders?kind=renew",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/renewal-390.png",
+      "screenshotSha256": "6c1db262717917400b11cda8c7c3b0128c91114c5026f6700f427ab96317f799",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/orders?kind=renew",
+      "width": 320,
+      "height": 700,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-orders-followup-20261011/renewal-320.png",
+      "screenshotSha256": "085abb52a530b9c264838893a672cee55559d44489c8b3c692aa20840ce4c013",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "人工抽查320订单和1440续费，表格内部滚动；其余未逐张审阅"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "真实记录/筛选/页容量；交互和剩余缺口见admin-batch-customer-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-products",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-products-empty-1440.png",
+      "screenshotSha256": "c6882839c107215130e4bc225169e65ee9ae23c6e29b561287726aa8b8957c90",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-products",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-products-empty-1024.png",
+      "screenshotSha256": "f08114e56f743aa6b269771b0a2c6c801f054194f97e4a28fc7967764a8a4f55",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-products",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-products-empty-390.png",
+      "screenshotSha256": "17280c9ca77e21140d4eb3af1a1856f75e37faca24f4efafaba5f21bff71134f",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-products",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-products-empty-320.png",
+      "screenshotSha256": "2dfd793775605c4fb9d3a06d454e505d59119aaa56e245bb304a9d936f51c357",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-orders",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-orders-1440.png",
+      "screenshotSha256": "6f429c54ee7aff9e846dbe00512d66f42e72afb3e47405449448dfcf17808bb5",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-orders",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-orders-1024.png",
+      "screenshotSha256": "edff3231eebe8f5d55d482f7d6682d984e1805bd6f29cfd919b8bb3858b8f83b",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-orders",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-orders-390.png",
+      "screenshotSha256": "9f9e6849b41f948380bdc8b3d9cc3be99c9692d027e9e2cb11a52f207123b7d9",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/traffic-orders",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "environment": "运行PG18 schema121+Next production localhost:3088",
+      "screenshot": "output/playwright/admin-batch-traffic-20261011/traffic-orders-320.png",
+      "screenshotSha256": "a5b988017291268c9c5d57ee611c8bc2195e2935933e7414f33c4040acc522e0",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "目录弹窗及移动端空态已人工复核"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "scope": "目录CRUD/真实空订单/筛选恢复；非空订单及真实支付交付浏览器未验证，见admin-batch-traffic-acceptance-20261011.md"
     }
   ],
   "pageErrors": [],

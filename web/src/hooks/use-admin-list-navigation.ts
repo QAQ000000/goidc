@@ -53,7 +53,7 @@ export function useAdminListNavigation(enabled: boolean, states: readonly string
   }, [enabled, states, defaultStatus, extraDefaults]);
 
   const params = new URLSearchParams(serializeState({ query, status, page }, defaultStatus));
-  for (const [key, value] of Object.entries(extra)) params.set(key, value);
+  for (const [key, value] of Object.entries(extra)) if (value) params.set(key, value);
   const suffix = params.size ? `?${params.toString()}` : "";
   useEffect(() => {
     if (enabled && ready) window.history.replaceState(null, "", `${window.location.pathname}${suffix}`);
@@ -62,7 +62,12 @@ export function useAdminListNavigation(enabled: boolean, states: readonly string
   return { extra, setExtra, query, setQuery, draft, setDraft, status, setStatus, page, setPage, ready, suffix: enabled ? suffix : "" };
 }
 
-export function useAdminListReturnHref(path: string, states: readonly string[], defaultStatus = "all") {
+export function useAdminListReturnHref(path: string, states: readonly string[], defaultStatus = "all", extraDefaults?: Readonly<Record<string, string>>) {
   const params = useSearchParams();
-  return path + serializeState(readState(new URLSearchParams(params.toString()), states, defaultStatus), defaultStatus);
+  const result = new URLSearchParams(serializeState(readState(new URLSearchParams(params.toString()), states, defaultStatus), defaultStatus));
+  for (const [key, fallback] of Object.entries(extraDefaults ?? {})) {
+    const value = params.get(key) ?? fallback;
+    if (value) result.set(key, value);
+  }
+  return path + (result.size ? `?${result}` : "");
 }

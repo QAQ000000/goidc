@@ -145,6 +145,15 @@ var adminRoutePermissions = func() map[string]string {
 	m["PUT /api/v1/admin/products/{id}/configuration-upgrade-policy"] = "products.manage"
 	m["GET /api/v1/admin/products/{id}/upgrade-targets"] = "products.view"
 	m["PUT /api/v1/admin/products/{id}/upgrade-targets"] = "products.manage"
+	m["GET /api/v1/admin/traffic-products"] = "products.view"
+	m["POST /api/v1/admin/traffic-products"] = "products.manage"
+	m["PATCH /api/v1/admin/traffic-products/{id}"] = "products.manage"
+	m["DELETE /api/v1/admin/traffic-products/{id}"] = "products.manage"
+	m["GET /api/v1/admin/traffic-orders"] = "orders.view"
+	m["GET /api/v1/admin/orders/page"] = "orders.view"
+	m["GET /api/v1/admin/traffic-orders/{id}"] = "orders.view"
+	m["POST /api/v1/admin/traffic-orders/{id}/cancel"] = "orders.manage"
+	m["POST /api/v1/admin/traffic-orders/{id}/delivery-verification"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/configuration-changes/{change_id}/retry"] = "services.manage"
 	groups := map[string][]string{
 		"customer_files.view":           {"GET /api/v1/admin/customer-files", "GET /api/v1/admin/customer-files/{id}", "GET /api/v1/admin/customer-files/{id}/file", "GET /api/v1/admin/customer-files/owners"},

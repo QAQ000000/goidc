@@ -269,6 +269,11 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 	if _, err = tx.Exec(ctx, "UPDATE payment_transactions SET status=$2,completed_at=CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE completed_at END,raw_result=$3,next_reconcile_at=NULL,updated_at=now() WHERE id=$1", txID, status, json.RawMessage(raw)); err != nil {
 		return out, err
 	}
+	if status == "succeeded" {
+		if _, err = tx.Exec(ctx, "UPDATE traffic_orders SET payment_method=$2 WHERE invoice_id=$1 AND status='paid'", invoiceID, provider); err != nil {
+			return out, err
+		}
+	}
 	if err = Audit(ctx, tx, 0, "payment.webhook."+status, "invoice", invoiceID, map[string]any{"provider": provider, "event_id": eventID, "payment_id": providerPaymentID, "amount_cents": amountCents}); err != nil {
 		return out, err
 	}

@@ -13,9 +13,9 @@
 | 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports?tab=sales | 报表页销售标签使用真实 API，并恢复年份和标签 URL | 已验收 |
 | 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
 | 7 | [客户 / 推介计划](#page-7) | #/customer-promotionplan | /admin/affiliate | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 真实总数分页/客户范围/详情返回已补齐，写操作版本保护及新建删除仍待补 | PASS（四尺寸） |
+| 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 真实续费分页/客户范围/已付款渠道/详情返回 | PASS（四尺寸） |
+| 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 有对应路由源码；真实支付后待人工交付，自动上游交付未实现 | PASS（四尺寸，空订单） |
 | 11 | [业务 / 业务列表](#page-11) | #/customer-product | /admin/services | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 12 | [业务 / 产品暂停请求](#page-12) | #/customer-cancelreq | /admin/cancellations | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 13 | [财务 / 交易流水](#page-13) | #/business-statement | /admin/transactions | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -75,7 +75,7 @@
 | 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 有真实认证审计事件分页 API 和 React 页面 | 已实现（契约） |
 | 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 有对应路由、筛选、分页 API 和 React 页面 | 已实现（契约） |
 | 69 | [设置 / 商品管理](#page-69) | #/product-server | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 70 | [设置 / 流量包管理](#page-70) | #/dcim-traffic | /admin/traffic-products | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 70 | [设置 / 流量包管理](#page-70) | #/dcim-traffic | /admin/traffic-products | 有对应路由源码；真实目录/库存/适用产品 | PASS（四尺寸、CRUD） |
 | 71 | [设置 / 通用接口](#page-71) | #/server-settings | /admin/channels?category=provision | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 72 | [设置 / 魔方DCIM](#page-72) | #/dcim | /admin/suppliers?kind=dcim | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 73 | [设置 / 魔方云](#page-73) | #/zjmfcloud | /admin/suppliers?kind=cloud | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -156,12 +156,14 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:195)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:18)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/order-list 检索。
 
+普通列表使用 `GET /api/v1/admin/orders/page` 的真实总数分页，显示产品快照、服务域名、金额/付款、订单备注和客户销售归属。状态、关键词、客户ID、页容量和分页保留URL；审核/取消具备确认，但新建、删除和写操作版本保护尚未完全补齐，台账保持部分完成。
+
 <a id="page-9"></a>
 ## 9. 续费订单
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:212)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:19)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/renewal-order 检索。
 
-新版通过 `GET /api/v1/admin/renewal-orders` 从 `invoice_items.item_type='renew'` 读取真实续费账单，返回 `items/total/limit/offset`，并关联客户、服务域名、续费时间、付款渠道和账单状态。`kind=renew` 保留状态、关键词和分页 URL；续费行只提供账单详情入口，不复用普通订单取消/审核动作。权限使用 `orders.view`，服务端继续执行客户范围校验。
+新版通过 `GET /api/v1/admin/renewal-orders` 从 `invoice_items.item_type='renew'` 读取真实续费账单，返回 `items/total/limit/offset`，并关联客户、服务域名、账单创建时间、已付款渠道和账单状态。`kind=renew` 保留状态、关键词、客户ID、页容量和分页 URL，账单详情返回续费列表时保留这些条件；续费行只提供账单详情入口，不复用普通订单取消/审核动作。权限使用 `orders.view`，服务端继续执行客户范围校验。
 
 <a id="page-10"></a>
 ## 10. 流量包订单

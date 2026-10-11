@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog, WalletCards, Megaphone, Percent } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog, WalletCards, Megaphone, Percent, Gauge } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -15,12 +15,14 @@ export const adminNavigation = [
   { href: "/admin/marketing", label: "营销推送", icon: Megaphone, permission: "notifications.view", group: "customer_ops" },
   { href: "/admin/promo-codes", label: "优惠码", icon: Tag, permission: "promos.view", group: "finance" },
   { href: "/admin/products", label: "产品目录", icon: Package, permission: "products.view", group: "products" },
+  { href: "/admin/traffic-products", label: "流量包管理", icon: Gauge, permission: "products.view", group: "products" },
   { href: "/admin/catalog-groups", label: "目录分组", icon: Package, permission: "products.view", group: "products" },
   { href: "/admin/suppliers", label: "供应商", icon: Network, permission: "products.view", group: "products" },
   { href: "/admin/service-groups", label: "服务分组", icon: Server, permission: "products.view", group: "products" },
   { href: "/admin/content", label: "新闻与知识库", icon: BookOpen, permission: "content.view", group: "content" },
   { href: "/admin/downloads", label: "下载中心", icon: Download, permission: "downloads.view", group: "content" },
   { href: "/admin/orders", label: "订单管理", icon: ClipboardList, permission: "orders.view", group: "orders" },
+  { href: "/admin/traffic-orders", label: "流量包订单", icon: Gauge, permission: "orders.view", group: "orders" },
   { href: "/admin/services", label: "服务主机", icon: Server, permission: "services.view", group: "products" },
   { href: "/admin/cancellations", label: "取消申请", icon: ClipboardCheck, permission: "services.view", group: "orders" },
   { href: "/admin/invoices", label: "财务账单", icon: Receipt, permission: "invoices.view", group: "finance" },

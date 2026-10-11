@@ -33,7 +33,7 @@ export function AdminPagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#606266] pt-2">
       <div>共 {total} 条</div>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {onPageSizeChange && (
           <Select
             value={String(pageSize)}
