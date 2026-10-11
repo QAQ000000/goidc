@@ -472,7 +472,11 @@ func (s *Server) adminLogPage(w http.ResponseWriter, r *http.Request) {
 	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
 		args = append(args, "%"+q+"%")
 		n := strconv.Itoa(len(args))
-		where += " AND (a.action ILIKE $" + n + " OR a.entity_id ILIKE $" + n + ")"
+		if kind == "sms" || kind == "email" {
+			where += " AND (a.kind ILIKE $" + n + " OR a.status ILIKE $" + n + " OR a.recipient ILIKE $" + n + ")"
+		} else {
+			where += " AND (a.action ILIKE $" + n + " OR a.entity_id ILIKE $" + n + ")"
+		}
 	}
 	var total int
 	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM "+table+" WHERE "+where, args...).Scan(&total); err != nil {
