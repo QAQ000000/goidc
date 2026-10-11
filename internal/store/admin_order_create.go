@@ -384,8 +384,9 @@ func (s *Store) checkAdminOrderPayment(ctx context.Context, tx pgx.Tx, in AdminO
 		return "", conflict("invalid_order_payment", "请选择支付渠道实例")
 	}
 	legacyInstance := in.ChannelInstanceID == "payment-default" || in.ChannelInstanceID == "payment-mock-default"
-	// Legacy settings writes lock the singleton before synchronizing the channel.
-	// Keep this order to prevent a quote/settings update deadlock.
+	// The legacy singleton is authoritative and synchronizes with channel writes.
+	// Lock only that authority for legacy instances: generic channel writes take
+	// the channel first, so also locking both rows here could deadlock.
 	if legacyInstance {
 		var id int
 		if err := tx.QueryRow(ctx, "SELECT id FROM payment_settings WHERE id=1 FOR SHARE").Scan(&id); err != nil {
@@ -396,7 +397,11 @@ func (s *Store) checkAdminOrderPayment(ctx context.Context, tx pgx.Tx, in AdminO
 	var enabled bool
 	var raw, sealed []byte
 	var version int64
-	if err := tx.QueryRow(ctx, "SELECT category,implementation_id,enabled,config,secret_ciphertext,version FROM channel_instances WHERE id=$1 FOR SHARE", in.ChannelInstanceID).Scan(&category, &implementation, &enabled, &raw, &sealed, &version); err != nil {
+	query := "SELECT category,implementation_id,enabled,config,secret_ciphertext,version FROM channel_instances WHERE id=$1"
+	if !legacyInstance {
+		query += " FOR SHARE"
+	}
+	if err := tx.QueryRow(ctx, query, in.ChannelInstanceID).Scan(&category, &implementation, &enabled, &raw, &sealed, &version); err != nil {
 		return "", err
 	}
 	if category != "payment" || !enabled && in.ChannelInstanceID != "payment-mock-default" {

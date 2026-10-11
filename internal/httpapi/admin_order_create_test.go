@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
 )
@@ -418,5 +419,32 @@ func TestAdminOrderCreateEmailSkipChannelAndTemplate(t *testing.T) {
 	expect(t, missing, 201)
 	if data(t, missing)["email_status"] != "skipped_template" {
 		t.Fatal("disabled template appeared sent")
+	}
+}
+
+// Channel configuration writes lock the channel and then synchronize the
+// authoritative payment singleton. Quotes must not take those locks backwards.
+func TestAdminOrderCreateLegacyQuoteDoesNotBlockOnChannelLock(t *testing.T) {
+	f := newMutationOrderFixture(t)
+	in := adminOrderDraft(t, f)
+	in.PaymentProvider = "mock"
+	in.ChannelInstanceID = "payment-mock-default"
+	tx, err := f.db.Pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	if _, err = tx.Exec(t.Context(), "SELECT id FROM channel_instances WHERE id='payment-mock-default' FOR UPDATE"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- request(f.h, "POST", "/api/v1/admin/orders/quote", in, f.root, "") }()
+	select {
+	case response := <-done:
+		expect(t, response, 200)
+	case <-time.After(3 * time.Second):
+		tx.Rollback(t.Context())
+		<-done
+		t.Fatal("legacy quote blocked on channel lock; channel/singleton synchronization can deadlock")
 	}
 }
