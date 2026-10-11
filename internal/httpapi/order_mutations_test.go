@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/codex/zjmfgo/internal/store"
@@ -357,5 +358,122 @@ func TestOrderMutationsBulkPayloadBindingAndDuplicatePreflight(t *testing.T) {
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders/bulk-delete", map[string]any{"order_ids": []int64{third}, "expected_versions": map[int64]int64{third: thirdVersion}, "reason": "不同批次原因"}, f.root, "mutation-batch-delete-bound"), 409)
 	if orderVersion(t, f.db, third) != thirdVersion {
 		t.Fatal("changed delete batch mutated new order")
+	}
+}
+
+func TestOrderMutationsConcurrentNotesAndCancelSameVersion(t *testing.T) {
+	f := newMutationOrderFixture(t)
+	for attempt := 0; attempt < 4; attempt++ {
+		id, invoice := f.order(t, fmt.Sprintf("mutation-concurrent-order-%d", attempt), 2)
+		version := orderVersion(t, f.db, id)
+		var stockBefore int
+		if err := f.db.Pool.QueryRow(t.Context(), "SELECT stock FROM products WHERE id=$1", f.productID).Scan(&stockBefore); err != nil {
+			t.Fatal(err)
+		}
+		path := fmt.Sprintf("/api/v1/admin/orders/%d", id)
+		start := make(chan struct{})
+		type response struct {
+			action string
+			result *httptest.ResponseRecorder
+		}
+		results := make(chan response, 2)
+		go func() {
+			<-start
+			results <- response{"notes", request(f.h, "POST", path+"/notes", map[string]any{"notes": "并发核对备注", "expected_version": version}, f.root, fmt.Sprintf("mutation-concurrent-notes-%d", attempt))}
+		}()
+		go func() {
+			<-start
+			results <- response{"cancel", request(f.h, "POST", path+"/cancel", map[string]any{"expected_version": version}, f.root, fmt.Sprintf("mutation-concurrent-cancel-%d", attempt))}
+		}()
+		close(start)
+		winner := ""
+		conflicts := 0
+		for i := 0; i < 2; i++ {
+			out := <-results
+			if out.result.Code == http.StatusConflict {
+				conflicts++
+				continue
+			}
+			wantCode := http.StatusOK
+			if out.action == "cancel" {
+				wantCode = http.StatusCreated
+			}
+			expect(t, out.result, wantCode)
+			if winner != "" {
+				t.Fatal("both operations committed with the same order version")
+			}
+			winner = out.action
+		}
+		if winner == "" || conflicts != 1 {
+			t.Fatalf("winner=%q conflicts=%d", winner, conflicts)
+		}
+		var storedVersion int64
+		var status, notes, invoiceStatus, receiptAction string
+		var stock, services, cancelled, released, receipts, audits int
+		if err := f.db.Pool.QueryRow(t.Context(), `SELECT o.version,o.status,o.notes,i.status,p.stock,
+(SELECT count(*) FROM services WHERE order_id=o.id),
+(SELECT count(*) FROM services WHERE order_id=o.id AND status='cancelled'),
+(SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
+(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT min(action) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.notes.updated','order.cancelled'))
+FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 WHERE o.id=$1`, id, invoice, f.productID).Scan(&storedVersion, &status, &notes, &invoiceStatus, &stock, &services, &cancelled, &released, &receipts, &receiptAction, &audits); err != nil {
+			t.Fatal(err)
+		}
+		wantStatus, wantInvoice, wantNotes, wantStock, wantReleased := "pending", "unpaid", "并发核对备注", stockBefore, 0
+		if winner == "cancel" {
+			wantStatus, wantInvoice, wantNotes, wantStock, wantReleased = "cancelled", "cancelled", "", stockBefore+2, 2
+		}
+		if storedVersion != version+1 || status != wantStatus || invoiceStatus != wantInvoice || notes != wantNotes || stock != wantStock || services != 2 || cancelled != wantReleased || released != wantReleased || receipts != 1 || receiptAction != winner || audits != 1 {
+			t.Fatalf("winner=%s version=%d status=%s invoice=%s notes=%q stock=%d services=%d cancelled=%d released=%d receipts=%d receipt=%s audits=%d", winner, storedVersion, status, invoiceStatus, notes, stock, services, cancelled, released, receipts, receiptAction, audits)
+		}
+	}
+}
+
+func TestOrderMutationsDeleteAuditFailureRollsBackCancellation(t *testing.T) {
+	f := newMutationOrderFixture(t)
+	id, invoice := f.order(t, "mutation-delete-audit-order", 2)
+	type state struct {
+		version, serviceVersions                                     int64
+		status, invoiceStatus, reason                                string
+		deleted, deletedBy                                           bool
+		stock, services, pendingServices, released, receipts, audits int
+	}
+	readState := func() state {
+		t.Helper()
+		var out state
+		if err := f.db.Pool.QueryRow(t.Context(), `SELECT o.version,o.status,o.deleted_at IS NOT NULL,o.deleted_by IS NOT NULL,o.deletion_reason,i.status,p.stock,
+(SELECT count(*) FROM services WHERE order_id=o.id),
+(SELECT count(*) FROM services WHERE order_id=o.id AND status='pending_payment'),
+(SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
+(SELECT coalesce(sum(version),0) FROM services WHERE order_id=o.id),
+(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.cancelled','order.deleted'))
+FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 WHERE o.id=$1`, id, invoice, f.productID).Scan(&out.version, &out.status, &out.deleted, &out.deletedBy, &out.reason, &out.invoiceStatus, &out.stock, &out.services, &out.pendingServices, &out.released, &out.serviceVersions, &out.receipts, &out.audits); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	before := readState()
+	if before.status != "pending" || before.invoiceStatus != "unpaid" || before.stock != 10 || before.services != 2 || before.pendingServices != 2 || before.released != 0 || before.deleted || before.deletedBy || before.receipts != 0 || before.audits != 0 {
+		t.Fatalf("invalid rollback fixture: %+v", before)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_order_delete_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='order.deleted' THEN RAISE EXCEPTION 'injected order deletion audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_order_delete_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_order_delete_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/admin/orders/%d", id)
+	body := map[string]any{"reason": "重复订单回滚测试", "expected_version": before.version}
+	expect(t, request(f.h, "DELETE", path, body, f.root, "mutation-delete-audit-key"), http.StatusInternalServerError)
+	if after := readState(); after != before {
+		t.Fatalf("audit failure left partial deletion: before=%+v after=%+v", before, after)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), `DROP TRIGGER reject_order_delete_audit ON audit_events; DROP FUNCTION reject_order_delete_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	// The failed transaction must not consume the key or the original version.
+	expect(t, request(f.h, "DELETE", path, body, f.root, "mutation-delete-audit-key"), http.StatusOK)
+	after := readState()
+	if !after.deleted || !after.deletedBy || after.reason != body["reason"] || after.status != "cancelled" || after.invoiceStatus != "cancelled" || after.stock != 12 || after.pendingServices != 0 || after.released != 2 || after.receipts != 1 || after.audits != 2 {
+		t.Fatalf("retry after audit recovery failed: %+v", after)
 	}
 }
