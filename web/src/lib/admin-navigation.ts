@@ -49,6 +49,7 @@ export const adminNavigation = [
   { href: "/admin/invoice-settings", label: "发票设置", icon: Receipt, permission: "settings.view", group: "finance" },
   { href: "/admin/contract-settings", label: "合同设置", icon: Receipt, permission: "settings.view", group: "finance" },
   { href: "/admin/credit-settings", label: "信用额设置", icon: WalletCards, permission: "settings.view", group: "finance" },
+  { href: "/admin/credit", label: "信用额管理", icon: WalletCards, permission: "credit.view", group: "finance" },
   { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/sms", label: "短信日志", icon: Mail, permission: "notifications.view", group: "system" },

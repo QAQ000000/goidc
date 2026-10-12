@@ -32,6 +32,7 @@ var AdminPermissions = []Permission{
 	{"customer_files.view", "客户文件", "读取授权客户文件与下载"}, {"customer_files.manage", "客户文件", "上传、编辑、转移和删除授权客户文件"},
 	{"orders.view", "订单", "读取订单"}, {"orders.manage", "订单", "审核、备注和取消订单"},
 	{"invoices.view", "财务", "读取账单"}, {"invoices.manage", "财务", "创建、编辑和作废人工账单"}, {"invoices.refund", "财务", "退款"}, {"balance.manage", "财务", "客户余额充值"},
+	{"credit.view", "信用额", "读取客户信用额"}, {"credit.manage", "信用额", "调整客户信用额"},
 	{"payments.reconcile", "财务", "查询在线支付并补结算"},
 	{"invoice_applications.view", "发票", "读取授权客户的发票申请"}, {"invoice_applications.manage", "发票", "审核、登记开具及邮寄信息"},
 	{"services.view", "服务", "读取服务和取消申请"}, {"services.manage", "服务", "执行服务动作、交付和取消审核"},

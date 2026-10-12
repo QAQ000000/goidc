@@ -133,6 +133,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/credit-settings", s.sessionAuth(s.creditSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/credit-settings", s.sessionAuth(s.updateCreditSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/credit", s.auth(s.adminCreditPage, true))
+	mux.HandleFunc("PUT /api/v1/admin/credit/{id}/limit", s.sessionAuth(s.adminCreditLimit, true))
 	mux.HandleFunc("GET /api/v1/admin/currencies", s.sessionAuth(s.currencies, true))
 	mux.HandleFunc("POST /api/v1/admin/currencies", s.sessionAuth(s.saveCurrency, true))
 	mux.HandleFunc("PATCH /api/v1/admin/currencies/{id}", s.sessionAuth(s.saveCurrency, true))
