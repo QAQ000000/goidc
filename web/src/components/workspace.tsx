@@ -37,6 +37,9 @@ export function AdminAccessProvider({ initialUser, children }: { initialUser: Us
 export function useAdminPermission(permission: string) {
   return can(useContext(AccessContext)?.user ?? null, permission);
 }
+export function useAdminIdentity() {
+  return useContext(AccessContext)?.user ?? null;
+}
 export function PermissionGate({ permission, children, bypass = false }: { permission: string; children: React.ReactNode; bypass?: boolean }) {
   const allowed = useAdminPermission(permission);
   return bypass || allowed ? children : null;
