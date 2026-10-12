@@ -26,12 +26,15 @@ func (s *Server) salesReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, e := s.db.Pool.Query(r.Context(), `
-WITH customer_orders AS (
+WITH cash AS (
+ SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+ UNION ALL SELECT r.user_id,r.amount_cents,r.received_at FROM credit_repayments r
+), customer_orders AS (
  SELECT user_id,count(*)::bigint AS order_count FROM orders
  WHERE created_at >= $1 AND created_at < $2 AND admin_customer_allowed($3,user_id) GROUP BY user_id
 ), customer_income AS (
- SELECT user_id,sum(amount_cents)::bigint AS income_cents FROM invoices
- WHERE status='paid' AND paid_at >= $1 AND paid_at < $2 AND admin_customer_allowed($3,user_id) GROUP BY user_id
+ SELECT user_id,sum(amount_cents)::bigint AS income_cents FROM cash
+ WHERE received_at >= $1 AND received_at < $2 AND admin_customer_allowed($3,user_id) GROUP BY user_id
 )
 SELECT coalesce(u.sales_owner_id,0) AS sales_owner_id,
        coalesce(o.display_name,'未分配') AS sales_owner_name,

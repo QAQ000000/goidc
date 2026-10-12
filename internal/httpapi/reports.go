@@ -76,10 +76,12 @@ func (s *Server) incomeReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.db.Pool.Query(r.Context(), `
-SELECT to_char(date_trunc('month', paid_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM'),
-       coalesce(sum(amount_cents),0)::bigint, count(*)::bigint
-FROM invoices
-WHERE status='paid' AND paid_at >= $1 AND paid_at < $2 AND admin_customer_allowed($3,user_id)
+WITH cash AS (SELECT i.id invoice_id,i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+UNION ALL SELECT r.invoice_id,r.user_id,r.amount_cents,r.received_at FROM credit_repayments r)
+SELECT to_char(date_trunc('month', received_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM'),
+       coalesce(sum(amount_cents),0)::bigint, count(DISTINCT invoice_id)::bigint
+FROM cash
+WHERE received_at >= $1 AND received_at < $2 AND admin_customer_allowed($3,user_id)
 GROUP BY 1 ORDER BY 1 DESC`, period.Start, period.End, identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -224,19 +226,28 @@ WITH new_sales AS (
   SELECT oi.product_id, max(oi.product_name) AS name, sum(oi.total_cents)::bigint AS amount,
          count(DISTINCT o.id)::bigint AS order_count
   FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN invoices i ON i.order_id=o.id
-  WHERE i.status='paid' AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
+  WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
   GROUP BY oi.product_id
 ), renewals AS (
   SELECT s.product_id, max(p.name) AS name, sum(ii.amount_cents)::bigint AS amount,
          count(DISTINCT i.id)::bigint AS order_count
   FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN services s ON s.id=ii.service_id
        JOIN products p ON p.id=s.product_id
-  WHERE ii.item_type='renew' AND i.status='paid' AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
+  WHERE ii.item_type='renew' AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
   GROUP BY s.product_id
 )
-SELECT coalesce(n.product_id,r.product_id), coalesce(n.name,r.name), coalesce(n.amount,0), coalesce(n.order_count,0),
-       coalesce(r.amount,0), coalesce(r.order_count,0), coalesce(n.amount,0)+coalesce(r.amount,0)
-FROM new_sales n FULL JOIN renewals r ON r.product_id=n.product_id
+ , credit_products AS (
+ SELECT r.invoice_id,r.amount_cents,ii.item_type,ii.service_id,s.product_id,p.name
+ FROM credit_repayments r JOIN invoices i ON i.id=r.invoice_id
+ JOIN invoice_items ii ON ii.invoice_id=i.id JOIN services s ON s.id=ii.service_id AND s.user_id=r.user_id JOIN products p ON p.id=s.product_id
+ WHERE r.received_at >= $1 AND r.received_at < $2 AND admin_customer_allowed($3,r.user_id)
+ AND i.invoice_kind='automatic' AND ii.item_type IN ('service','renew')
+ AND (SELECT count(*) FROM invoice_items x WHERE x.invoice_id=i.id)=1
+ ), totals AS (
+ SELECT product_id,name,amount new_amount,order_count new_count,0::bigint renew_amount,0::bigint renew_count FROM new_sales
+ UNION ALL SELECT product_id,name,0,0,amount,order_count FROM renewals
+ UNION ALL SELECT product_id,max(name),coalesce(sum(amount_cents) FILTER(WHERE item_type='service'),0)::bigint,count(DISTINCT invoice_id) FILTER(WHERE item_type='service')::bigint,coalesce(sum(amount_cents) FILTER(WHERE item_type='renew'),0)::bigint,count(DISTINCT invoice_id) FILTER(WHERE item_type='renew')::bigint FROM credit_products GROUP BY product_id
+ ) SELECT product_id,max(name),sum(new_amount)::bigint,sum(new_count)::bigint,sum(renew_amount)::bigint,sum(renew_count)::bigint,(sum(new_amount)+sum(renew_amount))::bigint FROM totals GROUP BY product_id
 ORDER BY 7 DESC,1`, period.Start, period.End, identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)

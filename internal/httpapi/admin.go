@@ -28,16 +28,19 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	year := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT
+	rows, err := s.db.Pool.Query(r.Context(), `WITH cash AS (
+ SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+ UNION ALL SELECT r.user_id,r.amount_cents,r.received_at FROM credit_repayments r
+ ) SELECT
  count(*)::bigint AS total_orders,
  count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $2)::bigint AS today_paid_orders,
  count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $3)::bigint AS month_paid_orders,
  count(*) FILTER (WHERE status IN ('paid','active') AND created_at >= $4)::bigint AS seven_days_paid_orders,
  count(*) FILTER (WHERE status='pending' AND created_at >= $4)::bigint AS seven_days_pending_orders,
- (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $2 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS today_income_cents,
- (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $3 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS month_income_cents,
- (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at >= $5 AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS annual_income_cents,
- (SELECT coalesce(sum(amount_cents),0)::bigint FROM invoices WHERE status='paid' AND paid_at <= $9 AND admin_customer_allowed($1,user_id)) AS total_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM cash WHERE received_at >= $2 AND received_at <= $9 AND admin_customer_allowed($1,user_id)) AS today_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM cash WHERE received_at >= $3 AND received_at <= $9 AND admin_customer_allowed($1,user_id)) AS month_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM cash WHERE received_at >= $5 AND received_at <= $9 AND admin_customer_allowed($1,user_id)) AS annual_income_cents,
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM cash WHERE received_at <= $9 AND admin_customer_allowed($1,user_id)) AS total_income_cents,
  (SELECT count(*) FROM certification_profiles WHERE status='pending' AND $6::boolean AND admin_customer_allowed($1,user_id)) AS pending_certifications,
  (SELECT count(*) FROM affiliate_withdrawals w JOIN affiliate_accounts a ON a.id=w.account_id WHERE w.status IN ('submitted','reviewing') AND $7::boolean AND admin_customer_allowed($1,a.user_id)) AS pending_withdrawals,
  (SELECT count(*) FROM users WHERE role='customer' AND created_at >= $2 AND created_at <= $9 AND admin_customer_allowed($1,id)) AS today_new_clients
