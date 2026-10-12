@@ -23,7 +23,7 @@
 | 15 | [财务 / 信用额管理](#page-15) | #/credit-management | /admin/credit | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 16 | [财务 / 提现审核](#page-16) | #/customer-withdrawal | /admin/affiliate?tab=withdrawals | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 17 | [财务 / 发票列表](#page-17) | #/invoice-audit | /admin/invoice-applications | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 18 | [财务 / 合同列表](#page-18) | #/contracts_audit | /admin/contracts | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 18 | [财务 / 合同列表](#page-18) | #/contracts_audit | /admin/contracts | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 19 | [工单 / 工单列表](#page-19) | #/support-ticket | /admin/tickets | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 20 | [工单 / 工单统计](#page-20) | #/support-statistics | /admin/reports?tab=tickets | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 21 | [功能 / 年度收入统计](#page-21) | #/annual-statistics | /admin/reports?tab=annual | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -43,7 +43,7 @@
 | 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 36 | [设置 / 优惠码](#page-36) | #/promo-code | /admin/promo-codes | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 37 | [设置 / 发票设置](#page-37) | #/voucher-setting | /admin/invoice-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 40 | [设置 / 工单部门](#page-40) | #/work-order-dept | /admin/ticket-departments | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 41 | [设置 / 工单状态](#page-41) | #/work-order-status | /admin/ticket-statuses | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -200,7 +200,7 @@
 <a id="page-18"></a>
 ## 18. 合同列表
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:403)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:28)。JSON 中按唯一旧 hash #/contracts_audit 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:403)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:28)；页面：[源码](../web/src/app/admin/contracts/page.tsx:1)。JSON 中按唯一旧 hash #/contracts_audit 检索。
 
 <a id="page-19"></a>
 ## 19. 工单列表

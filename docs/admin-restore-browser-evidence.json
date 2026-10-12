@@ -2381,6 +2381,246 @@
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
       "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/contracts",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-contracts-20261012/contracts-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "df7b801eaf40643639976bee476a3d80861bbfd7336ceac574f04286c4a06d81"
+    },
+    {
+      "newRoute": "/admin/contracts",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/admin-contracts-20261012/contracts-1024.png",
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "0df65c4d1e2cd2292391f343bede0f427cc1a832a396980bd6ebc01d69d84f5f"
+    },
+    {
+      "newRoute": "/admin/contracts",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-contracts-20261012/contracts-390.png",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "a38d50cce36eb607fbee9a4fed516408a1b08af7017c13ac09a225be9177096b"
+    },
+    {
+      "newRoute": "/admin/contracts",
+      "width": 320,
+      "height": 800,
+      "screenshot": "output/playwright/admin-contracts-20261012/contracts-320.png",
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "07a0ee07cfeea030d9498fc01612259ddde9b4e17c42534b19333ce411b5e2de"
+    },
+    {
+      "newRoute": "/admin/contract-settings",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-contracts-20261012/settings-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "a8a164d23b78ae512046c82820510e3209c9adf9c5aa620b9b9794c8d00aef42"
+    },
+    {
+      "newRoute": "/admin/contract-settings",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/admin-contracts-20261012/settings-1024.png",
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "d6f489baeb8bc2441f18a4813232dac93324742a7d5b7a0095f912686fe7feca"
+    },
+    {
+      "newRoute": "/admin/contract-settings",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-contracts-20261012/settings-390.png",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "9057c31d7f1ef688cbdc7aaadcca85eb717749bf7498719a2fabb12adf0de64f"
+    },
+    {
+      "newRoute": "/admin/contract-settings",
+      "width": 320,
+      "height": 800,
+      "screenshot": "output/playwright/admin-contracts-20261012/settings-320.png",
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "c12facd0901f1ded4d896140909d41a6474f2ea97668ccc177fb453f4eb94932"
+    },
+    {
+      "newRoute": "/admin/contract-settings?tab=templates",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-contracts-20261012/templates-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "744ba25e5be611af26aa2ee1c47258d1fa60f2eddac3e923715602062faa4d32"
+    },
+    {
+      "newRoute": "/admin/contract-settings?tab=templates",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/admin-contracts-20261012/templates-1024.png",
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "b560e25a07d802e55b5ee99a0d19a2326e0fb92b6af1e8818f5f4f95275a1950"
+    },
+    {
+      "newRoute": "/admin/contract-settings?tab=templates",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-contracts-20261012/templates-390.png",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "196916d35483d4fa989e522a15294ecca5bc5f78e0b1eefbaace95f3213c0145"
+    },
+    {
+      "newRoute": "/admin/contract-settings?tab=templates",
+      "width": 320,
+      "height": 800,
+      "screenshot": "output/playwright/admin-contracts-20261012/templates-320.png",
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320合同列表和邮寄弹窗；未逐张检查全部文字"
+      },
+      "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
+      "screenshotSha256": "c1512d8d946f5b46d1a2eb4567d83040d7832e6dd95fe8e1b510e21eed810ab3"
     }
   ],
   "pageErrors": [],
