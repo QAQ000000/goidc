@@ -22,7 +22,7 @@
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
 | 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/customer-transactions` | `invoices.view` / 金额和渠道筛选 |
 | 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page` | `invoices.view/manage` / 合并和取消 |
-| 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit`、`PUT /admin/credit/{id}/limit` | `credit.view/manage` / 独立授信账户、分页/关键词/状态筛选、授信额度调整、版本/幂等/客户范围/审计；消费、还款、冻结闭环未实现；见 [本批边界](admin-credit-management-batch.md) |
+| 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit`、`PUT /admin/credit/{id}/limit` | `credit.view/manage` / 独立授信账户、分页/关键词/状态筛选、授信额度调整、版本/幂等/客户范围/审计；四尺寸、保存/取消/409/未知请求重试已验收；消费、还款、冻结闭环未实现；见 [本批边界](admin-credit-management-batch.md) |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
 | 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 待实现 | `GET/POST /admin/contracts` | `contracts.view/manage` |
@@ -35,7 +35,7 @@
 | 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 部分完成 | `GET /admin/jobs` | `jobs.view` / 实时队列汇总；定时趋势日志待补 |
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
-| 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-fields` | `customers.manage` / 真实分页、字段规则、版本冲突、幂等和审计；客户资料消费待补 |
+| 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-fields` | `customers.manage` / 真实分页、字段规则、版本冲突、幂等和审计；客户创建/详情已接入类型化值读写；完整注册表单联动和四尺寸待验收 |
 | 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 已完成 | `GET/POST/PATCH/DELETE /admin/customer-levels` | `customer_levels.view/manage` / 阈值统计、分页、版本冲突、幂等和审计 |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups`、`/admin/customer-groups?tab=products`、`/admin/customer-groups?tab=discounts` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-groups`、`GET/POST/PATCH/DELETE /admin/customer-product-groups`、`GET/PUT /admin/customer-product-discounts` | `customer_groups.view/manage` / 客户组、商品分组和客户组折扣真实分页；百分比/固定金额校验、版本冲突、幂等、审计和危险操作确认；商品分组/折扣四尺寸浏览器待验收 |
@@ -53,7 +53,7 @@
 | 43 | 常规设置 `#/general-settings/general` | `/admin/settings` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 分区草稿 |
 | 44 | 第三方登录 `#/third-login` | `/admin/channels?category=oauth` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / OAuth 能力 |
 | 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 已完成 | `GET/PUT /admin/scheduler-settings` | `@super` / 到期和账单提醒、版本冲突、幂等；四尺寸已验收 |
-| 46 | 注册登录 `#/login-register` | `/admin/auth-settings` | 待实现 | `GET/PUT /admin/auth-settings` | `settings.manage` |
+| 46 | 注册登录 `#/login-register` | `/admin/auth-settings` | 部分完成 | `GET/PUT /admin/auth-settings` | `settings.view/manage` / 真实客户登录/注册、登录方式和验证码渠道策略；版本、幂等、审计；保存/取消/409草稿、未知结果恢复和四尺寸通过；独立手机注册、国际电话和注册字段联动待补 |
 | 47 | 分组权限 `#/permissions-managment` | `/admin/access?tab=roles` | 部分完成 | `GET/POST/PATCH/DELETE /admin/roles` | `@super` / 权限矩阵 |
 | 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 部分完成 | `GET/PUT /admin/sales-settings`、`GET/POST/PATCH/DELETE /admin/sales-commission-groups`、`GET/POST/PATCH/DELETE /admin/sales-commission-tiers`、`GET/PATCH /admin/sales-staff` | `sales.view/manage` / 提成组、阶梯、销售人员绑定、版本冲突、幂等和审计；浏览器四尺寸待验收 |
 | 49 | 员工管理 `#/admin-management` | `/admin/access?tab=staff` | 部分完成 | `GET/POST/PATCH /admin/staff` | `@super` / 部门范围 |
@@ -61,9 +61,9 @@
 | 51 | 邮件模板 `#/email-list` | `/admin/notifications?channel=email` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |
 | 52 | 短信模板 `#/sms-template-index` | `/admin/notifications?channel=sms` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |
 | 53 | 发送设置 `#/sms-send-settings` | `/admin/sms-settings` | 已完成 | `GET/PUT/POST /admin/sms-settings` | `@super` / 测试短信 |
-| 54 | 二次验证 `#/twice-confirm` | `/admin/security/mfa` | 待实现 | `GET/PUT /admin/security/mfa` | `settings.manage` |
-| 55 | 验证码设置 `#/general-settings/captcha` | `/admin/auth-settings?tab=captcha` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.manage` / 验证码流程 |
-| 56 | 黑名单列表 `#/black-list` | `/admin/blacklist` | 已完成 | `GET/POST/PATCH/DELETE /admin/blacklist` | `security.view/manage` / 手动用户名/IP 阻断、连续三次管理员登录失败自动封禁、确认解除、幂等、审计、版本冲突；四尺寸验收通过 |
+| 54 | 二次验证 `#/twice-confirm` | `/admin/security/mfa` | 部分完成 | `GET/PUT /admin/security/mfa` | `settings.view/manage` / 客户/管理员个人MFA开通策略；已有MFA不能绕过；版本、幂等、审计；启停确认、未知请求恢复和四尺寸通过；旧版按动作二次确认策略及前后台标签深度待补 |
+| 55 | 验证码设置 `#/general-settings/captcha` | `/admin/auth-settings?tab=captcha` | 部分完成 | `GET/PUT /admin/auth-settings` | `settings.view/manage` / 验证码渠道、图形开关和管理员失败策略；真实保存与四尺寸通过，自动开启策略待补 |
+| 56 | 黑名单列表 `#/black-list` | `/admin/blacklist` | 已完成 | `GET/POST/PATCH/DELETE /admin/blacklist` | `security.view/manage` / 手动用户名/IP 阻断、管理员登录失败按认证策略自动封禁、确认解除、幂等、审计、版本冲突；四尺寸验收通过 |
 | 57 | 数据迁移 `#/data-migration` | `/admin/migrations` | 部分完成 | `GET/POST /admin/migrations` | `migrations.view/manage` |
 | 58 | 关于 `#/about` | `/admin/system/about` | 已完成 | `GET /admin/system/about` | `settings.view` / 真实技术栈和构建信息 |
 | 59 | 系统升级 `#/system-message` | `/admin/system/upgrade` | 已完成 | `GET /admin/system/upgrade` | `settings.view` / 编译迁移清单与数据库已应用版本差异检查 |
@@ -98,7 +98,7 @@
 | 88 | 商品管理 `#/commodity-list` | `/admin/suppliers/catalog` | 部分完成 | `GET /admin/suppliers/{id}/products` | `products.view` |
 | 89 | 产品管理 `#/commodity-product` | `/admin/products` | 部分完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
 | 90 | 任务队列 `#/commodity-taskQueue` | `/admin/suppliers/jobs` | 待实现 | `GET /admin/supplier-jobs` | `products.view` |
-| 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 待实现 | `GET/POST/PATCH /admin/resources` | `resources.view/manage` |
+| 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 部分完成 | `GET /admin/resources` | `resources.view` / 真实服务资源分页、IP/供应商/状态筛选、URL恢复；客户范围、脱敏白名单、交付快照绑定；四尺寸、真实筛选/空态/URL恢复/错误恢复已验收；独立资源增改、成本/配置/备注和资源动作弹窗待补 |
 | 92 | 订单列表 `#/supplier-order-list` | `/admin/suppliers/orders` | 待实现 | `GET /admin/supplier-orders` | `orders.view` |
 | 93 | 续费订单 `#/supplier-renewal-order` | `/admin/suppliers/renewals` | 待实现 | `GET /admin/supplier-renewals` | `orders.view` |
 | 94 | 任务队列 `#/task-queue` | `/admin/suppliers/tasks` | 待实现 | `GET /admin/supplier-tasks` | `jobs.view` |
@@ -106,7 +106,7 @@
 | 96 | 我的应用 `#/app-store` | `/admin/apps` | 待实现 | `GET /admin/apps` | `apps.view` |
 | 97 | 应用商店 `#/app-store/app-list` | `/admin/apps/store` | 待实现 | `GET /admin/apps/store` | `apps.view` |
 | 98 | 添加客户 `#/customer-add` | `/admin/customers/new` | 已完成 | `POST /admin/customers` | `customers.manage` / 校验和返回 |
-| 99 | 新建订单 `#/add-order` | `/admin/orders/new` | 部分完成 | `GET /admin/orders/create-options` + `GET /admin/promo-codes/page` + `POST /admin/promo-codes` + `POST /admin/orders/quote` + `POST /admin/orders` + `POST /admin/orders/{id}/invoice` | `orders.manage`；优惠码目录另需`promos.view`，新建另需`promos.manage` / 客户/商品搜索分页、目录选择/新增弹窗、报价校验、多商品/配置/数量/资料、价格覆盖、付款/账单/邮件、草稿恢复、版本/幂等/权限/审计；旧创建流程四尺寸通过，新增弹窗浏览器四尺寸待验；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
+| 99 | 新建订单 `#/add-order` | `/admin/orders/new` | 部分完成 | `GET /admin/orders/create-options` + `GET /admin/promo-codes/page` + `POST /admin/promo-codes` + `POST /admin/orders/quote` + `POST /admin/orders` + `POST /admin/orders/{id}/invoice` | `orders.manage`；优惠码目录另需`promos.view`，新建另需`promos.manage` / 客户/商品搜索分页、目录选择/新增弹窗、报价校验、多商品/配置/数量/资料、价格覆盖、付款/账单/邮件、草稿恢复、版本/幂等/权限/审计；创建流程与新增优惠码弹窗四尺寸均已通过；真实邮件投递和复杂多级商品待验；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 | 100 | 新建工单 `#/add-support-ticket` | `/admin/tickets/new` | 部分完成 | `GET /admin/tickets/create-options` + `POST /admin/tickets` + `POST /tickets/{id}/attachments` | `tickets.manage` / 真实客户、部门、服务、处理人搜索分页；优先级、抄送、邮件入队、附件上传、草稿恢复、取消确认、幂等与结果不确定保护；四尺寸浏览器验收通过；附件失败后的人工复核与完整旧版字段仍待补 |
 | 101 | 开具发票 `#/invoice` | `/admin/invoices/new` | 已完成 | `POST /admin/invoices` | `invoices.manage` |
 | 102 | 添加商品分组 `#/add-product-group` | `/admin/catalog-groups/new` | 部分完成 | `POST /admin/catalog-groups` | `products.manage` |
@@ -119,12 +119,14 @@
 | 批次 | 范围 | 状态 | 证据 |
 |---|---|---|---|
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面四尺寸验收见 `docs/admin-batch-settings-marketing-acceptance-20261011.md`；渠道和通知深度仍在补齐 |
-| 第二批 | 客户扩展 | 进行中 | 客户资源池已完成；实名、业绩、营销和等级待补 |
+| 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、业绩与等级已交付；营销、返佣和注册字段联动继续补齐 |
 | 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除、客户资料备注、订单提成只读预估已交付；自动流量交付待补；[订单验收](admin-batch-admin-orders-acceptance-20261011.md)、[流量包验收](admin-batch-traffic-acceptance-20261011.md) |
-| 第四批 | 财务与合同 | 待开始 | - |
+| 第四批 | 财务与合同 | 进行中 | 独立授信账户及安全额度调整已实现，信用消费/还款和合同列表继续补齐 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](admin-batch-admin-tickets-acceptance-20261011.md) |
 | 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
-| 第七批 | 权限、员工与销售 | 待开始 | - |
-| 第八批 | 内容与官网配置 | 待开始 | - |
-| 第九批 | 供应商与资源商店 | 待开始 | - |
+| 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置四尺寸已有既往验收，销售结算和完整权限页面待补 |
+| 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
+| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单已补；独立资源CRUD、供应商订单/续费/任务、资源API和应用目录待补 |
 | 第十批 | 创建与编辑页 | 进行中 | 新建订单优惠码目录/新增弹窗与真实分页 API 已补；订单创建/延期出账及新增弹窗均完成四尺寸浏览器验收；其余创建编辑页继续补齐；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
+
+2026-10-12 独立分支资源/信用/认证批次已集成并检验；台账仍为47项已完成、48项部分完成、10项待实现，表示登记状态而非功能完成率。[本批验收与边界](admin-parallel-acceptance-20261012.md)。

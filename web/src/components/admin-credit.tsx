@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, ApiError, money } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminListNavigation } from "@/hooks/use-admin-list-navigation";
-import { Workspace, useAdminPermission } from "./workspace";
+import { Workspace, useAdminIdentity, useAdminPermission } from "./workspace";
 import { Loading, Failure } from "./common";
 import { AdminPagination } from "./admin-pagination";
 import { Button } from "./ui/button";
@@ -34,22 +34,43 @@ export function CreditManagementView() {
   const [error,setError] = useState("");
   const [busy,setBusy] = useState(false);
   const [conflict,setConflict]=useState(false);
+  const actor = useAdminIdentity();
+  const pendingKey = actor ? `zjmfgo:pending-credit:${actor.id}` : null;
+  const [readyKey, setReadyKey] = useState<string|null>(null);
+  useEffect(() => {
+    let restored:Draft|null=null;
+    try {
+      const raw=pendingKey ? sessionStorage.getItem(pendingKey) : null;
+      if(raw){const value=JSON.parse(raw) as Draft;if(value.pending && value.confirmed && Number.isSafeInteger(value.row?.id) && typeof value.amount==="string" && typeof value.note==="string" && typeof value.key==="string")restored=value;}
+    }catch{/* Browser storage is optional. */}
+    let active=true;
+    queueMicrotask(()=>{if(active){setDraft(restored);setReadyKey(pendingKey);}});
+    return ()=>{active=false;};
+  },[pendingKey]);
+  useEffect(()=>{
+    if(!draft?.pending)return;
+    const warn=(event:BeforeUnloadEvent)=>{event.preventDefault();event.returnValue="";};
+    window.addEventListener("beforeunload",warn);
+    return ()=>window.removeEventListener("beforeunload",warn);
+  },[draft?.pending]);
+  const rememberPending=(value:Draft|null)=>{if(pendingKey){try{if(value)sessionStorage.setItem(pendingKey,JSON.stringify(value));else sessionStorage.removeItem(pendingKey);}catch{/* In-memory retry remains available. */}}};
   const open = (row:Row) => {setConflict(false);setError("");setDraft({row,amount:(row.limit_cents/100).toFixed(2),note:"",key:crypto.randomUUID(),confirmed:false,pending:false});};
   const edit = (patch:Partial<Draft>) => {if(draft&&!draft.pending)setDraft({...draft,...patch,confirmed:false,key:crypto.randomUUID()});};
   const save = async () => {
-    if(!draft||!manage)return;
+    if(!draft||!manage||!pendingKey||readyKey!==pendingKey)return;
     const amount=cents(draft.amount);
     if(amount===null||amount<draft.row.used_cents){setError("请输入有效金额（最多两位小数），授权额度不能低于已用额度。");return;}
     if(!draft.confirmed){setDraft({...draft,confirmed:true});return;}
-    setBusy(true);setError("");setDraft({...draft,pending:true});
+    setBusy(true);setError("");setDraft({...draft,pending:true});rememberPending({...draft,pending:true});
     try {
       await api(`/admin/credit/${draft.row.id}/limit`,{method:"PUT",headers:{"Idempotency-Key":`credit-${draft.key}`},body:JSON.stringify({limit_cents:amount,expected_version:draft.row.version,note:draft.note})});
-      setDraft(null);resource.refresh();
+      rememberPending(null);setDraft(null);resource.refresh();
     } catch(e) {
       setError((e as Error).message);
       setConflict(e instanceof ApiError && e.status===409);
       // A transport failure has an unknown result: preserve the exact payload and key for retry.
-      setDraft({...draft,pending:!(e instanceof ApiError)});
+      if(e instanceof ApiError && e.status<500)rememberPending(null);
+      setDraft({...draft,pending:!(e instanceof ApiError) || e.status >= 500});
     } finally {setBusy(false);}
   };
   const refreshDraft = async () => {

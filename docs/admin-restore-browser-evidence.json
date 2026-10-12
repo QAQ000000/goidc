@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-11",
-  "environment": "隔离 PG18 schema + Next dev :3099；系统 Chrome Playwright",
+  "date": "2026-10-12",
+  "environment": "历批隔离PG18验收；2026-10-12 新增独立Next生产webpack :3099 + 系统Chrome",
   "pages": [
     {
       "newRoute": "/admin/system/database",
@@ -1185,6 +1185,506 @@
         "scrollWidth": 320
       },
       "scope": "正常稳定加载/真实报价与筛选；完整交互/预期409/重启500/登录403和401及剩余缺口见admin-batch-admin-orders-acceptance-20261011.md"
+    },
+    {
+      "newRoute": "/admin/resources",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/resources-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "服务器资源",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "e76c9db1036423de7d0577e663399f4ffe9b0fcbf6794beaddbadb5919309cec"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/credit-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "fb0bfa10e285a02a1e4cc40d8c72d49dfa5b15d304868851a968a0090cec81e1"
+    },
+    {
+      "newRoute": "/admin/auth-settings",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/auth-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "f98d43fd81f71aa4d5013de0897be9be98db50051da34fbf622c9c85820dc4a2"
+    },
+    {
+      "newRoute": "/admin/auth-settings?tab=captcha",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/captcha-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "79013c5a0e402d294beae6459a87cb4a57f54af745cd452a0247b6b0951ce25a"
+    },
+    {
+      "newRoute": "/admin/security/mfa",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/mfa-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "二次验证",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "d7c6646abba1a4b42277e30d326252b489b99b1f059b351a8197e5e26b40b337"
+    },
+    {
+      "newRoute": "/admin/resources",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/resources-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "服务器资源",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "bddd594c91a753138bc1e9898ca25e819e783e0f0b416beb5d0a5e2b63e713c0"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/credit-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "15340a562c9d27993c478d43d639e28bc81f563b075a34403ae98c0311722663"
+    },
+    {
+      "newRoute": "/admin/auth-settings",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/auth-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "2155489e152d96342f8627427957d8b65a1d334dcde444d1d46d43f816474913"
+    },
+    {
+      "newRoute": "/admin/auth-settings?tab=captcha",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/captcha-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "9e9e6f724d73894a319f87f234c6e56e7bc9fb1f01d980905292200f9e9440c3"
+    },
+    {
+      "newRoute": "/admin/security/mfa",
+      "width": 1024,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/mfa-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "二次验证",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "435ca146869e21beebc5f8c17d58a6495b8d70b67acca816f5ff6e45b96f38d5"
+    },
+    {
+      "newRoute": "/admin/resources",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/resources-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "服务器资源",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "d51c25dffa15827c639e1a38000e502e904adfef8ffe1f6345b3eca0cae4f383"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/credit-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "f2538411fe56399c400885290f6564611595398466b805f9b7bcaf9ed12d47b5"
+    },
+    {
+      "newRoute": "/admin/auth-settings",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/auth-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "2b50eb1482cbc3772983962b4b97187c7adf4e85c034b8de739dfd8c9da0425b"
+    },
+    {
+      "newRoute": "/admin/auth-settings?tab=captcha",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/captcha-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "e4a09587d5ddb0bab5c90da972d44974545e287852ce8b6e9356ec184fd7ddf0"
+    },
+    {
+      "newRoute": "/admin/security/mfa",
+      "width": 390,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/mfa-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "二次验证",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "9460b5fcb95d16b8228d9aae0329e5fe16edabaa7a28c496d809f162f6e5dfe6"
+    },
+    {
+      "newRoute": "/admin/resources",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/resources-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "服务器资源",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "d9b79e4573a98186a65639f23e7aaaaa690c066f403e69ab1e93bf9ef357637c"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/credit-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "67da64c3965b1a77d96e3cd87b8f5bdd3997abcaaf3a26f6a150d4f58fea932a"
+    },
+    {
+      "newRoute": "/admin/auth-settings",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/auth-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "cd118592c7d040384b08b1914791dd2a6ff2f8bdc68c0333070150f35f1243c8"
+    },
+    {
+      "newRoute": "/admin/auth-settings?tab=captcha",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/captcha-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "注册登录与验证码",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "01f4cc04687d73bafc00f2d37780d67a76d6d3b16285fbdba2a5be1a44c2b534"
+    },
+    {
+      "newRoute": "/admin/security/mfa",
+      "width": 320,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-parallel-20261012/mfa-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "二次验证",
+        "alerts": []
+      },
+      "errors": [],
+      "consoleErrors": [],
+      "apiFailures": [],
+      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
+      "screenshotSha256": "a07f564929ca9a3e8e64fe9094a2e17eb7d8db2f1f9a65223589a4de3d0fde0f"
     }
   ],
   "pageErrors": [],

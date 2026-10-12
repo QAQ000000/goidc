@@ -8,24 +8,24 @@
 |---:|---|---|---|---|---|
 | 1 | [概览 / 控制台概览](#page-1) | #/login | /admin | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 2 | [客户 / 客户列表](#page-2) | #/customer-list | /admin/customers | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications、/console/certification | 有分页、筛选、详情、历史、审核和个人转企业 API；企业转换保留个人历史并具备幂等/版本保护 | 四尺寸验收通过，见客户扩展批次记录 |
+| 3 | [客户 / 实名认证](#page-3) | #/customer-authentication | /admin/certifications、/console/certification | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 4 | [客户 / 客户资源池](#page-4) | #/customer-resources | /admin/customer-resources | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports?tab=sales | 报表页销售标签使用真实 API，并恢复年份和标签 URL | 已验收 |
-| 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
+| 5 | [客户 / 我的业绩](#page-5) | #/sales-statistics | /admin/reports?tab=sales | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 6 | [客户 / 营销推送](#page-6) | #/marketing-push | /admin/marketing | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 7 | [客户 / 推介计划](#page-7) | #/customer-promotionplan | /admin/affiliate | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 真实报价创建、延期出账、版本化单笔/批量操作和软删除已补齐；客户资料备注/订单提成计算待补 | PASS（四尺寸） |
-| 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 真实续费分页/客户范围/已付款渠道/详情返回 | PASS（四尺寸） |
-| 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 有对应路由源码；真实支付后待人工交付，自动上游交付未实现 | PASS（四尺寸，空订单） |
+| 8 | [业务 / 产品订单](#page-8) | #/order-list | /admin/orders | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 9 | [业务 / 续费订单](#page-9) | #/renewal-order | /admin/orders?kind=renew | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 11 | [业务 / 业务列表](#page-11) | #/customer-product | /admin/services | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 12 | [业务 / 产品暂停请求](#page-12) | #/customer-cancelreq | /admin/cancellations | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 13 | [财务 / 交易流水](#page-13) | #/business-statement | /admin/transactions | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 14 | [财务 / 账单管理](#page-14) | #/bill-management | /admin/invoices | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 15 | [财务 / 信用额管理](#page-15) | #/credit-management | /admin/credit | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 15 | [财务 / 信用额管理](#page-15) | #/credit-management | /admin/credit | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 16 | [财务 / 提现审核](#page-16) | #/customer-withdrawal | /admin/affiliate?tab=withdrawals | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 17 | [财务 / 发票列表](#page-17) | #/invoice-audit | /admin/invoice-applications | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 18 | [财务 / 合同列表](#page-18) | #/contracts_audit | /admin/contracts | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 19 | [工单 / 工单列表](#page-19) | #/support-ticket | /admin/tickets | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 20 | [工单 / 工单统计](#page-20) | #/support-statistics | /admin/reports?tab=tickets | 报表页工单标签使用真实 API，按上海日期和部门范围统计 | 已验收 |
+| 20 | [工单 / 工单统计](#page-20) | #/support-statistics | /admin/reports?tab=tickets | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 21 | [功能 / 年度收入统计](#page-21) | #/annual-statistics | /admin/reports?tab=annual | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 22 | [功能 / 新客户](#page-22) | #/new-customer | /admin/reports?tab=new-clients | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 23 | [功能 / 产品收入](#page-23) | #/product-revenue | /admin/reports?tab=products | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -33,70 +33,70 @@
 | 25 | [功能 / 定时任务状态](#page-25) | #/timing-results | /admin/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 26 | [功能 / 任务队列](#page-26) | #/statistics-taskQueue | /admin/jobs/queue | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 27 | [功能 / 数据库状态](#page-27) | #/database-message | /admin/system/database | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有真实分页 CRUD、字段规则、权限、审计、幂等和版本冲突；客户资料消费待补 | 四尺寸验收通过，见客户扩展批次记录 |
+| 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 有真实 CRUD、阈值统计、分页、权限、审计、幂等和版本冲突 | 四尺寸验收通过，见客户扩展批次记录 |
-| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups、?tab=products、?tab=discounts | 客户组、商品分组和折扣均有真实分页 API；商品分组/折扣支持权限、审计、幂等和版本冲突 | 代码契约已验证；商品分组/折扣浏览器待验收 |
-| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | Go API 与 React 页面已实现；基础设置和接口实例状态均来自真实 API | 四尺寸验收通过，见客户扩展批次记录 |
-| 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
+| 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups、/admin/customer-groups?tab=products、/admin/customer-groups?tab=discounts | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 33 | [设置 / 货币配置](#page-33) | #/currency-settings | /admin/currencies | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 34 | [设置 / 支付接口](#page-34) | #/payment-interface | /admin/channels?category=payment | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
+| 35 | [设置 / 充值与财务](#page-35) | #/general-settings/finance | /admin/finance-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 36 | [设置 / 优惠码](#page-36) | #/promo-code | /admin/promo-codes | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 37 | [设置 / 发票设置](#page-37) | #/voucher-setting | /admin/invoice-settings | Go API 与 React 页面已实现，快递方式 CRUD 已接入 | 四尺寸验收通过，见批次记录 |
-| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
-| 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | Go API 与 React 页面已实现 | 四尺寸验收通过，见批次记录 |
+| 37 | [设置 / 发票设置](#page-37) | #/voucher-setting | /admin/invoice-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 38 | [设置 / 合同设置](#page-38) | #/contracts_setting | /admin/contract-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 39 | [设置 / 信用额设置](#page-39) | #/credit-setting | /admin/credit-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 40 | [设置 / 工单部门](#page-40) | #/work-order-dept | /admin/ticket-departments | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 41 | [设置 / 工单状态](#page-41) | #/work-order-status | /admin/ticket-statuses | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 42 | [设置 / 工单传递](#page-42) | #/work-order-rules | /admin/ticket-rules | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 43 | [设置 / 常规设置](#page-43) | #/general-settings/general | /admin/settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 44 | [设置 / 第三方登录](#page-44) | #/third-login | /admin/channels?category=oauth | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 45 | [设置 / 定时任务](#page-45) | #/automatic-tasks | /admin/job-settings | 真实 GET/PUT scheduler-settings，版本冲突和幂等保存 | 已验收 |
-| 46 | [设置 / 注册登录](#page-46) | #/login-register | /admin/auth-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 45 | [设置 / 定时任务](#page-45) | #/automatic-tasks | /admin/job-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 46 | [设置 / 注册登录](#page-46) | #/login-register | /admin/auth-settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 47 | [设置 / 分组权限](#page-47) | #/permissions-managment | /admin/access?tab=roles | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 48 | [设置 / 销售设置](#page-48) | #/sales-management | /admin/sales-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 48 | [设置 / 销售设置](#page-48) | #/sales-management | /admin/sales-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 49 | [设置 / 员工管理](#page-49) | #/admin-management | /admin/access?tab=staff | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 50 | [设置 / 接口设置](#page-50) | #/sms-template/sms | /admin/channels?category=sms | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 51 | [设置 / 邮件模板](#page-51) | #/email-list | /admin/notifications?channel=email | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 52 | [设置 / 短信模板](#page-52) | #/sms-template-index | /admin/notifications?channel=sms | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 53 | [设置 / 发送设置](#page-53) | #/sms-send-settings | /admin/sms-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 54 | [设置 / 二次验证](#page-54) | #/twice-confirm | /admin/security/mfa | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 55 | [设置 / 验证码设置](#page-55) | #/general-settings/captcha | /admin/auth-settings?tab=captcha | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 56 | [设置 / 黑名单列表](#page-56) | #/black-list | /admin/blacklist | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 54 | [设置 / 二次验证](#page-54) | #/twice-confirm | /admin/security/mfa | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 55 | [设置 / 验证码设置](#page-55) | #/general-settings/captcha | /admin/auth-settings?tab=captcha | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 56 | [设置 / 黑名单列表](#page-56) | #/black-list | /admin/blacklist | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 57 | [设置 / 数据迁移](#page-57) | #/data-migration | /admin/migrations | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 58 | [设置 / 关于](#page-58) | #/about | /admin/system/about | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 59 | [设置 / 系统升级](#page-59) | #/system-message | /admin/system/upgrade | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 60 | [设置 / php信息](#page-60) | #/php-message | /admin/system/runtime | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 61 | [设置 / 短信日志](#page-61) | #/sms-log | /admin/logs/sms | 有对应路由、分页 API 和 React 页面；正文脱敏 | 已实现（契约） |
-| 62 | [设置 / 站内信日志](#page-62) | #/station-letter-log | /admin/logs/inbox | 有对应路由、分页 API 和 React 页面；真实空表为空态 | 已实现（契约） |
-| 63 | [设置 / API日志](#page-63) | #/api-log | /admin/logs/api | 有对应路由、认证请求记录和分页 API | 已实现（契约） |
+| 61 | [设置 / 短信日志](#page-61) | #/sms-log | /admin/logs/sms | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 62 | [设置 / 站内信日志](#page-62) | #/station-letter-log | /admin/logs/inbox | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 63 | [设置 / API日志](#page-63) | #/api-log | /admin/logs/api | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 64 | [设置 / 定时任务日志](#page-64) | #/automatic-task-log | /admin/logs/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 65 | [设置 / 日志清理](#page-65) | #/log-cleanup | /admin/logs/cleanup | 有确认、幂等、权限、审计和保留窗口 | 已实现（契约） |
-| 66 | [设置 / 系统日志](#page-66) | #/system-log | /admin/logs/system | 安全审计元数据列表、搜索和分页，要求 audit.view | 已验收 |
-| 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 有真实认证审计事件分页 API 和 React 页面 | 已实现（契约） |
-| 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 有对应路由、筛选、分页 API 和 React 页面 | 已实现（契约） |
+| 65 | [设置 / 日志清理](#page-65) | #/log-cleanup | /admin/logs/cleanup | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 66 | [设置 / 系统日志](#page-66) | #/system-log | /admin/logs/system | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 67 | [设置 / 管理员登录日志](#page-67) | #/system-admin-log | /admin/logs/admin-login | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 68 | [设置 / 邮件日志](#page-68) | #/email-log | /admin/logs/email | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 69 | [设置 / 商品管理](#page-69) | #/product-server | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 70 | [设置 / 流量包管理](#page-70) | #/dcim-traffic | /admin/traffic-products | 有对应路由源码；真实目录/库存/适用产品 | PASS（四尺寸、CRUD） |
+| 70 | [设置 / 流量包管理](#page-70) | #/dcim-traffic | /admin/traffic-products | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 71 | [设置 / 通用接口](#page-71) | #/server-settings | /admin/channels?category=provision | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 72 | [设置 / 魔方DCIM](#page-72) | #/dcim | /admin/suppliers?kind=dcim | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 73 | [设置 / 魔方云](#page-73) | #/zjmfcloud | /admin/suppliers?kind=cloud | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 74 | [设置 / 全局可配置项](#page-74) | #/configurable-option | /admin/configurable-options | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 75 | [设置 / 商品订购设置](#page-75) | #/order-product | /admin/order-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 76 | [设置 / 基础信息](#page-76) | #/base-info | /admin/site-settings?tab=basic | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 77 | [设置 / 主题模板](#page-77) | #/theme-template | /admin/theme-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 78 | [设置 / 官网自定义字段](#page-78) | #/custom-template-fields | /admin/site-fields | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 79 | [设置 / 导航管理](#page-79) | #/menu_manage | /admin/navigation | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 80 | [设置 / 友情链接](#page-80) | #/friendly_link | /admin/friendly-links | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 81 | [设置 / 文件分组](#page-81) | #/service-support | /admin/file-groups | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 76 | [设置 / 基础信息](#page-76) | #/base-info | /admin/site-settings?tab=basic | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 77 | [设置 / 主题模板](#page-77) | #/theme-template | /admin/theme-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 78 | [设置 / 官网自定义字段](#page-78) | #/custom-template-fields | /admin/site-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 79 | [设置 / 导航管理](#page-79) | #/menu_manage | /admin/navigation | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 80 | [设置 / 友情链接](#page-80) | #/friendly_link | /admin/friendly-links | 有对应路由源码；实现完整性未验证 | 未验证 |
+| 81 | [设置 / 文件分组](#page-81) | #/service-support | /admin/file-groups | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 82 | [设置 / 新闻列表](#page-82) | #/news-list | /admin/content?kind=news | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 83 | [设置 / 新闻分类](#page-83) | #/news-category | /admin/content?tab=categories | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 84 | [设置 / 帮助列表](#page-84) | #/help-list | /admin/content?kind=help | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 85 | [设置 / 帮助分类](#page-85) | #/help-category | /admin/content?tab=categories&kind=help | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 86 | [设置 / 基础设置](#page-86) | #/set | /admin/site-settings?tab=display | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 86 | [设置 / 基础设置](#page-86) | #/set | /admin/site-settings?tab=display | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 87 | [资源与商店 / 供应商管理](#page-87) | #/zjmf-api | /admin/suppliers | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 88 | [资源与商店 / 商品管理](#page-88) | #/commodity-list | /admin/suppliers/catalog | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 89 | [资源与商店 / 产品管理](#page-89) | #/commodity-product | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 90 | [资源与商店 / 任务队列](#page-90) | #/commodity-taskQueue | /admin/suppliers/jobs | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 91 | [资源与商店 / 服务器列表](#page-91) | #/munual-resource | /admin/resources | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 91 | [资源与商店 / 服务器列表](#page-91) | #/munual-resource | /admin/resources | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 92 | [资源与商店 / 订单列表](#page-92) | #/supplier-order-list | /admin/suppliers/orders | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 93 | [资源与商店 / 续费订单](#page-93) | #/supplier-renewal-order | /admin/suppliers/renewals | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 94 | [资源与商店 / 任务队列](#page-94) | #/task-queue | /admin/suppliers/tasks | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -104,8 +104,8 @@
 | 96 | [资源与商店 / 我的应用](#page-96) | #/app-store | /admin/apps | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 97 | [资源与商店 / 应用商店](#page-97) | #/app-store/app-list | /admin/apps/store | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 98 | [客户管理 / 添加客户](#page-98) | #/customer-add | /admin/customers/new | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 99 | [订单管理 / 新建订单](#page-99) | #/add-order | /admin/orders/new | 真实多产品报价/创建/延期出账、库存、草稿和授权保护；优惠码目录弹窗待补 | PASS（四尺寸） |
-| 100 | [工单管理 / 新建工单](#page-100) | #/add-support-ticket | /admin/tickets/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 99 | [订单管理 / 新建订单](#page-99) | #/add-order | /admin/orders/new | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 100 | [工单管理 / 新建工单](#page-100) | #/add-support-ticket | /admin/tickets/new | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 101 | [发票管理 / 开具发票](#page-101) | #/invoice | /admin/invoices/new | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 102 | [商品设置 / 添加商品分组](#page-102) | #/add-product-group | /admin/catalog-groups/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 103 | [商品设置 / 编辑商品配置](#page-103) | #/edit-product | /admin/products/{id} | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -125,7 +125,7 @@
 <a id="page-3"></a>
 ## 3. 实名认证
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:87)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:13)；页面：[源码](../web/src/app/admin/certifications/page.tsx:1)。JSON 中按唯一旧 hash #/customer-authentication 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:87)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:13)。JSON 中按唯一旧 hash #/customer-authentication 检索。
 
 <a id="page-4"></a>
 ## 4. 客户资源池
@@ -135,16 +135,12 @@
 <a id="page-5"></a>
 ## 5. 我的业绩
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:128)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:15)。页面使用 `/admin/reports?tab=sales` 的真实销售报表标签，调用 `GET /api/v1/admin/reports/sales?year=`，支持 URL 年份/标签恢复和真实空态。JSON 中按唯一旧 hash #/sales-statistics 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:128)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:15)；页面：[源码](../web/src/app/admin/reports/page.tsx:1)。JSON 中按唯一旧 hash #/sales-statistics 检索。
 
 <a id="page-6"></a>
 ## 6. 营销推送
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:16)。页面：[路由](../web/src/app/admin/marketing/page.tsx:1)；组件：[实现](../web/src/components/marketing-push.tsx:1)。
-
-已实现真实 API：`GET /api/v1/admin/marketing` 返回 `items/total/limit/offset`，`GET /api/v1/admin/marketing/options` 返回销售、商品、供应商、国家和语言选项，`POST /api/v1/admin/marketing/audience-count` 预览受众，`POST/PATCH /api/v1/admin/marketing` 创建/保存草稿，`GET /api/v1/admin/marketing/{id}` 读取详情，`POST /api/v1/admin/marketing/{id}/send` 在版本锁和幂等键保护下创建邮件、短信或站内信真实投递记录。受众条件由 Go 查询 `users`、`customer_profiles`、`services`、`products` 和 `supplier_product_bindings` 计算，保存后以 JSON 快照记录在 `marketing_campaigns`。
-
-权限使用 `notifications.view` / `notifications.manage`；创建、编辑和发送均记录审计，重复幂等键重放原结果，版本不一致返回 `409`。迁移：[110_marketing_campaigns.sql](../db/migrations/110_marketing_campaigns.sql)。当前状态为部分完成，Playwright 四尺寸验收待执行。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:146)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:16)；页面：[源码](../web/src/app/admin/marketing/page.tsx:1)。JSON 中按唯一旧 hash #/marketing-push 检索。
 
 <a id="page-7"></a>
 ## 7. 推介计划
@@ -156,23 +152,15 @@
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:195)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:18)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/order-list 检索。
 
-普通列表使用真实总数分页、客户范围、上海日期/付款筛选与URL恢复，显示产品快照、域名/IP、金额/付款、内部备注和客户销售归属。单笔/批量备注、取消、审核和软删除具备事务权限重检、版本、幂等、审计与确认；延期出账和新建入口已接入。客户资料备注投影和订单销售提成计算/展示仍待补，台账保持部分完成，见[本批验收](admin-batch-admin-orders-acceptance-20261011.md)。
-
 <a id="page-9"></a>
 ## 9. 续费订单
 
 旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:212)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:19)；页面：[源码](../web/src/app/admin/orders/page.tsx:1)。JSON 中按唯一旧 hash #/renewal-order 检索。
 
-新版通过 `GET /api/v1/admin/renewal-orders` 从 `invoice_items.item_type='renew'` 读取真实续费账单，返回 `items/total/limit/offset`，并关联客户、服务域名、账单创建时间、已付款渠道和账单状态。`kind=renew` 保留状态、关键词、客户ID、页容量和分页 URL，账单详情返回续费列表时保留这些条件；续费行只提供账单详情入口，不复用普通订单取消/审核动作。权限使用 `orders.view`，服务端继续执行客户范围校验。
-
 <a id="page-10"></a>
 ## 10. 流量包订单
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:228)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:20)。JSON 中按唯一旧 hash #/dcim-traffic-log 检索。
-
-新版 `/admin/traffic-orders` 从 `traffic_orders` 读取真实购买快照，列表返回 `items/total/limit/offset`，支持订单号/客户/产品关键词、状态、分页、详情和待支付取消。取消需要 `expected_version`，由 `orders.manage` 权限、幂等键、客户范围和审计事务共同保护；不存在购买记录时返回真实空态，不从普通订单表伪造流量包数据。
-
-客户本人活动/暂停服务通过 `/console/services/{id}/traffic` 购买适用目录项，生成 `invoice_items.item_type='traffic'` 的独立账单并占用库存。现有支付结算只将订单转为已支付/待人工交付，不改变服务到期时间或虚增流量；管理员必须在资源端实际交付后按 `services.manage` 记录核验。未交付取消/退款单次释放库存，已核验交付拒绝自动退款。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:228)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:20)；页面：[源码](../web/src/app/admin/traffic-orders/page.tsx:1)。JSON 中按唯一旧 hash #/dcim-traffic-log 检索。
 
 <a id="page-11"></a>
 ## 11. 业务列表
@@ -197,7 +185,7 @@
 <a id="page-15"></a>
 ## 15. 信用额管理
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:330)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:25)。JSON 中按唯一旧 hash #/credit-management 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:330)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:25)；页面：[源码](../web/src/app/admin/credit/page.tsx:1)。JSON 中按唯一旧 hash #/credit-management 检索。
 
 <a id="page-16"></a>
 ## 16. 提现审核
@@ -222,7 +210,7 @@
 <a id="page-20"></a>
 ## 20. 工单统计
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:443)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:30)。页面使用 `/admin/reports?tab=tickets` 的真实工单统计标签，调用 `GET /api/v1/admin/reports/tickets?year=&month=`，按上海日期和部门权限过滤。JSON 中按唯一旧 hash #/support-statistics 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:443)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:30)；页面：[源码](../web/src/app/admin/reports/page.tsx:1)。JSON 中按唯一旧 hash #/support-statistics 检索。
 
 <a id="page-21"></a>
 ## 21. 年度收入统计
@@ -272,24 +260,22 @@
 <a id="page-30"></a>
 ## 30. 客户等级
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:635)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:40)。JSON 中按唯一旧 hash #/customer-level 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:635)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:40)；页面：[源码](../web/src/app/admin/customer-levels/page.tsx:1)。JSON 中按唯一旧 hash #/customer-level 检索。
 
 <a id="page-31"></a>
 ## 31. 客户分组与折扣
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:656)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:41)；页面：[源码](../web/src/app/admin/customer-groups/page.tsx:1)。JSON 中按唯一旧 hash #/customer-group 检索。
-
-新版使用 `/admin/customer-groups`、`?tab=products` 和 `?tab=discounts` 三个稳定视图。客户组、商品分组和客户组折扣均来自 Go API；列表返回 `items/total/limit/offset`，商品分组写入携带 `expected_version` 与 `Idempotency-Key`，折扣支持百分比、固定分值和清除配置，并记录审计事件。商品分组只引用真实 `products`，删除受外键约束保护；无数据时展示真实空态。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:656)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:41)。JSON 中按唯一旧 hash #/customer-group 检索。
 
 <a id="page-32"></a>
 ## 32. 实名设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:683)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:42)。JSON 中按唯一旧 hash #/authentication-setting 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:683)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:42)；页面：[源码](../web/src/app/admin/certification-settings/page.tsx:1)。JSON 中按唯一旧 hash #/authentication-setting 检索。
 
 <a id="page-33"></a>
 ## 33. 货币配置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:705)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:43)。JSON 中按唯一旧 hash #/currency-settings 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:705)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:43)；页面：[源码](../web/src/app/admin/currencies/page.tsx:1)。JSON 中按唯一旧 hash #/currency-settings 检索。
 
 <a id="page-34"></a>
 ## 34. 支付接口
@@ -299,7 +285,7 @@
 <a id="page-35"></a>
 ## 35. 充值与财务
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:740)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:45)。JSON 中按唯一旧 hash #/general-settings/finance 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:740)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:45)；页面：[源码](../web/src/app/admin/finance-settings/page.tsx:1)。JSON 中按唯一旧 hash #/general-settings/finance 检索。
 
 <a id="page-36"></a>
 ## 36. 优惠码
@@ -309,17 +295,17 @@
 <a id="page-37"></a>
 ## 37. 发票设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:783)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:47)。JSON 中按唯一旧 hash #/voucher-setting 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:783)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:47)；页面：[源码](../web/src/app/admin/invoice-settings/page.tsx:1)。JSON 中按唯一旧 hash #/voucher-setting 检索。
 
 <a id="page-38"></a>
 ## 38. 合同设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:806)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:48)。JSON 中按唯一旧 hash #/contracts_setting 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:806)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:48)；页面：[源码](../web/src/app/admin/contract-settings/page.tsx:1)。JSON 中按唯一旧 hash #/contracts_setting 检索。
 
 <a id="page-39"></a>
 ## 39. 信用额设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:824)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:49)。JSON 中按唯一旧 hash #/credit-setting 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:824)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:49)；页面：[源码](../web/src/app/admin/credit-settings/page.tsx:1)。JSON 中按唯一旧 hash #/credit-setting 检索。
 
 <a id="page-40"></a>
 ## 40. 工单部门
@@ -329,12 +315,12 @@
 <a id="page-41"></a>
 ## 41. 工单状态
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)；页面：[源码](../web/src/app/admin/ticket-statuses/page.tsx:1)。真实列表、创建编辑删除、默认状态保护、幂等、版本冲突和审计已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/work-order-status 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:858)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:51)；页面：[源码](../web/src/app/admin/ticket-statuses/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-status 检索。
 
 <a id="page-42"></a>
 ## 42. 工单传递
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)；页面：[源码](../web/src/app/admin/ticket-rules/page.tsx:1)。真实空态、创建编辑删除、关联校验、幂等、版本冲突和审计已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/work-order-rules 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:878)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:52)；页面：[源码](../web/src/app/admin/ticket-rules/page.tsx:1)。JSON 中按唯一旧 hash #/work-order-rules 检索。
 
 <a id="page-43"></a>
 ## 43. 常规设置
@@ -349,7 +335,7 @@
 <a id="page-45"></a>
 ## 45. 定时任务
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:950)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:55)。页面 `/admin/job-settings` 调用 `GET/PUT /api/v1/admin/scheduler-settings`，设置到期和账单提醒；写入带版本冲突、幂等键和审计。JSON 中按唯一旧 hash #/automatic-tasks 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:950)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:55)；页面：[源码](../web/src/app/admin/job-settings/page.tsx:1)。JSON 中按唯一旧 hash #/automatic-tasks 检索。
 
 <a id="page-46"></a>
 ## 46. 注册登录
@@ -364,7 +350,7 @@
 <a id="page-48"></a>
 ## 48. 销售设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1021)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:58)；页面：[源码](../web/src/app/admin/sales-settings/page.tsx:1)。页面的商品提成、阶梯、人员设置和销售分配均调用真实接口；写请求使用 `sales.view/manage` 权限、版本号、幂等键和审计记录，暂无数据显示真实空态。JSON 中按唯一旧 hash #/sales-management 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1021)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:58)；页面：[源码](../web/src/app/admin/sales-settings/page.tsx:1)。JSON 中按唯一旧 hash #/sales-management 检索。
 
 <a id="page-49"></a>
 ## 49. 员工管理
@@ -394,7 +380,7 @@
 <a id="page-54"></a>
 ## 54. 二次验证
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1194)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:64)。JSON 中按唯一旧 hash #/twice-confirm 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1194)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:64)；页面：[源码](../web/src/app/admin/security/mfa/page.tsx:1)。JSON 中按唯一旧 hash #/twice-confirm 检索。
 
 <a id="page-55"></a>
 ## 55. 验证码设置
@@ -404,11 +390,7 @@
 <a id="page-56"></a>
 ## 56. 黑名单列表
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1237)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:66)；页面：[路由](../web/src/app/admin/blacklist/page.tsx:1)；组件：[实现](../web/src/components/admin-blacklist.tsx:1)。JSON 中按唯一旧 hash #/black-list 检索。
-
-页面使用 `GET /api/v1/admin/blacklist` 返回 `items/total/limit/offset`，支持关键词和生效状态筛选。超级管理员或拥有 `security.manage` 的管理员可添加用户名/IP 登录阻断、填写来源 IP、原因和永久/定时解封时间；保存通过 `Idempotency-Key`，服务端写入审计并在更新/删除时校验 `expected_version`，冲突返回 `409`。解除操作必须确认，删除后列表重新读取真实空态。登录链路在认证前检查有效黑名单；管理员连续三次失败会自动创建 3 小时用户名阻断并记录安全审计。密钥、密码和原始认证凭据不写入黑名单表。
-
-页面状态覆盖初始加载、真实空态、API 错误、筛选、添加成功、重复/冲突错误和解除确认；数据来自 Go API，不使用静态行。Playwright 四尺寸（1440x900、1024x768、390x844、320x800）无横向溢出，截图见 [本批验收](admin-batch-security-acceptance-20261011.md)。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1237)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:66)；页面：[源码](../web/src/app/admin/blacklist/page.tsx:1)。JSON 中按唯一旧 hash #/black-list 检索。
 
 <a id="page-57"></a>
 ## 57. 数据迁移
@@ -433,42 +415,42 @@
 <a id="page-61"></a>
 ## 61. 短信日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1326)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:71)。页面支持真实日志筛选、脱敏字段、分页和空态，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/sms-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1326)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:71)；页面：[源码](../web/src/app/admin/logs/sms/page.tsx:1)。JSON 中按唯一旧 hash #/sms-log 检索。
 
 <a id="page-62"></a>
 ## 62. 站内信日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1344)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:72)。页面支持真实空态、筛选、状态、分页和四尺寸布局验收，证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/station-letter-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1344)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:72)；页面：[源码](../web/src/app/admin/logs/inbox/page.tsx:1)。JSON 中按唯一旧 hash #/station-letter-log 检索。
 
 <a id="page-63"></a>
 ## 63. API日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1362)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:73)。页面支持方法、状态码、用户名、关键词、日期筛选及分页，真实记录和移动端布局已验收；证据见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/api-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1362)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:73)；页面：[源码](../web/src/app/admin/logs/api/page.tsx:1)。JSON 中按唯一旧 hash #/api-log 检索。
 
 <a id="page-64"></a>
 ## 64. 定时任务日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1380)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:74)；页面：[源码](../web/src/app/admin/logs/jobs/page.tsx:1)。页面支持任务/状态/上海日期筛选、真实执行分页和31日趋势，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/automatic-task-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1380)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:74)；页面：[源码](../web/src/app/admin/logs/jobs/page.tsx:1)。JSON 中按唯一旧 hash #/automatic-task-log 检索。
 
 <a id="page-65"></a>
 ## 65. 日志清理
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1398)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:75)。页面支持日志类型、时间、不可恢复确认、危险操作二次确认和幂等提交，四尺寸验收见 [本批验收](admin-batch-ticket-logs-acceptance-20261011.md)。JSON 中按唯一旧 hash #/log-cleanup 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1398)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:75)；页面：[源码](../web/src/app/admin/logs/cleanup/page.tsx:1)。JSON 中按唯一旧 hash #/log-cleanup 检索。
 
 <a id="page-66"></a>
 ## 66. 系统日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1419)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:76)；页面：[源码](../web/src/app/admin/logs/[kind]/page.tsx:1)。系统日志页面 `/admin/logs/system` 调用 `GET /api/v1/admin/logs?kind=system`，只返回审计安全元数据，支持关键词和分页并要求 `audit.view`。JSON 中按唯一旧 hash #/system-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1419)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:76)。JSON 中按唯一旧 hash #/system-log 检索。
 
 <a id="page-67"></a>
 ## 67. 管理员登录日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1437)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:77)。JSON 中按唯一旧 hash #/system-admin-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1437)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:77)；页面：[源码](../web/src/app/admin/logs/admin-login/page.tsx:1)。JSON 中按唯一旧 hash #/system-admin-log 检索。
 
 <a id="page-68"></a>
 ## 68. 邮件日志
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1455)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:78)。JSON 中按唯一旧 hash #/email-log 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1455)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:78)；页面：[源码](../web/src/app/admin/logs/email/page.tsx:1)。JSON 中按唯一旧 hash #/email-log 检索。
 
 <a id="page-69"></a>
 ## 69. 商品管理
@@ -478,9 +460,7 @@
 <a id="page-70"></a>
 ## 70. 流量包管理
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1497)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:80)。JSON 中按唯一旧 hash #/dcim-traffic 检索。
-
-新版 `/admin/traffic-products` 维护 `traffic_products` 目录及 `traffic_product_products` 适用产品关系，列表返回 `items/total/limit/offset`，展示容量 GB、整数分价格、启用状态、已售/库存、关联产品和创建时间。创建/编辑/删除均使用 `products.manage`、幂等键、版本校验和审计；已有订单的目录项拒绝删除并要求停用。页面支持真实空态、关键词/状态筛选、分页、保存/取消和移动端横向滚动保护。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1497)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:80)；页面：[源码](../web/src/app/admin/traffic-products/page.tsx:1)。JSON 中按唯一旧 hash #/dcim-traffic 检索。
 
 <a id="page-71"></a>
 ## 71. 通用接口
@@ -510,44 +490,32 @@
 <a id="page-76"></a>
 ## 76. 基础信息
 
-已实现 `/admin/site-settings?tab=basic`，沿用站点设置版本化保存、权限和审计契约；本批补充证据见 `admin-batch-content-site-acceptance-20261011.md`。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1626)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:86)。JSON 中按唯一旧 hash #/base-info 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1626)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:86)；页面：[源码](../web/src/app/admin/site-settings/page.tsx:1)。JSON 中按唯一旧 hash #/base-info 检索。
 
 <a id="page-77"></a>
 ## 77. 主题模板
 
-`/admin/theme-settings` 展示模板、主色、Logo 样式、页脚和版本；编辑保存携带 `expected_version` 与 `Idempotency-Key`，无权限时隐藏写操作。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1659)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:87)。JSON 中按唯一旧 hash #/theme-template 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1659)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:87)；页面：[源码](../web/src/app/admin/theme-settings/page.tsx:1)。JSON 中按唯一旧 hash #/theme-template 检索。
 
 <a id="page-78"></a>
 ## 78. 官网自定义字段
 
-`/admin/site-fields` 支持关键词/状态筛选、分页、创建、编辑、启停、删除确认和 409 版本冲突。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1678)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:88)。JSON 中按唯一旧 hash #/custom-template-fields 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1678)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:88)；页面：[源码](../web/src/app/admin/site-fields/page.tsx:1)。JSON 中按唯一旧 hash #/custom-template-fields 检索。
 
 <a id="page-79"></a>
 ## 79. 导航管理
 
-`/admin/navigation` 支持父项、链接、图标、排序、启停和新窗口；数据库触发器拒绝循环父子关系。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1696)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:89)。JSON 中按唯一旧 hash #/menu_manage 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1696)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:89)；页面：[源码](../web/src/app/admin/navigation/page.tsx:1)。JSON 中按唯一旧 hash #/menu_manage 检索。
 
 <a id="page-80"></a>
 ## 80. 友情链接
 
-`/admin/friendly-links` 支持 HTTPS 链接、Logo、说明、排序、启停、分页及版本化 CRUD。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1723)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:90)。JSON 中按唯一旧 hash #/friendly_link 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1723)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:90)；页面：[源码](../web/src/app/admin/friendly-links/page.tsx:1)。JSON 中按唯一旧 hash #/friendly_link 检索。
 
 <a id="page-81"></a>
 ## 81. 文件分组
 
-`/admin/file-groups` 复用下载中心分类数据，支持层级筛选、分页和下载分类的版本化 CRUD。
-
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1743)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:91)。JSON 中按唯一旧 hash #/service-support 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1743)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:91)；页面：[源码](../web/src/app/admin/file-groups/page.tsx:1)。JSON 中按唯一旧 hash #/service-support 检索。
 
 <a id="page-82"></a>
 ## 82. 新闻列表
@@ -572,7 +540,7 @@
 <a id="page-86"></a>
 ## 86. 基础设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1838)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:96)。JSON 中按唯一旧 hash #/set 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1838)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:96)；页面：[源码](../web/src/app/admin/site-settings/page.tsx:1)。JSON 中按唯一旧 hash #/set 检索。
 
 <a id="page-87"></a>
 ## 87. 供应商管理
@@ -597,7 +565,7 @@
 <a id="page-91"></a>
 ## 91. 服务器列表
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1944)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:101)。JSON 中按唯一旧 hash #/munual-resource 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1944)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:101)；页面：[源码](../web/src/app/admin/resources/page.tsx:1)。JSON 中按唯一旧 hash #/munual-resource 检索。
 
 <a id="page-92"></a>
 ## 92. 订单列表
@@ -637,14 +605,12 @@
 <a id="page-99"></a>
 ## 99. 新建订单
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2092)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:109)。JSON 中按唯一旧 hash #/add-order 检索。
-
-`AdminOrderCreatePage`使用真实客户/商品搜索和配置，报价哈希绑定价格/渠道/版本，确认后以幂等键创建。未付款不开通，延期账单可在详情生成；价格为整数分，购买资料不进入草稿缓存。旧优惠码目录与添加弹窗仍待还原。四尺寸及创建→出账→备注409→取消→审计软删除见[验收](admin-batch-admin-orders-acceptance-20261011.md)。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2092)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:109)；页面：[源码](../web/src/app/admin/orders/new/page.tsx:1)。JSON 中按唯一旧 hash #/add-order 检索。
 
 <a id="page-100"></a>
 ## 100. 新建工单
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2125)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:110)。JSON 中按唯一旧 hash #/add-support-ticket 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2125)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:110)；页面：[源码](../web/src/app/admin/tickets/new/page.tsx:1)。JSON 中按唯一旧 hash #/add-support-ticket 检索。
 
 <a id="page-101"></a>
 ## 101. 开具发票
