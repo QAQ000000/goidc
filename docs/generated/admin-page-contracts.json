@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "ledger": "docs/admin-full-ui-restore-ledger.md",
-    "ledgerSha256": "5351ae3fb164c1159f5de49b5debf97ac387624ac8135f64558d78e246eac7fc",
+    "ledgerSha256": "a563d8d97e7e8cc504bebf790ad53e0dcffed9e9d6eafc134e841b70ef08670a",
     "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md",
     "specificationSha256": "b16aee6e1139eef7f08eb539d081f4484e3e6aa3eb514bffa202a7d07a5e628c"
   },
@@ -46,7 +46,7 @@
             "method": "GET",
             "path": "/admin/dashboard",
             "handler": "dashboard",
-            "evidence": "internal/httpapi/server.go:331"
+            "evidence": "internal/httpapi/server.go:339"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -175,7 +175,7 @@
             "method": "GET",
             "path": "/admin/customers/page",
             "handler": "customersPage",
-            "evidence": "internal/httpapi/server.go:413"
+            "evidence": "internal/httpapi/server.go:421"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -436,13 +436,13 @@
             "method": "GET",
             "path": "/admin/customers/page",
             "handler": "customersPage",
-            "evidence": "internal/httpapi/server.go:413"
+            "evidence": "internal/httpapi/server.go:421"
           },
           {
             "method": "PUT",
             "path": "/admin/customers/{id}/sales-owner",
             "handler": "assignCustomerSalesOwner",
-            "evidence": "internal/httpapi/server.go:435"
+            "evidence": "internal/httpapi/server.go:443"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -575,7 +575,7 @@
             "method": "GET",
             "path": "/admin/reports/sales",
             "handler": "salesReport",
-            "evidence": "internal/httpapi/server.go:355"
+            "evidence": "internal/httpapi/server.go:363"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -708,7 +708,7 @@
             "method": "POST",
             "path": "/admin/marketing/{id}/send",
             "handler": "sendMarketingCampaign",
-            "evidence": "internal/httpapi/server.go:135"
+            "evidence": "internal/httpapi/server.go:138"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -854,19 +854,19 @@
             "method": "GET",
             "path": "/admin/affiliate/accounts/page",
             "handler": "adminAffiliateAccountsPage",
-            "evidence": "internal/httpapi/server.go:419"
+            "evidence": "internal/httpapi/server.go:427"
           },
           {
             "method": "GET",
             "path": "/admin/affiliate/attributions/page",
             "handler": "adminAffiliateAttributionsPage",
-            "evidence": "internal/httpapi/server.go:420"
+            "evidence": "internal/httpapi/server.go:428"
           },
           {
             "method": "GET",
             "path": "/admin/affiliate/withdrawals/page",
             "handler": "adminAffiliateWithdrawalsPage",
-            "evidence": "internal/httpapi/server.go:421"
+            "evidence": "internal/httpapi/server.go:429"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1002,55 +1002,55 @@
             "method": "DELETE",
             "path": "/admin/orders/{id}",
             "handler": "deleteOrder",
-            "evidence": "internal/httpapi/server.go:440"
+            "evidence": "internal/httpapi/server.go:448"
           },
           {
             "method": "POST",
             "path": "/admin/orders/bulk-review",
             "handler": "bulkReviewOrders",
-            "evidence": "internal/httpapi/server.go:441"
+            "evidence": "internal/httpapi/server.go:449"
           },
           {
             "method": "POST",
             "path": "/admin/orders/bulk-delete",
             "handler": "bulkDeleteOrders",
-            "evidence": "internal/httpapi/server.go:442"
+            "evidence": "internal/httpapi/server.go:450"
           },
           {
             "method": "GET",
             "path": "/admin/orders/page",
             "handler": "orders",
-            "evidence": "internal/httpapi/server.go:444"
+            "evidence": "internal/httpapi/server.go:454"
           },
           {
             "method": "POST",
             "path": "/admin/orders/{id}/cancel",
             "handler": "cancelOrder",
-            "evidence": "internal/httpapi/server.go:455"
+            "evidence": "internal/httpapi/server.go:465"
           },
           {
             "method": "POST",
             "path": "/admin/orders/{id}/review",
             "handler": "reviewOrder",
-            "evidence": "internal/httpapi/server.go:456"
+            "evidence": "internal/httpapi/server.go:466"
           },
           {
             "method": "POST",
             "path": "/admin/orders/{id}/notes",
             "handler": "updateOrderNotes",
-            "evidence": "internal/httpapi/server.go:457"
+            "evidence": "internal/httpapi/server.go:467"
           },
           {
             "method": "POST",
             "path": "/admin/orders/commission",
             "handler": "adminOrderCommission",
-            "evidence": "internal/httpapi/server.go:458"
+            "evidence": "internal/httpapi/server.go:468"
           },
           {
             "method": "POST",
             "path": "/admin/orders/bulk-cancel",
             "handler": "bulkCancelOrders",
-            "evidence": "internal/httpapi/server.go:459"
+            "evidence": "internal/httpapi/server.go:469"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1156,7 +1156,8 @@
           "db/migrations/121_traffic_packets.sql",
           "db/migrations/122_order_mutations.sql",
           "db/migrations/123_admin_order_create.sql",
-          "db/migrations/125_admin_ticket_create.sql"
+          "db/migrations/125_admin_ticket_create.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -1466,7 +1467,7 @@
             "method": "GET",
             "path": "/admin/renewal-orders",
             "handler": "renewalOrders",
-            "evidence": "internal/httpapi/server.go:445"
+            "evidence": "internal/httpapi/server.go:455"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1702,25 +1703,25 @@
             "method": "GET",
             "path": "/admin/traffic-orders",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:450"
+            "evidence": "internal/httpapi/server.go:460"
           },
           {
             "method": "GET",
             "path": "/admin/traffic-orders/{id}",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:451"
+            "evidence": "internal/httpapi/server.go:461"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-orders/{id}/cancel",
             "handler": "trafficOrders",
-            "evidence": "internal/httpapi/server.go:452"
+            "evidence": "internal/httpapi/server.go:462"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-orders/{id}/delivery-verification",
             "handler": "verifyTrafficDelivery",
-            "evidence": "internal/httpapi/server.go:453"
+            "evidence": "internal/httpapi/server.go:463"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -1963,7 +1964,7 @@
             "method": "GET",
             "path": "/admin/services/page",
             "handler": "servicesPage",
-            "evidence": "internal/httpapi/server.go:497"
+            "evidence": "internal/httpapi/server.go:507"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2099,7 +2100,7 @@
             "method": "GET",
             "path": "/admin/cancellations",
             "handler": "adminCancellations",
-            "evidence": "internal/httpapi/server.go:518"
+            "evidence": "internal/httpapi/server.go:528"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2234,7 +2235,7 @@
             "method": "GET",
             "path": "/admin/customer-transactions",
             "handler": "adminCustomerTransactions",
-            "evidence": "internal/httpapi/server.go:433"
+            "evidence": "internal/httpapi/server.go:441"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2375,7 +2376,7 @@
             "method": "GET",
             "path": "/admin/invoices/page",
             "handler": "invoices",
-            "evidence": "internal/httpapi/server.go:461"
+            "evidence": "internal/httpapi/server.go:471"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2511,9 +2512,46 @@
         "component": "web/src/app/admin/credit/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/credit、PUT /admin/credit/{id}/limit",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET /admin/credit + PUT /admin/credit/{id}/limit + GET /admin/credit/consumptions + GET /admin/credit/repayments + POST /admin/credit/consumptions/{id}/repay + PUT /admin/credit/{id}/freeze + POST /invoices/{id}/pay-credit",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/credit/consumptions",
+            "handler": "creditConsumptions",
+            "evidence": "internal/httpapi/server.go:144"
+          },
+          {
+            "method": "GET",
+            "path": "/admin/credit/repayments",
+            "handler": "creditRepayments",
+            "evidence": "internal/httpapi/server.go:145"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/credit/consumptions/{id}/repay",
+            "handler": "creditRepay",
+            "evidence": "internal/httpapi/server.go:146"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/credit/{id}/freeze",
+            "handler": "creditFreeze",
+            "evidence": "internal/httpapi/server.go:147"
+          },
+          {
+            "method": "GET",
+            "path": "/admin/credit",
+            "handler": "adminCreditPage",
+            "evidence": "internal/httpapi/server.go:148"
+          },
+          {
+            "method": "PUT",
+            "path": "/admin/credit/{id}/limit",
+            "handler": "adminCreditLimit",
+            "evidence": "internal/httpapi/server.go:149"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "credit.view/manage",
@@ -2611,12 +2649,11 @@
           "checks": {
             "noHorizontalOverflow": true,
             "noJavascriptErrors": true,
-            "noConsoleErrors": true,
             "noApiFailures": true,
-            "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
           },
           "result": "PASS",
-          "screenshot": "output/playwright/admin-parallel-20261012/credit-1440.png",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1440.png",
           "source": "docs/admin-restore-browser-evidence.json"
         },
         {
@@ -2625,40 +2662,37 @@
           "checks": {
             "noHorizontalOverflow": true,
             "noJavascriptErrors": true,
-            "noConsoleErrors": true,
             "noApiFailures": true,
-            "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
           },
           "result": "PASS",
-          "screenshot": "output/playwright/admin-parallel-20261012/credit-1024.png",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1024.png",
           "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
-          "height": 900,
+          "height": 844,
           "checks": {
             "noHorizontalOverflow": true,
             "noJavascriptErrors": true,
-            "noConsoleErrors": true,
             "noApiFailures": true,
-            "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
           },
           "result": "PASS",
-          "screenshot": "output/playwright/admin-parallel-20261012/credit-390.png",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-390.png",
           "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
-          "height": 900,
+          "height": 844,
           "checks": {
             "noHorizontalOverflow": true,
             "noJavascriptErrors": true,
-            "noConsoleErrors": true,
             "noApiFailures": true,
-            "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
           },
           "result": "PASS",
-          "screenshot": "output/playwright/admin-parallel-20261012/credit-320.png",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-320.png",
           "source": "docs/admin-restore-browser-evidence.json"
         }
       ],
@@ -2668,7 +2702,7 @@
           "height": 900,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-parallel-20261012/credit-1440.png"
+            "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1440.png"
           ],
           "evidence": [
             {
@@ -2676,9 +2710,8 @@
               "checks": {
                 "noHorizontalOverflow": true,
                 "noJavascriptErrors": true,
-                "noConsoleErrors": true,
                 "noApiFailures": true,
-                "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
               }
             }
           ]
@@ -2688,7 +2721,7 @@
           "height": 900,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-parallel-20261012/credit-1024.png"
+            "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1024.png"
           ],
           "evidence": [
             {
@@ -2696,19 +2729,18 @@
               "checks": {
                 "noHorizontalOverflow": true,
                 "noJavascriptErrors": true,
-                "noConsoleErrors": true,
                 "noApiFailures": true,
-                "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
               }
             }
           ]
         },
         {
           "width": 390,
-          "height": 900,
+          "height": 844,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-parallel-20261012/credit-390.png"
+            "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-390.png"
           ],
           "evidence": [
             {
@@ -2716,19 +2748,18 @@
               "checks": {
                 "noHorizontalOverflow": true,
                 "noJavascriptErrors": true,
-                "noConsoleErrors": true,
                 "noApiFailures": true,
-                "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
               }
             }
           ]
         },
         {
           "width": 320,
-          "height": 900,
+          "height": 844,
           "result": "PASS",
           "screenshots": [
-            "output/playwright/admin-parallel-20261012/credit-320.png"
+            "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-320.png"
           ],
           "evidence": [
             {
@@ -2736,9 +2767,8 @@
               "checks": {
                 "noHorizontalOverflow": true,
                 "noJavascriptErrors": true,
-                "noConsoleErrors": true,
                 "noApiFailures": true,
-                "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
               }
             }
           ]
@@ -2778,7 +2808,7 @@
             "method": "GET",
             "path": "/admin/affiliate/withdrawals",
             "handler": "adminAffiliateWithdrawals",
-            "evidence": "internal/httpapi/server.go:234"
+            "evidence": "internal/httpapi/server.go:242"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -2933,7 +2963,7 @@
             "method": "GET",
             "path": "/admin/invoice-applications",
             "handler": "invoiceApplications",
-            "evidence": "internal/httpapi/server.go:261"
+            "evidence": "internal/httpapi/server.go:269"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3200,7 +3230,7 @@
             "method": "GET",
             "path": "/admin/tickets",
             "handler": "tickets",
-            "evidence": "internal/httpapi/server.go:520"
+            "evidence": "internal/httpapi/server.go:530"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3337,7 +3367,7 @@
             "method": "GET",
             "path": "/admin/reports/tickets",
             "handler": "ticketReport",
-            "evidence": "internal/httpapi/server.go:356"
+            "evidence": "internal/httpapi/server.go:364"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3470,7 +3500,7 @@
             "method": "GET",
             "path": "/admin/reports/income",
             "handler": "incomeReport",
-            "evidence": "internal/httpapi/server.go:354"
+            "evidence": "internal/httpapi/server.go:362"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3598,7 +3628,7 @@
             "method": "GET",
             "path": "/admin/reports/new-clients",
             "handler": "newClientsReport",
-            "evidence": "internal/httpapi/server.go:357"
+            "evidence": "internal/httpapi/server.go:365"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3730,7 +3760,7 @@
             "method": "GET",
             "path": "/admin/reports/product-income",
             "handler": "productIncomeReport",
-            "evidence": "internal/httpapi/server.go:359"
+            "evidence": "internal/httpapi/server.go:367"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -3862,7 +3892,7 @@
             "method": "GET",
             "path": "/admin/reports/customer-ranking",
             "handler": "customerRankingReport",
-            "evidence": "internal/httpapi/server.go:358"
+            "evidence": "internal/httpapi/server.go:366"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -4718,13 +4748,13 @@
             "method": "GET",
             "path": "/admin/customer-fields",
             "handler": "adminCustomerCustomFields",
-            "evidence": "internal/httpapi/server.go:488"
+            "evidence": "internal/httpapi/server.go:498"
           },
           {
             "method": "POST",
             "path": "/admin/customer-fields",
             "handler": "createCustomerCustomField",
-            "evidence": "internal/httpapi/server.go:489"
+            "evidence": "internal/httpapi/server.go:499"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5002,13 +5032,13 @@
             "method": "GET",
             "path": "/admin/customer-levels",
             "handler": "adminCustomerLevels",
-            "evidence": "internal/httpapi/server.go:414"
+            "evidence": "internal/httpapi/server.go:422"
           },
           {
             "method": "POST",
             "path": "/admin/customer-levels",
             "handler": "createCustomerLevel",
-            "evidence": "internal/httpapi/server.go:415"
+            "evidence": "internal/httpapi/server.go:423"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5141,13 +5171,13 @@
             "method": "GET",
             "path": "/admin/customer-product-discounts",
             "handler": "adminCustomerProductDiscounts",
-            "evidence": "internal/httpapi/server.go:484"
+            "evidence": "internal/httpapi/server.go:494"
           },
           {
             "method": "PUT",
             "path": "/admin/customer-product-discounts",
             "handler": "saveCustomerProductDiscount",
-            "evidence": "internal/httpapi/server.go:485"
+            "evidence": "internal/httpapi/server.go:495"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5544,13 +5574,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:165"
+            "evidence": "internal/httpapi/server.go:173"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:166"
+            "evidence": "internal/httpapi/server.go:174"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5714,13 +5744,13 @@
             "method": "GET",
             "path": "/admin/finance-settings",
             "handler": "financeSettings",
-            "evidence": "internal/httpapi/server.go:147"
+            "evidence": "internal/httpapi/server.go:155"
           },
           {
             "method": "PUT",
             "path": "/admin/finance-settings",
             "handler": "updateFinanceSettings",
-            "evidence": "internal/httpapi/server.go:148"
+            "evidence": "internal/httpapi/server.go:156"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -5856,13 +5886,13 @@
             "method": "GET",
             "path": "/admin/promo-codes",
             "handler": "promoCodes",
-            "evidence": "internal/httpapi/server.go:492"
+            "evidence": "internal/httpapi/server.go:502"
           },
           {
             "method": "POST",
             "path": "/admin/promo-codes",
             "handler": "createPromoCode",
-            "evidence": "internal/httpapi/server.go:494"
+            "evidence": "internal/httpapi/server.go:504"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6000,13 +6030,13 @@
             "method": "GET",
             "path": "/admin/invoice-settings",
             "handler": "invoiceSettings",
-            "evidence": "internal/httpapi/server.go:149"
+            "evidence": "internal/httpapi/server.go:157"
           },
           {
             "method": "PUT",
             "path": "/admin/invoice-settings",
             "handler": "updateInvoiceSettings",
-            "evidence": "internal/httpapi/server.go:150"
+            "evidence": "internal/httpapi/server.go:158"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6137,13 +6167,13 @@
             "method": "GET",
             "path": "/admin/contract-settings",
             "handler": "contractSettings",
-            "evidence": "internal/httpapi/server.go:154"
+            "evidence": "internal/httpapi/server.go:162"
           },
           {
             "method": "PUT",
             "path": "/admin/contract-settings",
             "handler": "updateContractSettings",
-            "evidence": "internal/httpapi/server.go:155"
+            "evidence": "internal/httpapi/server.go:163"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6272,13 +6302,13 @@
             "method": "GET",
             "path": "/admin/credit-settings",
             "handler": "creditSettings",
-            "evidence": "internal/httpapi/server.go:138"
+            "evidence": "internal/httpapi/server.go:141"
           },
           {
             "method": "PUT",
             "path": "/admin/credit-settings",
             "handler": "updateCreditSettings",
-            "evidence": "internal/httpapi/server.go:139"
+            "evidence": "internal/httpapi/server.go:142"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6407,13 +6437,13 @@
             "method": "GET",
             "path": "/admin/ticket-departments",
             "handler": "adminTicketDepartments",
-            "evidence": "internal/httpapi/server.go:533"
+            "evidence": "internal/httpapi/server.go:543"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-departments",
             "handler": "createTicketDepartment",
-            "evidence": "internal/httpapi/server.go:534"
+            "evidence": "internal/httpapi/server.go:544"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6541,13 +6571,13 @@
             "method": "GET",
             "path": "/admin/ticket-statuses",
             "handler": "ticketStatuses",
-            "evidence": "internal/httpapi/server.go:524"
+            "evidence": "internal/httpapi/server.go:534"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-statuses",
             "handler": "saveTicketStatus",
-            "evidence": "internal/httpapi/server.go:525"
+            "evidence": "internal/httpapi/server.go:535"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -6681,13 +6711,13 @@
             "method": "GET",
             "path": "/admin/ticket-rules",
             "handler": "ticketRules",
-            "evidence": "internal/httpapi/server.go:528"
+            "evidence": "internal/httpapi/server.go:538"
           },
           {
             "method": "POST",
             "path": "/admin/ticket-rules",
             "handler": "saveTicketRule",
-            "evidence": "internal/httpapi/server.go:529"
+            "evidence": "internal/httpapi/server.go:539"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -7102,13 +7132,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:165"
+            "evidence": "internal/httpapi/server.go:173"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:166"
+            "evidence": "internal/httpapi/server.go:174"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -7682,13 +7712,13 @@
             "method": "GET",
             "path": "/admin/roles",
             "handler": "adminRoles",
-            "evidence": "internal/httpapi/server.go:334"
+            "evidence": "internal/httpapi/server.go:342"
           },
           {
             "method": "POST",
             "path": "/admin/roles",
             "handler": "saveAdminRole",
-            "evidence": "internal/httpapi/server.go:335"
+            "evidence": "internal/httpapi/server.go:343"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -7774,7 +7804,8 @@
           "db/migrations/124_customer_profile_contract.sql",
           "db/migrations/125_admin_ticket_create.sql",
           "db/migrations/126_credit_management.sql",
-          "db/migrations/128_mfa_challenge_login_method.sql"
+          "db/migrations/128_mfa_challenge_login_method.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -8036,13 +8067,13 @@
             "method": "GET",
             "path": "/admin/staff",
             "handler": "adminStaff",
-            "evidence": "internal/httpapi/server.go:338"
+            "evidence": "internal/httpapi/server.go:346"
           },
           {
             "method": "POST",
             "path": "/admin/staff",
             "handler": "saveAdminStaff",
-            "evidence": "internal/httpapi/server.go:339"
+            "evidence": "internal/httpapi/server.go:347"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8175,13 +8206,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:165"
+            "evidence": "internal/httpapi/server.go:173"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:166"
+            "evidence": "internal/httpapi/server.go:174"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8348,13 +8379,13 @@
             "method": "GET",
             "path": "/admin/notification-templates",
             "handler": "notificationTemplates",
-            "evidence": "internal/httpapi/server.go:346"
+            "evidence": "internal/httpapi/server.go:354"
           },
           {
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:347"
+            "evidence": "internal/httpapi/server.go:355"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8521,13 +8552,13 @@
             "method": "GET",
             "path": "/admin/notification-templates",
             "handler": "notificationTemplates",
-            "evidence": "internal/httpapi/server.go:346"
+            "evidence": "internal/httpapi/server.go:354"
           },
           {
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:347"
+            "evidence": "internal/httpapi/server.go:355"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8667,13 +8698,13 @@
             "method": "GET",
             "path": "/admin/sms-settings",
             "handler": "smsSettings",
-            "evidence": "internal/httpapi/server.go:160"
+            "evidence": "internal/httpapi/server.go:168"
           },
           {
             "method": "PUT",
             "path": "/admin/sms-settings",
             "handler": "updateSMSSettings",
-            "evidence": "internal/httpapi/server.go:161"
+            "evidence": "internal/httpapi/server.go:169"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -8767,7 +8798,8 @@
           "db/migrations/123_admin_order_create.sql",
           "db/migrations/124_customer_profile_contract.sql",
           "db/migrations/125_admin_ticket_create.sql",
-          "db/migrations/126_credit_management.sql"
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -9405,13 +9437,13 @@
             "method": "GET",
             "path": "/admin/blacklist",
             "handler": "adminBlacklist",
-            "evidence": "internal/httpapi/server.go:121"
+            "evidence": "internal/httpapi/server.go:124"
           },
           {
             "method": "POST",
             "path": "/admin/blacklist",
             "handler": "saveBlacklist",
-            "evidence": "internal/httpapi/server.go:122"
+            "evidence": "internal/httpapi/server.go:125"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -10410,7 +10442,7 @@
             "method": "GET",
             "path": "/admin/logs/sms",
             "handler": "adminSMSLog",
-            "evidence": "internal/httpapi/server.go:125"
+            "evidence": "internal/httpapi/server.go:128"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -10544,7 +10576,7 @@
             "method": "GET",
             "path": "/admin/logs/inbox",
             "handler": "adminInboxLog",
-            "evidence": "internal/httpapi/server.go:126"
+            "evidence": "internal/httpapi/server.go:129"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -10674,7 +10706,7 @@
             "method": "GET",
             "path": "/admin/logs/api",
             "handler": "adminAPILog",
-            "evidence": "internal/httpapi/server.go:127"
+            "evidence": "internal/httpapi/server.go:130"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -10805,7 +10837,7 @@
             "method": "GET",
             "path": "/admin/logs/jobs/trend",
             "handler": "adminSchedulerTrend",
-            "evidence": "internal/httpapi/server.go:118"
+            "evidence": "internal/httpapi/server.go:121"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11049,7 +11081,7 @@
             "method": "POST",
             "path": "/admin/logs/cleanup",
             "handler": "cleanupLogs",
-            "evidence": "internal/httpapi/server.go:120"
+            "evidence": "internal/httpapi/server.go:123"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11176,7 +11208,7 @@
             "method": "GET",
             "path": "/admin/logs",
             "handler": "adminLogPage",
-            "evidence": "internal/httpapi/server.go:350"
+            "evidence": "internal/httpapi/server.go:358"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11308,7 +11340,7 @@
             "method": "GET",
             "path": "/admin/logs/admin-login",
             "handler": "adminLoginLog",
-            "evidence": "internal/httpapi/server.go:119"
+            "evidence": "internal/httpapi/server.go:122"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11440,7 +11472,7 @@
             "method": "GET",
             "path": "/admin/logs/email",
             "handler": "adminEmailLog",
-            "evidence": "internal/httpapi/server.go:128"
+            "evidence": "internal/httpapi/server.go:131"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11573,13 +11605,13 @@
             "method": "GET",
             "path": "/admin/products",
             "handler": "adminProducts",
-            "evidence": "internal/httpapi/server.go:360"
+            "evidence": "internal/httpapi/server.go:368"
           },
           {
             "method": "POST",
             "path": "/admin/products",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:384"
+            "evidence": "internal/httpapi/server.go:392"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11720,25 +11752,25 @@
             "method": "GET",
             "path": "/admin/traffic-products",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:446"
+            "evidence": "internal/httpapi/server.go:456"
           },
           {
             "method": "POST",
             "path": "/admin/traffic-products",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:447"
+            "evidence": "internal/httpapi/server.go:457"
           },
           {
             "method": "PATCH",
             "path": "/admin/traffic-products/{id}",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:448"
+            "evidence": "internal/httpapi/server.go:458"
           },
           {
             "method": "DELETE",
             "path": "/admin/traffic-products/{id}",
             "handler": "trafficProducts",
-            "evidence": "internal/httpapi/server.go:449"
+            "evidence": "internal/httpapi/server.go:459"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -11984,13 +12016,13 @@
             "method": "GET",
             "path": "/admin/channel-instances",
             "handler": "channelInstances",
-            "evidence": "internal/httpapi/server.go:165"
+            "evidence": "internal/httpapi/server.go:173"
           },
           {
             "method": "POST",
             "path": "/admin/channel-instances",
             "handler": "createChannelInstance",
-            "evidence": "internal/httpapi/server.go:166"
+            "evidence": "internal/httpapi/server.go:174"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -12162,13 +12194,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:363"
+            "evidence": "internal/httpapi/server.go:371"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:364"
+            "evidence": "internal/httpapi/server.go:372"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -12335,13 +12367,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:363"
+            "evidence": "internal/httpapi/server.go:371"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:364"
+            "evidence": "internal/httpapi/server.go:372"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13479,13 +13511,13 @@
             "method": "GET",
             "path": "/admin/file-groups",
             "handler": "adminFileGroups",
-            "evidence": "internal/httpapi/server.go:209"
+            "evidence": "internal/httpapi/server.go:217"
           },
           {
             "method": "POST",
             "path": "/admin/file-groups",
             "handler": "saveDownloadCategory",
-            "evidence": "internal/httpapi/server.go:210"
+            "evidence": "internal/httpapi/server.go:218"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13585,7 +13617,8 @@
           "db/migrations/123_admin_order_create.sql",
           "db/migrations/124_customer_profile_contract.sql",
           "db/migrations/125_admin_ticket_create.sql",
-          "db/migrations/126_credit_management.sql"
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -13697,13 +13730,13 @@
             "method": "POST",
             "path": "/admin/content",
             "handler": "adminCreateContent",
-            "evidence": "internal/httpapi/server.go:396"
+            "evidence": "internal/httpapi/server.go:404"
           },
           {
             "method": "GET",
             "path": "/admin/content",
             "handler": "adminContentList",
-            "evidence": "internal/httpapi/server.go:397"
+            "evidence": "internal/httpapi/server.go:405"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13838,13 +13871,13 @@
             "method": "GET",
             "path": "/admin/content-categories",
             "handler": "adminContentCategories",
-            "evidence": "internal/httpapi/server.go:402"
+            "evidence": "internal/httpapi/server.go:410"
           },
           {
             "method": "POST",
             "path": "/admin/content-categories",
             "handler": "adminSaveContentCategory",
-            "evidence": "internal/httpapi/server.go:403"
+            "evidence": "internal/httpapi/server.go:411"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -13974,13 +14007,13 @@
             "method": "POST",
             "path": "/admin/content",
             "handler": "adminCreateContent",
-            "evidence": "internal/httpapi/server.go:396"
+            "evidence": "internal/httpapi/server.go:404"
           },
           {
             "method": "GET",
             "path": "/admin/content",
             "handler": "adminContentList",
-            "evidence": "internal/httpapi/server.go:397"
+            "evidence": "internal/httpapi/server.go:405"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14115,13 +14148,13 @@
             "method": "GET",
             "path": "/admin/content-categories",
             "handler": "adminContentCategories",
-            "evidence": "internal/httpapi/server.go:402"
+            "evidence": "internal/httpapi/server.go:410"
           },
           {
             "method": "POST",
             "path": "/admin/content-categories",
             "handler": "adminSaveContentCategory",
-            "evidence": "internal/httpapi/server.go:403"
+            "evidence": "internal/httpapi/server.go:411"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14420,13 +14453,13 @@
             "method": "GET",
             "path": "/admin/suppliers",
             "handler": "suppliers",
-            "evidence": "internal/httpapi/server.go:363"
+            "evidence": "internal/httpapi/server.go:371"
           },
           {
             "method": "POST",
             "path": "/admin/suppliers",
             "handler": "saveSupplier",
-            "evidence": "internal/httpapi/server.go:364"
+            "evidence": "internal/httpapi/server.go:372"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14717,13 +14750,13 @@
             "method": "GET",
             "path": "/admin/products",
             "handler": "adminProducts",
-            "evidence": "internal/httpapi/server.go:360"
+            "evidence": "internal/httpapi/server.go:368"
           },
           {
             "method": "POST",
             "path": "/admin/products",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:384"
+            "evidence": "internal/httpapi/server.go:392"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -14842,42 +14875,151 @@
       "title": "任务队列",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/jobs",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/suppliers/jobs/page.tsx",
+      "component": [
+        {
+          "name": "SupplierJobsView",
+          "source": "@/components/supplier-jobs",
+          "evidence": "web/src/app/admin/suppliers/jobs/page.tsx:9"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1926",
         "ledger": "docs/admin-full-ui-restore-ledger.md:100",
-        "component": null
+        "component": "web/src/app/admin/suppliers/jobs/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/supplier-jobs",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET /admin/supplier-jobs + POST /admin/supplier-jobs/{id}/retry",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/supplier-jobs",
+            "handler": "supplierJobs",
+            "evidence": "internal/httpapi/server.go:117"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/supplier-jobs/{id}/retry",
+            "handler": "retrySupplierJob",
+            "evidence": "internal/httpapi/server.go:119"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "products.view",
+        "ledgerClaim": "products.view；重试另需 services.manage/view",
         "registry": [
           {
-            "token": "products.view",
+            "token": "products.view；重试另需",
+            "status": "未验证",
+            "evidence": null
+          },
+          {
+            "token": "services.manage",
             "status": "已登记",
-            "evidence": "internal/store/admin_rbac.go:28"
+            "evidence": "internal/store/admin_rbac.go:38"
+          },
+          {
+            "token": "services.view",
+            "status": "已登记",
+            "evidence": "internal/store/admin_rbac.go:38"
           }
         ],
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "admin_roles",
+          "admin_setting_operations",
+          "provision_jobs",
+          "services",
+          "sessions",
+          "supplier_accounts",
+          "users"
+        ],
+        "evidence": [
+          "internal/store/supplier_job_retry.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/003_finance_ledger.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/006_service_delivery.sql",
+          "db/migrations/007_legacy_import_issues.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/009_service_renewals.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/014_auto_renewal.sql",
+          "db/migrations/016_public_content.sql",
+          "db/migrations/017_ticket_departments.sql",
+          "db/migrations/018_api_keys.sql",
+          "db/migrations/019_customer_contacts_groups.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/021_ticket_attachments.sql",
+          "db/migrations/022_ticket_workflow.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/026_notification_templates.sql",
+          "db/migrations/028_mfa.sql",
+          "db/migrations/029_mfa_recovery_codes.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/032_ticket_department_scope.sql",
+          "db/migrations/033_customer_sales_scope.sql",
+          "db/migrations/036_content_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/042_customer_files.sql",
+          "db/migrations/045_legacy_tickets.sql",
+          "db/migrations/048_legacy_product_configuration.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/062_recurring_promotions.sql",
+          "db/migrations/064_limited_renewal_benefits.sql",
+          "db/migrations/065_upgrade_promotions.sql",
+          "db/migrations/066_nokvm_delivery.sql",
+          "db/migrations/068_nokvm_power.sql",
+          "db/migrations/069_nokvm_password.sql",
+          "db/migrations/070_nokvm_reinstall.sql",
+          "db/migrations/071_nokvm_storage.sql",
+          "db/migrations/072_nokvm_nat.sql",
+          "db/migrations/073_nokvm_cdrom.sql",
+          "db/migrations/078_invoice_e_files.sql",
+          "db/migrations/080_content_rich_seo.sql",
+          "db/migrations/081_supplier_products.sql",
+          "db/migrations/082_supplier_actions.sql",
+          "db/migrations/083_supplier_console.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/093_certification.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/107_ticket_status_rules.sql",
+          "db/migrations/108_log_records.sql",
+          "db/migrations/109_log_cleanup_operations.sql",
+          "db/migrations/110_financial_settings.sql",
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/118_sales_settings.sql",
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql",
+          "db/migrations/124_customer_profile_contract.sql",
+          "db/migrations/125_admin_ticket_create.sql",
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -14927,31 +15069,136 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
-      "viewportResults": [
+      "stateEvidence": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
           "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 844,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
+      "viewportResults": [
+        {
+          "width": 1440,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 320,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -14988,7 +15235,7 @@
             "method": "GET",
             "path": "/admin/resources",
             "handler": "resourcesPage",
-            "evidence": "internal/httpapi/server.go:498"
+            "evidence": "internal/httpapi/server.go:508"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -15216,28 +15463,39 @@
       "title": "订单列表",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/orders",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/suppliers/orders/page.tsx",
+      "component": [
+        {
+          "name": "SupplierOrdersView",
+          "source": "@/components/data-pages",
+          "evidence": "web/src/app/admin/suppliers/orders/page.tsx:8"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1967",
         "ledger": "docs/admin-full-ui-restore-ledger.md:102",
-        "component": null
+        "component": "web/src/app/admin/suppliers/orders/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/supplier-orders",
+        "ledgerClaim": "GET /admin/supplier-orders；操作复用 /admin/orders/*",
         "registered": [],
         "status": "未验证"
       },
       "permission": {
-        "ledgerClaim": "orders.view",
+        "ledgerClaim": "orders.view/manage",
         "registry": [
           {
             "token": "orders.view",
+            "status": "已登记",
+            "evidence": "internal/store/admin_rbac.go:33"
+          },
+          {
+            "token": "orders.manage",
             "status": "已登记",
             "evidence": "internal/store/admin_rbac.go:33"
           }
@@ -15301,31 +15559,136 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
-      "viewportResults": [
+      "stateEvidence": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
           "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 844,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
+      "viewportResults": [
+        {
+          "width": 1440,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 320,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -15337,30 +15700,48 @@
       "title": "续费订单",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/renewals",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/suppliers/renewals/page.tsx",
+      "component": [
+        {
+          "name": "SupplierRenewalsView",
+          "source": "@/components/supplier-renewals",
+          "evidence": "web/src/app/admin/suppliers/renewals/page.tsx:5"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1984",
         "ledger": "docs/admin-full-ui-restore-ledger.md:103",
-        "component": null
+        "component": "web/src/app/admin/suppliers/renewals/page.tsx:1"
       },
       "realApi": {
         "ledgerClaim": "GET /admin/supplier-renewals",
-        "registered": [],
-        "status": "未验证"
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/supplier-renewals",
+            "handler": "renewalOrders",
+            "evidence": "internal/httpapi/server.go:453"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "orders.view",
+        "ledgerClaim": "orders.view；账单详情另需 invoices.view",
         "registry": [
           {
-            "token": "orders.view",
+            "token": "orders.view；账单详情另需",
+            "status": "未验证",
+            "evidence": null
+          },
+          {
+            "token": "invoices.view",
             "status": "已登记",
-            "evidence": "internal/store/admin_rbac.go:33"
+            "evidence": "internal/store/admin_rbac.go:34"
           }
         ],
         "enforcement": "未验证"
@@ -15420,31 +15801,136 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
-      "viewportResults": [
+      "stateEvidence": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
           "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 844,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
+      "viewportResults": [
+        {
+          "width": 1440,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 320,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -15456,42 +15942,151 @@
       "title": "任务队列",
       "module": "资源与商店",
       "newRoute": "/admin/suppliers/tasks",
-      "pageFile": null,
-      "component": "未验证",
+      "pageFile": "web/src/app/admin/suppliers/tasks/page.tsx",
+      "component": [
+        {
+          "name": "SupplierJobsView",
+          "source": "@/components/supplier-jobs",
+          "evidence": "web/src/app/admin/suppliers/tasks/page.tsx:9"
+        }
+      ],
       "pageStatus": {
-        "ledger": "待实现",
-        "code": "未找到对应独立路由文件；实现状态未验证",
-        "browserAcceptance": "未验证"
+        "ledger": "部分完成",
+        "code": "有对应路由源码；实现完整性未验证",
+        "browserAcceptance": "PASS（四尺寸）"
       },
       "evidence": {
         "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2000",
         "ledger": "docs/admin-full-ui-restore-ledger.md:104",
-        "component": null
+        "component": "web/src/app/admin/suppliers/tasks/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/supplier-tasks",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET /admin/supplier-tasks + POST /admin/supplier-jobs/{id}/retry",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/supplier-tasks",
+            "handler": "supplierJobs",
+            "evidence": "internal/httpapi/server.go:118"
+          },
+          {
+            "method": "POST",
+            "path": "/admin/supplier-jobs/{id}/retry",
+            "handler": "retrySupplierJob",
+            "evidence": "internal/httpapi/server.go:119"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
-        "ledgerClaim": "jobs.view",
+        "ledgerClaim": "jobs.view；重试另需 services.manage/view",
         "registry": [
           {
-            "token": "jobs.view",
+            "token": "jobs.view；重试另需",
+            "status": "未验证",
+            "evidence": null
+          },
+          {
+            "token": "services.manage",
             "status": "已登记",
-            "evidence": "internal/store/admin_rbac.go:48"
+            "evidence": "internal/store/admin_rbac.go:38"
+          },
+          {
+            "token": "services.view",
+            "status": "已登记",
+            "evidence": "internal/store/admin_rbac.go:38"
           }
         ],
         "enforcement": "未验证"
       },
       "storage": {
-        "tables": [],
-        "evidence": [],
-        "status": "未验证"
+        "tables": [
+          "admin_roles",
+          "admin_setting_operations",
+          "provision_jobs",
+          "services",
+          "sessions",
+          "supplier_accounts",
+          "users"
+        ],
+        "evidence": [
+          "internal/store/supplier_job_retry.go"
+        ],
+        "status": "静态候选，调用链未验证"
       },
       "migrations": {
-        "evidence": [],
-        "status": "未验证"
+        "evidence": [
+          "db/migrations/001_init.sql",
+          "db/migrations/003_finance_ledger.sql",
+          "db/migrations/004_services_provision_jobs.sql",
+          "db/migrations/005_legacy_import_map.sql",
+          "db/migrations/006_service_delivery.sql",
+          "db/migrations/007_legacy_import_issues.sql",
+          "db/migrations/008_service_cancellations.sql",
+          "db/migrations/009_service_renewals.sql",
+          "db/migrations/010_payment_gateway.sql",
+          "db/migrations/014_auto_renewal.sql",
+          "db/migrations/016_public_content.sql",
+          "db/migrations/017_ticket_departments.sql",
+          "db/migrations/018_api_keys.sql",
+          "db/migrations/019_customer_contacts_groups.sql",
+          "db/migrations/020_promo_codes.sql",
+          "db/migrations/021_ticket_attachments.sql",
+          "db/migrations/022_ticket_workflow.sql",
+          "db/migrations/024_password_reset_email_outbox.sql",
+          "db/migrations/026_notification_templates.sql",
+          "db/migrations/028_mfa.sql",
+          "db/migrations/029_mfa_recovery_codes.sql",
+          "db/migrations/030_legacy_reviews.sql",
+          "db/migrations/031_admin_rbac.sql",
+          "db/migrations/032_ticket_department_scope.sql",
+          "db/migrations/033_customer_sales_scope.sql",
+          "db/migrations/036_content_management.sql",
+          "db/migrations/039_service_navigation.sql",
+          "db/migrations/041_download_center.sql",
+          "db/migrations/042_customer_files.sql",
+          "db/migrations/045_legacy_tickets.sql",
+          "db/migrations/048_legacy_product_configuration.sql",
+          "db/migrations/054_service_configuration_changes.sql",
+          "db/migrations/056_manual_invoices.sql",
+          "db/migrations/059_invoice_applications.sql",
+          "db/migrations/061_payment_reconciliation.sql",
+          "db/migrations/062_recurring_promotions.sql",
+          "db/migrations/064_limited_renewal_benefits.sql",
+          "db/migrations/065_upgrade_promotions.sql",
+          "db/migrations/066_nokvm_delivery.sql",
+          "db/migrations/068_nokvm_power.sql",
+          "db/migrations/069_nokvm_password.sql",
+          "db/migrations/070_nokvm_reinstall.sql",
+          "db/migrations/071_nokvm_storage.sql",
+          "db/migrations/072_nokvm_nat.sql",
+          "db/migrations/073_nokvm_cdrom.sql",
+          "db/migrations/078_invoice_e_files.sql",
+          "db/migrations/080_content_rich_seo.sql",
+          "db/migrations/081_supplier_products.sql",
+          "db/migrations/082_supplier_actions.sql",
+          "db/migrations/083_supplier_console.sql",
+          "db/migrations/089_verification_codes.sql",
+          "db/migrations/093_certification.sql",
+          "db/migrations/094_service_expiry_notifications.sql",
+          "db/migrations/099_affiliate_core.sql",
+          "db/migrations/100_affiliate_settlement_withdrawals.sql",
+          "db/migrations/101_customer_profiles.sql",
+          "db/migrations/107_ticket_status_rules.sql",
+          "db/migrations/108_log_records.sql",
+          "db/migrations/109_log_cleanup_operations.sql",
+          "db/migrations/110_financial_settings.sql",
+          "db/migrations/111_marketing_campaigns.sql",
+          "db/migrations/118_sales_settings.sql",
+          "db/migrations/121_traffic_packets.sql",
+          "db/migrations/122_order_mutations.sql",
+          "db/migrations/123_admin_order_create.sql",
+          "db/migrations/124_customer_profile_contract.sql",
+          "db/migrations/125_admin_ticket_create.sql",
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
+        ],
+        "status": "表名关联候选，逐页适用性未验证"
       },
       "fields": {
         "legacy": [
@@ -15541,31 +16136,136 @@
         "conflict": "未验证",
         "success": "未验证"
       },
-      "stateEvidence": [],
-      "viewportResults": [
+      "stateEvidence": [
         {
           "width": 1440,
           "height": 900,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1440.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 1024,
-          "height": 768,
-          "result": "未验证",
-          "screenshots": []
+          "height": 900,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1024.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 390,
           "height": 844,
-          "result": "未验证",
-          "screenshots": []
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-390.png",
+          "source": "docs/admin-restore-browser-evidence.json"
         },
         {
           "width": 320,
-          "height": 800,
-          "result": "未验证",
-          "screenshots": []
+          "height": 844,
+          "checks": {
+            "noHorizontalOverflow": true,
+            "noJavascriptErrors": true,
+            "noApiFailures": true,
+            "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+          },
+          "result": "PASS",
+          "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-320.png",
+          "source": "docs/admin-restore-browser-evidence.json"
+        }
+      ],
+      "viewportResults": [
+        {
+          "width": 1440,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1440.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 1024,
+          "height": 900,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1024.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-390.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
+        },
+        {
+          "width": 320,
+          "height": 844,
+          "result": "PASS",
+          "screenshots": [
+            "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-320.png"
+          ],
+          "evidence": [
+            {
+              "source": "docs/admin-restore-browser-evidence.json",
+              "checks": {
+                "noHorizontalOverflow": true,
+                "noJavascriptErrors": true,
+                "noApiFailures": true,
+                "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+              }
+            }
+          ]
         }
       ],
       "note": "未运行浏览器；未验证项不得解释为功能不存在或验收通过。"
@@ -15937,7 +16637,7 @@
             "method": "POST",
             "path": "/admin/customers",
             "handler": "adminCreateCustomer",
-            "evidence": "internal/httpapi/server.go:422"
+            "evidence": "internal/httpapi/server.go:430"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -16081,37 +16781,37 @@
             "method": "GET",
             "path": "/admin/orders/create-options",
             "handler": "adminOrderCreateOptions",
-            "evidence": "internal/httpapi/server.go:436"
+            "evidence": "internal/httpapi/server.go:444"
           },
           {
             "method": "POST",
             "path": "/admin/orders/quote",
             "handler": "adminOrderQuote",
-            "evidence": "internal/httpapi/server.go:437"
+            "evidence": "internal/httpapi/server.go:445"
           },
           {
             "method": "POST",
             "path": "/admin/orders",
             "handler": "createAdminOrder",
-            "evidence": "internal/httpapi/server.go:438"
+            "evidence": "internal/httpapi/server.go:446"
           },
           {
             "method": "POST",
             "path": "/admin/orders/{id}/invoice",
             "handler": "createDeferredOrderInvoice",
-            "evidence": "internal/httpapi/server.go:439"
+            "evidence": "internal/httpapi/server.go:447"
           },
           {
             "method": "GET",
             "path": "/admin/promo-codes/page",
             "handler": "promoCodesPage",
-            "evidence": "internal/httpapi/server.go:493"
+            "evidence": "internal/httpapi/server.go:503"
           },
           {
             "method": "POST",
             "path": "/admin/promo-codes",
             "handler": "createPromoCode",
-            "evidence": "internal/httpapi/server.go:494"
+            "evidence": "internal/httpapi/server.go:504"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -16224,7 +16924,8 @@
           "db/migrations/123_admin_order_create.sql",
           "db/migrations/124_customer_profile_contract.sql",
           "db/migrations/125_admin_ticket_create.sql",
-          "db/migrations/126_credit_management.sql"
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -16449,13 +17150,13 @@
             "method": "GET",
             "path": "/admin/tickets/create-options",
             "handler": "adminTicketCreateOptions",
-            "evidence": "internal/httpapi/server.go:522"
+            "evidence": "internal/httpapi/server.go:532"
           },
           {
             "method": "POST",
             "path": "/admin/tickets",
             "handler": "createAdminTicket",
-            "evidence": "internal/httpapi/server.go:523"
+            "evidence": "internal/httpapi/server.go:533"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -16592,7 +17293,7 @@
             "method": "POST",
             "path": "/admin/invoices",
             "handler": "saveManualInvoice",
-            "evidence": "internal/httpapi/server.go:464"
+            "evidence": "internal/httpapi/server.go:474"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -16688,7 +17389,8 @@
           "db/migrations/123_admin_order_create.sql",
           "db/migrations/124_customer_profile_contract.sql",
           "db/migrations/125_admin_ticket_create.sql",
-          "db/migrations/126_credit_management.sql"
+          "db/migrations/126_credit_management.sql",
+          "db/migrations/129_credit_lifecycle.sql"
         ],
         "status": "表名关联候选，逐页适用性未验证"
       },
@@ -16907,19 +17609,19 @@
             "method": "GET",
             "path": "/admin/products/page",
             "handler": "adminProductsPage",
-            "evidence": "internal/httpapi/server.go:361"
+            "evidence": "internal/httpapi/server.go:369"
           },
           {
             "method": "GET",
             "path": "/admin/products/{id}",
             "handler": "adminProduct",
-            "evidence": "internal/httpapi/server.go:372"
+            "evidence": "internal/httpapi/server.go:380"
           },
           {
             "method": "PATCH",
             "path": "/admin/products/{id}",
             "handler": "createProduct",
-            "evidence": "internal/httpapi/server.go:373"
+            "evidence": "internal/httpapi/server.go:381"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -17072,7 +17774,7 @@
             "method": "PATCH",
             "path": "/admin/staff/{id}",
             "handler": "saveAdminStaff",
-            "evidence": "internal/httpapi/server.go:340"
+            "evidence": "internal/httpapi/server.go:348"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"
@@ -17208,7 +17910,7 @@
             "method": "POST",
             "path": "/admin/notification-templates",
             "handler": "createNotificationTemplate",
-            "evidence": "internal/httpapi/server.go:347"
+            "evidence": "internal/httpapi/server.go:355"
           }
         ],
         "status": "已找到静态路由；逐动作与权限链未验证"

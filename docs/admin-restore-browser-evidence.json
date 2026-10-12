@@ -1212,31 +1212,6 @@
       "screenshotSha256": "e76c9db1036423de7d0577e663399f4ffe9b0fcbf6794beaddbadb5919309cec"
     },
     {
-      "newRoute": "/admin/credit",
-      "width": 1440,
-      "height": 900,
-      "result": "PASS",
-      "screenshot": "output/playwright/admin-parallel-20261012/credit-1440.png",
-      "checks": {
-        "noHorizontalOverflow": true,
-        "noJavascriptErrors": true,
-        "noConsoleErrors": true,
-        "noApiFailures": true,
-        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
-      },
-      "layout": {
-        "width": 1440,
-        "scrollWidth": 1440,
-        "title": "信用额管理",
-        "alerts": []
-      },
-      "errors": [],
-      "consoleErrors": [],
-      "apiFailures": [],
-      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
-      "screenshotSha256": "fb0bfa10e285a02a1e4cc40d8c72d49dfa5b15d304868851a968a0090cec81e1"
-    },
-    {
       "newRoute": "/admin/auth-settings",
       "width": 1440,
       "height": 900,
@@ -1335,31 +1310,6 @@
       "apiFailures": [],
       "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
       "screenshotSha256": "bddd594c91a753138bc1e9898ca25e819e783e0f0b416beb5d0a5e2b63e713c0"
-    },
-    {
-      "newRoute": "/admin/credit",
-      "width": 1024,
-      "height": 900,
-      "result": "PASS",
-      "screenshot": "output/playwright/admin-parallel-20261012/credit-1024.png",
-      "checks": {
-        "noHorizontalOverflow": true,
-        "noJavascriptErrors": true,
-        "noConsoleErrors": true,
-        "noApiFailures": true,
-        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
-      },
-      "layout": {
-        "width": 1024,
-        "scrollWidth": 1024,
-        "title": "信用额管理",
-        "alerts": []
-      },
-      "errors": [],
-      "consoleErrors": [],
-      "apiFailures": [],
-      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
-      "screenshotSha256": "15340a562c9d27993c478d43d639e28bc81f563b075a34403ae98c0311722663"
     },
     {
       "newRoute": "/admin/auth-settings",
@@ -1462,31 +1412,6 @@
       "screenshotSha256": "d51c25dffa15827c639e1a38000e502e904adfef8ffe1f6345b3eca0cae4f383"
     },
     {
-      "newRoute": "/admin/credit",
-      "width": 390,
-      "height": 900,
-      "result": "PASS",
-      "screenshot": "output/playwright/admin-parallel-20261012/credit-390.png",
-      "checks": {
-        "noHorizontalOverflow": true,
-        "noJavascriptErrors": true,
-        "noConsoleErrors": true,
-        "noApiFailures": true,
-        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
-      },
-      "layout": {
-        "width": 390,
-        "scrollWidth": 390,
-        "title": "信用额管理",
-        "alerts": []
-      },
-      "errors": [],
-      "consoleErrors": [],
-      "apiFailures": [],
-      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
-      "screenshotSha256": "f2538411fe56399c400885290f6564611595398466b805f9b7bcaf9ed12d47b5"
-    },
-    {
       "newRoute": "/admin/auth-settings",
       "width": 390,
       "height": 900,
@@ -1587,31 +1512,6 @@
       "screenshotSha256": "d9b79e4573a98186a65639f23e7aaaaa690c066f403e69ab1e93bf9ef357637c"
     },
     {
-      "newRoute": "/admin/credit",
-      "width": 320,
-      "height": 900,
-      "result": "PASS",
-      "screenshot": "output/playwright/admin-parallel-20261012/credit-320.png",
-      "checks": {
-        "noHorizontalOverflow": true,
-        "noJavascriptErrors": true,
-        "noConsoleErrors": true,
-        "noApiFailures": true,
-        "visualReview": "最终截图总览复核，320px表单逐张复核；宽表内部滚动"
-      },
-      "layout": {
-        "width": 320,
-        "scrollWidth": 320,
-        "title": "信用额管理",
-        "alerts": []
-      },
-      "errors": [],
-      "consoleErrors": [],
-      "apiFailures": [],
-      "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
-      "screenshotSha256": "67da64c3965b1a77d96e3cd87b8f5bdd3997abcaaf3a26f6a150d4f58fea932a"
-    },
-    {
       "newRoute": "/admin/auth-settings",
       "width": 320,
       "height": 900,
@@ -1685,6 +1585,682 @@
       "apiFailures": [],
       "scope": "最终合并前端+真实隔离API页面加载与四尺寸布局",
       "screenshotSha256": "a07f564929ca9a3e8e64fe9094a2e17eb7d8db2f1f9a65223589a4de3d0fde0f"
+    },
+    {
+      "newRoute": "/admin/credit?tab=customers",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "c5851e4f5b9ada282af2ec1564ed866e276ec0d0ac80e26a3e712aa46468d2f1"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "c5851e4f5b9ada282af2ec1564ed866e276ec0d0ac80e26a3e712aa46468d2f1",
+      "visitedUrl": "/admin/credit?tab=customers"
+    },
+    {
+      "newRoute": "/admin/credit?tab=consumptions",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-consumptions-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "6bdbe7e3f897c10551a2d9ffea9fab0181892659b350078f40390bfc7b102cc6"
+    },
+    {
+      "newRoute": "/admin/credit?tab=repayments",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-repayments-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "3820d6992d25c978d8beba21c4f84bca70b76179ca34fa8e4904d8f3df2896f9"
+    },
+    {
+      "newRoute": "/admin/suppliers/orders",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "供应商订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "67bcd6b6399475d937b0df0a7ba01208c16d409f23563d6989f23318c9928844"
+    },
+    {
+      "newRoute": "/admin/suppliers/renewals",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "供应商续费订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "e835a60884592b96349be9165b4ccc448d16ccdb983350653793d7982eff1575"
+    },
+    {
+      "newRoute": "/admin/suppliers/jobs",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "供应商任务队列",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "35148b5fd982a86da8c557059b99b77b0203313e339fd70f2d3479ff17e7c59c"
+    },
+    {
+      "newRoute": "/admin/suppliers/tasks",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1440.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "title": "供应商交付任务",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "8c88480b40caf2f4b3127c42257a49ca057ac596d4319da1c85030e6ab9d4ab2"
+    },
+    {
+      "newRoute": "/admin/credit?tab=customers",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "29375c54e86139ada257e21f8b3839a0118748b8e80ad21f424f29984e68b4c4"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "29375c54e86139ada257e21f8b3839a0118748b8e80ad21f424f29984e68b4c4",
+      "visitedUrl": "/admin/credit?tab=customers"
+    },
+    {
+      "newRoute": "/admin/credit?tab=consumptions",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-consumptions-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "2c58890f0d65b601a8273b1c70970d4cf51557642f0fdc93df9fb2474c8d4cbf"
+    },
+    {
+      "newRoute": "/admin/credit?tab=repayments",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-repayments-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "2b1b7a0985449330ce99569f9ed8a0c3181d3cd6a81337bd0efc6c2a15e0cfab"
+    },
+    {
+      "newRoute": "/admin/suppliers/orders",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "供应商订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "5c1e94e3b5eec54de472d4a7f0f598d86d08a7a11fe768dc48f28fd6853405d8"
+    },
+    {
+      "newRoute": "/admin/suppliers/renewals",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "供应商续费订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "7cc61e7b25ad885730b11fe566a32fbc2ceb1f19c995a39773fb607a596cc621"
+    },
+    {
+      "newRoute": "/admin/suppliers/jobs",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "供应商任务队列",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "929f07a14e4333514178551714807ed7e562b65571917a071586e440bd08e605"
+    },
+    {
+      "newRoute": "/admin/suppliers/tasks",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-1024.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "title": "供应商交付任务",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "fd29ca2245577a94ee47c14027ee1c645721feb5c58de935a2cf9a01b74973bc"
+    },
+    {
+      "newRoute": "/admin/credit?tab=customers",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "79fd5ca07dd9640b210ceb602cd74ec51c4ea23e0d1ff07e24ad33e9d3a3c59b"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "79fd5ca07dd9640b210ceb602cd74ec51c4ea23e0d1ff07e24ad33e9d3a3c59b",
+      "visitedUrl": "/admin/credit?tab=customers"
+    },
+    {
+      "newRoute": "/admin/credit?tab=consumptions",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-consumptions-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "a40f4712ebe446aa0e9c5358b7b75dc843f1aff33814992f2a82c67c780e29f0"
+    },
+    {
+      "newRoute": "/admin/credit?tab=repayments",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-repayments-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "8d9c212e0560b97e004b8e0b319776330a6be2ddd516ce9548a81f8e3a177a6d"
+    },
+    {
+      "newRoute": "/admin/suppliers/orders",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "供应商订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "dedc228b5dbcd53ccebc16ebd948c5c5066ecb6fd2bae52889a7cc0627fd677d"
+    },
+    {
+      "newRoute": "/admin/suppliers/renewals",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "供应商续费订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "851544b5b308018b3355dc44f86ec18c3c17989da7c394f651f06d6153104bdf"
+    },
+    {
+      "newRoute": "/admin/suppliers/jobs",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "供应商任务队列",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "77532036a4921b0c5bc9aa45879e51f253c9561d6a9991e9022517c9a5500825"
+    },
+    {
+      "newRoute": "/admin/suppliers/tasks",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-390.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "title": "供应商交付任务",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "8aee0354cf48ffa3bb8d5fdea903c8439cae0bd130e5ac64023f2f9e318b9b62"
+    },
+    {
+      "newRoute": "/admin/credit?tab=customers",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "c2ca224a46a44194669a2125408ad54ab322417088886699c81a0bfbd62bbbc7"
+    },
+    {
+      "newRoute": "/admin/credit",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-customers-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "c2ca224a46a44194669a2125408ad54ab322417088886699c81a0bfbd62bbbc7",
+      "visitedUrl": "/admin/credit?tab=customers"
+    },
+    {
+      "newRoute": "/admin/credit?tab=consumptions",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-consumptions-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "73fc8bc971725cf81b1d2687cdd66e2d001bee7ff94996c90c407d41c9da7935"
+    },
+    {
+      "newRoute": "/admin/credit?tab=repayments",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-credit-repayments-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "信用额管理",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "a4911c20c184b70801676fad2b6e65cd07358db22cdb833efcceda4bbf40c043"
+    },
+    {
+      "newRoute": "/admin/suppliers/orders",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-orders-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "供应商订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "5c6a41c254933c2e4e93c84f712879f10f71abd9d030a9c1c92c7dc5903bc9dd"
+    },
+    {
+      "newRoute": "/admin/suppliers/renewals",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-renewals-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "供应商续费订单",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "2ffb003529b66d3ee30a7cd0086fa719b95fe5b627a972135212822cf057180f"
+    },
+    {
+      "newRoute": "/admin/suppliers/jobs",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-jobs-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "供应商任务队列",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "13c22cd428db62ee0796366bbe21a2e99f70fb080d4fd1b4d02f31f2672616af"
+    },
+    {
+      "newRoute": "/admin/suppliers/tasks",
+      "width": 320,
+      "height": 844,
+      "screenshot": "output/playwright/admin-credit-supplier-20261012/admin-suppliers-tasks-320.png",
+      "result": "PASS",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查320信用客户与1440任务图；未逐张核对所有文字遮挡"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "title": "供应商交付任务",
+        "alerts": []
+      },
+      "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
+      "screenshotSha256": "35c604061d4066f3e7aea467e83548df5f8deb906520a6dafe06646b828c5d03"
     }
   ],
   "pageErrors": [],

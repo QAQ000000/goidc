@@ -582,5 +582,5 @@ VALUES($1,'refund',$2,$3,'invoice',$4,$5,'账单退款')`, userID, out.AmountCen
 // The owner lookup must not lock the invoice before this call.
 func LockFinancialCustomer(ctx context.Context, tx pgx.Tx, userID int64) error {
 	var id int64
-	return tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND role='customer' FOR NO KEY UPDATE", userID).Scan(&id)
+	return tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&id)
 }

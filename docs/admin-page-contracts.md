@@ -95,11 +95,11 @@
 | 87 | [资源与商店 / 供应商管理](#page-87) | #/zjmf-api | /admin/suppliers | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 88 | [资源与商店 / 商品管理](#page-88) | #/commodity-list | /admin/suppliers/catalog | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 89 | [资源与商店 / 产品管理](#page-89) | #/commodity-product | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 90 | [资源与商店 / 任务队列](#page-90) | #/commodity-taskQueue | /admin/suppliers/jobs | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 90 | [资源与商店 / 任务队列](#page-90) | #/commodity-taskQueue | /admin/suppliers/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 91 | [资源与商店 / 服务器列表](#page-91) | #/munual-resource | /admin/resources | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 92 | [资源与商店 / 订单列表](#page-92) | #/supplier-order-list | /admin/suppliers/orders | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 93 | [资源与商店 / 续费订单](#page-93) | #/supplier-renewal-order | /admin/suppliers/renewals | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 94 | [资源与商店 / 任务队列](#page-94) | #/task-queue | /admin/suppliers/tasks | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 92 | [资源与商店 / 订单列表](#page-92) | #/supplier-order-list | /admin/suppliers/orders | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 93 | [资源与商店 / 续费订单](#page-93) | #/supplier-renewal-order | /admin/suppliers/renewals | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 94 | [资源与商店 / 任务队列](#page-94) | #/task-queue | /admin/suppliers/tasks | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 95 | [资源与商店 / API设置](#page-95) | #/api-setup | /admin/suppliers/api-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 96 | [资源与商店 / 我的应用](#page-96) | #/app-store | /admin/apps | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 97 | [资源与商店 / 应用商店](#page-97) | #/app-store/app-list | /admin/apps/store | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
@@ -560,7 +560,7 @@
 <a id="page-90"></a>
 ## 90. 任务队列
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1926)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:100)。JSON 中按唯一旧 hash #/commodity-taskQueue 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1926)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:100)；页面：[源码](../web/src/app/admin/suppliers/jobs/page.tsx:1)。JSON 中按唯一旧 hash #/commodity-taskQueue 检索。
 
 <a id="page-91"></a>
 ## 91. 服务器列表
@@ -570,17 +570,17 @@
 <a id="page-92"></a>
 ## 92. 订单列表
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1967)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:102)。JSON 中按唯一旧 hash #/supplier-order-list 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1967)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:102)；页面：[源码](../web/src/app/admin/suppliers/orders/page.tsx:1)。JSON 中按唯一旧 hash #/supplier-order-list 检索。
 
 <a id="page-93"></a>
 ## 93. 续费订单
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1984)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:103)。JSON 中按唯一旧 hash #/supplier-renewal-order 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1984)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:103)；页面：[源码](../web/src/app/admin/suppliers/renewals/page.tsx:1)。JSON 中按唯一旧 hash #/supplier-renewal-order 检索。
 
 <a id="page-94"></a>
 ## 94. 任务队列
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2000)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:104)。JSON 中按唯一旧 hash #/task-queue 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2000)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:104)；页面：[源码](../web/src/app/admin/suppliers/tasks/page.tsx:1)。JSON 中按唯一旧 hash #/task-queue 检索。
 
 <a id="page-95"></a>
 ## 95. API设置

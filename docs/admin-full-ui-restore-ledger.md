@@ -22,7 +22,7 @@
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
 | 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/customer-transactions` | `invoices.view` / 金额和渠道筛选 |
 | 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page` | `invoices.view/manage` / 合并和取消 |
-| 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit`、`PUT /admin/credit/{id}/limit` | `credit.view/manage` / 独立授信账户、分页/关键词/状态筛选、授信额度调整、版本/幂等/客户范围/审计；四尺寸、保存/取消/409/未知请求重试已验收；消费、还款、冻结闭环未实现；见 [本批边界](admin-credit-management-batch.md) |
+| 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit` + `PUT /admin/credit/{id}/limit` + `GET /admin/credit/consumptions` + `GET /admin/credit/repayments` + `POST /admin/credit/consumptions/{id}/repay` + `PUT /admin/credit/{id}/freeze` + `POST /invoices/{id}/pay-credit` | `credit.view/manage` / 独立账户、信用消费/真实线下还款/冻结、客户/日期/债务状态分页、余额隔离、权限/范围/版本/幂等/审计；三标签四尺寸与未知结果恢复；线上还款、已还款现金退付、授信审批仍待补；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
 | 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 待实现 | `GET/POST /admin/contracts` | `contracts.view/manage` |
@@ -97,11 +97,11 @@
 | 87 | 供应商管理 `#/zjmf-api` | `/admin/suppliers` | 已完成 | `GET/POST/PUT /admin/suppliers` | `products.view/manage` |
 | 88 | 商品管理 `#/commodity-list` | `/admin/suppliers/catalog` | 部分完成 | `GET /admin/suppliers/{id}/products` | `products.view` |
 | 89 | 产品管理 `#/commodity-product` | `/admin/products` | 部分完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
-| 90 | 任务队列 `#/commodity-taskQueue` | `/admin/suppliers/jobs` | 待实现 | `GET /admin/supplier-jobs` | `products.view` |
+| 90 | 任务队列 `#/commodity-taskQueue` | `/admin/suppliers/jobs` | 部分完成 | `GET /admin/supplier-jobs` + `POST /admin/supplier-jobs/{id}/retry` | `products.view`；重试另需 `services.manage/view` / 真实供应商交付任务、8列、客户/供应商/动作/状态/日期/关键词分页、URL恢复与四尺寸；只重试未外调失败同步，未知结果原请求恢复；危险写任务须核验；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 部分完成 | `GET /admin/resources` | `resources.view` / 真实服务资源分页、IP/供应商/状态筛选、URL恢复；客户范围、脱敏白名单、交付快照绑定；四尺寸、真实筛选/空态/URL恢复/错误恢复已验收；独立资源增改、成本/配置/备注和资源动作弹窗待补 |
-| 92 | 订单列表 `#/supplier-order-list` | `/admin/suppliers/orders` | 待实现 | `GET /admin/supplier-orders` | `orders.view` |
-| 93 | 续费订单 `#/supplier-renewal-order` | `/admin/suppliers/renewals` | 待实现 | `GET /admin/supplier-renewals` | `orders.view` |
-| 94 | 任务队列 `#/task-queue` | `/admin/suppliers/tasks` | 待实现 | `GET /admin/supplier-tasks` | `jobs.view` |
+| 92 | 订单列表 `#/supplier-order-list` | `/admin/suppliers/orders` | 部分完成 | `GET /admin/supplier-orders`；操作复用 `/admin/orders/*` | `orders.view/manage` / 交付快照供应商归属、客户范围与真实分页、完整订单金额/已证明成本、筛选及详情/创建取消返回上下文、四尺寸；上游订单操作和完整旧版成本结算仍待补；[验收](admin-credit-supplier-acceptance-20261012.md) |
+| 93 | 续费订单 `#/supplier-renewal-order` | `/admin/suppliers/renewals` | 部分完成 | `GET /admin/supplier-renewals` | `orders.view`；账单详情另需 `invoices.view` / 真实本地供应商服务续费记录、客户/供应商/日期/付款状态分页与返回上下文、四尺寸；成本未知为null，上游续费调用未支持；[验收](admin-credit-supplier-acceptance-20261012.md) |
+| 94 | 任务队列 `#/task-queue` | `/admin/suppliers/tasks` | 部分完成 | `GET /admin/supplier-tasks` + `POST /admin/supplier-jobs/{id}/retry` | `jobs.view`；重试另需 `services.manage/view` / 与90页使用同一真实队列，安全字段/客户范围、筛选/分页/URL/错误恢复和四尺寸；仅安全同步重排、危险任务人工核验；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 95 | API设置 `#/api-setup` | `/admin/suppliers/api-settings` | 待实现 | `GET/PUT /admin/supplier-api-settings` | `products.manage` |
 | 96 | 我的应用 `#/app-store` | `/admin/apps` | 待实现 | `GET /admin/apps` | `apps.view` |
 | 97 | 应用商店 `#/app-store/app-list` | `/admin/apps/store` | 待实现 | `GET /admin/apps/store` | `apps.view` |
@@ -121,12 +121,14 @@
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面四尺寸验收见 `docs/admin-batch-settings-marketing-acceptance-20261011.md`；渠道和通知深度仍在补齐 |
 | 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、业绩与等级已交付；营销、返佣和注册字段联动继续补齐 |
 | 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除、客户资料备注、订单提成只读预估已交付；自动流量交付待补；[订单验收](admin-batch-admin-orders-acceptance-20261011.md)、[流量包验收](admin-batch-traffic-acceptance-20261011.md) |
-| 第四批 | 财务与合同 | 进行中 | 独立授信账户及安全额度调整已实现，信用消费/还款和合同列表继续补齐 |
+| 第四批 | 财务与合同 | 进行中 | 独立授信、信用消费、线下还款和冻结已补；线上还款/已还款退付、授信审批及合同列表继续补齐 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](admin-batch-admin-tickets-acceptance-20261011.md) |
 | 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
 | 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置四尺寸已有既往验收，销售结算和完整权限页面待补 |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
-| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单已补；独立资源CRUD、供应商订单/续费/任务、资源API和应用目录待补 |
+| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；独立资源CRUD、上游续费/复杂配置、资源API和应用目录待补 |
 | 第十批 | 创建与编辑页 | 进行中 | 新建订单优惠码目录/新增弹窗与真实分页 API 已补；订单创建/延期出账及新增弹窗均完成四尺寸浏览器验收；其余创建编辑页继续补齐；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 
 2026-10-12 独立分支资源/信用/认证批次已集成并检验；台账仍为47项已完成、48项部分完成、10项待实现，表示登记状态而非功能完成率。[本批验收与边界](admin-parallel-acceptance-20261012.md)。
+
+2026-10-12 信用业务/供应商批次：原待实现90/92/93/94页新增真实API和页面，按完整旧版剩余边界登记为部分完成。台账现为47项已完成、52项部分完成、6项待实现；登记状态不是功能完成率。[本批验收](admin-credit-supplier-acceptance-20261012.md)。
