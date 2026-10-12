@@ -53,6 +53,7 @@ export const adminNavigation = [
   { href: "/admin/currencies", label: "货币配置", icon: Settings, permission: "settings.view", group: "finance" },
   { href: "/admin/finance-settings", label: "充值与财务", icon: Settings, permission: "settings.view", group: "finance" },
   { href: "/admin/invoice-settings", label: "发票设置", icon: Receipt, permission: "settings.view", group: "finance" },
+  { href: "/admin/contracts", label: "合同列表", icon: FileCheck, permission: "contracts.view", group: "finance" },
   { href: "/admin/contract-settings", label: "合同设置", icon: Receipt, permission: "settings.view", group: "finance" },
   { href: "/admin/credit-settings", label: "信用额设置", icon: WalletCards, permission: "settings.view", group: "finance" },
   { href: "/admin/credit", label: "信用额管理", icon: WalletCards, permission: "credit.view", group: "finance" },
