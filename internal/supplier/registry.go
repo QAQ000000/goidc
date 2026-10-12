@@ -11,6 +11,14 @@ import (
 
 type ProviderFactory func(Account) (Adapter, error)
 
+// Definition binds provider-neutral metadata to the compiled configuration
+// schema exposed to administrators. The schema is public metadata only; it
+// never contains account values or credentials.
+type Definition struct {
+	Provider   Provider           `json:"provider"`
+	Descriptor channel.Descriptor `json:"descriptor"`
+}
+
 var adapterRegistry = module.NewRegistry[Adapter](channel.Provision)
 
 var providerState = struct {
@@ -96,5 +104,23 @@ func Providers() []Provider {
 	}
 	providerState.RUnlock()
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
+	return result
+}
+
+// Definitions returns the compiled provider catalogue together with the
+// matching form schema. Database rows are deliberately not consulted here.
+func Definitions() []Definition {
+	providers := Providers()
+	result := make([]Definition, 0, len(providers))
+	for _, provider := range providers {
+		providerState.RLock()
+		descriptorID := providerState.descriptor[provider.ID]
+		providerState.RUnlock()
+		descriptor, ok := channel.Lookup(channel.Provision, descriptorID)
+		if !ok {
+			continue
+		}
+		result = append(result, Definition{Provider: provider, Descriptor: descriptor})
+	}
 	return result
 }

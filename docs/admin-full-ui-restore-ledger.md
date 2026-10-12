@@ -102,7 +102,7 @@
 | 92 | 订单列表 `#/supplier-order-list` | `/admin/suppliers/orders` | 部分完成 | `GET /admin/supplier-orders` | `orders.view/manage` / 交付快照供应商归属、客户范围与真实分页、完整订单金额/已证明成本、筛选及详情/创建取消返回上下文、四尺寸；上游订单操作和完整旧版成本结算仍待补；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 93 | 续费订单 `#/supplier-renewal-order` | `/admin/suppliers/renewals` | 部分完成 | `GET /admin/supplier-renewals` | `orders.view`；账单详情另需 `invoices.view` / 真实本地供应商服务续费记录、客户/供应商/日期/付款状态分页与返回上下文、四尺寸；成本未知为null，上游续费调用未支持；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 94 | 任务队列 `#/task-queue` | `/admin/suppliers/tasks` | 部分完成 | `GET /admin/supplier-tasks` + `POST /admin/supplier-jobs/{id}/retry` | `jobs.view`；重试另需 `services.manage/view` / 与90页使用同一真实队列，安全字段/客户范围、筛选/分页/URL/错误恢复和四尺寸；仅安全同步重排、危险任务人工核验；[验收](admin-credit-supplier-acceptance-20261012.md) |
-| 95 | API设置 `#/api-setup` | `/admin/suppliers/api-settings` | 待实现 | `GET/PUT /admin/supplier-api-settings` | `products.manage` |
+| 95 | API设置 `#/api-setup` | `/admin/suppliers/api-settings` | 部分完成 | `GET/PUT /admin/supplier-api-settings` + `GET /admin/supplier-providers` + `POST /admin/suppliers/{id}/test-connection` | `products.view/manage` / 资源 API 总开关、实名/手机门禁、编译供应商能力/schema、账户脱敏摘要、只读连接测试；版本、幂等、审计和权限；保存/取消/连接测试及四尺寸布局已验收，完整状态矩阵待补；[验收](admin-supplier-api-settings-acceptance-20261012.md) |
 | 96 | 我的应用 `#/app-store` | `/admin/apps` | 待实现 | `GET /admin/apps` | `apps.view` |
 | 97 | 应用商店 `#/app-store/app-list` | `/admin/apps/store` | 待实现 | `GET /admin/apps/store` | `apps.view` |
 | 98 | 添加客户 `#/customer-add` | `/admin/customers/new` | 已完成 | `POST /admin/customers` | `customers.manage` / 校验和返回 |
@@ -126,7 +126,7 @@
 | 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
 | 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置四尺寸已有既往验收，销售结算和完整权限页面待补 |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
-| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；独立资源CRUD、上游续费/复杂配置、资源API和应用目录待补 |
+| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立资源CRUD、上游续费/复杂配置和应用目录待补 |
 | 第十批 | 创建与编辑页 | 进行中 | 新建订单优惠码目录/新增弹窗与真实分页 API 已补；订单创建/延期出账及新增弹窗均完成四尺寸浏览器验收；其余创建编辑页继续补齐；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 
 2026-10-12 独立分支资源/信用/认证批次已集成并检验；台账仍为47项已完成、48项部分完成、10项待实现，表示登记状态而非功能完成率。[本批验收与边界](admin-parallel-acceptance-20261012.md)。
@@ -138,3 +138,5 @@
 2026-10-12 合同批次：第18页从待实现改为部分完成，38页补合同模板页签。真实客户确认、审核、邮寄和作废通过；HTML打印不作为PDF或电子签章验收。现为47完成、55部分、3待实现；[验收](admin-contract-lifecycle-acceptance-20261012.md)。
 
 2026-10-12 编译期模块基础批次：公共渠道目录增加类型化工厂解析；支付、短信、SMTP、实名认证和供应商注册迁移到编译进二进制的注册契约，保留 `channel_instances`/`supplier_accounts` 的配置与密钥边界。页面登记数量不变；供应商 API 设置、我的应用和应用商店仍待实现。设计与扩展约束见 [编译期模块与渠道扩展契约](compiled-module-architecture.md)。
+
+2026-10-13 供应商 API 设置：第95页接入资源 API 全局设置、密钥签发实名/手机门禁、客户 Bearer 总开关、编译供应商描述目录、脱敏账户摘要和只读上游目录连通测试。设置保存使用版本冲突、幂等回执与审计；测试复核权限并在外部调用期间不持有数据库事务。隔离 PG18 专项、浏览器保存/取消/连接测试及 1440/1024/390/320 验收通过；完整浏览器状态矩阵未收口，登记部分完成。台账现为47完成、56部分、2待实现；[验收记录](admin-supplier-api-settings-acceptance-20261012.md)。

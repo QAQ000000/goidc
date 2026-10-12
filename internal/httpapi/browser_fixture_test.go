@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -126,6 +127,11 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 	defer os.Remove(finish)
 	t.Log("isolated browser fixture ready")
 	limit := 15 * time.Minute
+	if raw := os.Getenv("ZJMFGO_BROWSER_TIMEOUT_SECONDS"); raw != "" {
+		if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 60 {
+			limit = time.Duration(seconds) * time.Second
+		}
+	}
 	if testDeadline, ok := t.Deadline(); ok {
 		limit = min(limit, time.Until(testDeadline)-30*time.Second)
 	}

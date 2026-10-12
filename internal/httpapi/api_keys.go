@@ -50,6 +50,12 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if identityFrom(r).Role == "customer" {
+		if err = s.db.CheckCustomerAPIKeyEligibilityTx(r.Context(), tx, identityFrom(r).ID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	var id int64
 	if err = tx.QueryRow(r.Context(), "INSERT INTO api_keys(user_id,name,prefix,secret_hash,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id", identityFrom(r).ID, input.Name, prefix, tokenHash(secret), expiresAt).Scan(&id); err != nil {
 		s.fail(w, r, err)

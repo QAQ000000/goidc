@@ -2621,6 +2621,86 @@
       },
       "scope": "隔离PG18真实API加载；交互验收见admin-contract-lifecycle-acceptance-20261012.md",
       "screenshotSha256": "c1512d8d946f5b46d1a2eb4567d83040d7832e6dd95fe8e1b510e21eed810ab3"
+    },
+    {
+      "newRoute": "/admin/suppliers/api-settings",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-supplier-api-settings-20261012/api-settings-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查1440和320；页面表格容器内横向滚动；320公共顶部退出按钮存在裁切，完整公共布局未通过"
+      },
+      "scope": "隔离PG18真实API；连接测试、保存与取消确认已操作验收",
+      "screenshotSha256": "435dfcbd2b90e1c4943914bd7dc712b06b5064b0c97d7dabd2e903fc01b59864"
+    },
+    {
+      "newRoute": "/admin/suppliers/api-settings",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-supplier-api-settings-20261012/api-settings-1024.png",
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查1440和320；页面表格容器内横向滚动；320公共顶部退出按钮存在裁切，完整公共布局未通过"
+      },
+      "scope": "隔离PG18真实API；连接测试、保存与取消确认已操作验收",
+      "screenshotSha256": "8481af9e6a3fef70182651a6b48c7c29efd204dab9fb4a503ad61aac0e8ea5eb"
+    },
+    {
+      "newRoute": "/admin/suppliers/api-settings",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-supplier-api-settings-20261012/api-settings-390.png",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查1440和320；页面表格容器内横向滚动；320公共顶部退出按钮存在裁切，完整公共布局未通过"
+      },
+      "scope": "隔离PG18真实API；连接测试、保存与取消确认已操作验收",
+      "screenshotSha256": "36510368a805699aa8b3d36bae115702befe22ab18c4b8ab48bda25cef4af75c"
+    },
+    {
+      "newRoute": "/admin/suppliers/api-settings",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-supplier-api-settings-20261012/api-settings-320.png",
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "抽查1440和320；页面表格容器内横向滚动；320公共顶部退出按钮存在裁切，完整公共布局未通过"
+      },
+      "scope": "隔离PG18真实API；连接测试、保存与取消确认已操作验收",
+      "screenshotSha256": "8b476733d37f5ddc10b4682cfd549d832a912c8bbc0bc85c36d553fdb9ce410a"
     }
   ],
   "pageErrors": [],

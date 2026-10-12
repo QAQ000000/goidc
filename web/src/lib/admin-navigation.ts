@@ -20,6 +20,7 @@ export const adminNavigation = [
   { href: "/admin/suppliers/orders", label: "供应商订单", icon: ClipboardList, permission: "orders.view", group: "products" },
   { href: "/admin/suppliers/renewals", label: "供应商续费", icon: Receipt, permission: "orders.view", group: "products" },
   { href: "/admin/suppliers", label: "供应商", icon: Network, permission: "products.view", group: "products" },
+  { href: "/admin/suppliers/api-settings", label: "供应商 API 设置", icon: Plug, permission: "products.view", group: "products" },
   { href: "/admin/suppliers/jobs", label: "供应商任务队列", icon: ClipboardList, permission: "products.view", group: "products" },
   { href: "/admin/service-groups", label: "服务分组", icon: Server, permission: "products.view", group: "products" },
   { href: "/admin/content", label: "新闻与知识库", icon: BookOpen, permission: "content.view", group: "content" },

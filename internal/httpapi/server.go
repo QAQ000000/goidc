@@ -390,9 +390,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/products", s.auth(s.adminProducts, true))
 	mux.HandleFunc("GET /api/v1/admin/products/page", s.auth(s.adminProductsPage, true))
 	mux.HandleFunc("GET /api/v1/admin/supplier-providers", s.auth(s.supplierProviders, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-api-settings", s.sessionAuth(s.supplierAPISettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/supplier-api-settings", s.sessionAuth(s.updateSupplierAPISettings, true))
 	mux.HandleFunc("GET /api/v1/admin/suppliers", s.auth(s.suppliers, true))
 	mux.HandleFunc("POST /api/v1/admin/suppliers", s.auth(s.saveSupplier, true))
 	mux.HandleFunc("PUT /api/v1/admin/suppliers/{id}", s.auth(s.saveSupplier, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/test-connection", s.sessionAuth(s.testSupplierConnection, true))
 	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/catalog", s.auth(s.supplierCatalog, true))
 	mux.HandleFunc("GET /api/v1/admin/suppliers/{id}/products/{product_id}", s.auth(s.supplierProduct, true))
 	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/import", s.auth(s.importSupplierProduct, true))
@@ -664,6 +667,17 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 		if err != nil {
 			s.fail(w, r, err)
 			return
+		}
+		if bearer != "" && id.Role == "customer" {
+			var enabled bool
+			if err = s.db.Pool.QueryRow(r.Context(), "SELECT enabled FROM resource_api_settings WHERE id=1").Scan(&enabled); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if !enabled {
+				writeError(w, http.StatusForbidden, "api_access_disabled", "客户 API 接口暂未开放")
+				return
+			}
 		}
 		if admin && id.Role != "admin" && id.Role != "super_admin" {
 			writeError(w, 403, "forbidden", "需要管理员权限")

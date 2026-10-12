@@ -21,10 +21,10 @@ var adminRoutePermissions = func() map[string]string {
 	m["DELETE /api/v1/admin/global-configuration-groups/{id}"] = "products.manage"
 	m["GET /api/v1/admin/supplier-orders"] = "orders.view"
 	m["GET /api/v1/admin/supplier-renewals"] = "orders.view"
-	for _, p := range []string{"GET /api/v1/admin/supplier-providers", "GET /api/v1/admin/suppliers", "GET /api/v1/admin/products/{id}/supplier-binding"} {
+	for _, p := range []string{"GET /api/v1/admin/supplier-providers", "GET /api/v1/admin/supplier-api-settings", "GET /api/v1/admin/suppliers", "GET /api/v1/admin/products/{id}/supplier-binding"} {
 		m[p] = "products.view"
 	}
-	for _, p := range []string{"POST /api/v1/admin/suppliers", "PUT /api/v1/admin/suppliers/{id}", "POST /api/v1/admin/suppliers/{id}/catalog", "GET /api/v1/admin/suppliers/{id}/products/{product_id}", "POST /api/v1/admin/suppliers/{id}/import"} {
+	for _, p := range []string{"PUT /api/v1/admin/supplier-api-settings", "POST /api/v1/admin/suppliers", "PUT /api/v1/admin/suppliers/{id}", "POST /api/v1/admin/suppliers/{id}/test-connection", "POST /api/v1/admin/suppliers/{id}/catalog", "GET /api/v1/admin/suppliers/{id}/products/{product_id}", "POST /api/v1/admin/suppliers/{id}/import"} {
 		m[p] = "products.manage"
 	}
 	m["POST /api/v1/admin/services/{id}/supplier-verification"] = "services.manage"

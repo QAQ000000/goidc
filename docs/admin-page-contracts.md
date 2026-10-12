@@ -100,7 +100,7 @@
 | 92 | [资源与商店 / 订单列表](#page-92) | #/supplier-order-list | /admin/suppliers/orders | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 93 | [资源与商店 / 续费订单](#page-93) | #/supplier-renewal-order | /admin/suppliers/renewals | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 94 | [资源与商店 / 任务队列](#page-94) | #/task-queue | /admin/suppliers/tasks | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
-| 95 | [资源与商店 / API设置](#page-95) | #/api-setup | /admin/suppliers/api-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 95 | [资源与商店 / API设置](#page-95) | #/api-setup | /admin/suppliers/api-settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 96 | [资源与商店 / 我的应用](#page-96) | #/app-store | /admin/apps | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 97 | [资源与商店 / 应用商店](#page-97) | #/app-store/app-list | /admin/apps/store | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 98 | [客户管理 / 添加客户](#page-98) | #/customer-add | /admin/customers/new | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -585,7 +585,7 @@
 <a id="page-95"></a>
 ## 95. API设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2018)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:105)。JSON 中按唯一旧 hash #/api-setup 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2018)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:105)；页面：[源码](../web/src/app/admin/suppliers/api-settings/page.tsx:1)。JSON 中按唯一旧 hash #/api-setup 检索。
 
 <a id="page-96"></a>
 ## 96. 我的应用

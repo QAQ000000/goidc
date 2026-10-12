@@ -74,6 +74,9 @@ func testServer(t *testing.T) (*store.Store, http.Handler) {
 	if _, err = db.Pool.Exec(ctx, "UPDATE site_settings SET email_verification_required=false"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.Pool.Exec(ctx, "UPDATE resource_api_settings SET enabled=true"); err != nil {
+		t.Fatal(err)
+	}
 	db.ProvisionEncryptionKey = []byte("01234567890123456789012345678901")
 	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", SMTPHost: "localhost", SMTPPort: 587, SMTPFrom: "test@example.test", ProvisionEncryptionKey: db.ProvisionEncryptionKey, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
 }
