@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSupplierJobsScopeSecretsAndSafeRetry(t *testing.T) {
@@ -65,4 +66,53 @@ func TestSupplierJobsScopeSecretsAndSafeRetry(t *testing.T) {
 		t.Fatal(row)
 	}
 	expect(t, request(f.h, "POST", path, map[string]any{"expected_attempts": row["attempts"], "expected_updated_at": row["updated_at"]}, f.root, "supplier-jobs-verify-key"), 409)
+}
+
+func TestSupplierJobRetrySameKeyAcrossServices(t *testing.T) {
+	f := supplierSetup(t)
+	f.publish(t, f.pid, "supplier-retry-cross-service")
+	serviceA, _ := f.purchase(t, f.pid, "supplier-retry-order-a")
+	serviceB, _ := f.purchase(t, f.pid, "supplier-retry-order-b")
+	type candidate struct {
+		jobID    int64
+		attempts int
+		updated  time.Time
+	}
+	jobs := make([]candidate, 0, 2)
+	for _, serviceID := range []int64{serviceA, serviceB} {
+		var id int64
+		if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM provision_jobs WHERE service_id=$1", serviceID).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET action='sync',status='failed' WHERE id=$1", id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET status='active',upstream_id=$2 WHERE id=$1", serviceID, fmt.Sprint(40+serviceID)); err != nil {
+			t.Fatal(err)
+		}
+		var attempts int
+		var updated time.Time
+		if err := f.db.Pool.QueryRow(t.Context(), "SELECT attempts,updated_at FROM provision_jobs WHERE id=$1", id).Scan(&attempts, &updated); err != nil {
+			t.Fatal(err)
+		}
+		jobs = append(jobs, candidate{id, attempts, updated})
+	}
+	start := make(chan struct{})
+	statuses := make(chan int, 2)
+	for _, job := range jobs {
+		go func(job candidate) {
+			<-start
+			path := fmt.Sprintf("/api/v1/admin/supplier-jobs/%d/retry", job.jobID)
+			statuses <- request(f.h, "POST", path, map[string]any{"expected_attempts": job.attempts, "expected_updated_at": job.updated}, f.root, "supplier-retry-shared-key").Code
+		}(job)
+	}
+	close(start)
+	first, second := <-statuses, <-statuses
+	if !(first == 200 && second == 409 || first == 409 && second == 200) {
+		t.Fatalf("same key across services returned %d and %d", first, second)
+	}
+	var pending, receipts int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM provision_jobs WHERE id=ANY($1) AND status='pending'),(SELECT count(*) FROM admin_setting_operations WHERE operation='supplier.job.retry' AND idempotency_key='supplier-retry-shared-key')", []int64{jobs[0].jobID, jobs[1].jobID}).Scan(&pending, &receipts); err != nil || pending != 1 || receipts != 1 {
+		t.Fatal(pending, receipts, err)
+	}
 }

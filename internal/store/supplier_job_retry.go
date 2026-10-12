@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -25,10 +26,6 @@ func (s *Store) RetrySupplierJob(ctx context.Context, actorID int64, sessionHash
 	if err = tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		return false, conflict("permission_denied", "没有管理服务的权限")
 	}
-	var sessionUser int64
-	if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUser); err != nil {
-		return false, conflict("unauthorized", "登录已失效")
-	}
 	if role != "super_admin" {
 		if role != "admin" || roleID == nil {
 			return false, conflict("permission_denied", "没有管理服务的权限")
@@ -37,6 +34,13 @@ func (s *Store) RetrySupplierJob(ctx context.Context, actorID int64, sessionHash
 		if err = tx.QueryRow(ctx, "SELECT active AND 'services.view'=ANY(permissions) AND 'services.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil || !allowed {
 			return false, conflict("permission_denied", "没有管理服务的权限")
 		}
+	}
+	var sessionUser int64
+	if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUser); err != nil {
+		return false, conflict("unauthorized", "登录已失效")
+	}
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("supplier-job-retry:%d:%s", actorID, key)); err != nil {
+		return false, err
 	}
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
 		return false, err
