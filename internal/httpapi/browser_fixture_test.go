@@ -86,6 +86,16 @@ func TestSiteSettingsBrowserFixture(t *testing.T) {
 	})
 }
 
+func TestCompiledAppsBrowserFixture(t *testing.T) {
+	adminBrowserFixture(t, "compiled-apps-super", func(db *store.Store, h http.Handler) {
+		seedCompiledApps(t, db)
+		readerID, _ := user(t, db, h, "apps-reader", "admin")
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+			t.Fatal(err)
+		}
+	})
+}
+
 func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store, http.Handler)) {
 	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
 	if ready == "" || finish == "" {

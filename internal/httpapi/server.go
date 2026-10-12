@@ -191,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/sms-settings", s.sessionAuth(s.updateSMSSettings, true))
 	mux.HandleFunc("POST /api/v1/admin/sms-settings/test", s.sessionAuth(s.testSMSSettings, true))
 	mux.HandleFunc("POST /api/v1/admin/smtp-settings/test", s.sessionAuth(s.testSMTPSettings, true))
+	mux.HandleFunc("GET /api/v1/admin/apps", s.sessionAuth(s.apps, true))
 	mux.HandleFunc("GET /api/v1/admin/channel-catalogue", s.sessionAuth(s.channelCatalogue, true))
 	mux.HandleFunc("GET /api/v1/admin/channel-instances", s.sessionAuth(s.channelInstances, true))
 	mux.HandleFunc("POST /api/v1/admin/channel-instances", s.sessionAuth(s.createChannelInstance, true))
