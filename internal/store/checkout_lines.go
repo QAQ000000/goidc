@@ -44,6 +44,9 @@ func (s *Store) prepareCheckoutLines(ctx context.Context, tx pgx.Tx, userID int6
 	stockUse := map[int64]int{}
 	for index := range items {
 		v := &items[index]
+		if err = s.CheckOrderAdmission(ctx, tx, userID, v.ProductID, true); err != nil {
+			return result, nil, false, err
+		}
 		if err = lockSupplierAtCheckout(ctx, tx, v.ProductID, v.Cycle); err != nil {
 			return result, nil, false, err
 		}

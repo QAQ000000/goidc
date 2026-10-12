@@ -326,6 +326,9 @@ func (s *Store) CartPromoQuote(ctx context.Context, tx pgx.Tx, userID int64, car
 	lines := []PromoLine{}
 	var subtotal int64
 	for _, entry := range configured {
+		if err = s.CheckOrderAdmission(ctx, tx, userID, entry.line.ProductID, lock); err != nil {
+			return PromoQuote{}, 0, err
+		}
 		if !entry.current {
 			return PromoQuote{}, 0, conflict("price_changed", "商品价格或配置已变化，请重新确认购物车")
 		}

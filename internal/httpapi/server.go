@@ -136,6 +136,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/marketing/{id}", s.auth(s.marketingCampaignDetail, true))
 	mux.HandleFunc("PATCH /api/v1/admin/marketing/{id}", s.auth(s.updateMarketingCampaign, true))
 	mux.HandleFunc("POST /api/v1/admin/marketing/{id}/send", s.auth(s.sendMarketingCampaign, true))
+	mux.HandleFunc("GET /api/v1/admin/order-settings", s.sessionAuth(s.orderSettings, true))
+	mux.HandleFunc("PUT /api/v1/admin/order-settings", s.sessionAuth(s.updateOrderSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/credit-settings", s.sessionAuth(s.creditSettings, true))

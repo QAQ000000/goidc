@@ -305,6 +305,8 @@ export type NOKVMMonitoring={
 };
 export type DeliveryConfig={profile_id:string;resources:NOKVMResources;templates?:NOKVMTemplate[]};
 export type Product = {
+ require_verified_phone?:boolean;
+ require_certification?:boolean;
   delivery_config?:DeliveryConfig|null;
   purchase_field_definitions?: PurchaseField[];
 	config_upgrade_enabled?: boolean;
@@ -351,6 +353,8 @@ export type ProductOption = { id:number;parent_option_id?:number;label:string;va
 export type ProductOptionGroup = { id:number;parent_group_id?:number;name:string;slug:string;required:boolean;active:boolean;sort_order:number;option_type?:number;qty_minimum?:number;qty_maximum?:number;qty_stage?:number;unit?:string;upgrade_enabled?:boolean;options:ProductOption[] };
 export type OptionSnapshot = { id:number;group_id:number;group_name:string;group_slug:string;label:string;value:string;quantity?:number;price_delta_cents:number;setup_delta_cents:number };
 export type CartItem = Product & {
+ admission_error?:string;
+ admission_code?:string;
   purchase_fields: Record<string,string>;
   purchase_field_snapshot: PurchaseFieldSnapshot[];
   fields_valid: boolean;

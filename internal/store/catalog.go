@@ -146,21 +146,23 @@ func (s *Store) DeleteCatalogGroup(ctx context.Context, actor, id, version int64
 }
 
 type ProductInput struct {
-	Name             string              `json:"name"`
-	Slug             string              `json:"slug"`
-	Description      string              `json:"description"`
-	CategoryID       *int64              `json:"category_id"`
-	SortOrder        int                 `json:"sort_order"`
-	Active           *bool               `json:"active"`
-	BillingCycle     string              `json:"billing_cycle"`
-	PriceCents       int64               `json:"price_cents"`
-	SetupFeeCents    int64               `json:"setup_fee_cents"`
-	Stock            *int                `json:"stock"`
-	ExpectedStock    *int                `json:"expected_stock"`
-	ProvisionMode    string              `json:"provision_mode"`
-	DeliveryConfig   *provision.Delivery `json:"delivery_config"`
-	ApprovalRequired bool                `json:"approval_required"`
-	ExpectedRevision int64               `json:"expected_revision"`
+	Name                 string              `json:"name"`
+	Slug                 string              `json:"slug"`
+	Description          string              `json:"description"`
+	CategoryID           *int64              `json:"category_id"`
+	SortOrder            int                 `json:"sort_order"`
+	Active               *bool               `json:"active"`
+	BillingCycle         string              `json:"billing_cycle"`
+	PriceCents           int64               `json:"price_cents"`
+	SetupFeeCents        int64               `json:"setup_fee_cents"`
+	Stock                *int                `json:"stock"`
+	ExpectedStock        *int                `json:"expected_stock"`
+	ProvisionMode        string              `json:"provision_mode"`
+	DeliveryConfig       *provision.Delivery `json:"delivery_config"`
+	RequireVerifiedPhone *bool               `json:"require_verified_phone"`
+	RequireCertification *bool               `json:"require_certification"`
+	ApprovalRequired     bool                `json:"approval_required"`
+	ExpectedRevision     int64               `json:"expected_revision"`
 }
 
 var productSlugPattern = regexp.MustCompile(`^[a-z0-9-]{1,120}$`)
@@ -252,7 +254,10 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 	if err != nil {
 		return 0, err
 	}
-	if err = Audit(ctx, tx, actor, action, "product", id, map[string]any{"revision": revision + 1, "category_id": in.CategoryID, "active": *in.Active, "price_cents": in.PriceCents, "stock": in.Stock}); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE products SET require_verified_phone=COALESCE($2,require_verified_phone),require_certification=COALESCE($3,require_certification) WHERE id=$1", id, in.RequireVerifiedPhone, in.RequireCertification); err != nil {
+		return 0, err
+	}
+	if err = Audit(ctx, tx, actor, action, "product", id, map[string]any{"revision": revision + 1, "category_id": in.CategoryID, "active": *in.Active, "price_cents": in.PriceCents, "stock": in.Stock, "require_verified_phone": in.RequireVerifiedPhone, "require_certification": in.RequireCertification}); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)

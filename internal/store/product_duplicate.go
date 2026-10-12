@@ -49,8 +49,8 @@ func (s *Store) DuplicateProduct(ctx context.Context, actor int64, in ProductDup
 	}
 	var productID int64
 	err = tx.QueryRow(ctx, `
-INSERT INTO products(category_id,name,slug,description,product_type,billing_cycle,price_cents,setup_fee_cents,stock,active,metadata,revision,sort_order,provision_mode,approval_required,service_group_id,config_upgrade_enabled,config_downgrade_enabled,delivery_config)
-SELECT category_id,$2,$3,description,product_type,billing_cycle,price_cents,setup_fee_cents,stock,active,metadata,1,sort_order,provision_mode,approval_required,service_group_id,config_upgrade_enabled,config_downgrade_enabled,delivery_config
+INSERT INTO products(category_id,name,slug,description,product_type,billing_cycle,price_cents,setup_fee_cents,stock,active,metadata,revision,sort_order,provision_mode,approval_required,require_verified_phone,require_certification,service_group_id,config_upgrade_enabled,config_downgrade_enabled,delivery_config)
+SELECT category_id,$2,$3,description,product_type,billing_cycle,price_cents,setup_fee_cents,stock,active,metadata,1,sort_order,provision_mode,approval_required,require_verified_phone,require_certification,service_group_id,config_upgrade_enabled,config_downgrade_enabled,delivery_config
 FROM products WHERE id=$1
 RETURNING id`, sourceID, in.Name, in.Slug).Scan(&productID)
 	if err != nil {
