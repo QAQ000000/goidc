@@ -14,16 +14,28 @@ import (
 
 func (s *Server) verificationChannels(w http.ResponseWriter, r *http.Request) {
 	channels := []string{}
-	if s.verificationAvailable(r.Context(), "email") == nil {
+	var emailEnabled, smsEnabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT verification_email_enabled,verification_sms_enabled FROM auth_settings WHERE id=1").Scan(&emailEnabled, &smsEnabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if emailEnabled && s.verificationAvailable(r.Context(), "email") == nil {
 		channels = append(channels, "email")
 	}
-	if s.verificationAvailable(r.Context(), "sms") == nil {
+	if smsEnabled && s.verificationAvailable(r.Context(), "sms") == nil {
 		channels = append(channels, "sms")
 	}
 	write(w, 200, map[string]any{"channels": channels})
 }
 
 func (s *Server) verificationAvailable(ctx context.Context, channel string) error {
+	var enabled bool
+	if err := s.db.Pool.QueryRow(ctx, "SELECT CASE WHEN $1='sms' THEN verification_sms_enabled ELSE verification_email_enabled END FROM auth_settings WHERE id=1", channel).Scan(&enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		return storeError("notification_channel_unavailable", "通知渠道未启用")
+	}
 	if len(s.db.ProvisionEncryptionKey) != 32 {
 		return storeError("verification_unconfigured", "验证码加密尚未配置")
 	}
@@ -140,7 +152,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 	deliver := true
 	if flow == "register" {
 		var enabled bool
-		if err = tx.QueryRow(r.Context(), "SELECT registration_enabled FROM site_settings WHERE id=1 FOR SHARE").Scan(&enabled); err != nil {
+		if err = tx.QueryRow(r.Context(), "SELECT s.registration_enabled AND a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1 FOR SHARE").Scan(&enabled); err != nil {
 			s.fail(w, r, err)
 			return
 		}

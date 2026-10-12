@@ -108,6 +108,12 @@ func recheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessi
 	return nil
 }
 
+// RecheckSettingsManager is used by settings endpoints that keep a wider
+// transaction than the legacy store helpers.
+func RecheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string) error {
+	return recheckSettingsManager(ctx, tx, actorID, sessionHash)
+}
+
 func (s *Store) AdminGrants(ctx context.Context, userID int64) ([]string, error) {
 	var grants []string
 	err := s.Pool.QueryRow(ctx, `SELECT coalesce((SELECT r.permissions FROM admin_roles r WHERE r.id=u.admin_role_id AND r.active),'{}'::text[])

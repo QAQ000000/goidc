@@ -164,6 +164,13 @@ func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHa
 	if captchaEnabled == nil {
 		in.AuthCaptchaEnabled = previous.AuthCaptchaEnabled
 	}
+	var verificationEmailEnabled bool
+	if err = tx.QueryRow(ctx, "SELECT verification_email_enabled FROM auth_settings WHERE id=1 FOR SHARE").Scan(&verificationEmailEnabled); err != nil {
+		return SiteSettings{}, err
+	}
+	if in.EmailVerificationRequired && !verificationEmailEnabled {
+		return SiteSettings{}, conflict("invalid_site_settings", "注册需要邮箱验证时不能关闭邮件验证码渠道")
+	}
 	if adminSettings == nil {
 		adminSettings = &previous.AdminSettings
 	}
@@ -177,6 +184,11 @@ func (s *Store) UpdateSiteSettings(ctx context.Context, actorID int64, sessionHa
 	}
 	if err = Audit(ctx, tx, actorID, "site.settings_updated", "site_settings", 1, map[string]any{"before": previous.SiteProfile, "after": out.SiteProfile, "previous_version": previous.Version, "version": out.Version}); err != nil {
 		return SiteSettings{}, err
+	}
+	if previous.RegistrationEnabled != out.RegistrationEnabled || previous.EmailVerificationRequired != out.EmailVerificationRequired || previous.AuthCaptchaEnabled != out.AuthCaptchaEnabled {
+		if _, err = tx.Exec(ctx, "UPDATE auth_settings SET version=version+1,updated_at=now() WHERE id=1"); err != nil {
+			return SiteSettings{}, err
+		}
 	}
 	return out, tx.Commit(ctx)
 }

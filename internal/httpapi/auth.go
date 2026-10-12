@@ -49,6 +49,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := strings.ToLower(strings.TrimSpace(input.Username))
+	var loginEnabled, usernameEnabled, emailEnabled, phoneEnabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT login_enabled,login_username_enabled,login_email_enabled,login_phone_enabled FROM auth_settings WHERE id=1").Scan(&loginEnabled, &usernameEnabled, &emailEnabled, &phoneEnabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	method := "username"
+	if strings.Contains(username, "@") {
+		method = "email"
+	} else if strings.HasPrefix(username, "+") {
+		method = "phone"
+	}
 	if s.loginBlocked(r.Context(), username, requestHost(r)) {
 		writeError(w, http.StatusForbidden, "login_blocked", "该登录来源已被暂时禁止，请稍后再试")
 		return
@@ -56,7 +67,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var id identity
 	var hash, status string
 	var resetRequired, mfaEnabled bool
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT id,username,email,display_name,role,password_hash,status,password_reset_required,mfa_enabled FROM users WHERE username=$1 OR email=$1", username).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role, &hash, &status, &resetRequired, &mfaEnabled)
+	err := s.db.Pool.QueryRow(r.Context(), "SELECT id,username,email,display_name,role,password_hash,status,password_reset_required,mfa_enabled FROM users WHERE ($2='username' AND username=$1) OR ($2='email' AND email=$1) OR ($2='phone' AND phone=$1 AND phone_verified)", username, method).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role, &hash, &status, &resetRequired, &mfaEnabled)
 	if errors.Is(err, pgx.ErrNoRows) {
 		hash = "$2b$12$IaaLuziNj3ry6N5MGpfILOWgfDw.czQWlhSIXXp68bPxDJiIX1.3a"
 	} else if err != nil {
@@ -76,6 +87,14 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			s.recordAdminLoginFailure(r.Context(), username, requestHost(r), id.ID)
 		}
 		writeError(w, 401, "invalid_credentials", "账号或密码错误")
+		return
+	}
+	if !loginEnabled && id.Role == "customer" {
+		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
+		return
+	}
+	if id.Role == "customer" && (method == "username" && !usernameEnabled || method == "email" && !emailEnabled || method == "phone" && !phoneEnabled) {
+		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放")
 		return
 	}
 	if legacyHash && match == nil {
@@ -161,12 +180,12 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if !s.authLimit(w, r, "register", 10) {
 		return
 	}
-	var enabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT registration_enabled FROM site_settings WHERE id=1").Scan(&enabled); err != nil {
+	var enabled, registrationEmail bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT s.registration_enabled,a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1").Scan(&enabled, &registrationEmail); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if !enabled {
+	if !enabled || !registrationEmail {
 		writeError(w, 403, "registration_disabled", "本站暂未开放注册")
 		return
 	}
@@ -199,7 +218,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	var id int64
-	if err = tx.QueryRow(r.Context(), "SELECT registration_enabled FROM site_settings WHERE id=1 FOR SHARE").Scan(&enabled); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT s.registration_enabled AND a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1 FOR SHARE").Scan(&enabled); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -368,15 +387,19 @@ func (s *Server) loginBlocked(ctx context.Context, username, host string) bool {
 }
 
 func (s *Server) recordAdminLoginFailure(ctx context.Context, username, host string, actorID int64) {
+	var maxAttempts, lockoutMinutes int
+	if err := s.db.Pool.QueryRow(ctx, "SELECT login_max_attempts,login_lockout_minutes FROM auth_settings WHERE id=1").Scan(&maxAttempts, &lockoutMinutes); err != nil {
+		return
+	}
 	key := tokenHash("admin-login:" + username + ":" + host)
 	var attempts int
 	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO auth_rate_limits(key,attempts) VALUES($1,1)
- ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_rate_limits.window_start < now()-interval '3 hours' THEN 1 ELSE auth_rate_limits.attempts+1 END,
- window_start=CASE WHEN auth_rate_limits.window_start < now()-interval '3 hours' THEN now() ELSE auth_rate_limits.window_start END RETURNING attempts`, key).Scan(&attempts); err != nil || attempts < 3 {
+ ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN 1 ELSE auth_rate_limits.attempts+1 END,
+ window_start=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN now() ELSE auth_rate_limits.window_start END RETURNING attempts`, key, lockoutMinutes).Scan(&attempts); err != nil || attempts < maxAttempts {
 		return
 	}
 	_, _ = s.db.Pool.Exec(ctx, `INSERT INTO auth_blacklist(subject_type,subject,operation_type,remote_addr,reason,blocked_until)
- VALUES('username',$1,'login',$2,'连续登录失败',now()+interval '3 hours')
- ON CONFLICT(subject_type,subject,operation_type) DO UPDATE SET remote_addr=excluded.remote_addr,reason=excluded.reason,blocked_until=GREATEST(auth_blacklist.blocked_until,excluded.blocked_until),version=auth_blacklist.version+1,updated_at=now()`, username, host)
-	s.authAudit(ctx, actorID, "auth.login_blocked", map[string]any{"username": username, "remote_addr": host, "duration": "3h"})
+ VALUES('username',$1,'login',$2,'连续登录失败',now()+make_interval(mins=>$3))
+ ON CONFLICT(subject_type,subject,operation_type) DO UPDATE SET remote_addr=excluded.remote_addr,reason=excluded.reason,blocked_until=GREATEST(auth_blacklist.blocked_until,excluded.blocked_until),version=auth_blacklist.version+1,updated_at=now()`, username, host, lockoutMinutes)
+	s.authAudit(ctx, actorID, "auth.login_blocked", map[string]any{"username": username, "remote_addr": host, "duration_minutes": lockoutMinutes})
 }

@@ -91,6 +91,15 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	var loginEnabled bool
+	if err = tx.QueryRow(r.Context(), "SELECT login_enabled FROM auth_settings WHERE id=1 FOR SHARE").Scan(&loginEnabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if role == "customer" && !loginEnabled {
+		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
+		return
+	}
 	if attempts >= 5 {
 		_, _ = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge))
 		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码尝试次数过多，请重新登录")
@@ -123,14 +132,22 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	raw := make([]byte, 32)
+	if _, err = rand.Read(raw); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	token := hex.EncodeToString(raw)
+	if _, err = tx.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), userID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err = s.completeLogin(w, r, identity{ID: userID, Username: username, Email: email, Name: name, Role: role}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	write(w, http.StatusOK, identity{ID: userID, Username: username, Email: email, Name: name, Role: role})
 }
 
@@ -149,15 +166,6 @@ func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := identityFrom(r)
-	var enabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", user.ID).Scan(&enabled); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if enabled {
-		writeError(w, http.StatusConflict, "mfa_already_enabled", "MFA 已启用")
-		return
-	}
 	raw := make([]byte, 20)
 	if _, err := rand.Read(raw); err != nil {
 		s.fail(w, r, err)
@@ -175,6 +183,23 @@ func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	var enabled, allowed bool
+	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.QueryRow(r.Context(), "SELECT CASE WHEN $1='customer' THEN customer_enabled ELSE admin_enabled END FROM mfa_settings WHERE id=1 FOR SHARE", user.Role).Scan(&allowed); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, "mfa_enrollment_disabled", "当前账户类型暂未开放二次验证设置")
+		return
+	}
+	if enabled {
+		writeError(w, http.StatusConflict, "mfa_already_enabled", "MFA 已启用")
+		return
+	}
 	if _, err = tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=$2,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID, enc); err != nil {
 		s.fail(w, r, err)
 		return
@@ -222,7 +247,13 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 	user := identityFrom(r)
 	var enabled bool
 	var enc []byte
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc FROM users WHERE id=$1", user.ID).Scan(&enabled, &enc); err != nil {
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled, &enc); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -235,7 +266,11 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_mfa", "验证码错误")
 		return
 	}
-	if _, err = s.db.Pool.Exec(r.Context(), "UPDATE users SET mfa_enabled=true,mfa_confirmed_at=now(),updated_at=now() WHERE id=$1", user.ID); err != nil {
+	if _, err = tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=true,mfa_confirmed_at=now(),updated_at=now() WHERE id=$1", user.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -259,7 +294,13 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 	var hash string
 	var enc []byte
 	var enabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT password_hash,mfa_enabled,mfa_secret_enc FROM users WHERE id=$1", user.ID).Scan(&hash, &enabled, &enc); err != nil {
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if err = tx.QueryRow(r.Context(), "SELECT password_hash,mfa_enabled,mfa_secret_enc FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&hash, &enabled, &enc); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -272,7 +313,7 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validCode && validRecoveryCode(input.Code) {
 		var usedHash string
-		if err := s.db.Pool.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", user.ID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash); err == nil {
+		if err := tx.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", user.ID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash); err == nil {
 			validCode = true
 		}
 	}
@@ -280,12 +321,19 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码错误")
 		return
 	}
-	if _, err := s.db.Pool.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=NULL,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID); err != nil {
+	if _, err := tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=NULL,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
-		_, _ = s.db.Pool.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", user.ID, tokenHash(cookie.Value))
+		if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", user.ID, tokenHash(cookie.Value)); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
 	}
 	s.authAudit(r.Context(), user.ID, "auth.mfa_disabled", map[string]any{})
 	write(w, http.StatusOK, map[string]bool{"enabled": false})

@@ -42,6 +42,7 @@ export const adminNavigation = [
   { href: "/admin/friendly-links", label: "友情链接", icon: Network, permission: "content.view", group: "content" },
   { href: "/admin/file-groups", label: "文件分组", icon: Download, permission: "downloads.view", group: "content" },
   { href: "/admin/auth-settings", label: "注册与验证码", icon: ShieldCheck, permission: "settings.view", group: "system" },
+  { href: "/admin/security/mfa", label: "二次验证", icon: ShieldCheck, permission: "settings.view", group: "system" },
   { href: "/admin/blacklist", label: "登录黑名单", icon: ShieldCheck, permission: "security.view", group: "system" },
   { href: "/admin/sales-settings", label: "销售设置", icon: Percent, permission: "sales.view", group: "system" },
   { href: "/admin/currencies", label: "货币配置", icon: Settings, permission: "settings.view", group: "finance" },
