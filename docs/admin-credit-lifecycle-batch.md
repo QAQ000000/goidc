@@ -13,3 +13,5 @@ API：客户 POST /invoices/{id}/pay-credit（expected_version、Idempotency-Key
 三个标签支持真实分页、客户ID/日期筛选与URL恢复，消费状态为待还/已还/已退款；还款日期按实际 received_at（上海日期边界）。账单安全投影包含 credit_payment 金额/剩余/状态，后台信用退款标为撤销债务并明确不加余额，发生还款后普通退款按钮不可用。冻结、还款、信用支付未知结果保留 actor-scoped sessionStorage 请求键/内容，重试使用原版本，未确认前禁用修改或其他资金方式。
 
 验证：隔离 PostgreSQL 18 migration129/HTTP专项与race，包含真实消费、还款/重放、余额不变、未还退款、已还退款拒绝、冻结拒付、信用续费到期更新、余额/信用并发只成功一次、审计回滚、范围/撤权、真实支付pending拒绝、筛选校验与全后台路由权限覆盖；前端typecheck与改动组件lint通过。主代理负责全量构建及浏览器验收。
+
+资金锁顺序由 LockFinancialCustomer 统一：客户行 → 账单行 → 信用债务/账户。退款先只读查 owner，不提前锁账单；线下还款亦先锁客户。三路并发专项同时执行同客户新消费、旧消费退款和还款，验证无死锁且债务守恒。

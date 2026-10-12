@@ -142,3 +142,61 @@ func TestCreditPaymentPendingAndUnsupported(t *testing.T) {
 	}
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", unsupported), map[string]any{"expected_version": 1}, customer, "credit-unsupported-pay"), 409)
 }
+
+// New consumption, a refund and receipt confirmation for one customer must not
+// acquire customer/invoice locks in opposing orders. Only one debt terminal
+// operation may win; the new independent invoice must still settle.
+func TestCreditFinancialLockOrder(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "credit-lock-root", "super_admin")
+	uid, customer := user(t, db, h, "credit-lock-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE credit_settings SET enabled=true;UPDATE customer_credit_accounts SET limit_cents=100000"); err != nil {
+		t.Fatal(err)
+	}
+	first := manualInvoiceCreate(t, h, root, manualInvoiceInput(uid), "credit-lock-first")
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", first), map[string]any{"expected_version": 1}, customer, "credit-lock-initial-pay"), 201)
+	second := manualInvoiceCreate(t, h, root, manualInvoiceInput(uid), "credit-lock-second")
+	start := make(chan struct{})
+	results := make(chan struct {
+		kind string
+		code int
+	}, 3)
+	go func() {
+		<-start
+		results <- struct {
+			kind string
+			code int
+		}{"pay", request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", second), map[string]any{"expected_version": 1}, customer, "credit-lock-second-pay").Code}
+	}()
+	go func() {
+		<-start
+		results <- struct {
+			kind string
+			code int
+		}{"refund", request(h, "POST", fmt.Sprintf("/api/v1/admin/invoices/%d/refund", first), map[string]any{}, root, "credit-lock-refund").Code}
+	}()
+	go func() {
+		<-start
+		results <- struct {
+			kind string
+			code int
+		}{"repay", request(h, "POST", fmt.Sprintf("/api/v1/admin/credit/consumptions/%d/repay", first), map[string]any{"amount_cents": 3000, "expected_version": 1, "receipt": "lock-bank-receipt", "received_at": time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)}, root, "credit-lock-repay").Code}
+	}()
+	close(start)
+	got := map[string]int{}
+	for range 3 {
+		select {
+		case result := <-results:
+			got[result.kind] = result.code
+		case <-time.After(15 * time.Second):
+			t.Fatal("financial transaction lock timeout", got)
+		}
+	}
+	if got["pay"] != 201 || !((got["refund"] == 201 && got["repay"] == 409) || (got["refund"] == 409 && got["repay"] == 201)) {
+		t.Fatal("financial races", got)
+	}
+	var used int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT used_cents FROM customer_credit_accounts WHERE user_id=$1", uid).Scan(&used); err != nil || used != 3000 {
+		t.Fatal("credit debt conservation", used, err)
+	}
+}

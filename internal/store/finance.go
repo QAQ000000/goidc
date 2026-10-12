@@ -40,8 +40,7 @@ func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key str
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	var lockedUser int64
-	if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&lockedUser); err != nil {
+	if err = LockFinancialCustomer(ctx, tx, userID); err != nil {
 		return out, err
 	}
 	if err = lockOperationKey(ctx, tx, "payment", fmt.Sprintf("%d:%s", userID, key)); err != nil {
@@ -332,7 +331,10 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 		return out, err
 	}
 	var lockedCustomer int64
-	if err = tx.QueryRow(ctx, "SELECT u.id FROM users u JOIN invoices i ON i.user_id=u.id WHERE i.id=$1 FOR NO KEY UPDATE OF u", invoiceID).Scan(&lockedCustomer); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT user_id FROM invoices WHERE id=$1", invoiceID).Scan(&lockedCustomer); err != nil {
+		return out, err
+	}
+	if err = LockFinancialCustomer(ctx, tx, lockedCustomer); err != nil {
 		return out, err
 	}
 	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
@@ -573,4 +575,12 @@ VALUES($1,'refund',$2,$3,'invoice',$4,$5,'账单退款')`, userID, out.AmountCen
 	out.Status = "refunded"
 	out.BalanceCents = balance
 	return out, tx.Commit(ctx)
+}
+
+// LockFinancialCustomer establishes the shared order for balance/credit payments,
+// invoice refunds and confirmed repayments: customer -> invoice -> credit debt/account.
+// The owner lookup must not lock the invoice before this call.
+func LockFinancialCustomer(ctx context.Context, tx pgx.Tx, userID int64) error {
+	var id int64
+	return tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND role='customer' FOR NO KEY UPDATE", userID).Scan(&id)
 }

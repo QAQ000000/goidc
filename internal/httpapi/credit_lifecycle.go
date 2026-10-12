@@ -133,6 +133,10 @@ func (s *Server) creditRepay(w http.ResponseWriter, r *http.Request) {
 	if !s.lockCreditManager(w, r, tx, uid) {
 		return
 	}
+	if err = store.LockFinancialCustomer(r.Context(), tx, uid); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("credit-repay:%d:%s", actor, key)); err != nil {
 		s.fail(w, r, err)
 		return
