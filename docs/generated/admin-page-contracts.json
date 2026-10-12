@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "ledger": "docs/admin-full-ui-restore-ledger.md",
-    "ledgerSha256": "a563d8d97e7e8cc504bebf790ad53e0dcffed9e9d6eafc134e841b70ef08670a",
+    "ledgerSha256": "feb67574b2ebdfb17732c644f05cc8ef066c6ea0f46330e226d524b4676b894d",
     "specification": "/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md",
     "specificationSha256": "b16aee6e1139eef7f08eb539d081f4484e3e6aa3eb514bffa202a7d07a5e628c"
   },
@@ -15482,9 +15482,16 @@
         "component": "web/src/app/admin/suppliers/orders/page.tsx:1"
       },
       "realApi": {
-        "ledgerClaim": "GET /admin/supplier-orders；操作复用 /admin/orders/*",
-        "registered": [],
-        "status": "未验证"
+        "ledgerClaim": "GET /admin/supplier-orders",
+        "registered": [
+          {
+            "method": "GET",
+            "path": "/admin/supplier-orders",
+            "handler": "orders",
+            "evidence": "internal/httpapi/server.go:452"
+          }
+        ],
+        "status": "已找到静态路由；逐动作与权限链未验证"
       },
       "permission": {
         "ledgerClaim": "orders.view/manage",
