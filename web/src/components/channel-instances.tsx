@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, Copy, Info, Plus, RefreshCw, Send, Settings2, ToggleLeft, ToggleRight, Trash2, Wrench } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
 import { api } from "@/lib/api";
@@ -37,7 +38,7 @@ const categoryText: Record<string, { title: string; description: string; empty: 
   provision: { title: "开通接口", description: "管理上游开通适配器实例。", empty: "当前没有已安装的开通接口" },
 };
 
-export function ChannelInstancesView({ initialCategory = "payment", title = "接口设置" }: { initialCategory?: ChannelCategory; title?: string }) {
+export function ChannelInstancesView({ initialCategory = "payment", title = "接口设置", returnHref }: { initialCategory?: ChannelCategory; title?: string; returnHref?: string }) {
   const [category, setCategory] = useState<ChannelCategory>(initialCategory);
   const catalogue = useResource<Descriptor[]>(`/admin/channel-catalogue?category=${category}`, false);
   const instances = useResource<Instance[]>(`/admin/channel-instances?category=${category}`, false);
@@ -85,6 +86,7 @@ export function ChannelInstancesView({ initialCategory = "payment", title = "接
 
   return <Workspace title={title} admin>
     <div className="space-y-5">
+      {returnHref && <Button type="button" variant="outline" size="sm" asChild><Link href={returnHref}>返回应用列表</Link></Button>}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h1 className="page-title">{meta.title}</h1><p className="text-sm text-muted-foreground mt-2">{meta.description}</p></div>
         <Button type="button" variant="outline" size="icon" title="刷新接口列表" aria-label="刷新接口列表" onClick={refresh}><RefreshCw /></Button>

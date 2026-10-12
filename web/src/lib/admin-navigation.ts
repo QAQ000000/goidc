@@ -59,6 +59,8 @@ export const adminNavigation = [
   { href: "/admin/credit-settings", label: "信用额设置", icon: WalletCards, permission: "settings.view", group: "finance" },
   { href: "/admin/credit", label: "信用额管理", icon: WalletCards, permission: "credit.view", group: "finance" },
   { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
+  { href: "/admin/apps", label: "我的应用", icon: Package, permission: "@super", group: "resources_store" },
+  { href: "/admin/apps/store", label: "应用商店", icon: Download, permission: "@super", group: "resources_store" },
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/sms", label: "短信日志", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/inbox", label: "站内信日志", icon: Mail, permission: "notifications.view", group: "system" },
@@ -87,6 +89,7 @@ export const adminNavigationGroups = [
   { id: "finance", label: "财务" },
   { id: "support", label: "工单与通知" },
   { id: "content", label: "内容与资料" },
+  { id: "resources_store", label: "资源与商店" },
   { id: "reports", label: "报表" },
   { id: "system", label: "系统" },
 ];
@@ -97,7 +100,7 @@ export const adminDomains = [
   { id: "business", label: "业务", href: "/admin/orders", groups: ["orders", "products"] },
   { id: "finance", label: "财务", href: "/admin/invoices", groups: ["finance", "reports"] },
   { id: "support", label: "工单", href: "/admin/tickets", groups: ["support"] },
-  { id: "content", label: "功能", href: "/admin/content", groups: ["content"] },
+  { id: "content", label: "功能", href: "/admin/content", groups: ["content", "resources_store"] },
   { id: "system", label: "设置", href: "/admin/settings", groups: ["system"] },
 ];
 

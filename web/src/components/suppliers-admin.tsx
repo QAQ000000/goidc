@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Download, Pencil, Plus, RefreshCw, Save } from "lucide-react";
 import { api, money, type CatalogCategory, type SupplierAccount, type SupplierProduct, type SupplierProvider } from "@/lib/api";
@@ -36,8 +37,8 @@ function unsupportedLabel(reason?:string) {
   return ({detail_required:"需要查看商品配置",unsupported_currency:"仅支持人民币",unsupported_cycle:"不支持所选账期",unsupported_option_type:"暂不支持此规格类型",out_of_stock:"上游库存不足"} as Record<string,string>)[reason??""]??"当前商品配置暂不支持导入";
 }
 
-export function SuppliersView() {
-  return <Workspace title="供应商" admin><SuppliersManager /></Workspace>;
+export function SuppliersView({ returnHref }: { returnHref?: string }) {
+  return <Workspace title="供应商" admin>{returnHref && <Button type="button" variant="outline" size="sm" className="mb-5" asChild><Link href={returnHref}>返回应用列表</Link></Button>}<SuppliersManager /></Workspace>;
 }
 
 function SuppliersManager() {
