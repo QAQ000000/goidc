@@ -84,6 +84,7 @@ export function ContractsView({ admin = false, identity }: { admin?: boolean; id
   const services = useResource<Page<Service>>(mode === "generate" ? `${prefix}/eligible-services?limit=25&offset=${servicePage * 25}` : null, false);
   const templates = useResource<Page<Template>>(mode === "generate" ? `${admin ? "/admin/contracts/available-templates" : "/contract-templates"}?limit=25&offset=${templatePage * 25}` : null, false);
   const write = useContractWrite(identity, manage, () => { setMode(null); setForm({}); setSelected([]); resource.refresh(); detail.refresh(); }, admin ? "admin-contracts" : "customer-contracts");
+  const [contractDraftReady, setContractDraftReady] = useState(false);
   const draftKey = `zjmfgo:contract-draft:${admin ? "admin" : "customer"}:${identity}`;
   useEffect(() => {
     if (!manage) return;
@@ -94,12 +95,13 @@ export function ContractsView({ admin = false, identity }: { admin?: boolean; id
         if (["generate", "review", "shipping", "submit"].includes(draft.mode || "") && window.confirm("发现该账户未提交的合同草稿，恢复输入？")) queueMicrotask(() => { setMode(draft.mode); setForm(draft.form); setDetailID(draft.detailID); });
       }
     } catch { /* storage unavailable */ }
+    queueMicrotask(() => setContractDraftReady(true));
   }, [draftKey, manage]);
   useEffect(() => {
-    if (!manage) return;
+    if (!manage || !contractDraftReady) return;
     try { if (mode && mode !== "void") sessionStorage.setItem(draftKey, JSON.stringify({ mode, form, detailID }));
     else sessionStorage.removeItem(draftKey); } catch { /* storage unavailable */ }
-  }, [draftKey, manage, mode, form, detailID]);
+  }, [draftKey, manage, contractDraftReady, mode, form, detailID]);
 
   const dirty = !!mode && Object.values(form).some(Boolean);
   useLeaveGuard(dirty || !!write.pending);
