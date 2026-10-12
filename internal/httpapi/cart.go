@@ -384,6 +384,14 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	admin := adminRoute(r)
 	where := "o.deleted_at IS NULL AND (($1::boolean AND admin_customer_allowed($2,o.user_id)) OR (NOT $1::boolean AND o.user_id=$2))"
 	args := []any{admin, uid}
+	supplierList := r.URL.Path == "/api/v1/admin/supplier-orders"
+	if supplierList {
+		var ok bool
+		where, args, ok = supplierOrderWhere(w, r, where, args, false)
+		if !ok {
+			return
+		}
+	}
 	if admin && r.URL.Query().Get("customer_id") != "" {
 		customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
 		if err != nil || customerID < 1 {
@@ -458,8 +466,11 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 	if admin {
 		projection += `,COALESCE((SELECT cp.admin_note FROM customer_profiles cp WHERE cp.customer_id=o.user_id),'') AS customer_note,o.notes,o.invoice_deferred,o.payment_provider,o.payment_channel_instance_id,COALESCE((SELECT string_agg(DISTINCT nullif(s.resource_info->>'dedicated_ip',''),'、') FROM services s WHERE s.order_id=o.id),'') AS service_ips,COALESCE((SELECT string_agg(oi.product_name,'、' ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id),'') AS product_names,COALESCE((SELECT string_agg(s.domain,'、' ORDER BY s.id) FROM services s WHERE s.order_id=o.id),'') AS service_domains,COALESCE((SELECT display_name FROM users WHERE id=u.sales_owner_id),'') AS sales_owner_name,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method`
 	}
+	if supplierList {
+		projection += supplierOrderProjection
+	}
 	from := " FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id AND i.user_id=o.user_id WHERE " + where
-	if strings.HasSuffix(r.URL.Path, "/page") {
+	if supplierList || strings.HasSuffix(r.URL.Path, "/page") {
 		s.transactionPage(w, r, projection, from, "o.id", args, limit, offset)
 		return
 	}
@@ -475,6 +486,15 @@ func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	args := []any{true, identityFrom(r).ID}
 	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2)) AND ii.item_type='renew'"
+	supplierList := r.URL.Path == "/api/v1/admin/supplier-renewals"
+	if supplierList {
+		var ok bool
+		where, args, ok = supplierOrderWhere(w, r, where, args, true)
+		if !ok {
+			return
+		}
+	}
+
 	if value := r.URL.Query().Get("customer_id"); value != "" {
 		customerID, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || customerID < 1 {
@@ -501,6 +521,9 @@ func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
 		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR ii.description ILIKE $%d OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
 	}
 	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method"
+	if supplierList {
+		projection += ",s.resource_info->>'dedicated_ip' AS service_ips,s.delivery_snapshot->>'supplier_id' AS supplier_id,(SELECT name FROM supplier_accounts a WHERE a.id::text=s.delivery_snapshot->>'supplier_id') AS supplier_name,NULL::bigint AS cost_cents,'local_renewal_invoice'::text AS record_kind"
+	}
 	from := " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id AND s.user_id=i.user_id WHERE " + where
 	s.transactionPage(w, r, projection, from, "ii.id", args, limit, offset)
 }

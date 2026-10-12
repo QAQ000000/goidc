@@ -1080,6 +1080,8 @@ export function InvoiceDetailView({
 }) {
   const searchParams = useSearchParams();
   const renewal = admin && searchParams.get("kind") === "renew";
+  const supplierReturn=searchParams.get("supplier_return");
+  const supplierBack=admin && supplierReturn && /^\/admin\/suppliers\/renewals(?:\?|$)/.test(supplierReturn) ? supplierReturn : null;
   const returnHref = useAdminListReturnHref(renewal ? "/admin/orders" : `${admin ? "/admin" : "/console"}/invoices`, renewal ? ["pending", "paid", "cancelled", "refunded"] : invoiceStatusValues, "all", renewal ? { kind: "renew", limit: "25", customer_id: "" } : undefined);
   const { data, error, refresh } = useResource<Invoice>(
     `${admin ? "/admin" : ""}/invoices/${id}`,
@@ -1093,9 +1095,9 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? returnHref : "/console/invoices"}>
+        <Link href={admin ? supplierBack ?? returnHref : "/console/invoices"}>
           <ArrowLeft />
-          {renewal ? "返回续费订单列表" : "返回账单列表"}
+          {supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
       </Button>
       {error ? (

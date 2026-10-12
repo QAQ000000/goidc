@@ -17,6 +17,8 @@ export const adminNavigation = [
   { href: "/admin/products", label: "产品目录", icon: Package, permission: "products.view", group: "products" },
   { href: "/admin/traffic-products", label: "流量包管理", icon: Gauge, permission: "products.view", group: "products" },
   { href: "/admin/catalog-groups", label: "目录分组", icon: Package, permission: "products.view", group: "products" },
+  { href: "/admin/suppliers/orders", label: "供应商订单", icon: ClipboardList, permission: "orders.view", group: "products" },
+  { href: "/admin/suppliers/renewals", label: "供应商续费", icon: Receipt, permission: "orders.view", group: "products" },
   { href: "/admin/suppliers", label: "供应商", icon: Network, permission: "products.view", group: "products" },
   { href: "/admin/service-groups", label: "服务分组", icon: Server, permission: "products.view", group: "products" },
   { href: "/admin/content", label: "新闻与知识库", icon: BookOpen, permission: "content.view", group: "content" },

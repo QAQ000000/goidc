@@ -441,6 +441,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/orders/bulk-review", s.auth(s.bulkReviewOrders, true))
 	mux.HandleFunc("POST /api/v1/admin/orders/bulk-delete", s.auth(s.bulkDeleteOrders, true))
 	mux.HandleFunc("GET /api/v1/admin/orders", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-orders", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-renewals", s.auth(s.renewalOrders, true))
 	mux.HandleFunc("GET /api/v1/admin/orders/page", s.auth(s.orders, true))
 	mux.HandleFunc("GET /api/v1/admin/renewal-orders", s.auth(s.renewalOrders, true))
 	mux.HandleFunc("GET /api/v1/admin/traffic-products", s.auth(s.trafficProducts, true))
