@@ -11,11 +11,23 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/store"
 )
 
+type MailProvider interface {
+	Enabled() bool
+	Send(store.EmailJob) error
+}
+
+var mailRegistry = module.NewRegistry[MailProvider](channel.Mail)
+
+func NewMailProvider(id string, config module.Config) (MailProvider, error) {
+	return mailRegistry.New(id, config)
+}
+
 func init() {
-	channel.MustRegister(channel.Descriptor{
+	mailRegistry.MustRegister(channel.Descriptor{
 		ID: "smtp", Name: "SMTP", Category: channel.Mail,
 		Capabilities: []string{"send", "test"},
 		Fields: []channel.Field{
@@ -27,7 +39,33 @@ func init() {
 			{Key: "from_name", Label: "发件名称", Type: channel.Text},
 			{Key: "tls_mode", Label: "TLS 模式", Type: channel.Select, Options: []string{"implicit_tls", "starttls", "none"}},
 		},
+	}, func(config module.Config) (MailProvider, error) {
+		values := config.Values
+		port := 0
+		if raw, ok := values["port"].(float64); ok {
+			port = int(raw)
+		}
+		if raw, ok := values["port"].(int); ok {
+			port = raw
+		}
+		return SMTPConfig{
+			Host: configString(values, "host"), Port: port,
+			Username: configString(values, "username"), Password: config.Secret,
+			From: configString(values, "from"), FromName: configString(values, "from_name"),
+			TLSMode: configString(values, "tls_mode"),
+		}, nil
 	})
+}
+
+func configString(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	value, ok := values[key]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 type SMTPConfig struct {

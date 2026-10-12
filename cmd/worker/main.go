@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
+	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/notification"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -170,11 +171,13 @@ func main() {
 					continue
 				}
 				smtpRuntime, resolveErr := db.ResolveSMTPConfigForInstance(ctx, job.ChannelInstanceID, smtpFallback)
-				smtpConfig := notification.SMTPConfig{Host: smtpRuntime.Host, Port: smtpRuntime.Port, Username: smtpRuntime.Username, Password: smtpRuntime.Password, From: smtpRuntime.From, TLSMode: smtpRuntime.TLSMode, FromName: smtpRuntime.FromName}
+				smtpConfig, factoryErr := notification.NewMailProvider("smtp", module.Config{Values: map[string]any{"host": smtpRuntime.Host, "port": smtpRuntime.Port, "username": smtpRuntime.Username, "from": smtpRuntime.From, "tls_mode": smtpRuntime.TLSMode, "from_name": smtpRuntime.FromName}, Secret: smtpRuntime.Password})
 				var sendErr error
 				switch {
 				case resolveErr != nil:
 					sendErr = resolveErr
+				case factoryErr != nil:
+					sendErr = factoryErr
 				case !smtpConfig.Enabled():
 					sendErr = errors.New("SMTP channel disabled")
 				default:

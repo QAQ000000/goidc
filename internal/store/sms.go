@@ -12,11 +12,10 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
-)
 
-var smsProviders sync.Map
+	"github.com/codex/zjmfgo/internal/channel"
+)
 
 func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, expected int64) error {
 	if e := recheckSettingsManager(ctx, tx, actor, hash); e != nil {
@@ -38,8 +37,10 @@ func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, 
 	}
 	return nil
 }
-func RegisterSMSProviderName(name string)    { smsProviders.Store(name, true) }
-func SMSProviderRegistered(name string) bool { _, ok := smsProviders.Load(name); return ok }
+func SMSProviderRegistered(name string) bool {
+	desc, ok := channel.Lookup(channel.SMS, strings.TrimSpace(name))
+	return ok && channel.HasFactory(channel.SMS, name) && len(desc.Capabilities) > 0
+}
 
 var e164Pattern = regexp.MustCompile(`^\+[1-9][0-9]{7,14}$`)
 

@@ -10,10 +10,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/store"
 )
 
@@ -22,39 +22,36 @@ type SMSProvider interface {
 	Send(context.Context, store.SMSRuntimeConfig, store.SMSJob) error
 }
 
-var smsRegistry = struct {
-	sync.RWMutex
-	providers map[string]SMSProvider
-}{providers: make(map[string]SMSProvider)}
+var smsRegistry = module.NewRegistry[SMSProvider](channel.SMS)
 
 func RegisterSMSProvider(name string, p SMSProvider) error {
-	smsRegistry.Lock()
-	defer smsRegistry.Unlock()
-	if name == "" || p == nil || smsRegistry.providers[name] != nil {
+	return RegisterSMSProviderDescriptor(channel.Descriptor{ID: name, Name: name, Category: channel.SMS, Capabilities: []string{"send"}}, p)
+}
+
+func RegisterSMSProviderDescriptor(desc channel.Descriptor, p SMSProvider) error {
+	if desc.ID == "" || p == nil || desc.Category != channel.SMS {
 		return errors.New("invalid SMS provider registration")
 	}
-	smsRegistry.providers[name] = p
-	store.RegisterSMSProviderName(name)
+	if err := smsRegistry.Register(desc, func(module.Config) (SMSProvider, error) { return p, nil }); err != nil {
+		return err
+	}
 	return nil
 }
 
 const idcsmartDefaultEndpoint = "http://api1.idcsmart.com/smsapi.php?action=send"
 
 func init() {
-	_ = RegisterSMSProvider("generic_http_json", genericHTTPSMS{})
-	_ = RegisterSMSProvider("idcsmart", idcsmartSMS{endpoint: idcsmartDefaultEndpoint})
-}
-
-func init() {
-	channel.MustRegister(channel.Descriptor{
+	if err := RegisterSMSProviderDescriptor(channel.Descriptor{
 		ID: "generic_http_json", Name: "通用 HTTP JSON 短信", Category: channel.SMS,
 		Capabilities: []string{"send"},
 		Fields: []channel.Field{
 			{Key: "endpoint", Label: "HTTPS 接口", Type: channel.Text, Required: true},
 			{Key: "token", Label: "访问令牌", Type: channel.Text, Required: true, Secret: true},
 		},
-	})
-	channel.MustRegister(channel.Descriptor{
+	}, genericHTTPSMS{}); err != nil {
+		panic(err)
+	}
+	if err := RegisterSMSProviderDescriptor(channel.Descriptor{
 		ID: "idcsmart", Name: "智简魔方", Category: channel.SMS,
 		Capabilities: []string{"send"},
 		Fields: []channel.Field{
@@ -62,17 +59,17 @@ func init() {
 			{Key: "sign", Label: "短信 SignName", Type: channel.Text, Required: true},
 			{Key: "key", Label: "应用秘钥", Type: channel.Text, Required: true, Secret: true},
 		},
-	})
+	}, idcsmartSMS{endpoint: idcsmartDefaultEndpoint}); err != nil {
+		panic(err)
+	}
 }
 func SendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
-	smsRegistry.RLock()
-	p := smsRegistry.providers[c.Provider]
-	smsRegistry.RUnlock()
 	validConfig := c.Provider == "idcsmart" && c.API != "" && c.Sign != "" && c.Key != ""
 	if c.Provider != "idcsmart" {
 		validConfig = store.ValidSMSEndpoint(c.Endpoint) && c.Token != ""
 	}
-	if !c.Enabled || p == nil || !validConfig || !store.ValidSMSRecipient(j.Recipient) || !j.ExpiresAt.After(time.Now()) {
+	p, resolveErr := smsRegistry.New(c.Provider, module.Config{Payload: c})
+	if !c.Enabled || resolveErr != nil || p == nil || !validConfig || !store.ValidSMSRecipient(j.Recipient) || !j.ExpiresAt.After(time.Now()) {
 		return errors.New("SMS delivery failed")
 	}
 	if e := p.Send(ctx, c, j); e != nil {

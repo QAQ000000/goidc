@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 )
 
 type IntentRequest struct {
@@ -39,11 +40,45 @@ type Gateway interface {
 	DecodeWebhook(body []byte) (Webhook, error)
 }
 
+// gatewayRegistry is the payment-specific typed view over the common
+// compiled-in module registry. Database channel instances select an ID, while
+// this registry supplies the executable implementation.
+var gatewayRegistry = module.NewRegistry[Gateway](channel.Payment)
+
+// FactoryConfig is kept as a typed compatibility boundary for existing
+// payment callers. New adapters may use Values/Secret from module.Config and
+// leave Epay empty.
+type FactoryConfig = module.Config
+
+type epayFactoryConfig struct {
+	Config EpayConfig
+	Type   string
+}
+
+func New(name string, config FactoryConfig) (Gateway, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("payment gateway ID is empty")
+	}
+	implementation := name
+	if strings.HasPrefix(name, "epay_") {
+		implementation = "epay"
+		cfg, ok := config.Payload.(EpayConfig)
+		if !ok {
+			return nil, errors.New("invalid epay factory configuration")
+		}
+		config.Payload = epayFactoryConfig{Config: cfg, Type: strings.TrimPrefix(name, "epay_")}
+	}
+	return gatewayRegistry.New(implementation, config)
+}
+
 func init() {
-	channel.MustRegister(channel.Descriptor{
+	gatewayRegistry.MustRegister(channel.Descriptor{
 		ID: "mock", Name: "模拟支付", Category: channel.Payment,
 		Capabilities: []string{"create_intent", "verify_webhook"},
 		Fields:       []channel.Field{{Key: "secret_source", Label: "签名密钥来源", Type: channel.Select, Options: []string{"deployment"}}},
+	}, func(config FactoryConfig) (Gateway, error) {
+		return MockGateway{Secret: []byte(config.Secret)}, nil
 	})
 }
 
@@ -90,15 +125,10 @@ func (g MockGateway) DecodeWebhook(body []byte) (Webhook, error) {
 }
 
 func For(name, secret string, configs ...EpayConfig) (Gateway, bool) {
-	if name != "mock" {
-		if strings.HasPrefix(name, "epay_") && len(configs) > 0 {
-			typeName := strings.TrimPrefix(name, "epay_")
-			g := EpayGateway{EpayConfig: configs[0], Type: typeName}
-			if g.Validate() == nil {
-				return g, true
-			}
-		}
-		return nil, false
+	config := FactoryConfig{Secret: secret}
+	if len(configs) > 0 {
+		config.Payload = configs[0]
 	}
-	return MockGateway{Secret: []byte(secret)}, true
+	gateway, err := New(name, config)
+	return gateway, err == nil
 }

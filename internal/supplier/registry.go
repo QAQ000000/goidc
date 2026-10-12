@@ -1,34 +1,76 @@
 package supplier
 
 import (
+	"errors"
 	"sort"
+	"sync"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 )
 
-type registration struct {
-	provider Provider
-	factory  func(Account) (Adapter, error)
+type ProviderFactory func(Account) (Adapter, error)
+
+var adapterRegistry = module.NewRegistry[Adapter](channel.Provision)
+
+var providerState = struct {
+	sync.RWMutex
+	metadata   map[string]Provider
+	descriptor map[string]string
+}{
+	metadata:   make(map[string]Provider),
+	descriptor: make(map[string]string),
 }
 
-// Register additional protocols here; business code consumes normalized DTOs.
-var providers = map[string]registration{
-	ProviderZJMF: {
-		provider: Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true}},
-		factory:  newZJMF,
-	},
+// Register adds a provider-neutral adapter and its UI descriptor together.
+// Provider IDs are the durable values stored on supplier_accounts; descriptor
+// IDs are compiled channel IDs and may stay short for configuration backwards
+// compatibility.
+func Register(provider Provider, descriptor channel.Descriptor, factory ProviderFactory) error {
+	if provider.ID == "" || provider.Name == "" || factory == nil || descriptor.ID == "" {
+		return errors.New("invalid supplier registration")
+	}
+	providerState.Lock()
+	defer providerState.Unlock()
+	if _, exists := providerState.metadata[provider.ID]; exists {
+		return errors.New("supplier provider already registered")
+	}
+	if err := adapterRegistry.Register(descriptor, func(config module.Config) (Adapter, error) {
+		account, ok := config.Payload.(Account)
+		if !ok {
+			return nil, errors.New("invalid supplier factory configuration")
+		}
+		return factory(account)
+	}); err != nil {
+		return err
+	}
+	providerState.metadata[provider.ID] = provider
+	providerState.descriptor[provider.ID] = descriptor.ID
+	return nil
+}
+
+func MustRegister(provider Provider, descriptor channel.Descriptor, factory ProviderFactory) {
+	if err := Register(provider, descriptor, factory); err != nil {
+		panic(err)
+	}
 }
 
 func init() {
-	channel.MustRegister(channel.Descriptor{
-		ID: "zjmf", Name: "魔方财务", Category: channel.Provision,
-		Capabilities: []string{"catalog", "create", "sync", "power", "reset_password", "rescue", "vnc", "reinstall"},
-		Fields: []channel.Field{
-			{Key: "endpoint", Label: "API 地址", Type: channel.Text, Required: true},
-			{Key: "username", Label: "用户名", Type: channel.Text, Required: true},
-			{Key: "secret", Label: "SecretKey", Type: channel.Text, Required: true, Secret: true},
+	MustRegister(
+		Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true}},
+		channel.Descriptor{
+			ID: "zjmf", Name: "魔方财务", Category: channel.Provision,
+			Capabilities: []string{"catalog", "create", "sync", "power", "reset_password", "rescue", "vnc", "reinstall"},
+			Fields: []channel.Field{
+				{Key: "endpoint", Label: "API 地址", Type: channel.Text, Required: true},
+				{Key: "username", Label: "用户名", Type: channel.Text, Required: true},
+				{Key: "secret", Label: "SecretKey", Type: channel.Text, Required: true, Secret: true},
+			},
 		},
-	})
+		newZJMF,
+	)
+	// NOKVM still uses its dedicated profile store. Its descriptor is visible
+	// in the common catalogue, but its account factory is migrated separately.
 	channel.MustRegister(channel.Descriptor{
 		ID: "nokvm", Name: "NOKVM", Category: channel.Provision,
 		Capabilities: []string{"create", "sync", "power", "reset_password", "rescue", "vnc", "reinstall"},
@@ -37,18 +79,22 @@ func init() {
 }
 
 func New(account Account) (Adapter, error) {
-	p, ok := providers[account.Provider]
+	providerState.RLock()
+	descriptorID, ok := providerState.descriptor[account.Provider]
+	providerState.RUnlock()
 	if !ok {
 		return nil, &Error{Code: "unsupported_provider"}
 	}
-	return p.factory(account)
+	return adapterRegistry.New(descriptorID, module.Config{Payload: account})
 }
 
 func Providers() []Provider {
-	result := make([]Provider, 0, len(providers))
-	for _, p := range providers {
-		result = append(result, p.provider)
+	providerState.RLock()
+	result := make([]Provider, 0, len(providerState.metadata))
+	for _, provider := range providerState.metadata {
+		result = append(result, provider)
 	}
+	providerState.RUnlock()
 	sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 	return result
 }

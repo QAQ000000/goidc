@@ -3,9 +3,9 @@ package certification
 import (
 	"context"
 	"errors"
-	"sync"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 )
 
 type Submission struct {
@@ -24,29 +24,22 @@ type Provider interface {
 	Query(context.Context, string) (Result, error)
 }
 
-var registry = struct {
-	sync.RWMutex
-	items map[string]Provider
-}{items: map[string]Provider{}}
+var registry = module.NewRegistry[Provider](channel.Certification)
 
 func Register(id string, provider Provider) error {
-	if id == "" || provider == nil {
+	return RegisterDescriptor(channel.Descriptor{ID: id, Name: id, Category: channel.Certification}, provider)
+}
+
+func RegisterDescriptor(desc channel.Descriptor, provider Provider) error {
+	if desc.ID == "" || provider == nil || desc.Category != channel.Certification {
 		return errors.New("invalid certification provider")
 	}
-	registry.Lock()
-	defer registry.Unlock()
-	if _, ok := registry.items[id]; ok {
-		return errors.New("certification provider already registered")
-	}
-	registry.items[id] = provider
-	return nil
+	return registry.Register(desc, func(module.Config) (Provider, error) { return provider, nil })
 }
 
 func Lookup(id string) (Provider, bool) {
-	registry.RLock()
-	p, ok := registry.items[id]
-	registry.RUnlock()
-	return p, ok
+	p, err := registry.New(id, module.Config{})
+	return p, err == nil
 }
 
 type manualProvider struct{}
@@ -59,6 +52,5 @@ func (manualProvider) Query(context.Context, string) (Result, error) {
 }
 
 func init() {
-	_ = Register("manual", manualProvider{})
-	_ = channel.Register(channel.Descriptor{ID: "manual", Name: "人工实名认证", Category: channel.Certification, Capabilities: []string{"submit", "review"}})
+	_ = RegisterDescriptor(channel.Descriptor{ID: "manual", Name: "人工实名认证", Category: channel.Certification, Capabilities: []string{"submit", "review"}}, manualProvider{})
 }

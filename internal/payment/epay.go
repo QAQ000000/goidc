@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 )
 
 type EpayConfig struct {
@@ -28,7 +29,7 @@ type EpayGateway struct {
 }
 
 func init() {
-	channel.MustRegister(channel.Descriptor{
+	gatewayRegistry.MustRegister(channel.Descriptor{
 		ID: "epay", Name: "易支付", Category: channel.Payment,
 		Capabilities: []string{"create_intent", "verify_webhook", "query"},
 		Fields: []channel.Field{
@@ -37,6 +38,16 @@ func init() {
 			{Key: "types", Label: "支付类型", Type: channel.Select, Options: []string{"alipay", "wxpay", "qqpay", "bank"}},
 			{Key: "key", Label: "商户密钥", Type: channel.Text, Required: true, Secret: true},
 		},
+	}, func(config module.Config) (Gateway, error) {
+		factoryConfig, ok := config.Payload.(epayFactoryConfig)
+		if !ok {
+			return nil, errors.New("invalid epay factory configuration")
+		}
+		g := EpayGateway{EpayConfig: factoryConfig.Config, Type: factoryConfig.Type}
+		if err := g.Validate(); err != nil {
+			return nil, err
+		}
+		return g, nil
 	})
 }
 
