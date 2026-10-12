@@ -29,6 +29,7 @@ var AdminPermissions = []Permission{
 	{"resources.view", "服务器资源", "读取供应商服务器资源列表"}, {"resources.manage", "服务器资源", "管理服务器资源信息"},
 	{"content.view", "内容", "读取文章与分类"}, {"content.manage", "内容", "管理新闻、知识库及分类"},
 	{"downloads.view", "下载中心", "读取文件、分类和下载设置"}, {"downloads.manage", "下载中心", "上传、编辑、删除文件及管理分类与设置"},
+	{"contracts.view", "合同管理", "读取授权客户合同"}, {"contracts.manage", "合同管理", "生成审核寄送与作废合同"},
 	{"customer_files.view", "客户文件", "读取授权客户文件与下载"}, {"customer_files.manage", "客户文件", "上传、编辑、转移和删除授权客户文件"},
 	{"orders.view", "订单", "读取订单"}, {"orders.manage", "订单", "审核、备注和取消订单"},
 	{"invoices.view", "财务", "读取账单"}, {"invoices.manage", "财务", "创建、编辑和作废人工账单"}, {"invoices.refund", "财务", "退款"}, {"balance.manage", "财务", "客户余额充值"},

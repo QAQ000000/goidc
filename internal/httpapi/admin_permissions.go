@@ -165,6 +165,9 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/resources"] = "resources.view"
 	m["GET /api/v1/admin/customers/page"] = "customers.view"
 	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
+	m["GET /api/v1/admin/contract-templates"] = "settings.view"
+	m["POST /api/v1/admin/contract-templates"] = "settings.manage"
+	m["PUT /api/v1/admin/contract-templates/{id}"] = "settings.manage"
 	m["GET /api/v1/admin/affiliate/accounts/page"] = "affiliates.view"
 	m["GET /api/v1/admin/affiliate/attributions/page"] = "affiliates.view"
 	m["GET /api/v1/admin/affiliate/withdrawals/page"] = "affiliates.view"
@@ -183,6 +186,8 @@ var adminRoutePermissions = func() map[string]string {
 	m["POST /api/v1/admin/traffic-orders/{id}/delivery-verification"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/configuration-changes/{change_id}/retry"] = "services.manage"
 	groups := map[string][]string{
+		"contracts.view":                {"GET /api/v1/admin/contracts", "GET /api/v1/admin/contracts/eligible-services", "GET /api/v1/admin/contracts/available-templates", "GET /api/v1/admin/contracts/{id}", "GET /api/v1/admin/contracts/{id}/document"},
+		"contracts.manage":              {"POST /api/v1/admin/contracts", "POST /api/v1/admin/contracts/{id}/review", "PUT /api/v1/admin/contracts/{id}/shipping", "POST /api/v1/admin/contracts/{id}/void", "POST /api/v1/admin/contracts/bulk-void"},
 		"customer_files.view":           {"GET /api/v1/admin/customer-files", "GET /api/v1/admin/customer-files/{id}", "GET /api/v1/admin/customer-files/{id}/file", "GET /api/v1/admin/customer-files/owners"},
 		"customer_files.manage":         {"POST /api/v1/admin/customer-files", "PUT /api/v1/admin/customer-files/{id}", "DELETE /api/v1/admin/customer-files/{id}", "POST /api/v1/admin/customer-files/bulk-delete"},
 		"downloads.view":                {"GET /api/v1/admin/downloads", "GET /api/v1/admin/downloads/{id}", "GET /api/v1/admin/download-categories", "GET /api/v1/admin/download-settings", "GET /api/v1/admin/download-products"},
