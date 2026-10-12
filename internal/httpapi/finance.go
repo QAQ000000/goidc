@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
 	"strings"
 
@@ -99,7 +100,12 @@ func (s *Server) adminRefundInvoice(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	result, err := s.db.RefundInvoice(r.Context(), identityFrom(r).ID, id, r.Header.Get("Idempotency-Key"))
+	cookie, _ := r.Cookie("zjmfgo_session")
+	ctx := r.Context()
+	if cookie != nil {
+		ctx = store.WithCreditRefundSession(ctx, tokenHash(cookie.Value))
+	}
+	result, err := s.db.RefundInvoice(ctx, identityFrom(r).ID, id, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.fail(w, r, err)
 		return

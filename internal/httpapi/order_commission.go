@@ -65,7 +65,7 @@ WITH requested AS MATERIALIZED (
 ), scoped_orders AS MATERIALIZED (
   SELECT o.id,o.user_id,o.total_cents,COALESCE(i.id,0) AS invoice_id,
          COALESCE(i.status,'') AS invoice_status,
-         CASE WHEN i.status='paid' THEN LEAST(o.total_cents,i.amount_cents) ELSE 0 END::bigint AS basis_cents,
+         CASE WHEN i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id AND cp.status<>'repaid') THEN LEAST(o.total_cents,i.amount_cents) ELSE 0 END::bigint AS basis_cents,
          owner.id AS sales_owner_id,COALESCE(owner.display_name,'') AS sales_owner_name,
          COALESCE(owner.sales_enabled,false) AS sales_enabled,
          COALESCE(owner.status='active',false) AS sales_active,
@@ -81,7 +81,7 @@ WITH requested AS MATERIALIZED (
   SELECT customer.sales_owner_id,SUM(i.amount_cents)::bigint AS amount_cents
   FROM invoices i
   JOIN users customer ON customer.id=i.user_id AND customer.role='customer'
-  WHERE i.status='paid' AND i.paid_at >= $2 AND i.paid_at < $3
+  WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id AND cp.status<>'repaid') AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) >= $2 AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) < $3
     AND admin_customer_allowed($4,customer.id)
     AND customer.sales_owner_id IN (SELECT DISTINCT sales_owner_id FROM scoped_orders WHERE sales_owner_id IS NOT NULL)
   GROUP BY customer.sales_owner_id
@@ -92,7 +92,7 @@ SELECT o.id,o.sales_owner_id,o.sales_owner_name,o.invoice_status,o.basis_cents,o
             THEN round(o.basis_cents::numeric*(o.purchase_rate_bps+COALESCE(tier.extra_rate_bps,0))/10000)::bigint
             ELSE 0::bigint END AS commission_cents,
        CASE WHEN o.invoice_id=0 THEN 'not_invoiced'
-            WHEN o.invoice_status<>'paid' THEN 'not_paid'
+            WHEN o.invoice_status<>'paid' OR o.basis_cents=0 THEN 'not_paid'
             WHEN o.sales_owner_id IS NULL THEN 'unassigned'
             WHEN NOT o.sales_enabled OR NOT o.sales_active THEN 'sales_inactive'
             WHEN o.group_id IS NULL THEN 'commission_group_unavailable'

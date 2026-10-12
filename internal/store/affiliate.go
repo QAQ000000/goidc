@@ -483,6 +483,13 @@ func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoic
 	if err := tx.QueryRow(ctx, "SELECT user_id,status,to_jsonb(i) FROM invoices i WHERE id=$1 FOR SHARE", invoiceID).Scan(&referredUser, &invoiceStatus, &invoiceSnapshot); err != nil {
 		return err
 	}
+	var creditOutstanding bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM credit_invoice_payments WHERE invoice_id=$1 AND status<>'repaid')", invoiceID).Scan(&creditOutstanding); err != nil {
+		return err
+	}
+	if creditOutstanding {
+		return nil
+	}
 	if invoiceStatus != "paid" {
 		return nil
 	}

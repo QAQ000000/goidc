@@ -8,6 +8,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+type creditSessionKey struct{}
+
+func WithCreditRefundSession(ctx context.Context, hash string) context.Context {
+	return context.WithValue(ctx, creditSessionKey{}, hash)
+}
+
 type PaymentResult struct {
 	InvoiceID    int64  `json:"invoice_id"`
 	InvoiceNo    string `json:"invoice_no"`
@@ -18,6 +24,13 @@ type PaymentResult struct {
 }
 
 func (s *Store) PayInvoice(ctx context.Context, userID, invoiceID int64, key string, expectedVersion ...int64) (PaymentResult, error) {
+	return s.payInvoice(ctx, userID, invoiceID, key, false, expectedVersion...)
+}
+func (s *Store) PayInvoiceCredit(ctx context.Context, userID, invoiceID int64, key string, expectedVersion int64, sessionHash string) (PaymentResult, error) {
+	ctx = context.WithValue(ctx, creditSessionKey{}, sessionHash)
+	return s.payInvoice(ctx, userID, invoiceID, key, true, expectedVersion)
+}
+func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key string, credit bool, expectedVersion ...int64) (PaymentResult, error) {
 	var out PaymentResult
 	if userID < 1 || invoiceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_payment", "账单或幂等键无效")
@@ -27,29 +40,63 @@ func (s *Store) PayInvoice(ctx context.Context, userID, invoiceID int64, key str
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	var lockedUser int64
+	if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&lockedUser); err != nil {
+		return out, err
+	}
 	if err = lockOperationKey(ctx, tx, "payment", fmt.Sprintf("%d:%s", userID, key)); err != nil {
 		return out, err
 	}
-	var delta, balance int64
-	var replayInvoiceID int64
-	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
-FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id
-WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID, key).
-		Scan(&replayInvoiceID, &out.InvoiceNo, &delta, &out.Status)
-	if err == nil {
-		if replayInvoiceID != invoiceID {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同账单")
-		}
-		out.InvoiceID = replayInvoiceID
-		out.AmountCents = -delta
-		if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1", userID).Scan(&out.BalanceCents); err != nil {
+	var balance int64
+	if credit {
+		var activeID int64
+		if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND role='customer' AND status='active' FOR SHARE", userID).Scan(&activeID); err != nil {
 			return out, err
 		}
-		out.Replayed = true
-		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
+		if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE", ctx.Value(creditSessionKey{}), userID).Scan(&activeID); err != nil {
+			return out, err
+		}
+
+		var replayID, replayVersion int64
+		err = tx.QueryRow(ctx, "SELECT invoice_id,amount_cents,expected_version FROM credit_invoice_payments WHERE user_id=$1 AND idempotency_key=$2", userID, key).Scan(&replayID, &out.AmountCents, &replayVersion)
+		if err == nil {
+			if replayID != invoiceID || len(expectedVersion) != 1 || replayVersion != expectedVersion[0] {
+				return out, conflict("idempotency_conflict", "幂等键对应其他账单")
+			}
+			out.InvoiceID = invoiceID
+			var activeID int64
+			if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND status='active' AND role='customer' FOR SHARE", userID).Scan(&activeID); err != nil {
+				return out, err
+			}
+			out.Status = "paid"
+			out.Replayed = true
+			return out, tx.Commit(ctx)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
+	} else {
+		var delta int64
+		var replayInvoiceID int64
+		err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
+FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id
+WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID, key).
+			Scan(&replayInvoiceID, &out.InvoiceNo, &delta, &out.Status)
+		if err == nil {
+			if replayInvoiceID != invoiceID {
+				return out, conflict("idempotency_conflict", "相同幂等键对应不同账单")
+			}
+			out.InvoiceID = replayInvoiceID
+			out.AmountCents = -delta
+			if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1", userID).Scan(&out.BalanceCents); err != nil {
+				return out, err
+			}
+			out.Replayed = true
+			return out, tx.Commit(ctx)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return out, err
+		}
 	}
 	var ownerID, orderID int64
 	var kind string
@@ -77,6 +124,9 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	if len(expectedVersion) > 1 || (len(expectedVersion) == 1 && expectedVersion[0] != version) {
 		return out, conflict("stale_invoice", "账单已更新，请刷新后重新支付")
 	}
+	if credit && kind != "manual" && kind != "automatic" {
+		return out, conflict("unsupported_credit_invoice", "该账单类型不支持信用付款")
+	}
 	if kind == "manual" {
 		if err = requireManualInvoiceValid(ctx, tx, invoiceID); err != nil {
 			return out, err
@@ -90,15 +140,51 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 			return out, conflict("invoice_not_payable", "账单没有可支付的服务关联")
 		}
 	}
-	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
-		return out, err
-	}
-	if balance < out.AmountCents {
-		return out, conflict("insufficient_balance", "账户余额不足")
-	}
-	balance -= out.AmountCents
-	if _, err = tx.Exec(ctx, "UPDATE users SET balance_cents=$1,updated_at=now() WHERE id=$2", balance, userID); err != nil {
-		return out, err
+	if credit {
+		if kind == "manual" {
+			var unsupported bool
+			if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=$1 AND item_type NOT IN ('manual','service'))", invoiceID).Scan(&unsupported); err != nil {
+				return out, err
+			}
+			if unsupported {
+				return out, conflict("unsupported_credit_invoice", "充值或特殊项目不支持信用付款")
+			}
+		}
+		if len(expectedVersion) != 1 || expectedVersion[0] < 1 || out.AmountCents < 1 {
+			return out, conflict("invalid_credit_payment", "需要账单版本与正数金额")
+		}
+		var enabled bool
+		if err = tx.QueryRow(ctx, "SELECT enabled FROM credit_settings WHERE id=1 FOR SHARE").Scan(&enabled); err != nil {
+			return out, err
+		}
+		if !enabled {
+			return out, conflict("credit_disabled", "信用支付未启用")
+		}
+		var limit, used int64
+		var frozen bool
+		if err = tx.QueryRow(ctx, "SELECT limit_cents,used_cents,frozen FROM customer_credit_accounts WHERE user_id=$1 FOR UPDATE", userID).Scan(&limit, &used, &frozen); err != nil {
+			return out, err
+		}
+		if frozen || out.AmountCents > limit-used {
+			return out, conflict("credit_unavailable", "账户冻结或额度不足")
+		}
+		if _, err = tx.Exec(ctx, "UPDATE customer_credit_accounts SET used_cents=used_cents+$2,version=version+1,updated_at=now() WHERE user_id=$1", userID, out.AmountCents); err != nil {
+			return out, err
+		}
+		if _, err = tx.Exec(ctx, "INSERT INTO credit_invoice_payments(invoice_id,user_id,amount_cents,remaining_cents,idempotency_key,expected_version) VALUES($1,$2,$3,$3,$4,$5)", invoiceID, userID, out.AmountCents, key, expectedVersion[0]); err != nil {
+			return out, err
+		}
+	} else {
+		if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
+			return out, err
+		}
+		if balance < out.AmountCents {
+			return out, conflict("insufficient_balance", "账户余额不足")
+		}
+		balance -= out.AmountCents
+		if _, err = tx.Exec(ctx, "UPDATE users SET balance_cents=$1,updated_at=now() WHERE id=$2", balance, userID); err != nil {
+			return out, err
+		}
 	}
 	if _, err = tx.Exec(ctx, "UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1", invoiceID); err != nil {
 		return out, err
@@ -128,15 +214,19 @@ SELECT id,'create','service-create-'||id FROM queued
 			return out, err
 		}
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
+	if !credit {
+		if _, err = tx.Exec(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
 VALUES($1,'payment',$2,$3,'invoice',$4,$5,'账单支付')`, userID, -out.AmountCents, balance, invoiceID, key); err != nil {
-		return out, err
+			return out, err
+		}
 	}
 	if err = s.QueuePaymentSuccessNotifications(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
-	if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, 0); err != nil {
-		return out, err
+	if !credit {
+		if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, 0); err != nil {
+			return out, err
+		}
 	}
 	if err = Audit(ctx, tx, userID, "invoice.paid", "invoice", invoiceID, map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}); err != nil {
 		return out, err
@@ -201,11 +291,48 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	if ctx.Value(creditSessionKey{}) != nil {
+		var role string
+		var roleID *int64
+		if err = tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+			return out, err
+		}
+		if role != "super_admin" {
+			var allowed bool
+			if roleID == nil {
+				return out, conflict("permission_denied", "没有退款权限")
+			}
+			if err = tx.QueryRow(ctx, "SELECT active AND 'invoices.refund'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+				return out, err
+			}
+			if !allowed {
+				return out, conflict("permission_denied", "没有退款权限")
+			}
+		}
+		var activeSession int64
+		if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE", ctx.Value(creditSessionKey{}), actorID).Scan(&activeSession); err != nil {
+			return out, conflict("permission_denied", "信用退款需要有效浏览器会话")
+		}
+
+	}
+
 	if err = lockOperationKey(ctx, tx, "refund", key); err != nil {
+		return out, err
+	}
+	var keyInvoice int64
+	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
+	if err == nil && keyInvoice != invoiceID {
+		return out, conflict("idempotency_conflict", "退款幂等键对应其他账单")
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
 	}
 	var delta, replayInvoiceID int64
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "invoice", invoiceID); err != nil {
+		return out, err
+	}
+	var lockedCustomer int64
+	if err = tx.QueryRow(ctx, "SELECT u.id FROM users u JOIN invoices i ON i.user_id=u.id WHERE i.id=$1 FOR NO KEY UPDATE OF u", invoiceID).Scan(&lockedCustomer); err != nil {
 		return out, err
 	}
 	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
@@ -234,6 +361,31 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		Scan(&out.InvoiceID, &userID, &orderID, &out.InvoiceNo, &out.AmountCents, &out.Status, &kind)
 	if err != nil {
 		return out, err
+	}
+	var creditRemaining int64
+	var creditRefunded bool
+	err = tx.QueryRow(ctx, "SELECT remaining_cents,status='refunded' FROM credit_invoice_payments WHERE invoice_id=$1 FOR UPDATE", invoiceID).Scan(&creditRemaining, &creditRefunded)
+	creditPayment := err == nil
+	if creditPayment && ctx.Value(creditSessionKey{}) == nil {
+		return out, conflict("permission_denied", "信用退款需要浏览器会话")
+	}
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return out, err
+	}
+	if creditPayment && creditRefunded {
+		var oldKey string
+		var oldActor int64
+		if err = tx.QueryRow(ctx, "SELECT refund_key,refund_actor_id FROM credit_invoice_payments WHERE invoice_id=$1", invoiceID).Scan(&oldKey, &oldActor); err != nil {
+			return out, err
+		}
+		if oldKey != key || oldActor != actorID {
+			return out, conflict("invoice_not_refundable", "账单已退款")
+		}
+		out.Replayed = true
+		return out, tx.Commit(ctx)
+	}
+	if creditPayment && creditRemaining != out.AmountCents {
+		return out, conflict("credit_repaid_refund_manual", "信用消费已还款，需先人工核实线下退付，不能自动退款")
 	}
 	if out.Status != "paid" {
 		return out, conflict("invoice_not_refundable", "只有已支付账单可以退款")
@@ -310,12 +462,21 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 			return out, err
 		}
 	}
-	if balance > 9223372036854775807-out.AmountCents {
-		return out, conflict("balance_overflow", "余额超出上限")
-	}
-	balance += out.AmountCents
-	if _, err = tx.Exec(ctx, "UPDATE users SET balance_cents=$1,updated_at=now() WHERE id=$2", balance, userID); err != nil {
-		return out, err
+	if creditPayment {
+		if _, err = tx.Exec(ctx, "UPDATE customer_credit_accounts SET used_cents=used_cents-$2,version=version+1,updated_at=now() WHERE user_id=$1 AND used_cents>=$2", userID, creditRemaining); err != nil {
+			return out, err
+		}
+		if _, err = tx.Exec(ctx, "UPDATE credit_invoice_payments SET remaining_cents=0,status='refunded',version=version+1,refunded_at=now(),refund_key=$2,refund_actor_id=$3 WHERE invoice_id=$1", invoiceID, key, actorID); err != nil {
+			return out, err
+		}
+	} else {
+		if balance > 9223372036854775807-out.AmountCents {
+			return out, conflict("balance_overflow", "余额超出上限")
+		}
+		balance += out.AmountCents
+		if _, err = tx.Exec(ctx, "UPDATE users SET balance_cents=$1,updated_at=now() WHERE id=$2", balance, userID); err != nil {
+			return out, err
+		}
 	}
 	if _, err = tx.Exec(ctx, "UPDATE invoices SET status='refunded',paid_at=NULL WHERE id=$1", invoiceID); err != nil {
 		return out, err
@@ -397,9 +558,11 @@ UPDATE products p SET stock=p.stock+c.n,updated_at=now() FROM counts c WHERE p.i
 			return out, err
 		}
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
+	if !creditPayment {
+		if _, err = tx.Exec(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
 VALUES($1,'refund',$2,$3,'invoice',$4,$5,'账单退款')`, userID, out.AmountCents, balance, invoiceID, key); err != nil {
-		return out, err
+			return out, err
+		}
 	}
 	if err = Audit(ctx, tx, actorID, "invoice.refunded", "invoice", invoiceID, map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}); err != nil {
 		return out, err

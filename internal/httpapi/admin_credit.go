@@ -29,7 +29,7 @@ func (s *Server) adminCreditPage(w http.ResponseWriter, r *http.Request) {
 	like := "%" + q + "%"
 	rows, err := s.db.Pool.Query(r.Context(), `WITH filtered AS (
  SELECT u.id,u.username,u.display_name,u.email,u.status,a.limit_cents,a.used_cents,
-  GREATEST(a.limit_cents-a.used_cents,0)::bigint AS available_cents,a.version,a.updated_at
+  GREATEST(a.limit_cents-a.used_cents,0)::bigint AS available_cents,a.version,a.updated_at,a.frozen
  FROM users u JOIN customer_credit_accounts a ON a.user_id=u.id
  WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
  AND ($2='' OR u.status=$2) AND ($3='' OR u.username ILIKE $3 OR u.display_name ILIKE $3 OR u.email ILIKE $3 OR u.id::text ILIKE $3)
@@ -74,39 +74,7 @@ func (s *Server) adminCreditLimit(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	actor := identityFrom(r).ID
-	var role string
-	var roleID *int64
-	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if role != "super_admin" {
-		var allowed bool
-		if roleID == nil {
-			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
-			return
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT active AND 'credit.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !allowed {
-			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
-			return
-		}
-	}
-	cookie, cookieErr := r.Cookie("zjmfgo_session")
-	if cookieErr != nil {
-		writeError(w, 401, "unauthorized", "会话失效")
-		return
-	}
-	var sessionUser int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE", tokenHash(cookie.Value), actor).Scan(&sessionUser); err != nil {
-		writeError(w, 401, "unauthorized", "会话失效")
-		return
-	}
-	if err = store.LockAdminCustomer(r.Context(), tx, actor, id); err != nil {
-		s.fail(w, r, err)
+	if !s.lockCreditManager(w, r, tx, id) {
 		return
 	}
 	if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("admin-credit:%d:%s", actor, key)); err != nil {
@@ -165,4 +133,46 @@ func (s *Server) adminCreditLimit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 201, map[string]any{"user_id": id, "limit_cents": in.LimitCents, "used_cents": used, "available_cents": in.LimitCents - used, "version": nextVersion, "replayed": false})
+}
+
+func (s *Server) lockCreditManager(w http.ResponseWriter, r *http.Request, tx pgx.Tx, id int64) bool {
+	actor := identityFrom(r).ID
+	var err error
+	var role string
+	var roleID *int64
+	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
+		s.fail(w, r, err)
+		return false
+	}
+	if role != "super_admin" {
+		var allowed bool
+		if roleID == nil {
+			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
+			return false
+		}
+		if err = tx.QueryRow(r.Context(), "SELECT active AND 'credit.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+			s.fail(w, r, err)
+			return false
+		}
+		if !allowed {
+			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
+			return false
+		}
+	}
+	cookie, cookieErr := r.Cookie("zjmfgo_session")
+	if cookieErr != nil {
+		writeError(w, 401, "unauthorized", "会话失效")
+		return false
+	}
+	var sessionUser int64
+	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE", tokenHash(cookie.Value), actor).Scan(&sessionUser); err != nil {
+		writeError(w, 401, "unauthorized", "会话失效")
+		return false
+	}
+	if err = store.LockAdminCustomer(r.Context(), tx, actor, id); err != nil {
+		s.fail(w, r, err)
+		return false
+	}
+
+	return true
 }

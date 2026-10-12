@@ -15,7 +15,7 @@ import {
   Search,
   Wallet,
 } from "lucide-react";
-import { api, date, money, type OptionSnapshot, type User } from "@/lib/api";
+import { api, ApiError,date, money, type OptionSnapshot, type User } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
@@ -113,6 +113,7 @@ type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   import_review_required: boolean;
   payment_pending: boolean;
   real_payment_pending: boolean;
+ credit_payment?:{remaining_cents:number;amount_cents:number;status:string}|null;
   discount_cents: number;
   promo_code: string;
   items: {
@@ -162,6 +163,7 @@ type InvoiceActionRow = Pick<
   | "import_review_required"
   | "payment_pending"
   | "real_payment_pending"
+ | "credit_payment"
   | "version"
 > & { payments?: PaymentRecord[] };
 type InvoiceRow = InvoiceActionRow &
@@ -963,33 +965,35 @@ function InvoiceActions({
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
   const key = useRef<Record<string, string>>({});
-  async function act(action: "pay" | "refund") {
+ const [creditPending,setCreditPending]=useState<{key:string;body:string}|null>(null);
+ const actorKey=useRef("");
+ useEffect(()=>{if(admin)return;void api<User>("/me").then(u=>{actorKey.current=`credit-pay-pending:${u.id}:${invoice.id}`;const raw=sessionStorage.getItem(actorKey.current);if(raw){try{setCreditPending(JSON.parse(raw));}catch{sessionStorage.removeItem(actorKey.current);}}});},[admin,invoice.id]);
+ useEffect(()=>{if(!creditPending)return;const leave=(event:BeforeUnloadEvent)=>{event.preventDefault();};window.addEventListener("beforeunload",leave);return()=>window.removeEventListener("beforeunload",leave);},[creditPending]);
+
+  async function act(action: "pay" | "pay-credit" | "refund") {
     setBusy(true);
     setError("");
+    if(creditPending&&action!=="pay-credit"){setBusy(false);return;}
     const requestKey = `${action}:${invoice.version}`;
     key.current[requestKey] ??=
       `web-invoice-${action}-${invoice.id}-${crypto.randomUUID()}`;
+    const creditRequest=creditPending??{key:key.current[requestKey],body:JSON.stringify({expected_version:invoice.version})};
     try {
       await api(
         `${action === "refund" ? "/admin" : ""}/invoices/${invoice.id}/${action}`,
         {
           method: "POST",
-          body: JSON.stringify(
-            action === "pay" ? { expected_version: invoice.version } : {},
-          ),
-          headers: { "Idempotency-Key": key.current[requestKey] },
+          body:action==="pay-credit"?creditRequest.body:JSON.stringify(action!=="refund"?{expected_version:invoice.version}:{}),
+          headers: { "Idempotency-Key": action==="pay-credit"?creditRequest.key:key.current[requestKey] },
         },
       );
+      if(action==="pay-credit"){setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}
       setConfirm(false);
       refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    } catch(e){setError((e as Error).message);if(action==="pay-credit"){if(!(e instanceof ApiError)||e.status>=500){setCreditPending(creditRequest);if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}else{setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}}}finally{setBusy(false);}
   }
   if (admin && (invoice.status !== "paid" || !allowed)) return null;
-  if (!admin && invoice.status !== "unpaid") return null;
+  if (!admin && invoice.status !== "unpaid"&&!creditPending) return null;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -998,11 +1002,11 @@ function InvoiceActions({
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || invoice.import_review_required}
+              disabled={busy || invoice.import_review_required || (!!invoice.credit_payment&&invoice.credit_payment.remaining_cents<invoice.credit_payment.amount_cents)}
               onClick={() => setConfirm(true)}
             >
               <RotateCcw />
-              退款至余额
+              {invoice.credit_payment?"撤销信用债务":"退款至余额"}
             </Button>
             <Dialog
               open={confirm}
@@ -1012,7 +1016,7 @@ function InvoiceActions({
             >
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>退款至账户余额</DialogTitle>
+                  <DialogTitle>{invoice.credit_payment?"撤销信用债务（不增加余额）":"退款至账户余额"}</DialogTitle>
                 </DialogHeader>
                 <p className="text-sm break-all">
                   {invoice.invoice_no} · {money(invoice.amount_cents)}
@@ -1042,18 +1046,20 @@ function InvoiceActions({
           <>
             <Button
               size="sm"
-              disabled={busy || invoice.import_review_required || invoice.real_payment_pending}
+              disabled={busy || !!creditPending || invoice.import_review_required || invoice.real_payment_pending}
               onClick={() => void act("pay")}
             >
               <Wallet />
               余额支付
             </Button>
-            {invoice.amount_cents > 0 && (
+            {invoice.amount_cents > 0 && <Button size="sm" variant="outline" disabled={busy||(!creditPending&&(invoice.import_review_required||invoice.real_payment_pending))} onClick={()=>{if(creditPending||window.confirm(`确认使用授信额度支付 ${money(invoice.amount_cents)}？该金额会成为待还债务。`))void act("pay-credit");}}>{creditPending?"以原请求确认信用付款结果":"信用支付"}</Button>}
+            {invoice.amount_cents > 0 && !creditPending && (
               <OnlinePayment invoice={invoice} refresh={refresh} />
             )}
           </>
         )}
       </div>
+{admin&&invoice.credit_payment&&invoice.credit_payment.remaining_cents<invoice.credit_payment.amount_cents&&<p className="text-sm">该信用消费已发生还款，普通退款不可用，请人工核实线下退付。</p>}
       {invoice.import_review_required && (
         <p className="text-xs text-muted-foreground">账单待复核</p>
       )}
