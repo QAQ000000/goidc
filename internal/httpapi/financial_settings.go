@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -545,7 +546,60 @@ func (s *Server) updateContractSettings(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 400, "invalid_contract_settings", "合同设置无效")
 		return
 	}
-	s.updateSingletonSettings(w, r, "contract.settings_updated", "contract_settings", in.ExpectedVersion, map[string]any{"enabled": *in.Enabled}, `UPDATE contract_settings SET enabled=$1,version=version+1,updated_at=now() WHERE id=1 AND version=$2 RETURNING version`, *in.Enabled, in.ExpectedVersion)
+	key, ok := settingMutationKey(w, r)
+	if !ok {
+		return
+	}
+	tx, actor, ok := s.contractTx(w, r, true, true)
+	if !ok {
+		return
+	}
+	defer tx.Rollback(r.Context())
+	audit := map[string]any{"enabled": *in.Enabled}
+	hash := settingMutationHash(audit)
+	if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("contract-settings:%d:%s", actor, key)); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if replay, replayed, err := loadSettingReplayTx(r, tx, actor, "contract_settings", key, hash); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if replayed {
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		write(w, 200, replay)
+		return
+	}
+	var version int64
+	if err := tx.QueryRow(r.Context(), "SELECT version FROM contract_settings WHERE id=1 FOR UPDATE").Scan(&version); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if version != in.ExpectedVersion {
+		writeError(w, 409, "version_conflict", "设置已变更，请重新加载")
+		return
+	}
+	var next int64
+	if err := tx.QueryRow(r.Context(), "UPDATE contract_settings SET enabled=$1,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled).Scan(&next); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	result := map[string]any{"version": next}
+	if err := store.Audit(r.Context(), tx, actor, "contract.settings_updated", "contract_settings", 1, audit); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := saveSettingOperationTx(r, tx, actor, "contract_settings", key, hash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, result)
 }
 
 func (s *Server) updateSingletonSettings(w http.ResponseWriter, r *http.Request, action, entity string, expected int64, audit map[string]any, query string, args ...any) {

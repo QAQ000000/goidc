@@ -1,11 +1,14 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
+	"net/http"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestContractPlaceholderValidation(t *testing.T) {
@@ -157,4 +160,277 @@ func TestContractConcurrentCreateAndPaidDateBoundary(t *testing.T) {
 		}
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/contracts?from=2026-10-13&to=2026-10-12", nil, root, ""), 400)
+}
+func contractTestFixture(t *testing.T) (*store.Store, http.Handler, string, string, int64, int64, int64) {
+	t.Helper()
+	db, h := testServer(t)
+	_, root := user(t, db, h, "contract-extra-root", "super_admin")
+	uid, customer := user(t, db, h, "contract-extra-customer", "customer")
+	sid, iid := billingSchedulerFixture(t, db, uid, product(t, db, 10), 714, false)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1", iid); err != nil {
+		t.Fatal(err)
+	}
+	db.Pool.Exec(t.Context(), "UPDATE contract_settings SET enabled=true")
+	w := request(h, "POST", "/api/v1/admin/contract-templates", map[string]any{"name": "专项合同", "content": "{{domain}}", "enabled": true}, root, "contract-extra-template")
+	expect(t, w, 200)
+	return db, h, root, customer, uid, sid, int64(data(t, w)["id"].(float64))
+}
+func TestContractAuditRollbackAndBulkStaleRollback(t *testing.T) {
+	db, h, root, customer, uid, sid, tid := contractTestFixture(t)
+	create := map[string]any{"service_id": sid, "template_id": tid}
+	if _, err := db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_contract_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.entity_type='contract' THEN RAISE EXCEPTION 'contract audit rejected'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_contract BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_contract_audit();`); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/contracts", create, customer, "contract-audit-create"), 500)
+	for _, table := range []string{"contracts", "contract_history", "contract_documents", "contract_receipts"} {
+		var count int
+		db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM "+table).Scan(&count)
+		wanted := 0
+		if table == "contract_receipts" {
+			wanted = 1
+		}
+		if count != wanted {
+			t.Fatal("create audit partial write", table, count)
+		}
+	}
+	db.Pool.Exec(t.Context(), "DROP TRIGGER reject_contract ON audit_events")
+	w := request(h, "POST", "/api/v1/contracts", create, customer, "contract-audit-create")
+	expect(t, w, 200)
+	id := int64(data(t, w)["id"].(float64))
+	path := fmt.Sprintf("/api/v1/admin/contracts/%d/void", id)
+	db.Pool.Exec(t.Context(), "CREATE TRIGGER reject_contract BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_contract_audit()")
+	expect(t, request(h, "POST", path, map[string]any{"expected_version": 1, "reason": "审计失败"}, root, "contract-audit-void"), 500)
+	var version int
+	var status string
+	db.Pool.QueryRow(t.Context(), "SELECT version,status FROM contracts WHERE id=$1", id).Scan(&version, &status)
+	if version != 1 || status != "draft" {
+		t.Fatal("audit mutation survived", version, status)
+	}
+	for _, table := range []string{"contract_history", "contract_documents", "contract_receipts"} {
+		var count int
+		db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM "+table).Scan(&count)
+		wanted := 1
+		if table == "contract_receipts" {
+			wanted = 2
+		}
+		if count != wanted {
+			t.Fatal("transition audit partial write", table, count)
+		}
+	}
+	db.Pool.Exec(t.Context(), "DROP TRIGGER reject_contract ON audit_events")
+	sid2, iid2 := billingSchedulerFixture(t, db, uid, product(t, db, 10), 715, false)
+	db.Pool.Exec(t.Context(), "UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1", iid2)
+	w = request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": sid2, "template_id": tid}, customer, "contract-second-create")
+	expect(t, w, 200)
+	id2 := int64(data(t, w)["id"].(float64))
+	expect(t, request(h, "POST", "/api/v1/admin/contracts/bulk-void", map[string]any{"reason": "批量", "items": []any{map[string]any{"id": id, "expected_version": 1}, map[string]any{"id": id2, "expected_version": 99}}}, root, "contract-bulk-stale"), 409)
+	var unchanged int
+	db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM contracts WHERE status='draft' AND version=1").Scan(&unchanged)
+	if unchanged != 2 {
+		t.Fatal("bulk stale changed first", unchanged)
+	}
+	for _, table := range []string{"contract_history", "contract_documents", "contract_receipts"} {
+		var count int
+		db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM "+table).Scan(&count)
+		wanted := 2
+		if table == "contract_receipts" {
+			wanted = 3
+		}
+		if count != wanted {
+			t.Fatal("bulk stale partial write", table, count)
+		}
+	}
+}
+func TestContractWaitRechecksSessionAndRoleIncludingReplay(t *testing.T) {
+	for _, kind := range []string{"session", "role"} {
+		for _, replay := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/replay-%t", kind, replay), func(t *testing.T) {
+				db, h, root, customer, _, sid, tid := contractTestFixture(t)
+				staffID, staff := user(t, db, h, "contract-wait-staff", "admin")
+				contentRole(t, db, staffID, "contracts.view", "contracts.manage")
+				w := request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": sid, "template_id": tid}, customer, "contract-wait-create")
+				expect(t, w, 200)
+				id := int64(data(t, w)["id"].(float64))
+				path := fmt.Sprintf("/api/v1/admin/contracts/%d/void", id)
+				body := map[string]any{"expected_version": 1, "reason": "等待锁"}
+				key := "contract-wait-operation"
+				if replay {
+					expect(t, request(h, "POST", path, body, staff, key), 200)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				tx, err := db.Pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback(context.Background())
+				if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108190)"); err != nil {
+					t.Fatal(err)
+				}
+				done := make(chan int, 1)
+				go func() { done <- request(h, "POST", path, body, staff, key).Code }()
+				for {
+					var waiting bool
+					if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query=$1)", "SELECT pg_advisory_xact_lock_shared(70108190)").Scan(&waiting); err != nil {
+						t.Fatal(err)
+					}
+					if waiting {
+						break
+					}
+					select {
+					case code := <-done:
+						t.Fatal("request did not wait", code)
+					case <-ctx.Done():
+						t.Fatal("no observed lock wait")
+					case <-time.After(10 * time.Millisecond):
+					}
+				}
+				want := 403
+				if kind == "session" {
+					want = 401
+					_, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", staffID)
+				} else {
+					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = tx.Commit(ctx); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case code := <-done:
+					if code != want {
+						t.Fatal("wait authorization", code, want)
+					}
+				case <-ctx.Done():
+					t.Fatal("request did not complete")
+				}
+				var version int
+				db.Pool.QueryRow(t.Context(), "SELECT version FROM contracts WHERE id=$1", id).Scan(&version)
+				wanted := 1
+				if replay {
+					wanted = 2
+				}
+				if version != wanted {
+					t.Fatal("denied operation wrote", version)
+				}
+				expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/contracts/%d", id), nil, root, ""), 200)
+			})
+		}
+	}
+}
+func TestContractOwnedAssignedScopesAndReceiptReplay(t *testing.T) {
+	db, h, root, customer, uid, sid, tid := contractTestFixture(t)
+	staffID, staff := user(t, db, h, "contract-scope-staff", "admin")
+	otherID, _ := user(t, db, h, "contract-scope-other-admin", "admin")
+	contentRole(t, db, staffID, "contracts.view", "contracts.manage")
+	db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, uid)
+	w := request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": sid, "template_id": tid}, customer, "contract-scope-create")
+	expect(t, w, 200)
+	id := int64(data(t, w)["id"].(float64))
+	path := fmt.Sprintf("/api/v1/admin/contracts/%d", id)
+	expect(t, request(h, "GET", path, nil, staff, ""), 200)
+	body := map[string]any{"expected_version": 1, "reason": "所属客户"}
+	expect(t, request(h, "POST", path+"/void", body, staff, "contract-scope-void"), 200)
+	db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", otherID, uid)
+	expect(t, request(h, "GET", path, nil, staff, ""), 404)
+	expect(t, request(h, "POST", path+"/void", body, staff, "contract-scope-void"), 404)
+	w = request(h, "GET", "/api/v1/admin/contracts", nil, staff, "")
+	expect(t, w, 200)
+	if data(t, w)["total"] != float64(0) {
+		t.Fatal("owned list leaked")
+	}
+	db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='assigned' WHERE id=$1", staffID)
+	expect(t, request(h, "GET", path, nil, staff, ""), 200)
+	expect(t, request(h, "POST", path+"/void", body, staff, "contract-scope-void"), 200)
+	db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=NULL WHERE id=$1", uid)
+	expect(t, request(h, "GET", path, nil, staff, ""), 404)
+	expect(t, request(h, "POST", path+"/void", body, staff, "contract-scope-void"), 404)
+	w = request(h, "GET", "/api/v1/admin/contracts", nil, staff, "")
+	expect(t, w, 200)
+	if data(t, w)["total"] != float64(0) {
+		t.Fatal("ownerless list leaked")
+	}
+	expect(t, request(h, "GET", path, nil, root, ""), 200)
+}
+func TestContractTemplateListReads(t *testing.T) {
+	_, h, root, customer, _, _, _ := contractTestFixture(t)
+	expect(t, request(h, "GET", "/api/v1/admin/contract-templates", nil, root, ""), 200)
+	expect(t, request(h, "GET", "/api/v1/contract-templates", nil, customer, ""), 200)
+}
+func TestContractSettingsWaitAuthorizationAndReplay(t *testing.T) {
+	for _, kind := range []string{"session", "role"} {
+		for _, replay := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/replay-%t", kind, replay), func(t *testing.T) {
+				db, h, _, _, _, _, _ := contractTestFixture(t)
+				staffID, staff := user(t, db, h, "contract-settings-wait-staff", "admin")
+				contentRole(t, db, staffID, "settings.view", "settings.manage")
+				body := map[string]any{"expected_version": 1, "enabled": false}
+				key := "contract-settings-wait"
+				if replay {
+					expect(t, request(h, "PUT", "/api/v1/admin/contract-settings", body, staff, key), 200)
+				}
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				tx, err := db.Pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback(context.Background())
+				if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108190)"); err != nil {
+					t.Fatal(err)
+				}
+				done := make(chan int, 1)
+				go func() { done <- request(h, "PUT", "/api/v1/admin/contract-settings", body, staff, key).Code }()
+				for {
+					var waiting bool
+					if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query=$1)", "SELECT pg_advisory_xact_lock_shared(70108190)").Scan(&waiting); err != nil {
+						t.Fatal(err)
+					}
+					if waiting {
+						break
+					}
+					select {
+					case code := <-done:
+						t.Fatal("settings did not wait", code)
+					case <-ctx.Done():
+						t.Fatal("no settings lock wait")
+					case <-time.After(10 * time.Millisecond):
+					}
+				}
+				want := 403
+				if kind == "session" {
+					want = 401
+					_, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", staffID)
+				} else {
+					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = tx.Commit(ctx); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case code := <-done:
+					if code != want {
+						t.Fatal("settings authorization", code, want)
+					}
+				case <-ctx.Done():
+					t.Fatal("settings did not complete")
+				}
+				var version int
+				db.Pool.QueryRow(t.Context(), "SELECT version FROM contract_settings").Scan(&version)
+				wanted := 1
+				if replay {
+					wanted = 2
+				}
+				if version != wanted {
+					t.Fatal("denied settings wrote", version)
+				}
+			})
+		}
+	}
 }
