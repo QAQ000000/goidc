@@ -118,7 +118,7 @@ WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr !=
 		return
 	}
 	if mfaEnabled {
-		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID)
+		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID, method)
 		if challengeErr != nil {
 			s.fail(w, r, challengeErr)
 			return

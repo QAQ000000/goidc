@@ -38,7 +38,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 	return nil
 }
 
-func (s *Server) createMFAChallenge(ctx context.Context, userID int64) (string, error) {
+func (s *Server) createMFAChallenge(ctx context.Context, userID int64, method string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
@@ -48,7 +48,7 @@ func (s *Server) createMFAChallenge(ctx context.Context, userID int64) (string, 
 	if err != nil {
 		return "", err
 	}
-	_, err = s.db.Pool.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '5 minutes')", tokenHash(challenge), userID)
+	_, err = s.db.Pool.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,login_method,expires_at) VALUES($1,$2,$3,now()+interval '5 minutes')", tokenHash(challenge), userID, method)
 	return challenge, err
 }
 
@@ -77,12 +77,12 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback(r.Context())
 	var userID int64
 	var secretEnc []byte
-	var username, email, name, role string
+	var username, email, name, role, method string
 	var attempts int
-	err = tx.QueryRow(r.Context(), `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc
+	err = tx.QueryRow(r.Context(), `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,'')
 		FROM mfa_challenges c JOIN users u ON u.id=c.user_id
 		WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true
-		FOR UPDATE`, tokenHash(input.Challenge)).Scan(&userID, &attempts, &username, &email, &name, &role, &secretEnc)
+		FOR UPDATE`, tokenHash(input.Challenge)).Scan(&userID, &attempts, &username, &email, &name, &role, &secretEnc, &method)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
 		return
@@ -91,13 +91,17 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var loginEnabled bool
-	if err = tx.QueryRow(r.Context(), "SELECT login_enabled FROM auth_settings WHERE id=1 FOR SHARE").Scan(&loginEnabled); err != nil {
+	var loginEnabled, methodEnabled bool
+	if err = tx.QueryRow(r.Context(), `SELECT login_enabled,CASE $1 WHEN 'username' THEN login_username_enabled WHEN 'email' THEN login_email_enabled WHEN 'phone' THEN login_phone_enabled ELSE false END FROM auth_settings WHERE id=1 FOR SHARE`, method).Scan(&loginEnabled, &methodEnabled); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if role == "customer" && !loginEnabled {
 		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
+		return
+	}
+	if method == "" || (role == "customer" && !methodEnabled) {
+		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放，请重新登录")
 		return
 	}
 	if attempts >= 5 {
@@ -245,7 +249,8 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := identityFrom(r)
-	var enabled bool
+	var enabled, allowed bool
+	var role string
 	var enc []byte
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
@@ -253,8 +258,16 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled, &enc); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc,role FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled, &enc, &role); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if err = tx.QueryRow(r.Context(), "SELECT CASE WHEN $1='customer' THEN customer_enabled ELSE admin_enabled END FROM mfa_settings WHERE id=1 FOR SHARE", role).Scan(&allowed); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !allowed {
+		writeError(w, http.StatusForbidden, "mfa_enrollment_disabled", "当前账户类型暂未开放二次验证设置")
 		return
 	}
 	if enabled || len(enc) == 0 {

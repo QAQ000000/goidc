@@ -171,7 +171,7 @@ func TestMFAEnrollCannotReplaceConfirmedSecret(t *testing.T) {
 	go func() {
 		confirmDone <- request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, "").Code
 	}()
-	waitForMFALock(t, db, "SELECT mfa_enabled,mfa_secret_enc FROM users")
+	waitForMFALock(t, db, "SELECT mfa_enabled,mfa_secret_enc,role FROM users")
 	enrollDone := make(chan int, 1)
 	go func() {
 		enrollDone <- request(h, "POST", "/api/v1/account/mfa/enroll", map[string]any{}, cookie, "").Code
@@ -190,6 +190,52 @@ func TestMFAEnrollCannotReplaceConfirmedSecret(t *testing.T) {
 	if err = db.Pool.QueryRow(t.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", userID).Scan(&enabled); err != nil || !enabled {
 		t.Fatal(enabled, err)
 	}
+}
+
+func TestMFAConfirmRechecksCurrentRolePolicy(t *testing.T) {
+	db, h := testServer(t)
+	userID, cookie := user(t, db, h, "mfa-confirm-policy", "customer")
+	enroll := request(h, "POST", "/api/v1/account/mfa/enroll", map[string]any{}, cookie, "")
+	expect(t, enroll, 200)
+	secret := data(t, enroll)["secret"].(string)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_settings SET customer_enabled=false"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 403)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_settings SET customer_enabled=true,admin_enabled=false"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='super_admin' WHERE id=$1", userID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 403)
+	var enabled bool
+	if err := db.Pool.QueryRow(t.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", userID).Scan(&enabled); err != nil || enabled {
+		t.Fatal("MFA was enabled despite disabled role policy", enabled, err)
+	}
+}
+
+func TestMFAChallengeRechecksLoginMethod(t *testing.T) {
+	db, h := testServer(t)
+	userID, cookie := user(t, db, h, "mfa-method-policy", "customer")
+	enroll := request(h, "POST", "/api/v1/account/mfa/enroll", map[string]any{}, cookie, "")
+	expect(t, enroll, 200)
+	secret := data(t, enroll)["secret"].(string)
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 200)
+	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "mfa-method-policy", "password": "integration-password"}, "", "")
+	expect(t, login, 401)
+	challenge := errorData(t, login)["challenge"].(string)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_username_enabled=false WHERE id=1"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/auth/login/mfa", map[string]any{"challenge": challenge, "code": testTOTP(secret, time.Now())}, "", ""), 403)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_username_enabled=true WHERE id=1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_challenges SET login_method=NULL WHERE user_id=$1", userID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/auth/login/mfa", map[string]any{"challenge": challenge, "code": testTOTP(secret, time.Now())}, "", ""), 403)
 }
 
 func waitForMFALock(t *testing.T, db *store.Store, fragment string) {
