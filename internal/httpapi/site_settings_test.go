@@ -164,7 +164,7 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 	go func() { result <- request(h, "POST", "/api/v1/auth/register", registration, "", "").Code }()
 	for {
 		var waiting bool
-		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT registration_enabled FROM site_settings WHERE id=1 FOR SHARE')").Scan(&waiting); err != nil {
+		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT s.registration_enabled AND a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1 FOR SHARE')").Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
