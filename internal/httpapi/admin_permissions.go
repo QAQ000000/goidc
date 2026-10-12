@@ -138,6 +138,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["DELETE /api/v1/admin/service-groups/{id}"] = "products.manage"
 	m["PUT /api/v1/admin/products/{id}/service-group"] = "products.manage"
 	m["GET /api/v1/admin/services/page"] = "services.view"
+	m["GET /api/v1/admin/resources"] = "resources.view"
 	m["GET /api/v1/admin/customers/page"] = "customers.view"
 	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
 	m["GET /api/v1/admin/affiliate/accounts/page"] = "affiliates.view"

@@ -26,6 +26,7 @@ var AdminPermissions = []Permission{
 	{"customer_levels.view", "客户等级", "读取客户等级规则"}, {"customer_levels.manage", "客户等级", "管理客户等级规则"},
 	{"promos.view", "优惠码", "读取优惠码"}, {"promos.manage", "优惠码", "管理优惠码"},
 	{"products.view", "产品", "读取商品及目录分组"}, {"products.manage", "产品", "管理商品、价格与目录分组"},
+	{"resources.view", "服务器资源", "读取供应商服务器资源列表"}, {"resources.manage", "服务器资源", "管理服务器资源信息"},
 	{"content.view", "内容", "读取文章与分类"}, {"content.manage", "内容", "管理新闻、知识库及分类"},
 	{"downloads.view", "下载中心", "读取文件、分类和下载设置"}, {"downloads.manage", "下载中心", "上传、编辑、删除文件及管理分类与设置"},
 	{"customer_files.view", "客户文件", "读取授权客户文件与下载"}, {"customer_files.manage", "客户文件", "上传、编辑、转移和删除授权客户文件"},

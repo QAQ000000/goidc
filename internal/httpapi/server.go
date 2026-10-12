@@ -489,6 +489,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/promo-codes/{id}", s.auth(s.updatePromoCode, true))
 	mux.HandleFunc("GET /api/v1/admin/services", s.auth(s.services, true))
 	mux.HandleFunc("GET /api/v1/admin/services/page", s.auth(s.servicesPage, true))
+	mux.HandleFunc("GET /api/v1/admin/resources", s.auth(s.resourcesPage, true))
 	mux.HandleFunc("GET /api/v1/admin/services/{id}", s.auth(s.serviceDetail, true))
 	mux.HandleFunc("GET /api/v1/admin/services/{id}/activity", s.auth(s.serviceActivity, true))
 	mux.HandleFunc("PUT /api/v1/admin/products/{id}/configuration-upgrade-policy", s.auth(s.saveConfigurationUpgradePolicy, true))
