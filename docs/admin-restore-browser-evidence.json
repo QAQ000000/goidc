@@ -2701,6 +2701,106 @@
       },
       "scope": "隔离PG18真实API；连接测试、保存与取消确认已操作验收",
       "screenshotSha256": "8b476733d37f5ddc10b4682cfd549d832a912c8bbc0bc85c36d553fdb9ce410a"
+    },
+    {
+      "newRoute": "/admin/apps",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-apps-20261013/apps-my-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "真实 API 夹具；编译应用卡片布局与筛选操作已验收"
+      },
+      "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
+      "screenshotSha256": "437460035bcd442211e2f7ba7cff67a4657d8926d3b27fbfb5e80c6ba46fceaf"
+    },
+    {
+      "newRoute": "/admin/apps",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-apps-20261013/apps-my-1024.png",
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "真实 API 夹具；编译应用卡片布局与筛选操作已验收"
+      },
+      "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
+      "screenshotSha256": "f84ea5c86de070031f069a710b9f666a163baa5b74e79d48c705ad03c19db876"
+    },
+    {
+      "newRoute": "/admin/apps",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-apps-20261013/apps-my-390.png",
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "真实 API 夹具；编译应用卡片布局与筛选操作已验收"
+      },
+      "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
+      "screenshotSha256": "44243e4edf29d48aff857d88aca7ac1c5a66be2378c3b4263e29cbfe5bbfb6a7"
+    },
+    {
+      "newRoute": "/admin/apps",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-apps-20261013/apps-my-320.png",
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "真实 API 夹具；编译应用卡片布局与筛选操作已验收"
+      },
+      "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
+      "screenshotSha256": "f6345422aa9e4053077caab518de6081ba7166fb9d482571d332308c0e08c1b8"
+    },
+    {
+      "newRoute": "/admin/apps/store",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-apps-20261013/apps-store-1440.png",
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440
+      },
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noConsoleErrors": true,
+        "noApiFailures": true,
+        "visualReview": "真实 API 夹具；编译应用卡片布局与筛选操作已验收"
+      },
+      "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
+      "screenshotSha256": "378013d8b9fb7086580a0a5963fa9064d44d4333ceb320b7bdfdcb00be2c35ef"
     }
   ],
   "pageErrors": [],
