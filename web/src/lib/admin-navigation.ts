@@ -39,6 +39,8 @@ export const adminNavigation = [
   { href: "/admin/migrations", label: "迁移复核", icon: ClipboardCheck, permission: "migrations.view", group: "system" },
   { href: "/admin/access", label: "管理员与权限", icon: ShieldCheck, permission: "@super", group: "system" },
   { href: "/admin/settings", label: "站点设置", icon: Settings, permission: "settings.view", group: "system" },
+  { href: "/admin/configurable-options", label: "全局可配置项", icon: Package, permission: "products.view", group: "system" },
+  { href: "/admin/order-settings", label: "商品订购设置", icon: ClipboardList, permission: "settings.view", group: "system" },
   { href: "/admin/theme-settings", label: "主题模板", icon: Settings, permission: "settings.view", group: "content" },
   { href: "/admin/site-fields", label: "官网自定义字段", icon: UserRoundCog, permission: "content.view", group: "content" },
   { href: "/admin/navigation", label: "导航管理", icon: Network, permission: "content.view", group: "content" },

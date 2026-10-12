@@ -79,8 +79,8 @@
 | 71 | [设置 / 通用接口](#page-71) | #/server-settings | /admin/channels?category=provision | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 72 | [设置 / 魔方DCIM](#page-72) | #/dcim | /admin/suppliers?kind=dcim | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 73 | [设置 / 魔方云](#page-73) | #/zjmfcloud | /admin/suppliers?kind=cloud | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 74 | [设置 / 全局可配置项](#page-74) | #/configurable-option | /admin/configurable-options | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 75 | [设置 / 商品订购设置](#page-75) | #/order-product | /admin/order-settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 74 | [设置 / 全局可配置项](#page-74) | #/configurable-option | /admin/configurable-options | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 75 | [设置 / 商品订购设置](#page-75) | #/order-product | /admin/order-settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 76 | [设置 / 基础信息](#page-76) | #/base-info | /admin/site-settings?tab=basic | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 77 | [设置 / 主题模板](#page-77) | #/theme-template | /admin/theme-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 78 | [设置 / 官网自定义字段](#page-78) | #/custom-template-fields | /admin/site-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -480,12 +480,12 @@
 <a id="page-74"></a>
 ## 74. 全局可配置项
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1588)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:84)。JSON 中按唯一旧 hash #/configurable-option 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1588)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:84)；页面：[源码](../web/src/app/admin/configurable-options/page.tsx:1)。JSON 中按唯一旧 hash #/configurable-option 检索。
 
 <a id="page-75"></a>
 ## 75. 商品订购设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1608)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:85)。JSON 中按唯一旧 hash #/order-product 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1608)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:85)；页面：[源码](../web/src/app/admin/order-settings/page.tsx:1)。JSON 中按唯一旧 hash #/order-product 检索。
 
 <a id="page-76"></a>
 ## 76. 基础信息

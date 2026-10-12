@@ -35,6 +35,9 @@ type GlobalConfigurationInput struct {
 }
 
 func ValidateGlobalConfiguration(in *GlobalConfigurationInput) error {
+	if in.Definitions == nil {
+		in.Definitions = []GlobalDefinition{}
+	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Description = strings.TrimSpace(in.Description)
 	if !contentTextValid(in.Name, 120, false) || in.Name == "" || !contentTextValid(in.Description, 2000, true) || len(in.Definitions) > 100 {

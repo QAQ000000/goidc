@@ -2261,6 +2261,126 @@
       },
       "scope": "隔离PG18真实API加载/空态/供应商非空表格；完整动作见admin-credit-supplier-acceptance-20261012.md",
       "screenshotSha256": "35c604061d4066f3e7aea467e83548df5f8deb906520a6dafe06646b828c5d03"
+    },
+    {
+      "newRoute": "/admin/configurable-options",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/global-options-1440.png",
+      "sha256": "c0df0bb815bd943ef6411ad30ce166d4a109c087cc797dfad146aa445b9329d1",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/configurable-options",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/global-options-1024.png",
+      "sha256": "6635f5498dcc1456bc29ff31997c09dbcb00037a959e450ec58b15b7c7a44434",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/configurable-options",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/global-options-390.png",
+      "sha256": "fadd393791827264f6224545aba2c9bd4c0749585335fed1ea4537dbdd992f83",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/configurable-options",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/global-options-320.png",
+      "sha256": "9db298122ea48884eb6086b7e720449d5ee6530e7ace495027fc1124f4cdde66",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/order-settings",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/order-settings-1440.png",
+      "sha256": "146feae8ee4530176b857932e868011290cae0a8567266d59a58ce79a4bb5e02",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/order-settings",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/order-settings-1024.png",
+      "sha256": "0c63a13ffce9edf6c9597a8d362dde8d79fb09e6d810de8c2565469e31ca9954",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/order-settings",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/order-settings-390.png",
+      "sha256": "26aaa4ff56bce5f2a2a87941569795ba61e8feaac61d47685fe9f5e5e2c2cb2b",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+    },
+    {
+      "newRoute": "/admin/order-settings",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-options-order-20261012/order-settings-320.png",
+      "sha256": "e4f3a0b480734feff3174e36aac79dfb754d833667efec385608f75143325e5f",
+      "checks": {
+        "horizontalOverflow": false,
+        "javascriptErrors": 0,
+        "apiFailures": 0,
+        "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
+      },
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
     }
   ],
   "pageErrors": [],

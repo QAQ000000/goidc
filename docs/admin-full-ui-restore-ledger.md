@@ -81,8 +81,8 @@
 | 71 | 通用接口 `#/server-settings` | `/admin/channels?category=provision` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 开通能力 |
 | 72 | 魔方DCIM `#/dcim` | `/admin/suppliers?kind=dcim` | 部分完成 | `GET/POST /admin/suppliers` | `products.view/manage` |
 | 73 | 魔方云 `#/zjmfcloud` | `/admin/suppliers?kind=cloud` | 部分完成 | `GET/POST /admin/suppliers` | `products.view/manage` |
-| 74 | 全局可配置项 `#/configurable-option` | `/admin/configurable-options` | 待实现 | `GET/POST/PATCH /admin/configurable-options` | `products.manage` |
-| 75 | 商品订购设置 `#/order-product` | `/admin/order-settings` | 待实现 | `GET/PUT /admin/order-settings` | `settings.manage` |
+| 74 | 全局可配置项 `#/configurable-option` | `/admin/configurable-options` | 部分完成 | `GET/POST /admin/global-configuration-groups` + `GET/PUT/DELETE /admin/global-configuration-groups/{id}` + `POST /admin/global-configuration-groups/copy` + `PUT /admin/global-configuration-groups/{id}/assignments` | `products.view/manage` / 130全局定义、分配与定价投影 |
+| 75 | 商品订购设置 `#/order-product` | `/admin/order-settings` | 部分完成 | `GET/PUT /admin/order-settings` | `settings.view/manage` / 131全局与商品准入、持久幂等 |
 | 76 | 基础信息 `#/base-info` | `/admin/site-settings?tab=basic` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` / 版本、审计和四尺寸验收沿用站点设置批次 |
 | 77 | 主题模板 `#/theme-template` | `/admin/theme-settings` | 已完成 | `GET/PUT /admin/theme-settings` | `settings.view/manage` / 120 迁移、幂等、版本冲突、审计；四尺寸验收 |
 | 78 | 官网自定义字段 `#/custom-template-fields` | `/admin/site-fields` | 已完成 | `GET/POST/PATCH/DELETE /admin/site-fields` | `content.view/manage` / 真实分页 CRUD、幂等、版本冲突、审计；四尺寸验收 |
@@ -132,3 +132,5 @@
 2026-10-12 独立分支资源/信用/认证批次已集成并检验；台账仍为47项已完成、48项部分完成、10项待实现，表示登记状态而非功能完成率。[本批验收与边界](admin-parallel-acceptance-20261012.md)。
 
 2026-10-12 信用业务/供应商批次：原待实现90/92/93/94页新增真实API和页面，按完整旧版剩余边界登记为部分完成。台账现为47项已完成、52项部分完成、6项待实现；登记状态不是功能完成率。[本批验收](admin-credit-supplier-acceptance-20261012.md)。
+
+2026-10-12 全局配置/订购批次：74/75新增真实配置、跨商品持续投影、复制/分配、商品级和全局验证要求、报价/结账准入、审计及版本幂等。两页和配置编辑弹窗有四尺寸证据；完整状态矩阵、多级全局联动和全部弹窗四尺寸仍未收口，因此登记部分完成。台账现为47完成、54部分、4待实现。[本批验收](admin-options-order-acceptance-20261012.md)。

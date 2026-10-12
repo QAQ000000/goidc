@@ -63,8 +63,12 @@ func TestHierarchyMigrationPreservesLegacyReferencesAndEnablesNativeDefaults(t *
 	if err = db.CheckSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Pool.QueryRow(t.Context(), fmt.Sprintf(query, "-'parent_group_id'-'hierarchy_native'", "-'parent_option_id'-'hierarchy_native'")).Scan(&after); err != nil || before != after {
+	if err = db.Pool.QueryRow(t.Context(), fmt.Sprintf(query, "-'parent_group_id'-'hierarchy_native'-'global_group_id'", "-'parent_option_id'-'hierarchy_native'")).Scan(&after); err != nil || before != after {
 		t.Fatal("upgrade altered legacy records", err)
+	}
+	var unmanaged bool
+	if err = db.Pool.QueryRow(t.Context(), "SELECT bool_and(global_group_id IS NULL) FROM product_option_groups WHERE product_id=$1", pid).Scan(&unmanaged); err != nil || !unmanaged {
+		t.Fatal("upgrade assigned legacy groups to global ownership", err)
 	}
 	if _, err = store.ValidateProductOptions(t.Context(), db.Pool, pid, []int64{rootOption, childOption}); err != nil {
 		t.Fatal("legacy branch lost after upgrade", err)
