@@ -12,6 +12,13 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/global-configuration-groups"] = "products.view"
+	m["GET /api/v1/admin/global-configuration-groups/{id}"] = "products.view"
+	m["POST /api/v1/admin/global-configuration-groups"] = "products.manage"
+	m["POST /api/v1/admin/global-configuration-groups/copy"] = "products.manage"
+	m["PUT /api/v1/admin/global-configuration-groups/{id}"] = "products.manage"
+	m["PUT /api/v1/admin/global-configuration-groups/{id}/assignments"] = "products.manage"
+	m["DELETE /api/v1/admin/global-configuration-groups/{id}"] = "products.manage"
 	m["GET /api/v1/admin/supplier-orders"] = "orders.view"
 	m["GET /api/v1/admin/supplier-renewals"] = "orders.view"
 	for _, p := range []string{"GET /api/v1/admin/supplier-providers", "GET /api/v1/admin/suppliers", "GET /api/v1/admin/products/{id}/supplier-binding"} {
