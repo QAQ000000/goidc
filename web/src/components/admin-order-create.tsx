@@ -106,6 +106,11 @@ function OrderForm() {
     for (const key of ["q", "status", "page", "date_from", "date_to", "payment_status", "limit", "customer_id"]) {
       const value = params.get(key); if (value) safe.set(key, value);
     }
+    if (params.get("source") === "supplier") {
+      safe.set("source", "supplier");
+      const supplier = params.get("supplier_id");
+      if (supplier && /^[1-9]\d*$/.test(supplier)) safe.set("supplier_id", supplier);
+    }
     return safe.size ? `?${safe.toString()}` : "";
   }
   function clearDraft() { if (draftKey) { try { sessionStorage.removeItem(draftKey); } catch {} } setSavedDraft(null); }
@@ -182,7 +187,7 @@ function OrderForm() {
       else { setUncertain(true); setError("订单提交结果暂时未知。请用同一请求重试，或先查看订单列表确认；不会重复创建订单。"); }
     } finally { setBusy(null); }
   }
-  function cancel() { if (busy || dirty && !window.confirm("确认取消本次新建订单并丢弃草稿？")) return; leaving.current = true; clearDraft(); router.push(`/admin/orders${listSuffix()}`); }
+  function cancel() { if (busy || dirty && !window.confirm("确认取消本次新建订单并丢弃草稿？")) return; leaving.current = true; clearDraft(); router.push(`${new URLSearchParams(window.location.search).get("source") === "supplier" ? "/admin/suppliers/orders" : "/admin/orders"}${listSuffix()}`); }
 
   if (!manage) return <p role="alert" className="py-12 text-center text-destructive">没有新建订单权限。</p>;
   return <div className="min-w-0 space-y-5">
