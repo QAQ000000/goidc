@@ -11,6 +11,15 @@ import (
 
 func (s *Server) adminCreditPage(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	var customerID *int64
+	if raw := r.URL.Query().Get("customer_id"); raw != "" {
+		id, err := parsePositiveID(raw)
+		if err != nil {
+			writeError(w, 400, "invalid_customer", "客户筛选无效")
+			return
+		}
+		customerID = &id
+	}
 	status := r.URL.Query().Get("status")
 	if status != "" && status != "active" && status != "disabled" {
 		writeError(w, 400, "invalid_status", "客户状态无效")
@@ -24,7 +33,8 @@ func (s *Server) adminCreditPage(w http.ResponseWriter, r *http.Request) {
  FROM users u JOIN customer_credit_accounts a ON a.user_id=u.id
  WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
  AND ($2='' OR u.status=$2) AND ($3='' OR u.username ILIKE $3 OR u.display_name ILIKE $3 OR u.email ILIKE $3 OR u.id::text ILIKE $3)
- ) SELECT (SELECT count(*) FROM filtered) AS total, COALESCE((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $4 OFFSET $5) page),'[]'::jsonb) AS items`, identityFrom(r).ID, status, like, limit, offset)
+ AND ($6::bigint IS NULL OR u.id=$6)
+ ) SELECT (SELECT count(*) FROM filtered) AS total, COALESCE((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $4 OFFSET $5) page),'[]'::jsonb) AS items`, identityFrom(r).ID, status, like, limit, offset, customerID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -53,7 +63,7 @@ func (s *Server) adminCreditLimit(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Note = strings.TrimSpace(in.Note)
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if in.LimitCents < 0 || in.ExpectedVersion < 1 || len(key) < 8 || len(key) > 128 || len(in.Note) > 240 {
+	if in.LimitCents < 0 || in.LimitCents > 100000000000 || in.ExpectedVersion < 1 || len(key) < 8 || len(key) > 128 || len(in.Note) > 240 {
 		writeError(w, 400, "invalid_credit_limit", "授权额度、版本、备注或幂等键无效")
 		return
 	}

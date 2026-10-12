@@ -11,12 +11,14 @@ export function AdminPagination({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  pageSizes = [25, 50, 100],
 }: {
   total: number;
   page: number; // 0-indexed
   pageSize: number;
   onPageChange: (newPage: number) => void;
   onPageSizeChange?: (newPageSize: number) => void;
+  pageSizes?: readonly number[];
 }) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const [jumpPage, setJumpPage] = useState("");
@@ -45,9 +47,7 @@ export function AdminPagination({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="25">25条/页</SelectItem>
-              <SelectItem value="50">50条/页</SelectItem>
-              <SelectItem value="100">100条/页</SelectItem>
+              {pageSizes.map(size => <SelectItem key={size} value={String(size)}>{size}条/页</SelectItem>)}
             </SelectContent>
           </Select>
         )}
