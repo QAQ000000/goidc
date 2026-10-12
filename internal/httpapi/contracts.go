@@ -68,6 +68,7 @@ func (s *Server) contractRead(w http.ResponseWriter, r *http.Request) {
 	args := []any{uid}
 	where, cols := " FROM contracts c WHERE "+contractScope(adminRoute(r)), "c.*,(SELECT status FROM services WHERE id=c.service_id) AS service_status"
 	if templates || available {
+		cols = "c.*"
 		if available {
 			cols = "c.id,c.name,c.version"
 		}
