@@ -20,6 +20,7 @@ export const adminNavigation = [
   { href: "/admin/suppliers/orders", label: "供应商订单", icon: ClipboardList, permission: "orders.view", group: "products" },
   { href: "/admin/suppliers/renewals", label: "供应商续费", icon: Receipt, permission: "orders.view", group: "products" },
   { href: "/admin/suppliers", label: "供应商", icon: Network, permission: "products.view", group: "products" },
+  { href: "/admin/suppliers/jobs", label: "供应商任务队列", icon: ClipboardList, permission: "products.view", group: "products" },
   { href: "/admin/service-groups", label: "服务分组", icon: Server, permission: "products.view", group: "products" },
   { href: "/admin/content", label: "新闻与知识库", icon: BookOpen, permission: "content.view", group: "content" },
   { href: "/admin/downloads", label: "下载中心", icon: Download, permission: "downloads.view", group: "content" },
@@ -69,6 +70,7 @@ export const adminNavigation = [
   { href: "/admin/job-settings", label: "任务配置", icon: Settings, permission: "@super", group: "system" },
   { href: "/admin/logs/jobs", label: "定时任务日志", icon: History, permission: "@super", group: "system" },
   { href: "/admin/jobs/queue", label: "任务队列", icon: Settings, permission: "jobs.view", group: "system" },
+  { href: "/admin/suppliers/tasks", label: "供应商交付任务", icon: ClipboardList, permission: "jobs.view", group: "system" },
   { href: "/admin/system/about", label: "关于系统", icon: Settings, permission: "settings.view", group: "system" },
 ];
 

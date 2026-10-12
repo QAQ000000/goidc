@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-export type PendingSetting = { body: string; key: string };
+export type PendingSetting = { body: string; key: string; path?: string };
 
 export function usePendingSetting(scope: string, actorId: number | null) {
   const pending = useRef<PendingSetting | null>(null);
@@ -19,7 +19,7 @@ export function usePendingSetting(scope: string, actorId: number | null) {
         if (saved) {
           const parsed: unknown = JSON.parse(saved);
           if (parsed && typeof parsed === "object" && "body" in parsed && "key" in parsed && typeof parsed.body === "string" && typeof parsed.key === "string") {
-            pending.current = { body: parsed.body, key: parsed.key };
+            pending.current = { body: parsed.body, key: parsed.key, path: "path" in parsed && typeof parsed.path === "string" ? parsed.path : undefined };
             found = true;
           }
         }
