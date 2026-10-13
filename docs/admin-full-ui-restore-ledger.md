@@ -36,7 +36,7 @@
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
 | 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-fields` | `customers.manage` / 真实分页、字段规则、版本冲突、幂等和审计；客户创建/详情已接入类型化值读写；完整注册表单联动和四尺寸待验收 |
-| 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/policy` | `affiliates.manage` / 默认计划、归因冻结周期、默认四类佣金、提现门槛；版本、幂等、历史快照、草稿与冲突；商品/阶梯规则编辑待补；[本批验收](admin-entry-pages-acceptance-20261013.md) |
+| 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/policy`、`GET /admin/affiliate/rules/schema`、`GET/PUT /admin/affiliate/rules` | `affiliates.view/manage` / 默认计划、归因冻结周期、默认四类佣金、提现门槛；商品专属规则（继承/停用/比例/固定额/上限）与月营业额阶梯已接入真实 API、版本快照、幂等、草稿恢复和409冲突；[本批验收](admin-batch-affiliate-sales-acceptance-20261013.md) |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 已完成 | `GET/POST/PATCH/DELETE /admin/customer-levels` | `customer_levels.view/manage` / 阈值统计、分页、版本冲突、幂等和审计 |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups`、`/admin/customer-groups?tab=products`、`/admin/customer-groups?tab=discounts` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-groups`、`GET/POST/PATCH/DELETE /admin/customer-product-groups`、`GET/PUT /admin/customer-product-discounts` | `customer_groups.view/manage` / 客户组、商品分组和客户组折扣真实分页；百分比/固定金额校验、版本冲突、幂等、审计和危险操作确认；商品分组/折扣四尺寸浏览器待验收 |
 | 32 | 实名设置 `#/authentication-setting` | `/admin/certification-settings` | 已完成 | `GET/PUT /admin/certification-settings`、`GET /admin/channel-instances?category=certification` | `certifications.view/manage`、版本冲突、幂等和审计 |
@@ -55,7 +55,7 @@
 | 45 | 定时任务 `#/automatic-tasks` | `/admin/job-settings` | 已完成 | `GET/PUT /admin/scheduler-settings` | `@super` / 到期和账单提醒、版本冲突、幂等；四尺寸已验收 |
 | 46 | 注册登录 `#/login-register` | `/admin/auth-settings` | 部分完成 | `GET/PUT /admin/auth-settings` | `settings.view/manage` / 真实客户登录/注册、登录方式和验证码渠道策略；版本、幂等、审计；保存/取消/409草稿、未知结果恢复和四尺寸通过；独立手机注册、国际电话和注册字段联动待补 |
 | 47 | 分组权限 `#/permissions-managment` | `/admin/access?tab=roles` | 部分完成 | `GET/POST/PATCH/DELETE /admin/roles` | `@super` / 权限矩阵 |
-| 48 | 销售设置 `#/sales-management` | `/admin/sales-settings` | 部分完成 | `GET/PUT /admin/sales-settings`、`GET/POST/PATCH/DELETE /admin/sales-commission-groups`、`GET/POST/PATCH/DELETE /admin/sales-commission-tiers`、`GET/PATCH /admin/sales-staff` | `sales.view/manage` / 提成组、阶梯、销售人员绑定、版本冲突、幂等和审计；浏览器四尺寸待验收 |
+| 48 | 销售设置 `#/sales-management` | `/admin/sales-settings`、`/admin/sales-settlements` | 部分完成 | `GET/PUT /admin/sales-settings`、`GET/POST/PATCH/DELETE /admin/sales-commission-groups`、`GET/POST/PATCH/DELETE /admin/sales-commission-tiers`、`GET/PATCH /admin/sales-staff`、`POST /admin/sales-settlements/preview`、`POST/GET /admin/sales-settlements`、`GET /admin/sales-settlements/{id}` | `sales.view/manage` / 提成组、阶梯、销售人员绑定和按月新购佣金结算；不可变规则/销售归属快照、退款原子冲正、幂等、预览摘要409、审计和全部客户范围校验；浏览器四尺寸及冲突/未知结果恢复已验收；真实浏览器退款独立链路未形成证据；[本批验收](admin-batch-affiliate-sales-acceptance-20261013.md) |
 | 49 | 员工管理 `#/admin-management` | `/admin/access?tab=staff` | 部分完成 | `GET/POST/PATCH /admin/staff` | `@super` / 部门范围 |
 | 50 | 接口设置 `#/sms-template/sms` | `/admin/channels?category=sms` | 部分完成 | `GET/POST/PUT /admin/channel-instances` | `@super` / 测试发送 |
 | 51 | 邮件模板 `#/email-list` | `/admin/notifications?channel=email` | 部分完成 | `GET/POST/PATCH /admin/notification-templates` | `notifications.view/manage` / 服务端筛选分页 |
@@ -124,7 +124,7 @@
 | 第四批 | 财务与合同 | 进行中 | 独立授信、信用消费、线下还款和冻结已补；线上还款/已还款退付、授信审批继续补齐；合同基础生命周期已补，PDF/电子签章和高级模板策略待补 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](admin-batch-admin-tickets-acceptance-20261011.md) |
 | 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
-| 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置四尺寸已有既往验收，销售结算和完整权限页面待补 |
+| 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置、商品/阶梯规则和销售结算已补并完成隔离 PG18、四尺寸及冲突/未知结果验收；完整权限页面与真实浏览器退款展示仍待补；[本批验收](admin-batch-affiliate-sales-acceptance-20261013.md) |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
 | 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立资源CRUD、上游续费/复杂配置和应用目录待补 |
 | 第十批 | 创建与编辑页 | 进行中 | 新建订单优惠码目录/新增弹窗与真实分页 API 已补；订单创建/延期出账及新增弹窗均完成四尺寸浏览器验收；其余创建编辑页继续补齐；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
@@ -142,3 +142,5 @@
 2026-10-13 供应商 API 设置：第95页接入资源 API 全局设置、密钥签发实名/手机门禁、客户 Bearer 总开关、编译供应商描述目录、脱敏账户摘要和只读上游目录连通测试。设置保存使用版本冲突、幂等回执与审计；测试复核权限并在外部调用期间不持有数据库事务。隔离 PG18 专项、浏览器保存/取消/连接测试及 1440/1024/390/320 验收通过；完整浏览器状态矩阵未收口，登记部分完成。台账现为47完成、56部分、2待实现；[验收记录](admin-supplier-api-settings-acceptance-20261012.md)。
 
 2026-10-13 编译模块应用目录：第96/97页接入 `GET /admin/apps` 真实编译目录 API，聚合 `channel_instances` 与 `supplier_accounts` 的实例/启用/凭据计数，响应不读取或回显配置和密钥；支持目录/已配置视图、搜索、类别/状态筛选、分页、URL恢复、权限拒绝、配置入口和真实构建元数据。隔离 PG18 HTTP契约/RBAC/脱敏测试、Webpack生产构建和两页浏览器验收通过；四尺寸截图覆盖“我的应用”共享卡片布局，应用商店页面已在1440px操作验收。完整旧版应用安装、在线升级和第三方发布不实现。台账现为47完成、58部分、0待实现；[验收记录](admin-compiled-apps-acceptance-20261013.md)。
+
+2026-10-13 推介规则与销售结算批次：第29页接入商品专属规则和月营业额阶梯，第48页新增销售结算页面。商品覆盖优先于阶梯，规则和销售归属在结算时固化；信用消费须全部还清才进入营业额，退款/取消/发票退款通过数据库触发器原子冲正。结算仅保存不可变快照，不打款、不改余额；写入要求 `sales.view + sales.manage` 及全部客户范围，使用预览摘要、幂等键、409版本冲突和审计。迁移134/135在隔离 PG18 回归通过；全量 Go test、vet、race、Web typecheck/lint/build 通过；推介设置与销售结算在1440/1024/390/320完成真实 API 浏览器验收，包含保存/取消、分页、冲突、未知结果保留和权限恢复提示。服务端并发退款专项通过，但本批没有形成独立干净的浏览器退款截图；未部署，迁移未应用运行数据库。[验收记录](admin-batch-affiliate-sales-acceptance-20261013.md)。

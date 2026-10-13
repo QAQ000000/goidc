@@ -5,6 +5,6 @@ import { redirect } from "next/navigation";
 
 export default async function Page() {
   const user = await requireUser(true);
-  if (!can(user, "affiliates.manage")) redirect(adminEntry(user));
+  if (!can(user, "affiliates.view")) redirect(adminEntry(user));
   return <AdminAffiliateSettingsView />;
 }
