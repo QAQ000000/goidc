@@ -99,7 +99,11 @@ func (s *Store) IssueVerification(ctx context.Context, tx pgx.Tx, purpose, chann
 		return "", err
 	}
 	var expires time.Time
-	if err = tx.QueryRow(ctx, `INSERT INTO verification_challenges(id,purpose,channel,recipient,user_id,code_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+interval '10 minutes') RETURNING expires_at`, id, purpose, channel, recipient, userID, hash).Scan(&expires); err != nil {
+	minutes := 10
+	if channel == "sms" {
+		minutes = 5
+	}
+	if err = tx.QueryRow(ctx, `INSERT INTO verification_challenges(id,purpose,channel,recipient,user_id,code_hash,expires_at) VALUES($1,$2,$3,$4,$5,$6,clock_timestamp()+$7*interval '1 minute') RETURNING expires_at`, id, purpose, channel, recipient, userID, hash, minutes).Scan(&expires); err != nil {
 		return "", err
 	}
 	if !deliver {

@@ -64,6 +64,22 @@ func init() {
 	}
 }
 func SendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
+	_, err := SendSMSWithEvidence(ctx, c, j)
+	return err
+}
+
+type smsEvidenceKey struct{}
+
+// SendSMSWithEvidence retains the response before BOM/JSON normalization. Its
+// error remains safe for logs; only encrypted storage should receive evidence.
+func SendSMSWithEvidence(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) (store.SMSDeliveryEvidence, error) {
+	evidence := store.SMSDeliveryEvidence{Provider: c.Provider, Outcome: "configuration_rejected"}
+	ctx = context.WithValue(ctx, smsEvidenceKey{}, &evidence)
+	err := sendSMS(ctx, c, j)
+	return evidence, err
+}
+
+func sendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
 	validConfig := c.Provider == "idcsmart" && c.API != "" && c.Sign != "" && c.Key != ""
 	if c.Provider != "idcsmart" {
 		validConfig = store.ValidSMSEndpoint(c.Endpoint) && c.Token != ""
@@ -72,10 +88,41 @@ func SendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) erro
 	if !c.Enabled || resolveErr != nil || p == nil || !validConfig || !store.ValidSMSRecipient(j.Recipient) || !j.ExpiresAt.After(time.Now()) {
 		return errors.New("SMS delivery failed")
 	}
+	setSMSOutcome(ctx, "provider_failed")
 	if e := p.Send(ctx, c, j); e != nil {
 		return errors.New("SMS delivery failed")
 	}
+	setSMSOutcome(ctx, "accepted")
 	return nil
+}
+
+func setSMSOutcome(ctx context.Context, outcome string) {
+	if evidence, ok := ctx.Value(smsEvidenceKey{}).(*store.SMSDeliveryEvidence); ok {
+		evidence.Outcome = outcome
+	}
+}
+
+func readSMSResponse(ctx context.Context, resp *http.Response) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	truncated := len(raw) > 64<<10
+	if evidence, ok := ctx.Value(smsEvidenceKey{}).(*store.SMSDeliveryEvidence); ok {
+		evidence.HTTPStatus = resp.StatusCode
+		evidence.Response = append([]byte(nil), raw[:min(len(raw), 64<<10)]...)
+		evidence.Truncated = truncated
+	}
+	if err != nil {
+		setSMSOutcome(ctx, "read_error")
+		return nil, errors.New("SMS delivery failed")
+	}
+	if truncated {
+		setSMSOutcome(ctx, "response_too_large")
+		return nil, errors.New("SMS delivery failed")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		setSMSOutcome(ctx, "http_rejected")
+		return nil, errors.New("SMS delivery failed")
+	}
+	return raw, nil
 }
 
 type genericHTTPSMS struct{}
@@ -140,24 +187,28 @@ func (p idcsmartSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j store
 	defer client.CloseIdleConnections()
 	resp, err := client.Do(req)
 	if err != nil {
+		setSMSOutcome(ctx, "transport_error")
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("idcsmart request failed")
-	}
 	var result struct {
 		Status json.RawMessage `json:"status"`
 	}
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
-	if err != nil || len(raw) > 64<<10 {
+	raw, err := readSMSResponse(ctx, resp)
+	if err != nil {
 		return errors.New("idcsmart request failed")
 	}
 	// Match the old PHP adapter's handling of UTF-8 BOM responses.
 	raw = bytes.TrimPrefix(raw, []byte{0xef, 0xbb, 0xbf})
-	if err = json.Unmarshal(raw, &result); err != nil || !idcsmartStatusOK(result.Status) {
+	if err = json.Unmarshal(raw, &result); err != nil {
+		setSMSOutcome(ctx, "invalid_json")
 		return errors.New("idcsmart request failed")
 	}
+	if !idcsmartStatusOK(result.Status) {
+		setSMSOutcome(ctx, "business_rejected")
+		return errors.New("idcsmart request failed")
+	}
+	setSMSOutcome(ctx, "accepted")
 	return nil
 }
 
@@ -209,11 +260,15 @@ func (genericHTTPSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j stor
 	defer client.CloseIdleConnections()
 	resp, e := client.Do(req)
 	if e != nil {
+		setSMSOutcome(ctx, "transport_error")
 		return e
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return errors.New("SMS delivery failed")
+	_, e = readSMSResponse(ctx, resp)
+	// This adapter's success contract is the HTTP status. Reading evidence
+	// must not turn an already accepted generic request into a retry.
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil
 	}
-	return nil
+	return e
 }

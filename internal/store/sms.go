@@ -253,7 +253,8 @@ func (s *Store) QueueSMSVerification(ctx context.Context, tx pgx.Tx, recipient, 
 	var body, templateID string
 	err := tx.QueryRow(ctx, `SELECT body,provider_template_id FROM notification_templates WHERE channel='sms' AND kind=$1 AND active=true`, kind).Scan(&body, &templateID)
 	if err == nil {
-		body = strings.ReplaceAll(strings.ReplaceAll(body, "{{code}}", code), "{{expires_minutes}}", "10")
+		minutes := max(1, int((time.Until(expiresAt)+time.Minute-1)/time.Minute))
+		body = strings.ReplaceAll(strings.ReplaceAll(body, "{{code}}", code), "{{expires_minutes}}", fmt.Sprint(minutes))
 	} else {
 		body = "验证码：" + code
 		templateID = ""
@@ -313,6 +314,9 @@ func (s *Store) queueSMSWithTemplateID(ctx context.Context, tx pgx.Tx, recipient
 	return id, e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
+	if _, err := s.Pool.Exec(ctx, `DELETE FROM sms_delivery_evidence WHERE expires_at<=now()`); err != nil {
+		return err
+	}
 	return s.recoverOutboxJobs(ctx, "sms_outbox")
 }
 func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {

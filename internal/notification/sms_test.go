@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/codex/zjmfgo/internal/store"
@@ -11,6 +12,80 @@ import (
 	"testing"
 	"time"
 )
+
+func TestSMSGatewayEvidencePreservesOriginalBody(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, outcome string
+		status              int
+		ok, truncated       bool
+	}{
+		{"bom-success", "\xef\xbb\xbf" + `{"status":"200"}`, "accepted", 200, true, false},
+		{"quota", `{"status":"405","msg":"短信条数已用完"}`, "business_rejected", 200, false, false},
+		{"non-json", "private response", "invalid_json", 200, false, false},
+		{"http-failure", "private response", "http_rejected", 502, false, false},
+		{"oversize", strings.Repeat("x", (64<<10)+8), "response_too_large", 200, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer target.Close()
+			var evidence store.SMSDeliveryEvidence
+			ctx := context.WithValue(context.Background(), smsEvidenceKey{}, &evidence)
+			err := (idcsmartSMS{endpoint: target.URL}).Send(ctx, store.SMSRuntimeConfig{API: "app", Key: "private-key", Sign: "sign"}, store.SMSJob{Recipient: "+8613800138000", ExpiresAt: time.Now().Add(time.Minute)})
+			if (err == nil) != tc.ok || evidence.Outcome != tc.outcome || evidence.HTTPStatus != tc.status || evidence.Truncated != tc.truncated || !bytes.Equal(evidence.Response, []byte(tc.body[:min(len(tc.body), 64<<10)])) {
+				t.Fatalf("unexpected evidence: status=%d outcome=%s truncated=%t error=%v", evidence.HTTPStatus, evidence.Outcome, evidence.Truncated, err)
+			}
+		})
+	}
+}
+
+func TestSMSWithEvidenceFailuresRemainPrivate(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte("phone and code: private"))
+	}))
+	c := store.SMSRuntimeConfig{Provider: "generic_http_json", Enabled: true, Endpoint: target.URL, Token: "secret"}
+	j := store.SMSJob{Recipient: "+8613800138000", ExpiresAt: time.Now().Add(time.Minute)}
+	e, err := SendSMSWithEvidence(context.Background(), c, j)
+	if err == nil || err.Error() != "SMS delivery failed" || e.Outcome != "http_rejected" || string(e.Response) != "phone and code: private" {
+		t.Fatal("response capture or privacy failed")
+	}
+	target.Close()
+	e, err = SendSMSWithEvidence(context.Background(), c, j)
+	if err == nil || e.Outcome != "transport_error" || len(e.Response) != 0 || e.HTTPStatus != 0 {
+		t.Fatal("transport failure was misclassified")
+	}
+	c.Enabled = false
+	e, err = SendSMSWithEvidence(context.Background(), c, j)
+	if err == nil || e.Outcome != "configuration_rejected" {
+		t.Fatal("configuration failure was misclassified")
+	}
+}
+
+func TestSMSWithEvidenceGenericAcceptanceSurvivesLargeBody(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(strings.Repeat("x", (64<<10)+1))) }))
+	defer target.Close()
+	e, err := SendSMSWithEvidence(context.Background(), store.SMSRuntimeConfig{Provider: "generic_http_json", Enabled: true, Endpoint: target.URL, Token: "secret"}, store.SMSJob{Recipient: "+8613800138000", ExpiresAt: time.Now().Add(time.Minute)})
+	if err != nil || e.Outcome != "accepted" || !e.Truncated || len(e.Response) != 64<<10 {
+		t.Fatal("evidence changed generic HTTP success contract")
+	}
+}
+
+func TestSMSGatewayEvidenceRetainsPartialRead(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = w.Write([]byte(`{"status":200`))
+	}))
+	defer target.Close()
+	var evidence store.SMSDeliveryEvidence
+	ctx := context.WithValue(context.Background(), smsEvidenceKey{}, &evidence)
+	err := (idcsmartSMS{endpoint: target.URL}).Send(ctx, store.SMSRuntimeConfig{API: "app", Key: "key", Sign: "sign"}, store.SMSJob{Recipient: "+8613800138000", ExpiresAt: time.Now().Add(time.Minute)})
+	if err == nil || evidence.Outcome != "read_error" || string(evidence.Response) != `{"status":200` {
+		t.Fatal("partial response evidence lost")
+	}
+}
 
 func TestSMSIgnoresDefaultTransportProxy(t *testing.T) {
 	proxyCalls := 0

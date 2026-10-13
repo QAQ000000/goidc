@@ -138,13 +138,19 @@ func main() {
 				}
 				smsRuntime, resolveErr := db.ResolveSMSConfigForInstance(ctx, job.ChannelInstanceID)
 				var sendErr error
+				evidence := store.SMSDeliveryEvidence{Provider: smsRuntime.Provider, Outcome: "configuration_rejected"}
 				switch {
 				case resolveErr != nil:
 					sendErr = resolveErr
 				case !smsRuntime.Enabled:
 					sendErr = errors.New("SMS channel disabled")
 				default:
-					sendErr = notification.SendSMS(ctx, smsRuntime, *job)
+					evidence, sendErr = notification.SendSMSWithEvidence(ctx, smsRuntime, *job)
+				}
+				// Keep the response durable before marking this attempt complete.
+				if evidenceErr := db.SaveSMSDeliveryEvidence(ctx, *job, evidence); evidenceErr != nil {
+					log.Error("SMS evidence persistence failed", "job_id", job.ID)
+					continue
 				}
 				if completeErr := db.CompleteSMSJob(ctx, *job, sendErr); completeErr != nil {
 					log.Error("SMS completion failed", "job_id", job.ID)

@@ -72,8 +72,12 @@ func validVerificationRecipient(channel, value string) bool {
 	return channel == "email" && err == nil && email.Address == value && len(value) <= 254
 }
 
-func verificationResponse(w http.ResponseWriter, id string) {
-	write(w, 202, map[string]any{"queued": true, "challenge_id": id, "expires_in": 600, "resend_after": 60})
+func verificationResponse(w http.ResponseWriter, id, channel string) {
+	expiresIn := 600
+	if channel == "sms" {
+		expiresIn = 300
+	}
+	write(w, 202, map[string]any{"queued": true, "challenge_id": id, "expires_in": expiresIn, "resend_after": 60})
 }
 
 func (s *Server) requestPasswordReset(w http.ResponseWriter, r *http.Request) {
@@ -222,7 +226,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 		s.fail(w, r, err)
 		return
 	}
-	verificationResponse(w, id)
+	verificationResponse(w, id, in.Channel)
 }
 
 type verificationConfirmInput struct {
