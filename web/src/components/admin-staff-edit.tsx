@@ -56,7 +56,7 @@ function StaffEditor({ staff, roles, departments, reload, saved }: { staff: Staf
       setError((e as Error).message); setDialog(null);
       setConflict(e instanceof ApiError && e.code === "version_conflict");
       setDenied(e instanceof ApiError && (e.status === 401 || e.status === 403));
-      setUnknown(!(e instanceof ApiError) || e.status >= 500);
+      setUnknown(!(e instanceof ApiError) || e.status >= 500 || e.status === 408);
     } finally { inFlight.current = false; setBusy(false); }
   }
   function reset() { setForm(original); setConfirmPassword(""); setError(""); setConflict(false); setDialog(null); }

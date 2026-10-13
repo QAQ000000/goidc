@@ -594,6 +594,8 @@ body:has(.admin-theme) {
   .admin-global-header .admin-brand { width: auto; min-height: 56px; padding: 4px 0; flex: 1; }
   .admin-global-header .admin-brand-full > span > span:first-child:not(:last-child) { width: 80px; }
   .admin-domain-navigation { display: none; }
+  .admin-global-account .admin-header-search { display: none; }
+  .admin-global-account { gap: 8px; }
   .admin-global-account .admin-user-name, .admin-global-account .admin-front-button { display: none; }
   .mf-admin-shell.is-home .admin-content { padding: 0 12px 20px; }
   .mf-admin-shell .admin-content { padding: 0 12px 20px; overflow-x: hidden; }
