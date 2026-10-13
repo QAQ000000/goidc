@@ -59,9 +59,32 @@ zero-cost success. An uncertain response after cart mutation returns
 endpoint used by the legacy PHP implementation, and falls back to
 `/cart/hostinfo?hostid[0]=...` for older upstream installations.
 `CreateResult.Status` is `active` only after an upstream `Active` status is
-observed. Other successful outcomes remain `provisioning`. The `Execute` action `sync` is supported;
-pause, resume, terminate and renew are unsupported. Legacy termination uses a
-separate cancellation path whose effect has not been established here.
+observed. Other successful outcomes remain `provisioning`. `Execute` supports
+`sync`; pause, resume, terminate and renew remain unsupported. Refund requests
+and resource deletion are handled at the remote supplier. A pending refund or
+cancellation request alone must not terminate the local service. The worker
+periodically reads the actual upstream resource status and re-arms completed
+sync jobs after five minutes. An observed `Deleted`, `Terminated` or `Cancelled`
+state maps to local `terminated` and releases inventory once. Already terminated
+services are excluded from further periodic scheduling. This state synchronization
+does not refund the local invoice or credit the local customer automatically.
+No local termination command or `/host/cancel` request is sent. The
+2026-10-13 `Deleted` mapping is covered by isolated database tests and has not
+yet been deployed to the resident Go processes.
+
+Following the 2026-10-13 legacy review, the working tree now uses the maintained
+PHP project's lifecycle merge rules in the shared application path. Local
+`cancelled`/`terminated` remain terminal; `active`/`suspended` cannot regress to
+provisioning; upstream `Active` cannot release a local suspension. This applies
+to callbacks, polling and manual verification under a service row lock.
+Accepted `Active` clears the suspension reason; accepted `Suspended` preserves
+its type prefix without duplication. Ignored states do not overwrite the local
+suspension reason. A stale `Pending` response only schedules a follow-up when
+the resulting local state is still provisioning. `Fraud` remains unsupported
+and requires explicit reconciliation rather than an inferred deletion.
+Isolated supplier race tests cover delayed callbacks and an in-flight `Active`
+read completing after a deletion callback. These changes are not yet deployed.
+See [legacy lifecycle review](legacy-supplier-lifecycle-review-20261013.md).
 
 The downstream exposes the legacy callback `POST /api/host/sync` (and the
 versioned alias `/api/v1/host/sync`). The upstream sends `id` as the local
@@ -103,8 +126,9 @@ Due dates come from the upstream response. Pending provisioning gets delayed
 sync jobs, with a bounded limit of120 automatic syncs; thereafter an admin can
 request sync. Active supplier services cannot be refunded while their upstream
 resource remains active; cancellation must be performed upstream and synchronized
-to terminated first. Automatic renewal, upgrades and lifecycle writes remain
-blocked for this provider.
+to terminated first. Automatic renewal, upgrades and suspend/resume writes remain
+blocked for this provider. A remote refund request alone does not unlock local
+refunds; the actual resource deletion must first be synchronized.
 
 Use a dedicated upstream customer account for automated orders: this lease
 coordinates local workers, not people or other deployments sharing that account.

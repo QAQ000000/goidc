@@ -109,19 +109,20 @@ type CreateResult struct {
 }
 
 type Service struct {
-	UpstreamID    int64  `json:"upstream_id"`
-	ProductID     int64  `json:"product_id"`
-	Status        string `json:"status"`
-	Domain        string `json:"domain"`
-	NextDueDate   string `json:"next_due_date"`
-	Username      string `json:"username,omitempty"`
-	Password      string `json:"-"`
-	DedicatedIP   string `json:"dedicated_ip,omitempty"`
-	AssignedIPs   string `json:"assigned_ips,omitempty"`
-	Port          int    `json:"port,omitempty"`
-	OS            string `json:"os,omitempty"`
-	OSURL         string `json:"os_url,omitempty"`
-	SuspendReason string `json:"suspend_reason,omitempty"`
+	UpstreamID        int64  `json:"upstream_id"`
+	ProductID         int64  `json:"product_id"`
+	Status            string `json:"status"`
+	Domain            string `json:"domain"`
+	NextDueDate       string `json:"next_due_date"`
+	Username          string `json:"username,omitempty"`
+	Password          string `json:"-"`
+	DedicatedIP       string `json:"dedicated_ip,omitempty"`
+	AssignedIPs       string `json:"assigned_ips,omitempty"`
+	Port              int    `json:"port,omitempty"`
+	OS                string `json:"os,omitempty"`
+	OSURL             string `json:"os_url,omitempty"`
+	SuspendReason     string `json:"suspend_reason,omitempty"`
+	SuspendReasonType string `json:"suspend_reason_type,omitempty"`
 }
 
 // ActionRequest contains the provider action and the one-time secret needed

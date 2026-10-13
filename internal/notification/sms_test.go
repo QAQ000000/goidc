@@ -85,7 +85,7 @@ func TestIdcsmartSMSProtocol(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatal(err)
 		}
-		if r.Form.Get("to") != "+8613800138000" || r.Form.Get("content") != "【智简魔方】验证码：123456" || r.Form.Get("template_id") != "" || r.Form.Get("vars") != "" {
+		if r.Form.Get("to") != "13800138000" || r.Form.Get("content") != "【智简魔方】验证码：123456" || r.Form.Get("template_id") != "" || r.Form.Get("vars") != "" {
 			t.Errorf("unexpected idcsmart form: %#v", r.Form)
 		}
 		_, _ = w.Write([]byte(`{"status":200,"msg":"ok"}`))
@@ -95,6 +95,41 @@ func TestIdcsmartSMSProtocol(t *testing.T) {
 	err := p.Send(context.Background(), store.SMSRuntimeConfig{API: "app-123", Key: "private-key", Sign: "【智简魔方】"}, store.SMSJob{Recipient: "+8613800138000", Body: "验证码：123456", ExpiresAt: time.Now().Add(time.Minute)})
 	if err != nil || !called {
 		t.Fatalf("idcsmart delivery failed: %v", err)
+	}
+}
+
+func TestIdcsmartSMSLegacyResponseVariants(t *testing.T) {
+	for _, tc := range []struct {
+		name, response string
+		wantOK         bool
+	}{
+		{"bom-success", "\xef\xbb\xbf" + `{"status":"200"}`, true},
+		{"quota-exhausted", `{"status":"405","msg":"短信条数已用完"}`, false},
+		{"gateway-rejected", `{"status":400,"msg":"private upstream details"}`, false},
+		{"malformed", `{"status":200`, false},
+		{"trailing-garbage", `{"status":200}invalid`, false},
+		{"oversized", `{"status":200,"padding":"` + strings.Repeat("x", 64<<10) + `"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+					return
+				}
+				if r.Form.Get("to") != "13800138000" || r.Form.Get("template_id") != "approved-template" {
+					t.Error("domestic recipient or approved template was not passed")
+				}
+				_, _ = w.Write([]byte(tc.response))
+			}))
+			defer target.Close()
+			err := (idcsmartSMS{endpoint: target.URL}).Send(context.Background(), store.SMSRuntimeConfig{API: "app", Key: "private-key", Sign: "sign"}, store.SMSJob{Recipient: "+8613800138000", Body: "验证码：123456", TemplateID: "approved-template", ExpiresAt: time.Now().Add(time.Minute)})
+			if (err == nil) != tc.wantOK {
+				t.Fatalf("success=%t, want %t", err == nil, tc.wantOK)
+			}
+			if err != nil && strings.Contains(err.Error(), "private upstream details") {
+				t.Fatal("upstream response leaked")
+			}
+		})
 	}
 }
 

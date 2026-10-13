@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -19,21 +21,25 @@ import (
 )
 
 type supplierFixture struct {
-	db                                   *store.Store
-	h                                    http.Handler
-	root, customer, reader, other        string
-	supplierID, pid, uid                 int64
-	in                                   store.SupplierImportInput
-	remote                               *httptest.Server
-	creates, pays                        atomic.Int64
-	uncertain                            atomic.Bool
-	remoteProduct                        atomic.Int64
-	blocked                              chan struct{}
-	entered                              chan struct{}
-	once                                 sync.Once
-	actions                              atomic.Int64
-	systemPassword, systemOS, consoleURL atomic.Value
-	syncFailure                          atomic.Bool
+	db                                     *store.Store
+	h                                      http.Handler
+	root, customer, reader, other          string
+	supplierID, pid, uid                   int64
+	in                                     store.SupplierImportInput
+	remote                                 *httptest.Server
+	creates, pays                          atomic.Int64
+	uncertain                              atomic.Bool
+	remoteProduct                          atomic.Int64
+	blocked                                chan struct{}
+	entered                                chan struct{}
+	once                                   sync.Once
+	actions                                atomic.Int64
+	systemPassword, systemOS, consoleURL   atomic.Value
+	syncFailure                            atomic.Bool
+	remoteStatus                           atomic.Value
+	remoteSuspendReason, remoteSuspendType atomic.Value
+	syncEntered, syncBlocked               chan struct{}
+	syncOnce                               sync.Once
 }
 
 func supplierSetup(t *testing.T) *supplierFixture {
@@ -89,8 +95,18 @@ func supplierSetup(t *testing.T) *supplierFixture {
 				productID = 7
 			}
 			password, _ := f.systemPassword.Load().(string)
+			status, _ := f.remoteStatus.Load().(string)
+			if status == "" {
+				status = "Active"
+			}
+			if f.syncEntered != nil {
+				f.syncOnce.Do(func() { close(f.syncEntered) })
+				<-f.syncBlocked
+			}
 			osName, _ := f.systemOS.Load().(string)
-			json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"host_data": map[string]any{"id": 42, "productid": productID, "domainstatus": "Active", "domain": "vm.example", "nextduedate": 1800000000, "username": "root", "password": password, "os": osName}, "cloud_os": []map[string]any{{"id": 17, "name": "Debian 13", "group": "Linux"}, {"id": 18, "name": "Windows Server 2025", "group": "Windows"}}}})
+			reason, _ := f.remoteSuspendReason.Load().(string)
+			reasonType, _ := f.remoteSuspendType.Load().(string)
+			json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"host_data": map[string]any{"id": 42, "productid": productID, "domainstatus": status, "domain": "vm.example", "nextduedate": 1800000000, "username": "root", "password": password, "os": osName, "suspendreason": reason, "suspendreason_type": reasonType}, "cloud_os": []map[string]any{{"id": 17, "name": "Debian 13", "group": "Linux"}, {"id": 18, "name": "Windows Server 2025", "group": "Windows"}}}})
 		case "/provision/default", "/provision/custom/42":
 			if r.Method != http.MethodPost || r.PostFormValue("id") != "42" || r.PostFormValue("is_api") != "1" {
 				t.Error("invalid supplier action identity")
@@ -410,5 +426,83 @@ func TestSupplierCredentialsAreOwnerBound(t *testing.T) {
 	out, _ := json.Marshal(supplier.Account{Password: "supplier-private-password"})
 	if strings.Contains(string(out), "supplier-private-password") {
 		t.Fatal("account DTO secret leak")
+	}
+}
+
+func TestSupplierPeriodicSyncAfterRemoteDeletionReleasesOnce(t *testing.T) {
+	for _, remoteStatus := range []string{"Deleted", "deleted"} {
+		t.Run(remoteStatus, func(t *testing.T) {
+			f := supplierSetup(t)
+			f.publish(t, f.pid, "local-vm")
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE products SET stock=1 WHERE id=$1", f.pid); err != nil {
+				t.Fatal(err)
+			}
+			sid, invoice := f.purchase(t, f.pid, "remote-delete-purchase")
+			if err := f.db.ProcessProvisionJob(t.Context(), *f.claim(t)); err != nil {
+				t.Fatal(err)
+			}
+			check := func(wantState string, wantStock int, wantReleased bool) {
+				t.Helper()
+				var state, invoiceStatus string
+				var stock int
+				var released bool
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT s.status,p.stock,s.inventory_released,i.status
+FROM services s JOIN products p ON p.id=s.product_id JOIN invoices i ON i.id=$2 WHERE s.id=$1`, sid, invoice).Scan(&state, &stock, &released, &invoiceStatus); err != nil {
+					t.Fatal(err)
+				}
+				if state != wantState || stock != wantStock || released != wantReleased || invoiceStatus != "paid" {
+					t.Fatal(state, stock, released, invoiceStatus)
+				}
+			}
+			// Refund/cancellation is handled remotely; no local termination is sent.
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/services/%d/actions", sid), map[string]any{"action": "terminate"}, f.root, "remote-delete-no-local-terminate"), 409)
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/invoices/%d/refund", invoice), map[string]any{}, f.root, "remote-delete-active-refund"), 409)
+			check("active", 0, false)
+			// A refund still being processed leaves the actual resource active.
+			if n, err := f.db.EnqueuePeriodicSupplierSyncs(t.Context()); err != nil || n != 1 {
+				t.Fatal(n, err)
+			}
+			first := f.claim(t)
+			if err := f.db.ProcessProvisionJob(t.Context(), *first); err != nil {
+				t.Fatal(err)
+			}
+			check("active", 0, false)
+			f.remoteStatus.Store(remoteStatus)
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET updated_at=now()-interval '6 minutes' WHERE id=$1", first.ID); err != nil {
+				t.Fatal(err)
+			}
+			if n, err := f.db.EnqueuePeriodicSupplierSyncs(t.Context()); err != nil || n != 1 {
+				t.Fatal(n, err)
+			}
+			second := f.claim(t)
+			if second.ID != first.ID {
+				t.Fatal("periodic synchronization must reuse its job")
+			}
+			if err := f.db.ProcessProvisionJob(t.Context(), *second); err != nil {
+				t.Fatal(err)
+			}
+			state, service, lease := f.state(t, second)
+			if state != "succeeded" || service != "terminated" || lease != nil {
+				t.Fatal(state, service, lease)
+			}
+			check("terminated", 1, true)
+			id := strconv.FormatInt(sid, 10)
+			values := url.Values{"id": {id}, "host_id": {"42"}, "domainstatus": {remoteStatus}, "rand_str": {"repeat-delete"}}
+			values.Set("signature", supplierCallbackSign(id, supplierCallbackToken(sid), "repeat-delete"))
+			expect(t, supplierCallbackRequest(f.h, "/api/host/sync", values), 200)
+			check("terminated", 1, true)
+			for _, staleStatus := range []string{"Active", "Pending", "Suspended", "Cancelled"} {
+				values.Set("domainstatus", staleStatus)
+				values.Set("suspendreason", "stale-reason")
+				expect(t, supplierCallbackRequest(f.h, "/api/host/sync", values), 200)
+				check("terminated", 1, true)
+			}
+			if n, err := f.db.EnqueuePeriodicSupplierSyncs(t.Context()); err != nil || n != 0 {
+				t.Fatal(n, err)
+			}
+			if f.creates.Load() != 1 || f.pays.Load() != 1 {
+				t.Fatal("state synchronization must not repeat upstream purchasing/payment")
+			}
+		})
 	}
 }

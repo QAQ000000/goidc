@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/provision"
@@ -316,7 +317,8 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 	if outcome == "succeeded" && (remote.Status == "provisioning" || remote.Status == "Pending" || remote.Status == "pending") {
 		if _, err = tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
 SELECT $1,'sync','supplier-sync-'||$2::bigint::text,now()+interval '30 seconds'
-WHERE (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='sync')<120`, j.ServiceID, j.ID); err != nil {
+WHERE (SELECT status FROM services WHERE id=$1)='provisioning'
+AND (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='sync')<120`, j.ServiceID, j.ID); err != nil {
 			return err
 		}
 	}
@@ -351,11 +353,34 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 		state = "active"
 	case "Suspended", "suspended":
 		state = "suspended"
-	case "Terminated", "terminated", "Cancelled", "cancelled":
+	case "Terminated", "terminated", "Cancelled", "cancelled", "Deleted", "deleted":
 		state = "terminated"
 	case "Pending", "pending", "provisioning":
 	default:
 		return conflict("supplier_status_unknown", "上游资源状态不可识别，请核验")
+	}
+	// Match the maintained PHP project's mergeUpstreamLifecycleState, using
+	// queued/provisioning for Pending and cancelled/terminated for its terminal
+	// states. Lock here so callbacks, in-flight jobs and manual verification all
+	// merge against the latest committed state, rather than an earlier snapshot.
+	var current, existing string
+	if err := tx.QueryRow(ctx, "SELECT status,upstream_id FROM services WHERE id=$1 FOR UPDATE", j.ServiceID).Scan(&current, &existing); err != nil {
+		return err
+	}
+	if existing != "" && existing != strconv.FormatInt(remote.UpstreamID, 10) {
+		return conflict("supplier_resource_mismatch", "供应商资源与本地服务不匹配")
+	}
+	applyLifecycle := true
+	switch current {
+	case "queued", "provisioning":
+	case "active", "suspended":
+		applyLifecycle = state != "provisioning" && !(current == "suspended" && state == "active")
+	default:
+		// In particular, cancelled and terminated must never be revived.
+		applyLifecycle = false
+	}
+	if !applyLifecycle {
+		state = current
 	}
 	due, err := supplierDueDate(remote.NextDueDate)
 	if err != nil {
@@ -373,10 +398,22 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 			return err
 		}
 	}
-	resource, _ := json.Marshal(map[string]any{
+	resourceFields := map[string]any{
 		"dedicated_ip": remote.DedicatedIP, "assigned_ips": remote.AssignedIPs, "port": remote.Port,
-		"suspend_reason": remote.SuspendReason,
-	})
+	}
+	if applyLifecycle {
+		reason := remote.SuspendReason
+		if state == "active" {
+			reason = ""
+		} else if state == "suspended" && remote.SuspendReasonType != "" && !strings.HasPrefix(reason, remote.SuspendReasonType+"-") {
+			reason = remote.SuspendReasonType + "-" + reason
+		}
+		// An omitted reason preserves the local reason; Active clears it.
+		if reason != "" || state == "active" {
+			resourceFields["suspend_reason"] = reason
+		}
+	}
+	resource, _ := json.Marshal(resourceFields)
 	installedOS := ""
 	if remote.OS != "" || remote.OSURL != "" {
 		installed, _ := json.Marshal(map[string]string{"name": remote.OS, "url": remote.OSURL})

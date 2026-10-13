@@ -693,19 +693,20 @@ func rawDate(raw json.RawMessage) string {
 func parseHostHeader(raw json.RawMessage, id int64) (Service, bool) {
 	var envelope struct {
 		HostData struct {
-			ID            int64           `json:"id"`
-			ProductID     int64           `json:"productid"`
-			DomainStatus  string          `json:"domainstatus"`
-			Domain        string          `json:"domain"`
-			NextDueDate   json.RawMessage `json:"nextduedate"`
-			Username      string          `json:"username"`
-			Password      string          `json:"password"`
-			DedicatedIP   string          `json:"dedicatedip"`
-			AssignedIPs   json.RawMessage `json:"assignedips"`
-			Port          int             `json:"port"`
-			OS            string          `json:"os"`
-			OSURL         string          `json:"os_url"`
-			SuspendReason string          `json:"suspendreason"`
+			ID                int64           `json:"id"`
+			ProductID         int64           `json:"productid"`
+			DomainStatus      string          `json:"domainstatus"`
+			Domain            string          `json:"domain"`
+			NextDueDate       json.RawMessage `json:"nextduedate"`
+			Username          string          `json:"username"`
+			Password          string          `json:"password"`
+			DedicatedIP       string          `json:"dedicatedip"`
+			AssignedIPs       json.RawMessage `json:"assignedips"`
+			Port              int             `json:"port"`
+			OS                string          `json:"os"`
+			OSURL             string          `json:"os_url"`
+			SuspendReason     string          `json:"suspendreason"`
+			SuspendReasonType string          `json:"suspendreason_type"`
 		} `json:"host_data"`
 	}
 	if json.Unmarshal(raw, &envelope) != nil || envelope.HostData.ProductID < 1 || envelope.HostData.DomainStatus == "" {
@@ -715,7 +716,7 @@ func parseHostHeader(raw json.RawMessage, id int64) (Service, bool) {
 		return Service{}, false
 	}
 	v := envelope.HostData
-	return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: rawIPs(v.AssignedIPs), Port: v.Port, OS: v.OS, OSURL: v.OSURL, SuspendReason: v.SuspendReason}, true
+	return Service{UpstreamID: id, ProductID: v.ProductID, Status: v.DomainStatus, Domain: v.Domain, NextDueDate: rawDate(v.NextDueDate), Username: v.Username, Password: v.Password, DedicatedIP: v.DedicatedIP, AssignedIPs: rawIPs(v.AssignedIPs), Port: v.Port, OS: v.OS, OSURL: v.OSURL, SuspendReason: v.SuspendReason, SuspendReasonType: v.SuspendReasonType}, true
 }
 
 // Magic Cube installations return assignedips as either a string or an array.

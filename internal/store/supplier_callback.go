@@ -20,22 +20,23 @@ import (
 // SupplierHostSyncInput is the legacy downstream callback payload. The
 // signature covers only id, token and rand_str, matching the PHP provider.
 type SupplierHostSyncInput struct {
-	ID            string `json:"id"`
-	HostID        string `json:"host_id"`
-	Domain        string `json:"domain"`
-	DomainStatus  string `json:"domainstatus"`
-	Username      string `json:"username"`
-	Password      string `json:"password"`
-	DedicatedIP   string `json:"dedicatedip"`
-	AssignedIPs   string `json:"assignedips"`
-	Port          string `json:"port"`
-	OS            string `json:"os"`
-	OSURL         string `json:"os_url"`
-	NextDueDate   string `json:"nextduedate"`
-	SuspendReason string `json:"suspendreason"`
-	Type          string `json:"type"`
-	Signature     string `json:"signature"`
-	RandStr       string `json:"rand_str"`
+	ID                string `json:"id"`
+	HostID            string `json:"host_id"`
+	Domain            string `json:"domain"`
+	DomainStatus      string `json:"domainstatus"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	DedicatedIP       string `json:"dedicatedip"`
+	AssignedIPs       string `json:"assignedips"`
+	Port              string `json:"port"`
+	OS                string `json:"os"`
+	OSURL             string `json:"os_url"`
+	NextDueDate       string `json:"nextduedate"`
+	SuspendReason     string `json:"suspendreason"`
+	SuspendReasonType string `json:"suspendreason_type"`
+	Type              string `json:"type"`
+	Signature         string `json:"signature"`
+	RandStr           string `json:"rand_str"`
 }
 
 func supplierDownstreamToken(key []byte, serviceID int64) string {
@@ -77,7 +78,7 @@ func (s *Store) SyncSupplierHost(ctx context.Context, in SupplierHostSyncInput) 
 			return conflict("supplier_callback_invalid", "供应商回调端口无效")
 		}
 	}
-	for _, value := range []string{in.Domain, in.Username, in.DedicatedIP, in.AssignedIPs, in.OS, in.OSURL, in.SuspendReason} {
+	for _, value := range []string{in.Domain, in.Username, in.DedicatedIP, in.AssignedIPs, in.OS, in.OSURL, in.SuspendReason, in.SuspendReasonType} {
 		if len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n") {
 			return conflict("supplier_callback_invalid", "供应商回调字段无效")
 		}
@@ -105,7 +106,7 @@ func (s *Store) SyncSupplierHost(ctx context.Context, in SupplierHostSyncInput) 
 	if status == "" {
 		status = current
 	}
-	remote := supplier.Service{UpstreamID: hostID, ProductID: upstreamProductID, Status: status, Domain: strings.TrimSpace(in.Domain), Username: strings.TrimSpace(in.Username), Password: html.UnescapeString(in.Password), DedicatedIP: strings.TrimSpace(in.DedicatedIP), AssignedIPs: strings.TrimSpace(in.AssignedIPs), Port: port, OS: strings.TrimSpace(in.OS), OSURL: strings.TrimSpace(in.OSURL), SuspendReason: strings.TrimSpace(in.SuspendReason), NextDueDate: strings.TrimSpace(in.NextDueDate)}
+	remote := supplier.Service{UpstreamID: hostID, ProductID: upstreamProductID, Status: status, Domain: strings.TrimSpace(in.Domain), Username: strings.TrimSpace(in.Username), Password: html.UnescapeString(in.Password), DedicatedIP: strings.TrimSpace(in.DedicatedIP), AssignedIPs: strings.TrimSpace(in.AssignedIPs), Port: port, OS: strings.TrimSpace(in.OS), OSURL: strings.TrimSpace(in.OSURL), SuspendReason: strings.TrimSpace(in.SuspendReason), SuspendReasonType: strings.TrimSpace(in.SuspendReasonType), NextDueDate: strings.TrimSpace(in.NextDueDate)}
 	if err = applySupplierRemoteSafely(ctx, tx, ProvisionJob{ServiceID: serviceID, Action: "sync"}, remote, s.ProvisionEncryptionKey); err != nil {
 		return err
 	}

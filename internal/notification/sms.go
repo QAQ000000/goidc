@@ -103,7 +103,9 @@ func (p idcsmartSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j store
 	}
 
 	form := url.Values{}
-	form.Set("to", j.Recipient)
+	// The legacy domestic SMS module strips China's country prefix before
+	// calling the gateway; local recipients remain stored in E.164 form.
+	form.Set("to", strings.TrimPrefix(j.Recipient, "+86"))
 	form.Set("content", idcsmartSign(c.Sign)+j.Body)
 	form.Set("template_id", j.TemplateID)
 	form.Set("vars", "")
@@ -147,8 +149,13 @@ func (p idcsmartSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j store
 	var result struct {
 		Status json.RawMessage `json:"status"`
 	}
-	limited := io.LimitReader(resp.Body, 64<<10)
-	if err = json.NewDecoder(limited).Decode(&result); err != nil || !idcsmartStatusOK(result.Status) {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	if err != nil || len(raw) > 64<<10 {
+		return errors.New("idcsmart request failed")
+	}
+	// Match the old PHP adapter's handling of UTF-8 BOM responses.
+	raw = bytes.TrimPrefix(raw, []byte{0xef, 0xbb, 0xbf})
+	if err = json.Unmarshal(raw, &result); err != nil || !idcsmartStatusOK(result.Status) {
 		return errors.New("idcsmart request failed")
 	}
 	return nil

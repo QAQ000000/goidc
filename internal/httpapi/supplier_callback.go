@@ -66,6 +66,7 @@ func decodeSupplierHostSync(r *http.Request) (store.SupplierHostSyncInput, error
 	in.DedicatedIP, in.AssignedIPs = first("dedicatedip"), first("assignedips")
 	in.Port, in.OS, in.OSURL = first("port"), first("os"), first("os_url")
 	in.NextDueDate, in.SuspendReason = first("nextduedate"), first("suspendreason")
+	in.SuspendReasonType = first("suspendreason_type")
 	in.Type, in.Signature, in.RandStr = first("type"), first("signature"), first("rand_str")
 	return in, nil
 }
