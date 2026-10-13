@@ -127,6 +127,26 @@ func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer tx.Rollback(r.Context())
+	actor := identityFrom(r).ID
+	if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, actor, "notifications"); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	key := r.Header.Get("Idempotency-Key")
+	result := map[string]any{}
+	hash, replay, err := store.CreationReceipt(r.Context(), tx, actor, "notification_template.create", key, input, &result)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if replay {
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		write(w, http.StatusCreated, result)
+		return
+	}
 	var id int64
 	err = tx.QueryRow(r.Context(), `INSERT INTO notification_templates(channel,kind,name,subject,body,provider_template_id,active,updated_by)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.Name, input.Subject, input.Body, input.ProviderTemplateID, active, identityFrom(r).ID).Scan(&id)
@@ -138,11 +158,16 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.
 		s.fail(w, r, err)
 		return
 	}
+	result = map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind, "version": 1}
+	if err = store.SaveCreationReceipt(r.Context(), tx, actor, "notification_template.create", key, hash, result); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind, "version": 1})
+	write(w, http.StatusCreated, result)
 }
 
 func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Request) {

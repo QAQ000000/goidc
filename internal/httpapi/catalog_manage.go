@@ -54,7 +54,7 @@ func (s *Server) saveCatalogGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	saved, err := s.db.SaveCatalogGroup(r.Context(), identityFrom(r).ID, id, kind, input)
+	saved, err := s.db.SaveCatalogGroup(requestFileContext(r), identityFrom(r).ID, id, kind, input, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.fail(w, r, err)
 		return

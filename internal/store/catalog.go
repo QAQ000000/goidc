@@ -59,7 +59,7 @@ func CatalogGroupTable(kind string) string {
 	}
 	return ""
 }
-func (s *Store) SaveCatalogGroup(ctx context.Context, actor, id int64, kind string, in CatalogGroupInput) (int64, error) {
+func (s *Store) SaveCatalogGroup(ctx context.Context, actor, id int64, kind string, in CatalogGroupInput, keys ...string) (int64, error) {
 	table := CatalogGroupTable(kind)
 	in.Name, in.Slug, in.Description, in.Headline, in.Tagline = strings.TrimSpace(in.Name), strings.ToLower(strings.TrimSpace(in.Slug)), strings.TrimSpace(in.Description), strings.TrimSpace(in.Headline), strings.TrimSpace(in.Tagline)
 	if table == "" || in.Name == "" || !contentTextValid(in.Name, 255, false) || !contentSlug.MatchString(in.Slug) || !contentTextValid(in.Description, 1000, true) || !contentTextValid(in.Headline, 255, false) || !contentTextValid(in.Tagline, 255, false) || in.Active == nil || in.SortOrder < 0 || in.SortOrder > 1000000 || (kind == "category" && (in.SectionID == nil || *in.SectionID < 1)) || (kind == "section" && (in.SectionID != nil || in.Headline != "" || in.Tagline != "")) {
@@ -70,6 +70,23 @@ func (s *Store) SaveCatalogGroup(ctx context.Context, actor, id int64, kind stri
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	key := ""
+	if id == 0 && len(keys) > 0 {
+		key = keys[0]
+	}
+	if err = CheckAdminCreationPermission(ctx, tx, actor, "products"); err != nil {
+		return 0, err
+	}
+	receipt := struct {
+		ID int64 `json:"id"`
+	}{}
+	hash, replay, err := CreationReceipt(ctx, tx, actor, "catalog_group.create."+kind, key, in, &receipt)
+	if err != nil {
+		return 0, err
+	}
+	if replay {
+		return receipt.ID, tx.Commit(ctx)
+	}
 	var version int64
 	if id != 0 {
 		if err = tx.QueryRow(ctx, "SELECT version FROM "+table+" WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
@@ -104,6 +121,10 @@ func (s *Store) SaveCatalogGroup(ctx context.Context, actor, id int64, kind stri
 		return 0, err
 	}
 	if err = Audit(ctx, tx, actor, action, kind, id, map[string]any{"version": version + 1, "active": *in.Active, "section_id": in.SectionID}); err != nil {
+		return 0, err
+	}
+	receipt.ID = id
+	if err = SaveCreationReceipt(ctx, tx, actor, "catalog_group.create."+kind, key, hash, receipt); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)

@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { usePendingSetting } from "@/hooks/use-pending-setting";
+import { useAdminFormLeave } from "@/hooks/use-admin-form-leave";
 import { ArrowLeft, Pencil, Plus, RotateCcw, Save } from "lucide-react";
 import { api, ApiError, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
-import { useAdminListNavigation } from "@/hooks/use-admin-list-navigation";
+import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { AdminPagination } from "./admin-pagination";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
@@ -19,7 +23,7 @@ import {
   TableRow,
 } from "./ui/table";
 import { Failure, Loading, Status } from "./common";
-import { Workspace, useAdminPermission } from "./workspace";
+import { Workspace, useAdminPermission, useAdminIdentity } from "./workspace";
 
 type Template = {
   version: number;
@@ -127,26 +131,7 @@ function NotificationManager() {
             <RotateCcw />
           </Button>
           {manage && tab === "templates" && (
-            <Button
-              onClick={() => {
-                setNotice("");
-                setEdit({
-                  version: 1,
-                  id: 0,
-                  channel: templateChannel,
-                  kind: "",
-                  name: "",
-                  subject: "",
-                  body: "",
-                  provider_template_id: "",
-                  active: false,
-                  updated_at: "",
-                });
-              }}
-            >
-              <Plus />
-              新增模板
-            </Button>
+            <Button asChild><Link href={`/admin/notifications/new${navigation.suffix}`}><Plus />新增模板</Link></Button>
           )}
         </div>
       </div>
@@ -329,7 +314,7 @@ function NotificationManager() {
     </>
   );
 }
-function TemplateEditor({
+export function TemplateEditor({
   template,
   manage,
   saved,
@@ -345,39 +330,42 @@ function TemplateEditor({
   const [form, setForm] = useState(template);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [forbidden, setForbidden] = useState(false);
+  const canWrite = manage && !forbidden;
+  const actor = useAdminIdentity();
+  const request = usePendingSetting(`template-create:${template.channel}`, actor?.id ?? null);
   const dirty = JSON.stringify(form) !== JSON.stringify(template);
+  useAdminFormLeave(dirty || (!template.id && request.unknown));
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
-  async function save(event: React.FormEvent) {
-    event.preventDefault();
-    if (!manage || busy) return;
+  async function save(event?: React.FormEvent) {
+    event?.preventDefault();
+    if (!canWrite || busy || (!template.id && !request.ready)) return;
     setBusy(true);
     onBusy(true);
     setError("");
     try {
-      await api(
-        `/admin/notification-templates${template.id ? `/${template.id}` : ""}`,
-        {
-          method: template.id ? "PATCH" : "POST",
-          body: JSON.stringify({
-            ...(template.id ? { expected_version: template.version } : { kind: form.kind }),
-            ...(template.id ? {} : { channel: form.channel }),
-            name: form.name,
-            subject: form.subject,
-            body: form.body,
-            provider_template_id: form.provider_template_id,
-            active: form.active,
-          }),
-        },
-      );
+      const body = JSON.stringify({
+        ...(template.id ? { expected_version: template.version } : { kind: form.kind, channel: form.channel }),
+        name: form.name, subject: form.subject, body: form.body,
+        provider_template_id: form.provider_template_id, active: form.active,
+      });
+      if (template.id) {
+        await api(`/admin/notification-templates/${template.id}`, { method: "PATCH", body });
+      } else {
+        const pending = request.pending.current ?? { body, key: crypto.randomUUID(), path: "/admin/notification-templates" };
+        request.remember(pending);
+        await api(pending.path!, { method: "POST", body: pending.body, headers: { "Idempotency-Key": pending.key } });
+        request.resolve();
+      }
       saved();
     } catch (e) {
-      setError(e instanceof ApiError && e.status === 409 ? "模板已被其他管理员修改。请保留所需内容，返回列表刷新后重新编辑。" : (e as Error).message);
+      if (e instanceof ApiError && e.status === 403) setForbidden(true);
+      if (!template.id && (request.unknown || !(e instanceof ApiError) || e.status >= 500 || e.status === 408)) {
+        request.setUnknown(true); setError("创建结果尚未确认，请重试原请求确认结果。");
+      } else {
+        if (!template.id) request.resolve();
+        setError(template.id && e instanceof ApiError && e.status === 409 ? "模板已被其他管理员修改。请保留所需内容，返回列表刷新后重新编辑。" : (e as Error).message);
+      }
     } finally {
       setBusy(false);
       onBusy(false);
@@ -388,7 +376,7 @@ function TemplateEditor({
       onSubmit={(event) => void save(event)}
       className="max-w-4xl space-y-5"
     >
-      <fieldset disabled={busy || !manage} className="space-y-5">
+      <fieldset disabled={busy || !canWrite || (!template.id && (!request.ready || request.unknown))} className="space-y-5">
         <section className="space-y-4 border-b pb-5">
           <h2 className="text-sm font-semibold">模板资料</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -453,17 +441,19 @@ function TemplateEditor({
           {error}
         </p>
       )}
-      {manage && (
+      {!template.id && request.unknown && <p role="status" className="text-sm text-amber-700">上次创建尚未确认。已保留原请求，确认结果前不能修改内容或创建另一条记录。</p>}
+      {canWrite && (
         <div className="flex flex-wrap gap-3 border-t pt-4">
-          <Button disabled={busy}>
+          <Button disabled={busy || (!template.id && !request.ready)} type={!template.id && request.unknown ? "button" : "submit"} onClick={!template.id && request.unknown ? () => void save() : undefined}>
             <Save />
-            {busy ? "保存中" : "保存模板"}
+            {busy ? "保存中" : !template.id && request.unknown ? "重试原请求" : "保存模板"}
           </Button>
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || (!template.id && request.unknown)}
             onClick={() => {
+              if (dirty && !window.confirm("确定丢弃未保存的内容？")) return;
               setForm(template);
               setError("");
             }}
@@ -516,4 +506,17 @@ function RetryOutbox({ id, channel, refresh }: { id: number; channel: "email" | 
       )}
     </div>
   );
+}
+
+export function NotificationTemplateCreateView(){return <Workspace title="创建通知模板" admin><NotificationTemplateCreate/></Workspace>;}
+function NotificationTemplateCreate(){
+ const router=useRouter();const params=useSearchParams();const channel=params.get("channel")==="sms"?"sms":"email";
+ const manage=useAdminPermission("notifications.manage");const view=useAdminPermission("notifications.view");const allowed=manage&&view;
+ const returnHref=useAdminListReturnHref("/admin/notifications",templateStates,"all",{channel,limit:"25"});
+ const access=useResource<TemplatePage>(`/admin/notification-templates/page?channel=${channel}&limit=1`,false);
+ const [busy,setBusy]=useState(false);const [,setDirty]=useState(false);
+ const [template]=useState<Template>(()=>({id:0,version:1,channel,kind:"",name:"",subject:"",body:"",provider_template_id:"",active:false,updated_at:""}));
+ return <div className="max-w-4xl"><div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div><h1 className="page-title">创建{channel==="sms"?"短信":"邮件"}模板</h1><p className="mt-2 text-sm text-muted-foreground">填写通知模板资料和内容</p></div><Button variant="outline" disabled={busy} asChild><Link href={returnHref}>返回模板列表</Link></Button></div>
+ {!allowed?<p role="alert" className="text-sm text-destructive">没有创建通知模板的权限。</p>:access.error?<Failure error={access.error} retry={access.refresh}/>:!access.data?<Loading/>:<>{channel==="sms"&&<p className="mb-5 text-sm text-muted-foreground">短信使用系统配置的供应商。供应商要求已审核模板时，请填写对应模板 ID。<Link href="/admin/sms-settings" className="ml-2 text-primary">查看短信设置</Link></p>}<TemplateEditor key={channel} template={{...template,channel}} manage={manage} saved={()=>router.replace(returnHref)} onBusy={setBusy} onDirty={setDirty}/></>}
+ </div>;
 }
