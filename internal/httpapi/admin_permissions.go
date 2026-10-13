@@ -195,7 +195,7 @@ var adminRoutePermissions = func() map[string]string {
 		"downloads.manage":              {"POST /api/v1/admin/downloads", "PUT /api/v1/admin/downloads/{id}", "DELETE /api/v1/admin/downloads/{id}", "POST /api/v1/admin/download-categories", "PUT /api/v1/admin/download-categories/{id}", "DELETE /api/v1/admin/download-categories/{id}", "PUT /api/v1/admin/download-settings"},
 		"dashboard.view":                {"GET /api/v1/admin/dashboard"},
 		"migrations.view":               {"GET /api/v1/admin/migrations/runs", "GET /api/v1/admin/migrations/reviews", "GET /api/v1/admin/migrations/reviews/{entity}/{id}"},
-		"@super":                        {"POST /api/v1/admin/migrations/reviews/{entity}/{id}", "POST /api/v1/admin/ticket-departments", "PATCH /api/v1/admin/ticket-departments/{id}", "DELETE /api/v1/admin/ticket-departments/{id}", "GET /api/v1/admin/permissions", "GET /api/v1/admin/roles", "POST /api/v1/admin/roles", "PATCH /api/v1/admin/roles/{id}", "DELETE /api/v1/admin/roles/{id}", "GET /api/v1/admin/staff", "POST /api/v1/admin/staff", "PATCH /api/v1/admin/staff/{id}"},
+		"@super":                        {"POST /api/v1/admin/migrations/reviews/{entity}/{id}", "POST /api/v1/admin/ticket-departments", "PATCH /api/v1/admin/ticket-departments/{id}", "DELETE /api/v1/admin/ticket-departments/{id}", "GET /api/v1/admin/permissions", "GET /api/v1/admin/roles", "POST /api/v1/admin/roles", "PATCH /api/v1/admin/roles/{id}", "DELETE /api/v1/admin/roles/{id}", "GET /api/v1/admin/staff", "GET /api/v1/admin/staff/{id}", "POST /api/v1/admin/staff", "PATCH /api/v1/admin/staff/{id}"},
 		"notifications.view":            {"GET /api/v1/admin/notification-templates/page", "GET /api/v1/admin/notification-templates", "GET /api/v1/admin/email-outbox", "GET /api/v1/admin/sms-outbox"},
 		"notifications.manage":          {"POST /api/v1/admin/notification-templates", "PATCH /api/v1/admin/notification-templates/{id}", "POST /api/v1/admin/email-outbox/{id}/retry", "POST /api/v1/admin/sms-outbox/{id}/retry"},
 		"affiliates.view":               {"GET /api/v1/admin/affiliate/accounts", "GET /api/v1/admin/affiliate/attributions", "GET /api/v1/admin/affiliate/withdrawals", "GET /api/v1/admin/affiliate/withdrawals/{id}"},
@@ -317,7 +317,12 @@ func (s *Server) saveAdminStaff(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	result, err := s.db.SaveStaff(r.Context(), identityFrom(r).ID, id, in)
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
+	}
+	result, err := s.db.SaveStaffWithSession(r.Context(), identityFrom(r).ID, id, tokenHash(cookie.Value), strings.TrimSpace(r.Header.Get("Idempotency-Key")), in)
 	if err != nil {
 		s.fail(w, r, err)
 		return

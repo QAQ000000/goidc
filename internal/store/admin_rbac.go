@@ -2,8 +2,13 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"net/mail"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -173,6 +178,9 @@ func adminManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx, er
 	}
 	if err != nil {
 		tx.Rollback(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, conflict("permission_denied", "仅超级管理员可管理人员权限")
+		}
 		return nil, err
 	}
 	return tx, nil
@@ -256,6 +264,22 @@ type StaffInput struct {
 }
 
 func (s *Store) SaveStaff(ctx context.Context, actorID, id int64, in StaffInput) (int64, error) {
+	return s.saveStaff(ctx, actorID, id, "", "", in)
+}
+
+// SaveStaffWithSession rechecks the browser credential after acquiring the
+// management lock and records a payload-bound receipt for safe retries.
+func (s *Store) SaveStaffWithSession(ctx context.Context, actorID, id int64, sessionHash, key string, in StaffInput) (int64, error) {
+	if sessionHash == "" {
+		return 0, conflict("unauthorized", "登录已失效")
+	}
+	return s.saveStaff(ctx, actorID, id, sessionHash, key, in)
+}
+
+func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, key string, in StaffInput) (int64, error) {
+	if key != "" && (len(key) < 8 || len(key) > 128) {
+		return 0, conflict("invalid_idempotency_key", "幂等键长度必须为 8 到 128 位")
+	}
 	in.Username, in.Email, in.Name = strings.TrimSpace(in.Username), strings.TrimSpace(in.Email), strings.TrimSpace(in.Name)
 	address, err := mail.ParseAddress(in.Email)
 	if err != nil || address.Address != in.Email || len(in.Email) > 254 || in.Name == "" || utf8.RuneCountInString(in.Name) > 120 || in.RoleID < 1 || (in.Status != "active" && in.Status != "disabled") {
@@ -284,6 +308,43 @@ func (s *Store) SaveStaff(ctx context.Context, actorID, id int64, in StaffInput)
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	if sessionHash != "" {
+		var userID int64
+		if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&userID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return 0, conflict("unauthorized", "登录已失效")
+			}
+			return 0, err
+		}
+	}
+	operation := "admin_staff.save." + strconv.FormatInt(id, 10)
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return 0, err
+	}
+	digest := sha256.Sum256(raw)
+	requestHash := hex.EncodeToString(digest[:])
+	if key != "" {
+		var savedHash string
+		var result []byte
+		err = tx.QueryRow(ctx, "SELECT request_hash,result FROM admin_setting_operations WHERE actor_id=$1 AND operation=$2 AND idempotency_key=$3", actorID, operation, key).Scan(&savedHash, &result)
+		if err == nil {
+			if savedHash != requestHash {
+				return 0, conflict("idempotency_conflict", "相同幂等键对应不同的管理员资料")
+			}
+			var saved struct {
+				ID int64 `json:"id"`
+			}
+			if err = json.Unmarshal(result, &saved); err != nil {
+				return 0, err
+			}
+			return saved.ID, tx.Commit(ctx)
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return 0, err
+		}
+	}
+
 	var active bool
 	if err = tx.QueryRow(ctx, "SELECT active FROM admin_roles WHERE id=$1 FOR SHARE", in.RoleID).Scan(&active); err != nil {
 		return 0, err
@@ -407,6 +468,12 @@ func (s *Store) SaveStaff(ctx context.Context, actorID, id int64, in StaffInput)
 	}
 	if err = Audit(ctx, tx, actorID, action, "user", id, map[string]any{"username": in.Username, "status": in.Status, "admin_role_id": in.RoleID, "password_changed": hash != nil, "ticket_scope": scope, "ticket_unassigned": unassigned, "ticket_department_ids": departments, "customer_scope": customerScope, "customer_ownerless": ownerless, "sales_enabled": salesEnabled}); err != nil {
 		return 0, err
+	}
+	if key != "" {
+		result, _ := json.Marshal(map[string]int64{"id": id})
+		if _, err = tx.Exec(ctx, "INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)", actorID, operation, key, requestHash, result); err != nil {
+			return 0, err
+		}
 	}
 	return id, tx.Commit(ctx)
 }

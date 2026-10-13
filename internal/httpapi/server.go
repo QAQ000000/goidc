@@ -367,6 +367,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/roles/{id}", s.sessionAuth(s.saveAdminRole, true))
 	mux.HandleFunc("DELETE /api/v1/admin/roles/{id}", s.sessionAuth(s.deleteAdminRole, true))
 	mux.HandleFunc("GET /api/v1/admin/staff", s.sessionAuth(s.adminStaff, true))
+	mux.HandleFunc("GET /api/v1/admin/staff/{id}", s.sessionAuth(s.adminStaffDetail, true))
 	mux.HandleFunc("POST /api/v1/admin/staff", s.sessionAuth(s.saveAdminStaff, true))
 	mux.HandleFunc("PATCH /api/v1/admin/staff/{id}", s.sessionAuth(s.saveAdminStaff, true))
 	mux.HandleFunc("GET /api/v1/admin/migrations/runs", s.auth(s.legacyImportRuns, true))
