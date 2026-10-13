@@ -1,6 +1,6 @@
 {
-  "date": "2026-10-12",
-  "environment": "历批隔离PG18验收；2026-10-12 新增独立Next生产webpack :3099 + 系统Chrome",
+  "date": "2026-10-13",
+  "environment": "历批隔离PG18；2026-10-13独立Next生产webpack :3101 + 系统Chrome",
   "pages": [
     {
       "newRoute": "/admin/system/database",
@@ -2801,6 +2801,654 @@
       },
       "scope": "隔离PG18真实API；权限、真实计数、筛选、分页和配置入口已验收",
       "screenshotSha256": "378013d8b9fb7086580a0a5963fa9064d44d4333ceb320b7bdfdcb00be2c35ef"
+    },
+    {
+      "newRoute": "/admin/transactions",
+      "testedURL": "/admin/transactions",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/transactions-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "交易流水",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "89c7dafb9b5624dbc93f81dd34f8331208ce76b0a1ba06fef6f5d501a314b04c"
+    },
+    {
+      "newRoute": "/admin/transactions",
+      "testedURL": "/admin/transactions",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/transactions-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "交易流水",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "146af981f19f47fc935d93cc3516b751fcae7c02f90110d193d17fde6043bb77"
+    },
+    {
+      "newRoute": "/admin/transactions",
+      "testedURL": "/admin/transactions",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/transactions-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "交易流水",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "813d0132762232e7e382dcad952a7979b9356a5856b41fc516bcee464f77df5e"
+    },
+    {
+      "newRoute": "/admin/transactions",
+      "testedURL": "/admin/transactions",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/transactions-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "交易流水",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "18d6d1d78f9c144686247cfb3f62e842c3f5978e3d1812d08d9098840eb4e84d"
+    },
+    {
+      "newRoute": "/admin/affiliate/settings",
+      "testedURL": "/admin/affiliate/settings",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/affiliate-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "推介设置",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "52e0bcdf25cdcf84e47cb485189efe3b8465b61c3beb6b19725f577152b7ba2c"
+    },
+    {
+      "newRoute": "/admin/affiliate/settings",
+      "testedURL": "/admin/affiliate/settings",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/affiliate-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "推介设置",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "922f19abec13f790d04733daf2c1b7e4e4fee7f76a435d5cea3fda1a23d36ead"
+    },
+    {
+      "newRoute": "/admin/affiliate/settings",
+      "testedURL": "/admin/affiliate/settings",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/affiliate-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "推介设置",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "5a1b64a4dc9f29623469891d8278ea15596b05c113f030877f28e7427d383a12"
+    },
+    {
+      "newRoute": "/admin/affiliate/settings",
+      "testedURL": "/admin/affiliate/settings",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/affiliate-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "推介设置",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "9f1e9e2faeb23cf1309fa51cfa25acdd9a7af923e63f063dbe988383035a4b81"
+    },
+    {
+      "newRoute": "/admin/suppliers/catalog",
+      "testedURL": "/admin/suppliers/catalog",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/supplier-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "供应商商品目录",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "639febde7f67f43a95fcd900aba3c10da841dedbb9a618b1e95eb2217d74914b"
+    },
+    {
+      "newRoute": "/admin/suppliers/catalog",
+      "testedURL": "/admin/suppliers/catalog",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/supplier-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "供应商商品目录",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "fabdbe5b4df44ae84988c24240a02bb1fbcab42cf589ccf206d338c4676a77eb"
+    },
+    {
+      "newRoute": "/admin/suppliers/catalog",
+      "testedURL": "/admin/suppliers/catalog",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/supplier-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "供应商商品目录",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "b3ea377fe3cda8c7e218c7736f25cb0851bc91c640bbd67218a3b9cc69935711"
+    },
+    {
+      "newRoute": "/admin/suppliers/catalog",
+      "testedURL": "/admin/suppliers/catalog",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/supplier-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "供应商商品目录",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "29bf1c18f73c029a8ef54827c71c3b43ecffed5a7b8f7787d75cdbd434acb7da"
+    },
+    {
+      "newRoute": "/admin/catalog-groups/new",
+      "testedURL": "/admin/catalog-groups/new?kind=section",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/group-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "添加商品分组",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "48f8b2ebc7df9d7daaeeddc24ec47364188038671bc35b0fa509c6dbc6615662"
+    },
+    {
+      "newRoute": "/admin/catalog-groups/new",
+      "testedURL": "/admin/catalog-groups/new?kind=section",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/group-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "添加商品分组",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "bd4cdd5c5ed072ebd1e00c04ec3673337a006a9cffa7c7607b046720a898e483"
+    },
+    {
+      "newRoute": "/admin/catalog-groups/new",
+      "testedURL": "/admin/catalog-groups/new?kind=section",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/group-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "添加商品分组",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "104e5fd2911c499040bab3bd3bb2280046f541bcb0d1c158cf15656cb7ee148e"
+    },
+    {
+      "newRoute": "/admin/catalog-groups/new",
+      "testedURL": "/admin/catalog-groups/new?kind=section",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/group-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "添加商品分组",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "f52a7fcc0daee6421b8a87dd4e2a33a695ee84e4d8f9ad42be367db5e4829c39"
+    },
+    {
+      "newRoute": "/admin/access/staff/{id}",
+      "testedURL": "/admin/access/staff/4",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/staff-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "编辑管理员",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "0612a35d4f0854c390b808b601fda7f66d9251aeb9143a90a66c82f5e59bbbbd"
+    },
+    {
+      "newRoute": "/admin/access/staff/{id}",
+      "testedURL": "/admin/access/staff/4",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/staff-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "编辑管理员",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "38228611b1f39928e65b7a2426dfe2f98e55d292981d63d0f648e6b252e15c06"
+    },
+    {
+      "newRoute": "/admin/access/staff/{id}",
+      "testedURL": "/admin/access/staff/4",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/staff-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "编辑管理员",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "148e010b340b280751d73f0a496c5e6f36386d47285c1d592e0dcdeb6edb88f3"
+    },
+    {
+      "newRoute": "/admin/access/staff/{id}",
+      "testedURL": "/admin/access/staff/4",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/staff-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "编辑管理员",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "7f5d451869aa0bf776f53e859ef445a1e5d1572e69a4341700427b225aab1a10"
+    },
+    {
+      "newRoute": "/admin/notifications/new?channel=sms",
+      "testedURL": "/admin/notifications/new?channel=sms",
+      "width": 1440,
+      "height": 900,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/sms-1440.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1440,
+        "scrollWidth": 1440,
+        "heading": "创建短信模板",
+        "alerts": [],
+        "logout": {
+          "left": 1384,
+          "right": 1420
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "4157b8083d66f32fbee837fd6498ba6fd005c10c336857f591fd1154c597803c"
+    },
+    {
+      "newRoute": "/admin/notifications/new?channel=sms",
+      "testedURL": "/admin/notifications/new?channel=sms",
+      "width": 1024,
+      "height": 768,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/sms-1024.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 1024,
+        "scrollWidth": 1024,
+        "heading": "创建短信模板",
+        "alerts": [],
+        "logout": {
+          "left": 968,
+          "right": 1004
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "38d5316c141e471d53c33ae0c1591211ffd4e5b501e5ef9fe3a4299e146e4abf"
+    },
+    {
+      "newRoute": "/admin/notifications/new?channel=sms",
+      "testedURL": "/admin/notifications/new?channel=sms",
+      "width": 390,
+      "height": 844,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/sms-390.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 390,
+        "scrollWidth": 390,
+        "heading": "创建短信模板",
+        "alerts": [],
+        "logout": {
+          "left": 334,
+          "right": 378
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "deaa3dd66cd6e4ea3a8113b443ff55cfe943975ac63e41163f652611a76425a5"
+    },
+    {
+      "newRoute": "/admin/notifications/new?channel=sms",
+      "testedURL": "/admin/notifications/new?channel=sms",
+      "width": 320,
+      "height": 800,
+      "result": "PASS",
+      "screenshot": "output/playwright/admin-entries-20261013/sms-320.png",
+      "checks": {
+        "noHorizontalOverflow": true,
+        "noJavascriptErrors": true,
+        "noApiFailures": true,
+        "logoutWithinViewport": true,
+        "visualReview": "1440与320截图对照复核；1024与390布局检查，未逐字检查全部表格文本"
+      },
+      "layout": {
+        "width": 320,
+        "scrollWidth": 320,
+        "heading": "创建短信模板",
+        "alerts": [],
+        "logout": {
+          "left": 264,
+          "right": 308
+        }
+      },
+      "scope": "真实API稳定加载与四尺寸布局；供应商为无账户空态；交互见本批验收",
+      "screenshotSha256": "580db2744eeb9e54af066c6a8864fc4c64370b98ea0928d7ac5562fe9d7c21d1"
     }
   ],
   "pageErrors": [],

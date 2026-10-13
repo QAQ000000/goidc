@@ -18,7 +18,7 @@
 | 10 | [业务 / 流量包订单](#page-10) | #/dcim-traffic-log | /admin/traffic-orders | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 11 | [业务 / 业务列表](#page-11) | #/customer-product | /admin/services | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 12 | [业务 / 产品暂停请求](#page-12) | #/customer-cancelreq | /admin/cancellations | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 13 | [财务 / 交易流水](#page-13) | #/business-statement | /admin/transactions | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 13 | [财务 / 交易流水](#page-13) | #/business-statement | /admin/transactions | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 14 | [财务 / 账单管理](#page-14) | #/bill-management | /admin/invoices | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 15 | [财务 / 信用额管理](#page-15) | #/credit-management | /admin/credit | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 16 | [财务 / 提现审核](#page-16) | #/customer-withdrawal | /admin/affiliate?tab=withdrawals | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -34,7 +34,7 @@
 | 26 | [功能 / 任务队列](#page-26) | #/statistics-taskQueue | /admin/jobs/queue | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 27 | [功能 / 数据库状态](#page-27) | #/database-message | /admin/system/database | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 28 | [设置 / 自定义客户字段](#page-28) | #/customer-custom | /admin/customer-fields | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 29 | [设置 / 推介设置](#page-29) | #/promotion_plan | /admin/affiliate/settings | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 30 | [设置 / 客户等级](#page-30) | #/customer-level | /admin/customer-levels | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 31 | [设置 / 客户分组与折扣](#page-31) | #/customer-group | /admin/customer-groups、/admin/customer-groups?tab=products、/admin/customer-groups?tab=discounts | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
 | 32 | [设置 / 实名设置](#page-32) | #/authentication-setting | /admin/certification-settings | 有对应路由源码；实现完整性未验证 | 未验证 |
@@ -93,7 +93,7 @@
 | 85 | [设置 / 帮助分类](#page-85) | #/help-category | /admin/content?tab=categories&kind=help | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 86 | [设置 / 基础设置](#page-86) | #/set | /admin/site-settings?tab=display | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 87 | [资源与商店 / 供应商管理](#page-87) | #/zjmf-api | /admin/suppliers | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 88 | [资源与商店 / 商品管理](#page-88) | #/commodity-list | /admin/suppliers/catalog | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 88 | [资源与商店 / 商品管理](#page-88) | #/commodity-list | /admin/suppliers/catalog | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 89 | [资源与商店 / 产品管理](#page-89) | #/commodity-product | /admin/products | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 90 | [资源与商店 / 任务队列](#page-90) | #/commodity-taskQueue | /admin/suppliers/jobs | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 91 | [资源与商店 / 服务器列表](#page-91) | #/munual-resource | /admin/resources | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
@@ -107,10 +107,10 @@
 | 99 | [订单管理 / 新建订单](#page-99) | #/add-order | /admin/orders/new | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 100 | [工单管理 / 新建工单](#page-100) | #/add-support-ticket | /admin/tickets/new | 有对应路由源码；实现完整性未验证 | 未验证 |
 | 101 | [发票管理 / 开具发票](#page-101) | #/invoice | /admin/invoices/new | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 102 | [商品设置 / 添加商品分组](#page-102) | #/add-product-group | /admin/catalog-groups/new | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 102 | [商品设置 / 添加商品分组](#page-102) | #/add-product-group | /admin/catalog-groups/new | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 | 103 | [商品设置 / 编辑商品配置](#page-103) | #/edit-product | /admin/products/{id} | 有对应路由源码；实现完整性未验证 | 未验证 |
-| 104 | [人员管理 / 编辑管理员](#page-104) | #/admin-edit | /admin/access/staff/{id} | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
-| 105 | [短信邮件 / 创建短信模板](#page-105) | #/sms-create-template | /admin/notifications/new?channel=sms | 未找到对应独立路由文件；实现状态未验证 | 未验证 |
+| 104 | [人员管理 / 编辑管理员](#page-104) | #/admin-edit | /admin/access/staff/{id} | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
+| 105 | [短信邮件 / 创建短信模板](#page-105) | #/sms-create-template | /admin/notifications/new?channel=sms | 有对应路由源码；实现完整性未验证 | PASS（四尺寸） |
 
 <a id="page-1"></a>
 ## 1. 控制台概览
@@ -175,7 +175,7 @@
 <a id="page-13"></a>
 ## 13. 交易流水
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:287)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:23)。JSON 中按唯一旧 hash #/business-statement 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:287)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:23)；页面：[源码](../web/src/app/admin/transactions/page.tsx:1)。JSON 中按唯一旧 hash #/business-statement 检索。
 
 <a id="page-14"></a>
 ## 14. 账单管理
@@ -255,7 +255,7 @@
 <a id="page-29"></a>
 ## 29. 推介设置
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:605)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:39)。JSON 中按唯一旧 hash #/promotion_plan 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:605)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:39)；页面：[源码](../web/src/app/admin/affiliate/settings/page.tsx:1)。JSON 中按唯一旧 hash #/promotion_plan 检索。
 
 <a id="page-30"></a>
 ## 30. 客户等级
@@ -550,7 +550,7 @@
 <a id="page-88"></a>
 ## 88. 商品管理
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1886)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:98)。JSON 中按唯一旧 hash #/commodity-list 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:1886)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:98)；页面：[源码](../web/src/app/admin/suppliers/catalog/page.tsx:1)。JSON 中按唯一旧 hash #/commodity-list 检索。
 
 <a id="page-89"></a>
 ## 89. 产品管理
@@ -620,7 +620,7 @@
 <a id="page-102"></a>
 ## 102. 添加商品分组
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2158)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:112)。JSON 中按唯一旧 hash #/add-product-group 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2158)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:112)；页面：[源码](../web/src/app/admin/catalog-groups/new/page.tsx:1)。JSON 中按唯一旧 hash #/add-product-group 检索。
 
 <a id="page-103"></a>
 ## 103. 编辑商品配置
@@ -630,9 +630,9 @@
 <a id="page-104"></a>
 ## 104. 编辑管理员
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2212)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:114)。JSON 中按唯一旧 hash #/admin-edit 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2212)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:114)；页面：[源码](../web/src/app/admin/access/staff/[id]/page.tsx:1)。JSON 中按唯一旧 hash #/admin-edit 检索。
 
 <a id="page-105"></a>
 ## 105. 创建短信模板
 
-旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2245)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:115)。JSON 中按唯一旧 hash #/sms-create-template 检索。
+旧规范：[源文档](/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:2245)；台账：[记录](../docs/admin-full-ui-restore-ledger.md:115)；页面：[源码](../web/src/app/admin/notifications/new/page.tsx:1)。JSON 中按唯一旧 hash #/sms-create-template 检索。

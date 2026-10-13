@@ -20,7 +20,7 @@
 | 10 | 流量包订单 `#/dcim-traffic-log` | `/admin/traffic-orders` | 部分完成 | `GET /admin/traffic-orders` + `GET /admin/traffic-orders/{id}` + `POST /admin/traffic-orders/{id}/cancel` + `POST /admin/traffic-orders/{id}/delivery-verification` | `orders.view/manage`、`services.manage` / 真实购买→账单→支付→待人工交付；客户范围、状态/关键词筛选、分页、详情、取消/退款返库存；版本冲突、幂等、审计；PG18专项通过，四尺寸浏览器通过，目录CRUD/取消/删除确认/筛选URL恢复已验收；[验收](admin-batch-traffic-acceptance-20261011.md)；自动资源交付未实现 |
 | 11 | 业务列表 `#/customer-product` | `/admin/services` | 已完成 | `GET /admin/services/page` | `services.view` / 状态页签 |
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
-| 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/customer-transactions` | `invoices.view` / 金额和渠道筛选 |
+| 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/transactions/page` | `invoices.view` / 成功支付、余额与已付账单事件分页；整数分金额/渠道/方向/上海日期筛选、客户范围、URL与详情回跳；不提供混合现金汇总；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 | 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page` | `invoices.view/manage` / 合并和取消 |
 | 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit` + `PUT /admin/credit/{id}/limit` + `GET /admin/credit/consumptions` + `GET /admin/credit/repayments` + `POST /admin/credit/consumptions/{id}/repay` + `PUT /admin/credit/{id}/freeze` + `POST /invoices/{id}/pay-credit` | `credit.view/manage` / 独立账户、信用消费/真实线下还款/冻结、客户/日期/债务状态分页、余额隔离、权限/范围/版本/幂等/审计；三标签四尺寸与未知结果恢复；线上还款、已还款现金退付、授信审批仍待补；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
@@ -36,7 +36,7 @@
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
 | 28 | 自定义客户字段 `#/customer-custom` | `/admin/customer-fields` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-fields` | `customers.manage` / 真实分页、字段规则、版本冲突、幂等和审计；客户创建/详情已接入类型化值读写；完整注册表单联动和四尺寸待验收 |
-| 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/settings` | `affiliates.manage` / 规则版本 |
+| 29 | 推介设置 `#/promotion_plan` | `/admin/affiliate/settings` | 部分完成 | `GET/PUT /admin/affiliate/policy` | `affiliates.manage` / 默认计划、归因冻结周期、默认四类佣金、提现门槛；版本、幂等、历史快照、草稿与冲突；商品/阶梯规则编辑待补；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 | 30 | 客户等级 `#/customer-level` | `/admin/customer-levels` | 已完成 | `GET/POST/PATCH/DELETE /admin/customer-levels` | `customer_levels.view/manage` / 阈值统计、分页、版本冲突、幂等和审计 |
 | 31 | 客户分组与折扣 `#/customer-group` | `/admin/customer-groups`、`/admin/customer-groups?tab=products`、`/admin/customer-groups?tab=discounts` | 部分完成 | `GET/POST/PATCH/DELETE /admin/customer-groups`、`GET/POST/PATCH/DELETE /admin/customer-product-groups`、`GET/PUT /admin/customer-product-discounts` | `customer_groups.view/manage` / 客户组、商品分组和客户组折扣真实分页；百分比/固定金额校验、版本冲突、幂等、审计和危险操作确认；商品分组/折扣四尺寸浏览器待验收 |
 | 32 | 实名设置 `#/authentication-setting` | `/admin/certification-settings` | 已完成 | `GET/PUT /admin/certification-settings`、`GET /admin/channel-instances?category=certification` | `certifications.view/manage`、版本冲突、幂等和审计 |
@@ -95,7 +95,7 @@
 | 85 | 帮助分类 `#/help-category` | `/admin/content?tab=categories&kind=help` | 部分完成 | `GET/POST/PUT /admin/content-categories` | `content.manage` |
 | 86 | 基础设置 `#/set` | `/admin/site-settings?tab=display` | 部分完成 | `GET/PUT /admin/site-settings` | `settings.view/manage` |
 | 87 | 供应商管理 `#/zjmf-api` | `/admin/suppliers` | 已完成 | `GET/POST/PUT /admin/suppliers` | `products.view/manage` |
-| 88 | 商品管理 `#/commodity-list` | `/admin/suppliers/catalog` | 部分完成 | `GET /admin/suppliers/{id}/products` | `products.view` |
+| 88 | 商品管理 `#/commodity-list` | `/admin/suppliers/catalog` | 部分完成 | `GET /admin/suppliers` + `POST /admin/suppliers/{id}/catalog` + `GET /admin/suppliers/{id}/products/{product_id}` + `POST /admin/suppliers/{id}/import` | `products.view/manage` / 独立目录、账户选择、真实空态；拉取、详情与导入保持manage；目录快照本地筛选分页，URL恢复与真实账户新入口导入浏览器验收待补；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 | 89 | 产品管理 `#/commodity-product` | `/admin/products` | 部分完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
 | 90 | 任务队列 `#/commodity-taskQueue` | `/admin/suppliers/jobs` | 部分完成 | `GET /admin/supplier-jobs` + `POST /admin/supplier-jobs/{id}/retry` | `products.view`；重试另需 `services.manage/view` / 真实供应商交付任务、8列、客户/供应商/动作/状态/日期/关键词分页、URL恢复与四尺寸；只重试未外调失败同步，未知结果原请求恢复；危险写任务须核验；[验收](admin-credit-supplier-acceptance-20261012.md) |
 | 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 部分完成 | `GET /admin/resources` | `resources.view` / 真实服务资源分页、IP/供应商/状态筛选、URL恢复；客户范围、脱敏白名单、交付快照绑定；四尺寸、真实筛选/空态/URL恢复/错误恢复已验收；独立资源增改、成本/配置/备注和资源动作弹窗待补 |
@@ -109,10 +109,10 @@
 | 99 | 新建订单 `#/add-order` | `/admin/orders/new` | 部分完成 | `GET /admin/orders/create-options` + `GET /admin/promo-codes/page` + `POST /admin/promo-codes` + `POST /admin/orders/quote` + `POST /admin/orders` + `POST /admin/orders/{id}/invoice` | `orders.manage`；优惠码目录另需`promos.view`，新建另需`promos.manage` / 客户/商品搜索分页、目录选择/新增弹窗、报价校验、多商品/配置/数量/资料、价格覆盖、付款/账单/邮件、草稿恢复、版本/幂等/权限/审计；创建流程与新增优惠码弹窗四尺寸均已通过；真实邮件投递和复杂多级商品待验；[验收](admin-batch-admin-orders-acceptance-20261011.md) |
 | 100 | 新建工单 `#/add-support-ticket` | `/admin/tickets/new` | 部分完成 | `GET /admin/tickets/create-options` + `POST /admin/tickets` + `POST /tickets/{id}/attachments` | `tickets.manage` / 真实客户、部门、服务、处理人搜索分页；优先级、抄送、邮件入队、附件上传、草稿恢复、取消确认、幂等与结果不确定保护；四尺寸浏览器验收通过；附件失败后的人工复核与完整旧版字段仍待补 |
 | 101 | 开具发票 `#/invoice` | `/admin/invoices/new` | 已完成 | `POST /admin/invoices` | `invoices.manage` |
-| 102 | 添加商品分组 `#/add-product-group` | `/admin/catalog-groups/new` | 部分完成 | `POST /admin/catalog-groups` | `products.manage` |
+| 102 | 添加商品分组 `#/add-product-group` | `/admin/catalog-groups/new` | 部分完成 | `GET/POST /admin/catalog-groups/{kind}` | `products.manage` / 一级/二级独立创建、真实父分组、共用校验、payload绑定幂等、审计及权限复核；返回原分组层级；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 | 103 | 编辑商品配置 `#/edit-product` | `/admin/products/{id}` | 已完成 | `GET/PATCH /admin/products/{id}` | `products.view/manage` |
-| 104 | 编辑管理员 `#/admin-edit` | `/admin/access/staff/{id}` | 部分完成 | `GET/PATCH /admin/staff/{id}` | `@super` |
-| 105 | 创建短信模板 `#/sms-create-template` | `/admin/notifications/new?channel=sms` | 部分完成 | `POST /admin/notification-templates` | `notifications.manage` |
+| 104 | 编辑管理员 `#/admin-edit` | `/admin/access/staff/{id}` | 部分完成 | `GET/PATCH /admin/staff/{id}` | `@super` / 独立详情、共用账号/角色/范围字段、密码确认、提交重置确认、会话复核/版本/幂等/审计、保护超级管理员；旧版语言、工单签名与业务邮件偏好待补；[本批验收](admin-entry-pages-acceptance-20261013.md) |
+| 105 | 创建短信模板 `#/sms-create-template` | `/admin/notifications/new?channel=sms` | 部分完成 | `POST /admin/notification-templates` | `notifications.manage` / 独立创建复用模板编辑器、真实列表回跳、变量/供应商模板ID、payload绑定幂等、权限凭据重查、审计version1；真实供应商模板发送本批未测；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 
 ## 批次验收记录
 
