@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"strings"
 	"time"
@@ -527,10 +528,61 @@ FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
 	if err != nil {
 		return err
 	}
+	// Account-scoped serialization counts each settled invoice exactly once.
+	if err = lockOperationKey(ctx, tx, "affiliate-turnover-account", fmt.Sprint(accountID)); err != nil {
+		return err
+	}
+	var turnoverRecorded bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM affiliate_turnover_entries WHERE invoice_id=$1)`, invoiceID).Scan(&turnoverRecorded); err != nil || turnoverRecorded {
+		return err
+	}
+	var paidAt, windowStart, windowEnd time.Time
+	if err = tx.QueryRow(ctx, `WITH settlement AS (SELECT COALESCE((SELECT received_at FROM credit_repayments WHERE invoice_id=i.id AND remaining_after=0 ORDER BY version_after DESC LIMIT 1),i.paid_at,clock_timestamp()) AS paid_at FROM invoices i WHERE i.id=$1) SELECT paid_at,date_trunc('month',paid_at AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai',(date_trunc('month',paid_at AT TIME ZONE 'Asia/Shanghai')+interval '1 month') AT TIME ZONE 'Asia/Shanghai' FROM settlement`, invoiceID).Scan(&paidAt, &windowStart, &windowEnd); err != nil {
+		return err
+	}
+	var invoiceBasis int64
+	for _, item := range items {
+		if item.BasisCents > 0 {
+			if item.BasisCents > math.MaxInt64-invoiceBasis {
+				return conflict("invalid_affiliate_rule", "计佣净额溢出")
+			}
+			invoiceBasis += item.BasisCents
+		}
+	}
+	if invoiceBasis == 0 {
+		return nil
+	}
+	var priorBasis int64
+	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(t.basis_cents),0)::bigint FROM affiliate_turnover_entries t JOIN invoices i ON i.id=t.invoice_id WHERE t.account_id=$1 AND t.paid_at>=$2 AND t.paid_at<$3 AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM orders o WHERE o.id=i.order_id AND o.status IN ('cancelled','refunded')) AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id AND c.status<>'repaid')`, accountID, windowStart, windowEnd).Scan(&priorBasis); err != nil {
+		return err
+	}
+	if invoiceBasis > math.MaxInt64-priorBasis {
+		return conflict("invalid_affiliate_rule", "计佣营业额溢出")
+	}
+	turnover := priorBasis + invoiceBasis
+	var tier affiliateRule
+	var tierLower int64
+	var tierUpper *int64
+	tierFound := true
+	if err = tx.QueryRow(ctx, `SELECT rate_bps,amount_cents,lower_cents,upper_cents FROM affiliate_tier_rules WHERE rule_set_id=$1 AND lower_cents<=$2 AND (upper_cents IS NULL OR upper_cents>$2) ORDER BY lower_cents DESC LIMIT 1`, ruleSetID, turnover).Scan(&tier.RateBPS, &tier.AmountCents, &tierLower, &tierUpper); err != nil {
+		if err != pgx.ErrNoRows {
+			return err
+		}
+		tierFound = false
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO affiliate_turnover_entries(invoice_id,account_id,rule_set_id,basis_cents,paid_at) VALUES($1,$2,$3,$4,$5)`, invoiceID, accountID, ruleSetID, invoiceBasis, paidAt); err != nil {
+		return err
+	}
 	for _, item := range items {
 		rule, ruleSource, err := affiliateRuleForItem(ctx, tx, ruleSetID, item.ProductID, item.EventType, defaultRules)
 		if err != nil {
 			return err
+		}
+		if ruleSource == "default" && tierFound {
+			// Tier replaces the amount/rate, retaining the event's plan cap.
+			tier.MaxCents = rule.MaxCents
+			rule = tier
+			ruleSource = "tier"
 		}
 		amount, err := affiliateCommissionAmount(item.BasisCents, rule)
 		if err != nil {
@@ -543,6 +595,15 @@ FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
 			continue
 		}
 		ruleSnapshot := map[string]any{"program_id": programID, "rule_set_id": ruleSetID, "rule_version": ruleVersion, "hold_days": holdDays, "rule_source": ruleSource, "event_type": item.EventType, "rate_bps": rule.RateBPS, "amount_cents": rule.AmountCents, "max_cents": rule.MaxCents, "basis": "net_amount", "rounding_remainder_bps": (item.BasisCents % 10000) * int64(rule.RateBPS) % 10000}
+		if ruleSource == "tier" {
+			ruleSnapshot["tier_lower_cents"] = tierLower
+			ruleSnapshot["tier_upper_cents"] = tierUpper
+		}
+		ruleSnapshot["turnover_cents"] = turnover
+		ruleSnapshot["invoice_net_cents"] = invoiceBasis
+		ruleSnapshot["window_start"] = windowStart
+		ruleSnapshot["window_end"] = windowEnd
+		ruleSnapshot["turnover_timezone"] = "Asia/Shanghai"
 		sourceSnapshot := map[string]any{"invoice_id": invoiceID, "invoice": invoiceSnapshot, "item": item.Snapshot, "invoice_item_id": item.InvoiceItemID, "order_item_id": item.OrderItemID, "service_id": item.ServiceID, "product_id": item.ProductID, "basis_cents": item.BasisCents, "description": item.Description}
 		ruleJSON, _ := json.Marshal(ruleSnapshot)
 		sourceJSON, _ := json.Marshal(sourceSnapshot)
