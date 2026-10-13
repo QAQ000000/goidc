@@ -100,3 +100,5 @@ Go 没有 Fraud 状态，本批保持显式拒绝和人工核验，不将其默�
 全量 `scripts/go.sh test ./...` 注入隔离测试 DSN 和 `REQUIRE_INTEGRATION=1` 后，HTTP 包触及默认 10 分钟总时限，停止在 `TestAdminResourcesPageContractAndPermission` 的 schema 清理阶段；该用例当时仅运行约一秒，日志未报告断言失败。其他 Go 包通过，legacy-import 为 70.538 秒。根据 `go test -list '^Test'` 的实际执行顺序，超时前完成 390 个 HTTP 测试；从中断用例起补跑剩余 85 个，设置 15 分钟时限，全部通过（125.680 秒）。因此 HTTP 回归以分段方式完成，原始全量命令的超时结果仍保留，不能记作单次全量命令 PASS。证据分别为 `maintained-lifecycle-all-test.log`、`httpapi-test-order.txt`、`maintained-lifecycle-remaining-test.log`。
 
 本批没有改前端或数据库 schema，没有重新操作真实上游，也没有部署常驻 API/worker。
+
+用户随后要求提交部署，2026-10-13 16:34 已发布代码 `c81c040`；运行库为满足当前二进制要求同步应用此前提交的 126–135 迁移。服务 14 保持终止及库存已释放，没有再次请求真实退款/删除或下单。发布前数据库恢复、迁移数据保留及发布后只读接口检查均通过，详见 [部署记录](deployment-20261013-supplier-sms.md)。以上“没有部署”保留为实现与回归阶段的历史边界。
