@@ -574,7 +574,7 @@ func allowedServiceAction(status, action string) bool {
 		return status == "suspended"
 	case "terminate":
 		return status == "active" || status == "suspended" || status == "failed" || status == "queued" || status == "provisioning"
-	case "sync":
+	case "sync", "renew":
 		return status == "active" || status == "suspended"
 	case "upgrade":
 		return status == "active"

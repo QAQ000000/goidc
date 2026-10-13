@@ -15,6 +15,7 @@ import (
 func fixture(t *testing.T, invoiceAmount string, fail string) (Adapter, *int) {
 	t.Helper()
 	writes := new(int)
+	paid := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/zjmf_api_login" && r.Header.Get("Authorization") != "Bearer private-jwt" {
 			t.Errorf("missing authorization: %s", r.URL.Path)
@@ -52,11 +53,16 @@ func fixture(t *testing.T, invoiceAmount string, fail string) (Adapter, *int) {
 			}
 			fmt.Fprint(w, `{"status":200,"data":{"hostid":[42],"invoiceid":90}}`)
 		case "/get_invoices_detail":
-			fmt.Fprintf(w, `{"status":200,"data":{"detail":{"id":90,"subtotal":%q,"status":"Unpaid"},"currency":{"code":"CNY"},"invoice_items":[{"type":"host","rel_id":42,"amount":%q}]}}`, invoiceAmount, invoiceAmount)
+			status := "Unpaid"
+			if paid {
+				status = "Paid"
+			}
+			fmt.Fprintf(w, `{"status":200,"data":{"detail":{"id":90,"subtotal":%q,"status":%q},"currency":{"code":"CNY"},"invoice_items":[{"type":"host","rel_id":42,"amount":%q}]}}`, invoiceAmount, status, invoiceAmount)
 		case "/apply_credit":
 			if r.PostFormValue("invoiceid") != "90" {
 				t.Error("wrong invoice")
 			}
+			paid = true
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
 		case "/host/header":
 			fmt.Fprint(w, `{"status":200,"data":{"host_data":{"id":42,"productid":7,"domainstatus":"Active","domain":"vm.example","assignedips":[],"nextduedate":1790000000}}}`)
@@ -122,7 +128,7 @@ func TestCatalogProductCreateSync(t *testing.T) {
 	if e != nil || s.Status != "Active" || s.NextDueDate != "1790000000" {
 		t.Fatal(s, e)
 	}
-	if a.Capabilities().Renew || a.Capabilities().Terminate {
+	if !a.Capabilities().Renew || a.Capabilities().Terminate {
 		t.Fatal("unsupported capability")
 	}
 }
@@ -344,7 +350,7 @@ func TestSelectionAndJSONContract(t *testing.T) {
 		t.Fatal(string(raw))
 	}
 	providers := Providers()
-	if len(providers) != 1 || providers[0].ID != ProviderZJMF || providers[0].Capabilities.Renew {
+	if len(providers) != 1 || providers[0].ID != ProviderZJMF || !providers[0].Capabilities.Renew {
 		t.Fatal(providers)
 	}
 }

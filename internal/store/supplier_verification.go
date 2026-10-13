@@ -61,7 +61,22 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		if e != nil {
 			return e
 		}
-		remote, e = adapter.Sync(ctx, in.UpstreamID)
+		var action string
+		var payload []byte
+		var invoiceID int64
+		if e = s.Pool.QueryRow(ctx, `SELECT action,request_payload,coalesce((result->>'invoice_id')::bigint,0) FROM provision_jobs WHERE id=$1 AND service_id=$2 AND status='waiting_verification' AND attempts=$3`, in.JobID, serviceID, in.ExpectedAttempts).Scan(&action, &payload, &invoiceID); e != nil {
+			return e
+		}
+		if action == "renew" {
+			var snap supplierRenewalSnapshot
+			renew, ok := adapter.(supplier.RenewalAdapter)
+			if !ok || json.Unmarshal(payload, &snap) != nil || snap.UpstreamID != in.UpstreamID || invoiceID < 1 {
+				return conflict("renewal_confirmation_pending", "缺少可信续费账单标识，请核验并记录账单")
+			}
+			_, remote, e = renew.ConfirmRenewal(ctx, snap.RenewalRequest, invoiceID)
+		} else {
+			remote, e = adapter.Sync(ctx, in.UpstreamID)
+		}
 		if e != nil {
 			return supplierReadError(e)
 		}

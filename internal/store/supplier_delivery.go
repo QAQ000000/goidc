@@ -132,6 +132,7 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	}
 	caps := adapter.Capabilities()
 	supported := (claimed.Action == "create" && caps.Create) || (claimed.Action == "sync" && caps.Sync) ||
+		(claimed.Action == "renew" && caps.Renew) ||
 		(claimed.Action == "suspend" && caps.Suspend) || (claimed.Action == "resume" && caps.Resume) ||
 		(provision.IsPowerAction(claimed.Action) && caps.Power) ||
 		(claimed.Action == "reset_password" && caps.ResetPassword) ||
@@ -143,6 +144,22 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	upstreamID, _ := strconv.ParseInt(upstream, 10, 64)
 	if claimed.Action != "create" && upstreamID < 1 {
 		return conflict("supplier_resource_missing", "缺少供应商资源标识")
+	}
+	var renewal supplierRenewalSnapshot
+	if claimed.Action == "renew" {
+		if err = tx.QueryRow(ctx, "SELECT request_payload FROM provision_jobs WHERE id=$1", claimed.ID).Scan(&raw); err != nil {
+			return err
+		}
+		if json.Unmarshal(raw, &renewal) != nil || renewal.SupplierID != b.SupplierID || renewal.AccountVersion != accountVersion || renewal.ProductID != b.UpstreamProductID || renewal.UpstreamID != upstreamID || renewal.Cycle != cycle || renewal.InvoiceID < 1 {
+			return s.failUndispatchedRenewal(ctx, tx, claimed, "供应商续费快照或账户已变更")
+		}
+		var paid bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices i JOIN invoice_items ii ON ii.invoice_id=i.id JOIN services s ON s.id=ii.service_id WHERE i.id=$1 AND i.status='paid' AND ii.item_type='renew' AND s.id=$2 AND s.user_id=i.user_id)`, renewal.InvoiceID, claimed.ServiceID).Scan(&paid); err != nil {
+			return err
+		}
+		if !paid {
+			return s.failUndispatchedRenewal(ctx, tx, claimed, "本地续费账单未支付或已退款")
+		}
 	}
 	actionRequest := supplier.ActionRequest{Action: claimed.Action, UpstreamID: upstreamID}
 	if claimed.Action == "reinstall" {
@@ -206,6 +223,20 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	var callErr error
 	if claimed.Action == "create" {
 		result, callErr = adapter.Create(callCtx, req)
+	} else if claimed.Action == "renew" {
+		renew, ok := adapter.(supplier.RenewalAdapter)
+		if !ok {
+			callErr = &supplier.Error{Code: "unsupported_renewal"}
+		} else {
+			result, remote, callErr = renew.Renew(callCtx, renewal.RenewalRequest, func(checkpoint supplier.CreateResult) error {
+				payload, _ := json.Marshal(map[string]any{"upstream_id": checkpoint.UpstreamID, "invoice_id": checkpoint.InvoiceID, "cost_cents": checkpoint.CostCents, "currency": checkpoint.Currency, "product_id": checkpoint.ProductID})
+				tag, e := s.Pool.Exec(callCtx, `UPDATE provision_jobs SET result=$2,updated_at=now() WHERE id=$1 AND status='running' AND attempts=$3 AND locked_at>clock_timestamp()-interval '5 minutes'`, claimed.ID, payload, claimed.Attempts)
+				if e == nil && tag.RowsAffected() != 1 {
+					return conflict("job_lease_lost", "续费任务租约失效")
+				}
+				return e
+			})
+		}
 	} else if claimed.Action == "sync" {
 		remote, callErr = adapter.Sync(callCtx, upstreamID)
 	} else {
@@ -257,7 +288,7 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 			if failure.InvoiceID > 0 {
 				result.InvoiceID = failure.InvoiceID
 			}
-			if !failure.Unknown && failure.UpstreamID == 0 && failure.InvoiceID == 0 {
+			if !failure.Unknown && (j.Action == "renew" || (failure.UpstreamID == 0 && failure.InvoiceID == 0)) {
 				outcome, message = "failed", "供应商请求失败："+failure.Code
 			}
 		}
@@ -306,7 +337,7 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 	}
 	// Store only normalized identifiers/costs, never supplier raw payloads or credentials.
 	payload, _ := json.Marshal(map[string]any{"upstream_id": result.UpstreamID, "invoice_id": result.InvoiceID, "cost_cents": result.CostCents, "currency": result.Currency, "upstream_status": remote.Status, "command_accepted": outcome == "succeeded" && (provision.IsPowerAction(j.Action) || j.Action == "rescue_system" || j.Action == "exit_rescue_system")})
-	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status=$2,last_error=$3,result=$4,locked_at=NULL,completed_at=CASE WHEN $2='waiting_verification' THEN NULL ELSE now() END,updated_at=now() WHERE id=$1`, j.ID, outcome, message, payload); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status=$2,last_error=$3,result=result||$4::jsonb,locked_at=NULL,completed_at=CASE WHEN $2='waiting_verification' THEN NULL ELSE now() END,updated_at=now() WHERE id=$1`, j.ID, outcome, message, payload); err != nil {
 		return err
 	}
 	if outcome != "waiting_verification" {
@@ -425,7 +456,7 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
  credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
  resource_info=resource_info||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE coalesce($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due)
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due)
 	if err != nil {
 		return err
 	}

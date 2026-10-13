@@ -39,7 +39,7 @@ func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID 
 		return err
 	}
 	if (mode == "nokvm" || mode == "supplier") && len(in.Targets) > 0 {
-		return conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
+		return conflict("unsupported_supplier_upgrade", "该交付方式暂不支持商品升级，请联系管理员处理")
 	}
 	seen := map[int64]bool{}
 	for _, target := range in.Targets {
@@ -90,7 +90,7 @@ func (s *Store) QuoteProductChange(ctx context.Context, userID, serviceID int64,
 		return out, err
 	}
 	if mode == "nokvm" || mode == "supplier" {
-		return out, conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
+		return out, conflict("unsupported_supplier_upgrade", "该交付方式暂不支持商品升级，请联系管理员处理")
 	}
 	if status != "active" || due == nil || !due.After(time.Now()) || released || (cycle != "monthly" && cycle != "quarterly" && cycle != "annually") {
 		return out, conflict("product_change_unavailable", "只有未到期且已启用的月、季、年服务可以升级商品")

@@ -410,6 +410,7 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		return out, conflict("external_refund_requires_gateway", "本站未接入可信原路退款接口，请由财务在商户后台人工退款并核验实际到账；不会退入本站余额")
 	}
 	var renewalServiceID int64
+	var supplierRenewalRefund bool
 	var upgradeID int64
 	var traffic bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM traffic_orders WHERE invoice_id=$1)", invoiceID).Scan(&traffic); err != nil {
@@ -437,6 +438,9 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 	}
 	if orderID == 0 && kind != "manual" && !traffic {
 		if _, err = tx.Exec(ctx, "SELECT id FROM services WHERE id=$1 FOR UPDATE", renewalServiceID); err != nil {
+			return out, err
+		}
+		if supplierRenewalRefund, err = refundSupplierRenewal(ctx, tx, invoiceID, renewalServiceID); err != nil {
 			return out, err
 		}
 		err = tx.QueryRow(ctx, "SELECT id FROM service_configuration_changes WHERE invoice_id=$1", invoiceID).Scan(&upgradeID)
@@ -488,7 +492,7 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 			return out, err
 		}
 	}
-	if orderID == 0 && upgradeID == 0 && kind != "manual" && !traffic {
+	if orderID == 0 && upgradeID == 0 && kind != "manual" && !traffic && !supplierRenewalRefund {
 		var cycle string
 		if err = tx.QueryRow(ctx, "SELECT billing_cycle FROM services WHERE id=$1 FOR UPDATE", renewalServiceID).Scan(&cycle); err != nil {
 			return out, err

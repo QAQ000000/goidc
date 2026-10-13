@@ -59,6 +59,8 @@ type Product struct {
 	Fields            []Field          `json:"fields"`
 	Supported         bool             `json:"supported"`
 	UnsupportedReason string           `json:"unsupported_reason,omitempty"`
+	HostRule          *credentialRule  `json:"-"`
+	PasswordRule      *credentialRule  `json:"-"`
 }
 
 type Capabilities struct {

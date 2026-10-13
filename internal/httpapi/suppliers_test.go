@@ -28,6 +28,8 @@ type supplierFixture struct {
 	in                                     store.SupplierImportInput
 	remote                                 *httptest.Server
 	creates, pays                          atomic.Int64
+	renews, renewalPays                    atomic.Int64
+	renewalDueUnchanged                    atomic.Bool
 	uncertain                              atomic.Bool
 	remoteProduct                          atomic.Int64
 	blocked                                chan struct{}
@@ -36,6 +38,8 @@ type supplierFixture struct {
 	actions                                atomic.Int64
 	systemPassword, systemOS, consoleURL   atomic.Value
 	syncFailure                            atomic.Bool
+	invoiceOnly                            atomic.Bool
+	paymentResponseIncomplete              atomic.Bool
 	remoteStatus                           atomic.Value
 	remoteSuspendReason, remoteSuspendType atomic.Value
 	syncEntered, syncBlocked               chan struct{}
@@ -71,6 +75,10 @@ func supplierSetup(t *testing.T) *supplierFixture {
 			fmt.Fprint(w, `{"status":200}`)
 		case "/cart/settle":
 			f.creates.Add(1)
+			if f.invoiceOnly.Load() {
+				fmt.Fprint(w, `{"status":200,"data":{"invoiceid":90}}`)
+				return
+			}
 			if f.entered != nil {
 				f.once.Do(func() { close(f.entered) })
 				<-f.blocked
@@ -80,10 +88,42 @@ func supplierSetup(t *testing.T) *supplierFixture {
 				return
 			}
 			fmt.Fprint(w, `{"status":200,"data":{"hostid":[42],"invoiceid":90}}`)
+		case "/host/renewpage":
+			fmt.Fprintf(w, `{"status":200,"data":{"host":{"productid":7,"billingcycle":"monthly","amount":"16.00","nextduedate":%d},"currency":{"code":"CNY"}}}`, f.renewalDue())
+		case "/host/renew":
+			if r.PostFormValue("hostid") != "42" || r.PostFormValue("billingcycles") != "monthly" {
+				t.Error("bad renewal request")
+			}
+			f.renews.Add(1)
+			fmt.Fprint(w, `{"status":200,"data":{"invoice_id":91}}`)
 		case "/get_invoices_detail":
-			fmt.Fprint(w, `{"status":200,"data":{"detail":{"id":90,"subtotal":"17.00","total":"17.00","credit":"0.00","status":"Unpaid"},"currency":{"code":"CNY"},"invoice_items":[{"type":"setup","rel_id":42,"amount":"1.00"},{"type":"host","rel_id":42,"amount":"16.00"}]}}`)
+			if r.URL.Query().Get("id") == "91" {
+				status, total := "Unpaid", "16.00"
+				if f.renewalPays.Load() > 0 {
+					status, total = "Paid", "0.00"
+				}
+				fmt.Fprintf(w, `{"status":200,"data":{"detail":{"id":91,"subtotal":"16.00","total":%q,"status":%q},"currency":{"code":"CNY"},"invoice_items":[{"type":"renew","rel_id":42}]}}`, total, status)
+				return
+			}
+			status, total := "Unpaid", "17.00"
+			if f.pays.Load() > 0 {
+				status, total = "Paid", "0.00"
+			}
+			fmt.Fprintf(w, `{"status":200,"data":{"detail":{"id":90,"subtotal":"17.00","total":%q,"credit":"0.00","status":%q},"currency":{"code":"CNY"},"invoice_items":[{"type":"setup","rel_id":42,"amount":"1.00"},{"type":"host","rel_id":42,"amount":"16.00"}]}}`, total, status)
 		case "/apply_credit":
+			if r.PostFormValue("invoiceid") == "91" {
+				if r.PostFormValue("enough") != "1" {
+					t.Error("unsafe renewal payment")
+				}
+				f.renewalPays.Add(1)
+				fmt.Fprint(w, `{"status":1001}`)
+				return
+			}
 			f.pays.Add(1)
+			if f.paymentResponseIncomplete.Load() {
+				fmt.Fprint(w, `{"status":1001}`)
+				return
+			}
 			fmt.Fprint(w, `{"status":1001,"data":{"hostid":[42]}}`)
 		case "/host/header":
 			if f.syncFailure.Load() {
@@ -106,7 +146,7 @@ func supplierSetup(t *testing.T) *supplierFixture {
 			osName, _ := f.systemOS.Load().(string)
 			reason, _ := f.remoteSuspendReason.Load().(string)
 			reasonType, _ := f.remoteSuspendType.Load().(string)
-			json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"host_data": map[string]any{"id": 42, "productid": productID, "domainstatus": status, "domain": "vm.example", "nextduedate": 1800000000, "username": "root", "password": password, "os": osName, "suspendreason": reason, "suspendreason_type": reasonType}, "cloud_os": []map[string]any{{"id": 17, "name": "Debian 13", "group": "Linux"}, {"id": 18, "name": "Windows Server 2025", "group": "Windows"}}}})
+			json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"host_data": map[string]any{"id": 42, "productid": productID, "domainstatus": status, "domain": "vm.example", "nextduedate": f.renewalDue(), "username": "root", "password": password, "os": osName, "suspendreason": reason, "suspendreason_type": reasonType}, "cloud_os": []map[string]any{{"id": 17, "name": "Debian 13", "group": "Linux"}, {"id": 18, "name": "Windows Server 2025", "group": "Windows"}}}})
 		case "/provision/default", "/provision/custom/42":
 			if r.Method != http.MethodPost || r.PostFormValue("id") != "42" || r.PostFormValue("is_api") != "1" {
 				t.Error("invalid supplier action identity")
@@ -260,8 +300,8 @@ func TestSupplierManagementImportCheckoutAndDelivery(t *testing.T) {
 			t.Fatal("source secrets leaked", p)
 		}
 	}
-	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", sid), map[string]any{}, f.customer, "supplier-renew"), 409)
-	expect(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", sid), map[string]any{"enabled": true}, f.customer, ""), 409)
+	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", sid), map[string]any{}, f.customer, "supplier-renew"), 201)
+	expect(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", sid), map[string]any{"enabled": true}, f.customer, ""), 200)
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/services/%d/actions", sid), map[string]any{"action": "terminate"}, f.root, "supplier-terminate"), 409)
 	_, err := f.db.Pool.Exec(t.Context(), "UPDATE supplier_product_bindings SET upstream_product_id=8 WHERE product_id=$1", f.pid)
 	if err == nil {
@@ -505,4 +545,11 @@ FROM services s JOIN products p ON p.id=s.product_id JOIN invoices i ON i.id=$2 
 			}
 		})
 	}
+}
+
+func (f *supplierFixture) renewalDue() int64 {
+	if f.renewalPays.Load() > 0 && !f.renewalDueUnchanged.Load() {
+		return 1802678400
+	}
+	return 1800000000
 }

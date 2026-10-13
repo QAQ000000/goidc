@@ -709,8 +709,8 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
           {!!data.purchase_fields?.length && <section className="data-surface p-6 my-5"><h2 className="font-semibold mb-4">购买信息</h2><PurchaseFieldDetails fields={data.purchase_fields}/></section>}
           {!admin && <ServiceDownloads key={data.id} serviceID={data.id} />}
           {!admin && (data.provision_mode !== "supplier" || data.cancellation) && <CancellationPanel service={data} refresh={refresh} />}
-          {!admin && data.provision_mode !== "supplier" && <RenewalPanel service={data} />}
-          {!admin && data.provision_mode !== "supplier" && <AutoRenewPanel service={data} refresh={refresh} />}
+          {!admin && <RenewalPanel service={data} />}
+          {!admin && <AutoRenewPanel service={data} refresh={refresh} />}
         </>
       )}
     </Workspace>
@@ -756,7 +756,7 @@ function RenewalPanel({ service }: { service: Service }) {
       setInvoiceID(result.invoice_id);
     } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   }
-  return <section className="data-surface p-6 mt-5"><div className="surface-head"><div><h2 className="font-semibold">服务续费</h2><p className="text-xs text-muted-foreground mt-1">当前到期时间：{service.next_due_at ? date(service.next_due_at) : "未设置"}</p></div></div><div className="flex flex-wrap items-center gap-3 mt-4"><Button variant="outline" disabled={busy} onClick={renew}><RotateCcw size={15} />{busy ? "生成中" : "生成续费账单"}</Button><Link className="text-sm text-primary underline underline-offset-4" href={invoiceID ? `/console/invoices/${invoiceID}` : "/console/invoices"}>查看账单</Link>{message && <span className="text-xs text-muted-foreground">{message}</span>}</div></section>;
+  return <section className="data-surface p-6 mt-5"><div className="surface-head"><div><h2 className="font-semibold">服务续费</h2>{service.provision_mode==="supplier"&&<p className="text-xs text-muted-foreground mt-1">付款后自动向上游续费，到期时间以上游确认结果为准。请在任务记录中查看处理状态。</p>}<p className="text-xs text-muted-foreground mt-1">当前到期时间：{service.next_due_at ? date(service.next_due_at) : "未设置"}</p></div></div><div className="flex flex-wrap items-center gap-3 mt-4"><Button variant="outline" disabled={busy} onClick={renew}><RotateCcw size={15} />{busy ? "生成中" : "生成续费账单"}</Button><Link className="text-sm text-primary underline underline-offset-4" href={invoiceID ? `/console/invoices/${invoiceID}` : "/console/invoices"}>查看账单</Link>{message && <span className="text-xs text-muted-foreground">{message}</span>}</div></section>;
 }
 
 function AutoRenewPanel({ service, refresh }: { service: Service; refresh: () => void }) {

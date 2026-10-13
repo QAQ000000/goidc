@@ -19,6 +19,11 @@ local `once` cycle maps to the legacy `onetime` key and its `osetupfee`.
 Product revision hashes the normalized identity, supplier version, prices,
 options, and fields; changing stock alone does not invalidate a binding.
 
+Non-editable automatic hostname/password rules are supported when their length,
+character groups and optional hostname prefix are recognized. They use secure
+random generation and participate in the revision; interactive credential input
+remains unsupported. Products without automatic rules retain the previous hash.
+
 `Providers()` returns registry metadata for the admin UI. Import and checkout
 both call `ValidateSelection` to require every fixed upstream choice and
 mandatory field, reject unknown IDs, and calculate base, option, and setup
@@ -55,12 +60,23 @@ without an invoice is an unknown outcome; it is never reported as a new
 zero-cost success. An uncertain response after cart mutation returns
 `Error.Unknown=true` and known IDs.
 
+Creation may return only the invoice ID: its single host item recovers the
+resource ID, followed by a resource/product check before spending balance.
+Scalar and single-element array IDs are accepted at either response location;
+multiple or contradictory resources are rejected. `apply_credit` uses `enough=1`.
+The exact invoice is read again after payment, including an incomplete or failed
+payment response, and must be Paid with unchanged cost and resource. No payment
+is resent when that read cannot confirm the outcome. Pending resources proceed
+through the existing sync queue. See [real unattended acceptance](supplier-unattended-acceptance-20261013.md)
+for the 2026-10-13 CDN experience product result and deployment boundary.
+
 `Sync` first uses GET `/host/header?host_id=...&source=API`, which is the
 endpoint used by the legacy PHP implementation, and falls back to
 `/cart/hostinfo?hostid[0]=...` for older upstream installations.
 `CreateResult.Status` is `active` only after an upstream `Active` status is
 observed. Other successful outcomes remain `provisioning`. `Execute` supports
-`sync`; pause, resume, terminate and renew remain unsupported. Refund requests
+`sync`; pause, resume and terminate remain unsupported. Renewal uses the optional
+`RenewalAdapter` workflow described below. Refund requests
 and resource deletion are handled at the remote supplier. A pending refund or
 cancellation request alone must not terminate the local service. The worker
 periodically reads the actual upstream resource status and re-arms completed
@@ -126,8 +142,11 @@ Due dates come from the upstream response. Pending provisioning gets delayed
 sync jobs, with a bounded limit of120 automatic syncs; thereafter an admin can
 request sync. Active supplier services cannot be refunded while their upstream
 resource remains active; cancellation must be performed upstream and synchronized
-to terminated first. Automatic renewal, upgrades and suspend/resume writes remain
-blocked for this provider. A remote refund request alone does not unlock local
+to terminated first. Purchase-invoice refunds retain that restriction. Renewal
+invoice refunds are allowed before dispatch or after a known failed/explicitly
+reconciled renewal; they cancel the job without shortening the service period.
+Unknown or successful upstream renewals cannot be reversed solely in local finance.
+Upgrades and suspend/resume writes remain blocked for this provider. A remote refund request alone does not unlock local
 refunds; the actual resource deletion must first be synchronized.
 
 Use a dedicated upstream customer account for automated orders: this lease
@@ -147,10 +166,47 @@ IDs needs a durable provider-to-handle mapping rather than lossy parsing or
 hashing. Additional credentials require a versioned encrypted account payload;
 the current first provider uses username/password.
 
-Capabilities reserve suspend/resume/terminate/renew, but advertising a flag alone
+Capabilities reserve suspend/resume/terminate, but advertising a flag alone
 does not enable those workflows. Implement and verify the matching store,
 queue, finance and UI contracts before opening a new lifecycle capability.
 Future interactive quantities, staged pricing and other configurations likewise
 require normalized schema support and checkout validation. Protocol fixtures and isolated databases prove
 the local contracts; a real supplier account remains required for external
 acceptance.
+
+
+## Legacy renewal integration (2026-10-13)
+
+Schema136 enables `renew` jobs and immutable supplier quotation snapshots on
+renewal invoice items. `RenewalAdapter.QuoteRenewal` reads `/host/header` and
+`/host/renewpage?hostid=...&billingcycles=...`; it checks resource/product identity,
+Active/Suspended state, CNY, matching cycle/due date and the imported cost cap.
+Current monthly, quarterly and annually cycles are supported; once is rejected.
+The price is the existing resource renewal amount, including its fixed options,
+not a new-product catalogue price. A local retail renewal invoice snapshots the
+supplier quote separately from the customer's retail price and benefit terms.
+
+Local payment queues exactly one `supplier-renew-{invoiceID}` job and consumes
+the existing retail renewal benefit once. It never extends a supplier service's
+local due date. Manual and automatic renewal share this settlement path. An
+unresolved paid renewal blocks another local renewal invoice even when its job
+has failed; finance must resolve that original invoice first.
+
+The worker holds the existing account lease, checks the local invoice is paid,
+resource binding and account version, then rechecks the quotation. Only then
+it sends `POST /host/renew` with `hostid` and `billingcycles`. The response accepts
+`invoiceid` or `data.invoice_id`; the exact invoice ID is durably checkpointed
+before any balance payment. Invoice items must contain exactly one `renew` item
+and only resource-owned discounts/promotions. Currency, quote cost and cost cap
+are checked again. It sends `/apply_credit` once, with `use_credit=1,enough=1`;
+credit-limit fallback and automatic replay of sent writes are disabled.
+
+The same invoice must be Paid and the same resource must report at least one
+complete purchased calendar period beyond the quoted due date. Incomplete or
+failed payment responses are resolved by reading that invoice, without another
+charge. Unknown results retain the lease and enter `waiting_verification`; known
+rejections or cost/ownership mismatches fail explicitly and release the lease.
+Manual successful reconciliation also confirms the original invoice and extended
+due date, rather than accepting an already-active resource as proof of renewal.
+Late polling/callback responses cannot shorten a confirmed supplier due date.
+See [renewal acceptance and runbook](supplier-renewal-acceptance-20261013.md).

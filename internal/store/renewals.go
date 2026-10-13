@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -67,9 +68,6 @@ FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON
 	if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
 		return out, err
 	}
-	if supplierMode {
-		return out, conflict("unsupported_supplier_renewal", "该上游适配器暂未开放自动续费，请通过管理员核验处理")
-	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
@@ -94,6 +92,18 @@ WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid')`, service
 	if renewalBase < 0 {
 		return out, conflict("invalid_renewal_price", "续费价格无效")
 	}
+	supplierQuote := []byte(`{}`)
+	if supplierMode {
+		adapter, snapshot, quoteErr := s.requireSupplierRenewal(ctx, tx, serviceID)
+		if quoteErr != nil {
+			return out, quoteErr
+		}
+		snapshot.RenewalRequest, quoteErr = adapter.QuoteRenewal(ctx, snapshot.RenewalRequest)
+		if quoteErr != nil {
+			return out, supplierReadError(quoteErr)
+		}
+		supplierQuote, _ = json.Marshal(snapshot)
+	}
 	renewalDiscount, snapshot, ordinal, err := benefit.Quote(renewalBase)
 	if err != nil {
 		return out, err
@@ -105,8 +115,8 @@ RETURNING id,invoice_no`, userID, out.AmountCents, key).Scan(&out.InvoiceID, &ou
 	if err != nil {
 		return out, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id,renewal_base_cents,renewal_discount_cents,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,renewal_discount_ordinal)
-VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11)`, out.InvoiceID, productName+"续费", out.AmountCents, serviceID, renewalBase, renewalDiscount, snapshot.Percent, snapshot.Code, snapshot.FixedCents, snapshot.Limit, ordinal); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id,renewal_base_cents,renewal_discount_cents,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,renewal_discount_ordinal,supplier_renewal_snapshot)
+VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, out.InvoiceID, productName+"续费", out.AmountCents, serviceID, renewalBase, renewalDiscount, snapshot.Percent, snapshot.Code, snapshot.FixedCents, snapshot.Limit, ordinal, supplierQuote); err != nil {
 		return out, err
 	}
 	out.ServiceID = serviceID
@@ -172,6 +182,9 @@ func extendRenewalDue(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
 		}
 	}
 	if err := requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
+		return err
+	}
+	if handled, err := queueSupplierRenewal(ctx, tx, invoiceID, serviceID); handled || err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE services SET next_due_at=GREATEST(COALESCE(next_due_at,now()),now())+interval '%s',version=version+1,updated_at=now() WHERE id=$1`, renewalInterval(cycle)), serviceID)

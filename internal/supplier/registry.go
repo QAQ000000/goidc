@@ -65,10 +65,10 @@ func MustRegister(provider Provider, descriptor channel.Descriptor, factory Prov
 
 func init() {
 	MustRegister(
-		Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true}},
+		Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true, Renew: true}},
 		channel.Descriptor{
 			ID: "zjmf", Name: "魔方财务", Category: channel.Provision,
-			Capabilities: []string{"catalog", "create", "sync", "power", "reset_password", "rescue", "vnc", "reinstall"},
+			Capabilities: []string{"catalog", "create", "sync", "renew", "power", "reset_password", "rescue", "vnc", "reinstall"},
 			Fields: []channel.Field{
 				{Key: "endpoint", Label: "API 地址", Type: channel.Text, Required: true},
 				{Key: "username", Label: "用户名", Type: channel.Text, Required: true},

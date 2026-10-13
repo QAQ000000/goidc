@@ -39,7 +39,7 @@ func newZJMF(account Account) (Adapter, error) {
 	return &zjmf{account: account, base: u, client: &http.Client{Transport: tr, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (z *zjmf) Capabilities() Capabilities {
-	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true}
+	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true, Renew: true}
 }
 func (z *zjmf) endpoint(path string) string {
 	u := *z.base
@@ -195,11 +195,11 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 	if number(d.Products.Hidden) != 0 || number(d.Products.Retired) != 0 {
 		p.Supported, p.UnsupportedReason = false, "product_unavailable"
 	}
-	for _, rule := range []json.RawMessage{d.Products.Host, d.Products.Password} {
-		show, valid := productRule(rule, "show")
-		if len(rule) > 0 && (!valid || (show != "" && show != "0")) {
-			p.Supported, p.UnsupportedReason = false, "unsupported_host_credentials"
-		}
+	var hostOK, passwordOK bool
+	p.HostRule, hostOK = parseCredentialRule(d.Products.Host, true)
+	p.PasswordRule, passwordOK = parseCredentialRule(d.Products.Password, false)
+	if !hostOK || !passwordOK {
+		p.Supported, p.UnsupportedReason = false, "unsupported_host_credentials"
 	}
 	if p.SupplierVersion < 1 {
 		p.Supported = false
@@ -364,7 +364,9 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 		Prices              map[string]Price
 		Options             []Option
 		Fields              []Field
-	}{p.ID, p.SupplierVersion, p.Currency, p.Prices, p.Options, p.Fields})
+		HostRule            *credentialRule `json:",omitempty"`
+		PasswordRule        *credentialRule `json:",omitempty"`
+	}{p.ID, p.SupplierVersion, p.Currency, p.Prices, p.Options, p.Fields, p.HostRule, p.PasswordRule})
 	h := sha256.Sum256(stable)
 	p.Revision = hex.EncodeToString(h[:])
 	return p, nil
@@ -456,22 +458,6 @@ func number(raw json.RawMessage) int64 {
 	}
 	return 0
 }
-func ids(w wire) (int64, int64) {
-	host := number(w.HostID)
-	invoice := number(w.InvoiceID)
-	var d struct {
-		HostID    []json.RawMessage `json:"hostid"`
-		InvoiceID json.RawMessage   `json:"invoiceid"`
-	}
-	json.Unmarshal(w.Data, &d)
-	if host == 0 && len(d.HostID) > 0 {
-		host = number(d.HostID[0])
-	}
-	if invoice == 0 {
-		invoice = number(d.InvoiceID)
-	}
-	return host, invoice
-}
 func failure(code string, unknown bool, r CreateResult) error {
 	return &Error{Code: code, Unknown: unknown, UpstreamID: r.UpstreamID, InvoiceID: r.InvoiceID}
 }
@@ -487,6 +473,18 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	}
 	if !p.Supported || p.Revision != r.Revision {
 		return out, failure("product_changed_or_unsupported", false, out)
+	}
+	if p.HostRule != nil {
+		r.Host, e = p.HostRule.generate()
+		if e != nil {
+			return out, failure("credentials_unavailable", false, out)
+		}
+	}
+	if p.PasswordRule != nil {
+		r.Password, e = p.PasswordRule.generate()
+		if e != nil {
+			return out, failure("credentials_unavailable", false, out)
+		}
 	}
 	cost, selectionErr := ValidateSelection(p, r.Cycle, r.ConfigOptions, r.CustomFields)
 	if selectionErr != nil || cost > r.MaximumCostCents {
@@ -513,7 +511,10 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 	if e != nil {
 		return out, e
 	}
-	out.UpstreamID, out.InvoiceID = ids(clear)
+	out.UpstreamID, out.InvoiceID, e = purchaseIDs(clear)
+	if e != nil {
+		return out, failure("purchase_identity_invalid", true, out)
+	}
 	if out.UpstreamID == 0 && out.InvoiceID == 0 {
 		upstreamCycle := r.Cycle
 		if upstreamCycle == "once" {
@@ -550,93 +551,59 @@ func (z *zjmf) Create(ctx context.Context, r CreateRequest) (CreateResult, error
 		if e != nil {
 			return out, failure("settlement_unknown", true, out)
 		}
-		out.UpstreamID, out.InvoiceID = ids(w)
+		out.UpstreamID, out.InvoiceID, e = purchaseIDs(w)
+		if e != nil {
+			return out, failure("purchase_identity_invalid", true, out)
+		}
 	}
 	if out.InvoiceID <= 0 {
 		return out, failure("invoice_missing", true, out)
 	}
-	detail, e := z.get(ctx, "get_invoices_detail", url.Values{"id": {strconv.FormatInt(out.InvoiceID, 10)}})
+	invoice, e := z.purchaseInvoice(ctx, &out, r.MaximumCostCents)
 	if e != nil {
-		return out, failure("invoice_unavailable", true, out)
+		return out, e
 	}
-	var invoice struct {
-		Detail struct {
-			ID       int64           `json:"id"`
-			Subtotal json.RawMessage `json:"subtotal"`
-			Status   string          `json:"status"`
-		} `json:"detail"`
-		Currency struct {
-			Code string `json:"code"`
-		} `json:"currency"`
-		InvoiceItems []struct {
-			Type  string          `json:"type"`
-			RelID json.RawMessage `json:"rel_id"`
-		} `json:"invoice_items"`
-	}
-	if json.Unmarshal(detail.Data, &invoice) != nil || invoice.Detail.ID != out.InvoiceID {
-		return out, failure("invoice_invalid", true, out)
-	}
-	var amount string
-	if json.Unmarshal(invoice.Detail.Subtotal, &amount) != nil {
-		amount = string(invoice.Detail.Subtotal)
-	}
-	cost, valid := money(amount)
-	if !valid || invoice.Currency.Code != "CNY" || cost > r.MaximumCostCents {
-		return out, failure("invoice_price_mismatch", true, out)
-	}
-	hostItems := 0
-	for _, item := range invoice.InvoiceItems {
-		if number(item.RelID) != out.UpstreamID || out.UpstreamID < 1 {
-			return out, failure("invoice_host_mismatch", true, out)
-		}
-		switch item.Type {
-		case "host":
-			hostItems++
-		case "setup", "discount", "promo":
-		default:
-			return out, failure("invoice_host_mismatch", true, out)
-		}
-	}
-	if hostItems != 1 {
-		return out, failure("invoice_host_mismatch", true, out)
-	}
-	out.CostCents = cost
-	out.Currency = "CNY"
-	if invoice.Detail.Status != "Unpaid" && invoice.Detail.Status != "Paid" {
-		return out, failure("invoice_status_invalid", true, out)
+	// Check resource ownership before spending any supplier balance, including
+	// when settlement returned only an invoice and the host came from its items.
+	svc, e := z.Sync(ctx, out.UpstreamID)
+	if e != nil || svc.ProductID != r.ProductID {
+		return out, failure("resource_product_unconfirmed", true, out)
 	}
 	if invoice.Detail.Status != "Paid" {
-		pay := url.Values{"invoiceid": {strconv.FormatInt(out.InvoiceID, 10)}, "use_credit": {"1"}, "enough": {"0"}}
+		pay := url.Values{"invoiceid": {strconv.FormatInt(out.InvoiceID, 10)}, "use_credit": {"1"}, "enough": {"1"}}
 		for k, v := range common {
 			pay[k] = v
 		}
-		w, e := z.post(ctx, token, "apply_credit", pay)
-		if e != nil {
-			return out, failure("payment_unknown", true, out)
+		w, payErr := z.post(ctx, token, "apply_credit", pay)
+		// A transport failure may have applied the payment. Resolve it by reading
+		// this exact invoice; never send a second charge or create another order.
+		if payErr == nil {
+			host, bill, idErr := purchaseIDs(w)
+			if idErr != nil || (host > 0 && host != out.UpstreamID) || (bill > 0 && bill != out.InvoiceID) {
+				return out, failure("payment_host_mismatch", true, out)
+			}
 		}
-		host, _ := ids(w)
-		if host != out.UpstreamID {
-			return out, failure("payment_host_mismatch", true, out)
-		}
-		if w.Status != 1001 {
+		confirmed := out
+		paidInvoice, readErr := z.purchaseInvoice(ctx, &confirmed, r.MaximumCostCents)
+		if readErr != nil || confirmed.UpstreamID != out.UpstreamID || confirmed.CostCents != out.CostCents || paidInvoice.Detail.Status != "Paid" {
 			return out, failure("payment_not_confirmed", true, out)
 		}
 	}
 	out.Status = "provisioning"
-	if out.UpstreamID > 0 {
-		svc, e := z.Sync(ctx, out.UpstreamID)
-		if e != nil {
-			return out, failure("resource_unconfirmed", true, out)
-		}
-		if e == nil {
-			if svc.ProductID != r.ProductID {
-				return out, failure("resource_product_mismatch", true, out)
-			}
-			out.ProductID, out.Domain, out.NextDueDate = svc.ProductID, svc.Domain, svc.NextDueDate
-			if svc.Status == "Active" {
-				out.Status = "active"
-			}
-		}
+	svc, e = z.Sync(ctx, out.UpstreamID)
+	if e != nil {
+		return out, failure("resource_unconfirmed", true, out)
+	}
+	if svc.ProductID != r.ProductID {
+		return out, failure("resource_product_mismatch", true, out)
+	}
+	out.ProductID, out.Domain, out.NextDueDate = svc.ProductID, svc.Domain, svc.NextDueDate
+	switch svc.Status {
+	case "Active", "active":
+		out.Status = "active"
+	case "Pending", "pending", "provisioning":
+	default:
+		return out, failure("resource_status_unconfirmed", true, out)
 	}
 	return out, nil
 }
