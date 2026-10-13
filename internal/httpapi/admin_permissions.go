@@ -12,6 +12,8 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/affiliate/policy"] = "affiliates.manage"
+	m["PUT /api/v1/admin/affiliate/policy"] = "affiliates.manage"
 	m["GET /api/v1/admin/global-configuration-groups"] = "products.view"
 	m["GET /api/v1/admin/global-configuration-groups/{id}"] = "products.view"
 	m["POST /api/v1/admin/global-configuration-groups"] = "products.manage"

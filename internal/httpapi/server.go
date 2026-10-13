@@ -462,6 +462,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/affiliate/attributions/page", s.auth(s.adminAffiliateAttributionsPage, true))
 	mux.HandleFunc("GET /api/v1/admin/affiliate/withdrawals/page", s.auth(s.adminAffiliateWithdrawalsPage, true))
 	mux.HandleFunc("POST /api/v1/admin/customers", s.auth(s.adminCreateCustomer, true))
+	mux.HandleFunc("GET /api/v1/admin/affiliate/policy", s.auth(s.adminAffiliatePolicy, true))
+	mux.HandleFunc("PUT /api/v1/admin/affiliate/policy", s.auth(s.updateAdminAffiliatePolicy, true))
 	mux.HandleFunc("GET /api/v1/admin/affiliate/accounts", s.auth(s.adminAffiliateAccounts, true))
 	mux.HandleFunc("GET /api/v1/admin/affiliate/attributions", s.auth(s.adminAffiliateAttributions, true))
 	mux.HandleFunc("POST /api/v1/admin/affiliate/accounts/{id}/status", s.auth(s.adminAffiliateAccountStatus, true))
