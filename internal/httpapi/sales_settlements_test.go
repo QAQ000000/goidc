@@ -153,3 +153,57 @@ func TestSalesSettlementLifecycle(t *testing.T) {
 	delete(body, "preview_digest")
 	expect(t, request(h, "POST", "/api/v1/admin/sales-settlements/preview", body, root, ""), 409)
 }
+
+func TestSalesSettlementConcurrentRefund(t *testing.T) {
+	db, h := testServer(t)
+	owner, root := user(t, db, h, "sales-race-root", "super_admin")
+	customer, cookie := user(t, db, h, "sales-race-customer", "customer")
+	var gid int64
+	if e := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps) VALUES('race',500) RETURNING id`).Scan(&gid); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, gid); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, customer, owner); e != nil {
+		t.Fatal(e)
+	}
+	pid := product(t, db, 20)
+	for n := 0; n < 5; n++ {
+		version, item := add(t, h, cookie, pid, 1)
+		created := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version, ItemIDs: []int64{item}}, cookie, fmt.Sprintf("race-order-%d", n))
+		expect(t, created, 201)
+		oid := int64(data(t, created)["order_id"].(float64))
+		var iid int64
+		if e := db.Pool.QueryRow(t.Context(), `UPDATE invoices SET status='paid',paid_at='2026-08-10T12:00:00+08' WHERE order_id=$1 RETURNING id`, oid).Scan(&iid); e != nil {
+			t.Fatal(e)
+		}
+		if _, e := db.Pool.Exec(t.Context(), `UPDATE orders SET status='paid' WHERE id=$1`, oid); e != nil {
+			t.Fatal(e)
+		}
+		body := map[string]any{"month": "2026-08", "order_ids": []int64{oid}}
+		p := request(h, "POST", "/api/v1/admin/sales-settlements/preview", body, root, "")
+		expect(t, p, 200)
+		body["preview_digest"] = data(t, p)["preview_digest"]
+		var confirm, refund *httptest.ResponseRecorder
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			confirm = request(h, "POST", "/api/v1/admin/sales-settlements", body, root, fmt.Sprintf("race-confirm-%d", n))
+		}()
+		go func() {
+			defer wg.Done()
+			refund = request(h, "POST", fmt.Sprintf("/api/v1/admin/invoices/%d/refund", iid), map[string]any{}, root, fmt.Sprintf("race-refund-%d", n))
+		}()
+		wg.Wait()
+		expect(t, refund, 201)
+		if confirm.Code != 200 && confirm.Code != 409 {
+			t.Fatalf("confirm race: %d %s", confirm.Code, confirm.Body.String())
+		}
+		var active int
+		if e := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM sales_settlement_items WHERE invoice_id=$1 AND status='confirmed'`, iid).Scan(&active); e != nil || active != 0 {
+			t.Fatalf("refund retained commission: %d %v", active, e)
+		}
+	}
+}

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 	"math"
@@ -16,6 +17,8 @@ type salesSettlementInput struct {
 	PreviewDigest string  `json:"preview_digest"`
 }
 type salesSettlementItem struct {
+	TierThresholdCents   int64     `json:"tier_threshold_cents"`
+	EffectiveRateBPS     int       `json:"effective_rate_bps"`
 	RuleGroupID          int64     `json:"rule_group_id"`
 	RuleGroupName        string    `json:"rule_group_name"`
 	TierID               int64     `json:"tier_id"`
@@ -60,16 +63,20 @@ func salesSettlementAuth(r *http.Request, tx pgx.Tx, permission string) error {
 		return salesSettlementConflict("permission_denied", "会话失效")
 	}
 	var ok bool
-	e = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now())`, tokenHash(cookie.Value), actor.ID).Scan(&ok)
+	var sessionUser int64
+	e = tx.QueryRow(r.Context(), `SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE`, tokenHash(cookie.Value), actor.ID).Scan(&sessionUser)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return salesSettlementConflict("permission_denied", "会话失效")
+	}
 	if e != nil {
 		return e
-	}
-	if !ok {
-		return salesSettlementConflict("permission_denied", "会话失效")
 	}
 	var role string
 	var rid *int64
 	e = tx.QueryRow(r.Context(), `SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE`, actor.ID).Scan(&role, &rid)
+	if errors.Is(e, pgx.ErrNoRows) {
+		return salesSettlementConflict("permission_denied", "账号已失效")
+	}
 	if e != nil {
 		return e
 	}
@@ -98,8 +105,8 @@ func salesSettlementPreviewTx(r *http.Request, tx pgx.Tx, in salesSettlementInpu
  AND EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=o.id) AND NOT EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type<>'service')
 ), turnover AS (SELECT sales_owner_id,sum(basis)::bigint amount FROM eligible WHERE cash_at >=$2 AND cash_at<$3 GROUP BY sales_owner_id)
  SELECT e.order_id,e.invoice_id,e.customer_id,e.sales_owner_id,e.display_name,e.basis,e.purchase_rate_bps,COALESCE(t.extra_rate_bps,0),v.amount,
- round(e.basis::numeric*LEAST(10000,e.purchase_rate_bps+COALESCE(t.extra_rate_bps,0))/10000)::bigint,e.cash_at,e.rule_version,e.staff_version,e.owner_version,COALESCE(t.version,0),e.rule_group_id,e.rule_group_name,COALESCE(t.id,0)
- FROM eligible e JOIN turnover v ON v.sales_owner_id=e.sales_owner_id LEFT JOIN LATERAL(SELECT id,extra_rate_bps,version FROM sales_commission_tiers WHERE active AND threshold_cents<=v.amount ORDER BY threshold_cents DESC,id DESC LIMIT 1)t ON true
+ round(e.basis::numeric*LEAST(10000,e.purchase_rate_bps+COALESCE(t.extra_rate_bps,0))/10000)::bigint,e.cash_at,e.rule_version,e.staff_version,e.owner_version,COALESCE(t.version,0),e.rule_group_id,e.rule_group_name,COALESCE(t.id,0),COALESCE(t.threshold_cents,0),LEAST(10000,e.purchase_rate_bps+COALESCE(t.extra_rate_bps,0))
+ FROM eligible e JOIN turnover v ON v.sales_owner_id=e.sales_owner_id LEFT JOIN LATERAL(SELECT id,extra_rate_bps,version,threshold_cents FROM sales_commission_tiers WHERE active AND threshold_cents<=v.amount ORDER BY threshold_cents DESC,id DESC LIMIT 1)t ON true
  WHERE e.order_id=ANY($1::bigint[]) AND e.cash_at >=$2 AND e.cash_at<$3 AND admin_customer_allowed($4,e.customer_id)
  AND NOT EXISTS(SELECT 1 FROM sales_settlement_items si WHERE si.invoice_id=e.invoice_id) ORDER BY e.order_id`, in.OrderIDs, start, end, identityFrom(r).ID)
 	if e != nil {
@@ -107,7 +114,7 @@ func salesSettlementPreviewTx(r *http.Request, tx pgx.Tx, in salesSettlementInpu
 	}
 	items, e := pgx.CollectRows(rows, func(row pgx.CollectableRow) (salesSettlementItem, error) {
 		var i salesSettlementItem
-		e := row.Scan(&i.OrderID, &i.InvoiceID, &i.CustomerID, &i.SalesOwnerID, &i.SalesOwnerName, &i.BasisCents, &i.PurchaseRateBPS, &i.TierExtraRateBPS, &i.MonthlyTurnoverCents, &i.CommissionCents, &i.CashReceivedAt, &i.RuleVersion, &i.StaffVersion, &i.OwnerVersion, &i.TierVersion, &i.RuleGroupID, &i.RuleGroupName, &i.TierID)
+		e := row.Scan(&i.OrderID, &i.InvoiceID, &i.CustomerID, &i.SalesOwnerID, &i.SalesOwnerName, &i.BasisCents, &i.PurchaseRateBPS, &i.TierExtraRateBPS, &i.MonthlyTurnoverCents, &i.CommissionCents, &i.CashReceivedAt, &i.RuleVersion, &i.StaffVersion, &i.OwnerVersion, &i.TierVersion, &i.RuleGroupID, &i.RuleGroupName, &i.TierID, &i.TierThresholdCents, &i.EffectiveRateBPS)
 		return i, e
 	})
 	if e != nil {
@@ -156,9 +163,8 @@ func (s *Server) salesSettlementWrite(w http.ResponseWriter, r *http.Request, cr
 	if create {
 		permission = "sales.manage"
 	}
-	// Shared table locks serialize source changes with refunds; configuration
-	// and ownership writes are blocked until the immutable snapshot has committed.
-	if _, e = tx.Exec(r.Context(), `LOCK TABLE invoices,orders,users,admin_roles,sessions,sales_commission_groups,sales_commission_tiers,credit_invoice_payments,credit_repayments,invoice_items,order_items IN SHARE MODE`); e != nil {
+
+	if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock_shared(70108190)`); e != nil {
 		s.fail(w, r, e)
 		return
 	}
@@ -209,6 +215,49 @@ func (s *Server) salesSettlementWrite(w http.ResponseWriter, r *http.Request, cr
 			return
 		}
 	}
+
+	sourceRows, e := tx.Query(r.Context(), `SELECT DISTINCT user_id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY user_id`, in.OrderIDs)
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	customers, e := pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	for _, customer := range customers {
+		if e = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customer); e != nil {
+			s.fail(w, r, e)
+			return
+		}
+		if e = store.LockFinancialCustomer(r.Context(), tx, customer); e != nil {
+			s.fail(w, r, e)
+			return
+		}
+	}
+	sourceRows, e = tx.Query(r.Context(), `SELECT id FROM invoices WHERE order_id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	sourceRows, e = tx.Query(r.Context(), `SELECT id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+	if e != nil {
+		s.fail(w, r, e)
+		return
+	}
+	// Rules and global turnover are read by one SQL snapshot. A later refund of a
+	// different source does not retroactively recalculate immutable tier snapshots.
 	items, e := salesSettlementPreviewTx(r, tx, in, start, end)
 	if e != nil {
 		s.fail(w, r, e)
@@ -277,6 +326,10 @@ func (s *Server) salesSettlements(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock_shared(70108190)`); e != nil {
+		s.fail(w, r, e)
+		return
+	}
 	if e = salesSettlementAuth(r, tx, "sales.view"); e != nil {
 		s.fail(w, r, e)
 		return
