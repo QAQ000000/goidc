@@ -7,6 +7,40 @@ import (
 	"github.com/codex/zjmfgo/internal/store"
 )
 
+func TestGlobalConfigurationLegacyQuantityType19Checkout(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "global-type19-root", "super_admin")
+	_, customer := user(t, db, h, "global-type19-customer", "customer")
+	pid := product(t, db, 10)
+	in := store.GlobalConfigurationInput{Name: "Legacy quantity", Definitions: []store.GlobalDefinition{{
+		ProductOptionGroupInput: store.ProductOptionGroupInput{Name: "Storage", Slug: "storage", OptionType: 19, Active: enabled(), Required: true, QtyMinimum: 1, QtyMaximum: 10, QtyStage: 1},
+		Items:                   []store.GlobalOption{{ProductOptionInput: store.ProductOptionInput{Label: "GB", Value: "gb", Active: enabled(), PriceDeltaCents: 25}}},
+	}}}
+	w := request(h, "POST", "/api/v1/admin/global-configuration-groups", in, root, "global-type19-create")
+	expect(t, w, 200)
+	gid := int64(data(t, w)["id"].(float64))
+	assign := store.GlobalConfigurationInput{ExpectedVersion: 1, ProductIDs: []int64{pid}, ExpectedRevisions: map[int64]int64{pid: *configRevision(t, h, root, pid)}}
+	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/global-configuration-groups/%d/assignments", gid), assign, root, "global-type19-assign"), 200)
+	var optionID int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT o.id FROM product_options o JOIN product_option_groups g ON g.id=o.group_id WHERE g.product_id=$1 AND g.global_group_id=$2", pid, gid).Scan(&optionID); err != nil {
+		t.Fatal(err)
+	}
+	version, _ := cart(t, h, customer)
+	expect(t, request(h, "POST", "/api/v1/cart/items", map[string]any{"version": version, "product_id": pid, "quantity": 1, "option_ids": []int64{optionID}, "option_quantities": map[int64]int64{optionID: 3}}, customer, ""), 200)
+	w = request(h, "GET", "/api/v1/cart", nil, customer, "")
+	expect(t, w, 200)
+	c := data(t, w)
+	item := c["items"].([]any)[0].(map[string]any)
+	if item["price_cents"] != float64(1309) || item["total_cents"] != float64(1408) || item["options_valid"] != true {
+		t.Fatalf("type 19 quantity pricing failed: %v", item)
+	}
+	order := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: int64(c["version"].(float64)), ItemIDs: []int64{int64(item["id"].(float64))}}, customer, "global-type19-checkout")
+	expect(t, order, 201)
+	if data(t, order)["total_cents"] != float64(1408) {
+		t.Fatalf("type 19 checkout pricing failed: %s", order.Body.String())
+	}
+}
+
 func TestGlobalConfigurationProjectionLifecycle(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "global-config-admin", "super_admin")

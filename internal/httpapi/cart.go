@@ -49,6 +49,7 @@ func (s *Server) cart(w http.ResponseWriter, r *http.Request) {
 	for _, item := range items {
 		if err = s.db.CheckOrderAdmission(r.Context(), tx, identityFrom(r).ID, item["product_id"].(int64), false); err != nil {
 			if c, ok := err.(*store.Conflict); ok {
+				item["active"] = false
 				item["admission_error"] = c.Message
 				item["admission_code"] = c.Code
 			} else {

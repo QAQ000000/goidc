@@ -248,6 +248,9 @@ func TestAdminOrderCreateSensitiveQuoteSnapshotAndCoupon(t *testing.T) {
 	override := int64(100)
 	in.Items[0].FirstPriceOverride = &override
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders/quote", in, f.root, ""), 409)
+	in.Items[0].FirstPriceOverride = nil
+	in.Items[0].RenewalPriceOverride = &override
+	expect(t, request(f.h, "POST", "/api/v1/admin/orders/quote", in, f.root, ""), 409)
 }
 
 func TestAdminOrderCreateEmailQueueAndAuditRollback(t *testing.T) {

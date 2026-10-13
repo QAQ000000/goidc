@@ -73,6 +73,11 @@ func TestSMSProtocolAndFailurePrivacy(t *testing.T) {
 	if e := SendSMS(context.Background(), c, j); e == nil || calls != 1 {
 		t.Fatal("expired message sent")
 	}
+	j.ExpiresAt = time.Now().Add(time.Minute)
+	c.Provider = "unregistered_sms_provider"
+	if e := SendSMS(context.Background(), c, j); e == nil || e.Error() != "SMS delivery failed" || calls != 1 {
+		t.Fatal("unregistered provider did not fail safely", e)
+	}
 }
 
 func TestIdcsmartSMSProtocol(t *testing.T) {

@@ -190,7 +190,7 @@ export function CartView() {
                       <div className="text-xs text-muted-foreground mt-1">
                         {cycles[item.billing_cycle]}付
                       </div>
-                      {(!item.current || !item.active) && (
+                      {(!item.current || (!item.active && !item.admission_error)) && (
                         <div className="text-xs text-destructive mt-1">
                           产品已变更，请重新选购
                         </div>

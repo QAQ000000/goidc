@@ -3,9 +3,53 @@ package httpapi
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"github.com/codex/zjmfgo/internal/store"
 	"testing"
+
+	"github.com/codex/zjmfgo/internal/store"
 )
+
+func TestCartAdmissionAvailabilityAndRecovery(t *testing.T) {
+	db, h := testServer(t)
+	uid, customer := user(t, db, h, "cart-admission-customer", "customer")
+	blockedProduct := product(t, db, 10)
+	allowedProduct := product(t, db, 10)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE products SET require_verified_phone=true WHERE id=$1", blockedProduct); err != nil {
+		t.Fatal(err)
+	}
+	add(t, h, customer, blockedProduct, 1)
+	add(t, h, customer, allowedProduct, 1)
+	check := func(blocked bool) {
+		t.Helper()
+		response := request(h, "GET", "/api/v1/cart", nil, customer, "")
+		expect(t, response, 200)
+		items := data(t, response)["items"].([]any)
+		if len(items) != 2 {
+			t.Fatalf("cart lost items: %v", items)
+		}
+		for _, value := range items {
+			item := value.(map[string]any)
+			denied := blocked && int64(item["product_id"].(float64)) == blockedProduct
+			if item["active"] != !denied || item["current"] != true || item["options_valid"] != true || item["fields_valid"] != true {
+				t.Fatalf("incorrect cart availability: %v", item)
+			}
+			if denied {
+				if item["admission_code"] != "order_phone_required" || item["admission_error"] == "" {
+					t.Fatalf("missing admission error: %v", item)
+				}
+			} else if _, exists := item["admission_code"]; exists {
+				t.Fatalf("eligible item retained admission error: %v", item)
+			}
+		}
+	}
+	check(true)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET phone='+12025550126' WHERE id=$1", uid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET phone_verified=true WHERE id=$1", uid); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+}
 
 func TestOrderSettingsAdmissionAndReceipts(t *testing.T) {
 	db, h := testServer(t)
