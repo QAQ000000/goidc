@@ -318,7 +318,9 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 		}
 	}
 	operation := "admin_staff.save." + strconv.FormatInt(id, 10)
-	raw, err := json.Marshal(in)
+	hashInput := in
+	hashInput.Password = ""
+	raw, err := json.Marshal(hashInput)
 	if err != nil {
 		return 0, err
 	}
@@ -333,10 +335,14 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 				return 0, conflict("idempotency_conflict", "相同幂等键对应不同的管理员资料")
 			}
 			var saved struct {
-				ID int64 `json:"id"`
+				ID            int64  `json:"id"`
+				PasswordProof string `json:"password_proof,omitempty"`
 			}
 			if err = json.Unmarshal(result, &saved); err != nil {
 				return 0, err
+			}
+			if (in.Password == "") != (saved.PasswordProof == "") || (in.Password != "" && bcrypt.CompareHashAndPassword([]byte(saved.PasswordProof), []byte(in.Password)) != nil) {
+				return 0, conflict("idempotency_conflict", "相同幂等键对应不同的管理员密码")
 			}
 			return saved.ID, tx.Commit(ctx)
 		}
@@ -470,7 +476,12 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 		return 0, err
 	}
 	if key != "" {
-		result, _ := json.Marshal(map[string]int64{"id": id})
+		// Keep the expensive password verifier; never persist a fast digest of a
+		// password in an idempotency receipt.
+		result, _ := json.Marshal(struct {
+			ID            int64  `json:"id"`
+			PasswordProof string `json:"password_proof,omitempty"`
+		}{id, string(hash)})
 		if _, err = tx.Exec(ctx, "INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)", actorID, operation, key, requestHash, result); err != nil {
 			return 0, err
 		}

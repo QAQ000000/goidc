@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { api, ApiError, type TicketDepartment } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
+import { useAdminFormLeave } from "@/hooks/use-admin-form-leave";
 import type { Staff, StaffForm, Role } from "./admin-access";
 import { StaffFields } from "./admin-staff-fields";
 import { Workspace } from "./workspace";
@@ -36,6 +37,10 @@ function StaffEditor({ staff, roles, departments, reload, saved }: { staff: Staf
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const [unknown, setUnknown] = useState(false);
+  const [awaitingReload, setAwaitingReload] = useState(false);
+  useAdminFormLeave(!awaitingReload && (unknown || JSON.stringify(form) !== JSON.stringify(original) || confirmPassword !== ""));
   const pending = useRef<{ body: string; key: string } | null>(null);
   const inFlight = useRef(false);
   async function save() {
@@ -46,24 +51,28 @@ function StaffEditor({ staff, roles, departments, reload, saved }: { staff: Staf
     if (pending.current?.body !== body) pending.current = { body, key: crypto.randomUUID() };
     try {
       await api(`/admin/staff/${id}`, { method: "PATCH", body, headers: { "Idempotency-Key": pending.current.key } });
-      setDialog(null); saved();
+      setDialog(null); setAwaitingReload(true); saved();
     } catch (e) {
       setError((e as Error).message); setDialog(null);
       setConflict(e instanceof ApiError && e.code === "version_conflict");
+      setDenied(e instanceof ApiError && (e.status === 401 || e.status === 403));
+      setUnknown(!(e instanceof ApiError) || e.status >= 500);
     } finally { inFlight.current = false; setBusy(false); }
   }
   function reset() { setForm(original); setConfirmPassword(""); setError(""); setConflict(false); setDialog(null); }
   return <div className="data-surface p-4 sm:p-6 max-w-4xl">
     <p className="text-sm text-muted-foreground mb-6">版本 {staff.admin_version} · 修改角色、客户范围、工单范围、密码或账号状态时，现有会话与 API 密钥将被撤销。</p>
     <form onSubmit={event => { event.preventDefault(); setError(""); if (form.password !== confirmPassword) { setError("两次输入的密码不一致"); return; } setDialog("save"); }}>
-      <fieldset disabled={busy} className="space-y-4 min-w-0">
+      <fieldset disabled={busy || denied || unknown || awaitingReload} className="space-y-4 min-w-0">
         <StaffFields staffForm={form} setStaffForm={setForm} roles={roles} departments={departments} />
         <div className="space-y-2"><Label htmlFor="staff-confirm-password">确认新密码</Label><Input id="staff-confirm-password" type="password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} autoComplete="new-password" maxLength={72} /></div>
         {error && <p role="alert" className="text-destructive text-sm break-words">{error}</p>}
         {conflict && <Button type="button" variant="outline" onClick={reload}>重新加载最新资料（丢弃当前更改）</Button>}
-        <div className="flex flex-wrap gap-3 border-t pt-4"><Button disabled={form.admin_role_id === "none" || busy || conflict}>{busy ? "保存中" : "提交"}</Button><Button type="button" variant="outline" onClick={() => setDialog("reset")}>重置 / 取消更改</Button></div>
+        <div className="flex flex-wrap gap-3 border-t pt-4">{!denied && <Button disabled={form.admin_role_id === "none" || busy || conflict}>{busy ? "保存中" : "提交"}</Button>}<Button type="button" variant="outline" onClick={() => setDialog("reset")}>重置 / 取消更改</Button></div>
       </fieldset>
     </form>
+    {awaitingReload && <p role="status" className="mt-4 text-sm">已保存，正在读取最新资料。<Button type="button" variant="outline" onClick={reload}>重新读取</Button></p>}
+    {unknown && <div role="alert" className="mt-4 space-y-3 text-sm"><p>保存结果尚未确认，请重试原请求；确认前已锁定表单。</p><Button disabled={busy} onClick={() => void save()}>重试原保存请求</Button></div>}
     <Dialog open={dialog !== null} onOpenChange={open => { if (!open && !busy) setDialog(null); }}><DialogContent><DialogHeader><DialogTitle>{dialog === "save" ? "确认修改管理员" : "取消当前更改"}</DialogTitle><DialogDescription>{dialog === "save" ? "请确认账号状态与授权范围。权限或凭据变更会撤销该管理员原有会话和 API 密钥。" : "重置后将恢复本次加载的资料，未提交的更改将丢弃。"}</DialogDescription></DialogHeader><div className="flex justify-end gap-2"><Button variant="outline" disabled={busy} onClick={() => setDialog(null)}>取消</Button><Button disabled={busy} onClick={() => dialog === "save" ? void save() : reset()}>{busy ? "保存中" : "确定"}</Button></div></DialogContent></Dialog>
   </div>;
 }
