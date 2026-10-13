@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAdminStaffDetailAndSafeRetry(t *testing.T) {
@@ -54,6 +55,20 @@ func TestAdminStaffDetailAndSafeRetry(t *testing.T) {
 	expect(t, request(h, "PATCH", path, payload, root, "staff-other-key-20261013"), 409)
 	payload["display_name"] = "改变相同幂等键的内容"
 	expect(t, request(h, "PATCH", path, payload, root, "staff-safe-retry-20261013"), 409)
+	// Password retries keep only bcrypt's expensive verifier in the receipt.
+	payload["expected_version"] = 2
+	payload["password"] = "integration-updated-password"
+	expect(t, request(h, "PATCH", path, payload, root, "staff-password-key-20261013"), 200)
+	expect(t, request(h, "PATCH", path, payload, root, "staff-password-key-20261013"), 200)
+	var proof string
+	if err := db.Pool.QueryRow(t.Context(), "SELECT result->>'password_proof' FROM admin_setting_operations WHERE actor_id=$1 AND idempotency_key='staff-password-key-20261013'", rootID).Scan(&proof); err != nil {
+		t.Fatal(err)
+	}
+	if cost, err := bcrypt.Cost([]byte(proof)); err != nil || cost != 12 {
+		t.Fatalf("invalid password receipt verifier: cost=%d err=%v", cost, err)
+	}
+	payload["password"] = "integration-different-password"
+	expect(t, request(h, "PATCH", path, payload, root, "staff-password-key-20261013"), 409)
 	// Replaying requires a live session even when the receipt already exists.
 	var in store.StaffInput
 	in.Username = info["username"].(string)
