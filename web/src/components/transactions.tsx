@@ -114,6 +114,7 @@ type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   import_review_required: boolean;
   payment_pending: boolean;
   real_payment_pending: boolean;
+  external_payment_paid: boolean;
  credit_payment?:{remaining_cents:number;amount_cents:number;status:string}|null;
   discount_cents: number;
   promo_code: string;
@@ -164,6 +165,7 @@ type InvoiceActionRow = Pick<
   | "import_review_required"
   | "payment_pending"
   | "real_payment_pending"
+  | "external_payment_paid"
  | "credit_payment"
   | "version"
 > & { payments?: PaymentRecord[] };
@@ -994,6 +996,13 @@ function InvoiceActions({
     } catch(e){setError((e as Error).message);if(action==="pay-credit"){if(!(e instanceof ApiError)||e.status>=500){setCreditPending(creditRequest);if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}else{setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}}}finally{setBusy(false);}
   }
   if (admin && (invoice.status !== "paid" || !allowed)) return null;
+  if (admin && invoice.external_payment_paid) {
+    return (
+      <p className="max-w-sm text-xs text-muted-foreground whitespace-normal">
+        在线支付暂不支持自动原路退款。请由财务在商户后台人工退款并核验实际到账，不会退入本站余额。
+      </p>
+    );
+  }
   if (!admin && invoice.status !== "unpaid"&&!creditPending) return null;
   return (
     <div className="space-y-2">

@@ -407,7 +407,7 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		return out, err
 	}
 	if externalPayment {
-		return out, conflict("external_refund_requires_gateway", "外部支付账单必须通过原支付渠道退款")
+		return out, conflict("external_refund_requires_gateway", "本站未接入可信原路退款接口，请由财务在商户后台人工退款并核验实际到账；不会退入本站余额")
 	}
 	var renewalServiceID int64
 	var upgradeID int64

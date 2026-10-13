@@ -899,6 +899,9 @@ function InvoiceAction({ row, admin }: { row: Row; admin: boolean }) {
   }
   if (admin) {
     if (status !== "paid") return null;
+    if (row.external_payment_paid) {
+      return <PermissionGate permission="invoices.refund"><p className="max-w-sm text-xs text-muted-foreground whitespace-normal">在线支付暂不支持自动原路退款，请由财务在商户后台人工退款并核验实际到账，不会退入本站余额。</p></PermissionGate>;
+    }
     return (
       <PermissionGate permission="invoices.refund"><div className="flex items-center gap-2">
         <Button size="sm" variant="outline" disabled={busy} onClick={() => change("refund")}>

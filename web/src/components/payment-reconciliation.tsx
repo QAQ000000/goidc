@@ -66,6 +66,11 @@ export function PaymentReconciliation({
       )}
       {(payment.status === "pending" || payment.status === "expired") && (
         <p className="text-muted-foreground whitespace-normal">
+          本站暂不支持自动关单。支付过期或查到未付款不代表商户已关单；核对完成前不能更换付款方式或取消账单，请联系客服人工核对。
+        </p>
+      )}
+      {(payment.status === "pending" || payment.status === "expired") && (
+        <p className="text-muted-foreground whitespace-normal">
           {payment.query_enabled === false
             ? "渠道查询未启用"
             : payment.reconciliation_exhausted
