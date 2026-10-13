@@ -10,6 +10,7 @@ import { Failure, Loading } from "./common";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
+import { AffiliateRulesPanel } from "./admin-affiliate-rules";
 
 type Rule = { rate_bps: number; amount_cents: number; max_cents: number | null };
 type Policy = { id: number; name: string; enabled: boolean; attribution_days: number; hold_days: number; min_withdraw_cents: number; fee_cents: number; default_rules: Record<string, Rule>; version: number; updated_at: string };
@@ -51,9 +52,11 @@ function requestBody(form: Form, version: number) {
 }
 
 export function AdminAffiliateSettingsView() {
-  const resource = useResource<Policy>("/admin/affiliate/policy", false);
+  const view = useAdminPermission("affiliates.view");
+  const [tab, setTab] = useState<"default" | "rules">("default");
+  const resource = useResource<Policy>(view ? "/admin/affiliate/policy" : null, false);
   const [notice, setNotice] = useState("");
-  return <Workspace title="推介设置" admin><div className="space-y-6"><div><h1 className="page-title">推介设置</h1><p className="mt-2 text-sm text-muted-foreground">设置默认推广计划、归因周期、返佣规则与提现门槛。</p></div>{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <PolicyForm key={resource.data.version} data={resource.data} refresh={resource.refresh} notify={setNotice} />}</div></Workspace>;
+  return <Workspace title="推介设置" admin><div className="space-y-6"><div><h1 className="page-title">推介设置</h1><p className="mt-2 text-sm text-muted-foreground">设置默认推广计划、商品专属与阶梯返佣规则。</p></div>{!view ? <p role="alert">无权读取推介设置。</p> : <><div role="tablist" aria-label="推介设置分类" className="flex flex-wrap gap-2"><Button role="tab" aria-selected={tab === "default"} variant={tab === "default" ? "default" : "outline"} onClick={() => setTab("default")}>默认计划</Button><Button role="tab" aria-selected={tab === "rules"} variant={tab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>商品专属 / 阶梯规则</Button></div><div hidden={tab !== "default"}>{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <PolicyForm key={resource.data.version} data={resource.data} refresh={resource.refresh} notify={setNotice} />}</div><div hidden={tab !== "rules"}><AffiliateRulesPanel onSaved={resource.refresh} /></div></>}</div></Workspace>;
 }
 
 function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => void; notify: (message: string) => void }) {
