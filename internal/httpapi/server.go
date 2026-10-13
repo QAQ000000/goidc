@@ -472,6 +472,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}", s.auth(s.adminCustomer, true))
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}/affiliate", s.auth(s.adminCustomerAffiliate, true))
 	mux.HandleFunc("POST /api/v1/admin/customers/{id}/impersonate", s.auth(s.adminImpersonateCustomer, true))
+	mux.HandleFunc("GET /api/v1/admin/transactions/page", s.auth(s.adminTransactionEntries, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-transactions", s.auth(s.adminCustomerTransactions, true))
 	mux.HandleFunc("GET /api/v1/admin/sales-owners", s.sessionAuth(s.salesOwners, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/sales-owner", s.sessionAuth(s.assignCustomerSalesOwner, true))

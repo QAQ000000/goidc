@@ -17,6 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { api, date, money, type Contact, type User } from "@/lib/api";
+import { transactionReturnHref } from "@/lib/transaction-return";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -98,7 +99,8 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
       : "summary";
   const backParams = new URLSearchParams(searchParams.toString());
   backParams.delete("tab");
-  const returnHref = `/admin/customers${backParams.toString() ? `?${backParams.toString()}` : ""}`;
+  const transactionBack = transactionReturnHref(searchParams.get("return_to"));
+  const returnHref = transactionBack ?? `/admin/customers${backParams.toString() ? `?${backParams.toString()}` : ""}`;
   const customer = useResource<AdminCustomer>(`/admin/customers/${customerId}`, false);
 
   return (
@@ -155,7 +157,7 @@ export function AdminCustomerDetailView({ customerId }: { customerId: number }) 
                 <Button variant="outline" size="sm" asChild className="h-7 text-xs border-[#dcdfe6]">
                   <Link href={returnHref}>
                     <ArrowLeft size={13} className="mr-1" />
-                    返回客户列表
+                    {transactionBack ? "返回交易流水" : "返回客户列表"}
                   </Link>
                 </Button>
               </div>

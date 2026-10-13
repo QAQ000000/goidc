@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { api, ApiError,date, money, type OptionSnapshot, type User } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
+import { transactionReturnHref } from "@/lib/transaction-return";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { Button } from "./ui/button";
@@ -1085,6 +1086,7 @@ export function InvoiceDetailView({
   admin?: boolean;
 }) {
   const searchParams = useSearchParams();
+  const transactionBack = admin ? transactionReturnHref(searchParams.get("return_to")) : null;
   const renewal = admin && searchParams.get("kind") === "renew";
   const supplierReturn=searchParams.get("supplier_return");
   const supplierBack=admin && supplierReturn && /^\/admin\/suppliers\/renewals(?:\?|$)/.test(supplierReturn) ? supplierReturn : null;
@@ -1101,9 +1103,9 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? supplierBack ?? returnHref : "/console/invoices"}>
+        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : "/console/invoices"}>
           <ArrowLeft />
-          {supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
+          {transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
       </Button>
       {error ? (
