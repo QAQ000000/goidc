@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
 import { ApiError, api, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
@@ -43,7 +43,7 @@ function requestBody(form: Form, version: number) {
   const rules = Object.fromEntries(events.map(([event, label]) => {
     const rule = form.rules[event];
     const value = rule.mode === "disabled" ? 0 : hundredths(rule.value, `${label}返佣`, rule.mode === "rate" ? 10000 : 100000000);
-    const maximum = rule.mode === "disabled" || !rule.max ? null : hundredths(rule.max, `${label}佣金上限`);
+    const maximum = !rule.max ? null : hundredths(rule.max, `${label}佣金上限`);
     if (rule.mode !== "disabled" && value === 0) throw new Error(`${label}返佣必须大于零`);
     if (maximum === 0) throw new Error(`${label}佣金上限必须大于零，或留空不限`);
     return [event, { rate_bps: rule.mode === "rate" ? value : 0, amount_cents: rule.mode === "fixed" ? value : 0, max_cents: maximum }];
@@ -53,13 +53,24 @@ function requestBody(form: Form, version: number) {
 
 export function AdminAffiliateSettingsView() {
   const view = useAdminPermission("affiliates.view");
+  const manage = useAdminPermission("affiliates.manage");
   const [tab, setTab] = useState<"default" | "rules">("default");
-  const resource = useResource<Policy>(view ? "/admin/affiliate/policy" : null, false);
+  const resource = useResource<Policy>(view && manage ? "/admin/affiliate/policy" : null, false);
   const [notice, setNotice] = useState("");
-  return <Workspace title="推介设置" admin><div className="space-y-6"><div><h1 className="page-title">推介设置</h1><p className="mt-2 text-sm text-muted-foreground">设置默认推广计划、商品专属与阶梯返佣规则。</p></div>{!view ? <p role="alert">无权读取推介设置。</p> : <><div role="tablist" aria-label="推介设置分类" className="flex flex-wrap gap-2"><Button role="tab" aria-selected={tab === "default"} variant={tab === "default" ? "default" : "outline"} onClick={() => setTab("default")}>默认计划</Button><Button role="tab" aria-selected={tab === "rules"} variant={tab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>商品专属 / 阶梯规则</Button></div><div hidden={tab !== "default"}>{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <PolicyForm key={resource.data.version} data={resource.data} refresh={resource.refresh} notify={setNotice} />}</div><div hidden={tab !== "rules"}><AffiliateRulesPanel onSaved={resource.refresh} /></div></>}</div></Workspace>;
+  const [policyBlocked, setPolicyBlocked] = useState(false);
+  const [rulesBlocked, setRulesBlocked] = useState(false);
+  const [rulesRevision, setRulesRevision] = useState(0);
+  // Surface the owning form after reload; two restored requests resolve policy first.
+  const activeTab = !manage ? "rules" : policyBlocked ? "default" : rulesBlocked ? "rules" : tab;
+  return <Workspace title="推介设置" admin><div className="space-y-6"><div><h1 className="page-title">推介设置</h1><p className="mt-2 text-sm text-muted-foreground">设置默认推广计划、商品专属与阶梯返佣规则。</p></div>{!view ? <p role="alert">无权读取推介设置。</p> : <>
+    {!manage && <p className="text-sm text-muted-foreground">默认计划需要推介管理权限；当前可只读商品与阶梯规则。</p>}
+    <div role="tablist" aria-label="推介设置分类" className="flex flex-wrap gap-2">{manage && <Button role="tab" disabled={policyBlocked || rulesBlocked} aria-selected={activeTab === "default"} variant={activeTab === "default" ? "default" : "outline"} onClick={() => setTab("default")}>默认计划</Button>}<Button role="tab" disabled={policyBlocked || rulesBlocked} aria-selected={activeTab === "rules"} variant={activeTab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>商品专属 / 阶梯规则</Button></div>
+    {manage && <div hidden={activeTab !== "default"}>{notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <PolicyForm key={resource.data.version} data={resource.data} refresh={resource.refresh} notify={setNotice} otherBlocked={rulesBlocked && !policyBlocked} onBlockedChange={setPolicyBlocked} onSaved={() => setRulesRevision(v => v + 1)} />}</div>}
+    <div hidden={activeTab !== "rules"}><AffiliateRulesPanel onSaved={resource.refresh} refreshVersion={rulesRevision} otherBlocked={policyBlocked} onBlockedChange={setRulesBlocked} /></div>
+  </>}</div></Workspace>;
 }
 
-function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => void; notify: (message: string) => void }) {
+function PolicyForm({ data, refresh, notify, otherBlocked, onBlockedChange, onSaved }: { data: Policy; refresh: () => void; notify: (message: string) => void; otherBlocked: boolean; onBlockedChange: (blocked: boolean) => void; onSaved: () => void }) {
   const actor = useAdminIdentity();
   const manage = useAdminPermission("affiliates.manage");
   const storageKey = actor ? `zjmfgo:affiliate-policy-draft:${actor.id}` : null;
@@ -68,11 +79,14 @@ function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => vo
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [authLocked, setAuthLocked] = useState(false);
+  const edited = useRef(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saved, setSaved] = useState(false);
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(data));
   const unknown = pending.unknown;
+  useEffect(() => { onBlockedChange(!pending.ready || busy || unknown || authLocked); return () => onBlockedChange(false); }, [pending.ready, busy, unknown, authLocked, onBlockedChange]);
   useEffect(() => {
     if (!pending.ready) return;
     const timer = window.setTimeout(() => {
@@ -91,9 +105,10 @@ function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => vo
     return () => window.clearTimeout(timer);
   }, [pending.ready, pending.unknown, pending.pending, storageKey, manage, data]);
   useEffect(() => {
-    if (!loaded || !storageKey || !manage || unknown || saved || !dirty) return;
+    if (!loaded || !storageKey || !manage || unknown || saved) return;
+    if (!dirty) { if (edited.current && !draft) { try { sessionStorage.removeItem(storageKey); } catch {} } return; }
     try { sessionStorage.setItem(storageKey, JSON.stringify({ base_version: data.version, form } satisfies Draft)); } catch { /* Optional draft storage. */ }
-  }, [loaded, storageKey, manage, unknown, saved, dirty, data.version, form]);
+  }, [loaded, storageKey, manage, unknown, saved, dirty, data.version, form, draft]);
   useEffect(() => {
     if (!loaded || (!dirty && !unknown)) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -102,11 +117,11 @@ function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => vo
     return () => { window.removeEventListener("beforeunload", warn); document.removeEventListener("click", click, true); };
   }, [loaded, dirty, unknown]);
   function clearDraft() { if (storageKey) { try { sessionStorage.removeItem(storageKey); } catch {} } setDraft(null); }
-  function update(next: Form) { notify(""); setForm(next); setSaved(false); setMessage(""); }
+  function update(next: Form) { edited.current = true; notify(""); setForm(next); setSaved(false); setMessage(""); }
   function cancel() { if (!window.confirm("确认取消更改并丢弃推介设置草稿？")) return; setForm(toForm(data)); clearDraft(); setError(""); setMessage(""); setSaved(false); }
   function recover() { if (!draft || (draft.base_version !== data.version && !window.confirm("草稿版本与当前设置不同，确认恢复并逐项核对？"))) return; update(draft.form); clearDraft(); setError(""); }
   async function save(event: React.FormEvent) {
-    event.preventDefault(); if (!manage || !loaded || busy || (!dirty && !unknown)) return;
+    event.preventDefault(); if (!manage || !loaded || busy || authLocked || otherBlocked || (!dirty && !unknown)) return;
     let body: string;
     try { body = unknown && pending.pending.current ? pending.pending.current.body : requestBody(form, data.version); } catch (cause) { setError((cause as Error).message); return; }
     if (!unknown && data.enabled && !form.enabled && !window.confirm("关闭后将停止新的推广申请、点击归因、计佣与提现申请；已申请提现继续审核打款。确认关闭推介计划？")) return;
@@ -114,20 +129,26 @@ function PolicyForm({ data, refresh, notify }: { data: Policy; refresh: () => vo
     pending.remember(operation); setBusy(true); setError(""); setMessage("");
     try {
       const result = await api<Policy>("/admin/affiliate/policy", { method: "PUT", headers: { "Idempotency-Key": operation.key }, body: operation.body });
-      pending.resolve(); clearDraft(); setForm(toForm(result)); setSaved(true); notify(`推介设置已保存（版本 ${result.version}）`); refresh();
+      const confirmedForm = toForm(result);
+      if (!Number.isInteger(result.version) || result.version < 1 || !validForm(confirmedForm)) throw new Error("推介设置响应不完整，需确认原请求结果");
+      pending.resolve(); clearDraft(); setForm(confirmedForm); setSaved(true); notify(`推介设置已保存（版本 ${result.version}）`); onSaved(); refresh();
     } catch (cause) {
-      if (!(cause instanceof ApiError) || cause.status >= 500) { pending.setUnknown(true); setMessage("保存结果暂无法确认，请仅重试原请求，勿刷新或离开页面。"); }
+      if (!(cause instanceof ApiError) || cause.status >= 500 || cause.status === 408) { pending.setUnknown(true); setMessage("保存结果暂无法确认，请仅重试原请求，勿刷新或离开页面。"); }
+      else if (cause.status === 401 || cause.status === 403) {
+        if (unknown) pending.setUnknown(true); else pending.resolve();
+        setAuthLocked(true); setError("登录或权限已失效，已锁定保存。请重新登录并刷新本页" + (unknown ? "，使用同一账号重试原请求以确认结果。" : "后继续核对设置。"));
+      }
       else { pending.resolve(); setError(cause.message); if (cause.code === "version_conflict") { if (storageKey) { try { sessionStorage.setItem(storageKey, JSON.stringify({ base_version: data.version, form } satisfies Draft)); } catch {} } notify("设置版本已被其他管理员更新，草稿已保留。请重新加载并对照最新值后恢复。"); refresh(); } }
     } finally { setBusy(false); }
   }
   return <form onSubmit={save} className="max-w-5xl space-y-6">
-    {draft && !unknown && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-4"><p className="text-sm">发现未保存的会话草稿{draft.base_version !== data.version ? "，当前服务器版本已更新，请核对后恢复。" : "。"}</p><div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !loaded} onClick={recover}>恢复草稿</Button><Button type="button" variant="ghost" disabled={busy || !loaded} onClick={clearDraft}>丢弃草稿</Button></div></div>}
-    <fieldset disabled={!manage || !loaded || busy || unknown} className="space-y-6">
+    {draft && !unknown && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 p-4"><p className="text-sm">发现未保存的会话草稿{draft.base_version !== data.version ? "，当前服务器版本已更新，请核对后恢复。" : "。"}</p><div className="flex gap-2"><Button type="button" variant="outline" disabled={busy || !loaded || authLocked || otherBlocked} onClick={recover}>恢复草稿</Button><Button type="button" variant="ghost" disabled={busy || !loaded || authLocked || otherBlocked} onClick={clearDraft}>丢弃草稿</Button></div></div>}
+    <fieldset disabled={!manage || !loaded || busy || unknown || authLocked || otherBlocked} className="space-y-6">
       <section className="space-y-4"><h2 className="border-b pb-3 font-semibold">计划与归因</h2><label className="flex items-center gap-3 text-sm"><Checkbox checked={form.enabled} onCheckedChange={checked => update({ ...form, enabled: checked === true })} />启用推介计划</label><p className="text-xs text-muted-foreground">停用后停止新推广申请、点击归因、计佣及提现申请；已入账佣金继续保留，已申请提现可继续审核打款。</p><div className="grid gap-4 sm:grid-cols-3"><label className="grid gap-2 text-sm">计划名称<Input required maxLength={120} value={form.name} onChange={event => update({ ...form, name: event.target.value })} /></label><label className="grid gap-2 text-sm">推荐链接 Cookie 有效期（天）<Input required type="number" min={1} max={365} step={1} value={form.attribution_days} onChange={event => update({ ...form, attribution_days: event.target.value })} /></label><label className="grid gap-2 text-sm">佣金冻结期（天）<Input required type="number" min={0} max={365} step={1} value={form.hold_days} onChange={event => update({ ...form, hold_days: event.target.value })} /></label></div></section>
-      <section className="space-y-4"><h2 className="border-b pb-3 font-semibold">默认返佣规则</h2><p className="text-xs text-muted-foreground">比例按实际付款净额计算，最多 100%。商品专属规则继续优先；保存生成新版本，已入账佣金不重新计算。</p>{events.map(([event, label]) => { const rule = form.rules[event]; const change = (next: RuleForm) => update({ ...form, rules: { ...form.rules, [event]: next } }); return <div key={event} className="grid items-end gap-4 border-b pb-4 sm:grid-cols-3"><label className="grid gap-2 text-sm">{label}返佣类型<select className="h-9 rounded-md border bg-background px-3" value={rule.mode} onChange={e => change({ ...rule, mode: e.target.value as RuleForm["mode"], value: "0.00" })}><option value="disabled">关闭默认返佣</option><option value="rate">比例</option><option value="fixed">固定金额</option></select></label>{rule.mode !== "disabled" && <><label className="grid gap-2 text-sm">{label}{rule.mode === "rate" ? "返佣比例（%）" : "返佣金额（元）"}<Input required inputMode="decimal" value={rule.value} onChange={e => change({ ...rule, value: e.target.value })} /></label><label className="grid gap-2 text-sm">{label}佣金上限（元）<Input inputMode="decimal" placeholder="留空不限" value={rule.max} onChange={e => change({ ...rule, max: e.target.value })} /></label></>}</div>; })}</section>
+      <section className="space-y-4"><h2 className="border-b pb-3 font-semibold">默认返佣规则</h2><p className="text-xs text-muted-foreground">比例按实际付款净额计算，最多 100%。商品专属规则继续优先；保存生成新版本，已入账佣金不重新计算。</p>{events.map(([event, label]) => { const rule = form.rules[event]; const change = (next: RuleForm) => update({ ...form, rules: { ...form.rules, [event]: next } }); return <div key={event} className="grid items-end gap-4 border-b pb-4 sm:grid-cols-3"><label className="grid gap-2 text-sm">{label}返佣类型<select className="h-9 rounded-md border bg-background px-3" value={rule.mode} onChange={e => change({ ...rule, mode: e.target.value as RuleForm["mode"], value: "0.00" })}><option value="disabled">关闭默认返佣</option><option value="rate">比例</option><option value="fixed">固定金额</option></select></label>{rule.mode !== "disabled" && <label className="grid gap-2 text-sm">{label}{rule.mode === "rate" ? "返佣比例（%）" : "返佣金额（元）"}<Input required inputMode="decimal" value={rule.value} onChange={e => change({ ...rule, value: e.target.value })} /></label>}<label className="grid gap-2 text-sm">{label}佣金上限（元，阶梯同样适用）<Input inputMode="decimal" placeholder="留空不限" value={rule.max} onChange={e => change({ ...rule, max: e.target.value })} /></label></div>; })}</section>
       <section className="space-y-4"><h2 className="border-b pb-3 font-semibold">提现门槛</h2><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-2 text-sm">最低提现金额（元）<Input required inputMode="decimal" value={form.min_withdraw} onChange={event => update({ ...form, min_withdraw: event.target.value })} /></label><label className="grid gap-2 text-sm">每次提现手续费（元）<Input required inputMode="decimal" value={form.fee} onChange={event => update({ ...form, fee: event.target.value })} /></label></div></section>
     </fieldset>
     {(error || message) && <p role={error ? "alert" : "status"} className={`break-words text-sm ${error ? "text-destructive" : "text-muted-foreground"}`}>{error || message}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><p className="text-xs text-muted-foreground">版本 {data.version} · 最后更新 {date(data.updated_at)}{saved && " · 已保存"}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!loaded || busy || unknown} onClick={() => { if (!dirty || window.confirm("重新加载服务器设置？当前修改会保留为会话草稿。")) refresh(); }}><RefreshCw size={16} />重新加载</Button><Button type="button" variant="outline" disabled={!loaded || busy || unknown || !dirty} onClick={cancel}>取消更改</Button><Button disabled={!manage || !loaded || busy || (!dirty && !unknown)}><Save size={16} />{busy ? "保存中…" : unknown ? "重试原请求" : "保存更改"}</Button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><p className="text-xs text-muted-foreground">版本 {data.version} · 最后更新 {date(data.updated_at)}{saved && " · 已保存"}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!loaded || busy || unknown || authLocked || otherBlocked} onClick={() => { if (!dirty || window.confirm("重新加载服务器设置？当前修改会保留为会话草稿。")) refresh(); }}><RefreshCw size={16} />重新加载</Button><Button type="button" variant="outline" disabled={!loaded || busy || unknown || authLocked || otherBlocked || !dirty} onClick={cancel}>取消更改</Button><Button disabled={!manage || !loaded || busy || authLocked || otherBlocked || (!dirty && !unknown)}><Save size={16} />{busy ? "保存中…" : unknown ? "重试原请求" : "保存更改"}</Button></div></div>
   </form>;
 }

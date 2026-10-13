@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RefreshCw, Save } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
@@ -45,15 +45,17 @@ function requestBody(form: Form, version: number, schema: Schema) {
  for (let i=1; i<tier_rules.length; i++) if (tier_rules[i-1].upper_cents === null || tier_rules[i].lower_cents < tier_rules[i-1].upper_cents!) throw new Error("阶梯区间不可重叠，无限上限只能位于最后一档");
  return JSON.stringify({ expected_version: version, product_rules, tier_rules });
 }
-export function AffiliateRulesPanel({ onSaved }: { onSaved: () => void }) {
+export function AffiliateRulesPanel({ onSaved, refreshVersion, otherBlocked, onBlockedChange }: { onSaved: () => void; refreshVersion: number; otherBlocked: boolean; onBlockedChange: (blocked: boolean) => void }) {
  const view = useAdminPermission("affiliates.view");
  const resource = useResource<Rules>(view ? "/admin/affiliate/rules" : null, false);
  const schema = useResource<Schema>(view ? "/admin/affiliate/rules/schema" : null, false);
  const [notice, setNotice] = useState("");
+ const refreshRules = resource.refresh;
+ useEffect(() => { if (refreshVersion > 0) refreshRules(); }, [refreshVersion, refreshRules]);
  if (!view) return <p role="alert">无权读取推介规则。</p>;
- return <div className="space-y-4">{notice && <p role="status">{notice}</p>}{resource.error || schema.error ? <Failure error={resource.error || schema.error!} retry={() => {resource.refresh();schema.refresh();}} /> : !resource.data || !schema.data ? <Loading /> : <RulesForm key={resource.data.version} data={resource.data} schema={schema.data} refresh={resource.refresh} notify={message => {setNotice(message); if (message.includes("已保存")) onSaved();}} />}</div>;
+ return <div className="space-y-4">{notice && <p role="status">{notice}</p>}{resource.error || schema.error ? <Failure error={resource.error || schema.error!} retry={() => {resource.refresh();schema.refresh();}} /> : !resource.data || !schema.data ? <Loading /> : <RulesForm key={resource.data.version} data={resource.data} schema={schema.data} otherBlocked={otherBlocked} onBlockedChange={onBlockedChange} refresh={resource.refresh} notify={message => {setNotice(message); if (message.includes("已保存")) onSaved();}} />}</div>;
 }
-function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: () => void; notify: (message: string) => void; schema: Schema }) {
+function RulesForm({ data, refresh, notify, schema, otherBlocked, onBlockedChange }: { data: Rules; refresh: () => void; notify: (message: string) => void; schema: Schema; otherBlocked: boolean; onBlockedChange: (blocked: boolean) => void }) {
   const actor = useAdminIdentity();
   const manage = useAdminPermission("affiliates.manage");
   const storageKey = actor ? `zjmfgo:affiliate-rules-draft:${actor.id}` : null;
@@ -62,11 +64,14 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [authLocked, setAuthLocked] = useState(false);
+  const edited = useRef(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [saved, setSaved] = useState(false);
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(data));
   const unknown = pending.unknown;
+  useEffect(() => { onBlockedChange(!pending.ready || busy || unknown || authLocked); return () => onBlockedChange(false); }, [pending.ready, busy, unknown, authLocked, onBlockedChange]);
   useEffect(() => {
     if (!pending.ready) return;
     const timer = window.setTimeout(() => {
@@ -85,9 +90,10 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
     return () => window.clearTimeout(timer);
   }, [pending.ready, pending.unknown, pending.pending, storageKey, manage, data]);
   useEffect(() => {
-    if (!loaded || !storageKey || !manage || unknown || saved || !dirty) return;
+    if (!loaded || !storageKey || !manage || unknown || saved) return;
+    if (!dirty) { if (edited.current && !draft) { try { sessionStorage.removeItem(storageKey); } catch {} } return; }
     try { sessionStorage.setItem(storageKey, JSON.stringify({ base_version: data.version, form } satisfies Draft)); } catch { /* Optional draft storage. */ }
-  }, [loaded, storageKey, manage, unknown, saved, dirty, data.version, form]);
+  }, [loaded, storageKey, manage, unknown, saved, dirty, data.version, form, draft]);
   useEffect(() => {
     if (!loaded || (!dirty && !unknown)) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -96,11 +102,11 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
     return () => { window.removeEventListener("beforeunload", warn); document.removeEventListener("click", click, true); };
   }, [loaded, dirty, unknown]);
   function clearDraft() { if (storageKey) { try { sessionStorage.removeItem(storageKey); } catch {} } setDraft(null); }
-  function update(next: Form) { notify(""); setForm(next); setSaved(false); setMessage(""); }
+  function update(next: Form) { edited.current = true; notify(""); setForm(next); setSaved(false); setMessage(""); }
   function cancel() { if (!window.confirm("确认取消更改并丢弃商品与阶梯规则草稿？")) return; setForm(toForm(data)); clearDraft(); setError(""); setMessage(""); setSaved(false); }
   function recover() { if (!draft || (draft.base_version !== data.version && !window.confirm("草稿版本与当前设置不同，确认恢复并逐项核对？"))) return; update(draft.form); clearDraft(); setError(""); }
   async function save(event: React.FormEvent) {
-    event.preventDefault(); if (!manage || !loaded || busy || (!dirty && !unknown)) return;
+    event.preventDefault(); if (!manage || !loaded || busy || authLocked || otherBlocked || (!dirty && !unknown)) return;
     let body: string;
     try { body = unknown && pending.pending.current ? pending.pending.current.body : requestBody(form, data.version, schema); } catch (cause) { setError((cause as Error).message); return; }
     if (!unknown && !window.confirm("确认保存全部规则？历史佣金不会重算。")) return;
@@ -108,9 +114,15 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
     pending.remember(operation); setBusy(true); setError(""); setMessage("");
     try {
       const result = await api<Rules>("/admin/affiliate/rules", { method: "PUT", headers: { "Idempotency-Key": operation.key }, body: operation.body });
-      pending.resolve(); clearDraft(); setForm(toForm(result)); setSaved(true); notify(`商品与阶梯规则已保存（版本 ${result.version}）`); refresh();
+      const confirmedForm = toForm(result);
+      if (!Number.isInteger(result.version) || result.version < 1 || !validForm(confirmedForm)) throw new Error("推介规则响应不完整，需确认原请求结果");
+      pending.resolve(); clearDraft(); setForm(confirmedForm); setSaved(true); notify(`商品与阶梯规则已保存（版本 ${result.version}）`); refresh();
     } catch (cause) {
-      if (!(cause instanceof ApiError) || cause.status >= 500) { pending.setUnknown(true); setMessage("保存结果暂无法确认，请仅重试原请求，勿刷新或离开页面。"); }
+      if (!(cause instanceof ApiError) || cause.status >= 500 || cause.status === 408) { pending.setUnknown(true); setMessage("保存结果暂无法确认，请仅重试原请求，勿刷新或离开页面。"); }
+      else if (cause.status === 401 || cause.status === 403) {
+        if (unknown) pending.setUnknown(true); else pending.resolve();
+        setAuthLocked(true); setError("登录或权限已失效，已锁定保存。请重新登录并刷新本页" + (unknown ? "，使用同一账号重试原请求以确认结果。" : "后继续核对设置。"));
+      }
       else { pending.resolve(); setError(cause.message); if (cause.code === "version_conflict") { if (storageKey) { try { sessionStorage.setItem(storageKey, JSON.stringify({ base_version: data.version, form } satisfies Draft)); } catch {} } notify("设置版本已被其他管理员更新，草稿已保留。请重新加载并对照最新值后恢复。"); refresh(); } }
     } finally { setBusy(false); }
   }
@@ -118,8 +130,8 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
   const selectClass = "h-9 w-full min-w-0 rounded-md border bg-background px-2";
   return <form onSubmit={save} className="max-w-5xl space-y-6">
     <p className="text-sm text-muted-foreground">商品专属规则优先；继承时按推广人上海自然月营业额（含当前到账净额）匹配阶梯，未匹配使用默认规则。阶梯含下限、不含上限，留空上限表示不限，返佣保留默认事件的佣金上限；商品专属使用自身上限。历史佣金不重算。</p>
-    {draft && !unknown && <div className="flex flex-wrap gap-3 rounded-md border p-4"><p className="text-sm">发现会话草稿{draft.base_version !== data.version && "，服务器版本已更新，请核对"}。</p><Button type="button" variant="outline" disabled={busy || !loaded || !manage} onClick={recover}>恢复草稿</Button><Button type="button" variant="ghost" disabled={busy || !loaded || !manage} onClick={clearDraft}>丢弃草稿</Button></div>}
-    <fieldset disabled={!manage || !loaded || busy || unknown} className="min-w-0 space-y-6">
+    {draft && !unknown && <div className="flex flex-wrap gap-3 rounded-md border p-4"><p className="text-sm">发现会话草稿{draft.base_version !== data.version && "，服务器版本已更新，请核对"}。</p><Button type="button" variant="outline" disabled={busy || !loaded || !manage || authLocked || otherBlocked} onClick={recover}>恢复草稿</Button><Button type="button" variant="ghost" disabled={busy || !loaded || !manage || authLocked || otherBlocked} onClick={clearDraft}>丢弃草稿</Button></div>}
+    <fieldset disabled={!manage || !loaded || busy || unknown || authLocked || otherBlocked} className="min-w-0 space-y-6">
       {(["products", "tiers"] as const).map(kind => <section key={kind} className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">{kind === "products" ? "商品专属规则" : "月营业额阶梯"}</h2><Button type="button" variant="outline" disabled={form[kind].length >= (kind === "products" ? 2000 : 200) || (kind === "products" && !schema.products.length)} onClick={() => update({...form, [kind]: [...form[kind], {...blank(), mode: kind === "products" ? "inherit" : "rate"}]})}>{kind === "products" ? "添加商品规则" : "添加阶梯"}</Button></div>
       {kind === "products" && !schema.products.length && <p className="text-sm text-muted-foreground">暂无可选商品，请先创建商品。</p>}
       {!form[kind].length && <p className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">{kind === "products" ? "暂无商品专属规则，商品使用阶梯或默认规则。" : "暂无阶梯，继承的商品使用默认规则。"}</p>}
@@ -131,6 +143,6 @@ function RulesForm({ data, refresh, notify, schema }: { data: Rules; refresh: ()
       </div>)}</section>)}
     </fieldset>
     {error && <p role="alert" className="break-words text-sm text-destructive">{error}</p>}{message && <p role="status" className="break-words text-sm">{message}</p>}
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><p className="text-xs text-muted-foreground">版本 {data.version}{saved && " · 已保存"}{!manage && " · 只读权限"}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!loaded || busy || unknown} onClick={()=>{if(!dirty || window.confirm("重新加载服务器规则？当前更改保留为会话草稿。")) refresh();}}><RefreshCw size={16}/>重新加载</Button><Button type="button" variant="outline" disabled={!manage || !loaded || busy || unknown || !dirty} onClick={cancel}>取消更改</Button><Button disabled={!manage || !loaded || busy || (!dirty && !unknown)}><Save size={16}/>{busy ? "保存中…" : unknown ? "重试原请求" : "保存全部规则"}</Button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4"><p className="text-xs text-muted-foreground">版本 {data.version}{saved && " · 已保存"}{!manage && " · 只读权限"}</p><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" disabled={!loaded || busy || unknown || authLocked || otherBlocked} onClick={()=>{if(!dirty || window.confirm("重新加载服务器规则？当前更改保留为会话草稿。")) refresh();}}><RefreshCw size={16}/>重新加载</Button><Button type="button" variant="outline" disabled={!manage || !loaded || busy || unknown || authLocked || otherBlocked || !dirty} onClick={cancel}>取消更改</Button><Button disabled={!manage || !loaded || busy || authLocked || otherBlocked || (!dirty && !unknown)}><Save size={16}/>{busy ? "保存中…" : unknown ? "重试原请求" : "保存全部规则"}</Button></div></div>
   </form>;
 }
