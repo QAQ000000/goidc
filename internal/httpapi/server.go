@@ -727,13 +727,11 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 		next(recorder, r.WithContext(ctx))
 		// API logging is best effort and never changes the response that was
 		// already delivered to the caller. Query/body secrets are intentionally
-		// excluded; only the normalized route path is retained.
-		var remoteIP net.IP
-		if host, _, splitErr := net.SplitHostPort(r.RemoteAddr); splitErr == nil {
-			remoteIP = net.ParseIP(host)
-		} else {
-			remoteIP = net.ParseIP(strings.TrimSpace(r.RemoteAddr))
-		}
+		// excluded; only the normalized route path is retained. The remote
+		// address follows the same trusted-proxy rules as rate limits and
+		// blacklists, so audit trails name the real client behind a reverse
+		// proxy instead of the loopback hop.
+		remoteIP := net.ParseIP(s.clientIP(r))
 		_, _ = s.db.Pool.Exec(r.Context(), `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip)
 VALUES($1,$2,$3,$4,$5,$6)`, id.ID, r.Method, r.URL.Path, recorder.status, time.Since(started).Milliseconds(), remoteIP)
 	}

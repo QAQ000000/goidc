@@ -28,6 +28,14 @@ import (
 
 func testServer(t *testing.T) (*store.Store, http.Handler) {
 	t.Helper()
+	return testServerConfig(t, nil)
+}
+
+// testServerConfig builds the integration fixture exactly like testServer but
+// lets a test adjust the server configuration (for example to configure
+// TRUSTED_PROXY_CIDRS or SecureCookie) before the handler is created.
+func testServerConfig(t *testing.T, mutate func(*config.Config)) (*store.Store, http.Handler) {
+	t.Helper()
 	dsn := os.Getenv("ZJMFGO_TEST_DATABASE_URL")
 	if dsn == "" {
 		if os.Getenv("REQUIRE_INTEGRATION") == "1" {
@@ -78,7 +86,34 @@ func testServer(t *testing.T) (*store.Store, http.Handler) {
 		t.Fatal(err)
 	}
 	db.ProvisionEncryptionKey = []byte("01234567890123456789012345678901")
-	return db, New(db, config.Config{PublicOrigin: "http://localhost:3088", SMTPHost: "localhost", SMTPPort: 587, SMTPFrom: "test@example.test", ProvisionEncryptionKey: db.ProvisionEncryptionKey, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	serverConfig := config.Config{PublicOrigin: "http://localhost:3088", SMTPHost: "localhost", SMTPPort: 587, SMTPFrom: "test@example.test", ProvisionEncryptionKey: db.ProvisionEncryptionKey, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", MFAEncryptionKey: []byte("01234567890123456789012345678901")}
+	if mutate != nil {
+		mutate(&serverConfig)
+	}
+	return db, New(db, serverConfig, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+}
+
+// requestFrom issues a request with an explicit socket peer address so tests
+// can exercise client-IP resolution behind a trusted proxy.
+func requestFrom(h http.Handler, method, path string, body any, remoteAddr, cookie string, headers map[string]string) *httptest.ResponseRecorder {
+	var payload []byte
+	if body != nil {
+		payload, _ = json.Marshal(body)
+	}
+	r := httptest.NewRequest(method, path, bytes.NewReader(payload))
+	r.RemoteAddr = remoteAddr
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("X-Requested-With", "zjmfgo")
+	r.Header.Set("Origin", "http://localhost:3088")
+	if cookie != "" {
+		r.Header.Set("Cookie", cookie)
+	}
+	for key, value := range headers {
+		r.Header.Set(key, value)
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
 }
 func request(h http.Handler, method, path string, body any, cookie string, key string) *httptest.ResponseRecorder {
 	var payload []byte

@@ -170,7 +170,7 @@ func (s *Server) issueCaptcha(w http.ResponseWriter, r *http.Request) {
 		s.captchaUnavailable(w, r)
 		return
 	}
-	if _, err = s.db.Pool.Exec(r.Context(), "INSERT INTO auth_captcha_challenges(id,action,answer_hash,nonce_hash,issued_ip,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')", tokenHash(id), action, hex.EncodeToString(answerHash[:]), hex.EncodeToString(nonceHash[:]), r.RemoteAddr); err != nil {
+	if _, err = s.db.Pool.Exec(r.Context(), "INSERT INTO auth_captcha_challenges(id,action,answer_hash,nonce_hash,issued_ip,expires_at) VALUES($1,$2,$3,$4,$5,now()+interval '5 minutes')", tokenHash(id), action, hex.EncodeToString(answerHash[:]), hex.EncodeToString(nonceHash[:]), s.requestHost(r)); err != nil {
 		s.captchaUnavailable(w, r)
 		return
 	}

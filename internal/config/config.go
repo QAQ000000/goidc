@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -20,6 +21,7 @@ type Config struct {
 	EpayTypes                                                                    []string
 	PaymentMockEnabled                                                           bool
 	SecureCookie                                                                 bool
+	TrustedProxyCIDRs                                                            []*net.IPNet
 	SMTPHost, SMTPUsername, SMTPPassword, SMTPFrom, SMTPFromName, SMTPTLSMode    string
 	SMTPPort                                                                     int
 	MFAEncryptionKey                                                             []byte
@@ -42,7 +44,22 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: publicOrigin, PublicOrigins: publicOrigins, PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), LegacyCMFAuthCode: os.Getenv("LEGACY_CMF_AUTHCODE"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: os.Getenv("COOKIE_SECURE") == "true", SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
+	secureCookie, err := parseBoolEnv("COOKIE_SECURE", "false")
+	if err != nil {
+		return Config{}, err
+	}
+	trustedProxyCIDRs, err := parseTrustedProxyCIDRs(os.Getenv("TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return Config{}, err
+	}
+	c := Config{HTTPAddr: env("HTTP_ADDR", "127.0.0.1:8088"), DatabaseURL: os.Getenv("DATABASE_URL"), PublicOrigin: publicOrigin, PublicOrigins: publicOrigins, PaymentGatewaySecret: os.Getenv("PAYMENT_GATEWAY_SECRET"), LegacyCMFAuthCode: os.Getenv("LEGACY_CMF_AUTHCODE"), EpayAPIURL: strings.TrimRight(strings.TrimSpace(os.Getenv("EPAY_API_URL")), "/"), EpayPID: strings.TrimSpace(os.Getenv("EPAY_PID")), EpayKey: os.Getenv("EPAY_KEY"), SecureCookie: secureCookie, TrustedProxyCIDRs: trustedProxyCIDRs, SMTPHost: strings.TrimSpace(os.Getenv("SMTP_HOST")), SMTPPort: smtpPort, SMTPUsername: os.Getenv("SMTP_USERNAME"), SMTPPassword: os.Getenv("SMTP_PASSWORD"), SMTPFrom: strings.TrimSpace(os.Getenv("SMTP_FROM"))}
+	// An HTTPS deployment that serves session cookies without the Secure flag
+	// sends them in cleartext on any downgrade, so refuting the combination is
+	// the only safe startup behaviour. PUBLIC_ORIGINS entries are additional
+	// browser origins and intentionally do not force the flag here.
+	if !c.SecureCookie && strings.HasPrefix(strings.ToLower(c.PublicOrigin), "https://") {
+		return c, fmt.Errorf("COOKIE_SECURE must be enabled when PUBLIC_ORIGIN uses https://; set COOKIE_SECURE=true or serve PUBLIC_ORIGIN over http")
+	}
 	c.PaymentMockEnabled = mockEnabled
 	c.SMTPFromName = strings.TrimSpace(os.Getenv("SMTP_FROM_NAME"))
 	c.SMTPTLSMode = strings.TrimSpace(os.Getenv("SMTP_TLS_MODE"))
@@ -138,6 +155,60 @@ func env(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// parseBoolEnv accepts the common truthy/falsey spellings (true/false, 1/0,
+// yes/no, on/off, enabled/disabled, case-insensitive). Unknown values are an
+// error instead of silently defaulting, so a mistyped security switch fails
+// startup rather than weakening the deployment.
+func parseBoolEnv(key, fallback string) (bool, error) {
+	raw := strings.ToLower(strings.TrimSpace(env(key, fallback)))
+	switch raw {
+	case "true", "1", "yes", "on", "enabled":
+		return true, nil
+	case "false", "0", "no", "off", "disabled":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s must be a boolean (true/false, 1/0, yes/no, on/off)", key)
+	}
+}
+
+// parseTrustedProxyCIDRs parses TRUSTED_PROXY_CIDRS. An empty value trusts no
+// proxy at all, which keeps forwarded headers ignored by default. Bare IP
+// addresses are treated as single-host CIDRs.
+func parseTrustedProxyCIDRs(raw string) ([]*net.IPNet, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var networks []*net.IPNet
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if !strings.Contains(value, "/") {
+			ip := net.ParseIP(value)
+			if ip == nil {
+				return nil, fmt.Errorf("TRUSTED_PROXY_CIDRS contains an invalid address: %s", value)
+			}
+			bits := 128
+			if ip.To4() != nil {
+				ip = ip.To4()
+				bits = 32
+			}
+			value = fmt.Sprintf("%s/%d", ip.String(), bits)
+		}
+		_, network, err := net.ParseCIDR(value)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXY_CIDRS contains an invalid CIDR: %s", value)
+		}
+		networks = append(networks, network)
+	}
+	if len(networks) == 0 {
+		return nil, nil
+	}
+	return networks, nil
 }
 
 func (c Config) PaymentQueryGateways() map[string]payment.QueryGateway {
