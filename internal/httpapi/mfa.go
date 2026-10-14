@@ -33,7 +33,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 	if _, err := s.db.Pool.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), id.ID); err != nil {
 		return err
 	}
-	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
 	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	return nil
 }
@@ -128,7 +128,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": r.RemoteAddr})
+		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": s.clientIP(r)})
 		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码错误")
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
 	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	write(w, http.StatusOK, identity{ID: userID, Username: username, Email: email, Name: name, Role: role})
 }

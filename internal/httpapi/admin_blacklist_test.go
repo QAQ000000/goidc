@@ -54,11 +54,16 @@ func TestAdminBlacklistContractsAndLoginBlock(t *testing.T) {
 		expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "auto-block-admin", "password": "wrong-password"}, "", ""), 401)
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "auto-block-admin", "password": "wrong-password"}, "", ""), 403)
-	var blocks int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM auth_blacklist WHERE subject='auto-block-admin'").Scan(&blocks); err != nil {
+	// Repeated failures automatically block the source address, never the
+	// account, so a known administrator username cannot be globally locked.
+	var usernameBlocks, ipBlocks int
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM auth_blacklist WHERE subject_type='username' AND subject='auto-block-admin'").Scan(&usernameBlocks); err != nil {
 		t.Fatal(err)
 	}
-	if blocks != 1 {
-		t.Fatalf("automatic login block count=%d", blocks)
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM auth_blacklist WHERE subject_type='ip' AND subject='192.0.2.1'").Scan(&ipBlocks); err != nil {
+		t.Fatal(err)
+	}
+	if usernameBlocks != 0 || ipBlocks != 1 {
+		t.Fatalf("automatic login block username=%d ip=%d", usernameBlocks, ipBlocks)
 	}
 }
