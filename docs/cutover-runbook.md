@@ -205,6 +205,26 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
 
 ## 5. 本次冷启动/割接预演结果
 
+### 2026-10-14 数据决定与隔离回滚复演
+
+2026-10-14 以旧 MySQL 只读账户重新生成一致性快照，并在临时 MySQL 5.7
+实例开启 `read_only=1` 后执行导入。源账户无法读取 `SHOW MASTER STATUS`，
+正式窗口必须由 DBA 提供 GTID/binlog 权限证据；不能用快照时间代替增量边界。
+当前源库较 10-09 快照增加 1 个订单、1 张账单和 1 个服务，问题从 245 变为
+247 条。逐类丢弃/合成/人工修正决定与证据见
+[`migration-reconciliation-20261014.md`](migration-reconciliation-20261014.md)。
+
+隔离 PG18 完成迁移至 137、完整 apply、custom dump 恢复和 `pg_restore
+--clean --if-exists` 回滚；在临时源新增 `products/999999` 后，现有 importer
+按设计拒绝 source changed，证明当前没有增量导入能力。不能把全量重跑作为增量
+切换。临时 Go `/readyz`、旧 PHP `/` 与 `/login` 均通过；生产 Nginx 未 reload。
+面板 Nginx 的独立启动因缺失 `resty.core` 被拒绝，正式切换需补齐 OpenResty
+运行库或提供已验证的发布副本。证据在忽略目录
+`output/cutover-rehearsal-20261014/`。
+
+因此本次完成的是隔离数据、恢复和回滚复演，仍不解除正式切换的增量导入、GTID、
+金额/资源人工凭证和 Nginx 切流闸门。
+
 当前代码复核的强制集成测试于 2026-10-09 13:41 CST 通过：
 `./scripts/go.sh test ./cmd/legacy-import -count=1`（39.782s），包含真实旧 MySQL
 只读快照、隔离 PG18 schema、全实体导入、整数分核对、复核保护和同快照重放。原始
