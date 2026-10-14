@@ -146,6 +146,19 @@ to terminated first. Purchase-invoice refunds retain that restriction. Renewal
 invoice refunds are allowed before dispatch or after a known failed/explicitly
 reconciled renewal; they cancel the job without shortening the service period.
 Unknown or successful upstream renewals cannot be reversed solely in local finance.
+
+Crash recovery reads only durable row state, because process memory and the
+upstream response are gone. `sync` is the only read-only action in the worker
+vocabulary, so a crashed or failed sync has no unknown upstream write to
+reconcile: stale recovery releases its account lease, clears the dispatch marker
+and retries it rather than routing it to manual verification. Every other action
+keeps the conservative contract: it enters `waiting_verification`, retains the
+account lease and is never resent automatically. Automated overdue suspension
+applies the same delivery-mode capability gate as the manual action API, so a
+mode that cannot suspend is not queued at all; the skipped suspension is recorded
+as durable `service.overdue_suspension.unsupported` audit evidence so operators
+can act on the missed local suspension.
+
 Upgrades and suspend/resume writes remain blocked for this provider. A remote refund request alone does not unlock local
 refunds; the actual resource deletion must first be synchronized.
 

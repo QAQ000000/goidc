@@ -103,7 +103,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if mode == "supplier" && action != "create" && action != "sync" && action != "reset_password" && action != "rescue_system" && action != "exit_rescue_system" && action != "reinstall" && !provision.IsPowerAction(action) {
+	if !modeSupportsServiceAction(mode, action) {
 		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
 	}
 	if storage != nil || nat != nil || cdrom != nil || (mode == "supplier" && action == "reinstall") {
@@ -561,6 +561,24 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingC
 	return out, tx.Commit(ctx)
 }
 
+// modeSupportsServiceAction mirrors the delivery-mode capability gate used by
+// the manual service-action API. A provisioning scheduler must apply the same
+// gate: queueing an action the delivery mode cannot perform only produces a job
+// that keeps failing until its lease attempts are exhausted while the local
+// service stays unchanged. Only the supplier mode restricts actions today; the
+// supplier adapter advertises create/sync/power/reset/rescue/reinstall but not
+// suspend, resume or terminate.
+func modeSupportsServiceAction(mode, action string) bool {
+	if mode != "supplier" {
+		return true
+	}
+	switch action {
+	case "create", "sync", "reset_password", "rescue_system", "exit_rescue_system", "reinstall":
+		return true
+	}
+	return provision.IsPowerAction(action)
+}
+
 func allowedServiceAction(status, action string) bool {
 	if provision.IsStorageAction(action) || provision.IsNATAction(action) || provision.IsCDROMAction(action) {
 		return status == "active"
@@ -605,12 +623,69 @@ RETURNING j.id,j.service_id,j.action,j.attempts`).Scan(&job.ID, &job.ServiceID, 
 	return &job, nil
 }
 
+// RecoverStaleProvisionJobs finalizes jobs whose worker died after claiming but
+// before finishing them. The decision must come from durable row state alone:
+// process memory, the response and the supplier lease are all gone.
+//
+// A dispatched action may have written upstream state, so its result is unknown
+// and stays conservative: the job enters waiting_verification and keeps the
+// supplier account lease until an administrator reconciles it. A read-only
+// action (sync) cannot have written anything, so there is no unknown result to
+// reconcile: its account lease is released and the job is retried or failed like
+// an undispatched one. Without the release the account stays locked forever,
+// because only finishSupplierJob (never reached) and manual verification clear it.
 func (s *Store) RecoverStaleProvisionJobs(ctx context.Context) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE provision_jobs SET status=CASE WHEN external_started_at IS NOT NULL THEN 'waiting_verification' WHEN attempts>=5 THEN 'failed' ELSE 'pending' END,
-available_at=now(),locked_at=NULL,updated_at=now(),last_error=CASE WHEN external_started_at IS NOT NULL THEN '供应商操作租约已过期，请核验实际资源，禁止直接重试' ELSE 'worker lease expired' END,
-completed_at=CASE WHEN external_started_at IS NULL AND attempts>=5 THEN now() ELSE NULL END
-WHERE status='running' AND locked_at<now()-interval '5 minutes'`)
-	return err
+	readOnly := provision.ReadOnlyActions()
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	// Collect the stale dispatched read-only jobs under their own row locks first.
+	// Dispatch locks service -> job -> supplier account, so releasing the account
+	// lease before the job update would invert that order and risk a deadlock.
+	rows, err := tx.Query(ctx, `SELECT id FROM provision_jobs
+WHERE status='running' AND locked_at<now()-interval '5 minutes'
+  AND external_started_at IS NOT NULL AND action=ANY($1::text[])
+ORDER BY id FOR UPDATE`, readOnly)
+	if err != nil {
+		return err
+	}
+	var release []int64
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		release = append(release, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET
+ status=CASE WHEN external_started_at IS NOT NULL AND NOT (action=ANY($1::text[])) THEN 'waiting_verification'
+             WHEN attempts>=5 THEN 'failed' ELSE 'pending' END,
+ available_at=now(),locked_at=NULL,updated_at=now(),
+ external_started_at=CASE WHEN external_started_at IS NOT NULL AND action=ANY($1::text[]) THEN NULL ELSE external_started_at END,
+ last_error=CASE WHEN external_started_at IS NOT NULL AND NOT (action=ANY($1::text[])) THEN '供应商操作租约已过期，请核验实际资源，禁止直接重试'
+                 WHEN external_started_at IS NOT NULL THEN '只读任务租约已过期，将自动重试'
+                 ELSE 'worker lease expired' END,
+ completed_at=CASE WHEN (external_started_at IS NULL OR action=ANY($1::text[])) AND attempts>=5 THEN now() ELSE NULL END
+WHERE status='running' AND locked_at<now()-interval '5 minutes'`, readOnly); err != nil {
+		return err
+	}
+	// Only read-only dispatches release the leased account; a write action keeps
+	// it so the unknown upstream result stays fenced until manual verification.
+	if len(release) > 0 {
+		if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET running_job_id=NULL,updated_at=now()
+WHERE running_job_id=ANY($1::bigint[])`, release); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error {
