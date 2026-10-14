@@ -184,6 +184,13 @@ func (s *Store) finishNOKVMJob(ctx context.Context, job ProvisionJob, result pro
 			state = "failed"
 			message = "供应商请求失败：" + failure.Code
 		}
+		// A read-only action cannot have written upstream state, so a failed read
+		// or a local apply failure has no unknown result to reconcile. Report it
+		// as retryable instead of blocking the service behind manual verification,
+		// which would also block refunds and credential reads.
+		if provision.IsReadOnlyAction(job.Action) {
+			state, message = "failed", "供应商读取失败，请稍后重试"
+		}
 		if (job.Action == "reinstall" || provision.IsStorageAction(job.Action) || provision.IsNATAction(job.Action) || provision.IsCDROMAction(job.Action)) && result.CommandAccepted {
 			message = "供应商已受理快照或备份操作，请核验实际结果，禁止重复提交"
 			if provision.IsNATAction(job.Action) {
