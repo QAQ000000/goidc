@@ -7,10 +7,12 @@ import { useResource } from "@/hooks/use-resource";
 import type { User } from "@/lib/api";
 import { Button } from "./ui/button";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
+import { useUnauthorizedRedirect } from "@/hooks/use-unauthorized-redirect";
 
 export function SiteAvailability({ children }: { children: React.ReactNode }) {
   const { site } = useSite();
   const path = usePathname();
+  useUnauthorizedRedirect();
   const exempt = path === "/admin" || path.startsWith("/admin/") || ["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path);
   const { data: user, error, refresh: refreshUser } = useResource<User>(site?.maintenance_enabled && !exempt ? "/me" : null, false);
   useEffect(() => {

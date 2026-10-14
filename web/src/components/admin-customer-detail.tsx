@@ -202,6 +202,7 @@ function CustomerSummaryView({
 }) {
   const manage = useAdminPermission("customers.manage");
   const [busyStatus, setBusyStatus] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupAmount, setTopupAmount] = useState("");
   const [topupBusy, setTopupBusy] = useState(false);
@@ -217,6 +218,7 @@ function CustomerSummaryView({
   async function toggleStatus() {
     if (!manage || busyStatus) return;
     setBusyStatus(true);
+    setStatusError("");
     const nextStatus = customer.status === "active" ? "disabled" : "active";
     try {
       await api(`/admin/customers/${customer.id}`, {
@@ -224,8 +226,8 @@ function CustomerSummaryView({
         body: JSON.stringify({ status: nextStatus }),
       });
       refresh();
-    } catch {
-      // ignore
+    } catch (e) {
+      setStatusError((e as Error).message || "客户状态更新失败");
     } finally {
       setBusyStatus(false);
     }
@@ -326,6 +328,11 @@ function CustomerSummaryView({
               />
             </button>
           </div>
+          {statusError && (
+            <p role="alert" className="text-xs text-destructive text-right">
+              {statusError}
+            </p>
+          )}
           <div className="flex justify-between">
             <span className="text-[#909399]">分组</span>
             <span className="text-[#303133]">{customer.group_name || "无"}</span>

@@ -11,6 +11,17 @@ export class ApiError extends Error {
 function noticeMaintenance(code: string | undefined) {
   if (code === "site_maintenance" && typeof window !== "undefined") window.dispatchEvent(new Event("zjmfgo:maintenance"));
 }
+// 登录、注册、验证码等端点自身的 401 表示凭据错误，不能触发全局跳转，否则会在登录页形成循环。
+const credentialEndpoints = ["/auth/login", "/auth/login/mfa", "/auth/register", "/auth/captcha", "/auth/verification/", "/auth/password-reset/"];
+function isCredentialEndpoint(path: string) {
+  const clean = path.split("?")[0];
+  return credentialEndpoints.some((prefix) => clean === prefix || clean.startsWith(prefix));
+}
+// 会话过期时派发全局事件，由壳层组件统一跳转到对应登录页。
+function noticeUnauthorized(path: string, status: number) {
+  if (status !== 401 || typeof window === "undefined" || isCredentialEndpoint(path)) return;
+  window.dispatchEvent(new CustomEvent("zjmfgo:unauthorized", { detail: { path } }));
+}
 export async function api<T>(
   path: string,
   options: RequestInit = {},
@@ -28,6 +39,7 @@ export async function api<T>(
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     noticeMaintenance(body.error?.code);
+    noticeUnauthorized(path, response.status);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -52,6 +64,7 @@ export async function upload<T>(path: string, form: FormData, method: "POST" | "
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     noticeMaintenance(body.error?.code);
+    noticeUnauthorized(path, response.status);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -69,6 +82,7 @@ export async function download(path: string): Promise<Blob> {
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     noticeMaintenance(body.error?.code);
+    noticeUnauthorized(path, response.status);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -77,18 +91,28 @@ export async function download(path: string): Promise<Blob> {
   }
   return response.blob();
 }
+// 金额以分为单位；非有限数值时返回占位符而不是 "¥NaN"。
 export function money(cents: number) {
+  if (!Number.isFinite(cents)) return "-";
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
     currency: "CNY",
   }).format(cents / 100);
 }
+// 后端可空时间戳经 String() 会变成 ""/"null"/"undefined"，不能直接交给 Date 解析。
+// 这些是预期内的空值，返回占位符；只有真正非法的字符串才额外输出警告便于排查。
 export function date(value: string) {
+  if (!value || value === "null" || value === "undefined") return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    console.warn("[zjmfgo] invalid date value:", value);
+    return "-";
+  }
   return new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "Asia/Shanghai",
-  }).format(new Date(value));
+  }).format(parsed);
 }
 export type User = {
   id: number;
@@ -271,7 +295,7 @@ export type AdminCustomerFile = CustomerFile & {version:number;uploader_id:numbe
 export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, path = `/downloads/${item.id}/file`) {
   const response = await fetch(`/api/v1${path}`, { credentials:"same-origin",cache:"no-store",headers:{"X-Requested-With":"zjmfgo"} });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})); noticeMaintenance(body.error?.code);
+    const body = await response.json().catch(() => ({})); noticeMaintenance(body.error?.code); noticeUnauthorized(path, response.status);
     throw new ApiError(response.status,body.error?.code ?? "download_failed",body.error?.message ?? "下载失败");
   }
   if (response.headers.get("Content-Type")?.includes("application/json")) {

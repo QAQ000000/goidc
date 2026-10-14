@@ -33,7 +33,6 @@ import {
   Trash2,
   Ban,
   RotateCcw,
-  CreditCard,
   KeyRound,
   Copy,
   Tag,
@@ -60,7 +59,7 @@ import {
 } from "@/components/ui/table";
 import { api, date, money, type ApiKey, type CustomerGroup, type PromoCode, type Service, type TicketDepartment, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
-import { Failure, Loading, Status } from "./common";
+import { Failure, Loading, Status, statusNames } from "./common";
 import { Workspace, PermissionGate, PermissionFields, useAdminPermission } from "./workspace";
 import { MfaPanel } from "./mfa-panel";
 import { ServiceNavigationSettings } from "./service-groups";
@@ -665,7 +664,7 @@ function ServiceList({admin,groupId}:{admin:boolean;groupId?:number}){
     {!admin&&<div className="flex flex-wrap items-center gap-3 mb-5"><label className="text-sm flex gap-2 items-center min-w-0">查看分组<select aria-label="查看服务分组" className={`${catalogSelectStyle} sm:max-w-xs`} value={groupId??""} onChange={e=>{window.location.assign(e.target.value?`/console/services/group/${e.target.value}`:"/console/services");}}><option value="">全部服务</option><option value="0">未分组服务</option>{groups.data?.map(g=><option key={g.id} value={g.id}>{g.name}{!g.visible&&"（导航隐藏）"}</option>)}{missingGroup&&<option value={groupId}>已删除的分组</option>}</select></label>{groupId!==undefined&&<Button variant="link" asChild><Link href="/console/services">查看全部服务</Link></Button>}</div>}
     {missingGroup&&<p role="status" className="text-sm text-muted-foreground mb-5">该服务分组已删除，请从全部服务或其他分组继续查看。</p>}
     {!admin&&groups.error&&<Failure error={groups.error} retry={groups.refresh}/>}
-    <form className="grid sm:grid-cols-[12rem_1fr_auto] gap-3 mb-6" onSubmit={e=>{e.preventDefault();setQuery(draft);setOffset(0);}}><select aria-label="服务状态筛选" className={catalogSelectStyle} value={state} onChange={e=>{setState(e.target.value);setOffset(0);}}><option value="">全部状态</option>{Object.entries({pending_payment:"待付款",queued:"开通队列",provisioning:"开通中",active:"运行中",suspended:"已暂停",failed:"失败",cancelled:"已取消",terminated:"已终止",import_review_required:"迁移待复核"}).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select><Input aria-label="搜索服务" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="搜索服务名称或标识"/><Button variant="outline"><Search size={16}/>搜索</Button></form>
+    <form className="grid sm:grid-cols-[12rem_1fr_auto] gap-3 mb-6" onSubmit={e=>{e.preventDefault();setQuery(draft);setOffset(0);}}><select aria-label="服务状态筛选" className={catalogSelectStyle} value={state} onChange={e=>{setState(e.target.value);setOffset(0);}}><option value="">全部状态</option>{adminServiceStates.map(value=><option value={value} key={value}>{statusNames[value] ?? value}</option>)}</select><Input aria-label="搜索服务" value={draft} onChange={e=>setDraft(e.target.value)} placeholder="搜索服务名称或标识"/><Button variant="outline"><Search size={16}/>搜索</Button></form>
     {error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<><div className="admin-list-surface data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>服务</TableHead>{admin&&<TableHead>客户</TableHead>}<TableHead>主机名</TableHead>{admin&&<><TableHead>IP 地址</TableHead><TableHead>付款周期</TableHead><TableHead>周期金额</TableHead></>}<TableHead>到期时间</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{data.items.length===0?<TableRow><TableCell colSpan={admin?9:5} className="h-32 text-center text-muted-foreground">暂无服务</TableCell></TableRow>:data.items.map(service=><TableRow key={service.id}><TableCell><Link className="text-primary hover:underline" href={`${admin?"/admin":"/console"}/services/${service.id}${suffix}`}><div className="font-medium flex items-center gap-2"><Server size={15}/>{service.name}</div><div className="text-xs text-muted-foreground mt-1">#{service.id} · {service.service_group_name??"未分组"}</div></Link></TableCell>{admin&&<TableCell>{service.customer_name??"-"}</TableCell>}<TableCell className="font-mono text-xs">{service.domain}</TableCell>{admin&&<><TableCell className="font-mono text-xs">{service.resource_info?.dedicated_ip || service.resource_info?.ips?.[0] || "-"}</TableCell><TableCell>{({monthly:"月付",quarterly:"季付",annually:"年付",once:"一次性"} as Record<string,string>)[service.billing_cycle] || service.billing_cycle}</TableCell><TableCell className="money">{money(service.recurring_price_cents)}</TableCell></>}<TableCell>{serviceDueLabel(service)}</TableCell><TableCell><Status value={service.status}/></TableCell><TableCell><ServiceActions service={service} admin={admin} refresh={refresh}/></TableCell></TableRow>)}</TableBody></Table></div><div className="flex justify-between items-center flex-wrap gap-3 mt-5 text-sm"><span>{data.total} 个服务</span><div className="flex gap-2"><Button variant="outline" disabled={offset===0} onClick={()=>setOffset(v=>Math.max(0,v-20))}>上一页</Button><Button variant="outline" disabled={offset+20>=data.total} onClick={()=>setOffset(v=>v+20)}>下一页</Button></div></div></>}
   </>;
 }
@@ -817,113 +816,6 @@ function ServiceActions({ service, admin, refresh }: { service: Service; admin: 
   }
   if (service.provision_mode==="supplier" || (admin && !allowed) || (!actions.length && !error)) return <span className="text-xs text-muted-foreground">-</span>;
   return <div className="flex flex-wrap items-center gap-2">{actions.map(({ action, label, icon: Icon, destructive }) => <Button key={action} size="sm" variant={destructive ? "destructive" : "outline"} disabled={busy} onClick={() => run(action)}><Icon size={14} />{label}</Button>)}{error && <span className="text-xs text-destructive max-w-40 whitespace-normal">{error}</span>}</div>;
-}
-
-export function InvoicesView({ admin = false }: { admin?: boolean }) {
-  return (
-    <AdminListView
-      kind="invoices"
-      admin={admin}
-      title={admin ? "财务账单" : "我的账单"}
-      description={admin ? "账单状态与应收金额" : "查看应付账单"}
-      endpoint={admin ? "/admin/invoices" : "/invoices"}
-      columns={[
-        { key: "invoice_no", label: "账单号" },
-        { key: "order_id", label: "订单" },
-        {
-          key: "amount_cents",
-          label: "金额",
-          render: (r) => (
-            <span className="money">{money(Number(r.amount_cents))}</span>
-          ),
-        },
-        {
-          key: "due_at",
-          label: "到期时间",
-          render: (r) => date(String(r.due_at)),
-        },
-        {
-          key: "status",
-          label: "状态",
-          render: (r) => <Status value={String(r.status)} />,
-        },
-        {
-          key: "actions",
-          label: "操作",
-          render: (r) => <InvoiceAction row={r} admin={admin} />,
-        },
-      ]}
-    />
-  );
-}
-
-function InvoiceAction({ row, admin }: { row: Row; admin: boolean }) {
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(String(row.status));
-  const [error, setError] = useState("");
-  const [checkout, setCheckout] = useState("");
-  async function change(action: "pay" | "refund") {
-    setBusy(true);
-    setError("");
-    try {
-      const id = Number(row.id);
-      const endpoint = admin ? `/admin/invoices/${id}/refund` : `/invoices/${id}/pay`;
-      await api(endpoint, {
-        method: "POST",
-        body: "{}",
-        headers: { "Idempotency-Key": `web-${action}-${id}-${crypto.randomUUID()}` },
-      });
-      setStatus(action === "pay" ? "paid" : "refunded");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function createExternalPayment() {
-    setBusy(true);
-    setError("");
-    try {
-      const id = Number(row.id);
-      const result = await api<{ checkout_url: string; provider_payment_id: string }>(`/invoices/${id}/payments`, {
-        method: "POST",
-        body: JSON.stringify({ provider: "mock" }),
-        headers: { "Idempotency-Key": `web-gateway-${id}-${crypto.randomUUID()}` },
-      });
-      setCheckout(result.checkout_url);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (admin) {
-    if (status !== "paid") return null;
-    if (row.external_payment_paid) {
-      return <PermissionGate permission="invoices.refund"><p className="max-w-sm text-xs text-muted-foreground whitespace-normal">在线支付暂不支持自动原路退款，请由财务在商户后台人工退款并核验实际到账，不会退入本站余额。</p></PermissionGate>;
-    }
-    return (
-      <PermissionGate permission="invoices.refund"><div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => change("refund")}>
-          退款
-        </Button>
-        {error && <span className="text-xs text-destructive max-w-36 whitespace-normal">{error}</span>}
-      </div></PermissionGate>
-    );
-  }
-  if (status !== "unpaid") return null;
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" disabled={busy} onClick={() => change("pay")}>
-        {busy ? "处理中" : "余额支付"}
-      </Button>
-      <Button size="sm" variant="outline" disabled={busy} onClick={createExternalPayment}>
-        <CreditCard size={14} />在线支付
-      </Button>
-      {checkout && <span className="text-xs text-muted-foreground">支付单已创建：{checkout}</span>}
-      {error && <span className="text-xs text-destructive max-w-36 whitespace-normal">{error}</span>}
-    </div>
-  );
 }
 
 type Account = {

@@ -1,5 +1,10 @@
 import { TicketRulesView } from "@/components/ticket-rules";
+import { requireUser } from "@/lib/session";
+import { can, adminEntry } from "@/lib/admin-navigation";
+import { redirect } from "next/navigation";
 
-export default function Page() {
+export default async function Page() {
+  const user = await requireUser(true);
+  if (!can(user, "tickets.view")) redirect(adminEntry(user));
   return <TicketRulesView />;
 }
