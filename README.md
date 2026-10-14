@@ -133,8 +133,9 @@ NOKVM 服务详情支持 CPU、网络和系统盘/数据盘 I/O 监控，提供 
 旧数据导入器也保留服务导航分组、商品归属及客户显示偏好：源 ID 转换、缺失关联归档、已初始化默认隐藏规则及现场修改重跑保护已在真实旧库的隔离目标验证。开发实例没有 apply 旧数据；导入范围与正式切换的剩余工作见 [旧数据迁移](docs/legacy-migration.md)。
 
 ```bash
-go test ./...
-go vet ./...
+# 先设置 ZJMFGO_TEST_DATABASE_URL，指向隔离 PG18 测试库
+./scripts/test-all.sh
+./scripts/go.sh vet ./...
 cd web
 npm run lint
 npm run typecheck
@@ -142,5 +143,7 @@ npm run build
 ```
 
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
+
+`scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=30m`。PG18 的 httpapi 套件实测约 13 分钟，超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
 
 仓库内 Go 命令优先使用 `scripts/go.sh`，先运行 `scripts/check-go-toolchain.sh` 检查实际版本、`GOROOT` 和 `GOTOOLDIR`，避免用户级 Go 与 `/usr/local/btgo` 混用。
