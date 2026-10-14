@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { api, fetchCaptcha, type CaptchaChallenge, type User } from "@/lib/api";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
 import { Failure, Loading } from "./common";
-export function AuthForm({ register = false, adminLogin = false }: { register?: boolean; adminLogin?: boolean }) {
+export function AuthForm({ register = false }: { register?: boolean }) {
   const router = useRouter();
   const { site, error: siteError, refresh } = useSite();
   const [error, setError] = useState("");
@@ -86,14 +86,6 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }) })
         : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
-      if (adminLogin && user.role !== "admin" && user.role !== "super_admin") {
-        await api("/auth/logout", { method: "POST" });
-        setMfaChallenge("");
-        setMfaCode("");
-        setError("需要管理员账户");
-        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
-        return;
-      }
       router.push(user.role === "customer" ? "/" : "/admin");
       router.refresh();
     } catch (e) {
@@ -110,7 +102,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
     }
   }
   return (
-    <main className={`${adminLogin ? "admin-theme" : ""} min-h-screen grid place-items-center px-6 py-8 bg-white`}>
+    <main className="min-h-screen grid place-items-center px-6 py-8 bg-white">
       <div className="auth-form">
         <Link
           href="/"
@@ -119,10 +111,10 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
           <SiteBrand />
         </Link>
         <h1 className="text-2xl font-semibold mb-3">
-          {register ? "创建账户" : adminLogin ? "管理员登录" : "登录账户"}
+          {register ? "创建账户" : "登录账户"}
         </h1>
         <p className="text-muted-foreground mb-8">
-          {register ? "云服务客户中心" : adminLogin ? "管理控制台" : "欢迎回来"}
+          {register ? "云服务客户中心" : "欢迎回来"}
         </p>
         {register && siteError ? <Failure error={siteError} retry={refresh} /> : register && !site ? <Loading /> : register && !site?.registration_enabled ? <p role="status" className="py-6 text-muted-foreground">本站暂未开放注册</p> : <form className="space-y-5" onSubmit={submit}>
           {site?.auth_captcha_enabled && !mfaChallenge && (
@@ -200,7 +192,7 @@ export function AuthForm({ register = false, adminLogin = false }: { register?: 
           </Button>
         </form>}
         {!register && <div className="mt-4 text-sm"><Link className="text-primary underline underline-offset-4" href="/forgot-password">忘记密码？</Link></div>}
-        {!adminLogin && (register || (site?.registration_enabled && !siteError)) && <div className="mt-6 text-sm text-muted-foreground">
+        {(register || (site?.registration_enabled && !siteError)) && <div className="mt-6 text-sm text-muted-foreground">
           {register ? "已有账户？" : "还没有账户？"}
           <Link
             className="ml-2 text-primary underline underline-offset-4"

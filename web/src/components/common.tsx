@@ -31,7 +31,9 @@ export function Failure({ error, retry }: { error: Error; retry: () => void }) {
     </div>
   );
 }
-const names: Record<string, string> = {
+// 状态标识 → 中文文案的唯一来源：Status 徽标与各处筛选下拉都从这里取，避免同一状态出现多种译法。
+// 取值已对照 Go 后端（internal/httpapi、internal/store 及 db/migrations）确认。
+export const statusNames: Record<string, string> = {
   pending: "待处理",
   available: "可提现",
   reserved: "提现中",
@@ -75,6 +77,17 @@ const names: Record<string, string> = {
   recorded: "已记录",
   verified: "已核验",
   requested: "已申请",
+  review_pending: "待核验",
+  import_review_required: "待核验",
+  sending: "发送中",
+  sent: "已发送",
+  dead_letter: "死信",
+  draft: "草稿",
+  archived: "已归档",
+  shipped: "已邮寄",
+  issued: "已开具",
+  not_requested: "未请求发送",
+  up_to_date: "已是最新",
 };
 export function Status({ value }: { value: string }) {
   return (
@@ -90,7 +103,7 @@ export function Status({ value }: { value: string }) {
             : "text-zinc-600 bg-zinc-50"
       }
     >
-      {names[value] ?? value}
+      {statusNames[value] ?? value}
     </Badge>
   );
 }
