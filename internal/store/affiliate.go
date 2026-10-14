@@ -499,34 +499,51 @@ func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoic
 	if err := lockOperationKey(ctx, tx, "affiliate-commission-customer", fmt.Sprint(referredUser)); err != nil {
 		return err
 	}
-	var recorded bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM affiliate_commission_entries WHERE invoice_id=$1)", invoiceID).Scan(&recorded); err != nil || recorded {
-		return err
-	}
-	var accountID, programID, ruleSetID int64
-	var holdDays, ruleVersion int
-	var defaultJSON json.RawMessage
-	if err := tx.QueryRow(ctx, `SELECT a.id,a.program_id,p.hold_days,rs.id,rs.version,rs.default_rules
+	// The attribution/account pair decides whose turnover the settled invoice
+	// feeds. It is resolved on its own so that a missing rule set can no longer
+	// drop the invoice from the basis.
+	var accountID, programID int64
+	var holdDays int
+	if err := tx.QueryRow(ctx, `SELECT a.id,a.program_id,p.hold_days
 FROM affiliate_attributions at JOIN affiliate_accounts a ON a.id=at.account_id
 JOIN users owner ON owner.id=a.user_id JOIN affiliate_programs p ON p.id=a.program_id
-JOIN affiliate_rule_sets rs ON rs.program_id=p.id JOIN invoices i ON i.id=$2
 WHERE at.user_id=$1 AND at.status='active' AND a.status='approved' AND p.status='active'
  AND a.user_id<>$1 AND owner.status='active'
- AND rs.effective_from<=i.created_at AND (rs.effective_to IS NULL OR rs.effective_to>i.created_at)
-FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
-		Scan(&accountID, &programID, &holdDays, &ruleSetID, &ruleVersion, &defaultJSON); err != nil {
+FOR SHARE OF at,a,p`, referredUser).Scan(&accountID, &programID, &holdDays); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}
 		return err
 	}
+	// The rule set active at invoice creation time is optional: historical
+	// invoices predating the first rule set still contribute their net amount to
+	// the turnover basis, they only earn no commission.
+	var ruleSetID int64
+	var ruleVersion int
+	var defaultJSON json.RawMessage
+	if err := tx.QueryRow(ctx, `SELECT rs.id,rs.version,rs.default_rules
+FROM affiliate_rule_sets rs JOIN invoices i ON i.id=$2
+WHERE rs.program_id=$1 AND rs.effective_from<=i.created_at AND (rs.effective_to IS NULL OR rs.effective_to>i.created_at)
+FOR SHARE OF rs`, programID, invoiceID).Scan(&ruleSetID, &ruleVersion, &defaultJSON); err != nil {
+		if err != pgx.ErrNoRows {
+			return err
+		}
+	}
 	var defaultRules map[string]affiliateRule
-	if err := json.Unmarshal(defaultJSON, &defaultRules); err != nil {
-		return err
+	if ruleSetID > 0 {
+		if err := json.Unmarshal(defaultJSON, &defaultRules); err != nil {
+			return err
+		}
 	}
 	items, err := affiliateInvoiceItems(ctx, tx, invoiceID)
 	if err != nil {
 		return err
+	}
+	// Balance top-ups and traffic purchases own no product line and therefore no
+	// turnover. Every invoice with attributable sale/renewal/upgrade lines is
+	// recorded exactly once below, even when its net amount or commission is zero.
+	if len(items) == 0 {
+		return nil
 	}
 	// Account-scoped serialization counts each settled invoice exactly once.
 	if err = lockOperationKey(ctx, tx, "affiliate-turnover-account", fmt.Sprint(accountID)); err != nil {
@@ -549,9 +566,6 @@ FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
 			invoiceBasis += item.BasisCents
 		}
 	}
-	if invoiceBasis == 0 {
-		return nil
-	}
 	var priorBasis int64
 	if err = tx.QueryRow(ctx, `SELECT COALESCE(sum(t.basis_cents),0)::bigint FROM affiliate_turnover_entries t JOIN invoices i ON i.id=t.invoice_id WHERE t.account_id=$1 AND t.paid_at>=$2 AND t.paid_at<$3 AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM orders o WHERE o.id=i.order_id AND o.status IN ('cancelled','refunded')) AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id AND c.status<>'repaid')`, accountID, windowStart, windowEnd).Scan(&priorBasis); err != nil {
 		return err
@@ -563,14 +577,33 @@ FOR SHARE OF at,a,p,rs`, referredUser, invoiceID).
 	var tier affiliateRule
 	var tierLower int64
 	var tierUpper *int64
-	tierFound := true
-	if err = tx.QueryRow(ctx, `SELECT rate_bps,amount_cents,lower_cents,upper_cents FROM affiliate_tier_rules WHERE rule_set_id=$1 AND lower_cents<=$2 AND (upper_cents IS NULL OR upper_cents>$2) ORDER BY lower_cents DESC LIMIT 1`, ruleSetID, turnover).Scan(&tier.RateBPS, &tier.AmountCents, &tierLower, &tierUpper); err != nil {
-		if err != pgx.ErrNoRows {
-			return err
+	tierFound := false
+	if ruleSetID > 0 {
+		// Only an effective rule set can contribute tiers; without one the
+		// invoice still owns its basis but earns nothing.
+		if err = tx.QueryRow(ctx, `SELECT rate_bps,amount_cents,lower_cents,upper_cents FROM affiliate_tier_rules WHERE rule_set_id=$1 AND lower_cents<=$2 AND (upper_cents IS NULL OR upper_cents>$2) ORDER BY lower_cents DESC LIMIT 1`, ruleSetID, turnover).Scan(&tier.RateBPS, &tier.AmountCents, &tierLower, &tierUpper); err != nil {
+			if err != pgx.ErrNoRows {
+				return err
+			}
+		} else {
+			tierFound = true
 		}
-		tierFound = false
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO affiliate_turnover_entries(invoice_id,account_id,rule_set_id,basis_cents,paid_at) VALUES($1,$2,$3,$4,$5)`, invoiceID, accountID, ruleSetID, invoiceBasis, paidAt); err != nil {
+	// The basis row is written unconditionally: a settled invoice is counted once
+	// even when no rule set was effective and no commission is earned. A NULL
+	// rule_set_id records that absence instead of inventing a rule version.
+	if _, err = tx.Exec(ctx, `INSERT INTO affiliate_turnover_entries(invoice_id,account_id,rule_set_id,basis_cents,paid_at) VALUES($1,$2,NULLIF($3,0),$4,$5)`, invoiceID, accountID, ruleSetID, invoiceBasis, paidAt); err != nil {
+		return err
+	}
+	// Without an effective rule set the basis is the whole outcome: the invoice
+	// contributes to later tier thresholds and earns nothing.
+	if ruleSetID == 0 {
+		return nil
+	}
+	// Only commission rows are skipped for an already commissioned invoice; the
+	// basis row above was still verified and written exactly once.
+	var recorded bool
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM affiliate_commission_entries WHERE invoice_id=$1)", invoiceID).Scan(&recorded); err != nil || recorded {
 		return err
 	}
 	for _, item := range items {
