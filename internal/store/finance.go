@@ -270,6 +270,12 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	// top-ups; before this fix they were persisted and displayed but never
 	// read here. Read inside the same transaction with a shared row lock so a
 	// concurrent settings update cannot interleave with the credit.
+	// require_active_order keeps the conservative reading of the legacy
+	// activation state: only an order promoted by manual review satisfies it.
+	// The ordinary pay flow settles orders to their paid state without that
+	// promotion, so enabling this switch restricts top-ups to customers whose
+	// orders were reviewed or migrated. Aligning it with the legacy intent is
+	// a product decision tracked in the review report.
 	var topupEnabled, requireActiveOrder bool
 	var minTopup, maxTopup, maxBalance int64
 	if err = tx.QueryRow(ctx, `SELECT topup_enabled,min_topup_cents,max_topup_cents,max_balance_cents,require_active_order FROM finance_settings WHERE id=1 FOR SHARE`).Scan(&topupEnabled, &minTopup, &maxTopup, &maxBalance, &requireActiveOrder); err != nil {
