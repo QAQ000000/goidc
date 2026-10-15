@@ -176,14 +176,18 @@ func (s *Store) ConvertCertificationToCompanyTx(ctx context.Context, tx pgx.Tx, 
 	return map[string]any{"id": submissionID, "profile_id": profileID, "status": "pending", "version": version + 1}, nil
 }
 
-func (s *Store) AdminCertifications(ctx context.Context, status string, limit, offset int) ([]map[string]any, error) {
-	args := []any{limit, offset}
-	where := ""
+// AdminCertifications lists certification profiles visible to the reviewing
+// administrator. The listing is filtered by the same customer scope the detail,
+// history and review paths enforce, so an administrator whose scope excludes a
+// customer never sees that customer's identity documents.
+func (s *Store) AdminCertifications(ctx context.Context, actorID int64, status string, limit, offset int) ([]map[string]any, error) {
+	args := []any{actorID, limit, offset}
+	where := " WHERE admin_customer_allowed($1,p.user_id)"
 	if status != "" {
-		where = " WHERE p.status=$3"
+		where += " AND p.status=$4"
 		args = append(args, status)
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT p.id,p.user_id,u.username,u.display_name,u.email,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,(SELECT max(id) FROM certification_submissions x WHERE x.profile_id=p.id) AS submission_id FROM certification_profiles p JOIN users u ON u.id=p.user_id`+where+` ORDER BY p.updated_at DESC,p.id DESC LIMIT $1 OFFSET $2`, args...)
+	rows, err := s.Pool.Query(ctx, `SELECT p.id,p.user_id,u.username,u.display_name,u.email,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,(SELECT max(id) FROM certification_submissions x WHERE x.profile_id=p.id) AS submission_id FROM certification_profiles p JOIN users u ON u.id=p.user_id`+where+` ORDER BY p.updated_at DESC,p.id DESC LIMIT $2 OFFSET $3`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -229,6 +233,11 @@ func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, d
 
 // ReviewCertificationTx applies a review inside the caller's transaction so
 // the idempotency journal and the state transition commit atomically.
+//
+// The locking query also enforces the reviewing administrator's customer scope,
+// matching the detail and history paths: a reviewer whose scope excludes the
+// applicant cannot load the profile, so an out-of-scope decision is impossible
+// rather than merely hidden.
 func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID, id int64, decision, note string, expected int64) error {
 	if decision != "approved" && decision != "rejected" {
 		return conflict("invalid_certification_review", "审核结果无效")
@@ -239,7 +248,10 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 	var profileID, submissionID, version int64
 	var userID int64
 	var status string
-	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 FOR UPDATE`, id).Scan(&profileID, &userID, &version, &status, &submissionID)
+	// The scope predicate lives in the locking statement so the applicant is
+	// authorised at the same moment the row is locked; an out-of-scope reviewer
+	// gets no row and the review fails like a missing record.
+	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 AND admin_customer_allowed($2,p.user_id) FOR UPDATE`, id, reviewerID).Scan(&profileID, &userID, &version, &status, &submissionID)
 	if err != nil {
 		return err
 	}

@@ -98,7 +98,7 @@ func (s *Server) adminCertifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pagination(r)
-	out, err := s.db.AdminCertifications(r.Context(), status, limit, offset)
+	out, err := s.db.AdminCertifications(r.Context(), identityFrom(r).ID, status, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
