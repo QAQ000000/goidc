@@ -51,8 +51,12 @@ func (s *Server) servicesList(w http.ResponseWriter, r *http.Request, paged bool
 		return
 	}
 	limit, offset := pagination(r)
+	// import_review_required is a services boolean flag, not a status value: the
+	// status CHECK never contains it. Filtering by it returns the legacy-import
+	// services still awaiting review instead of an always-empty result.
 	where := serviceJoins + ` WHERE (($1::boolean AND admin_customer_allowed($2,s.user_id)) OR (NOT $1::boolean AND s.user_id=$2))
-	 AND ($3::bigint IS NULL OR coalesce(p.service_group_id,0)=$3) AND ($4='' OR s.status=$4)
+	 AND ($3::bigint IS NULL OR coalesce(p.service_group_id,0)=$3)
+	 AND (CASE WHEN $4='import_review_required' THEN s.import_review_required ELSE ($4='' OR s.status=$4) END)
 	 AND (s.name ILIKE $5 OR s.domain ILIKE $5) AND ($6::bigint IS NULL OR s.user_id=$6)`
 	args := []any{adminRoute(r), identityFrom(r).ID, group, state, "%" + strings.TrimSpace(r.URL.Query().Get("q")) + "%", customerID}
 	// Count and items share one statement snapshot, including empty pages.

@@ -33,7 +33,14 @@ func (s *Store) ChangePassword(ctx context.Context, userID int64, currentTokenHa
 	if _, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", userID, currentTokenHash); err != nil {
 		return err
 	}
-	if err = Audit(ctx, tx, userID, "customer.password_changed", "user", userID, map[string]any{"sessions_revoked": true}); err != nil {
+	// Long-lived API keys survive a password change unless they are revoked
+	// here. A customer changing the password after a suspected leak must not
+	// leave the leaked bearer credential usable, so every active key is revoked
+	// in the same transaction; the owner re-issues keys explicitly.
+	if _, err = tx.Exec(ctx, "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", userID); err != nil {
+		return err
+	}
+	if err = Audit(ctx, tx, userID, "customer.password_changed", "user", userID, map[string]any{"sessions_revoked": true, "api_keys_revoked": true}); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

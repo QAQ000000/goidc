@@ -534,16 +534,40 @@ func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, 
 		return false, nil
 	}
 	var eligible bool
+	var mode string
 	if err := tx.QueryRow(ctx, `SELECT s.status='active' AND NOT s.import_review_required
       AND EXISTS (SELECT 1 FROM invoices i WHERE i.id=$2 AND (i.order_id=s.order_id OR EXISTS (
         SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id
           AND ii.item_type IN ('renew','service','upgrade'))))
       AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.service_id=s.id
-          AND j.status IN ('pending','running','waiting_manual','waiting_verification'))
-      FROM services s WHERE s.id=$1 FOR UPDATE`, serviceID, invoiceID).Scan(&eligible); err != nil {
+          AND j.status IN ('pending','running','waiting_manual','waiting_verification')),
+      s.provision_mode
+      FROM services s WHERE s.id=$1 FOR UPDATE`, serviceID, invoiceID).Scan(&eligible, &mode); err != nil {
 		return false, err
 	}
 	if !eligible {
+		return false, nil
+	}
+	// A mode that cannot suspend must not queue a job that is guaranteed to
+	// fail: the job would exhaust its attempts while the service stayed active
+	// and unpaid, and an operator would never learn about it. Record durable
+	// evidence instead so the missed suspension is discoverable, then leave the
+	// service untouched. Evidence is deduplicated per service/invoice so the
+	// minute-level scheduler does not pile up identical rows.
+	if !modeSupportsServiceAction(mode, "suspend") {
+		var recorded bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM audit_events
+ WHERE action='service.overdue_suspension.unsupported' AND entity_type='service' AND entity_id=$1
+   AND payload->>'invoice_id'=$2)`, fmt.Sprint(serviceID), fmt.Sprint(invoiceID)).Scan(&recorded); err != nil {
+			return false, err
+		}
+		if recorded {
+			return false, nil
+		}
+		if err := Audit(ctx, tx, 0, "service.overdue_suspension.unsupported", "service", serviceID,
+			map[string]any{"invoice_id": invoiceID, "action": "suspend", "provision_mode": mode, "reason": "delivery_mode_unsupported"}); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 	// Re-read after the service lock: another scheduler may have inserted a

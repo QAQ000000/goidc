@@ -33,7 +33,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 	if _, err := s.db.Pool.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), id.ID); err != nil {
 		return err
 	}
-	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
 	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	return nil
 }
@@ -128,7 +128,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": r.RemoteAddr})
+		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": s.clientIP(r)})
 		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码错误")
 		return
 	}
@@ -150,7 +150,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": r.RemoteAddr})
+	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
 	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	write(w, http.StatusOK, identity{ID: userID, Username: username, Email: email, Name: name, Role: role})
 }
@@ -212,6 +212,11 @@ func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Enrollment only stages a secret until mfaConfirm activates it, so API
+	// keys are deliberately not revoked here: nothing is enforced yet and a
+	// hijacked session must not be able to invalidate the owner's credentials
+	// through an enrollment that is never confirmed. Revocation happens once in
+	// mfaConfirm, at the moment the factor becomes effective.
 	recoveryCodes := make([]string, 0, 8)
 	for i := 0; i < 8; i++ {
 		codeBytes := make([]byte, 5)
@@ -283,11 +288,23 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// Confirming enrollment is the moment the account actually gets hardened,
+	// and API keys authenticate without MFA (see the bearer path of
+	// Server.authWith). Keys issued while MFA was off would silently bypass the
+	// factor this request just enabled, so every active key is revoked in the
+	// same transaction and the owner reissues keys from a session that passed
+	// MFA. Enrollment itself deliberately does not revoke: nothing is
+	// protected yet and an unconfirmed enrollment must not destroy the user's
+	// credentials. See mfaDisable for the symmetric decision.
+	if _, err = tx.Exec(r.Context(), "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", user.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.authAudit(r.Context(), user.ID, "auth.mfa_enabled", map[string]any{})
+	s.authAudit(r.Context(), user.ID, "auth.mfa_enabled", map[string]any{"api_keys_revoked": true})
 	write(w, http.StatusOK, map[string]bool{"enabled": true})
 }
 
@@ -338,6 +355,14 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// API keys are intentionally left untouched when MFA is switched off. This
+	// path already demands the password plus a TOTP/recovery code, so an actor
+	// who reaches it is fully authenticated; disabling the factor does not make
+	// surviving keys bypass anything (they were issued while MFA was on and the
+	// account has no factor to bypass afterwards). Revoking them here would
+	// only punish the legitimate owner and is asymmetric with the enable/disable
+	// contract, unlike mfaConfirm where revocation is what makes the new factor
+	// effective. Owners who want a clean slate can revoke keys explicitly.
 	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
 		if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", user.ID, tokenHash(cookie.Value)); err != nil {
 			s.fail(w, r, err)

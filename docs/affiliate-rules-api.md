@@ -17,3 +17,29 @@
 佣金快照保存月窗口、时区、累计营业额、当前账单净额及匹配档位上下界。金额计算沿用整数分、定点基点拆分防溢出、商品上限和不超过净额约束；营业额累计溢出会回滚付款事务，不产生错误金额。
 
 迁移 134 只建立历史营业额基线，不创建或改变历史佣金：仅回填有实际到账时间、现存有效归因且归因不晚于账单创建、能找到账单创建时规则集的已付款商品/续费/升级账单；排除当前退款/取消与未结清信用。无法从现存数据证明历史归属或规则集的账单不推测回填。没有历史归因/规则/到账证据的数据需要人工核对；后续规则变更不会补算它们的佣金。
+
+## 营业额计入与状态投影（2026-10-15 修复）
+
+迁移 138：`affiliate_turnover_entries.rule_set_id` 改为可空，明确规则集是证据而非营业额计入的前置条件。已付款的销售/续费/升级/重购账单只要存在有效归因就无条件写入一次基数分录，即使账单创建时没有生效规则集、即使净额为零、即使最终佣金为零；这类账单只跳过佣金分录，`rule_set_id` 记为 NULL。同一账单仍只计入一次，并发由 `affiliate-turnover-account` 账户级串行锁与 `affiliate_turnover_entries.invoice_id` 主键共同保证；重复到达同一账单的付款/还款/回调入口不会重复计基数，也不会跳过既有佣金分录。无商品行的充值、流量包账单仍不计营业额。
+
+`affiliate_commission_entries.status` 自迁移 100 起就是分桶列的派生投影（BEFORE UPDATE 触发器），桶列才是权威；迁移 139 增加 `affiliate_commission_status_derived` CHECK 约束并在建约束前重算存量不一致行，使释放/提现预留/打款/冲正/抵扣任一路径绕开触发器也无法把过期状态写回。客户接口继续返回该字段，其取值始终等于分桶派生结果，前端契约不变。
+
+迁移 140 为 `invoice_items(invoice_id)`、`order_items(order_id)`、`services(product_id)` 补前导列索引，消除父行删除/更新及导入器逐账单查询的全表扫描。
+
+### 历史数据回填
+
+迁移 134 之上新增的这两类修复都不回填历史数据：
+- 若某数据库在修复前已产生过“有归因但创建时无生效规则集”的已付款账单，它们仍缺基数分录。这是少付历史佣金的问题，需人工确认后再回填，本仓库不自动改写历史事实。只读诊断见下。
+- `status` 不一致若存在，迁移 139 会就地重算（仅重写 `status` 自身，不改分桶金额、不改 `amount_cents`）。这是把过期副本对齐到权威桶列，不改变任何客户金额。
+
+```sql
+-- 只读：找出缺少营业额基数、但有有效归因的已付款账单。
+SELECT i.id,i.invoice_no,i.user_id,i.amount_cents,i.created_at,i.paid_at
+FROM invoices i
+JOIN affiliate_attributions at ON at.user_id=i.user_id AND at.status='active'
+JOIN affiliate_accounts a ON a.id=at.account_id
+WHERE i.status='paid' AND a.user_id<>i.user_id
+  AND NOT EXISTS(SELECT 1 FROM affiliate_turnover_entries t WHERE t.invoice_id=i.id)
+ORDER BY i.id;
+```
+

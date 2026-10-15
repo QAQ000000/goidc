@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog, Tooltip } from "radix-ui";
-import { ArrowUpRight, ChevronDown, ChevronRight, Home, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Search, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronRight, Home, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
 import type { User } from "@/lib/api";
@@ -86,14 +86,6 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
         })}
       </nav>
       <div className="admin-global-account">
-        <div className="admin-header-search relative hidden md:flex items-center rounded-full bg-white/20 px-3 py-1 text-xs text-white">
-          <Search size={14} className="mr-1.5 opacity-80" />
-          <input
-            type="text"
-            placeholder="请搜索..."
-            className="w-20 bg-transparent text-xs text-white placeholder:text-white/70 outline-none transition-all focus:w-32"
-          />
-        </div>
         <img src="/assets/country/CN.png" alt="CN" className="h-4 w-6 rounded-sm object-cover hidden sm:inline-block" />
         {user ? <>
           <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span>

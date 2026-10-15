@@ -12,12 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func requestHost(r *http.Request) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
+// requestHost resolves the client address used by rate limits, blacklists and
+// audit records. X-Forwarded-For/X-Real-IP are honoured only when the socket
+// peer belongs to a configured TRUSTED_PROXY_CIDRS network; otherwise the
+// request keeps the historical RemoteAddr-derived behaviour.
+func (s *Server) requestHost(r *http.Request) string {
+	return s.clientIP(r)
 }
 
 type blacklistInput struct {
