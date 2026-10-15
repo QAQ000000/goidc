@@ -12,9 +12,77 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type CertificationStore struct{}
+
+// certificationEnabled reads the master switch behind legacy `certifi_open`.
+// The settings row is seeded by migration 093, but a missing row means
+// "closed" (legacy install default is '0') instead of an error: the switch
+// must never be assumed on.
+func certificationEnabled(ctx context.Context, q sqlQueryer) (bool, error) {
+	var enabled bool
+	err := q.QueryRow(ctx, "SELECT enabled FROM certification_settings WHERE id=1").Scan(&enabled)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return enabled, nil
+}
+
+// CertificationGate rejects certification writes while the master switch is
+// off, mirroring the legacy CERTIFI_CLOSE check that every submit endpoint
+// performs before reading any payload.
+func (s *Store) CertificationGate(ctx context.Context) error {
+	return certificationGate(ctx, s.Pool)
+}
+
+func certificationGate(ctx context.Context, q sqlQueryer) error {
+	enabled, err := certificationEnabled(ctx, q)
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		return conflict("certification_disabled", "实名认证已关闭")
+	}
+	return nil
+}
+
+// certificationPhoneMatch mirrors legacy `certifi_isbindphone` including its
+// three lenient behaviours: only a payload that actually carries a phone is
+// checked, only an account with a bound phone can be rejected, and an account
+// without a bound phone always passes.
+func certificationPhoneMatch(ctx context.Context, q sqlQueryer, userID int64, payload map[string]any) error {
+	var required bool
+	if err := q.QueryRow(ctx, "SELECT require_phone_match FROM certification_settings WHERE id=1").Scan(&required); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if !required {
+		return nil
+	}
+	phone, _ := payload["phone"].(string)
+	phone = strings.TrimSpace(phone)
+	if phone == "" {
+		return nil
+	}
+	var bound string
+	if err := q.QueryRow(ctx, "SELECT phone FROM users WHERE id=$1", userID).Scan(&bound); err != nil {
+		return err
+	}
+	if bound == "" {
+		return nil
+	}
+	if bound != phone {
+		return conflict("certification_phone_mismatch", "手机号与绑定手机不一致")
+	}
+	return nil
+}
 
 func sealCertification(key []byte, id string, payload any) ([]byte, string, error) {
 	if len(key) != 32 {
@@ -94,20 +162,35 @@ type CertificationSummary struct {
 }
 
 func (s *Store) Certification(ctx context.Context, userID int64) (map[string]any, error) {
+	enabled, err := certificationEnabled(ctx, s.Pool)
+	if err != nil {
+		return nil, err
+	}
 	var p CertificationSummary
-	err := s.Pool.QueryRow(ctx, `SELECT id,certification_type,status,provider_id,rejection_reason,version,updated_at FROM certification_profiles WHERE user_id=$1`, userID).Scan(&p.ID, &p.Type, &p.Status, &p.ProviderID, &p.RejectionReason, &p.Version, &p.UpdatedAt)
+	err = s.Pool.QueryRow(ctx, `SELECT id,certification_type,status,provider_id,rejection_reason,version,updated_at FROM certification_profiles WHERE user_id=$1`, userID).Scan(&p.ID, &p.Type, &p.Status, &p.ProviderID, &p.RejectionReason, &p.Version, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return map[string]any{"status": "unverified", "certification_type": "individual", "provider_id": "manual", "version": 0}, nil
+		return map[string]any{"enabled": enabled, "status": "unverified", "certification_type": "individual", "provider_id": "manual", "version": 0}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": p.ID, "certification_type": p.Type, "status": p.Status, "provider_id": p.ProviderID, "rejection_reason": p.RejectionReason, "version": p.Version, "updated_at": p.UpdatedAt}, nil
+	return map[string]any{"enabled": enabled, "id": p.ID, "certification_type": p.Type, "status": p.Status, "provider_id": p.ProviderID, "rejection_reason": p.RejectionReason, "version": p.Version, "updated_at": p.UpdatedAt}, nil
 }
 
 func (s *Store) SubmitCertification(ctx context.Context, userID int64, kind string, payload map[string]any) (map[string]any, error) {
+	if err := certificationGate(ctx, s.Pool); err != nil {
+		return nil, err
+	}
 	if err := validateCertificationPayload(kind, payload); err != nil {
 		return nil, err
+	}
+	// Legacy only enforces the bind-phone match on personal submissions
+	// (personCertifiPost / personRealNameAuth); the company submit path never
+	// checked certifi_isbindphone, so keep that asymmetry.
+	if kind == "individual" {
+		if err := certificationPhoneMatch(ctx, s.Pool, userID, payload); err != nil {
+			return nil, err
+		}
 	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
@@ -142,9 +225,14 @@ func (s *Store) SubmitCertification(ctx context.Context, userID int64, kind stri
 // a company submission without deleting the previous personal history.
 // The caller owns the transaction and must journal idempotency atomically.
 func (s *Store) ConvertCertificationToCompanyTx(ctx context.Context, tx pgx.Tx, userID int64, payload map[string]any, expected int64) (map[string]any, error) {
+	if err := certificationGate(ctx, tx); err != nil {
+		return nil, err
+	}
 	if err := validateCertificationPayload("company", payload); err != nil {
 		return nil, err
 	}
+	// personToCompany() delegates to companyCertifiPost(), which in legacy
+	// never applies certifi_isbindphone; only the personal submit path does.
 	var profileID, version int64
 	var kind, status string
 	if err := tx.QueryRow(ctx, `SELECT id,certification_type,status,version FROM certification_profiles WHERE user_id=$1 FOR UPDATE`, userID).Scan(&profileID, &kind, &status, &version); err != nil {
@@ -245,13 +333,16 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 	if len(note) > 2000 {
 		return conflict("invalid_certification_review", "审核备注过长")
 	}
-	var profileID, submissionID, version int64
+	var profileID, version int64
+	var submissionID *int64
 	var userID int64
 	var status string
 	// The scope predicate lives in the locking statement so the applicant is
 	// authorised at the same moment the row is locked; an out-of-scope reviewer
 	// gets no row and the review fails like a missing record.
-	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 AND admin_customer_allowed($2,p.user_id) FOR UPDATE`, id, reviewerID).Scan(&profileID, &userID, &version, &status, &submissionID)
+	var sealed []byte
+	var aad *string
+	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_encrypted FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_aad FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 AND admin_customer_allowed($2,p.user_id) FOR UPDATE`, id, reviewerID).Scan(&profileID, &userID, &version, &status, &submissionID, &sealed, &aad)
 	if err != nil {
 		return err
 	}
@@ -264,14 +355,79 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 	if _, err = tx.Exec(ctx, `UPDATE certification_profiles SET status=$2,rejection_reason=CASE WHEN $2='rejected' THEN $3 ELSE '' END,version=version+1,updated_at=now() WHERE id=$1`, id, decision, note); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE certification_submissions SET status=$2,reviewed_at=now(),reviewed_by=$3,review_note=$4 WHERE id=$1`, submissionID, decision, reviewerID, note); err != nil {
-		return err
+	if submissionID != nil {
+		if _, err = tx.Exec(ctx, `UPDATE certification_submissions SET status=$2,reviewed_at=now(),reviewed_by=$3,review_note=$4 WHERE id=$1`, *submissionID, decision, reviewerID, note); err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO certification_reviews(submission_id,profile_id,reviewer_id,decision,note) VALUES($1,$2,$3,$4,$5)`, *submissionID, profileID, reviewerID, decision, note); err != nil {
+			return err
+		}
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO certification_reviews(submission_id,profile_id,reviewer_id,decision,note) VALUES($1,$2,$3,$4,$5)`, submissionID, profileID, reviewerID, decision, note); err != nil {
-		return err
+	if decision == "approved" {
+		if err = s.applyCertifiedNameTx(ctx, tx, reviewerID, userID, profileID, submissionID, sealed, aad); err != nil {
+			return err
+		}
 	}
 	if err = Audit(ctx, tx, reviewerID, "certification.reviewed", "certification", id, map[string]any{"user_id": userID, "decision": decision}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// applyCertifiedNameTx implements legacy `certifi_realname`/auto_update_name:
+// an approved review writes the certified name back to the account name
+// (legacy clients.username -> users.username). It runs inside the review
+// transaction so the decision and the name change commit atomically.
+func (s *Store) applyCertifiedNameTx(ctx context.Context, tx pgx.Tx, reviewerID, userID, profileID int64, submissionID *int64, sealed []byte, aad *string) error {
+	var auto bool
+	if err := tx.QueryRow(ctx, "SELECT auto_update_name FROM certification_settings WHERE id=1").Scan(&auto); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		return err
+	}
+	if !auto || submissionID == nil || len(sealed) == 0 || aad == nil {
+		return nil
+	}
+	payload, err := openCertification(s.ProvisionEncryptionKey, *aad, sealed)
+	if err != nil {
+		// The approval itself must not depend on this optional convenience.
+		// Record the skipped writeback so operators can see it happened.
+		return Audit(ctx, tx, reviewerID, "certification.name_update_skipped", "certification", profileID, map[string]any{"user_id": userID, "reason": "payload_unavailable"})
+	}
+	name, _ := payload["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 240 {
+		return nil
+	}
+	var current string
+	if err = tx.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&current); err != nil {
+		return err
+	}
+	if current == name {
+		return nil
+	}
+	// Wrap the write in a savepoint: a duplicate username (23505) aborts the
+	// whole transaction in PostgreSQL, and the approval itself must survive.
+	nested, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err = nested.Exec(ctx, "UPDATE users SET username=$2,updated_at=now() WHERE id=$1", userID, name); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// Legacy clients.username had no unique constraint; Go usernames
+			// double as login identifiers. Keep the review result and record
+			// the skipped writeback instead of failing the whole decision.
+			if rbErr := nested.Rollback(ctx); rbErr != nil {
+				return rbErr
+			}
+			return Audit(ctx, tx, reviewerID, "certification.name_update_skipped", "certification", profileID, map[string]any{"user_id": userID, "reason": "username_taken"})
+		}
+		return err
+	}
+	if err = nested.Commit(ctx); err != nil {
+		return err
+	}
+	return Audit(ctx, tx, reviewerID, "certification.name_updated", "certification", profileID, map[string]any{"user_id": userID, "username": name})
 }

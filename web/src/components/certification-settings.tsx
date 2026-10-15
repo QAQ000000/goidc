@@ -77,12 +77,13 @@ function BasicSettings({ data, refresh }: { data: Settings; refresh: () => void 
     <fieldset disabled={!manage || busy} className="space-y-5">
       <div className="border-y py-5 space-y-4">
         <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.enabled} onCheckedChange={value => patch("enabled", value === true)} />启用实名认证</label>
-        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.advanced_enabled} onCheckedChange={value => patch("advanced_enabled", value === true)} />启用高级设置</label>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.advanced_enabled} onCheckedChange={value => patch("advanced_enabled", value === true)} />启用高级设置<span className="text-xs text-amber-700">（仅界面，尚未实现业务逻辑）</span></label>
         <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.auto_update_name} onCheckedChange={value => patch("auto_update_name", value === true)} />认证通过后自动更新客户姓名</label>
         <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.require_phone_match} onCheckedChange={value => patch("require_phone_match", value === true)} />认证手机号必须与绑定手机号一致</label>
-        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.notify_on_approval} onCheckedChange={value => patch("notify_on_approval", value === true)} />人工审核通过后自动发送短信</label>
-        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.suspend_unverified || form.require_for_purchase} onCheckedChange={value => { patch("suspend_unverified", value === true); patch("require_for_purchase", value === true); }} />未认证暂停产品或禁止购买</label>
-        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.allow_file_upload} onCheckedChange={value => patch("allow_file_upload", value === true)} />允许上传认证文件</label>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.notify_on_approval} onCheckedChange={value => patch("notify_on_approval", value === true)} />人工审核通过后自动发送短信<span className="text-xs text-amber-700">（尚未生效）</span></label>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.require_for_purchase} onCheckedChange={value => patch("require_for_purchase", value === true)} />未认证禁止购买<span className="text-xs text-muted-foreground">（下单时校验）</span></label>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.suspend_unverified} onCheckedChange={value => patch("suspend_unverified", value === true)} />未认证暂停已开通产品<span className="text-xs text-amber-700">（尚未生效）</span></label>
+        <label className="flex items-center gap-3 text-sm"><Checkbox checked={form.allow_file_upload} onCheckedChange={value => patch("allow_file_upload", value === true)} />允许上传认证文件<span className="text-xs text-amber-700">（尚未生效）</span></label>
       </div>
       <label className="grid max-w-md gap-2 text-sm">默认认证接口<select className="h-9 rounded-md border bg-background px-3" value={form.default_provider_id} onChange={event => patch("default_provider_id", event.target.value)}><option value="">请选择接口</option>{data.providers.map(provider => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
     </fieldset>
