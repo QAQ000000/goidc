@@ -29,6 +29,10 @@ func (s *Server) submitCertification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.Type = strings.TrimSpace(strings.ToLower(in.Type))
+	if err := s.db.CertificationGate(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	out, err := s.db.SubmitCertification(r.Context(), identityFrom(r).ID, in.Type, in.Payload)
 	if err != nil {
 		s.fail(w, r, err)
@@ -43,6 +47,12 @@ func (s *Server) convertCertificationToCompany(w http.ResponseWriter, r *http.Re
 		ExpectedVersion int64          `json:"expected_version"`
 	}
 	if !decode(w, r, &in) {
+		return
+	}
+	// Legacy checks certifi_open before anything else, so a closed switch is
+	// reported ahead of payload validation and idempotent replays.
+	if err := s.db.CertificationGate(r.Context()); err != nil {
+		s.fail(w, r, err)
 		return
 	}
 	if in.ExpectedVersion < 1 {

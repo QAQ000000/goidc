@@ -83,9 +83,13 @@ export function Workspace({
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const { data: impersonation } = useResource<{ active: boolean; admin_name?: string }>("/auth/impersonation", false);
+  // Legacy hides the 实名认证 menu entry whenever certifi_open is off; mirror
+  // that with the enabled flag from GET /account/certification. Absent data
+  // keeps the entry visible so a loading state never hides it by accident.
+  const { data: certification } = useResource<{ enabled?: boolean }>(!admin && user ? "/account/certification" : null, false);
   const [impersonationBusy, setImpersonationBusy] = useState(false);
   const [impersonationError, setImpersonationError] = useState("");
-  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : customerNav;
+  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : customerNav.filter(item => item.href !== "/console/certification" || certification?.enabled !== false);
   const groups = useServiceNavigation(!admin && !!user);
   async function exitImpersonation() {
     if (impersonationBusy) return;
