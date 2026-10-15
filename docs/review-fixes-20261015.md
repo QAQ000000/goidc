@@ -37,17 +37,26 @@ web: typecheck 通过、lint 0 error / 7 warning、next build 成功
 - 迁移 139 的 CHECK 与迁移 100 的触发器 CASE 一致，不会拒绝既有合法数据。
 - RBAC 映射未改动，路由数量不变（544）。
 
-## 未决事项（需产品/运维决定，本批次不改）
+## 未决事项
 
-1. **`require_active_order` 语义**：实现只认人工审核提升后的 `active` 状态，而常规支付流程把订单停在 `paid`。
-   legacy 的 `addfunds_require_order` 检查单一"已激活"状态，在 Go 中对应 `paid` 与 `active` 两者。
-   当前保守实现意味着开启该开关后，走常规支付闭环的客户将无法充值。代码注释已如实说明现状；
-   是否放宽为同时接受 `paid` 属产品决定。
+1. **`require_active_order` 语义**：已按 legacy `addfunds_require_order` 的真实意图修正，见下方"后续修正"。
 2. **自动 IP 黑名单只增不减**，且出口 IP 共享（NAT/跳板）时任一使用者触发阈值会牵连该出口的其他账号。
    建议增加过期行清理与更细的封锁粒度。
 3. **营业额基数不做退款冲正**，仅靠读侧排除已退款账单；已按含退款基数结算过的早先账单不会重算。
 4. **迁移 139 在单事务内全表修复并加约束**，大表上线需预留锁窗口。
 5. 本次修复未应用任何历史数据回填；`docs/affiliate-rules-api.md` 记录了只读诊断 SQL。
+
+## 后续修正：充值订单门禁对齐 legacy 语义
+
+`TopUp` 的 `require_active_order` 原先只接受人工审核提升后的 `active` 订单，而 Go 的常规支付流程
+把订单结算为 `paid`；legacy 的 `addfunds_require_order` 检查的是单一"已激活"状态（覆盖已支付与
+已受理订单），并忽略 `delete_time` 非零的订单。
+
+现改为接受 `paid` 与 `active`（`activatedOrderStates`），并排除软删除订单，与 legacy 行为一致。
+错误码 `topup_active_order_required` 不变，提示文案调整为"充值前必须存在已支付或已激活订单"；
+后台设置页标签同步更新。`TestTopUpRequiresActiveOrderWhenConfigured` 与
+`TestTopUpRequireActiveOrderAndHardcodedDefences` 覆盖五个分支：无订单拒绝、`paid` 放行、
+`cancelled` 拒绝、软删除 `paid` 拒绝、`active` 放行。
 
 ## 说明
 

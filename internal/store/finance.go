@@ -8,6 +8,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// activatedOrderStates lists the order states that satisfy the legacy
+// addfunds_require_order switch: the paid state that payment settles to, and
+// the active state that a manual review promotes an order to.
+var activatedOrderStates = []string{"paid", "active"}
+
 type creditSessionKey struct{}
 
 func WithCreditRefundSession(ctx context.Context, hash string) context.Context {
@@ -270,12 +275,12 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	// top-ups; before this fix they were persisted and displayed but never
 	// read here. Read inside the same transaction with a shared row lock so a
 	// concurrent settings update cannot interleave with the credit.
-	// require_active_order keeps the conservative reading of the legacy
-	// activation state: only an order promoted by manual review satisfies it.
-	// The ordinary pay flow settles orders to their paid state without that
-	// promotion, so enabling this switch restricts top-ups to customers whose
-	// orders were reviewed or migrated. Aligning it with the legacy intent is
-	// a product decision tracked in the review report.
+	// require_active_order mirrors the legacy addfunds_require_order switch,
+	// which accepted an order in the activated state and ignored orders the
+	// customer had deleted. Legacy had one activated state; Go settles payment
+	// to the paid state and only an optional manual review promotes an order
+	// to the active state, so both satisfy the switch. See
+	// activatedOrderStates for the accepted vocabulary.
 	var topupEnabled, requireActiveOrder bool
 	var minTopup, maxTopup, maxBalance int64
 	if err = tx.QueryRow(ctx, `SELECT topup_enabled,min_topup_cents,max_topup_cents,max_balance_cents,require_active_order FROM finance_settings WHERE id=1 FOR SHARE`).Scan(&topupEnabled, &minTopup, &maxTopup, &maxBalance, &requireActiveOrder); err != nil {
@@ -291,16 +296,12 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 		return 0, false, conflict("topup_above_maximum", fmt.Sprintf("单笔充值金额超过最大值 %d 分", maxTopup))
 	}
 	if requireActiveOrder {
-		// Legacy "addfunds_require_order" checked orders.status='Active'; Go
-		// maps that state to orders.status='active' (set when review approves
-		// the order). Conservative reading: at least one active order must
-		// exist before balance can be added.
-		var hasActiveOrder bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM orders WHERE user_id=$1 AND status='active')`, userID).Scan(&hasActiveOrder); err != nil {
+		var hasActivatedOrder bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM orders WHERE user_id=$1 AND status = ANY($2::text[]) AND deleted_at IS NULL)`, userID, activatedOrderStates).Scan(&hasActivatedOrder); err != nil {
 			return 0, false, err
 		}
-		if !hasActiveOrder {
-			return 0, false, conflict("topup_active_order_required", "充值前必须存在已激活订单")
+		if !hasActivatedOrder {
+			return 0, false, conflict("topup_active_order_required", "充值前必须存在已支付或已激活订单")
 		}
 	}
 	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 AND role='customer' FOR UPDATE", userID).Scan(&balance); err != nil {

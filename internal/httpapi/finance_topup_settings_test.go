@@ -75,29 +75,52 @@ func TestTopUpHonorsFinanceSettings(t *testing.T) {
 
 func TestTopUpRequiresActiveOrderWhenConfigured(t *testing.T) {
 	db, h := testServer(t)
-	customerID, _ := user(t, db, h, "active-order-customer", "customer")
 	_, root := user(t, db, h, "active-order-root", "super_admin")
-	balancePath := fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID)
-
 	expect(t, request(h, "PUT", "/api/v1/admin/finance-settings", financeSettingsPayload(true, 100, 10000, 0, true, 1), root, "active-order-settings"), 200)
-	w := request(h, "POST", balancePath, map[string]any{"amount_cents": 1000}, root, "active-order-missing")
+	balancePath := func(customerID int64) string { return fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID) }
+
+	// No order at all: the switch keeps refusing with its dedicated code.
+	emptyID, _ := user(t, db, h, "active-order-empty-customer", "customer")
+	w := request(h, "POST", balancePath(emptyID), map[string]any{"amount_cents": 1000}, root, "active-order-missing")
 	expect(t, w, 409)
 	if code := errorData(t, w)["code"]; code != "topup_active_order_required" {
 		t.Fatalf("active-order code=%v", code)
 	}
 
-	// A paid (not yet active) order still does not satisfy the rule.
-	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES($1,$2,'paid',1000,$1,'fixture')`, "active-order-paid", customerID); err != nil {
+	// A paid order (payment settled, not manually reviewed) now satisfies the
+	// legacy addfunds_require_order switch.
+	paidID, _ := user(t, db, h, "active-order-paid-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES($1,$2,'paid',1000,$1,'fixture')`, "active-order-paid", paidID); err != nil {
 		t.Fatal(err)
 	}
-	w = request(h, "POST", balancePath, map[string]any{"amount_cents": 1000}, root, "active-order-paid-attempt")
+	expect(t, request(h, "POST", balancePath(paidID), map[string]any{"amount_cents": 1000}, root, "active-order-paid-allowed"), 201)
+
+	// A cancelled order does not satisfy the rule.
+	cancelledID, _ := user(t, db, h, "active-order-cancelled-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES($1,$2,'cancelled',1000,$1,'fixture')`, "active-order-cancelled", cancelledID); err != nil {
+		t.Fatal(err)
+	}
+	w = request(h, "POST", balancePath(cancelledID), map[string]any{"amount_cents": 1000}, root, "active-order-cancelled-attempt")
 	expect(t, w, 409)
 	if code := errorData(t, w)["code"]; code != "topup_active_order_required" {
-		t.Fatalf("paid-only order code=%v", code)
+		t.Fatalf("cancelled-only order code=%v", code)
 	}
 
-	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES($1,$2,'active',1000,$1,'fixture')`, "active-order-active", customerID); err != nil {
+	// A soft-deleted paid order is ignored, mirroring legacy delete_time=0.
+	deletedID, _ := user(t, db, h, "active-order-deleted-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash,deleted_at) VALUES($1,$2,'paid',1000,$1,'fixture',now())`, "active-order-deleted", deletedID); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, request(h, "POST", balancePath, map[string]any{"amount_cents": 1000}, root, "active-order-allowed"), 201)
+	w = request(h, "POST", balancePath(deletedID), map[string]any{"amount_cents": 1000}, root, "active-order-deleted-attempt")
+	expect(t, w, 409)
+	if code := errorData(t, w)["code"]; code != "topup_active_order_required" {
+		t.Fatalf("deleted paid order code=%v", code)
+	}
+
+	// An active order (promoted by manual review) still satisfies the rule.
+	activeID, _ := user(t, db, h, "active-order-active-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES($1,$2,'active',1000,$1,'fixture')`, "active-order-active", activeID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", balancePath(activeID), map[string]any{"amount_cents": 1000}, root, "active-order-active-allowed"), 201)
 }

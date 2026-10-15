@@ -157,16 +157,30 @@ func TestTopUpRequireActiveOrderAndHardcodedDefences(t *testing.T) {
 	if _, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-missing", ""); conflictCode(t, err) != "topup_active_order_required" {
 		t.Fatalf("missing active order err=%v", err)
 	}
+	// Only paid and active orders satisfy the legacy addfunds_require_order
+	// switch, and soft-deleted orders are ignored like legacy delete_time<>0.
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES('topup-cancelled',$1,'cancelled',1000,'topup-cancelled','fixture')`, customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-cancelled", ""); conflictCode(t, err) != "topup_active_order_required" {
+		t.Fatalf("cancelled order satisfied active-order rule: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash,deleted_at) VALUES('topup-deleted',$1,'paid',1000,'topup-deleted','fixture',now())`, customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-deleted", ""); conflictCode(t, err) != "topup_active_order_required" {
+		t.Fatalf("soft-deleted paid order satisfied active-order rule: %v", err)
+	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES('topup-paid',$1,'paid',1000,'topup-paid','fixture')`, customerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-paid", ""); conflictCode(t, err) != "topup_active_order_required" {
-		t.Fatalf("paid order satisfied active-order rule: %v", err)
+	if balance, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-paid", ""); err != nil || balance != 1000 {
+		t.Fatalf("paid order did not permit topup: balance=%d err=%v", balance, err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash) VALUES('topup-active',$1,'active',1000,'topup-active','fixture')`, customerID); err != nil {
 		t.Fatal(err)
 	}
-	if balance, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-active", ""); err != nil || balance != 1000 {
+	if balance, _, err := db.TopUp(ctx, actorID, customerID, 1000, "topup-order-active", ""); err != nil || balance != 2000 {
 		t.Fatalf("active order did not permit topup: balance=%d err=%v", balance, err)
 	}
 
