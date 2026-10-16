@@ -96,8 +96,9 @@ export async function verifyStaticRetentionFiles(root, entries) {
 const quote = value => JSON.stringify(value);
 const regexEscape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function renderStaticRetentionNginx(plan, { port = 53188, phase, generation } = {}) {
-  check(port === 53188 && ['old', 'union', 'restored'].includes(phase) && typeof generation === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(generation), 'Invalid retention Nginx phase, generation or port');
+export function staticRetentionParts(plan, { phase, generation, locationGuards = false } = {}) {
+  check(typeof locationGuards === 'boolean', 'Invalid location guard option');
+  check(['old', 'union', 'restored'].includes(phase) && typeof generation === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(generation), 'Invalid retention Nginx phase, generation or port');
   check(plan?.version === 1 && Array.isArray(plan.entries) && Array.isArray(plan.oldEntries), 'Invalid retention plan');
   // Revalidate public plan inputs before interpolation, including rows unused
   // in this phase. A modified plan cannot inject Nginx directives or file paths.
@@ -110,7 +111,7 @@ export function renderStaticRetentionNginx(plan, { port = 53188, phase, generati
     `    ${quote(row.url)} 1;`,
     `    ${quote(`~^${regexEscape(row.url)}\\?[A-Za-z0-9_.~=&+\\-]*$`)} 1;`,
   ]).join('\n');
-  const locations = entries.map(row => `    location = ${quote(row.url)} {
+  const locations = entries.map(row => `    location = ${quote(row.url)} {${locationGuards ? '\n      if ($retention_exact_request = 0) { return 404; }\n      if ($request_method !~ ^(GET|HEAD)$) { return 405; }' : ''}
       alias ${quote(`${roots[row.release]}/${row.path}`)};
       types { }
       default_type ${row.contentType};
@@ -118,6 +119,12 @@ export function renderStaticRetentionNginx(plan, { port = 53188, phase, generati
       add_header X-Release-Generation ${quote(generation)} always;
       add_header X-Content-Type-Options nosniff always;
     }`).join('\n');
+  return { rawRequests, locations };
+}
+
+export function renderStaticRetentionNginx(plan, { port = 53188, phase, generation } = {}) {
+  check(port === 53188, 'Invalid retention Nginx port');
+  const { rawRequests, locations } = staticRetentionParts(plan, { phase, generation });
   return `daemon off;
 master_process on;
 worker_processes 1;
