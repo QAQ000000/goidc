@@ -226,7 +226,7 @@ function TransactionList({
   const router = useRouter();
   const { data: currentUser } = useResource<User>(admin ? "/me" : null, false);
   const mergePermission = admin && can(currentUser, "invoices.manage");
-  const { draft, setDraft, query, setQuery, status: state, setStatus: setState, page, setPage, ready, suffix } = useAdminListNavigation(admin, kind === "orders" ? orderStatusValues : invoiceStatusValues);
+  const { draft, setDraft, query, setQuery, status: state, setStatus: setState, page, setPage, ready, suffix } = useAdminListNavigation(admin || kind === "invoices", kind === "orders" ? orderStatusValues : invoiceStatusValues);
   const offset = page * 20;
   const [selected, setSelected] = useState<Record<number, MergeSelection>>({});
   const [mergeOpen, setMergeOpen] = useState(false);
@@ -515,6 +515,7 @@ function TransactionList({
                       <TableCell>
                         <InvoiceActions
                           key={`${row.id}:${row.status}`}
+                          listSuffix={suffix}
                           invoice={row}
                           admin={admin}
                           refresh={refresh}
@@ -961,9 +962,11 @@ function InvoiceActions({
   invoice,
   admin,
   refresh,
+  listSuffix = "",
 }: {
   invoice: InvoiceActionRow;
   admin: boolean;
+  listSuffix?: string;
   refresh: () => void;
 }) {
   const allowed = useAdminPermission("invoices.refund");
@@ -1002,7 +1005,7 @@ function InvoiceActions({
     const labels: Record<string, string> = { created: "待付款", accepted: "付款待核对", credited: "已入账", pending_liability: "已收到款，余额待核对", cancelled: "已取消" };
     return <div className="space-y-2">
       {invoice.topup_status && <p className="text-xs text-muted-foreground whitespace-normal">{labels[invoice.topup_status] ?? "充值状态待核对"}</p>}
-      <Button size="sm" variant="outline" asChild><Link href={`${admin ? "/admin" : "/console"}/invoices/${invoice.id}`}>查看充值账单</Link></Button>
+      <Button size="sm" variant="outline" asChild><Link href={`${admin ? "/admin" : "/console"}/invoices/${invoice.id}${listSuffix}`}>查看充值账单</Link></Button>
     </div>;
   }
   if (invoice.invoice_kind === "topup") return <TopupInvoiceActions invoice={invoice} admin={admin} refresh={refresh} />;
@@ -1123,7 +1126,7 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : searchParams.get("from") === "topup" ? "/console/account" : "/console/invoices"}>
+        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : searchParams.get("from") === "topup" ? "/console/account" : returnHref}>
           <ArrowLeft />
           {!admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
