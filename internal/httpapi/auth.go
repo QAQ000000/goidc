@@ -279,14 +279,6 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		s.registrationFieldsError(w, r, err)
 		return
 	}
-	if enabled, err = registrationEnabledTx(r.Context(), tx); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !enabled {
-		writeError(w, 403, "registration_disabled", "本站暂未开放注册")
-		return
-	}
 	if (len(allowed) > 0 || input.CustomFieldsVersion != "") && input.CustomFieldsVersion != schema.Version {
 		writeError(w, 409, "registration_fields_changed", "注册字段已变化，请加载最新字段后重试")
 		return

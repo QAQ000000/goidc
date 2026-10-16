@@ -115,15 +115,6 @@ func (s *Server) registrationFields(w http.ResponseWriter, r *http.Request) {
 		s.registrationFieldsError(w, r, err)
 		return
 	}
-	enabled, err := registrationEnabledTx(r.Context(), tx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !enabled {
-		writeError(w, 403, "registration_disabled", "本站暂未开放注册")
-		return
-	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
