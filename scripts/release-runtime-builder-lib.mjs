@@ -103,7 +103,7 @@ export function makeLaunchDescription({ web, binaries, runtime, webOrigin, runti
     version: 1, configVersion: 'zjmfgo-runtime-config-v1', runtimeUser,
     node: runtime.node.path, apiInternalURL: targets.api, webOrigin: targets.web, appRoot: web.appRoot, entry: web.entry,
     binaries: Object.fromEntries(Object.entries(binaries).map(([name, binary]) => [name, binary.path])),
-    environment: { inherit: false, allowlist: keys, forbidden: ['NODE_PATH', 'NODE_OPTIONS', '__NEXT_PRIVATE_STANDALONE_CONFIG'], fixed: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: new URL(targets.web).port, HTTP_ADDR: new URL(targets.api).host, PUBLIC_ORIGIN: targets.web, PUBLIC_ORIGINS: targets.web, COOKIE_SECURE: 'false', PAYMENT_MOCK_ENABLED: 'false' } },
+    environment: { inherit: false, allowlist: keys, forbidden: ['NODE_PATH', 'NODE_OPTIONS', '__NEXT_PRIVATE_STANDALONE_CONFIG'], fixed: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: new URL(targets.web).port, HTTP_ADDR: new URL(targets.api).host, API_INTERNAL_URL: targets.api, PUBLIC_ORIGIN: targets.web, PUBLIC_ORIGINS: targets.web, COOKIE_SECURE: 'false', PAYMENT_MOCK_ENABLED: 'false' } },
     config: { external: true, mode: '0600', required: keys, format: 'JSON object {version, values}; never dotenv/shell', owner: 'launch uid' },
     host: runtime.host, timeouts: { readySeconds: 30, workerSeconds: 30, stopSeconds: 15 },
     writablePaths: ['cache', 'tmp', 'state', 'logs'].map(name => ({ root: 'mutable', path: name })),

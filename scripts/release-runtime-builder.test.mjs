@@ -91,6 +91,7 @@ test('launch binds same package paths, readiness order and bounded cleanup', () 
   assert.equal(description.steps.find(step => step.name === 'web').cwd, web.appRoot);
   assert.equal(description.steps.find(step => step.name === 'migrate').repeat, 2);
   assert.equal(description.environment.fixed.HTTP_ADDR, '127.0.0.1:58088');
+  assert.equal(description.environment.fixed.API_INTERNAL_URL, web.apiInternalURL);
   assert.equal(description.environment.inherit, false);
   assert(description.writablePaths.every(item => item.root === 'mutable'));
   assert.throws(() => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'root' }), /Ordinary/);
