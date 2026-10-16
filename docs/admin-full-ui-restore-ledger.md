@@ -2,7 +2,9 @@
 
 来源：`/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md`。
 
-状态定义：`已完成` 表示已有真实页面和 API；`部分完成` 表示页面或交互仍缺一部分；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。
+状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面或交互仍缺一部分；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。登记状态不是全量浏览器或生产验收结论。
+
+2026-10-16 当前登记：105 项中 **44 项已完成、61 项部分完成、0 项待实现、0 项后端阻塞**。本次按已知能力缺口将 36/38/103 三项降为部分完成；下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](restore-evidence-scope-acceptance-20261016.md)。
 
 所有新版路径保持 `/admin/*` 稳定路由。列表页统一使用 `items/total/limit/offset`，设置页统一使用 `version/expected_version`，写操作必须经过权限、审计、幂等和版本冲突校验。
 
@@ -43,9 +45,9 @@
 | 33 | 货币配置 `#/currency-settings` | `/admin/currencies` | 已完成 | `GET/POST/PATCH/DELETE /admin/currencies`、`POST /admin/currencies/{id}/default` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 34 | 支付接口 `#/payment-interface` | `/admin/channels?category=payment` | 已完成 | `GET/POST/PUT/DELETE /admin/channel-instances` | `@super` / 能力、密钥、启停 |
 | 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
-| 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET/POST/PATCH /admin/promo-codes` | `promos.view/manage` |
+| 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 部分完成 | `GET/POST/PATCH /admin/promo-codes` | `promos.view/manage` / 已有新增、启停、循环/升级优惠与本页状态过滤；主页面未接起止时间编辑和真实分页。建单弹窗已有 `/admin/promo-codes/page` 目录分页，不等于主页面补齐；[能力映射](restore-evidence-scope-acceptance-20261016.md) |
 | 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
-| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 已完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `PUT /admin/contract-templates/{id}` | `settings.view` / `settings.manage`；总开关与纯文本模板管理、草稿和URL页签分页、版本幂等审计、事务会话锁；两个页签四尺寸通过；旧强制签订/商品模板绑定策略未实现，已完成登记仅指现有基础设置；[验收](admin-contract-lifecycle-acceptance-20261012.md) |
+| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 部分完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `PUT /admin/contract-templates/{id}` | `settings.view` / `settings.manage`；总开关与纯文本模板管理、草稿和URL页签分页、版本幂等审计、事务会话锁；两个页签历史四尺寸通过；强制签订/商品模板绑定策略未实现；[验收](admin-contract-lifecycle-acceptance-20261012.md)、[能力映射](restore-evidence-scope-acceptance-20261016.md) |
 | 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
 | 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、创建编辑删除确认、幂等、版本冲突、审计；四尺寸浏览器验收 |
@@ -110,7 +112,7 @@
 | 100 | 新建工单 `#/add-support-ticket` | `/admin/tickets/new` | 部分完成 | `GET /admin/tickets/create-options` + `POST /admin/tickets` + `POST /tickets/{id}/attachments` | `tickets.manage` / 真实客户、部门、服务、处理人搜索分页；优先级、抄送、邮件入队、附件上传、草稿恢复、取消确认、幂等与结果不确定保护；四尺寸浏览器验收通过；附件失败后的人工复核与完整旧版字段仍待补 |
 | 101 | 开具发票 `#/invoice` | `/admin/invoices/new` | 已完成 | `POST /admin/invoices` | `invoices.manage` |
 | 102 | 添加商品分组 `#/add-product-group` | `/admin/catalog-groups/new` | 部分完成 | `GET/POST /admin/catalog-groups/{kind}` | `products.manage` / 一级/二级独立创建、真实父分组、共用校验、payload绑定幂等、审计及权限复核；返回原分组层级；[本批验收](admin-entry-pages-acceptance-20261013.md) |
-| 103 | 编辑商品配置 `#/edit-product` | `/admin/products/{id}` | 已完成 | `GET/PATCH /admin/products/{id}` | `products.view/manage` |
+| 103 | 编辑商品配置 `#/edit-product` | `/admin/products/{id}` | 部分完成 | `GET/PATCH /admin/products/{id}` | `products.view/manage` / 已有基本信息、定价、服务归属、配置项/规则、购买字段及供应来源；旧版十分区未完整接入。推介商品规则、下载商品权限、商品/配置升级 API 与组件已有能力，商品编辑入口及旧版逐项语义仍待补齐；试用、链接等缺口见[十分区映射](restore-evidence-scope-acceptance-20261016.md) |
 | 104 | 编辑管理员 `#/admin-edit` | `/admin/access/staff/{id}` | 部分完成 | `GET/PATCH /admin/staff/{id}` | `@super` / 独立详情、共用账号/角色/范围字段、密码确认、提交重置确认、会话复核/版本/幂等/审计、保护超级管理员；旧版语言、工单签名与业务邮件偏好待补；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 | 105 | 创建短信模板 `#/sms-create-template` | `/admin/notifications/new?channel=sms` | 部分完成 | `POST /admin/notification-templates` | `notifications.manage` / 独立创建复用模板编辑器、真实列表回跳、变量/供应商模板ID、payload绑定幂等、权限凭据重查、审计version1；真实供应商模板发送本批未测；[本批验收](admin-entry-pages-acceptance-20261013.md) |
 
