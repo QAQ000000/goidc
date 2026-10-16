@@ -1,8 +1,9 @@
 "use client";
 
+import { CustomerCreditAccount, InvoiceCreditStatus, useCustomerCreditResource } from "./customer-credit";
 import { RenewalBenefitDetails,renewalBenefitLabel } from "./renewal-benefit";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -970,13 +971,30 @@ function InvoiceActions({
   refresh: () => void;
 }) {
   const allowed = useAdminPermission("invoices.refund");
+  const creditAccount = useCustomerCreditResource<CustomerCreditAccount>(admin || invoice.invoice_kind === "topup" ? null : "/credit/account");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState(false);
   const key = useRef<Record<string, string>>({});
  const [creditPending,setCreditPending]=useState<{key:string;body:string}|null>(null);
  const actorKey=useRef("");
- useEffect(()=>{if(admin)return;void api<User>("/me").then(u=>{actorKey.current=`credit-pay-pending:${u.id}:${invoice.id}`;const raw=sessionStorage.getItem(actorKey.current);if(raw){try{setCreditPending(JSON.parse(raw));}catch{sessionStorage.removeItem(actorKey.current);}}});},[admin,invoice.id]);
+ const creditOwner=useRef<number|null>(null);
+ const [creditOwnerReady,setCreditOwnerReady]=useState(false);
+ useEffect(()=>{
+   if(admin)return;
+   const controller=new AbortController();
+   creditOwner.current=null;actorKey.current="";
+   queueMicrotask(()=>{if(!controller.signal.aborted){setCreditOwnerReady(false);setCreditPending(null);}});
+   void api<User>("/me",{signal:controller.signal}).then(u=>{
+     if(controller.signal.aborted)return;
+     if(u.role!=="customer")throw new Error("请使用原客户账户确认信用付款结果");
+     creditOwner.current=u.id;actorKey.current=`credit-pay-pending:${u.id}:${invoice.id}`;
+     try{const raw=sessionStorage.getItem(actorKey.current);if(raw){const saved:unknown=JSON.parse(raw);if(!saved||typeof saved!=="object"||!("key" in saved)||typeof saved.key!=="string"||!("body" in saved)||typeof saved.body!=="string")throw new Error("原信用付款恢复资料无法读取，请联系支持核实后再付款");setCreditPending({key:saved.key,body:saved.body});}}
+     catch(e){setError((e as Error).message);return;}
+     setCreditOwnerReady(true);
+   }).catch((e:Error)=>{if(!controller.signal.aborted)setError(`无法核实信用付款账户：${e.message}`);});
+   return()=>controller.abort();
+ },[admin,invoice.id]);
  useEffect(()=>{if(!creditPending)return;const leave=(event:BeforeUnloadEvent)=>{event.preventDefault();};window.addEventListener("beforeunload",leave);return()=>window.removeEventListener("beforeunload",leave);},[creditPending]);
 
   async function act(action: "pay" | "pay-credit" | "refund") {
@@ -987,8 +1005,15 @@ function InvoiceActions({
     key.current[requestKey] ??=
       `web-invoice-${action}-${invoice.id}-${crypto.randomUUID()}`;
     const creditRequest=creditPending??{key:key.current[requestKey],body:JSON.stringify({expected_version:invoice.version})};
+    let submittedCredit=false;
     try {
-      await api(
+      if(action==="pay-credit"&&!admin){
+        if(!creditOwnerReady||creditOwner.current===null)throw new Error("信用付款账户尚未核实，请刷新页面后再试；原请求保留。");
+        const live=await api<User>("/me");
+        if(live.role!=="customer"||live.id!==creditOwner.current)throw new Error("账户已切换，请使用原账户重新打开账单；原信用付款请求已保留。");
+        submittedCredit=true;
+      }
+      const result=await api<{invoice_id:number;status:string}>(
         `${action === "refund" ? "/admin" : ""}/invoices/${invoice.id}/${action}`,
         {
           method: "POST",
@@ -996,10 +1021,19 @@ function InvoiceActions({
           headers: { "Idempotency-Key": action==="pay-credit"?creditRequest.key:key.current[requestKey] },
         },
       );
-      if(action==="pay-credit"){setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}
+      if(action==="pay-credit"&&(!result||result.invoice_id!==invoice.id||result.status!=="paid"))throw new Error("信用付款响应不完整，结果暂时未知，请以原请求确认。");
+      if(action==="pay-credit"){setCreditPending(null);try{if(actorKey.current)sessionStorage.removeItem(actorKey.current);}catch{}}
       setConfirm(false);
       refresh();
-    } catch(e){setError((e as Error).message);if(action==="pay-credit"){if(!(e instanceof ApiError)||e.status>=500){setCreditPending(creditRequest);if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}else{setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}}}finally{setBusy(false);}
+    } catch(e){
+      setError((e as Error).message);
+      if(action==="pay-credit"&&submittedCredit){
+        if(!(e instanceof ApiError)||e.status>=500||[401,403,408].includes(e.status)){
+          setCreditPending(creditRequest);
+          try{if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}catch{}
+        }else{setCreditPending(null);try{if(actorKey.current)sessionStorage.removeItem(actorKey.current);}catch{}}
+      }
+    }finally{setBusy(false);}
   }
   if (invoice.invoice_kind === "topup" && !invoice.topup) {
     const labels: Record<string, string> = { created: "待付款", accepted: "付款待核对", credited: "已入账", pending_liability: "已收到款，余额待核对", cancelled: "已取消" };
@@ -1076,7 +1110,9 @@ function InvoiceActions({
               <Wallet />
               余额支付
             </Button>
-            {invoice.amount_cents > 0 && <Button size="sm" variant="outline" disabled={busy||(!creditPending&&(invoice.import_review_required||invoice.real_payment_pending))} onClick={()=>{if(creditPending||window.confirm(`确认使用授信额度支付 ${money(invoice.amount_cents)}？该金额会成为待还债务。`))void act("pay-credit");}}>{creditPending?"以原请求确认信用付款结果":"信用支付"}</Button>}
+            {invoice.amount_cents > 0 && (creditPending || creditAccount.data?.display_enabled) && <Button size="sm" variant="outline" disabled={busy||!creditOwnerReady||(!creditPending&&(invoice.import_review_required||invoice.real_payment_pending||!creditAccount.data?.payment_enabled||creditAccount.data.frozen||creditAccount.data.available_cents<invoice.amount_cents))} onClick={()=>{if(creditPending||window.confirm(`确认使用授信额度支付 ${money(invoice.amount_cents)}？该金额会成为待还债务。`))void act("pay-credit");}}>{creditPending?"以原请求确认信用付款结果":"信用支付"}</Button>}
+            {creditAccount.error && !creditPending && <Failure error={creditAccount.error} retry={creditAccount.refresh} />}
+            {creditAccount.data?.display_enabled && !creditPending && (!creditAccount.data.payment_enabled || creditAccount.data.frozen || creditAccount.data.available_cents < invoice.amount_cents) && <p className="text-xs text-muted-foreground">当前不可新增信用付款：付款已关闭、账户冻结或账面额度不足。历史债务仍可查看。</p>}
             {invoice.amount_cents > 0 && !creditPending && (
               <OnlinePayment invoice={invoice} refresh={refresh} />
             )}
@@ -1109,15 +1145,19 @@ export function InvoiceDetailView({
   admin?: boolean;
 }) {
   const searchParams = useSearchParams();
+  const creditReturn = searchParams.get("credit_return");
+  const creditBack = !admin && creditReturn && /^\/console\/credit(?:\?|$)/.test(creditReturn) && !/[\r\n\\]/.test(creditReturn) ? creditReturn : null;
   const transactionBack = admin ? transactionReturnHref(searchParams.get("return_to")) : null;
   const renewal = admin && searchParams.get("kind") === "renew";
   const supplierReturn=searchParams.get("supplier_return");
   const supplierBack=admin && supplierReturn && /^\/admin\/suppliers\/renewals(?:\?|$)/.test(supplierReturn) ? supplierReturn : null;
   const returnHref = useAdminListReturnHref(renewal ? "/admin/orders" : `${admin ? "/admin" : "/console"}/invoices`, renewal ? ["pending", "paid", "cancelled", "refunded"] : invoiceStatusValues, "all", renewal ? { kind: "renew", limit: "25", customer_id: "" } : undefined);
-  const { data, error, refresh } = useResource<Invoice>(
+  const [creditRevision,setCreditRevision]=useState(0);
+  const { data, error, refresh: refreshInvoice } = useResource<Invoice>(
     `${admin ? "/admin" : ""}/invoices/${id}`,
     false,
   );
+  const refresh=useCallback(()=>{refreshInvoice();setCreditRevision(value=>value+1);},[refreshInvoice]);
   useEffect(() => {
     if (!data?.payment_pending) return;
     const timer = window.setInterval(refresh, 3000);
@@ -1126,9 +1166,9 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : searchParams.get("from") === "topup" ? "/console/account" : returnHref}>
+        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : creditBack ?? (searchParams.get("from") === "topup" ? "/console/account" : returnHref)}>
           <ArrowLeft />
-          {!admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
+          {creditBack ? "返回信用记录" : !admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
       </Button>
       {error ? (
@@ -1198,6 +1238,7 @@ export function InvoiceDetailView({
           {admin && (
             <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "topup" ? "在线充值账单" : data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
           )}
+          {!admin && <InvoiceCreditStatus invoiceId={data.id} revision={`${data.version}:${creditRevision}`} />}
           <div className="pb-5 flex flex-wrap gap-3">
             <InvoiceActions
               key={data.invoice_kind === "topup" ? `topup:${data.id}` : `${data.id}:${data.version}:${data.status}`}

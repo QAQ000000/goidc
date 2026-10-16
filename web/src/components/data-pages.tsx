@@ -1,4 +1,5 @@
 "use client";
+import { CustomerCreditOverview } from "./customer-credit";
 import { TicketNotificationPreferences } from "./ticket-notification-preferences";
 import { AdminCustomerDetailView, ContactsPanel } from "./admin-customer-detail";
 import { AccountVerification } from "./account-verification";
@@ -816,6 +817,7 @@ export function AccountView() {
   return (
     <Workspace title="账户余额">
       <PageHeading title="账户余额" description="余额流水与可用金额" />
+      <CustomerCreditOverview />
       {error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : (
         <>
           <section className="data-surface p-6 mb-6">
