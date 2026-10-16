@@ -410,6 +410,9 @@ func (s *Store) paymentAnomalyRefundWrite(ctx context.Context, actor, invoice, a
 		if !g.MerchantVerified {
 			return out, conflict("payment_anomaly_identity_unverified", "原商户或交易号不可核验，不能登记或解除")
 		}
+		if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('refund-original:'||$1,0))", g.ExternalTransactionID); err != nil {
+			return out, err
+		}
 		var occupied bool
 		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE id<>$1 AND external_transaction_id=$2 AND status='succeeded') OR EXISTS(SELECT 1 FROM external_refunds WHERE payment_id<>$1 AND merchant_scope=$3 AND original_transaction_id=$2 AND status='confirmed') OR EXISTS(SELECT 1 FROM payment_close_anomaly_refunds WHERE payment_id<>$1 AND merchant_scope=$3 AND external_transaction_id=$2 AND status<>'rejected')`, pid, g.ExternalTransactionID, g.merchantScope).Scan(&occupied); err != nil {
 			return out, err

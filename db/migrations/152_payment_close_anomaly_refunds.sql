@@ -139,7 +139,7 @@ BEGIN
  IF NEW.status='rejected' THEN RETURN NEW; END IF;
  original_tx:=CASE WHEN TG_TABLE_NAME='external_refunds' THEN to_jsonb(NEW)->>'original_transaction_id' ELSE to_jsonb(NEW)->>'external_transaction_id' END;
  IF original_tx='' THEN RETURN NEW; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended('refund-original:'||NEW.merchant_scope||':'||original_tx,0));
+ PERFORM pg_advisory_xact_lock(hashtextextended('refund-original:'||original_tx,0));
  IF TG_TABLE_NAME='payment_close_anomaly_refunds' THEN
   IF EXISTS(SELECT 1 FROM payment_transactions p WHERE p.id<>NEW.payment_id AND p.status='succeeded' AND p.external_transaction_id=original_tx)
    OR EXISTS(SELECT 1 FROM external_refunds r WHERE r.merchant_scope=NEW.merchant_scope AND r.original_transaction_id=original_tx AND r.status<>'rejected') THEN
@@ -154,3 +154,15 @@ BEGIN
 END $$;
 CREATE TRIGGER anomaly_refund_original_transaction BEFORE INSERT OR UPDATE ON payment_close_anomaly_refunds FOR EACH ROW EXECUTE FUNCTION guard_refund_original_transaction();
 CREATE TRIGGER external_refund_original_transaction BEFORE INSERT OR UPDATE ON external_refunds FOR EACH ROW EXECUTE FUNCTION guard_refund_original_transaction();
+
+-- Also protect the reverse ordering: a reserved/confirmed late-receipt refund
+-- must never be followed by sales settlement using that same receipt.
+CREATE FUNCTION guard_payment_anomaly_original_transaction() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.status<>'succeeded' OR NEW.external_transaction_id='' THEN RETURN NEW; END IF;
+ PERFORM pg_advisory_xact_lock(hashtextextended('refund-original:'||NEW.external_transaction_id,0));
+ IF EXISTS(SELECT 1 FROM payment_close_anomaly_refunds r WHERE r.external_transaction_id=NEW.external_transaction_id AND r.status<>'rejected') THEN
+ RAISE EXCEPTION 'original transaction is already claimed' USING ERRCODE='23514'; END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER payment_anomaly_original_transaction BEFORE INSERT OR UPDATE ON payment_transactions FOR EACH ROW EXECUTE FUNCTION guard_payment_anomaly_original_transaction();

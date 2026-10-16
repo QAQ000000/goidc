@@ -40,6 +40,126 @@ func anomalyReviewer(t *testing.T, f upgradeFixture) (int64, string) {
 	return externalRefundActor(t, f.db, f.h, "anomaly-reviewer", []string{"invoices.view", "payment_anomalies.view", "payment_anomalies.review"})
 }
 
+func anomalyOtherPayment(t *testing.T, f upgradeFixture, key string, closePayment bool, originalTransaction string) (int64, int64, string, int64) {
+	t.Helper()
+	invoice := manualInvoiceCreate(t, f.h, f.root, manualInvoiceInput(f.uid), key+"-invoice")
+	w := request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/payments", invoice), map[string]any{"provider": "mock", "expected_version": 1}, f.customer, key+"-intent")
+	expect(t, w, 201)
+	d := data(t, w)
+	pid, reference := int64(d["payment_id"].(float64)), d["provider_payment_id"].(string)
+	if !closePayment {
+		return invoice, pid, reference, 0
+	}
+	actor, hash := closeActor(t, f, f.root)
+	op, err := f.db.BeginPaymentClose(t.Context(), actor, invoice, pid, 1, key+"-close", hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.CompletePaymentClose(t.Context(), op, closeVerified(op), hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.ProcessPaymentWebhook(t.Context(), "mock", key+"-late", reference, invoice, 3000, "succeeded", []byte(key), originalTransaction); err != nil {
+		t.Fatal(err)
+	}
+	var anchor int64
+	if err = f.db.Pool.QueryRow(t.Context(), "SELECT min(id) FROM payment_close_anomalies WHERE payment_id=$1", pid).Scan(&anchor); err != nil {
+		t.Fatal(err)
+	}
+	return invoice, pid, reference, anchor
+}
+
+func TestPaymentAnomalySameOriginalAcrossPaymentsCannotRefundTwice(t *testing.T) {
+	f, invoice, _, _, anchor := paymentAnomalyFixture(t, "same-original-tx")
+	otherInvoice, _, _, otherAnchor := anomalyOtherPayment(t, f, "same-original-other", true, "same-original-tx")
+	_, firstPath := anomalyPaths(invoice, anchor)
+	_, secondPath := anomalyPaths(otherInvoice, otherAnchor)
+	var wg sync.WaitGroup
+	codes := make(chan int, 2)
+	for i, v := range []struct {
+		path   string
+		anchor int64
+	}{{firstPath, anchor}, {secondPath, otherAnchor}} {
+		wg.Add(1)
+		go func(i int, path string, version int64) {
+			defer wg.Done()
+			codes <- request(f.h, "POST", path, paymentAnomalyInput(version, fmt.Sprintf("different-payout-%d", i)), f.root, fmt.Sprintf("same-original-claim-%d", i)).Code
+		}(i, v.path, v.anchor)
+	}
+	wg.Wait()
+	close(codes)
+	var success, conflict int
+	for code := range codes {
+		switch code {
+		case 201:
+			success++
+		case 409:
+			conflict++
+		default:
+			t.Fatal(code)
+		}
+	}
+	if success != 1 || conflict != 1 {
+		t.Fatal(success, conflict)
+	}
+}
+
+func TestPaymentAnomalyRefundPreventsReverseSettlement(t *testing.T) {
+	for _, mode := range []string{"pending", "confirmed", "concurrent"} {
+		t.Run(mode, func(t *testing.T) {
+			f, invoice, _, _, anchor := paymentAnomalyFixture(t, "reverse-original-tx")
+			otherInvoice, otherPID, otherReference, _ := anomalyOtherPayment(t, f, "reverse-other", false, "")
+			base, create := anomalyPaths(invoice, anchor)
+			input := paymentAnomalyInput(anchor, "reverse-refund")
+			var refundCode int
+			var callbackErr error
+			createRefund := func() { refundCode = request(f.h, "POST", create, input, f.root, "reverse-create").Code }
+			callback := func() {
+				_, callbackErr = f.db.ProcessPaymentWebhook(t.Context(), "mock", "reverse-success", otherReference, otherInvoice, 3000, "succeeded", []byte(`{"reverse":true}`), "reverse-original-tx")
+			}
+			if mode == "concurrent" {
+				var wg sync.WaitGroup
+				wg.Add(2)
+				go func() { defer wg.Done(); createRefund() }()
+				go func() { defer wg.Done(); callback() }()
+				wg.Wait()
+				if !((refundCode == 201 && callbackErr != nil) || (refundCode == 409 && callbackErr == nil)) {
+					t.Fatal(refundCode, callbackErr)
+				}
+			} else {
+				createRefund()
+				if refundCode != 201 {
+					t.Fatal(refundCode)
+				}
+				if mode == "confirmed" {
+					_, reviewer := anomalyReviewer(t, f)
+					var rid int64
+					if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM payment_close_anomaly_refunds").Scan(&rid); err != nil {
+						t.Fatal(err)
+					}
+					expect(t, request(f.h, "POST", fmt.Sprintf("%s/payment-anomaly-refunds/%d/confirm", base, rid), map[string]any{"expected_version": 1, "expected_group_version": anchor, "note": "独立复核"}, reviewer, "reverse-confirm"), 201)
+				}
+				callback()
+				if callbackErr == nil {
+					t.Fatal("refunded receipt settled another payment")
+				}
+			}
+			var payments, refunds, ledger int
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_transactions WHERE status='succeeded'),(SELECT count(*) FROM payment_close_anomaly_refunds WHERE status<>'rejected'),(SELECT count(*) FROM balance_ledger WHERE reference_type='invoice' AND reference_id=$1)", otherInvoice).Scan(&payments, &refunds, &ledger); err != nil {
+				t.Fatal(err)
+			}
+			if payments+refunds != 1 {
+				t.Fatal(payments, refunds, ledger)
+			}
+			if refundCode == 201 {
+				closeState(t, f, otherInvoice, otherPID, "pending", 1)
+				if _, err := f.db.Pool.Exec(t.Context(), "UPDATE payment_transactions SET status='succeeded',external_transaction_id='reverse-original-tx' WHERE id=$1", otherPID); err == nil {
+					t.Fatal("SQL bypass settled claimed receipt")
+				}
+			}
+		})
+	}
+}
+
 func TestPaymentAnomalyRefundLifecycleGroupsAndSeparateMoney(t *testing.T) {
 	f, invoice, pid, reference, anchor := paymentAnomalyFixture(t, "merchant:late-one")
 	base, create := anomalyPaths(invoice, anchor)
@@ -103,7 +223,16 @@ func TestPaymentAnomalyRefundLifecycleGroupsAndSeparateMoney(t *testing.T) {
 		t.Fatal(summary)
 	}
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoice), map[string]any{"expected_version": 2}, f.customer, "anomaly-new-tx-blocks-pay"), 409)
-	for _, sql := range []string{"UPDATE payment_close_anomaly_refunds SET note='tampered'", "DELETE FROM payment_close_anomaly_refunds", "DELETE FROM payment_close_anomalies", "UPDATE external_refund_payout_claims SET status='released' WHERE status='confirmed'"} {
+	for _, sql := range []string{
+		"UPDATE payment_close_anomaly_refunds SET note='tampered'",
+		"UPDATE payment_close_anomaly_refunds SET merchant_scope='epay:'||repeat('b',64)",
+		"UPDATE payment_close_anomaly_refunds SET credential_sha256=repeat('b',64)",
+		"UPDATE payment_close_anomaly_merchant_bindings SET merchant_scope='epay:'||repeat('b',64)",
+		"UPDATE payment_close_anomaly_merchant_bindings SET credential_sha256=repeat('b',64)",
+		"DELETE FROM payment_close_anomaly_merchant_bindings",
+		"DELETE FROM payment_close_anomaly_refunds", "DELETE FROM payment_close_anomalies",
+		"UPDATE external_refund_payout_claims SET status='released' WHERE status='confirmed'",
+	} {
 		if _, err := f.db.Pool.Exec(t.Context(), sql); err == nil {
 			t.Fatal("immutable fact changed", sql)
 		}

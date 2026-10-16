@@ -270,6 +270,9 @@ func externalRefundDBError(err error) error {
 	if errors.As(err, &e) && e.Code == "23505" {
 		return conflict("external_refund_duplicate", "该账单、支付或退款流水已登记")
 	}
+	if errors.As(err, &e) && e.Code == "23514" && e.Message == "original transaction is already claimed" {
+		return conflict("external_refund_duplicate", "该原交易已被其他收款或退款占用")
+	}
 	return err
 }
 

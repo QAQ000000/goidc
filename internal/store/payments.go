@@ -331,6 +331,25 @@ func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider
 		if err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
 			return out, err
 		}
+		// A late receipt already reserved for independent refund review cannot
+		// be reused to settle another intent. Match the conservative global
+		// transaction identity enforced for Epay, and serialize both directions.
+		var originalTransaction string
+		if err = tx.QueryRow(ctx, "SELECT external_transaction_id FROM payment_transactions WHERE id=$1", txID).Scan(&originalTransaction); err != nil {
+			return out, err
+		}
+		if originalTransaction != "" {
+			if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('refund-original:'||$1,0))", originalTransaction); err != nil {
+				return out, err
+			}
+			var claimed bool
+			if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_close_anomaly_refunds WHERE external_transaction_id=$1 AND status<>'rejected')", originalTransaction).Scan(&claimed); err != nil {
+				return out, err
+			}
+			if claimed {
+				return out, conflict("payment_transaction_occupied", "原交易已登记异常退回，不能再次结算")
+			}
+		}
 		if err = requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
