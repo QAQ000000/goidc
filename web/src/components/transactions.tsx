@@ -61,6 +61,7 @@ import {
 import { TopupInvoiceActions, type TopupState } from "./topup-invoice-actions";
 import { ExternalRefunds } from "./external-refunds";
 import { PaymentClose } from "./payment-close";
+import { PaymentExceptionPanel } from "./payment-exception-panel";
 import { PaymentReconciliation } from "./payment-reconciliation";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import { AdminStatusTabs } from "./admin-status-tabs";
@@ -1399,6 +1400,7 @@ export function InvoiceDetailView({
               </Table>
             </div>
           </section>
+          {admin && <PaymentExceptionPanel invoiceId={data.id} payments={data.payments} refresh={refresh} />}
           {admin && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
         </>
       )}
