@@ -213,3 +213,42 @@ func TestRegistrationFieldsDefinitionEditSerializesRegistration(t *testing.T) {
 		t.Fatal("stale registration committed", n, err)
 	}
 }
+
+func TestRegistrationFieldsCatalogueFailsClosed(t *testing.T) {
+	for _, limit := range []string{"count", "bytes"} {
+		t.Run(limit, func(t *testing.T) {
+			db, h := testServer(t)
+			if limit == "count" {
+				// A supported 100-field catalogue is complete, including its last field.
+				if _, err := db.Pool.Exec(t.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,show_on_register,active) SELECT 'bounded_'||n,'公开字段'||n,'text',true,true FROM generate_series(1,100) n`); err != nil {
+					t.Fatal(err)
+				}
+				w := request(h, "GET", "/api/v1/auth/registration-fields", nil, "", "")
+				expect(t, w, 200)
+				if len(data(t, w)["items"].([]any)) != 100 {
+					t.Fatal("100 field catalogue truncated")
+				}
+				if _, err := db.Pool.Exec(t.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,show_on_register,active) VALUES('bounded_overflow','超限字段','text',true,true)`); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				// Legal field definitions with many individually bounded choices exceed
+				// the aggregate limit while staying well below the field-count ceiling.
+				if _, err := db.Pool.Exec(t.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,choices,show_on_register,active) SELECT 'large_'||n,'大选项字段'||n,'select',ARRAY(SELECT lpad(i::text,100,'x') FROM generate_series(1,1000) i),true,true FROM generate_series(1,3) n`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			registrationFieldsError(t, request(h, "GET", "/api/v1/auth/registration-fields", nil, "", ""), 503, "registration_fields_unavailable")
+			body := registrationFieldsBody("bounded-register", "stale", map[string]any{})
+			registrationFieldsError(t, request(h, "POST", "/api/v1/auth/register", body, "", ""), 503, "registration_fields_unavailable")
+			var count int
+			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM users WHERE username='bounded-register'").Scan(&count); err != nil || count != 0 {
+				t.Fatal("overflow accepted partial registration", count, err)
+			}
+			if _, err := db.Pool.Exec(t.Context(), "UPDATE site_settings SET registration_enabled=false"); err != nil {
+				t.Fatal(err)
+			}
+			registrationFieldsError(t, request(h, "GET", "/api/v1/auth/registration-fields", nil, "", ""), 403, "registration_disabled")
+		})
+	}
+}
