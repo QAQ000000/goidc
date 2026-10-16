@@ -163,6 +163,8 @@ node --test scripts/check-web-build-runtime.test.mjs
 
 上例显式使用webpack，以支持worktree外的共享依赖软链接；本项目已观察到默认Turbopack拒绝该链接，不能把失败构建算作通过。候选 `.next` 必须独立，不能软链接回运行目录；依赖需要变更时在独立目录安装，不能对常驻进程共享的 `node_modules` 执行 `npm ci`。Next rewrite 会绑定构建时 API 地址，临时 API 预览产物不能直接晋升正式发布。发布需要成套产物及静态资源、schema兼容和切回验收，见[发布验收契约](docs/release-readiness-next-contract-20261017.md)。
 
+已提交干净源码可使用[本地候选构建器与清单核验](docs/release-candidate-builder-20261017.md)准备同一提交的 API/worker/migrate、SQL checksum 和 Web 生产产物：构建器自行创建独立 checkout、显式使用 webpack，并输出需独立保存的 manifest SHA256；不接收任意已有 `.next` 作为同源证明，不含共享运行依赖，不部署或切流。此增量仅候选准备，G04/G09仍未关闭。
+
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
 
 `scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=30m`。PG18 的 httpapi 套件实测约 13 分钟，超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
