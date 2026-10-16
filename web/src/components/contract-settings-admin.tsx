@@ -66,7 +66,13 @@ function useDraft<T>(actor:number,scope:string,allowed:boolean,value:T,dirty:boo
  return {recoverable,recover:()=>{if(allowed&&recoverable){apply(recoverable);setRecoverable(null);sessionStorage.removeItem(legacy);}},discard:()=>{setRecoverable(null);sessionStorage.removeItem(storage);sessionStorage.removeItem(legacy);}};
 }
 function Notice({write}:{write:ReturnType<typeof useSettingsWrite>}){return <>{write.error&&<p role="alert" className="text-sm text-destructive break-words">{write.error}</p>}{write.pending&&<div className="border rounded p-3 text-sm space-y-2"><p>上次操作结果未确认，已保存原请求。刷新不会自动提交。尚有 {write.remaining} 项待核对（含历史请求），须逐项处理后才能新写入。</p>{write.allowed&&<Button type="button" disabled={write.busy} onClick={write.retry}>使用原请求重试</Button>}</div>}</>;}
-export function ContractSettingsAdmin(){const user=useAdminIdentity();return <Panel key={user?.id||"none"} actor={user?.id||0}/>;}
+export function ContractSettingsAdmin(){
+ const user=useAdminIdentity();
+ const manage=useAdminPermission("settings.manage");
+ // Each grant transition starts a fresh load cycle. Neither drafts nor pending
+ // writes can reuse a previous permission cycle's ready state.
+ return <Panel key={`${user?.id||"none"}:${manage?"manage":"read"}`} actor={user?.id||0}/>;
+}
 function Panel({actor}:{actor:number}){
  const params=useSearchParams(),router=useRouter(),tab=params.get("tab")==="templates"?"templates":"settings";
  const resource=useResource<Settings>("/admin/contract-settings",false);
