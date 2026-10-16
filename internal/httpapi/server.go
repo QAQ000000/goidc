@@ -562,6 +562,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/customer-product-discounts", s.auth(s.saveCustomerProductDiscount, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/group", s.auth(s.assignCustomerGroup, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-field-definitions", s.auth(s.customerFieldDefinitions, true))
+	mux.HandleFunc("GET /api/v1/admin/customer-fields/{id}", s.auth(s.adminCustomerCustomField, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-fields", s.auth(s.adminCustomerCustomFields, true))
 	mux.HandleFunc("POST /api/v1/admin/customer-fields", s.auth(s.createCustomerCustomField, true))
 	mux.HandleFunc("PATCH /api/v1/admin/customer-fields/{id}", s.auth(s.updateCustomerCustomField, true))
