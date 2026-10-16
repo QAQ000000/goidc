@@ -1,0 +1,1045 @@
+{
+  "status": "PASS",
+  "product_commit": "aa397f2",
+  "fixture_commit": "6baf13daf54d7d10f51327e4d4d3233d15320016",
+  "browser": "Chrome headless through Playwright",
+  "real_external_actions": false,
+  "widths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "checks": [
+    {
+      "name": "resolved topup exposes real refund entry at four sizes and short form cancel has no write",
+      "result": "PASS",
+      "before": {
+        "paid_at": "2026-10-17T01:35:08.889149+08:00",
+        "refunds": [],
+        "invoice_id": 2,
+        "resolution": {
+          "sha256": "1d463de2c81214020a16287505dc473c4024e59f90717885d3438352d96ef051",
+          "ledger_id": 4,
+          "amount_cents": 1234
+        },
+        "balance_cents": 103570,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 0,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "a5c48c1c21880cf7c572264b1228ecac63f1c032dda3f7b9fd56e6251ad2b200",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "registration freezes real credited balance once without altering failure or credit facts",
+      "result": "PASS",
+      "before": {
+        "paid_at": "2026-10-17T01:35:08.889149+08:00",
+        "refunds": [],
+        "invoice_id": 2,
+        "resolution": {
+          "sha256": "1d463de2c81214020a16287505dc473c4024e59f90717885d3438352d96ef051",
+          "ledger_id": 4,
+          "amount_cents": 1234
+        },
+        "balance_cents": 103570,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 0,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "a5c48c1c21880cf7c572264b1228ecac63f1c032dda3f7b9fd56e6251ad2b200",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "paid_at": "2026-10-17T01:35:08.889149+08:00",
+        "refunds": [
+          {
+            "id": 1,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "invoice_id": 2,
+        "resolution": {
+          "sha256": "1d463de2c81214020a16287505dc473c4024e59f90717885d3438352d96ef051",
+          "ledger_id": 4,
+          "amount_cents": 1234
+        },
+        "balance_cents": 103570,
+        "refund_audits": 1,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 1234,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "a5c48c1c21880cf7c572264b1228ecac63f1c032dda3f7b9fd56e6251ad2b200",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "applicant without review grant has no review action and real API returns 403",
+      "result": "PASS",
+      "status": 403,
+      "code": "permission_denied"
+    },
+    {
+      "name": "independent confirmation deducts exactly once and preserves original failed settlement and actual credit",
+      "result": "PASS",
+      "before": {
+        "paid_at": "2026-10-17T01:35:08.889149+08:00",
+        "refunds": [
+          {
+            "id": 1,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "invoice_id": 2,
+        "resolution": {
+          "sha256": "1d463de2c81214020a16287505dc473c4024e59f90717885d3438352d96ef051",
+          "ledger_id": 4,
+          "amount_cents": 1234
+        },
+        "balance_cents": 103570,
+        "refund_audits": 1,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 1234,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "a5c48c1c21880cf7c572264b1228ecac63f1c032dda3f7b9fd56e6251ad2b200",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "paid_at": "2026-10-17T01:35:08.889149+08:00",
+        "refunds": [
+          {
+            "id": 1,
+            "status": "confirmed",
+            "version": 2,
+            "ledger_id": 14,
+            "requested_by": 4,
+            "reversal_status": "applied"
+          }
+        ],
+        "invoice_id": 2,
+        "resolution": {
+          "sha256": "1d463de2c81214020a16287505dc473c4024e59f90717885d3438352d96ef051",
+          "ledger_id": 4,
+          "amount_cents": 1234
+        },
+        "balance_cents": 102336,
+        "refund_audits": 3,
+        "invoice_status": "refunded",
+        "payment_status": "succeeded",
+        "reserved_total": 0,
+        "invoice_version": 4,
+        "reversal_ledger": 1,
+        "original_settlement": {
+          "sha256": "a5c48c1c21880cf7c572264b1228ecac63f1c032dda3f7b9fd56e6251ad2b200",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "independent rejection releases the reservation without balance or ledger deduction",
+      "result": "PASS",
+      "before": {
+        "paid_at": "2026-10-17T01:35:08.990289+08:00",
+        "refunds": [],
+        "invoice_id": 3,
+        "resolution": {
+          "sha256": "01a9784334d4dc21194847a39f683af02fda09b73bdc9733ee5bdb4b46f7d870",
+          "ledger_id": 6,
+          "amount_cents": 1234
+        },
+        "balance_cents": 102336,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 0,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "c0220df957cc38f748c45f0223788e1f07d6aedd2ddfb2ebf4fb1b65fcc4b443",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "pending": {
+        "paid_at": "2026-10-17T01:35:08.990289+08:00",
+        "refunds": [
+          {
+            "id": 2,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "invoice_id": 3,
+        "resolution": {
+          "sha256": "01a9784334d4dc21194847a39f683af02fda09b73bdc9733ee5bdb4b46f7d870",
+          "ledger_id": 6,
+          "amount_cents": 1234
+        },
+        "balance_cents": 102336,
+        "refund_audits": 1,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 1234,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "c0220df957cc38f748c45f0223788e1f07d6aedd2ddfb2ebf4fb1b65fcc4b443",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "paid_at": "2026-10-17T01:35:08.990289+08:00",
+        "refunds": [
+          {
+            "id": 2,
+            "status": "rejected",
+            "version": 2,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "released"
+          }
+        ],
+        "invoice_id": 3,
+        "resolution": {
+          "sha256": "01a9784334d4dc21194847a39f683af02fda09b73bdc9733ee5bdb4b46f7d870",
+          "ledger_id": 6,
+          "amount_cents": 1234
+        },
+        "balance_cents": 102336,
+        "refund_audits": 2,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 0,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "c0220df957cc38f748c45f0223788e1f07d6aedd2ddfb2ebf4fb1b65fcc4b443",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "committed registration receipt loss survives refresh and identity change then same key and body replay causes no duplicate freeze",
+      "result": "PASS",
+      "committed_status": 201,
+      "same_key": true,
+      "same_body": true,
+      "request_body_sha256": "7a478fc48b16b14702cc5337c8d934c3a7ba5aadfc9d0f55ac14402a8d5a22fe",
+      "after": {
+        "paid_at": "2026-10-17T01:35:09.102332+08:00",
+        "refunds": [
+          {
+            "id": 3,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "invoice_id": 4,
+        "resolution": {
+          "sha256": "3d24590297d95794f55cecde4b9c59c5636b846a95e881c8b7b6809767f440b0",
+          "ledger_id": 8,
+          "amount_cents": 1234
+        },
+        "balance_cents": 102336,
+        "refund_audits": 1,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 1234,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "494828a776f48d8275be44f28474383f11bbad773022ac44f71ed0a3aad3e091",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "stale invoice version real API returns 409 with no funds or audit change",
+      "result": "PASS",
+      "status": 409,
+      "code": "version_conflict"
+    },
+    {
+      "name": "real competing registration yields 409 and preserves original request until explicit facts and end",
+      "result": "PASS",
+      "unchanged": true
+    },
+    {
+      "name": "independent permissions and customer scope enforced by real API",
+      "result": "PASS",
+      "write_status": 403,
+      "scope_status": 404
+    },
+    {
+      "name": "unresolved collected liability remains ineligible and no refund or reservation is written",
+      "result": "PASS",
+      "status": 409,
+      "code": "external_refund_topup_not_credited",
+      "after": {
+        "paid_at": "2026-10-17T01:35:09.32943+08:00",
+        "refunds": [],
+        "invoice_id": 7,
+        "resolution": null,
+        "balance_cents": 102336,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 2468,
+        "invoice_version": 2,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "b1352b2aa1ced8fce13706bb278ebeefac0e0c4dbb0bf4c6d4acf7dabbac4813",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 0
+      }
+    },
+    {
+      "name": "real customer spending leaves 500 cents available and new refund is rejected without refund reservation ledger or audit mutation",
+      "result": "PASS",
+      "manual_invoice_id": 8,
+      "spent_cents": 99368,
+      "before": {
+        "paid_at": "2026-10-17T01:35:09.243143+08:00",
+        "refunds": [],
+        "invoice_id": 6,
+        "resolution": {
+          "sha256": "e7f03e21a70535663845d149ab1a49eded043830a96e25d6632b66f4555eed6c",
+          "ledger_id": 12,
+          "amount_cents": 1234
+        },
+        "balance_cents": 2968,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 2468,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "0a57a3515ccb74b132d609b1346631187adc330e36291ad184d5ff6285beb42b",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "paid_at": "2026-10-17T01:35:09.243143+08:00",
+        "refunds": [],
+        "invoice_id": 6,
+        "resolution": {
+          "sha256": "e7f03e21a70535663845d149ab1a49eded043830a96e25d6632b66f4555eed6c",
+          "ledger_id": 12,
+          "amount_cents": 1234
+        },
+        "balance_cents": 2968,
+        "refund_audits": 0,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 2468,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "0a57a3515ccb74b132d609b1346631187adc330e36291ad184d5ff6285beb42b",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "customer detail safely projects actual credit and refunded state without internal reviewer notes or keys",
+      "result": "PASS",
+      "resolution_fields": [
+        "amount_cents",
+        "created_at",
+        "ledger_id"
+      ],
+      "status": "refunded",
+      "original_facts_unchanged": true
+    },
+    {
+      "name": "four sizes and short dialogs have reachable actions and no document/dialog overflow",
+      "result": "PASS",
+      "screenshots": 30,
+      "js_errors": 0
+    },
+    {
+      "name": "320x500 registration footer reached by scrolling, then canceled without submission",
+      "result": "PASS"
+    },
+    {
+      "name": "independent confirmation commits before hidden receipt, then refresh and exact request replay preserve single deduction",
+      "result": "PASS",
+      "committed_status": 201,
+      "same_body": true,
+      "same_key": true,
+      "request_body_sha256": "ad45b148fcc32927cf9f0eb84a3b863e0c5a53d4e3c70217e3b19acee5e12702",
+      "before": {
+        "paid_at": "2026-10-17T01:35:09.102332+08:00",
+        "refunds": [
+          {
+            "id": 3,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "invoice_id": 4,
+        "resolution": {
+          "sha256": "3d24590297d95794f55cecde4b9c59c5636b846a95e881c8b7b6809767f440b0",
+          "ledger_id": 8,
+          "amount_cents": 1234
+        },
+        "balance_cents": 2968,
+        "refund_audits": 1,
+        "invoice_status": "paid",
+        "payment_status": "succeeded",
+        "reserved_total": 2468,
+        "invoice_version": 3,
+        "reversal_ledger": 0,
+        "original_settlement": {
+          "sha256": "494828a776f48d8275be44f28474383f11bbad773022ac44f71ed0a3aad3e091",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "paid_at": "2026-10-17T01:35:09.102332+08:00",
+        "refunds": [
+          {
+            "id": 3,
+            "status": "confirmed",
+            "version": 2,
+            "ledger_id": 16,
+            "requested_by": 4,
+            "reversal_status": "applied"
+          }
+        ],
+        "invoice_id": 4,
+        "resolution": {
+          "sha256": "3d24590297d95794f55cecde4b9c59c5636b846a95e881c8b7b6809767f440b0",
+          "ledger_id": 8,
+          "amount_cents": 1234
+        },
+        "balance_cents": 1734,
+        "refund_audits": 3,
+        "invoice_status": "refunded",
+        "payment_status": "succeeded",
+        "reserved_total": 1234,
+        "invoice_version": 4,
+        "reversal_ledger": 1,
+        "original_settlement": {
+          "sha256": "494828a776f48d8275be44f28474383f11bbad773022ac44f71ed0a3aad3e091",
+          "status": "pending_liability",
+          "ledger_id": null,
+          "failure_code": "balance_posting_failed"
+        },
+        "original_topup_ledger": 1
+      }
+    }
+  ],
+  "pages": [
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "resolved-refund-entry",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/resolved-refund-entry-1440x900.png",
+      "screenshotSha256": "72490b37fd73ea0b98b6ca29240d5e4765f08c5522221ab01846d901fa7bd43e",
+      "layout": {
+        "viewport": 1440,
+        "height": 900,
+        "document": 1440,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "resolved-refund-entry",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/resolved-refund-entry-1024x900.png",
+      "screenshotSha256": "2336d922063b7c03d94831a0efcb9996268ba954b3b3fc359ee904f8ded06b9e",
+      "layout": {
+        "viewport": 1024,
+        "height": 900,
+        "document": 1024,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "resolved-refund-entry",
+      "width": 390,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/resolved-refund-entry-390x900.png",
+      "screenshotSha256": "088f9383404a2e7356447e856255ceda557b71bb1055a56f7b74149edf55c9c2",
+      "layout": {
+        "viewport": 390,
+        "height": 900,
+        "document": 390,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "resolved-refund-entry",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/resolved-refund-entry-320x900.png",
+      "screenshotSha256": "d7d16d999326b47c12ffea2439078c2575020266a36b0ae32ae0fa182e8db0e2",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "registration-dialog",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/registration-dialog-320x500.png",
+      "screenshotSha256": "4b027a2a44ca701e94ddf3194e5eafe07f7797d731431e9c677e9869d52c600b",
+      "layout": {
+        "viewport": 320,
+        "height": 500,
+        "document": 320,
+        "dialog": {
+          "left": 16,
+          "right": 304,
+          "top": 16,
+          "bottom": 484,
+          "scrollWidth": 286,
+          "clientWidth": 286
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "independent-confirm-dialog",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/independent-confirm-dialog-1440x900.png",
+      "screenshotSha256": "16318b15f858ccbefd9bca02b487876a39445784f1a417edfa11be66fd64cef6",
+      "layout": {
+        "viewport": 1440,
+        "height": 900,
+        "document": 1440,
+        "dialog": {
+          "left": 464,
+          "right": 976,
+          "top": 165,
+          "bottom": 735,
+          "scrollWidth": 510,
+          "clientWidth": 510
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "independent-confirm-dialog",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/independent-confirm-dialog-1024x900.png",
+      "screenshotSha256": "a356499e22c38f288d1939b19bf63876b061c5da5b54ddbde730ed9bb59cffa5",
+      "layout": {
+        "viewport": 1024,
+        "height": 900,
+        "document": 1024,
+        "dialog": {
+          "left": 256,
+          "right": 768,
+          "top": 165,
+          "bottom": 735,
+          "scrollWidth": 510,
+          "clientWidth": 510
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "independent-confirm-dialog",
+      "width": 390,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/independent-confirm-dialog-390x900.png",
+      "screenshotSha256": "f78b13d6d0c7572073e5dcfa4e2f32d72725ecb6a4d580e9eb8e8cb257a05b46",
+      "layout": {
+        "viewport": 390,
+        "height": 900,
+        "document": 390,
+        "dialog": {
+          "left": 16,
+          "right": 374,
+          "top": 114,
+          "bottom": 786,
+          "scrollWidth": 356,
+          "clientWidth": 356
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "independent-confirm-dialog",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/independent-confirm-dialog-320x900.png",
+      "screenshotSha256": "9ac9a57c2351a737a8170fc00af553cd88ec6a96a4c45b47f6663fc9e341549d",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": {
+          "left": 16,
+          "right": 304,
+          "top": 66,
+          "bottom": 834,
+          "scrollWidth": 286,
+          "clientWidth": 286
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "confirmed-refund",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmed-refund-1440x900.png",
+      "screenshotSha256": "e75b9de3ee4a7b860ae11294d4350e430d897363405832fede3c9b436f2688d3",
+      "layout": {
+        "viewport": 1440,
+        "height": 900,
+        "document": 1440,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "confirmed-refund",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmed-refund-1024x900.png",
+      "screenshotSha256": "210e8bcb741b8a17f1cdd4b44aa0f59698840212285ae98d5758ea75595e8b3e",
+      "layout": {
+        "viewport": 1024,
+        "height": 900,
+        "document": 1024,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "confirmed-refund",
+      "width": 390,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmed-refund-390x900.png",
+      "screenshotSha256": "3b3bed553d7e9a3920426dde16b74821f6da51ebbfcdf5794e9a4a366b03d342",
+      "layout": {
+        "viewport": 390,
+        "height": 900,
+        "document": 390,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/2",
+      "scenario": "confirmed-refund",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmed-refund-320x900.png",
+      "screenshotSha256": "7c36ada95ef39770536dd8ad423f0c8fbc07b02b663b21f66dcaac4580c8fd61",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "scenario": "independent-reject-dialog",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/independent-reject-dialog-320x500.png",
+      "screenshotSha256": "0e80af871a85cab6d39eba05f4e1bafb53a1790e4c39793f149b3f95279c0b3e",
+      "layout": {
+        "viewport": 320,
+        "height": 500,
+        "document": 320,
+        "dialog": {
+          "left": 16,
+          "right": 304,
+          "top": 16,
+          "bottom": 484,
+          "scrollWidth": 286,
+          "clientWidth": 286
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "scenario": "rejected-release",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/rejected-release-320x900.png",
+      "screenshotSha256": "d76506d673c838bb34da9436a483170dd30eeea7279669dde24a1c34c084de1f",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "lost-receipt-restored",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/lost-receipt-restored-1440x900.png",
+      "screenshotSha256": "7032a742cdd722eabf8b61c381374a1a15720bcaf326d7abef4228b60707972c",
+      "layout": {
+        "viewport": 1440,
+        "height": 900,
+        "document": 1440,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "lost-receipt-restored",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/lost-receipt-restored-1024x900.png",
+      "screenshotSha256": "48f9cdda50d8b737ec492257c21e99d5c5b10e70cfda2f2da3453ea1073ca185",
+      "layout": {
+        "viewport": 1024,
+        "height": 900,
+        "document": 1024,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "lost-receipt-restored",
+      "width": 390,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/lost-receipt-restored-390x900.png",
+      "screenshotSha256": "9508dfcf4dfdb1a0b07e88734c8a5afde636a18c6fa0a6ff9026ccee9578ae40",
+      "layout": {
+        "viewport": 390,
+        "height": 900,
+        "document": 390,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "lost-receipt-restored",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/lost-receipt-restored-320x900.png",
+      "screenshotSha256": "f7caec628db918455bbdfb1a02fcb7e377766487e1ea14286d62bd9f43aa8c65",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "same-key-replay",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/same-key-replay-320x900.png",
+      "screenshotSha256": "a2c3d86588db3cbeedefc25df1fcab22575c986a96b81e078d6d2eca4dcfb6b5",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "scenario": "conflict-explicit-reread",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/conflict-explicit-reread-320x900.png",
+      "screenshotSha256": "fda040fce2156ea58f1003064f9eaf48523f9eb616da4eca439ef97af5354558",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/6",
+      "scenario": "reader-no-write",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/reader-no-write-320x900.png",
+      "screenshotSha256": "4fc0a3579413c99894b0064c6acf850b8d6d8e2088d7fc54aed043ff8a082563",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/7",
+      "scenario": "unresolved-liability-refused",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/unresolved-liability-refused-320x900.png",
+      "screenshotSha256": "bb615a2305ea2441d42de3d4ddccb1db7f66958fc2c6cf40a2f4b76c4f783954",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/6",
+      "scenario": "insufficient-balance-refused",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/insufficient-balance-refused-320x900.png",
+      "screenshotSha256": "2bf67732799eafa99449182a674ab9fc8b72b303428572b6094d81fa0ba8e8f4",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": {
+          "left": 16,
+          "right": 304,
+          "top": 16,
+          "bottom": 884,
+          "scrollWidth": 286,
+          "clientWidth": 286
+        }
+      }
+    },
+    {
+      "newRoute": "/console/invoices/2",
+      "scenario": "customer-refunded-history",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/customer-refunded-history-320x900.png",
+      "screenshotSha256": "b0b5b37fab090641c0e714610e9c26d7a6a8a1b51d08332fa22957d9c255b4a3",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "scenario": "registration-short-footer-reachable",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/registration-short-footer-reachable-320x500.png",
+      "screenshotSha256": "d9a2fc8c90fbf403a45e8e40ab2a7a4738138a96a2cb2aa3f35a1e2d2516a3bc",
+      "layout": {
+        "viewport": 320,
+        "height": 500,
+        "document": 320,
+        "dialog": {
+          "left": 16,
+          "right": 304,
+          "top": 16,
+          "bottom": 484,
+          "scrollWidth": 286,
+          "clientWidth": 286
+        }
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "confirmation-receipt-restored",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmation-receipt-restored-1440x900.png",
+      "screenshotSha256": "1c2a250374a13def6c3e19fcdad9391d1ea0d92a7755b610b74d49001ecc0560",
+      "layout": {
+        "viewport": 1440,
+        "height": 900,
+        "document": 1440,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "confirmation-receipt-restored",
+      "width": 1024,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmation-receipt-restored-1024x900.png",
+      "screenshotSha256": "8b6309e04c85f41fa82be8e5805e1a6093a8e25d75cd0467bf5f506d461776a1",
+      "layout": {
+        "viewport": 1024,
+        "height": 900,
+        "document": 1024,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "confirmation-receipt-restored",
+      "width": 390,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmation-receipt-restored-390x900.png",
+      "screenshotSha256": "194a6c4905d4a164a6f9c1d9a03f58a75bb0d596de95948977a286aeec4d2f50",
+      "layout": {
+        "viewport": 390,
+        "height": 900,
+        "document": 390,
+        "dialog": null
+      }
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "scenario": "confirmation-receipt-restored",
+      "width": 320,
+      "height": 900,
+      "screenshot": "output/playwright/resolved-topup-refund-20261017/confirmation-receipt-restored-320x900.png",
+      "screenshotSha256": "4ac5608e2631fa33551e5efce12b004157c253ecb7f707eb8c1803473803e2e0",
+      "layout": {
+        "viewport": 320,
+        "height": 900,
+        "document": 320,
+        "dialog": null
+      }
+    }
+  ],
+  "js_errors": [],
+  "expected_api_errors": [
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/4/external-refunds",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/5/external-refunds",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/6/external-refunds",
+      "status": 409
+    }
+  ],
+  "unexpected_api_errors": [],
+  "local_product_commit": "29c5025",
+  "mainline_product_commit": "d462e49",
+  "scope": "补账后实际入账充值的全额外部退款登记/冻结/独立冲正；真实 Go API + 独立 PG18 + Next webpack 生产预览；无真实外部资金动作",
+  "build": {
+    "command": "API_INTERNAL_URL=<isolated API> npm run build -- --webpack",
+    "result": "PASS",
+    "rewrites_verified": true
+  },
+  "final_database": {
+    "pg_version": "180000",
+    "schema_version": "153_resolved_topup_external_refunds.sql",
+    "refund_status_counts": {
+      "rejected": 1,
+      "confirmed": 2,
+      "pending_review": 1
+    },
+    "reversal_status_counts": {
+      "applied": 2,
+      "pending": 1,
+      "released": 1
+    },
+    "actual_credit_resolutions": 5,
+    "confirmed_negative_ledgers": 2,
+    "original_pending_liabilities": 6
+  },
+  "cleanup": {
+    "fixture_pass": true,
+    "fixture_seconds": 698.27,
+    "exact_schema_remaining": 0,
+    "ready_manifest_finish_files_removed": true,
+    "preview_port_3111_listening": false,
+    "fixture_api_listening": false,
+    "browsers_closed": true,
+    "dedicated_test_database_dropped": true
+  },
+  "validation_notes": [
+    "Initial short-dialog geometry probe ran before resize animation settled, before any refund write. It was excluded; final captures wait for layout to settle and include a scrolled footer at 320x500.",
+    "403 applicant probe checks a requester without the review grant; independent reviewer ID differs in actual successful confirmation. This browser run does not separately exercise a super-admin self-review.",
+    "Only registration and confirmation responses are fault-injected after the real API has committed; financial facts and successful API payloads are never synthesized.",
+    "Canceled background GET requests during navigation are not business-write failures. No unexpected browser API HTTP error or JavaScript exception was observed."
+  ]
+}
