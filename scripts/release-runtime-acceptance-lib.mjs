@@ -1,4 +1,4 @@
-import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, readlink, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { fileHash, noLinks, safeRelative, sha256 } from './release-candidate-lib.mjs';
@@ -83,16 +83,39 @@ export async function verifyPages(manifest, releaseRoot, origin) {
   requireThat(direct.equals(proxy), 'Web proxy differs from direct read-only API response');
   return { pages, assets: [...assets.values()], proxy: { route: apiRoute, sha256: sha256(direct), equal: true } };
 }
-export async function auditProcesses(releaseRoot, expected) {
+export async function auditProcesses(releaseRoot, expected, traceRoot) {
   const rows = [];
   for (const name of (await readdir('/proc')).filter(value => /^\d+$/.test(value))) {
     let exe, cwd, cmdline;
     try { [exe, cwd, cmdline] = await Promise.all([readlink(`/proc/${name}/exe`), readlink(`/proc/${name}/cwd`), readFile(`/proc/${name}/cmdline`)]); } catch { continue; }
-    const item = expected.find(row => exe === path.join(releaseRoot, row.executable) && cwd === path.join(releaseRoot, row.cwd));
-    if (!item) continue;
     const argv = cmdline.toString().split('\0').filter(Boolean);
-    requireThat(sameArguments(argv.slice(1), item.args ?? []), 'Runtime process arguments differ from package launch');
-    rows.push({ name: item.name, pid: Number(name), executable: item.executable, cwd: item.cwd, args: argv.slice(1), sha256: await fileHash(`/proc/${name}/exe`) });
+    // strace -ff remains as the process-group wrapper, while the traced child
+    // execs the package binary. Inspect cmdline as well as /proc/exe so the
+    // identity check records the actual package PID rather than the wrapper.
+    const item = expected.find(row => {
+      const expectedExe = path.join(releaseRoot, row.executable);
+      const expectedCwd = path.join(releaseRoot, row.cwd);
+      const launchIndex = argv.findIndex(value => value === expectedExe || value.endsWith(expectedExe));
+      if (cwd !== expectedCwd) return false;
+      // A traced child has the package executable as argv[0]. Do not accept a
+      // strace wrapper merely because its argv contains the target path.
+      return exe === expectedExe || (launchIndex === 0 && path.basename(exe) === path.basename(expectedExe));
+    });
+    if (!item) continue;
+    const expectedExe = path.join(releaseRoot, item.executable), actualHash = await fileHash(`/proc/${name}/exe`);
+    requireThat(actualHash === await fileHash(expectedExe), 'Actual runtime executable differs from sealed package binary');
+    let args = argv.slice(1), argumentEvidence = 'current-cmdline';
+    if (traceRoot && item.traceName) {
+      const trace = await readFile(path.join(traceRoot, `${item.traceName}.trace.${name}`), 'utf8').catch(() => '');
+      const target = trace.split('\n').find(line => line.startsWith(`execve(${JSON.stringify(expectedExe)}, `) && /\)\s*= 0$/.test(line));
+      requireThat(target, 'Actual runtime PID lacks its successful package execve evidence');
+      const encoded = target.slice(target.indexOf('['), target.indexOf('], ') + 1);
+      let launched; try { launched = JSON.parse(encoded); } catch { throw new Error('Actual runtime execve arguments are incomplete'); }
+      requireThat(launched[0] === expectedExe, 'Actual runtime execve target mismatch');
+      args = launched.slice(1); argumentEvidence = 'same-pid-successful-execve';
+    }
+    requireThat(sameArguments(args, item.args ?? []), 'Runtime process arguments differ from package launch');
+    rows.push({ name: item.name, pid: Number(name), exe, executable: item.executable, cwd, args, cmdline: argv, argumentEvidence, sha256: actualHash });
   }
   return rows;
 }
@@ -102,20 +125,48 @@ export async function assertSocket(filename, expectedPort) {
   requireThat((await lstat(filename)).isSocket() && path.basename(filename) === `.s.PGSQL.${expectedPort}`, 'Explicit matching PostgreSQL Unix socket required');
 }
 export async function writeJSON(filename, data) {
-  await writeFile(filename, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+  const temporary = `${filename}.${process.pid}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    requireThat(!(await lstat(filename).catch(() => null)), 'Refusing to overwrite published controller evidence');
+    // Single controller writer owns the exclusive directory. Reader sees only
+    // absent or complete JSON; it never observes a newly created empty command.
+    await rename(temporary, filename);
+  } finally { await rm(temporary, { force: true }); }
 }
 
 export function auditTraceLine(line, cacheRoots = []) {
   // strace omits write buffers: only file/network operations are recorded.
   // A denied attempt still fails acceptance; readonly mounts alone do not prove
   // that the application did not require an undeclared writable path.
-  const mutation = /\b(?:open|openat|openat2)\(.*\b(?:O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND)\b/.test(line) || /\b(?:creat|mkdir|mkdirat|unlink|unlinkat|rename|renameat|renameat2|rmdir|truncate|chmod|fchmodat|chown|lchown|symlink|link|mknod|utime|utimensat)\(/.test(line);
+  const mutation = /\b(?:open|openat|openat2)\(.*\b(?:O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND)\b/.test(line) || /\b(?:creat|mkdir|mkdirat|unlink|unlinkat|rename|renameat|renameat2|rmdir|truncate|ftruncate|fallocate|chmod|fchmod|fchmodat|fchmodat2|chown|fchown|fchownat|lchown|symlink|link|mknod|utime|utimensat)\(/.test(line);
   if (mutation) {
-    const quoted = [...line.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(row => row[1]);
-    const paths = quoted.filter(value => value.startsWith('/') || !/^[A-Z_]+$/.test(value));
-    requireThat(paths.length > 0 && paths.every(value => value === '/dev/null' || value.startsWith('/mutable/') || cacheRoots.some(root => value === root || value.startsWith(`${root}/`))), 'Undeclared runtime write attempt');
+    const quoted = [...line.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)];
+    const fdPaths = [...line.matchAll(/\d+<([^>]+)>/g)].map(row => row[1]);
+    const paths = quoted.length ? quoted.map(row => {
+      // -yy annotates directory fds, including AT_FDCWD. Resolve relative
+      // operands against that directory before checking their normalized scope.
+      requireThat(!row[1].includes('\\'), 'Undeclared runtime write attempt');
+      if (row[1].startsWith('/')) return row[1];
+      const directory = line.slice(0, row.index).match(/(?:AT_FDCWD|\d+)<([^>]+)>,\s*$/)?.[1];
+      requireThat(directory?.startsWith('/'), 'Undeclared runtime write attempt');
+      return path.posix.join(directory, row[1]);
+    }) : fdPaths;
+    const allowed = value => {
+      const normalized = path.posix.normalize(value);
+      return normalized === '/dev/null' || normalized.startsWith('/mutable/') || cacheRoots.some(root => {
+        const base = path.posix.normalize(root); return normalized === base || normalized.startsWith(`${base}/`);
+      });
+    };
+    // fchmod/fchown/ftruncate are only attributable to a file
+    // when strace's -yy fd path is present. Unknown paths fail closed.
+    requireThat(paths.length > 0 && paths.every(allowed), 'Undeclared runtime write attempt');
   }
-  if (/\b(?:connect|sendto|sendmsg|bind)\(/.test(line) && /AF_INET6?/.test(line)) {
+  // Network payload syscalls use raw arguments so trace files never retain
+  // request/response bodies. Their pointer-only destinations cannot establish
+  // an allowed endpoint, so any such send attempt fails closed.
+  requireThat(!/\b(?:sendto|sendmsg|sendmmsg)\(/.test(line), 'Unresolved runtime network send target');
+  if (/\b(?:connect|bind)\(/.test(line) && /AF_INET6?/.test(line)) {
     const addresses = [...line.matchAll(/(?:inet_addr|inet_pton)\([^)]*?"([^"]+)"/g)].map(row => row[1]);
     requireThat(addresses.length > 0 && addresses.every(value => value === '127.0.0.1' || value === '::1'), 'Non-loopback runtime network attempt');
   }
@@ -135,7 +186,7 @@ export async function auditTraceFiles(root, cacheRoots = []) {
     evidence.push({ path: name, bytes: stat.size, sha256: await fileHash(filename) });
   }
   requireThat(migrations.has('migrate-first') && migrations.has('migrate-second'), 'Both actual same-package migration executions must be audited');
-  return { files: evidence, mutationCalls: mutations, networkCalls: network, undeclaredWrites: 0, nonLoopbackAttempts: 0 };
+  return { files: evidence, mutationCalls: mutations, networkCalls: network, auditedUndeclaredFileMutationAttempts: 0, nonLoopbackAttempts: 0, coverage: 'write-capable opens and path mutations; fchmod/fchown/ftruncate/fallocate with -yy fd paths; file/network syscall metadata only, no write payload buffers' };
 }
 
 export async function mutableAudit(root) {

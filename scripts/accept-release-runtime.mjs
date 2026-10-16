@@ -20,7 +20,7 @@ function command(executable, args, env = toolEnv) {
   requireThat(!result.error && result.status === 0, `BLOCKED: required host command unavailable: ${path.basename(executable)}`);
   return result.stdout.trim();
 }
-function launch(executable, args, options = {}) {
+export function launch(executable, args, options = {}) {
   const child = spawn(executable, args, { env: toolEnv, stdio: 'ignore', detached: true, ...options });
   const handle = { child, exited: false, code: null, failed: false };
   handle.done = new Promise(resolve => {
@@ -29,12 +29,21 @@ function launch(executable, args, options = {}) {
   });
   return handle;
 }
-async function stop(handle, seconds = 15) {
+export async function liveProcessGroup(group) {
+  const members = [];
+  for (const name of (await readdir('/proc')).filter(value => /^\d+$/.test(value))) {
+    const raw = await readFile(`/proc/${name}/stat`, 'utf8').catch(() => null); if (!raw) continue;
+    const fields = raw.slice(raw.lastIndexOf(')') + 2).split(' ');
+    if (Number(fields[2]) === group && !['Z', 'X'].includes(fields[0])) members.push(Number(name));
+  }
+  return members;
+}
+export async function stop(handle, seconds = 15) {
   if (!handle) return;
-  if (handle.exited) { try { process.kill(-handle.child.pid, 'SIGTERM'); } catch {} return; }
   try { process.kill(-handle.child.pid, 'SIGTERM'); } catch {}
-  const graceful = await deadline(handle.done.then(() => true), seconds * 1000, 'TERM deadline').catch(() => false);
-  if (!graceful) { try { process.kill(-handle.child.pid, 'SIGKILL'); } catch {} await handle.done; throw new Error('Owned process exceeded TERM deadline; KILL required'); }
+  const graceful = await waitFor(async () => handle.exited && !(await liveProcessGroup(handle.child.pid)).length, seconds, 'owned target process group TERM').then(() => true).catch(() => false);
+  if (!graceful) { try { process.kill(-handle.child.pid, 'SIGKILL'); } catch {} await deadline(handle.done, 5000, 'Owned wrapper KILL deadline').catch(() => {}); throw new Error('Owned process exceeded TERM deadline; KILL required'); }
+  handle.groupGone = true;
 }
 async function waitHealthy(handle, check, seconds, label) {
   return waitFor(async () => { requireThat(!handle?.exited, `Owned process exited before ${label}`); return check(); }, seconds, label);
@@ -91,6 +100,9 @@ export async function preflight(options) {
   requireThat(process.platform === 'linux' && process.arch === 'x64' && process.getuid?.() === 0, 'BLOCKED: Linux x64 root controller required');
   for (const key of ['sealed', 'source', 'pgSocket', 'budget']) options[key] = await noLinks(path.resolve(options[key]));
   const manifest = await verifyRuntimeCandidate(options.sealed, options.manifestSHA, options.source);
+  requireThat(git(options.source, 'rev-parse', 'HEAD') === manifest.source.commit, 'Candidate fixture checkout HEAD must equal candidate commit');
+  const fixtureInput = manifest.source.files.find(row => row.path === 'internal/store/release_runtime_fixture_test.go');
+  requireThat(fixtureInput && await fileHash(path.join(options.source, fixtureInput.path)) === fixtureInput.sha256, 'Actual Go fixture differs from selected candidate source');
   const runner = await verifyControllerSource(options.runnerCommit);
   requireThat(manifest.source.files.some(row => row.path === 'internal/store/release_runtime_fixture_test.go'), 'BLOCKED: candidate lacks isolated Go fixture');
   const description = await jsonFile(path.join(options.sealed, manifest.launch.path));
@@ -151,15 +163,11 @@ async function superviseInner() {
   process.once('SIGTERM', emergencyStop); process.once('SIGINT', emergencyStop);
   function service(name, step) {
     const executable = `/release/${step.executable}`, argv = step.args ?? [];
-    const handle = launch('/usr/bin/strace', ['-ff', '-qq', '-s', '256', '-o', `/mutable/logs/${name}.trace`, '-e', 'trace=%file,%network', executable, ...argv], { env: { ...env, HOME: '/mutable/home', TMPDIR: '/mutable/tmp', NEXT_TELEMETRY_DISABLED: '1' }, cwd: `/release/${step.cwd}` });
+    const handle = launch('/usr/bin/strace', ['-ff', '-yy', '-qq', '-s', '256', '-o', `/mutable/logs/${name}.trace`, '-e', 'trace=%file,%network,fchmod,fchown,ftruncate,fallocate', '-e', 'raw=sendto,sendmsg,sendmmsg,recvfrom,recvmsg,recvmmsg', executable, ...argv], { env: { ...env, HOME: '/mutable/home', TMPDIR: '/mutable/tmp', NEXT_TELEMETRY_DISABLED: '1' }, cwd: `/release/${step.cwd}` });
     owned.push(handle); return handle;
   }
   async function oneMigration(name, step) { const h = service(name, step); await deadline(h.done, 120000, 'Migration deadline exceeded'); requireThat(!h.failed && h.code === 0, 'Same-package migration failed'); await call('verify-migrations'); }
   try {
-    timer = setInterval(() => Promise.all([
-      guardReserve(runRoot, pre.budget, pre.available.bytes),
-      guardReserve(path.dirname(options.pgSocket), { ...pre.budget, maxPeakBytes: pre.databasePeak }, pre.databaseFree.bytes),
-    ]).catch(error => { failure ??= error; stop(sandbox).catch(() => {}); }), 250);
     const steps = Object.fromEntries(description.steps.map(row => [row.name, row]));
     await oneMigration('migrate-first', steps.migrate); await oneMigration('migrate-second', steps.migrate);
     const prepared = await call('prepare'); requireThat(prepared.safeInputs, 'Fixture external-effect boundaries not proven');
@@ -170,18 +178,20 @@ async function superviseInner() {
     const pages = await verifyPages(manifest, '/release', description.webOrigin);
     let worker = service('worker-first', steps.worker);
     await waitHealthy(worker, async () => !(await call('verify-first')).pending, description.timeouts.workerSeconds, 'worker simulation completion');
-    const identities = await auditProcesses('/release', [steps.api, steps.web, steps.worker].map((step, i) => ({ ...step, name: ['api', 'web', 'worker'][i] })));
+    const identities = await auditProcesses('/release', [steps.api, steps.web, steps.worker].map((step, i) => ({ ...step, name: ['api', 'web', 'worker'][i], traceName: ['api', 'web', 'worker-first'][i] })), '/mutable/logs');
     requireThat(['api', 'web', 'worker'].every(name => identities.some(row => row.name === name)), 'Actual package runtime identity missing');
     for (const identity of identities) requireThat(manifest.artifacts.find(row => row.path === identity.executable)?.sha256 === identity.sha256, 'Actual running executable differs from sealed artifact');
     await stop(worker, description.timeouts.stopSeconds);
     worker = service('worker-restart', steps.worker);
     // Observe a complete scheduler polling window before checking duplicate execution.
     await pause(6000); requireThat(!worker.exited, 'Restarted worker exited'); await call('verify-restart');
+    const restartIdentities = await auditProcesses('/release', [{ ...steps.worker, name: 'worker-restart', traceName: 'worker-restart' }], '/mutable/logs');
+    requireThat(restartIdentities.length === 1 && restartIdentities[0].sha256 === manifest.artifacts.find(row => row.path === steps.worker.executable)?.sha256, 'Actual restarted package worker identity missing');
     for (const handle of [...owned].reverse()) await stop(handle, description.timeouts.stopSeconds);
     await new Promise(resolve => bridge.close(resolve));
     for (const target of [description.apiInternalURL, description.webOrigin]) await assertAvailablePort(Number(new URL(target).port));
     await call('finish'); await waitFor(() => jsonFile('/fixture/done.json').catch(() => null), 15, 'fixture cleanup');
-    await writeJSON('/mutable/result.json', { ok: true, pages, identities, migrations: evidence.filter(row => row.operation === 'verify-migrations'), fixture: evidence, allOwnedExited: owned.every(row => row.exited), listenersGone: true });
+    await writeJSON('/mutable/result.json', { ok: true, pages, identities, restartIdentities, migrations: evidence.filter(row => row.operation === 'verify-migrations'), fixture: evidence, allOwnedExited: owned.every(row => row.exited && row.groupGone), listenersGone: true });
     process.removeListener('SIGTERM', emergencyStop); process.removeListener('SIGINT', emergencyStop);
   } catch (error) {
     for (const handle of [...owned].reverse()) await stop(handle).catch(() => {});
@@ -203,6 +213,10 @@ export async function acceptRuntime(options) {
   process.once('SIGTERM', interrupted); process.once('SIGINT', interrupted);
   const report = { status: 'FAIL', commit: manifest.source.commit, runnerCommit: pre.runner.commit, manifestSHA256: options.manifestSHA, checks: [] };
   try {
+    timer = setInterval(() => Promise.all([
+      guardReserve(runRoot, pre.budget, pre.available.bytes),
+      guardReserve(path.dirname(options.pgSocket), { ...pre.budget, maxPeakBytes: pre.databasePeak }, pre.databaseFree.bytes),
+    ]).catch(error => { failure ??= error; stop(sandbox).catch(() => {}); }), 250);
     for (const directory of [control, fixture, mutable]) await mkdir(directory, { mode: directory === fixture ? 0o700 : 0o755 });
     await copyIndependent(options.sealed, release);
     requireThat(same(await runtimeInventory(release), manifest.artifacts), 'Independent runtime-copy inventory differs');

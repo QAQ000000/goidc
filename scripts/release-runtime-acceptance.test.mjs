@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { assetArtifact, auditTraceLine, pageAssets, validateTestDSN } from './release-runtime-acceptance-lib.mjs';
-import { copyIndependent, namespaceArgs } from './accept-release-runtime.mjs';
+import { assetArtifact, auditProcesses, auditTraceLine, pageAssets, validateTestDSN, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
+import { copyIndependent, launch, liveProcessGroup, namespaceArgs, stop } from './accept-release-runtime.mjs';
 
 test('acceptance controller accepts only explicit isolated test DSNs', () => {
   const schema = 'release_runtime_0123456789abcdef0123456789abcdef';
@@ -54,9 +54,57 @@ test('namespace arguments have no inherited environment, source, shared dependen
 
 test('write and network syscall audit rejects successful and denied escapes', () => {
   assert.doesNotThrow(() => auditTraceLine('openat(AT_FDCWD, "/mutable/tmp/a", O_WRONLY|O_CREAT, 0600) = 4'));
+  assert.doesNotThrow(() => auditTraceLine('fchmod(4</mutable/tmp/a>, 0600) = 0'));
+  assert.doesNotThrow(() => auditTraceLine('ftruncate(4</mutable/tmp/a>, 0) = 0'));
   assert.doesNotThrow(() => auditTraceLine('connect(3, {sa_family=AF_INET, sin_port=htons(55432), sin_addr=inet_addr("127.0.0.1")}, 16) = 0'));
   assert.throws(() => auditTraceLine('openat(AT_FDCWD, "/release/server.js", O_WRONLY) = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('fchmod(4</mutable/../release/server.js>, 0600) = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('fchown(4</release/server.js>, 1000, 1000) = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('ftruncate(4, 0) = -1 EBADF'), /Undeclared/);
+  assert.throws(() => auditTraceLine('openat(AT_FDCWD</mutable>, "tmp/../../release/server.js", O_WRONLY) = -1 EROFS'), /Undeclared/);
+  assert.doesNotThrow(() => auditTraceLine('openat(AT_FDCWD</release/artifact>, "/mutable/tmp/a", O_WRONLY|O_CREAT, 0600) = 4</mutable/tmp/a>'));
   assert.throws(() => auditTraceLine('rename("/mutable/a", "/release/b") = -1 EROFS'), /Undeclared/);
   assert.throws(() => auditTraceLine('connect(3, {sa_family=AF_INET, sin_addr=inet_addr("203.0.113.1")}, 16) = -1 ENETUNREACH'), /Non-loopback/);
+  assert.throws(() => auditTraceLine('sendto(0x3, 0x1234, 0x80, 0, 0x5678, 0x10) = -1 ENETUNREACH'), /Unresolved.*network/);
   assert.doesNotThrow(() => auditTraceLine('mkdir("/release/web/.next/cache/a", 0700) = 0', ['/release/web/.next/cache']));
+});
+
+test('atomic command publication exposes complete JSON and refuses overwrite', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'runtime-command-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const filename = path.join(root, 'command-1.json'), payload = { operation: 'abort', padding: 'x'.repeat(100000) };
+  const writing = writeJSON(filename, payload);
+  await waitFor(async () => {
+    const bytes = await readFile(filename, 'utf8').catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+    if (bytes === null) return false;
+    assert.deepEqual(JSON.parse(bytes), payload); return true;
+  }, 5, 'atomic command');
+  await writing;
+  await assert.rejects(writeJSON(filename, { operation: 'prepare' }), /overwrite/);
+  assert.deepEqual(JSON.parse(await readFile(filename, 'utf8')), payload);
+});
+
+test('traced worker identity is the real child and TERM removes the entire group before restart', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'runtime-worker-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(path.join(root, 'bin')); await mkdir(path.join(root, 'artifact'));
+  await copyFile(process.execPath, path.join(root, 'bin/node'));
+  const args = ['-e', 'process.title="next-server (test)";process.on("SIGTERM",()=>setTimeout(()=>process.exit(0),150));setInterval(()=>{},1000)'];
+  let handle;
+  t.after(() => stop(handle).catch(() => {}));
+  const start = () => launch('/usr/bin/strace', ['-ff', '-yy', '-qq', '-s', '256', '-o', path.join(root, 'worker.trace'), '-e', 'trace=%file,%network,fchmod,fchown,ftruncate,fallocate', path.join(root, 'bin/node'), ...args], { cwd: path.join(root, 'artifact') });
+  handle = start();
+  const expected = [{ name: 'worker', executable: 'bin/node', cwd: 'artifact', args, traceName: 'worker' }];
+  const first = await waitFor(async () => (await auditProcesses(root, expected, root))[0], 5, 'real traced worker');
+  assert.notEqual(first.pid, handle.child.pid); assert.deepEqual(first.args, args); assert.equal(first.cwd, path.join(root, 'artifact'));
+  await waitFor(async () => (await readFile(`/proc/${first.pid}/cmdline`, 'utf8')).startsWith('next-server (test)'), 5, 'changed process title');
+  const renamed = (await auditProcesses(root, expected, root))[0];
+  assert.equal(renamed.argumentEvidence, 'same-pid-successful-execve'); assert.deepEqual(renamed.args, args);
+  await stop(handle, 5);
+  assert.equal(handle.groupGone, true); assert.deepEqual(await liveProcessGroup(handle.child.pid), []);
+  assert.equal(await readFile(`/proc/${first.pid}/cmdline`).catch(() => null), null);
+  handle = start();
+  const restarted = await waitFor(async () => (await auditProcesses(root, expected, root))[0], 5, 'restarted traced worker');
+  assert.notEqual(restarted.pid, first.pid); assert.equal(restarted.sha256, first.sha256);
+  await stop(handle, 5);
 });

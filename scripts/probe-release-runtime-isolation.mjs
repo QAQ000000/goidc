@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Opt-in kernel-boundary probe. Connects the declared test-cluster Unix socket
 // and immediately closes it; sends no PostgreSQL protocol message or SQL.
-import { chmod, chown, copyFile, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, chown, copyFile, mkdtemp, mkdir, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { namespaceArgs } from './accept-release-runtime.mjs';
 import { assertSocket, requireThat } from './release-runtime-acceptance-lib.mjs';
 const socket = process.argv[2];
@@ -25,5 +26,24 @@ try {
   requireThat(result.status === 0, 'Kernel isolation/socket/strace probe failed');
   const report = JSON.parse(await readFile(path.join(root, 'mutable/report.json'), 'utf8'));
   requireThat(report.uid === uid && report.gid === gid && report.sourceHidden && report.toolchainHidden && report.strace && report.readonlyRelease && report.postgresSocketConnected && JSON.stringify(report.interfaces) === '["lo"]', 'Probe boundaries not proven');
+  // Run the real inner controller through both guarded migration launches with
+  // tiny Node stand-ins and a file-only fixture. No SQL is sent. Deliberately
+  // refuse prepare so this checks real fail-closed control flow and cleanup.
+  const source = path.dirname(fileURLToPath(import.meta.url));
+  for (const name of ['accept-release-runtime.mjs', 'release-runtime-acceptance-lib.mjs', 'release-candidate-lib.mjs', 'release-runtime-builder-lib.mjs']) await copyFile(path.join(source, name), path.join(root, 'control', name));
+  await mkdir(path.join(root, 'release/launch')); await mkdir(path.join(root, 'mutable/logs')); await chown(path.join(root, 'mutable/logs'), uid, gid);
+  const schema = 'release_runtime_0123456789abcdef01234567';
+  const description = { configVersion: 'zjmfgo-runtime-config-v1', environment: { allowlist: ['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY'], fixed: {} }, config: { required: ['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY'] }, steps: [{ name: 'migrate', executable: 'runtime/node', cwd: 'artifact', args: ['-e', 'process.exit(0)'] }] };
+  await writeFile(path.join(root, 'release/manifest.json'), '{}'); await writeFile(path.join(root, 'release/launch/description.json'), JSON.stringify(description));
+  await writeFile(path.join(root, 'control/request.json'), JSON.stringify({ uid, gid, schema, pgSocket: `/pg/${path.basename(socket)}`, hiddenSource: '/www/wwwroot/zjmfgo', parentNetNamespace: await readlink('/proc/self/ns/net') }));
+  const values = { DATABASE_URL: `postgres://127.0.0.1:${port}/kernel_probe_test?search_path=${schema}`, MFA_ENCRYPTION_KEY: '1'.repeat(64), PURCHASE_FIELD_ENCRYPTION_KEY: '2'.repeat(64), PROVISION_ENCRYPTION_KEY: '3'.repeat(64) };
+  await writeFile(path.join(root, 'fixture/config.json'), JSON.stringify({ version: 'zjmfgo-runtime-config-v1', values }), { mode: 0o600 }); await chown(path.join(root, 'fixture'), uid, gid); await chown(path.join(root, 'fixture/config.json'), uid, gid); await chmod(path.join(root, 'fixture'), 0o700);
+  const controllerWorker = `const fs=require('fs'),cp=require('child_process');cp.execFileSync('/usr/bin/mount',['--bind',process.argv[1],process.argv[2]]);const root=process.argv[3],ops=[];let sequence=1;const child=cp.spawn('/usr/bin/setpriv',['--reuid',process.argv[4],'--regid',process.argv[5],'--clear-groups','--','/usr/bin/bwrap',...JSON.parse(process.argv[6])],{stdio:'ignore'});const timer=setInterval(()=>{const command=root+'/fixture/command-'+sequence+'.json';if(!fs.existsSync(command))return;const operation=JSON.parse(fs.readFileSync(command)).operation;ops.push(operation);fs.writeFileSync(root+'/fixture/result-'+sequence+'.json',JSON.stringify({ok:true,phase:operation,safeInputs:false,migrationSchemaSHA256:'fixture'}),{mode:0o644});sequence++},10);child.once('close',code=>{clearInterval(timer);cp.execFileSync('/usr/bin/umount',[process.argv[2]]);fs.writeFileSync(root+'/control-flow.json',JSON.stringify({code,operations:ops}));});setTimeout(()=>{child.kill('SIGKILL');process.exit(3)},15000).unref();`;
+  const controlled = spawnSync('/usr/bin/unshare', ['--mount', '--propagation', 'private', process.execPath, '-e', controllerWorker, socket, staged, root, String(uid), String(gid), JSON.stringify([...args, '/release/runtime/node', '/control/accept-release-runtime.mjs', '--inner'])], { stdio: 'ignore', timeout: 20000 });
+  requireThat(controlled.status === 0, 'Inner controller control-flow probe failed');
+  const flow = JSON.parse(await readFile(path.join(root, 'control-flow.json'), 'utf8'));
+  requireThat(flow.code === 1 && JSON.stringify(flow.operations) === '["verify-migrations","verify-migrations","prepare","abort"]', 'Real inner controller did not execute double migration and failure cleanup');
+  requireThat((await readFile(path.join(root, 'mutable/failure.json'), 'utf8')).includes('runtime'), 'Actual inner failure evidence missing');
+  report.realInnerDoubleMigration = true; report.realInnerPrepareRefusal = true; report.realInnerAbort = true;
   console.log(JSON.stringify({ status: 'PASS', ...report, scope: 'small kernel probe only; no SQL, app candidate, service, or deployment acceptance' }));
 } finally { await rm(root, { recursive: true, force: true }); }
