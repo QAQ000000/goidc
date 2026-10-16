@@ -63,7 +63,7 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
   const [identityReady, setIdentityReady] = useState(false), [reviewed, setReviewed] = useState(false);
   const [receipt, setReceipt] = useState("");
   const [storageRevision, setStorageRevision] = useState(0);
-  const running = useRef(false), mounted = useRef(true), draftMutation = useRef(0);
+  const running = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -104,15 +104,20 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
       return result;
     } catch (e) { if (e instanceof ApiError && [401,403].includes(e.status)) { setIdentityReady(false); setReviewed(false); } setReviewed(false); throw e; }
   }, [verify]);
-  async function persistDraft(key: string, draft: FieldDraft | null) {
-    if (!ready || !allowed) return false;
-    const mutation = ++draftMutation.current;
-    try { await verify(); } catch (e) { setError((e as Error).message); return false; }
-    if (!mounted.current || mutation !== draftMutation.current) return false;
-    const next = { ...drafts };
-    if (draft) next[key] = draft; else delete next[key];
+  function persistDraft(key: string, draft: FieldDraft) {
+    if (!ready || !allowed || !identityReady || !mounted.current) return false;
+    const next = { ...drafts, [key]: draft };
     setDrafts(next);
     try { sessionStorage.setItem(draftsKey, JSON.stringify(next)); return true; }
+    catch { setReady(false); setStorageError("浏览器无法保存字段草稿，已暂停新写入；当前内存输入保留。请检查浏览器存储。"); return false; }
+  }
+  async function replaceDraft(key: string, draft: FieldDraft | null) {
+    if (!ready || !allowed) return false;
+    try { await verify(); } catch (e) { setError((e as Error).message); return false; }
+    if (!mounted.current) return false;
+    const next = { ...drafts };
+    if (draft) next[key] = draft; else delete next[key];
+    try { sessionStorage.setItem(draftsKey, JSON.stringify(next)); setDrafts(next); return true; }
     catch { setReady(false); setStorageError("浏览器无法保存字段草稿，已暂停新写入；当前内存输入保留。请检查浏览器存储。"); return false; }
   }
   function savePending(item: Pending) {
@@ -177,5 +182,5 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
     return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", click, true); };
   }, [pending, drafts, busy]);
   const hideIdentity = useCallback(() => { setIdentityReady(false); setReviewed(false); }, []);
-  return { pending, drafts, ready, storageError, busy, error, setError, identityReady, hideIdentity, reviewed, setReviewed, receipt, read, verify, persistDraft, send, endRejected, running, reloadStorage: () => setStorageRevision(value => value + 1) };
+  return { pending, drafts, ready, storageError, busy, error, setError, identityReady, hideIdentity, reviewed, setReviewed, receipt, read, verify, persistDraft, replaceDraft, send, endRejected, running, reloadStorage: () => setStorageRevision(value => value + 1) };
 }
