@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { api, date, download, type Ticket, type TicketAssignee, type TicketAttachment, type TicketDepartment, type TicketReplyPreset, type User, upload } from "@/lib/api";
+import { api, ApiError, date, download, type Ticket, type TicketAssignee, type TicketAttachment, type TicketDepartment, type TicketReplyPreset, type User, upload } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
 import { useResource } from "@/hooks/use-resource";
 import { Workspace, PermissionGate } from "./workspace";
+import { TicketNotifications } from "./ticket-notifications";
+import { useAdminFormLeave } from "@/hooks/use-admin-form-leave";
+import { usePendingSetting } from "@/hooks/use-pending-setting";
 import { Failure, Loading, Status } from "./common";
 
 function fileSize(bytes: number) {
@@ -71,6 +74,9 @@ export function TicketDetailView({ id, admin = false }: { id: number; admin?: bo
   const fileRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [body, setBody] = useState("");
+  const replyRequest = usePendingSetting(`ticket-reply:${id}`, user?.id ?? null);
+  const uncertainReply = replyRequest.unknown;
+  const originalReply = uncertainReply && replyRequest.pending.current ? readReplyBody(replyRequest.pending.current.body) : "";
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -91,18 +97,25 @@ export function TicketDetailView({ id, admin = false }: { id: number; admin?: bo
   const [mergeTarget, setMergeTarget] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [panel, setPanel] = useState("reply");
+  useAdminFormLeave(body.trim() !== "" || uncertainReply);
 
   async function mutate(close = false) {
     if (!data) return;
     setBusy(true);
     setMessage("");
     try {
-      await api(`/tickets/${id}${close ? "" : "/replies"}`, { method: close ? "PATCH" : "POST", body: JSON.stringify({ version: data.version, ...(!close ? { body } : {}) }) });
-      if (!close) setBody("");
+      if (!close && !replyRequest.pending.current) { const key = crypto.randomUUID(); replyRequest.remember({key, body: JSON.stringify({ version: data.version, body, idempotency_key: key })}); }
+      await api(`/tickets/${id}${close ? "" : "/replies"}`, { method: close ? "PATCH" : "POST", body: close ? JSON.stringify({ version: data.version }) : replyRequest.pending.current?.body });
+      if (!close) { setBody(""); replyRequest.resolve(); }
       setDialog(false);
       refresh();
     } catch (error) {
-      setMessage((error as Error).message);
+      if (!close) {
+        const unknown = !(error instanceof ApiError) || error.status >= 500;
+        replyRequest.setUnknown(unknown);
+        if (!unknown) replyRequest.resolve();
+        setMessage(unknown ? "回复结果未知，原内容和请求标识已保留。请重试原回复以确认结果。" : (error as Error).message);
+      } else setMessage((error as Error).message);
       refresh();
     } finally {
       setBusy(false);
@@ -246,11 +259,15 @@ export function TicketDetailView({ id, admin = false }: { id: number; admin?: bo
         <section className="border-t py-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">附件</h2><p className="text-xs text-muted-foreground mt-1">单个文件最大 10 MiB</p></div><Paperclip className="text-muted-foreground" /></div><ul className="mt-3">{(data.attachments ?? []).map(attachment => <AttachmentRow key={attachment.id} attachment={attachment} ticketID={id} admin={admin && data.admin_access} onDelete={removeAttachment} />)}</ul>{(data.attachments ?? []).length === 0 && <p className="text-sm text-muted-foreground py-3">暂无附件</p>}{data.status !== "closed" && <PermissionGate permission="tickets.manage" bypass={!admin || !data.admin_access}><form className="mt-4 flex flex-wrap items-center gap-3" onSubmit={event => void addAttachment(event)}><Input ref={fileRef} type="file" className="max-w-md" onChange={event => setSelectedFile(event.target.files?.[0] ?? null)} /><Button type="submit" variant="outline" disabled={!selectedFile || attachmentBusy}><Paperclip />{attachmentBusy ? "上传中" : "上传附件"}</Button></form></PermissionGate>}{attachmentMessage && <p role="alert" className="text-sm text-destructive mt-2">{attachmentMessage}</p>}</section>
         </div>
         {data.replies.map(reply => <article key={reply.id} className="border-t py-5"><div className="text-sm flex flex-wrap gap-3 mb-4"><strong>{reply.author_name}</strong><span className="text-muted-foreground">{date(reply.created_at)}</span></div><p className="whitespace-pre-wrap break-words leading-7">{reply.body}</p></article>)}
+        {uncertainReply && <p role="status" className="text-sm">已恢复待确认回复。重试将使用原始内容、版本和请求标识，不会使用当前草稿。</p>}
         {message && <p role="alert" className="text-destructive">{message}</p>}
         <div hidden={admin && panel !== "reply"}>
-        {data.status !== "closed" && <PermissionGate permission="tickets.manage" bypass={!admin || !data.admin_access}><form className="border-t pt-6 space-y-4" onSubmit={event => { event.preventDefault(); void mutate(); }}><div className="flex flex-wrap items-center justify-between gap-3"><label htmlFor="reply" className="font-medium">回复工单</label>{admin && data.admin_access && presets && <Select value={presetID} onValueChange={value => { setPresetID(value); const preset = presets?.find(item => String(item.id) === value); if (preset) setBody(preset.body); }}><SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="插入预设回复" /></SelectTrigger><SelectContent><SelectItem value="none">不使用预设回复</SelectItem>{presets?.filter(item => item.active && item.category_active).map(item => <SelectItem key={item.id} value={String(item.id)}>{item.category_name} · {item.title}</SelectItem>)}</SelectContent></Select>}</div><Textarea id="reply" value={body} onChange={event => setBody(event.target.value)} required rows={5} maxLength={3000} /><div className="flex gap-3"><Button disabled={busy || body.trim() === ""}><Send />{busy ? "提交中" : "发送回复"}</Button><Dialog open={dialog} onOpenChange={setDialog}><DialogTrigger asChild><Button variant="outline" type="button" disabled={busy}><Check />关闭工单</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>关闭此工单？</DialogTitle><DialogDescription>关闭后将停止接收回复。</DialogDescription></DialogHeader><DialogFooter><DialogClose asChild><Button variant="outline">取消</Button></DialogClose><Button disabled={busy} onClick={() => void mutate(true)}>确认关闭</Button></DialogFooter></DialogContent></Dialog></div></form></PermissionGate>}
+        {data.status !== "closed" && <PermissionGate permission="tickets.manage" bypass={!admin || !data.admin_access}><form className="border-t pt-6 space-y-4" onSubmit={event => { event.preventDefault(); void mutate(); }}><div className="flex flex-wrap items-center justify-between gap-3"><label htmlFor="reply" className="font-medium">回复工单</label>{admin && data.admin_access && presets && <Select disabled={busy || uncertainReply} value={presetID} onValueChange={value => { setPresetID(value); const preset = presets?.find(item => String(item.id) === value); if (preset) setBody(preset.body); }}><SelectTrigger className="w-full sm:w-64"><SelectValue placeholder="插入预设回复" /></SelectTrigger><SelectContent><SelectItem value="none">不使用预设回复</SelectItem>{presets?.filter(item => item.active && item.category_active).map(item => <SelectItem key={item.id} value={String(item.id)}>{item.category_name} · {item.title}</SelectItem>)}</SelectContent></Select>}</div><Textarea id="reply" disabled={busy || uncertainReply} value={uncertainReply ? originalReply : body} onChange={event => setBody(event.target.value)} required rows={5} maxLength={3000} /><div className="flex flex-wrap gap-3"><Button disabled={busy || !replyRequest.ready || (!uncertainReply && body.trim() === "")}><Send />{busy ? "提交中" : uncertainReply ? "重试原回复" : "发送回复"}</Button><Dialog open={dialog} onOpenChange={setDialog}><DialogTrigger asChild><Button variant="outline" type="button" disabled={busy || uncertainReply}><Check />关闭工单</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>关闭此工单？</DialogTitle><DialogDescription>关闭后将停止接收回复。</DialogDescription></DialogHeader><DialogFooter><DialogClose asChild><Button variant="outline">取消</Button></DialogClose><Button disabled={busy} onClick={() => void mutate(true)}>确认关闭</Button></DialogFooter></DialogContent></Dialog></div></form></PermissionGate>}
         </div>
       </div>
+      <TicketNotifications ticketID={id} />
     </>}
   </Workspace>;
 }
+
+function readReplyBody(value: string): string { try { const parsed = JSON.parse(value); return typeof parsed?.body === "string" ? parsed.body : ""; } catch { return ""; } }

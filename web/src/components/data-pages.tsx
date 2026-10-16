@@ -1,4 +1,5 @@
 "use client";
+import { TicketNotificationPreferences } from "./ticket-notification-preferences";
 import { AdminCustomerDetailView, ContactsPanel } from "./admin-customer-detail";
 import { AccountVerification } from "./account-verification";
 import { AdminCustomersView } from "./admin-customers";
@@ -852,6 +853,7 @@ export function AccountView() {
           <CustomerTopup />
           <PasswordForm />
           {me.error ? <Failure error={me.error} retry={me.refresh} /> : !me.data ? <Loading /> : <AccountVerification email={me.data.email} phone={data.phone} phoneVerified={data.phone_verified} emailVerified={data.email_verified} onVerified={refresh} />}
+          <TicketNotificationPreferences />
           <MfaPanel />
           <ApiKeysPanel />
           <ContactsPanel />
