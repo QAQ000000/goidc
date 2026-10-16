@@ -11,4 +11,6 @@ fi
 
 export REQUIRE_INTEGRATION=1
 cd "$repo_root"
-exec "$repo_root/scripts/go.sh" test -count=1 -timeout=30m ./...
+# Every integration case migrates an isolated schema. The growing HTTP suite
+# exceeds thirty minutes on the acceptance host; keep an explicit package cap.
+exec "$repo_root/scripts/go.sh" test -count=1 -timeout=45m ./...

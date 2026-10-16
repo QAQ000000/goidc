@@ -1,6 +1,6 @@
 # 待审核未交付人工订单外部退款验收（2026-10-17）
 
-状态：实现已集成，最终验收进行中；不得据本文关闭G03或部署。契约见[订单退款设计](order-external-refund-next-contract-20261017.md)。迁移154只在隔离PG18测试库应用，没有应用到业务运行库。
+状态：本批实现及隔离验收通过；范围仅限下述未交付人工新购订单，不据此关闭G03或部署。契约见[订单退款设计](order-external-refund-next-contract-20261017.md)。迁移154只在隔离PG18测试库应用，没有应用到业务运行库。
 
 ## 实际实现范围
 
@@ -35,12 +35,18 @@
 | 新购订单待审冻结恢复 | 9.16秒通过；持久hold阻止交付，自审拒绝，恢复后独立确认，2单位释放一次、零交付任务；原请求/确认响应重放保持不变 |
 | 相关旧业务回归 | 子代理最终SQL聚焦HTTP整组93.295秒通过：Affiliate、CreditLifecycle、供应商导入下单交付、管理员调价/延迟账单、ConfigurationUpgrade；不替代主线全量 |
 | HTTP订单专项race | 最终SQL通过，`-race -p 1 ./internal/httpapi -run '^TestOrderExternalRefund' -count=1 -timeout=10m -v`，223.985秒，退出0；包括49项保守拒绝矩阵、8例真实锁等待后撤权/范围撤销、真实cart/admin签名付款与独立确认/驳回、原回调重放、版本及乱序同键重放、故障整体回滚与并发唯一确认；默认SKIP的浏览器opt-in另验 |
-| 强制隔离PG18全量 | 最终SQL运行中，未计通过 |
-| 前端与最终浏览器 | 最终验收整理中，未计通过 |
+| 强制隔离PG18全量 | 最终产品代码及夹具修复`c2806f9`通过：`scripts/test-all.sh`，HTTP1738.826秒、store190.118秒，全部测试包ok，命令退出0；专用PG18数据库验后随机测试schema残留0、其他连接0 |
+| 前端 | 最终UI `beec800` typecheck/lint退出0；lint 0错误、7个既有warning。独立worktree webpack build通过；随后两个纯布局修补已重建复验，源版本与BUILD_ID分别登记 |
+| 浏览器及资金复核 | [最终浏览器验收](order-external-refund-browser-acceptance-20261017.md)通过：五尺寸含320短屏、真实API丢回执/409/权限/独立复核/冻结投影；68张截图与101个证据文件由主代理独立校验摘要，10项只读数据库投影与final_db一致。专用API/预览/浏览器/schema均已回收，截图保留 |
+| 集成测试夹具 | 原两个供应商测试直接将create任务改为sync，被新身份保护正确拒绝。`c2806f9`改为通过正常action API新建sync；主代理独立PG18复跑两项供应商及Traffic退款测试均通过（5.905秒），没有放宽生产保护 |
 
-测试仅使用loopback隔离PG18（server_version_num=180000）和本批专用`_test`库；每例自有随机schema。恢复source/target独立，未连接业务库。代表性恢复archive SHA-256为`5cf18ffa75bf153a488aea97cf3160b7bf90e73cb16dd15c627ead946008d4e2`，snapshot为`fb7d61e2cb179ad6cc6e43b2ea08baf47c6b7c124fcde840855357240e6ff01c`；订单hold恢复archive为`c3b37dbacc580ae28afba708072284e5efa5b76874609f4186f6d0bb8d8c2782`。主代理store/race日志本地`/tmp/zjmfgo-order-refund-store-race-final3-20261017.log`，SHA-256为`3b249ece78c29618495fce2beba0c1da45c60c88f0a1bdf361f99c7f2a5d9177`。
+测试仅使用loopback隔离PG18（server_version_num=180000）和本批专用`_test`库；每例自有随机schema。恢复source/target独立，未连接业务库。代表性恢复archive SHA-256为`5cf18ffa75bf153a488aea97cf3160b7bf90e73cb16dd15c627ead946008d4e2`，snapshot为`fb7d61e2cb179ad6cc6e43b2ea08baf47c6b7c124fcde840855357240e6ff01c`；订单hold恢复archive为`c3b37dbacc580ae28afba708072284e5efa5b76874609f4186f6d0bb8d8c2782`。HTTP最终race日志本地`/tmp/zjmfgo-order-refund-http-final3-race-20261017.log`，SHA-256为`853b95916fe9bea3f12b762f0877d63cb1418109a9f24d2bdf53ef6fac7d988a`。主代理store/race日志本地`/tmp/zjmfgo-order-refund-store-race-final3-20261017.log`，SHA-256为`3b249ece78c29618495fce2beba0c1da45c60c88f0a1bdf361f99c7f2a5d9177`。
+
+最终全量日志为本地`/tmp/zjmfgo-order-refund-full-final4-20261017.log`，SHA-256为`4c0aba2dc8d03777de340ac4a862d8bf9f08bcb22a6e8b896e8d57092879adcf`。验收后原API/worker/Web PID仍为608393/608413/1647696，没有部署、重启或更改业务库。
 
 旧SQL版本的专项成功、因修补主动终止的全量、预验截图都不冒认为最终版本通过。浏览器与Go的opt-in夹具默认SKIP不等于通过；最终单独启用并核验。
+
+此前final3全量不计通过：两个旧供应商测试通过修改任务action构造夹具，与迁移154的身份保护冲突；随后HTTP包达到原30分钟上限，Traffic退款测试被整体超时终止。修复测试夹具后，三项专项已独立执行通过；强制全量脚本的显式包超时改为45分钟，以容纳逐例迁移隔离schema的完整HTTP套件，不以延长超时代替失败修复。
 
 ## 保留边界
 
