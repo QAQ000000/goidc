@@ -2,11 +2,12 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, date, money } from "@/lib/api";
 import { Button } from "./ui/button";
+import { TopupLiabilityPanel } from "./topup-liability-panel";
 import { OnlinePayment, type PaymentRecord } from "./online-payment";
 
-export type TopupState = { status: "created" | "accepted" | "credited" | "pending_liability" | "cancelled"; settings_version: number; accepted_at?: string | null; failure_code?: string };
+export type TopupState = { status: "created" | "accepted" | "credited" | "pending_liability" | "cancelled"; settings_version: number; accepted_at?: string | null; failure_code?: string; ledger_id?: number | null; resolution?: { amount_cents: number; ledger_id: number; created_at: string } | null };
 const messages: Record<TopupState["status"], string> = {
   created: "充值账单待付款，仅支持在线支付。",
   accepted: "充值付款已接纳，资金结果仍须核实。请继续原支付单或核对支付状态，暂不可取消。",
@@ -43,7 +44,9 @@ export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id
     finally { lock.current = false; setBusy(false); }
   }
   return <div className="space-y-3 max-w-xl">
-    <p role="status" className="text-sm">{status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
+    <p role="status" className="text-sm">{invoice.topup?.resolution ? "原充值收款已补入账户余额，请查看余额流水。" : status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
+    {!admin && invoice.topup?.resolution && <p className="text-sm">入账金额 {money(invoice.topup.resolution.amount_cents)} · {date(invoice.topup.resolution.created_at)} · 余额流水 #{invoice.topup.resolution.ledger_id}</p>}
+    {admin && <TopupLiabilityPanel invoiceId={invoice.id} refreshInvoice={refresh} />}
     <div className="flex flex-wrap gap-2">
       {!admin && (status === "created" || status === "accepted") && <OnlinePayment invoice={{ ...invoice, topup: invoice.topup }} refresh={refresh} />}
       {!admin && (status === "created" || unknown) && <Button size="sm" variant="outline" disabled={busy || (!unknown && invoice.payment_pending)} onClick={() => void cancel()}>{busy ? "正在取消" : unknown ? "以原请求确认取消结果" : "取消充值账单"}</Button>}
