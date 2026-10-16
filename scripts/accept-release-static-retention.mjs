@@ -89,6 +89,20 @@ function rawRequest(resource) {
     });
   });
 }
+export async function verifySealedStaticSource(root, manifestSHA256, sourceRepo) {
+  // A historical package with an incomplete launch contract may still be an
+  // authenticated static source. This check deliberately never accepts launch
+  // semantics, executes old verifier code or upgrades the old runtime verdict.
+  const { noLinks, sourceProof } = await import('./release-candidate-lib.mjs');
+  const { runtimeInventory } = await import('./release-runtime-lib.mjs');
+  await noLinks(root); const filename = path.join(root, 'manifest.json'), info = await lstat(filename);
+  check(info.isFile() && info.nlink === 1 && info.size <= 8 * 1024 * 1024, 'Bounded independent manifest required');
+  const data = await readFile(filename); check(hash(data) === manifestSHA256, 'Historical static manifest anchor mismatch');
+  const manifest = JSON.parse(data); check(manifest.format === 'zjmfgo-release-candidate-v2', 'Unknown historical static source format');
+  const source = await sourceProof(sourceRepo, 'HEAD'); check(JSON.stringify(source) === JSON.stringify(manifest.source), 'Historical static source differs from frozen Git checkout');
+  check(JSON.stringify(await runtimeInventory(root)) === JSON.stringify(manifest.artifacts), 'Historical sealed inventory differs from anchor');
+  return manifest;
+}
 function request(resource, method = 'GET', headers = {}) {
   return new Promise((resolve, reject) => {
     const start = performance.now();
@@ -285,7 +299,7 @@ export async function acceptStaticRetention(options) {
   const { buildStaticRetention, renderStaticRetentionNginx } = await import('./release-static-retention-lib.mjs');
   const runnerSource = path.resolve(here, '..');
   const runner = await sourceProof(runnerSource, 'HEAD'); check(runner.commit === options.runnerCommit, 'Clean pinned runner required');
-  const old = await verifyRuntimeCandidate(options.old, options.oldSHA, options.oldSource);
+  const old = await verifySealedStaticSource(options.old, options.oldSHA, options.oldSource);
   const next = await verifyRuntimeCandidate(options.next, options.nextSHA, options.nextSource);
   const plan = buildStaticRetention({ old: { manifest: old, manifestSHA256: options.oldSHA, root: '/releases/old' }, next: { manifest: next, manifestSHA256: options.nextSHA, root: '/releases/new' } });
   const oldURLs = new Set(plan.oldEntries.map(e => e.url));
@@ -313,7 +327,7 @@ export async function acceptStaticRetention(options) {
   const version = spawnSync(nginx, ['-V'], { env, encoding: 'utf8' }); check(version.status === 0, 'Nginx version unavailable');
   const elf = spawnSync('/usr/bin/readelf', ['-l', '-d', nginx], { env, encoding: 'utf8' }); check(elf.status === 0, 'Nginx ELF metadata unavailable');
   const needed = [...elf.stdout.matchAll(/Shared library: \[([^\]]+)\]/g)].map(m => m[1]).sort();
-  const preliminary = { scope: 'static retention preparation only', runnerCommit: runner.commit, oldCommit: old.source.commit, nextCommit: next.source.commit, counts: plan.counts, nginxSHA256,
+  const preliminary = { scope: 'static retention preparation only', oldInputScope: 'external anchor, frozen source and complete sealed bytes only; historical launch contract not accepted', runnerCommit: runner.commit, oldCommit: old.source.commit, nextCommit: next.source.commit, counts: plan.counts, nginxSHA256,
     tooling: { nginxVersion: version.stderr.trim(), needed, loaderCacheSHA256: hash(libraries), luaFiles, luajitSHA256: await digest('/usr/local/lib/libluajit-5.1.so.2') },
     budget: { maxOutputBytes: 32 * 1024 * 1024, minimumFreeBytes: 512 * 1024 * 1024, maximumOutputFiles: 4096 }, sourceProof: { commit: runner.commit, tree: runner.tree },
     mappingSHA256: hash(JSON.stringify(plan)), mapping: plan, hostBefore: await hostSnapshot() };
@@ -370,7 +384,7 @@ export async function acceptStaticRetention(options) {
     report.hostOrdinaryIdentity = await json(path.join(mutable, 'host-identity.json')); check(report.hostOrdinaryIdentity.uid === 1000 && report.hostOrdinaryIdentity.gid === 1000, 'Actual host ordinary identity missing');
     check(await digest(nginx) === nginxSHA256 && await digest('/usr/local/lib/libluajit-5.1.so.2') === preliminary.tooling.luajitSHA256, 'Host Nginx tooling changed');
     for (const file of luaFiles) check(await digest(file.path) === file.sha256, 'Lua tooling input changed');
-    await verifyRuntimeCandidate(options.old, options.oldSHA, options.oldSource); await verifyRuntimeCandidate(options.next, options.nextSHA, options.nextSource);
+    await verifySealedStaticSource(options.old, options.oldSHA, options.oldSource); await verifyRuntimeCandidate(options.next, options.nextSHA, options.nextSource);
     report.hostAfter = await hostSnapshot(); check(JSON.stringify(report.hostAfter) === JSON.stringify(report.hostBefore), 'Host namespace or resident identity changed');
     report.sealedUnchanged = true; report.status = 'PASS';
   } finally {
