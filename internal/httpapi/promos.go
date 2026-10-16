@@ -186,7 +186,7 @@ func validPromoInput(input *promoAdminInput) (*time.Time, *time.Time, error) {
 	return start, expire, nil
 }
 
-const promoStatusSQL = `CASE WHEN expires_at<=statement_timestamp() THEN 'expired' WHEN NOT active THEN 'disabled' WHEN starts_at>statement_timestamp() THEN 'scheduled' WHEN max_uses>0 AND used_count>=max_uses THEN 'exhausted' ELSE 'active' END`
+const promoStatusSQL = `CASE WHEN expires_at<=statement_timestamp() THEN 'expired' WHEN NOT active THEN 'disabled' WHEN starts_at>statement_timestamp() THEN 'scheduled' WHEN (max_uses>0 AND used_count>=max_uses) OR (one_time AND used_count>0) THEN 'exhausted' ELSE 'active' END`
 const promoAdminColumns = `id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,recurring_limit,upgrade_only,active,notes,created_at,updated_at,version,` + promoStatusSQL + ` AS status`
 
 func (s *Server) promoCodes(w http.ResponseWriter, r *http.Request) {
