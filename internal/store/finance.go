@@ -262,6 +262,11 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	if err = LockAdminCustomer(ctx, tx, actorID, userID); err != nil {
 		return 0, false, err
 	}
+	// Match online admission: customer funds before finance settings. Waiting
+	// settings writers must not create a settings -> customer reverse edge.
+	if err = LockFinancialCustomer(ctx, tx, userID); err != nil {
+		return 0, false, err
+	}
 	if err = tx.QueryRow(ctx, `SELECT delta_cents,balance_after FROM balance_ledger WHERE user_id=$1 AND entry_type='topup' AND idempotency_key=$2`, userID, key).Scan(&previousTopUp, &balance); err == nil {
 		// A replay of an already-committed top-up returns the recorded result
 		// even if the financial settings have changed since: the balance was
@@ -307,7 +312,7 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 			return 0, false, conflict("topup_active_order_required", "充值前必须存在已支付或已激活订单")
 		}
 	}
-	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 AND role='customer' FOR UPDATE", userID).Scan(&balance); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 AND role='customer'", userID).Scan(&balance); err != nil {
 		return 0, false, err
 	}
 	if amount > 9223372036854775807-balance {

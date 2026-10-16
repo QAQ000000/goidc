@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -315,5 +316,110 @@ func TestOnlineTopupOverflowIsVisibleLiability(t *testing.T) {
 	err = db.Pool.QueryRow(ctx, `SELECT u.balance_cents,t.status,s.failure_code,(SELECT count(*) FROM balance_ledger WHERE user_id=u.id) FROM balance_topups t JOIN balance_topup_settlements s ON s.topup_id=t.id JOIN users u ON u.id=t.user_id WHERE t.invoice_id=$1`, out.InvoiceID).Scan(&balance, &state, &failure, &ledger)
 	if err != nil || balance != 9223372036854775802 || state != "pending_liability" || failure != "balance_overflow" || ledger != 0 {
 		t.Fatalf("balance=%d state=%s failure=%s ledger=%d err=%v", balance, state, failure, ledger, err)
+	}
+}
+
+func TestOnlineTopupAdminAdmissionAndSettingsWriterLockOrder(t *testing.T) {
+	db, ctx, actor, uid := onlineTopupFixture(t)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	// A settings writer races both ways of increasing the customer's balance.
+	// Admission may reject its stale settings snapshot; deadlocks/timeouts and
+	// partial reservations are never valid outcomes.
+	for round := 0; round < 16; round++ {
+		out := createTopup(t, db, ctx, uid, 1, fmt.Sprintf("three-way-create-%d", round))
+		start := make(chan struct{})
+		errs := make(chan error, 3)
+		go func(round int) {
+			<-start
+			_, _, e := db.TopUp(ctx, actor, uid, 1, fmt.Sprintf("three-way-admin-%d", round), "")
+			errs <- e
+		}(round)
+		go func(round int) {
+			<-start
+			_, e := topupIntent(db, ctx, uid, out, fmt.Sprintf("three-way-intent-%d", round))
+			if e != nil {
+				var c *Conflict
+				if errors.As(e, &c) && c.Code == "version_conflict" {
+					e = nil
+				}
+			}
+			errs <- e
+		}(round)
+		go func() {
+			<-start
+			_, e := db.Pool.Exec(ctx, `UPDATE finance_settings SET version=version+1 WHERE id=1`)
+			errs <- e
+		}()
+		close(start)
+		for i := 0; i < 3; i++ {
+			if e := <-errs; e != nil {
+				t.Fatalf("round %d: %v", round, e)
+			}
+		}
+	}
+	var balance, accepted, payments int64
+	if err := db.Pool.QueryRow(ctx, `SELECT balance_cents,(SELECT count(*) FROM balance_topups WHERE status='accepted'),(SELECT count(*) FROM payment_transactions) FROM users WHERE id=$1`, uid).Scan(&balance, &accepted, &payments); err != nil || balance != 16 || accepted != payments {
+		t.Fatalf("balance=%d accepted=%d payments=%d err=%v", balance, accepted, payments, err)
+	}
+}
+
+func TestAdminTopupDoesNotHoldSettingsWhileWaitingForCustomer(t *testing.T) {
+	db, ctx, actor, uid := onlineTopupFixture(t)
+	out := createTopup(t, db, ctx, uid, 1, "lock-proof-create")
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	blocker, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback(ctx)
+	var blockerPID int
+	if err = blocker.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blockerPID); err != nil {
+		t.Fatal(err)
+	}
+	if err = LockFinancialCustomer(ctx, blocker, uid); err != nil {
+		t.Fatal(err)
+	}
+	errs := make(chan error, 2)
+	go func() { _, _, e := db.TopUp(ctx, actor, uid, 1, "lock-proof-admin", ""); errs <- e }()
+	// Observe a real database lock wait, rather than relying on goroutine timing.
+	ticker := time.NewTicker(5 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var waiting bool
+		if err = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))`, blockerPID).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-ticker.C:
+		}
+	}
+	writer, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Rollback(ctx)
+	// Before the fix, admin already held settings SHARE while waiting for the
+	// customer. NOWAIT fails there, exposing the precise reverse lock edge.
+	if _, err = writer.Exec(ctx, `SELECT id FROM finance_settings WHERE id=1 FOR UPDATE NOWAIT`); err != nil {
+		t.Fatalf("admin retained settings while blocked on customer: %v", err)
+	}
+	go func() { _, e := topupIntent(db, ctx, uid, out, "lock-proof-intent"); errs <- e }()
+	if err = writer.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if e := <-errs; e != nil {
+			t.Fatal(e)
+		}
 	}
 }
