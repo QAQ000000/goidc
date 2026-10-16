@@ -16,7 +16,7 @@ const messages: Record<TopupState["status"], string> = {
   cancelled: "充值账单已取消。",
 };
 
-export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id: number; status?: string; version: number; amount_cents: number; import_review_required: boolean; payment_pending: boolean; payments?: PaymentRecord[]; topup?: TopupState }; admin: boolean; refresh: () => void }) {
+export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id: number; status?: string; version: number; amount_cents: number; import_review_required: boolean; payment_pending: boolean; topup_can_retry?: boolean; payment_close_anomaly?: boolean; payments?: PaymentRecord[]; topup?: TopupState }; admin: boolean; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unknown, setUnknown] = useState(false);
@@ -44,12 +44,12 @@ export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id
     finally { lock.current = false; setBusy(false); }
   }
   return <div className="space-y-3 max-w-xl">
-    <p role="status" className="text-sm">{invoice.status === "refunded" ? "已退款，原入账及余额冲正保留历史。" : invoice.topup?.resolution ? "原充值收款已补入账户余额，请查看余额流水。" : status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
+    <p role="status" className="text-sm">{invoice.status === "refunded" ? "已退款，原入账及余额冲正保留历史。" : invoice.payment_close_anomaly ? "已关闭支付出现迟到收款异常，请联系财务核验，勿重复付款或取消。" : invoice.topup_can_retry ? "原支付已可信关闭，原充值接纳仍保留，可重新在线支付。" : invoice.topup?.resolution ? "原充值收款已补入账户余额，请查看余额流水。" : status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
     {!admin && invoice.topup?.resolution && <p className="text-sm">入账金额 {money(invoice.topup.resolution.amount_cents)} · {date(invoice.topup.resolution.created_at)} · 余额流水 #{invoice.topup.resolution.ledger_id}</p>}
     {admin && <TopupLiabilityPanel invoiceId={invoice.id} refreshInvoice={refresh} />}
     <div className="flex flex-wrap gap-2">
-      {!admin && (status === "created" || status === "accepted") && <OnlinePayment invoice={{ ...invoice, topup: invoice.topup }} refresh={refresh} />}
-      {!admin && (status === "created" || unknown) && <Button size="sm" variant="outline" disabled={busy || (!unknown && invoice.payment_pending)} onClick={() => void cancel()}>{busy ? "正在取消" : unknown ? "以原请求确认取消结果" : "取消充值账单"}</Button>}
+      {!admin && <OnlinePayment invoice={{ ...invoice, topup: invoice.topup }} refresh={refresh} />}
+      {!admin && (status === "created" || unknown) && <Button size="sm" variant="outline" disabled={busy || (!unknown && (invoice.payment_pending || invoice.payment_close_anomaly))} onClick={() => void cancel()}>{busy ? "正在取消" : unknown ? "以原请求确认取消结果" : "取消充值账单"}</Button>}
       {!admin && <Button variant="outline" size="sm" asChild><Link href="/console/account">查看账户余额</Link></Button>}
     </div>
     {admin && <p className="text-xs text-muted-foreground">充值整单外部退款请使用下方“外部退款登记与复核”，核对原支付、原始入账及余额冻结事实；此处不执行商户退款。</p>}

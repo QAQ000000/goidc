@@ -60,6 +60,7 @@ import {
 } from "./online-payment";
 import { TopupInvoiceActions, type TopupState } from "./topup-invoice-actions";
 import { ExternalRefunds } from "./external-refunds";
+import { PaymentClose } from "./payment-close";
 import { PaymentReconciliation } from "./payment-reconciliation";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import { AdminStatusTabs } from "./admin-status-tabs";
@@ -118,6 +119,8 @@ type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   import_review_required: boolean;
   payment_pending: boolean;
   real_payment_pending: boolean;
+  payment_close_anomaly?: boolean;
+  topup_can_retry?: boolean;
   external_payment_paid: boolean;
  credit_payment?:{remaining_cents:number;amount_cents:number;status:string}|null;
   discount_cents: number;
@@ -169,6 +172,8 @@ type InvoiceActionRow = Pick<
   | "import_review_required"
   | "payment_pending"
   | "real_payment_pending"
+  | "topup_can_retry"
+  | "payment_close_anomaly"
   | "external_payment_paid"
  | "credit_payment"
   | "version"
@@ -1071,7 +1076,7 @@ function InvoiceActions({
       </p>
     );
   }
-  if (!admin && invoice.status !== "unpaid"&&!creditPending&&creditOwnerReady) return null;
+  if (!admin && invoice.status !== "unpaid"&&!creditPending&&creditOwnerReady) return <OnlinePayment invoice={invoice} refresh={refresh} />;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
@@ -1320,6 +1325,7 @@ export function InvoiceDetailView({
           </section>
           <section className="py-5 border-b">
             <h2 className="font-semibold mb-3">付款记录</h2>
+            {data.payment_close_anomaly && <p role="alert" className="mb-3 text-sm text-destructive">已关闭支付出现迟到收款异常，账单已冻结，请联系财务核验；请勿重复付款或取消。原收款与操作证据保留。</p>}
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
@@ -1369,6 +1375,7 @@ export function InvoiceDetailView({
                         ) : (
                           <Status value={payment.status} />
                         )}
+                        {admin && <PaymentClose invoiceId={data.id} payment={payment} admin={admin} refresh={refresh} />}
                         <PaymentReconciliation
                           invoiceId={data.id}
                           payment={payment}

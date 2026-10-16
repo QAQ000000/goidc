@@ -54,7 +54,7 @@ export function PaymentReconciliation({
   return (
     <div className="mt-2 max-w-64 space-y-2 text-xs">
       {(payment.status === "pending" || payment.status === "expired") && (!admin || allowed) && payment.query_enabled !== false && (
-        <Button size="sm" variant="outline" disabled={busy} onClick={() => void query()}>
+        <Button size="sm" variant="outline" disabled={busy || payment.close_status === "checking" || payment.close_anomaly} onClick={() => void query()}>
           <RefreshCw className={busy ? "animate-spin" : ""} />
           {busy ? "查询中" : "查询付款结果"}
         </Button>
@@ -66,7 +66,7 @@ export function PaymentReconciliation({
       )}
       {(payment.status === "pending" || payment.status === "expired") && (
         <p className="text-muted-foreground whitespace-normal">
-          本站暂不支持自动关单。支付过期或查到未付款不代表商户已关单；核对完成前不能更换付款方式或取消账单，请联系客服人工核对。
+          支付过期或查到未付款不代表商户已关单；只有支持可信关单的渠道确认最终关闭后才能解除保护。未知结果继续冻结，请联系管理员核验。
         </p>
       )}
       {(payment.status === "pending" || payment.status === "expired") && (
