@@ -59,8 +59,14 @@ func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err = lockOnlineTopupCustomer(ctx, tx, invoiceID); err != nil {
+	topup, err := lockOnlineTopupCustomer(ctx, tx, invoiceID)
+	if err != nil {
 		return out, err
+	}
+	if topup {
+		if err = requireTopupSession(ctx, tx, userID); err != nil {
+			return out, err
+		}
 	}
 	if err = checkPaymentConfigurationVersion(ctx, tx, provider); err != nil {
 		return out, err

@@ -26,7 +26,7 @@ const transactionEntries = `(
  FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id AND i.user_id=r.user_id WHERE r.status='confirmed'
  UNION ALL
  SELECT 'ledger:'||l.id,'ledger',l.id,l.user_id,i.id,i.invoice_no,l.created_at,
- CASE WHEN l.reference_type='admin_topup' THEN 'admin_topup' ELSE 'balance' END,abs(l.delta_cents),
+ CASE WHEN l.reference_type='admin_topup' THEN 'admin_topup' WHEN l.reference_type='gateway_topup' THEN 'gateway_topup' ELSE 'balance' END,abs(l.delta_cents),
  CASE WHEN l.reference_type='gateway_topup' THEN 'neutral' WHEN l.delta_cents<0 THEN 'expense' WHEN l.delta_cents>0 THEN 'income' ELSE 'neutral' END,
  'L-'||l.id,coalesce(nullif(l.note,''),l.entry_type),
  CASE WHEN l.entry_type='topup' THEN 'topup'

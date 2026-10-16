@@ -29,7 +29,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	year := time.Date(now.Year(), 1, 1, 0, 0, 0, 0, now.Location())
 	rows, err := s.db.Pool.Query(r.Context(), `WITH cash AS (
- SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+ SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
  UNION ALL SELECT r.user_id,r.amount_cents,r.received_at FROM credit_repayments r
  ) SELECT
  count(*)::bigint AS total_orders,
@@ -151,8 +151,8 @@ FROM (
  FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id AND i.user_id=r.user_id
  WHERE r.status='confirmed' AND r.user_id=$1 AND admin_customer_allowed($2,r.user_id)
  UNION ALL
- SELECT 'ledger'::text,l.id,i.id AS invoice_id,i.invoice_no,l.entry_type AS label,NULL::bigint,l.delta_cents,'posted'::text,l.balance_after,l.created_at,NULL::timestamptz,l.note
- FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type='invoice' AND i.id=l.reference_id AND i.user_id=l.user_id
+ SELECT 'ledger'::text,l.id,i.id AS invoice_id,i.invoice_no,CASE WHEN l.reference_type='gateway_topup' THEN 'gateway_topup' ELSE l.entry_type END AS label,NULL::bigint,l.delta_cents,'posted'::text,l.balance_after,l.created_at,NULL::timestamptz,l.note
+ FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type IN ('invoice','gateway_topup') AND i.id=l.reference_id AND i.user_id=l.user_id
  WHERE l.user_id=$1 AND admin_customer_allowed($2,l.user_id)
 ) events ORDER BY created_at DESC,id DESC LIMIT $3 OFFSET $4`
 	s.list(w, r, query, customerID, identityFrom(r).ID, limit, offset)

@@ -81,7 +81,7 @@ WITH requested AS MATERIALIZED (
   SELECT customer.sales_owner_id,SUM(i.amount_cents)::bigint AS amount_cents
   FROM invoices i
   JOIN users customer ON customer.id=i.user_id AND customer.role='customer'
-  WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id AND cp.status<>'repaid') AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) >= $2 AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) < $3
+  WHERE i.status='paid' AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id AND cp.status<>'repaid') AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) >= $2 AND COALESCE((SELECT max(received_at) FROM credit_repayments cr WHERE cr.invoice_id=i.id),i.paid_at) < $3
     AND admin_customer_allowed($4,customer.id)
     AND customer.sales_owner_id IN (SELECT DISTINCT sales_owner_id FROM scoped_orders WHERE sales_owner_id IS NOT NULL)
   GROUP BY customer.sales_owner_id

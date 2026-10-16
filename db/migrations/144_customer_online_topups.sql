@@ -21,7 +21,7 @@ CREATE TABLE balance_topup_settlements (
  CHECK((status='credited' AND ledger_id IS NOT NULL AND failure_code='') OR (status='pending_liability' AND ledger_id IS NULL AND failure_code<>''))
 );
 CREATE UNIQUE INDEX balance_ledger_gateway_topup_invoice ON balance_ledger(reference_id) WHERE reference_type='gateway_topup' AND entry_type='topup';
-CREATE INDEX balance_topups_reserved ON balance_topups(user_id) WHERE status='accepted';
+CREATE INDEX balance_topups_reserved ON balance_topups(user_id) WHERE status IN ('accepted','pending_liability');
 CREATE FUNCTION immutable_topup_settlement() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'topup settlement fact is immutable'; END $$;
 CREATE TRIGGER protect_topup_settlement BEFORE UPDATE OR DELETE ON balance_topup_settlements FOR EACH ROW EXECUTE FUNCTION immutable_topup_settlement();
 CREATE TABLE balance_topup_operations (

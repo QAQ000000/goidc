@@ -316,10 +316,10 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	// max_balance_cents=0 keeps the migration/legacy default meaning of "no
 	// configured ceiling" so default installations continue to allow top-ups.
 	var reserved int64
-	if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=$1 AND status='accepted'", userID).Scan(&reserved); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=$1 AND status IN ('accepted','pending_liability')", userID).Scan(&reserved); err != nil {
 		return 0, false, err
 	}
-	if maxBalance > 0 && (balance+amount > maxBalance || reserved > maxBalance-balance-amount) {
+	if maxBalance > 0 && amount > topupCapacity(maxBalance, balance, reserved) {
 		return 0, false, conflict("topup_balance_limit", fmt.Sprintf("充值后余额将超过上限 %d 分", maxBalance))
 	}
 	balance += amount

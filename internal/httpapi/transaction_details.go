@@ -10,7 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const invoicePendingProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired')) AS payment_pending,
+const invoicePendingProjection = `(SELECT t.status FROM balance_topups t WHERE t.invoice_id=i.id) AS topup_status,
+ (SELECT s.amount_cents FROM balance_topup_settlements s WHERE s.invoice_id=i.id AND s.status='pending_liability') AS topup_pending_liability_cents,
+ i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired')) AS payment_pending,
  EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded') AS external_payment_paid,
  i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock') AS real_payment_pending, (SELECT jsonb_build_object('remaining_cents',cp.remaining_cents,'status',cp.status,'amount_cents',cp.amount_cents) FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) AS credit_payment`
 const maskedPurchaseFields = `coalesce((SELECT jsonb_agg(CASE WHEN field->>'encrypted'='true' THEN jsonb_set(field,'{value}','"********"'::jsonb) ELSE field END) FROM jsonb_array_elements(purchase_fields) field),'[]'::jsonb)`
@@ -143,7 +145,7 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	var topupJSON []byte
 	if invoice["invoice_kind"] == "topup" {
-		err = tx.QueryRow(ctx, `SELECT jsonb_build_object('status',t.status,'settings_version',t.settings_version,'accepted_at',t.accepted_at,'failure_code',coalesce(s.failure_code,'')) FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1`, id).Scan(&topupJSON)
+		err = tx.QueryRow(ctx, `SELECT jsonb_build_object('status',t.status,'settings_version',t.settings_version,'accepted_at',t.accepted_at,'failure_code',coalesce(s.failure_code,''),'payment_id',s.payment_id,'ledger_id',s.ledger_id,'amount_cents',t.amount_cents) FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1`, id).Scan(&topupJSON)
 		if err != nil {
 			s.fail(w, r, err)
 			return

@@ -40,18 +40,29 @@ type TopupOptions struct {
 func readTopupOptions(ctx context.Context, tx pgx.Tx, uid int64) (TopupOptions, error) {
 	var o TopupOptions
 	err := tx.QueryRow(ctx, `SELECT f.topup_enabled,f.min_topup_cents,f.max_topup_cents,f.max_balance_cents,f.require_active_order,f.version,u.balance_cents,
- (SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=u.id AND status='accepted'),
+ (SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=u.id AND status IN ('accepted','pending_liability')),
  EXISTS(SELECT 1 FROM orders WHERE user_id=u.id AND status IN ('paid','active') AND deleted_at IS NULL)
  FROM finance_settings f JOIN users u ON u.id=$1 AND u.role='customer' WHERE f.id=1 FOR SHARE OF f`, uid).Scan(&o.Enabled, &o.MinTopupCents, &o.MaxTopupCents, &o.MaxBalanceCents, &o.RequireActiveOrder, &o.Version, &o.BalanceCents, &o.ReservedCents, &o.HasActiveOrder)
 	if err == nil && o.MaxBalanceCents > 0 {
-		n := o.MaxBalanceCents - o.BalanceCents - o.ReservedCents
-		if n < 0 {
-			n = 0
-		}
+		n := topupCapacity(o.MaxBalanceCents, o.BalanceCents, o.ReservedCents)
 		o.AvailableCapacityCents = &n
 	}
 	return o, err
 }
+
+// Subtract only after ordering checks: a lowered ceiling plus a near-MaxInt64
+// balance and outstanding liabilities must never wrap into positive capacity.
+func topupCapacity(limit, balance, reserved int64) int64 {
+	if balance >= limit {
+		return 0
+	}
+	remaining := limit - balance
+	if reserved >= remaining {
+		return 0
+	}
+	return remaining - reserved
+}
+
 func (s *Store) OnlineTopupOptions(ctx context.Context, uid int64) (TopupOptions, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
