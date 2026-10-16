@@ -27,7 +27,7 @@ function launch(binary, args, options = {}) {
   const child = spawn(binary, args, { env, stdio: 'ignore', ...options });
   const handle = { child, exited: false, status: null };
   handle.done = new Promise(resolve => {
-    child.once('error', () => { handle.exited = true; handle.status = -1; resolve(); });
+    child.once('error', error => { handle.exited = true; handle.status = -1; handle.errorCode = error.code; resolve(); });
     child.once('close', code => { handle.exited = true; handle.status = code; resolve(); });
   });
   return handle;
@@ -136,8 +136,12 @@ async function inner() {
       report.step = `activate-${phase}`;
       const startedAt = new Date().toISOString();
       await copyFile(`/control/${phase}.conf`, '/mutable/nginx.next.conf');
-      const syntax = launch('/tools/nginx', ['-p', '/mutable/', '-c', '/mutable/nginx.next.conf', '-e', '/mutable/bootstrap.log', '-t']);
-      await until(() => syntax.exited, 10, 'Nginx syntax check deadline'); check(syntax.status === 0, 'Nginx syntax check failed');
+      const syntax = launch('/tools/nginx', ['-p', '/mutable/', '-c', '/mutable/nginx.next.conf', '-e', '/mutable/bootstrap.log', '-t'], { stdio: ['ignore', 'ignore', 'pipe'] });
+      let diagnostic = '';
+      syntax.child.stderr?.on('data', data => { if (diagnostic.length < 8192) diagnostic += data.toString().slice(0, 8192 - diagnostic.length); });
+      await until(() => syntax.exited, 10, 'Nginx syntax check deadline');
+      report.syntax ??= []; report.syntax.push({ phase, status: syntax.status, errorCode: syntax.errorCode, diagnostic });
+      check(syntax.status === 0, 'Nginx syntax check failed');
       await rename('/mutable/nginx.next.conf', '/mutable/nginx.conf');
       if (initial) master = launch('/tools/nginx', ['-p', '/mutable/', '-c', '/mutable/nginx.conf', '-e', '/mutable/bootstrap.log']);
       else {
@@ -328,7 +332,7 @@ export async function acceptStaticRetention(options) {
   const elf = spawnSync('/usr/bin/readelf', ['-l', '-d', nginx], { env, encoding: 'utf8' }); check(elf.status === 0, 'Nginx ELF metadata unavailable');
   const needed = [...elf.stdout.matchAll(/Shared library: \[([^\]]+)\]/g)].map(m => m[1]).sort();
   const preliminary = { scope: 'static retention preparation only', oldInputScope: 'external anchor, frozen source and complete sealed bytes only; historical launch contract not accepted', runnerCommit: runner.commit, oldCommit: old.source.commit, nextCommit: next.source.commit, counts: plan.counts, nginxSHA256,
-    tooling: { nginxVersion: version.stderr.trim(), needed, loaderCacheSHA256: hash(libraries), luaFiles, luajitSHA256: await digest('/usr/local/lib/libluajit-5.1.so.2') },
+    tooling: { nginxVersion: version.stderr.trim(), needed, loaderCacheSHA256: hash(libraries), luaFiles, luajitSHA256: await digest('/usr/local/lib/libluajit-5.1.so.2'), jemallocSHA256: await digest('/usr/local/lib/libjemalloc.so.2') },
     budget: { maxOutputBytes: 32 * 1024 * 1024, minimumFreeBytes: 512 * 1024 * 1024, maximumOutputFiles: 4096 }, sourceProof: { commit: runner.commit, tree: runner.tree },
     mappingSHA256: hash(JSON.stringify(plan)), mapping: plan, hostBefore: await hostSnapshot() };
   if (!options.execute) return { status: 'PREFLIGHT_ONLY', ...preliminary };
@@ -351,6 +355,7 @@ export async function acceptStaticRetention(options) {
   for (const p of ['/lib', '/lib64', '/usr/lib', '/usr/lib64', '/etc/passwd', '/etc/group', '/etc/nsswitch.conf', '/etc/hosts', '/etc/ld.so.cache']) args.push('--ro-bind', p, p);
   // Explicit host tooling dependency, not a bundled application dependency.
   args.push('--ro-bind', '/usr/local/lib/libluajit-5.1.so.2', '/usr/local/lib/libluajit-5.1.so.2');
+  args.push('--ro-bind', '/usr/local/lib/libjemalloc.so.2', '/usr/local/lib/libjemalloc.so.2');
   args.push('--ro-bind', '/www/server/nginx/lib/lua', '/www/server/nginx/lib/lua', '--ro-bind', nginx, '/tools/nginx');
   const stagedNode = path.join(root, 'node'); await writeFile(stagedNode, '', { flag: 'wx', mode: 0o444 });
   args.push('--ro-bind', stagedNode, '/tools/node', '--ro-bind', control, '/control', '--bind', mutable, '/mutable');
@@ -382,7 +387,7 @@ export async function acceptStaticRetention(options) {
     check(!reserveFailure && child.status === 0, 'Isolated Nginx acceptance failed');
     report.runtime = await json(path.join(mutable, 'result.json')); check(report.runtime.status === 'PASS', 'Runtime evidence incomplete');
     report.hostOrdinaryIdentity = await json(path.join(mutable, 'host-identity.json')); check(report.hostOrdinaryIdentity.uid === 1000 && report.hostOrdinaryIdentity.gid === 1000, 'Actual host ordinary identity missing');
-    check(await digest(nginx) === nginxSHA256 && await digest('/usr/local/lib/libluajit-5.1.so.2') === preliminary.tooling.luajitSHA256, 'Host Nginx tooling changed');
+    check(await digest(nginx) === nginxSHA256 && await digest('/usr/local/lib/libluajit-5.1.so.2') === preliminary.tooling.luajitSHA256 && await digest('/usr/local/lib/libjemalloc.so.2') === preliminary.tooling.jemallocSHA256, 'Host Nginx tooling changed');
     for (const file of luaFiles) check(await digest(file.path) === file.sha256, 'Lua tooling input changed');
     await verifySealedStaticSource(options.old, options.oldSHA, options.oldSource); await verifyRuntimeCandidate(options.next, options.nextSHA, options.nextSource);
     report.hostAfter = await hostSnapshot(); check(JSON.stringify(report.hostAfter) === JSON.stringify(report.hostBefore), 'Host namespace or resident identity changed');
@@ -390,6 +395,8 @@ export async function acceptStaticRetention(options) {
   } finally {
     clearInterval(interval); process.removeListener('SIGTERM', stopOnSignal); process.removeListener('SIGINT', stopOnSignal);
     await terminate(child, true).catch(() => { report.status = 'FAIL'; });
+    report.runtime ??= await json(path.join(mutable, 'result.json')).catch(() => null);
+    report.hostOrdinaryIdentity ??= await json(path.join(mutable, 'host-identity.json')).catch(() => null);
     report.wrapperExited = child?.exited === true;
     await writeJSON(path.join(root, 'report.json'), report);
   }
