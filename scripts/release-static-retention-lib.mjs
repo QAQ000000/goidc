@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { lstat } from 'node:fs/promises';
+import { fileHash, noLinks } from './release-candidate-lib.mjs';
 
 // Callers must independently verify both runtime candidates and their external
-// manifest anchors first. This pure module neither reads files nor authenticates
-// manifests. The two readonly namespace mounts are fixed, never host paths.
+// manifest anchors first. Planning does not authenticate manifests. The optional
+// file verifier reads only. Namespace mounts are fixed, never arbitrary host paths.
 const roots = { old: '/releases/old', next: '/releases/new' };
 const contentTypes = {
   '.js': 'application/javascript', '.css': 'text/css', '.json': 'application/json', '.map': 'application/json',
@@ -19,6 +21,9 @@ function relative(value) {
 function collect(input, release) {
   check(input?.root === roots[release], 'Retention mount root must be fixed');
   const manifest = input.manifest;
+  const commit = manifest?.source?.commit ?? null, manifestSHA256 = input.manifestSHA256 ?? null;
+  check(commit === null || (typeof commit === 'string' && /^[a-f0-9]{40}$/.test(commit)), 'Invalid retention source commit');
+  check(manifestSHA256 === null || (typeof manifestSHA256 === 'string' && /^[a-f0-9]{64}$/.test(manifestSHA256)), 'Invalid retention external manifest SHA256');
   check(Array.isArray(manifest?.artifacts) && manifest.artifacts.length > 0, 'Retention artifact inventory required');
   const appRoot = relative(manifest.web?.appRoot);
   check(appRoot.startsWith('artifact/web/'), 'Retention appRoot must belong to Web artifact');
@@ -30,7 +35,7 @@ function collect(input, release) {
     check(!Object.hasOwn(row, 'link') && Number.isSafeInteger(row.bytes) && row.bytes >= 0 && /^[a-f0-9]{64}$/.test(row.sha256 ?? '') && typeof row.executable === 'boolean', 'Retention static entry must be an inventoried ordinary file');
     const suffix = filename.slice(prefix.length), contentType = contentTypes[path.posix.extname(suffix).toLowerCase()];
     check(contentType && suffix.split('/').every(part => !part.startsWith('.')), 'Unsupported or hidden retained static file');
-    entries.push({ url: `/_next/static/${suffix}`, release, path: filename, bytes: row.bytes, sha256: row.sha256, contentType });
+    entries.push({ url: `/_next/static/${suffix}`, release, path: filename, bytes: row.bytes, sha256: row.sha256, contentType, sources: [{ release, path: filename, commit, manifestSHA256 }] });
   }
   check(entries.length > 0, 'Retention package contains no static files');
   return entries.sort((a, b) => a.url.localeCompare(b.url, 'en'));
@@ -42,7 +47,7 @@ export function buildStaticRetention({ old, next }) {
   for (const row of newEntries) {
     const existing = union.get(row.url);
     if (existing) { check(existing.bytes === row.bytes && existing.sha256 === row.sha256, 'Conflicting retained static URL bytes or SHA256'); shared++; }
-    union.set(row.url, row); // Identical shared URL always uses the new package.
+    union.set(row.url, existing ? { ...row, sources: [...existing.sources, ...row.sources] } : row); // Identical shared URL always uses the new package.
   }
   const entries = [...union.values()].sort((a, b) => a.url.localeCompare(b.url, 'en'));
   return { version: 1, entries, oldEntries, counts: { old: oldEntries.length, next: newEntries.length, shared, union: entries.length } };
@@ -55,6 +60,38 @@ function validateEntry(row) {
   const suffix = relative(row.url.slice('/_next/static/'.length));
   check(suffix.split('/').every(part => !part.startsWith('.')) && row.path.startsWith('artifact/web/') && row.path.endsWith(`/.next/static/${suffix}`), 'Retained URL/artifact binding mismatch');
   check(Number.isSafeInteger(row.bytes) && row.bytes >= 0 && /^[a-f0-9]{64}$/.test(row.sha256 ?? '') && row.contentType === contentTypes[path.posix.extname(suffix).toLowerCase()] && row.contentType, 'Invalid retained static metadata');
+  if (row.sources !== undefined) {
+    check(Array.isArray(row.sources) && row.sources.length > 0, 'Invalid retained sources');
+    const releases = new Set();
+    for (const source of row.sources) {
+      check(source && Object.hasOwn(roots, source.release) && !releases.has(source.release), 'Invalid or duplicate retained source release'); releases.add(source.release);
+      relative(source.path);
+      check(source.path.startsWith('artifact/web/') && source.path.endsWith(`/.next/static/${suffix}`) && (source.commit === null || (typeof source.commit === 'string' && /^[a-f0-9]{40}$/.test(source.commit))) && (source.manifestSHA256 === null || (typeof source.manifestSHA256 === 'string' && /^[a-f0-9]{64}$/.test(source.manifestSHA256))), 'Invalid retained source provenance');
+    }
+    check(row.sources.some(source => source.release === row.release && source.path === row.path), 'Selected retained provider lacks matching source');
+  }
+}
+
+// root is one already verified package root. Filter a mixed plan by provider
+// before calling. Mounts must remain immutable between verification and serving;
+// this does not claim race resistance against concurrent filesystem mutation.
+export async function verifyStaticRetentionFiles(root, entries) {
+  check(typeof root === 'string' && path.isAbsolute(root) && Array.isArray(entries) && entries.length > 0, 'Absolute retention root and nonempty entries required');
+  const absolute = await noLinks(root);
+  check((await lstat(absolute)).isDirectory(), 'Retention root must be an ordinary directory');
+  const evidence = [], seen = new Set();
+  for (const row of entries) {
+    validateEntry(row);
+    check(!seen.has(row.url), 'Duplicate retained URL'); seen.add(row.url);
+    const filename = path.join(absolute, row.path);
+    await noLinks(filename);
+    const stat = await lstat(filename);
+    check(stat.isFile() && stat.size === row.bytes, 'Retained static file type or size mismatch');
+    const digest = await fileHash(filename);
+    check(digest === row.sha256, 'Retained static file SHA256 mismatch');
+    evidence.push({ url: row.url, path: row.path, bytes: stat.size, sha256: digest });
+  }
+  return evidence;
 }
 const quote = value => JSON.stringify(value);
 const regexEscape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -97,6 +134,8 @@ http {
   uwsgi_temp_path /mutable/uwsgi;
   scgi_temp_path /mutable/scgi;
   default_type application/octet-stream;
+  gzip off;
+  gzip_static off;
   server_tokens off;
   map_hash_bucket_size 512;
   map_hash_max_size 8192;

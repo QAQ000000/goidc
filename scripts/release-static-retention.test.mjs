@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { buildStaticRetention, renderStaticRetentionNginx } from './release-static-retention-lib.mjs';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
+import { buildStaticRetention, renderStaticRetentionNginx, verifyStaticRetentionFiles } from './release-static-retention-lib.mjs';
 
 function file(name, bytes = 'asset', appRoot = 'artifact/web/web') {
   return { path: `${appRoot}/.next/static/${name}`, bytes: Buffer.byteLength(bytes), sha256: createHash('sha256').update(bytes).digest('hex'), executable: false };
@@ -32,6 +36,24 @@ test('same URL with unequal size or SHA fails rather than selecting one or falli
   }
   const duplicate = inputs(); duplicate.old.manifest.artifacts.push({ ...duplicate.old.manifest.artifacts[0] });
   assert.throws(() => buildStaticRetention(duplicate), /Duplicate retention artifact/);
+});
+
+test('shared entries retain both fixed source commits and external manifest anchors', () => {
+  const source = inputs();
+  source.old.manifest.source = { commit: '1'.repeat(40) }; source.old.manifestSHA256 = 'a'.repeat(64);
+  source.next.manifest.source = { commit: '2'.repeat(40) }; source.next.manifestSHA256 = 'b'.repeat(64);
+  const plan = buildStaticRetention(source), shared = plan.entries.find(row => row.url.endsWith('shared.css'));
+  assert.equal(shared.release, 'next');
+  assert.deepEqual(shared.sources, [
+    { release: 'old', path: 'artifact/web/old/.next/static/css/shared.css', commit: '1'.repeat(40), manifestSHA256: 'a'.repeat(64) },
+    { release: 'next', path: 'artifact/web/web/.next/static/css/shared.css', commit: '2'.repeat(40), manifestSHA256: 'b'.repeat(64) },
+  ]);
+  assert.equal(plan.oldEntries.find(row => row.url.endsWith('shared.css')).sources.length, 1);
+  assert.deepEqual(buildStaticRetention(inputs()).entries[0].sources[0].commit, null);
+  for (const patch of ['bad', 'a'.repeat(63), 'a'.repeat(64) + '\n']) {
+    const invalid = inputs(); invalid.next.manifestSHA256 = patch;
+    assert.throws(() => buildStaticRetention(invalid), /external manifest SHA256/);
+  }
 });
 
 test('traversal, encoded aliases, query/hash, directives, controls and key paths are refused at input', () => {
@@ -77,6 +99,7 @@ test('complete Nginx config phases retain union on restored, fixed roots/port, M
     assert.doesNotMatch(config, /\/api\/|server\.js|\.env/);
     assert.equal((config.match(/Cache-Control/g) ?? []).length, (config.match(/location = /g) ?? []).length + 1);
     assert.match(config, /default "no-store";/); assert.match(config, /200 "public, max-age=300, immutable";/);
+    assert.match(config, /gzip off;/); assert.match(config, /gzip_static off;/);
     assert.match(config, /lua_package_path "\/www\/server\/nginx\/lib\/lua\/\?\.lua;/);
   }
   assert.match(union, /default_type text\/css;/); assert.match(union, /default_type font\/woff2;/);
@@ -101,4 +124,58 @@ test('renderer revalidates modified plans and rejects options which could inject
   }
   const duplicate = structuredClone(clean); duplicate.entries.push({ ...duplicate.entries[0] });
   assert.throws(() => render(duplicate), /Duplicate retained URL/);
+  for (const patch of [{ commit: 'bad' }, { manifestSHA256: 'a"; return 200;' }, { path: '../../secret.key' }, { release: 'foreign' }]) {
+    const changed = structuredClone(clean); Object.assign(changed.entries[0].sources[0], patch);
+    assert.throws(() => render(changed), /Invalid|Unsafe|Protected/);
+  }
+});
+
+async function actualFiles(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'retained-files-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const data = 'verified bytes', row = file('chunks/fixture.js', data);
+  const source = inputs(); source.next.manifest.artifacts = [row];
+  const entry = buildStaticRetention(source).entries.find(row => row.release === 'next');
+  const filename = path.join(root, row.path); await mkdir(path.dirname(filename), { recursive: true }); await writeFile(filename, data);
+  return { root, entry, filename, data };
+}
+
+test('file verifier reads real ordinary files and returns matching evidence without mutation', async t => {
+  const f = await actualFiles(t), before = await lstat(f.filename), original = JSON.stringify(f.entry);
+  assert.deepEqual(await verifyStaticRetentionFiles(f.root, [f.entry]), [{ url: f.entry.url, path: f.entry.path, bytes: Buffer.byteLength(f.data), sha256: f.entry.sha256 }]);
+  assert.equal(await readFile(f.filename, 'utf8'), f.data); assert.equal((await lstat(f.filename)).mtimeMs, before.mtimeMs);
+  assert.equal(JSON.stringify(f.entry), original);
+  await assert.rejects(verifyStaticRetentionFiles(f.root, [f.entry, f.entry]), /Duplicate retained URL/);
+});
+
+test('file verifier rejects missing files, changed size, same-size tamper and invalid entry paths', async t => {
+  const missing = await actualFiles(t); await rm(missing.filename);
+  await assert.rejects(verifyStaticRetentionFiles(missing.root, [missing.entry]), /ENOENT/);
+  const changed = await actualFiles(t); await writeFile(changed.filename, changed.data + '!');
+  await assert.rejects(verifyStaticRetentionFiles(changed.root, [changed.entry]), /size mismatch/);
+  await writeFile(changed.filename, 'x'.repeat(Buffer.byteLength(changed.data)));
+  await assert.rejects(verifyStaticRetentionFiles(changed.root, [changed.entry]), /SHA256 mismatch/);
+  await assert.rejects(verifyStaticRetentionFiles(changed.root, [{ ...changed.entry, path: '../outside.js' }]), /Unsafe/);
+});
+
+test('file verifier refuses symlink at root, ancestor, directory component or final file', async t => {
+  const f = await actualFiles(t), parent = path.dirname(f.root), basename = path.basename(f.root), link = `${f.root}-link`;
+  t.after(() => rm(link, { force: true })); await symlink(f.root, link);
+  await assert.rejects(verifyStaticRetentionFiles(link, [f.entry]), /Symlink/);
+  const ancestor = `${f.root}-ancestor`; t.after(() => rm(ancestor, { force: true })); await symlink(parent, ancestor);
+  await assert.rejects(verifyStaticRetentionFiles(path.join(ancestor, basename), [f.entry]), /Symlink/);
+  const fileTarget = `${f.filename}-original`; await rm(f.filename); await writeFile(fileTarget, f.data); await symlink(fileTarget, f.filename);
+  await assert.rejects(verifyStaticRetentionFiles(f.root, [f.entry]), /Symlink/);
+  const directory = await actualFiles(t), original = path.dirname(directory.filename), moved = `${original}-original`;
+  await rm(original, { recursive: true }); await mkdir(moved); await writeFile(path.join(moved, 'fixture.js'), directory.data); await symlink(moved, original);
+  await assert.rejects(verifyStaticRetentionFiles(directory.root, [directory.entry]), /Symlink/);
+});
+
+test('file verifier rejects directories and actual Unix sockets without reading special files', async t => {
+  const directory = await actualFiles(t); await rm(directory.filename); await mkdir(directory.filename);
+  await assert.rejects(verifyStaticRetentionFiles(directory.root, [directory.entry]), /type or size/);
+  const socket = await actualFiles(t); await rm(socket.filename);
+  const server = net.createServer(); await new Promise((resolve, reject) => { server.once('error', reject); server.listen(socket.filename, resolve); });
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await assert.rejects(verifyStaticRetentionFiles(socket.root, [socket.entry]), /type or size/);
 });
