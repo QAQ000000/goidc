@@ -16,6 +16,15 @@ function origin(value) {
 // of source authenticity, on-disk integrity or runtime behavior.
 export function buildDualWebPlan({ old, next }) {
   const releases = [old, next];
+  const migrations = releases.map(({ manifest }) => {
+    check(Array.isArray(manifest?.migrations) && manifest.migrations.length > 0, 'Complete migrations required before sharing a schema');
+    const seen = new Set();
+    return manifest.migrations.map(row => {
+      check(/^db\/migrations\/[0-9]{3}_[a-z0-9_]+[.]sql$/.test(row.path ?? '') && digest(row.sha256) && Number.isSafeInteger(row.bytes) && row.bytes > 0 && !seen.has(row.path), 'Invalid migration identity');
+      seen.add(row.path); return { path: row.path, bytes: row.bytes, sha256: row.sha256 };
+    }).sort((a, b) => a.path.localeCompare(b.path, 'en'));
+  });
+  check(JSON.stringify(migrations[0]) === JSON.stringify(migrations[1]), 'Dual preparation requires identical migration inventories; schema upgrade compatibility needs separate acceptance');
   const descriptions = releases.map(({ manifest, description, manifestSHA256 }) => {
     check(digest(manifestSHA256) && /^[a-f0-9]{40}$/.test(manifest?.source?.commit ?? ''), 'Dual Web requires anchored source identities');
     const api = origin(manifest.web?.apiInternalURL), web = origin(description?.webOrigin), publicOrigin = origin(description?.publicOrigin);
@@ -46,6 +55,14 @@ export function renderDualWebNginx(plan, { phase } = {}) {
   check(new Set(endpoints).size === 5 && plan.old.buildID !== plan.next.buildID, 'Invalid dual Web targets');
   const active = phase === 'next' ? plan.next : plan.old;
   const { rawRequests, locations } = staticRetentionParts(plan.retention, { phase: 'union', generation: phase, locationGuards: true });
+  const rawPathGuard = String.raw`  map $request_uri $dual_raw_path { "~^([^?]*)" $1; }
+  map $dual_raw_path $dual_unsafe_path {
+    default 0;
+    "~*%(?:2e|2f|5c|25|0[0-9a-f]|1[0-9a-f]|7f)" 1;
+    "~(?:^|/)[.][.]?(?:/|$)" 1;
+    "~//" 1;
+    "~\\\\" 1;
+  }`;
   return `daemon off;
 master_process on;
 worker_processes 1;
@@ -56,7 +73,7 @@ events { worker_connections 256; }
 http {
   lua_package_path "/www/server/nginx/lib/lua/?.lua;/www/server/nginx/lib/lua/?/init.lua;;";
   lua_package_cpath "/www/server/nginx/lib/lua/?.so;;";
-  log_format bounded '$status $request_method $uri';
+  log_format bounded '$msec ${phase} $status $request_method $uri $upstream_addr';
   access_log /mutable/access.log bounded;
   client_body_temp_path /mutable/client_body;
   proxy_temp_path /mutable/proxy;
@@ -80,6 +97,7 @@ http {
     default 0;
 ${rawRequests}
   }
+${rawPathGuard}
   map $http_host $public_host_allowed { default 0; "${new URL(publicOrigin).host}" 1; }
   server {
     listen ${new URL(publicOrigin).host};
@@ -87,6 +105,7 @@ ${rawRequests}
     root /mutable/empty;
     autoindex off;
     disable_symlinks on;
+    if ($dual_unsafe_path = 1) { return 404; }
     if ($public_host_allowed = 0) { return 421; }
     add_header Cache-Control no-store always;
     add_header X-Release-Generation "${phase}" always;
@@ -95,13 +114,12 @@ ${locations}
     location ^~ /_next/static/ { return 404; }
     location = /_next/static { return 404; }
     location ~ ^/(?:[.]|artifact(?:/|$)|launch(?:/|$)|control(?:/|$)|mutable(?:/|$)|releases(?:/|$)|node_modules(?:/|$)) { return 404; }
-    location / {
-      proxy_pass ${active.web};
-      proxy_http_version 1.1;
+    proxy_http_version 1.1;
       proxy_set_header Host "${new URL(publicOrigin).host}";
       proxy_set_header X-Forwarded-Host "${new URL(publicOrigin).host}";
       proxy_set_header X-Forwarded-Proto http;
       proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_set_header X-Real-IP $remote_addr;
       proxy_set_header Forwarded "";
       proxy_set_header Connection "";
       proxy_connect_timeout 2s;
@@ -113,6 +131,12 @@ ${locations}
       proxy_hide_header Cache-Control;
       proxy_hide_header X-Release-Generation;
       proxy_hide_header X-Content-Type-Options;
+    location = /api { return 404; }
+    location ^~ /api/ {
+      proxy_pass ${active.api};
+    }
+    location / {
+      proxy_pass ${active.web};
     }
   }
 }

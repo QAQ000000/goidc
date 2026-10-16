@@ -9,6 +9,7 @@ function inputs() {
     return {
       root: kind === 'old' ? '/releases/old' : '/releases/new', manifestSHA256: (kind === 'old' ? 'a' : 'b').repeat(64),
       manifest: {
+        migrations: [{ path: 'db/migrations/001_init.sql', bytes: 5, sha256: 'c'.repeat(64) }],
         source: { commit: '1'.repeat(40) }, // Two actual builds of the same code are explicitly allowed.
         web: { appRoot: 'artifact/web/web', apiInternalURL: api, webOrigin: web, publicOrigin, buildID: kind },
         artifacts: [`chunks/${kind}.js`, 'css/shared.css'].map(name => ({ path: `artifact/web/web/.next/static/${name}`, bytes: 5, sha256: createHash('sha256').update(name).digest('hex'), executable: false })),
@@ -70,7 +71,10 @@ test('switch and restore route through the selected Web while preserving both st
     assert.ok(config.includes('alias "/releases/new/artifact/web/web/.next/static/chunks/next.js";'));
     assert.match(config, /worker_shutdown_timeout 15s;/);
     assert.match(config, /proxy_next_upstream off;/); // Never automatically replay a write to another backend.
-    assert.doesNotMatch(config, /include\s|proxy_pass http:\/\/127\.0\.0\.1:5808/);
+    assert.match(config, new RegExp(`proxy_pass http://127\\.0\\.0\\.1:${phase === 'next' ? '58089' : '58088'};`));
+    assert.match(config, /location \^~ \/api\/ \{/);
+    assert.match(config, /\$upstream_addr/);
+    assert.doesNotMatch(config, /include\s/);
   }
 });
 
@@ -83,6 +87,8 @@ test('exact static locations guard raw aliases and methods; unknown static URLs 
     assert.match(body, /if \(\$request_method !~ \^\(GET\|HEAD\)\$\) \{ return 405; \}/);
   }
   assert.match(config, /location \^~ \/_next\/static\/ \{ return 404; \}/);
+  assert.match(config, /map \$request_uri \$dual_raw_path/);
+  assert.match(config, /if \(\$dual_unsafe_path = 1\) \{ return 404; \}/);
   assert.match(config, /map \$http_host \$public_host_allowed/);
   assert.match(config, /if \(\$public_host_allowed = 0\) \{ return 421; \}/);
 });
@@ -101,4 +107,12 @@ test('untrusted phase or modified retention rows cannot inject directives into a
   assert.throws(() => renderDualWebNginx(plan, { phase: 'next;return 200;' }));
   plan.retention.entries[0].path += '";include /etc/passwd;#';
   assert.throws(() => renderDualWebNginx(plan, { phase: 'old' }));
+});
+
+test('shared-schema preparation rejects changed or missing migration contracts', () => {
+  for (const alter of [
+    input => { delete input.old.manifest.migrations; },
+    input => { input.next.manifest.migrations[0].sha256 = 'd'.repeat(64); },
+    input => { input.next.manifest.migrations.push(input.next.manifest.migrations[0]); },
+  ]) { const input = inputs(); alter(input); assert.throws(() => buildDualWebPlan(input), /migration/i); }
 });
