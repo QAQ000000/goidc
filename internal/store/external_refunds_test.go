@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/codex/zjmfgo/internal/payment"
 	"strings"
 	"sync"
 	"testing"
@@ -26,7 +28,7 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents,paid_at) VALUES('ER-1',$1,'manual','paid',100,now()-interval '1 hour') RETURNING id`, customer).Scan(&invoice))
 	_, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','Manual external receipt',100)`, invoice)
 	must(err)
-	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at,external_transaction_id) VALUES('test','original-1',$1,$2,100,'succeeded',now()-interval '1 hour','real-merchant-original-1') RETURNING id`, invoice, customer).Scan(&payment))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at,external_transaction_id) VALUES('mock','original-1',$1,$2,100,'succeeded',now()-interval '1 hour','real-merchant-original-1') RETURNING id`, invoice, customer).Scan(&payment))
 	requestCtx := WithExternalRefundSession(ctx, "refund-request")
 	reviewCtx := WithExternalRefundSession(ctx, "refund-review")
 	in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "original_route", ProviderRefundID: "refund-1", ReceivedAt: time.Now().Add(-time.Minute), Note: "Actual refund receipt", EvidenceRef: "evidence/redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
@@ -150,8 +152,8 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	}
 	var secondInvoice, secondPayment int64
 	must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents) VALUES('ER-2',$1,'manual','paid',100) RETURNING id`, customer).Scan(&secondInvoice))
-	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','original-2',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, secondInvoice, customer).Scan(&secondPayment))
-	_, err = db.Pool.Exec(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by) SELECT $2,$3,user_id,amount_cents,method,provider,channel_instance_id,'original-2',provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by FROM external_refunds WHERE id=$1`, pending.Refund.ID, secondInvoice, secondPayment)
+	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('mock','original-2',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, secondInvoice, customer).Scan(&secondPayment))
+	_, err = db.Pool.Exec(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,merchant_scope) SELECT $2,$3,user_id,amount_cents,method,provider,channel_instance_id,'original-2',provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,merchant_scope FROM external_refunds WHERE id=$1`, pending.Refund.ID, secondInvoice, secondPayment)
 	if err == nil {
 		t.Fatal("database allowed merchant refund reference reuse on another invoice/payment")
 	}
@@ -182,7 +184,7 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 			must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents) VALUES('guard',$1,'manual','paid',100) RETURNING id`, customer).Scan(&invoice))
 			_, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','guard',100)`, invoice)
 			must(err)
-			must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','guard',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, invoice, customer).Scan(&payment))
+			must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('mock','guard',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, invoice, customer).Scan(&payment))
 			in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "other", ProviderRefundID: "guard-refund", ReceivedAt: time.Now().Add(-time.Minute), Note: "Actual refund receipt", EvidenceRef: "redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
 			switch scenario {
 			case "empty_note":
@@ -214,7 +216,7 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 				_, err = db.Pool.Exec(ctx, `INSERT INTO invoice_application_items(application_id,source_invoice_id,invoice_no,description,amount_cents) VALUES($1,$2,'guard','guard',100)`, application, invoice)
 				must(err)
 			case "mixed":
-				_, err = db.Pool.Exec(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','guard-mixed',$1,$2,100,'succeeded',now())`, invoice, customer)
+				_, err = db.Pool.Exec(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('mock','guard-mixed',$1,$2,100,'succeeded',now())`, invoice, customer)
 				must(err)
 			case "import":
 				_, err = db.Pool.Exec(ctx, `UPDATE invoices SET invoice_kind='automatic',import_review_required=true WHERE id=$1`, invoice)
@@ -241,5 +243,87 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 				t.Fatal("failed request left fact")
 			}
 		})
+	}
+}
+
+func TestExternalRefundMerchantIdentity(t *testing.T) {
+	db := isolatedTestStore(t)
+	db.ProvisionEncryptionKey = []byte(strings.Repeat("k", 32))
+	actor, customer := topUpFixture(t, db)
+	ctx := t.Context()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var reviewer int64
+	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('merchant-review','merchant-review@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer))
+	_, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('merchant-request',$1,now()+interval '1 hour'),('merchant-review',$2,now()+interval '1 hour');`, actor, reviewer)
+	must(err)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name) VALUES('merchant-copy-a','payment','epay','A'),('merchant-copy-b','payment','epay','B')`)
+	must(err)
+	requestCtx := WithExternalRefundSession(ctx, "merchant-request")
+	reviewCtx := WithExternalRefundSession(ctx, "merchant-review")
+	fixture := func(name, provider, instance, api, pid string, corrupt bool) (int64, ExternalRefundInput) {
+		var invoice, paymentID int64
+		must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents) VALUES($1,$2,'manual','paid',100) RETURNING id`, name, customer).Scan(&invoice))
+		_, e := db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','merchant test',100)`, invoice)
+		must(e)
+		var sealed []byte
+		if api != "" {
+			raw, _ := json.Marshal(payment.EpayConfig{APIURL: api, PID: pid, Key: "isolated-secret"})
+			sealed, e = db.paymentCredentials(name, raw, true)
+			must(e)
+		}
+		if corrupt {
+			sealed = []byte("corrupt ciphertext")
+		}
+		must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,status,completed_at,credential_snapshot) VALUES($1,$2,$3,$4,$5,100,'succeeded',now()-interval '1 hour',$6) RETURNING id`, provider, name, instance, invoice, customer, append([]byte{}, sealed...)).Scan(&paymentID))
+		return invoice, ExternalRefundInput{PaymentID: paymentID, AmountCents: 100, Method: "original_route", ProviderRefundID: "same-merchant-refund", ReceivedAt: time.Now().Add(-time.Minute), EvidenceRef: "test://merchant", EvidenceSHA256: strings.Repeat("a", 64), Note: "verified receipt", ExpectedVersion: 1}
+	}
+	invoice, in := fixture("merchant-1", "epay_alipay", "merchant-copy-a", "HTTPS://Merchant.Example:443/gateway/", " 10001 ", false)
+	first, err := db.CreateExternalRefund(requestCtx, actor, invoice, in, "merchant-register-1")
+	must(err)
+	for _, tc := range []struct {
+		name, provider, instance, api, pid string
+		allowed                            bool
+	}{
+		{"cross-provider", "epay_wxpay", "merchant-copy-a", "https://merchant.example/gateway", "10001", false},
+		{"copy-instance", "epay_alipay", "merchant-copy-b", "https://MERCHANT.EXAMPLE:443/gateway///", "10001", false},
+		{"different-pid", "epay_wxpay", "merchant-copy-b", "https://merchant.example/gateway", "10002", true},
+		{"different-host", "epay_wxpay", "merchant-copy-b", "https://other.example/gateway", "10001", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			invoice, in := fixture(tc.name, tc.provider, tc.instance, tc.api, tc.pid, false)
+			_, e := db.CreateExternalRefund(requestCtx, actor, invoice, in, "merchant-key-"+tc.name)
+			if tc.allowed {
+				must(e)
+			} else if conflictCode(t, e) != "external_refund_duplicate" {
+				t.Fatal(e)
+			}
+		})
+	}
+	for _, tc := range []struct {
+		name, provider, api string
+		corrupt             bool
+	}{{"missing-snapshot", "epay_alipay", "", false}, {"corrupt-snapshot", "epay_wxpay", "https://merchant.example", true}, {"unknown-provider", "unknown", "", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			invoice, in := fixture(tc.name, tc.provider, "merchant-copy-a", tc.api, "10001", tc.corrupt)
+			if _, e := db.CreateExternalRefund(requestCtx, actor, invoice, in, "merchant-key-"+tc.name); conflictCode(t, e) != "external_refund_merchant_unavailable" {
+				t.Fatal(e)
+			}
+		})
+	}
+	// Wrong runtime encryption key makes the immutable original snapshot unreadable.
+	db.ProvisionEncryptionKey = []byte(strings.Repeat("x", 32))
+	review := ExternalRefundReviewInput{ExpectedVersion: 1, Note: "independent verification"}
+	if _, err = db.ReviewExternalRefund(reviewCtx, reviewer, invoice, first.Refund.ID, true, review, "merchant-confirm-bad-key"); conflictCode(t, err) != "external_refund_merchant_unavailable" {
+		t.Fatal(err)
+	}
+	rejected, err := db.ReviewExternalRefund(reviewCtx, reviewer, invoice, first.Refund.ID, false, review, "merchant-reject-bad-key")
+	must(err)
+	if rejected.Refund.Status != "rejected" {
+		t.Fatal("unreadable snapshot prevented rejection")
 	}
 }

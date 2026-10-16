@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/codex/zjmfgo/internal/payment"
+	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -16,6 +19,51 @@ import (
 )
 
 var externalRefundEvidenceHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// merchantScope uses only immutable, non-secret original merchant identity.
+func (s *Store) externalRefundMerchantScope(provider, reference string, sealed []byte) (string, error) {
+	if provider == "mock" {
+		return "mock:test-only", nil
+	}
+	unavailable := func() (string, error) {
+		return "", conflict("external_refund_merchant_unavailable", "原支付商户身份不可核验，不能登记或确认退款")
+	}
+	if !strings.HasPrefix(provider, "epay_") || len(sealed) == 0 {
+		return unavailable()
+	}
+	raw, err := s.paymentCredentials(reference, sealed, false)
+	if err != nil {
+		return unavailable()
+	}
+	var cfg struct {
+		payment.EpayConfig
+		Unavailable bool `json:"unavailable"`
+	}
+	if json.Unmarshal(raw, &cfg) != nil || cfg.Unavailable || strings.TrimSpace(cfg.PID) == "" {
+		return unavailable()
+	}
+	u, err := url.Parse(strings.TrimSpace(cfg.APIURL))
+	if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Hostname() == "" {
+		return unavailable()
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return unavailable()
+	}
+	host := strings.ToLower(u.Hostname())
+	port := u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	canonical := scheme + "://" + host + strings.TrimRight(u.EscapedPath(), "/")
+	sum := sha256.Sum256([]byte("epay\x00" + canonical + "\x00" + strings.TrimSpace(cfg.PID)))
+	return "epay:" + hex.EncodeToString(sum[:]), nil
+}
 
 type externalRefundSessionKey struct{}
 
@@ -49,6 +97,7 @@ type ExternalRefund struct {
 	Method                string     `json:"method"`
 	Provider              string     `json:"provider"`
 	ChannelInstanceID     string     `json:"channel_instance_id"`
+	MerchantScope         string     `json:"merchant_scope"`
 	OriginalTransactionID string     `json:"original_transaction_id"`
 	ProviderPaymentID     string     `json:"provider_payment_id"`
 	ProviderRefundID      string     `json:"provider_refund_id"`
@@ -234,7 +283,9 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	var paidInvoice, paidUser, paidAmount int64
 	var paidStatus string
 	var completedAt *time.Time
-	if err = tx.QueryRow(ctx, "SELECT provider,coalesce(channel_instance_id,''),provider_payment_id,external_transaction_id,invoice_id,user_id,amount_cents,status,completed_at FROM payment_transactions WHERE id=$1 FOR UPDATE", payment).Scan(&provider, &channel, &original, &originalTransaction, &paidInvoice, &paidUser, &paidAmount, &paidStatus, &completedAt); err != nil {
+	var sealed []byte
+	var merchantScope string
+	if err = tx.QueryRow(ctx, "SELECT provider,coalesce(channel_instance_id,''),provider_payment_id,external_transaction_id,invoice_id,user_id,amount_cents,status,completed_at,credential_snapshot FROM payment_transactions WHERE id=$1 FOR UPDATE", payment).Scan(&provider, &channel, &original, &originalTransaction, &paidInvoice, &paidUser, &paidAmount, &paidStatus, &completedAt, &sealed); err != nil {
 		return out, err
 	}
 	var amount, version int64
@@ -245,6 +296,18 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	// Rejection closes a pending record without money movement; changed business
 	// eligibility must never prevent an independent reviewer from rejecting it.
 	if id == 0 || confirm {
+		if merchantScope, err = s.externalRefundMerchantScope(provider, original, sealed); err != nil {
+			return out, err
+		}
+		if id > 0 {
+			var storedScope string
+			if err = tx.QueryRow(ctx, "SELECT merchant_scope FROM external_refunds WHERE id=$1", id).Scan(&storedScope); err != nil {
+				return out, err
+			}
+			if storedScope != merchantScope {
+				return out, conflict("external_refund_merchant_unavailable", "原支付商户身份已变化")
+			}
+		}
 		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || kind != "manual" {
 			return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付普通人工账单")
 		}
@@ -281,7 +344,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if amount != in.AmountCents {
 			return out, conflict("external_refund_amount_mismatch", "仅支持原单全额退款")
 		}
-		err = tx.QueryRow(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,original_transaction_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, invoice, payment, customer, amount, in.Method, provider, channel, original, in.ProviderRefundID, in.ReceivedAt, in.EvidenceRef, in.EvidenceSHA256, in.Note, actor, originalTransaction).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,original_transaction_id,merchant_scope) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, invoice, payment, customer, amount, in.Method, provider, channel, original, in.ProviderRefundID, in.ReceivedAt, in.EvidenceRef, in.EvidenceSHA256, in.Note, actor, originalTransaction, merchantScope).Scan(&id)
 		if err != nil {
 			return out, err
 		}
