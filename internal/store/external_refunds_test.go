@@ -264,6 +264,81 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 	}
 }
 
+func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
+	db, ctx, actor, uid := onlineTopupFixture(t)
+	var reviewer int64
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('topup-refund-reviewer','topup-refund-reviewer@example.test','unused','Topup refund reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('topup-refund-request',$1,now()+interval '1 hour'),('topup-refund-review',$2,now()+interval '1 hour')`, actor, reviewer); err != nil {
+		t.Fatal(err)
+	}
+	requestCtx := WithExternalRefundSession(ctx, "topup-refund-request")
+	reviewCtx := WithExternalRefundSession(ctx, "topup-refund-review")
+	topup := createTopup(t, db, ctx, uid, 400, "external-topup-create")
+	intent, err := topupIntent(db, ctx, uid, topup, "external-topup-intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = topupSuccess(db, ctx, intent, "external-topup-success"); err != nil {
+		t.Fatal(err)
+	}
+	in := ExternalRefundInput{PaymentID: intent.PaymentID, AmountCents: 400, Method: "original_route", ProviderRefundID: "external-topup-refund", ReceivedAt: time.Now(), EvidenceRef: "test://topup-refund", EvidenceSHA256: strings.Repeat("b", 64), Note: "verified external top-up refund", ExpectedVersion: 2}
+	pending, err := db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "external-topup-refund-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.Refund.Status != "pending_review" {
+		t.Fatalf("pending status=%s", pending.Refund.Status)
+	}
+	// A pending reversal must reduce spendable balance even though displayed
+	// balance remains unchanged until independent review.
+	manual := int64(0)
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents) VALUES('TOPUP-RESERVED-SPEND',$1,'manual','unpaid',100) RETURNING id`, uid).Scan(&manual); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','reserved spend',100)`, manual); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.PayInvoice(ctx, uid, manual, "topup-reserved-spend", 1); conflictCode(t, err) != "balance_reserved" {
+		t.Fatalf("reserved balance spend err=%v", err)
+	}
+	review := ExternalRefundReviewInput{ExpectedVersion: 1, Note: "reject for corrected evidence"}
+	rejected, err := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, false, review, "external-topup-reject")
+	if err != nil || rejected.Refund.Status != "rejected" {
+		t.Fatalf("reject=%+v err=%v", rejected, err)
+	}
+	var balance int64
+	if err = db.Pool.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1", uid).Scan(&balance); err != nil || balance != 400 {
+		t.Fatalf("reject changed balance=%d err=%v", balance, err)
+	}
+	in.EvidenceRef = "test://topup-refund-corrected"
+	pending, err = db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "external-topup-refund-corrected")
+	if err != nil {
+		t.Fatal(err)
+	}
+	review.Note = "independently verified corrected top-up refund"
+	confirmed, err := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-confirm")
+	if err != nil || confirmed.Refund.Status != "confirmed" {
+		t.Fatalf("confirm=%+v err=%v", confirmed, err)
+	}
+	replay, err := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-confirm")
+	if err != nil || !replay.Replayed {
+		t.Fatalf("confirm replay=%+v err=%v", replay, err)
+	}
+	var invoiceStatus, topupStatus, reservationStatus string
+	var topupLedger, refundLedger, reservations int
+	if err = db.Pool.QueryRow(ctx, `SELECT i.status,t.status,r.status,(SELECT count(*) FROM balance_ledger WHERE reference_type='gateway_topup' AND reference_id=i.id),(SELECT count(*) FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='refund'),(SELECT count(*) FROM external_refund_reversal_reservations WHERE invoice_id=i.id) FROM invoices i JOIN balance_topups t ON t.invoice_id=i.id JOIN external_refund_reversal_reservations r ON r.invoice_id=i.id AND r.status='applied' WHERE i.id=$1`, topup.InvoiceID).Scan(&invoiceStatus, &topupStatus, &reservationStatus, &topupLedger, &refundLedger, &reservations); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1", uid).Scan(&balance); err != nil {
+		t.Fatal(err)
+	}
+	if invoiceStatus != "refunded" || topupStatus != "credited" || reservationStatus != "applied" || topupLedger != 1 || refundLedger != 1 || reservations != 2 || balance != 0 {
+		t.Fatalf("invoice=%s topup=%s reservation=%s topupLedger=%d refundLedger=%d reservations=%d balance=%d", invoiceStatus, topupStatus, reservationStatus, topupLedger, refundLedger, reservations, balance)
+	}
+}
+
 func TestExternalRefundMerchantIdentity(t *testing.T) {
 	db := isolatedTestStore(t)
 	db.ProvisionEncryptionKey = []byte(strings.Repeat("k", 32))

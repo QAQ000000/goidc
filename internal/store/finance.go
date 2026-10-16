@@ -185,6 +185,13 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 		if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
 			return out, err
 		}
+		var reserved int64
+		if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM external_refund_reversal_reservations WHERE user_id=$1 AND status='pending'", userID).Scan(&reserved); err != nil {
+			return out, err
+		}
+		if reserved > 0 && (reserved > balance || out.AmountCents > balance-reserved) {
+			return out, conflict("balance_reserved", "账户有待复核外部退款冻结金额，可用余额不足")
+		}
 		if balance < out.AmountCents {
 			return out, conflict("insufficient_balance", "账户余额不足")
 		}

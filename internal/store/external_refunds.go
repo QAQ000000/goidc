@@ -87,34 +87,100 @@ type ExternalRefundReviewInput struct {
 	Note            string `json:"note"`
 }
 type ExternalRefund struct {
-	ID                    int64      `json:"id"`
-	InvoiceID             int64      `json:"invoice_id"`
-	PaymentID             int64      `json:"payment_id"`
-	UserID                int64      `json:"user_id"`
-	AmountCents           int64      `json:"amount_cents"`
-	Status                string     `json:"status"`
-	Version               int64      `json:"version"`
-	Method                string     `json:"method"`
-	Provider              string     `json:"provider"`
-	ChannelInstanceID     string     `json:"channel_instance_id"`
-	MerchantScope         string     `json:"merchant_scope"`
-	OriginalTransactionID string     `json:"original_transaction_id"`
-	ProviderPaymentID     string     `json:"provider_payment_id"`
-	ProviderRefundID      string     `json:"provider_refund_id"`
-	ReceivedAt            time.Time  `json:"received_at"`
-	EvidenceRef           string     `json:"evidence_ref"`
-	EvidenceSHA256        string     `json:"evidence_sha256"`
-	Note                  string     `json:"note"`
-	RequestedBy           int64      `json:"requested_by"`
-	ReviewedBy            *int64     `json:"reviewed_by"`
-	ReviewNote            string     `json:"review_note"`
-	ConfirmedAt           *time.Time `json:"confirmed_at"`
-	CreatedAt             time.Time  `json:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at"`
+	ID                    int64                   `json:"id"`
+	InvoiceID             int64                   `json:"invoice_id"`
+	PaymentID             int64                   `json:"payment_id"`
+	UserID                int64                   `json:"user_id"`
+	AmountCents           int64                   `json:"amount_cents"`
+	Status                string                  `json:"status"`
+	Version               int64                   `json:"version"`
+	Method                string                  `json:"method"`
+	Provider              string                  `json:"provider"`
+	ChannelInstanceID     string                  `json:"channel_instance_id"`
+	MerchantScope         string                  `json:"merchant_scope"`
+	OriginalTransactionID string                  `json:"original_transaction_id"`
+	ProviderPaymentID     string                  `json:"provider_payment_id"`
+	ProviderRefundID      string                  `json:"provider_refund_id"`
+	ReceivedAt            time.Time               `json:"received_at"`
+	EvidenceRef           string                  `json:"evidence_ref"`
+	EvidenceSHA256        string                  `json:"evidence_sha256"`
+	Note                  string                  `json:"note"`
+	RequestedBy           int64                   `json:"requested_by"`
+	ReviewedBy            *int64                  `json:"reviewed_by"`
+	ReviewNote            string                  `json:"review_note"`
+	ConfirmedAt           *time.Time              `json:"confirmed_at"`
+	CreatedAt             time.Time               `json:"created_at"`
+	UpdatedAt             time.Time               `json:"updated_at"`
+	Reversal              *ExternalRefundReversal `json:"reversal,omitempty"`
+}
+type ExternalRefundReversal struct {
+	Status      string     `json:"status"`
+	AmountCents int64      `json:"amount_cents"`
+	LedgerID    *int64     `json:"ledger_id"`
+	AppliedAt   *time.Time `json:"applied_at"`
+	ReleasedAt  *time.Time `json:"released_at"`
 }
 type ExternalRefundResult struct {
 	Refund   ExternalRefund `json:"refund"`
 	Replayed bool           `json:"replayed"`
+}
+
+// reserveExternalRefundBalance freezes spendable balance for a top-up refund
+// while the independent reviewer checks the merchant evidence.  The customer
+// row is already held by LockFinancialCustomer, so this read cannot race a
+// balance payment, top-up liability resolution, or another reservation.
+func reserveExternalRefundBalance(ctx context.Context, tx pgx.Tx, refundID, invoiceID, userID, amount int64) error {
+	var balance, reserved int64
+	if err := tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
+		return err
+	}
+	if err := tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM external_refund_reversal_reservations WHERE user_id=$1 AND status='pending'", userID).Scan(&reserved); err != nil {
+		return err
+	}
+	if reserved > balance || amount > balance-reserved {
+		return conflict("external_refund_balance_reserved", "客户余额不足，无法冻结外部退款冲正金额")
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO external_refund_reversal_reservations(refund_id,invoice_id,user_id,amount_cents) VALUES($1,$2,$3,$4)`, refundID, invoiceID, userID, amount)
+	return externalRefundDBError(err)
+}
+
+func releaseExternalRefundReservation(ctx context.Context, tx pgx.Tx, refundID int64) error {
+	_, err := tx.Exec(ctx, `UPDATE external_refund_reversal_reservations SET status='released',released_at=clock_timestamp() WHERE refund_id=$1 AND status='pending'`, refundID)
+	return err
+}
+
+// applyExternalRefundReversal performs the only supported balance reversal.
+// It intentionally does not change the immutable gateway receipt or create a
+// second payment/refund fact.  The customer lock is held by the caller.
+func applyExternalRefundReversal(ctx context.Context, tx pgx.Tx, refundID, invoiceID, userID, amount int64) error {
+	var reservedAmount int64
+	var reservationStatus string
+	if err := tx.QueryRow(ctx, `SELECT amount_cents,status FROM external_refund_reversal_reservations WHERE refund_id=$1 AND invoice_id=$2 AND user_id=$3 FOR UPDATE`, refundID, invoiceID, userID).Scan(&reservedAmount, &reservationStatus); err != nil {
+		return conflict("external_refund_reversal_missing", "缺少充值退款余额冻结事实")
+	}
+	if reservationStatus != "pending" || reservedAmount != amount {
+		return conflict("external_refund_reversal_state", "充值退款余额冻结状态已变化")
+	}
+	var balance int64
+	if err := tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
+		return err
+	}
+	if balance < amount {
+		return conflict("external_refund_balance_insufficient", "客户余额低于已冻结的外部退款金额，需人工核对")
+	}
+	newBalance := balance - amount
+	if _, err := tx.Exec(ctx, "UPDATE users SET balance_cents=$2,updated_at=clock_timestamp() WHERE id=$1", userID, newBalance); err != nil {
+		return err
+	}
+	var ledgerID int64
+	if err := tx.QueryRow(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
+VALUES($1,'refund',$2,$3,'invoice',$4,$5,'外部退款余额冲正') RETURNING id`, userID, -amount, newBalance, invoiceID, fmt.Sprintf("external-refund-balance-%d", refundID)).Scan(&ledgerID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE external_refund_reversal_reservations SET status='applied',ledger_id=$2,applied_at=clock_timestamp() WHERE refund_id=$1 AND status='pending'`, refundID, ledgerID); err != nil {
+		return err
+	}
+	return Audit(ctx, tx, userID, "external_refund.balance_reversed", "external_refund", refundID, map[string]any{"invoice_id": invoiceID, "amount_cents": amount, "ledger_id": ledgerID})
 }
 
 func externalRefundAuthorize(ctx context.Context, tx pgx.Tx, actor int64, permission string, session bool) error {
@@ -163,7 +229,7 @@ func (s *Store) ListExternalRefunds(ctx context.Context, actorID, invoiceID int6
 	if err = tx.QueryRow(ctx, "SELECT count(*) FROM external_refunds WHERE invoice_id=$1", invoiceID).Scan(&total); err != nil {
 		return out, 0, err
 	}
-	rows, err := tx.Query(ctx, "SELECT to_jsonb(r) FROM external_refunds r WHERE invoice_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3", invoiceID, limit, offset)
+	rows, err := tx.Query(ctx, "SELECT "+externalRefundJSON+" FROM external_refunds r WHERE invoice_id=$1 ORDER BY id DESC LIMIT $2 OFFSET $3", invoiceID, limit, offset)
 	if err != nil {
 		return out, 0, err
 	}
@@ -187,10 +253,13 @@ func (s *Store) ListExternalRefunds(ctx context.Context, actorID, invoiceID int6
 	}
 	return out, total, tx.Commit(ctx)
 }
+
+const externalRefundJSON = `to_jsonb(r)||jsonb_build_object('reversal',(SELECT jsonb_build_object('status',v.status,'amount_cents',v.amount_cents,'ledger_id',v.ledger_id,'applied_at',v.applied_at,'released_at',v.released_at) FROM external_refund_reversal_reservations v WHERE v.refund_id=r.id))`
+
 func externalRefundRead(ctx context.Context, tx pgx.Tx, id int64) (ExternalRefund, error) {
 	var r ExternalRefund
 	var b []byte
-	err := tx.QueryRow(ctx, "SELECT to_jsonb(r) FROM external_refunds r WHERE id=$1", id).Scan(&b)
+	err := tx.QueryRow(ctx, "SELECT "+externalRefundJSON+" FROM external_refunds r WHERE id=$1", id).Scan(&b)
 	if err == nil {
 		err = json.Unmarshal(b, &r)
 	}
@@ -308,11 +377,22 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 				return out, conflict("external_refund_merchant_unavailable", "原支付商户身份已变化")
 			}
 		}
-		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || kind != "manual" {
-			return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付普通人工账单")
+		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || (kind != "manual" && kind != "topup") {
+			return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付人工账单或已入账充值")
 		}
-		if err = requireManualInvoiceValid(ctx, tx, invoice); err != nil {
-			return out, err
+		if kind == "manual" {
+			if err = requireManualInvoiceValid(ctx, tx, invoice); err != nil {
+				return out, err
+			}
+		} else {
+			var topupStatus, settlementStatus string
+			var settlementLedger *int64
+			if err = tx.QueryRow(ctx, `SELECT t.status,s.status,s.ledger_id FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1 FOR UPDATE OF t`, invoice).Scan(&topupStatus, &settlementStatus, &settlementLedger); err != nil {
+				return out, conflict("external_refund_topup_not_credited", "充值尚未形成可冲正的余额入账事实")
+			}
+			if topupStatus != "credited" || settlementStatus != "credited" || settlementLedger == nil {
+				return out, conflict("external_refund_topup_not_credited", "充值尚未形成可冲正的余额入账事实")
+			}
 		}
 		if err = requireInvoiceReviewed(ctx, tx, invoice); err != nil {
 			return out, err
@@ -348,6 +428,11 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if err != nil {
 			return out, err
 		}
+		if kind == "topup" {
+			if err = reserveExternalRefundBalance(ctx, tx, id, invoice, customer, amount); err != nil {
+				return out, err
+			}
+		}
 	} else {
 		var requested, rv int64
 		var rs string
@@ -368,7 +453,16 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if confirm {
 			next = "confirmed"
 			action = "external_refund.confirmed"
+			if kind == "topup" {
+				if err = applyExternalRefundReversal(ctx, tx, id, invoice, customer, amount); err != nil {
+					return out, err
+				}
+			}
 			if _, err = tx.Exec(ctx, "UPDATE invoices SET status='refunded' WHERE id=$1", invoice); err != nil {
+				return out, err
+			}
+		} else if kind == "topup" {
+			if err = releaseExternalRefundReservation(ctx, tx, id); err != nil {
 				return out, err
 			}
 		}
