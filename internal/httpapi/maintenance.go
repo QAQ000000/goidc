@@ -37,6 +37,13 @@ func (s *Server) maintenanceAllowed(w http.ResponseWriter, r *http.Request) bool
 	var enabled bool
 	var message, target string
 	err := s.db.Pool.QueryRow(r.Context(), "SELECT maintenance_enabled,maintenance_message,maintenance_url FROM site_settings WHERE id=1").Scan(&enabled, &message, &target)
+	if errors.Is(err, pgx.ErrNoRows) {
+		s.log.Error("site maintenance configuration missing", "path", r.URL.Path)
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Retry-After", "60")
+		writeError(w, http.StatusServiceUnavailable, "site_configuration_unavailable", "服务配置暂不可用，请稍后重试")
+		return false
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return false
