@@ -1392,7 +1392,7 @@ export function InvoiceDetailView({
               </Table>
             </div>
           </section>
-          {admin && data.invoice_kind !== "topup" && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
+          {admin && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
         </>
       )}
     </Workspace>

@@ -52,7 +52,7 @@ export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id
       {!admin && (status === "created" || unknown) && <Button size="sm" variant="outline" disabled={busy || (!unknown && invoice.payment_pending)} onClick={() => void cancel()}>{busy ? "正在取消" : unknown ? "以原请求确认取消结果" : "取消充值账单"}</Button>}
       {!admin && <Button variant="outline" size="sm" asChild><Link href="/console/account">查看账户余额</Link></Button>}
     </div>
-    {admin && <p className="text-xs text-muted-foreground">充值账单暂不支持退款，请核对原支付与余额入账事实。</p>}
+    {admin && <p className="text-xs text-muted-foreground">充值整单外部退款请使用下方“外部退款登记与复核”，核对原支付、原始入账及余额冻结事实；此处不执行商户退款。</p>}
     {error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
   </div>;
 }

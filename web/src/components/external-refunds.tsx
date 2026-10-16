@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { api, ApiError, money } from "@/lib/api";
+import { api, ApiError, money, date, type User } from "@/lib/api";
+import { can } from "@/lib/admin-navigation";
+import type { TopupState } from "./topup-invoice-actions";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminIdentity, useAdminPermission } from "./workspace";
 import { Failure, Loading } from "./common";
@@ -44,12 +46,14 @@ type Refund = {
   review_note: string;
   created_at: string;
   updated_at: string;
+  reversal?: { status: "pending" | "released" | "applied"; amount_cents: number; ledger_id: number | null; applied_at: string | null; released_at: string | null } | null;
 };
 type Page = { items: Refund[]; total: number; limit: number; offset: number };
 type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   external_payment_paid: boolean;
   order_id: number | null;
   credit_payment?: unknown;
+  topup?: TopupState;
   items: {
     description: string;
     amount_cents: number;
@@ -78,7 +82,17 @@ const blank = () => ({
   note: "",
 });
 
-export function ExternalRefunds({
+type Pending = { path: string; body: string; key: string; kind: "create" | "confirm" | "reject"; recordId: number | null; rejected: boolean };
+
+export function ExternalRefunds(props: { invoice: Invoice; refreshInvoice: () => void }) {
+  const actor = useAdminIdentity();
+  const view = useAdminPermission("external_refunds.view");
+  const create = useAdminPermission("external_refunds.create");
+  const review = useAdminPermission("external_refunds.review");
+  return <RefundPanel key={`${actor?.id ?? 0}:${view}:${create}:${review}:${props.invoice.id}`} {...props} />;
+}
+
+function RefundPanel({
   invoice,
   refreshInvoice,
 }: {
@@ -125,22 +139,56 @@ export function ExternalRefunds({
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
-  const retry = useRef<{ payload: string; key: string } | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageError, setStorageError] = useState("");
+  const [reviewed, setReviewed] = useState(false);
+  const [latestFacts, setLatestFacts] = useState("");
+  const [identityFailed, setIdentityFailed] = useState(false);
+  const running = useRef(false);
+  const mounted = useRef(true);
+  const storage = `zjmfgo:external-refund:${user?.id ?? 0}:${invoice.id}`;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => {
+    queueMicrotask(() => {
+      if (!mounted.current) return;
+      try {
+        const raw = sessionStorage.getItem(storage);
+        if (raw) {
+          const saved = JSON.parse(raw) as Pending;
+          const body = JSON.parse(saved.body) as Record<string, unknown>;
+          const expectedPath = saved.kind === "create" ? path : `${path}/${saved.recordId}/${saved.kind}`;
+          const allowed = saved.kind === "create" ? ["payment_id", "amount_cents", "method", "provider_refund_id", "received_at", "evidence_ref", "evidence_sha256", "note", "expected_version"] : ["note", "expected_version"];
+          if (!["create", "confirm", "reject"].includes(saved.kind) || saved.path !== expectedPath || typeof saved.key !== "string" || saved.key.length < 8 || saved.key.length > 128 || typeof saved.rejected !== "boolean" || (saved.kind !== "create" && (!Number.isSafeInteger(saved.recordId) || (saved.recordId ?? 0) < 1)) || (saved.kind === "create" && saved.recordId !== null) || !Number.isSafeInteger(body.expected_version) || Number(body.expected_version) < 1 || typeof body.note !== "string" || !body.note.trim() || Array.from(body.note).length > 1000 || Object.keys(body).some(key => !allowed.includes(key))) throw new Error();
+          if (saved.kind === "create" && (!Number.isSafeInteger(body.payment_id) || Number(body.payment_id) < 1 || !Number.isSafeInteger(body.amount_cents) || Number(body.amount_cents) < 1 || typeof body.method !== "string" || !["original_route", "bank_transfer", "other"].includes(body.method) || typeof body.provider_refund_id !== "string" || !body.provider_refund_id.trim() || typeof body.received_at !== "string" || !Number.isFinite(Date.parse(body.received_at)) || typeof body.evidence_ref !== "string" || !body.evidence_ref.trim() || typeof body.evidence_sha256 !== "string" || !/^[a-f0-9]{64}$/.test(body.evidence_sha256))) throw new Error();
+          setPending(saved); setConflict(saved.rejected);
+        }
+        setStorageReady(true);
+      } catch { setStorageError("原退款请求恢复资料无法读取，已暂停新操作。请联系支持核实，勿删除恢复资料后重新登记。"); }
+    });
+  }, [storage, path]);
+  useEffect(() => {
+    if (!pending && !busy) return;
+    const leave = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", leave);
+    return () => window.removeEventListener("beforeunload", leave);
+  }, [pending, busy]);
   const successfulPayments = invoice.payments.filter(
     (p) => p.status === "succeeded",
   );
   const payments = successfulPayments.filter(
     (p) => p.amount_cents === invoice.amount_cents,
   );
+  const topup = invoice.invoice_kind === "topup";
   const eligible =
-    invoice.invoice_kind === "manual" &&
+    (topup ? invoice.topup?.status === "credited" && !invoice.topup.resolution : invoice.invoice_kind === "manual") &&
     invoice.status === "paid" &&
     invoice.external_payment_paid &&
     !invoice.order_id &&
     !invoice.credit_payment &&
     !invoice.import_review_required &&
     invoice.items.length > 0 &&
-    invoice.items.every((i) => i.item_type === "manual" && !i.service_id) &&
+    invoice.items.every((i) => i.item_type === (topup ? "topup" : "manual") && !i.service_id) &&
     successfulPayments.length === 1 &&
     payments.length === 1;
   const activeRefund = list.data?.items.some((r) => r.status !== "rejected");
@@ -148,45 +196,87 @@ export function ExternalRefunds({
     setDraft((d) => ({ ...d, [key]: value }));
     setError("");
   };
-  async function write(url: string, body: object) {
-    const payload = JSON.stringify(body);
-    const fingerprint = `${url}:${payload}`;
-    if (retry.current?.payload !== fingerprint)
-      retry.current = {
-        payload: fingerprint,
-        key: `external-refund-${crypto.randomUUID()}`,
-      };
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await api<{ refund: Refund; replayed: boolean }>(url, {
-        method: "POST",
-        body: payload,
-        headers: { "Idempotency-Key": retry.current.key },
-      });
-      setOpen(false);
-      setAction(null);
-      setDraft(blank());
-      setNote("");
-      setConflict(false);
-      retry.current = null;
-      setNotice("退款记录已保存。原收款记录保留，未增加客户余额。");
-      list.refresh();
-      refreshInvoice();
-    } catch (e) {
-      setError((e as Error).message);
-      if (e instanceof ApiError && e.status === 409) {
-        setConflict(true);
-        list.refresh();
-        refreshInvoice();
-        setError(
-          `${e.message}。已请求刷新版本，草稿已保留；请核对最新账单与记录后再提交。`,
-        );
-      }
-    } finally {
-      setBusy(false);
+  async function liveIdentity(permission: string) {
+    const live = await api<User>("/me");
+    if (live.id !== user?.id || !can(live, "external_refunds.view") || !can(live, permission)) {
+      setIdentityFailed(true);
+      throw new Error("员工身份或退款权限已变化，请使用原账户核实；原请求保留。");
     }
+    setIdentityFailed(false);
+    return live;
+  }
+  async function readLatest() {
+    if (running.current) return;
+    running.current = true; setBusy(true); setError(""); setReviewed(false);
+    try {
+      await liveIdentity("external_refunds.view");
+      const current = await api<Invoice>(`/admin/invoices/${invoice.id}`);
+      let found: Refund | undefined;
+      let pageOffset = 0;
+      do {
+        const page = await api<Page>(`${path}?limit=100&offset=${pageOffset}`);
+        found = page.items.find(record => record.id === pending?.recordId);
+        if (!pending?.recordId || found || pageOffset + page.items.length >= page.total || page.items.length === 0) break;
+        pageOffset += page.items.length;
+      } while (true);
+      await liveIdentity("external_refunds.view");
+      if (!mounted.current) return;
+      if (pending?.recordId && !found) throw new Error("未读到原退款记录，不能结束原请求，请核对权限或联系支持。");
+      setLatestFacts(`最新账单：${current.status}，版本 ${current.version}${found ? `；原退款 #${found.id}：${statuses[found.status]}，版本 ${found.version}` : ""}。原请求版本与载荷未改变。`);
+      setReviewed(true); list.refresh(); refreshInvoice();
+    } catch (failure) { if (mounted.current) setError((failure as Error).message); }
+    finally { running.current = false; if (mounted.current) setBusy(false); }
+  }
+  async function write(url: string, body: object, kind: Pending["kind"], recordId: number | null, original?: Pending) {
+    if (running.current || !storageReady || storageError || (!original && pending)) return;
+    const request: Pending = original ?? { path: url, body: JSON.stringify(body), key: `external-refund-${crypto.randomUUID()}`, kind, recordId, rejected: false };
+    running.current = true; setBusy(true); setError(""); setNotice("");
+    let dispatched = false;
+    let responseReceived = false;
+    try {
+      await liveIdentity(request.kind === "create" ? "external_refunds.create" : "external_refunds.review");
+      if (!mounted.current) return;
+      try { sessionStorage.setItem(storage, JSON.stringify(request)); }
+      catch { throw new Error("浏览器无法保存原退款请求，已停止发送。请检查浏览器存储。"); }
+      setPending(request); dispatched = true;
+      const result = await api<{ refund: Refund; replayed: boolean }>(request.path, { method: "POST", body: request.body, headers: { "Idempotency-Key": request.key } });
+      responseReceived = true;
+      if (topup && (!result?.refund?.reversal || result.refund.reversal.status !== (request.kind === "create" ? "pending" : request.kind === "confirm" ? "applied" : "released") || result.refund.reversal.amount_cents !== invoice.amount_cents || (request.kind === "confirm" && (!Number.isSafeInteger(result.refund.reversal.ledger_id) || (result.refund.reversal.ledger_id ?? 0) < 1)))) throw new Error("充值冲正回执不完整，请保留原请求核实冻结及扣减事实。");
+      if (!result?.refund || result.refund.invoice_id !== invoice.id || !Number.isSafeInteger(result.refund.id) || result.refund.id < 1 || (request.recordId && result.refund.id !== request.recordId) || result.refund.status !== (request.kind === "create" ? "pending_review" : request.kind === "confirm" ? "confirmed" : "rejected")) throw new Error("退款回执不完整，请保留原请求核实结果。");
+      await liveIdentity(request.kind === "create" ? "external_refunds.create" : "external_refunds.review");
+      if (!mounted.current) return;
+      try { sessionStorage.removeItem(storage); }
+      catch { throw new Error("回执已确认，但原请求恢复资料无法清理；请继续以原请求核实，勿重新登记。"); }
+      setPending(null); setOpen(false); setAction(null); setDraft(blank()); setNote(""); setConflict(false); setReviewed(false); setLatestFacts("");
+      setNotice(result.replayed ? "原退款请求回执已确认，未重复变更；请以最新退款及余额事实为准。" : topup ? request.kind === "create" ? "退款登记已保存，对应余额已冻结，等待其他员工独立复核。" : request.kind === "confirm" ? "退款到账已确认，冻结余额已扣减，原收款和入账流水保留。" : "退款登记已驳回，对应余额冻结已释放。" : "退款记录已保存。原收款记录保留，未增加客户余额。");
+      list.refresh(); refreshInvoice();
+    } catch (failure) {
+      if (!mounted.current) return;
+      if (dispatched && !responseReceived && failure instanceof ApiError && [400, 404, 409, 422].includes(failure.status)) {
+        const rejected = { ...request, rejected: true };
+        try { sessionStorage.setItem(storage, JSON.stringify(rejected)); setPending(rejected); }
+        catch { setStorageError("原请求拒绝状态无法保存，已暂停新操作；原键与载荷仍须保留核实。"); }
+        setConflict(true); setReviewed(false);
+        setError(`${failure.message}。原键、原版本及原载荷已保留；请显式读取最新事实，系统不会自动换版本提交。`);
+      } else setError(`${(failure as Error).message}${dispatched ? " 结果尚未确认，请保留并核实原请求，勿重新登记。" : " 未发送退款请求。"}`);
+    } finally { running.current = false; if (mounted.current) setBusy(false); }
+  }
+  async function endRejected() {
+    if (!pending?.rejected || !reviewed || running.current || !window.confirm("已核对最新事实，确认结束被拒绝的原请求？此操作不提交资金变更。之后须重新填写并确认，才会创建新请求。")) return;
+    running.current = true; setBusy(true); setError("");
+    try {
+      await liveIdentity(pending.kind === "create" ? "external_refunds.create" : "external_refunds.review");
+      if (!mounted.current) return;
+      sessionStorage.removeItem(storage); setPending(null); setConflict(false); setReviewed(false); setOpen(false); setAction(null); setDraft(blank()); setNote(""); setLatestFacts("");
+    } catch (failure) { if (mounted.current) setError((failure as Error).message); }
+    finally { running.current = false; if (mounted.current) setBusy(false); }
+  }
+  function closeDraft(kind: "create" | "review") {
+    if (busy) return;
+    const dirty = kind === "create" ? Object.entries(draft).some(([key, value]) => key === "method" ? value !== "original_route" : value !== "") : !!note;
+    if (!pending && dirty && !window.confirm("放弃尚未提交的退款草稿？")) return;
+    if (kind === "create") { setOpen(false); if (!pending) setDraft(blank()); }
+    else { setAction(null); if (!pending) setNote(""); }
   }
   function submit(now: number) {
     const received = new Date(draft.received_at);
@@ -206,7 +296,7 @@ export function ExternalRefunds({
     }
     if (
       !window.confirm(
-        `确认登记整单外部退款 ${money(invoice.amount_cents)}？此操作不执行退款，独立复核后才确认出款事实。`,
+        `确认登记整单外部退款 ${money(invoice.amount_cents)}？此操作不执行退款，独立复核后才确认出款事实。${topup ? "申请会冻结客户可用余额，确认后扣减，驳回后释放。" : ""}`,
       )
     )
       return;
@@ -220,31 +310,31 @@ export function ExternalRefunds({
       evidence_sha256: draft.evidence_sha256.toLowerCase(),
       received_at: received.toISOString(),
       expected_version: invoice.version,
-    });
+    }, "create", null);
   }
   function submitReview() {
     if (!action || !note.trim()) {
       setError("请填写复核说明。");
       return;
     }
-    const record =
-      list.data?.items.find((r) => r.id === action.record.id) ?? action.record;
-    if (record.status !== "pending_review") {
+    const record = action.record;
+    const latest = list.data?.items.find((r) => r.id === record.id);
+    if (!latest || latest.version !== record.version || latest.status !== record.status || record.status !== "pending_review") {
       setError("该记录已被处理，请关闭后查看最新结果。");
       return;
     }
     if (
       !window.confirm(
         action.kind === "confirm"
-          ? `确认已核实付款人真实到账 ${money(record.amount_cents)}，并完成独立复核？确认将记录出款并更新账单。`
-          : "确认驳回该退款登记？驳回不会执行任何资金操作。",
+          ? `确认已核实付款人真实到账 ${money(record.amount_cents)}，并完成独立复核？确认将记录出款并更新账单。${record.reversal ? "同时扣减已冻结的客户余额，不可重复退付。" : ""}`
+          : `确认驳回该退款登记？${record.reversal ? "将释放本申请冻结的客户余额。" : "驳回不会执行任何资金操作。"}`,
       )
     )
       return;
     void write(`${path}/${record.id}/${action.kind}`, {
       expected_version: record.version,
       note: note.trim(),
-    });
+    }, action.kind, record.id);
   }
   if (!view) return null;
   return (
@@ -267,7 +357,7 @@ export function ExternalRefunds({
             <Button
               size="sm"
               disabled={
-                busy || !eligible || !list.data || !!list.error || activeRefund
+                busy || !storageReady || !!storageError || !!pending || identityFailed || !eligible || !list.data || !!list.error || activeRefund
               }
               onClick={() => {
                 setOpen(true);
@@ -281,11 +371,16 @@ export function ExternalRefunds({
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
-        这里只登记已在外部发生的退款，不执行退款、不入客户余额。确认须核实真实到账并由其他员工独立复核；原收款记录永久保留。仅支持无交付及其他业务关联的普通人工账单整单退款，最终资格由服务端重验。
+        这里只登记已在外部发生的退款，不执行退款、不增加客户余额。确认须核实真实到账并由其他员工独立复核；原收款记录永久保留。支持无业务关联的普通人工账单及原始结算已入账的充值整单退款，最终资格由服务端重验。
       </p>
+      {topup && <p className="text-sm rounded border p-3">充值退款申请会冻结对应可用余额；独立确认后扣减，驳回后释放。可用余额不足时服务端拒绝申请，不允许透支或重复冲正。</p>}
+      {!storageReady && !storageError && <p role="status" className="text-sm">正在检查本员工的原退款请求，完成前不可新操作。</p>}
+      {storageError && <p role="alert" className="text-sm text-destructive">{storageError}</p>}
+      {pending && <div role="status" className="rounded border p-3 space-y-2 text-sm"><p>存在尚需核实的原退款{pending.kind === "create" ? "登记" : pending.kind === "confirm" ? "确认" : "驳回"}请求。刷新后不会自动提交；原版本、载荷和幂等键保持不变。</p><div className="flex flex-wrap gap-2"><Button size="sm" disabled={busy || !!storageError} onClick={() => void write(pending.path, {}, pending.kind, pending.recordId, pending)}>以原请求核实退款结果</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => void readLatest()}>读取最新退款事实</Button>{pending.rejected && reviewed && <Button size="sm" variant="outline" disabled={busy} onClick={() => void endRejected()}>已核对，结束被拒绝请求</Button>}</div>{latestFacts && <p>{latestFacts}</p>}{conflict && !reviewed && <p>原请求已被拒绝，请先读取最新事实；不会自动换键或换版本。</p>}</div>}
+      {!open && !action && error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
       {!eligible && (
         <p className="text-sm">
-          此账单当前不满足登记条件（须已付普通人工账单、匹配成功外部收款且无订单、资源或信用等关联）。
+          此账单当前不满足登记条件：须为已付普通人工账单或原始结算已入账充值，匹配唯一全额成功外部收款，且无订单、资源或信用等关联。补账后入账的充值暂不支持。
         </p>
       )}
       {notice && (
@@ -340,6 +435,7 @@ export function ExternalRefunds({
                     {r.version}
                   </p>
                   {r.review_note && <p>复核说明：{r.review_note}</p>}
+                  {r.reversal && <div className="rounded border p-3 space-y-1"><p>充值余额冲正：{r.reversal.status === "pending" ? "已冻结，待复核" : r.reversal.status === "applied" ? "已扣减" : "已释放"} · {money(r.reversal.amount_cents)}</p>{r.reversal.ledger_id && <p>冲正流水 #{r.reversal.ledger_id}</p>}{r.reversal.applied_at && <p>扣减时间：{date(r.reversal.applied_at)}</p>}{r.reversal.released_at && <p>释放时间：{date(r.reversal.released_at)}</p>}</div>}
                   {review &&
                     r.status === "pending_review" &&
                     (r.requested_by === user?.id ? (
@@ -355,7 +451,7 @@ export function ExternalRefunds({
                             variant={
                               kind === "confirm" ? "destructive" : "outline"
                             }
-                            disabled={busy}
+                            disabled={busy || !!pending || !storageReady || !!storageError || identityFailed}
                             onClick={() => {
                               setAction({ record: r, kind });
                               setNote("");
@@ -402,7 +498,7 @@ export function ExternalRefunds({
       <Dialog
         open={open}
         onOpenChange={(value) => {
-          if (!busy) setOpen(value);
+          if (!value) closeDraft("create");
         }}
       >
         <DialogContent
@@ -414,10 +510,10 @@ export function ExternalRefunds({
               登记外部退款 · {money(invoice.amount_cents)}
             </DialogTitle>
             <DialogDescription>
-              仅登记已经发生的整单退付。请勿填写密钥或完整个人敏感资料。取消不会提交。
+              仅登记已经发生的整单退付。请勿填写密钥或完整个人敏感资料。取消不会提交。{topup && "申请冻结对应可用余额，确认扣减，驳回释放。"}
             </DialogDescription>
           </DialogHeader>
-          <fieldset disabled={busy} className="space-y-3 min-w-0">
+          <fieldset disabled={busy || !!pending} className="space-y-3 min-w-0">
             <div className="space-y-1">
               <Label htmlFor="refund-payment">原外部支付</Label>
               <select
@@ -489,20 +585,20 @@ export function ExternalRefunds({
           )}
           {conflict && (
             <p className="text-sm">
-              当前账单版本 {invoice.version}。核对后提交将使用此版本。
+              原请求版本未改变。请在账单面板显式读取最新事实后处理被拒绝请求。
             </p>
           )}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
-              onClick={() => setOpen(false)}
+              onClick={() => closeDraft("create")}
             >
-              取消
+              {pending ? "关闭，保留原请求" : "取消未提交草稿"}
             </Button>
             <Button
               disabled={
-                busy || !eligible || !create || !list.data || !!list.error
+                busy || !!pending || !storageReady || !!storageError || identityFailed || !eligible || !create || !list.data || !!list.error
               }
               onClick={() => submit(Date.now())}
             >
@@ -514,7 +610,7 @@ export function ExternalRefunds({
       <Dialog
         open={!!action}
         onOpenChange={(value) => {
-          if (!value && !busy) setAction(null);
+          if (!value) closeDraft("review");
         }}
       >
         <DialogContent
@@ -528,7 +624,7 @@ export function ExternalRefunds({
                 : "驳回外部退款登记"}
             </DialogTitle>
             <DialogDescription>
-              核对原支付、退款流水、到账时间与证据。商户受理不代表付款人已到账；申请人不得自审。
+              核对原支付、退款流水、到账时间与证据。商户受理不代表付款人已到账；申请人不得自审。{action?.record.reversal && (action.kind === "confirm" ? "确认将扣减被冻结余额，请勿再次向客户转账。" : "驳回将释放本申请冻结的余额。")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 text-sm break-all">
@@ -565,7 +661,7 @@ export function ExternalRefunds({
           <Label htmlFor="refund-review-note">复核说明（必填）</Label>
           <Textarea
             id="refund-review-note"
-            disabled={busy}
+            disabled={busy || !!pending}
             maxLength={1000}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -582,14 +678,14 @@ export function ExternalRefunds({
             <Button
               variant="outline"
               disabled={busy}
-              onClick={() => setAction(null)}
+              onClick={() => closeDraft("review")}
             >
-              取消
+              {pending ? "关闭，保留原请求" : "取消未提交草稿"}
             </Button>
             <Button
               variant="destructive"
               disabled={
-                busy ||
+                busy || !!pending || !storageReady || !!storageError || identityFailed ||
                 !note.trim() ||
                 !review ||
                 action?.record.requested_by === user?.id ||
