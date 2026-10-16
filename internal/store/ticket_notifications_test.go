@@ -94,6 +94,30 @@ func TestTicketNotificationDeliveryTransactions(t *testing.T) {
 	if exists {
 		t.Fatal("failed event committed")
 	}
+	_, err = db.Pool.Exec(ctx, `DROP TRIGGER reject_ticket_delivery ON ticket_notification_deliveries`)
+	must(err)
+	db.ProvisionEncryptionKey = nil
+	if e = queue("staff_replied", reply2, staff); e == nil {
+		t.Fatal("encryption failure accepted")
+	}
+	must(db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM ticket_notification_events WHERE reply_id=$1)`, reply2).Scan(&exists))
+	if exists {
+		t.Fatal("encryption failure committed event")
+	}
+	db.ProvisionEncryptionKey = []byte("01234567890123456789012345678901")
+	_, err = db.Pool.Exec(ctx, `UPDATE user_ticket_notification_preferences SET email_enabled=false,sms_enabled=false,version=version+1 WHERE user_id=$1`, owner)
+	must(err)
+	_, err = db.Pool.Exec(ctx, `DELETE FROM notification_templates WHERE kind='ticket_staff_replied'`)
+	must(err)
+	must(queue("staff_replied", reply2, staff))
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.reply_id=$1 AND d.recipient_kind='user' AND d.reason='unsubscribed' AND d.preference_version=2`, reply2).Scan(&sent))
+	if sent != 2 {
+		t.Fatalf("preference snapshots=%d", sent)
+	}
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.reply_id=$1 AND d.reason='missing_template'`, reply2).Scan(&sent))
+	if sent != 2 {
+		t.Fatalf("missing-template decisions=%d", sent)
+	}
 }
 
 func TestTicketNotificationStaffEligibilityAndSkips(t *testing.T) {

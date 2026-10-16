@@ -15,7 +15,7 @@ CREATE TABLE ticket_notification_deliveries (
  user_id bigint REFERENCES users(id), contact_id bigint REFERENCES customer_contacts(id), customer_id bigint NOT NULL REFERENCES users(id),
  channel text NOT NULL CHECK(channel IN ('email','sms')), address text NOT NULL, normalized_address text NOT NULL,
  preference_enabled boolean NOT NULL, preference_version bigint NOT NULL DEFAULT 0, address_verified boolean NOT NULL,
- template_kind text NOT NULL, template_version bigint, channel_instance_id text,
+ template_kind text NOT NULL, template_version bigint, channel_instance_id text, channel_instance_version bigint, provider_template_id text NOT NULL DEFAULT '',
  rendered_subject text NOT NULL DEFAULT '', rendered_body text NOT NULL DEFAULT '',
  outcome text NOT NULL CHECK(outcome IN ('queued','skipped')), reason text NOT NULL DEFAULT '',
  duplicate_of bigint REFERENCES ticket_notification_deliveries(id), email_outbox_id bigint REFERENCES email_outbox(id), sms_outbox_id bigint REFERENCES sms_outbox(id),

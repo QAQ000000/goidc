@@ -130,7 +130,7 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 		reason = "missing_address"
 	}
 	var subject, body, providerID, instance string
-	var version int64
+	var version, instanceVersion int64
 	var active bool
 	err := tx.QueryRow(ctx, `SELECT subject,body,provider_template_id,version,active FROM notification_templates WHERE channel=$1 AND kind=$2`, channel, kind).Scan(&subject, &body, &providerID, &version, &active)
 	if err != nil && err != pgx.ErrNoRows {
@@ -147,7 +147,7 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 	if channel == "sms" {
 		category = "sms"
 	}
-	err = tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category=$1 AND enabled ORDER BY sort_order,id LIMIT 1`, category).Scan(&instance)
+	err = tx.QueryRow(ctx, `SELECT id,version FROM channel_instances WHERE category=$1 AND enabled ORDER BY sort_order,id LIMIT 1`, category).Scan(&instance, &instanceVersion)
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
@@ -166,14 +166,17 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 			reason = "duplicate_address"
 		}
 	}
+	subject = replacer.Replace(subject)
+	body = replacer.Replace(body)
+	if reason == "" && channel == "sms" && (!ValidSMSRecipient(normalized) || len(body) > 4096) {
+		reason = "invalid_sms_payload"
+	}
 	outcome := "queued"
 	if reason != "" {
 		outcome = "skipped"
 	}
-	subject = replacer.Replace(subject)
-	body = replacer.Replace(body)
 	var deliveryID int64
-	err = tx.QueryRow(ctx, `INSERT INTO ticket_notification_deliveries(event_id,recipient_kind,recipient_id,user_id,contact_id,customer_id,channel,address,normalized_address,preference_enabled,preference_version,address_verified,template_kind,template_version,channel_instance_id,rendered_subject,rendered_body,outcome,reason,duplicate_of) VALUES($1,$2,$3,CASE WHEN $2='user' THEN $3::bigint ELSE NULL END,CASE WHEN $2='contact' THEN $3::bigint ELSE NULL END,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,0),NULLIF($13,''),$14,$15,$16,$17,$18) RETURNING id`, eventID, r.kind, r.id, r.customer, channel, address, normalized, enabled, r.preferenceVersion, verified, kind, version, instance, subject, body, outcome, reason, duplicate).Scan(&deliveryID)
+	err = tx.QueryRow(ctx, `INSERT INTO ticket_notification_deliveries(event_id,recipient_kind,recipient_id,user_id,contact_id,customer_id,channel,address,normalized_address,preference_enabled,preference_version,address_verified,template_kind,template_version,channel_instance_id,rendered_subject,rendered_body,outcome,reason,duplicate_of,channel_instance_version,provider_template_id) VALUES($1,$2,$3,CASE WHEN $2='user' THEN $3::bigint ELSE NULL END,CASE WHEN $2='contact' THEN $3::bigint ELSE NULL END,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,0),NULLIF($13,''),$14,$15,$16,$17,$18,NULLIF($19,0),$20) RETURNING id`, eventID, r.kind, r.id, r.customer, channel, address, normalized, enabled, r.preferenceVersion, verified, kind, version, instance, subject, body, outcome, reason, duplicate, instanceVersion, providerID).Scan(&deliveryID)
 	if err != nil {
 		return err
 	}
