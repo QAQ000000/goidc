@@ -1,0 +1,170 @@
+package httpapi
+
+import (
+	"fmt"
+	"sync"
+	"testing"
+)
+
+// A completed unsupported-mode check must release its place in the bounded
+// scan, while retaining the audit and leaving the service active.
+func TestOverdueSuspendProgressPastUnsupportedBatch(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "suspend-progress-customer", "customer")
+	pid := product(t, db, 10)
+	for i := 0; i < 100; i++ {
+		sid, _ := billingSchedulerFixture(t, db, uid, pid, i, true)
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", sid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	manual, _ := billingSchedulerFixture(t, db, uid, pid, 100, true)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='manual' WHERE id=$1", manual); err != nil {
+		t.Fatal(err)
+	}
+	billingSchedulerFixture(t, db, uid, pid, 101, true)
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
+		t.Fatalf("first batch queued=%d err=%v", n, err)
+	}
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 2 {
+		t.Fatalf("supported services behind 100 unsupported services did not progress: queued=%d err=%v", n, err)
+	}
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
+		t.Fatalf("repeated scan queued=%d err=%v", n, err)
+	}
+	var audits, jobs, unsupportedActive, unsupportedJobs int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM provision_jobs WHERE action='suspend'),
+  (SELECT count(*) FROM services WHERE provision_mode='supplier' AND status='active'),
+  (SELECT count(*) FROM provision_jobs j JOIN services s ON s.id=j.service_id WHERE s.provision_mode='supplier')`).Scan(&audits, &jobs, &unsupportedActive, &unsupportedJobs); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 100 || jobs != 2 || unsupportedActive != 100 || unsupportedJobs != 0 {
+		t.Fatalf("audits=%d jobs=%d unsupported active=%d jobs=%d", audits, jobs, unsupportedActive, unsupportedJobs)
+	}
+}
+
+func TestOverdueSuspendProgressReconsidersChangedModes(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "suspend-mode-change-customer", "customer")
+	pid := product(t, db, 10)
+	var ids []int64
+	for i := 0; i < 2; i++ {
+		sid, _ := billingSchedulerFixture(t, db, uid, pid, i, true)
+		ids = append(ids, sid)
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", sid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
+		t.Fatalf("unsupported scan queued=%d err=%v", n, err)
+	}
+	for i, mode := range []string{"manual", "simulation"} {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode=$2 WHERE id=$1", ids[i], mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 2 {
+		t.Fatalf("old supplier audit suppressed changed delivery modes: queued=%d err=%v", n, err)
+	}
+	var audits int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'`).Scan(&audits); err != nil || audits != 2 {
+		t.Fatalf("prior evidence lost or duplicated: audits=%d err=%v", audits, err)
+	}
+}
+
+func TestOverdueSuspendProgressEvidenceMatchesCurrentMode(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "suspend-mode-evidence-customer", "customer")
+	pid := product(t, db, 10)
+	sid, iid := billingSchedulerFixture(t, db, uid, pid, 0, true)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", sid); err != nil {
+		t.Fatal(err)
+	}
+	// Historical evidence for another mode must neither hide the current
+	// unsupported mode nor suppress its new evidence indefinitely.
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO audit_events(action,entity_type,entity_id,payload)
+VALUES('service.overdue_suspension.unsupported','service',$1,
+  jsonb_build_object('invoice_id',$2::bigint,'provision_mode','legacy-mode'))`, fmt.Sprint(sid), iid); err != nil {
+		t.Fatal(err)
+	}
+	supported, _ := billingSchedulerFixture(t, db, uid, pid, 1, true)
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 1); err != nil || n != 0 {
+		t.Fatalf("current mode scan queued=%d err=%v", n, err)
+	}
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 1); err != nil || n != 1 {
+		t.Fatalf("current mode evidence failed to advance scan: queued=%d err=%v", n, err)
+	}
+	var audits, jobs int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported' AND payload->>'provision_mode'='supplier'),
+  (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='suspend')`, supported).Scan(&audits, &jobs); err != nil || audits != 1 || jobs != 1 {
+		t.Fatalf("current mode audits=%d supported jobs=%d err=%v", audits, jobs, err)
+	}
+}
+
+func TestOverdueSuspendProgressConcurrentInvoices(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "suspend-concurrent-progress-customer", "customer")
+	pid := product(t, db, 10)
+	unsupported, _ := billingSchedulerFixture(t, db, uid, pid, 0, true)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", unsupported); err != nil {
+		t.Fatal(err)
+	}
+	// Several invoices for one service must each advance, without duplicate
+	// evidence under concurrent scans or starving the following service.
+	for i := 0; i < 5; i++ {
+		var iid int64
+		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO invoices(invoice_no,user_id,status,amount_cents,due_at)
+VALUES($1,$2,'unpaid',1234,now()-interval '2 days') RETURNING id`, fmt.Sprintf("PROGRESS-%d", i), uid).Scan(&iid); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(t.Context(), `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id)
+VALUES($1,'重复服务账单','renew',1234,$2)`, iid, unsupported); err != nil {
+			t.Fatal(err)
+		}
+	}
+	supported, supportedInvoice := billingSchedulerFixture(t, db, uid, pid, 1, true)
+	// Link the same supported service to another overdue invoice as well.
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id)
+SELECT id,'交叉服务账单','service',1234,$1 FROM invoices WHERE invoice_no='PROGRESS-0'`, supported); err != nil {
+		t.Fatal(err)
+	}
+	// Reverse the invoice/service association too, exercising invoice-first
+	// lock ordering when each transaction has several candidates.
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id)
+VALUES($1,'交叉服务账单','renew',1234,$2)`, supportedInvoice, unsupported); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errs := make(chan error, 4)
+	for worker := 0; worker < 4; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for scan := 0; scan < 12; scan++ {
+				if _, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 3); err != nil {
+					errs <- err
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	var audits, distinctInvoices, jobs, unsupportedJobs int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(DISTINCT payload->>'invoice_id') FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='suspend'),
+  (SELECT count(*) FROM provision_jobs WHERE service_id=$2)`, supported, unsupported).Scan(&audits, &distinctInvoices, &jobs, &unsupportedJobs); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 7 || distinctInvoices != 7 || jobs != 1 || unsupportedJobs != 0 {
+		t.Fatalf("concurrent drain audits=%d distinct invoices=%d supported jobs=%d unsupported jobs=%d", audits, distinctInvoices, jobs, unsupportedJobs)
+	}
+}
