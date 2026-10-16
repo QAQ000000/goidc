@@ -25,15 +25,18 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents,paid_at) VALUES('ER-1',$1,'manual','paid',100,now()-interval '1 hour') RETURNING id`, customer).Scan(&invoice))
 	_, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','Manual external receipt',100)`, invoice)
 	must(err)
-	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','original-1',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, invoice, customer).Scan(&payment))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at,external_transaction_id) VALUES('test','original-1',$1,$2,100,'succeeded',now()-interval '1 hour','real-merchant-original-1') RETURNING id`, invoice, customer).Scan(&payment))
 	requestCtx := WithExternalRefundSession(ctx, "refund-request")
 	reviewCtx := WithExternalRefundSession(ctx, "refund-review")
-	in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "original_route", ProviderRefundID: "refund-1", ReceivedAt: time.Now().Add(-time.Minute), EvidenceRef: "evidence/redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
+	in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "original_route", ProviderRefundID: "refund-1", ReceivedAt: time.Now().Add(-time.Minute), Note: "Actual refund receipt", EvidenceRef: "evidence/redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
 	if _, err = db.CreateExternalRefund(ctx, actor, invoice, in, "missing-session"); err == nil {
 		t.Fatal("missing session accepted")
 	}
 	pending, err := db.CreateExternalRefund(requestCtx, actor, invoice, in, "create-refund-1")
 	must(err)
+	if pending.Refund.OriginalTransactionID != "real-merchant-original-1" {
+		t.Fatal("original merchant transaction snapshot lost")
+	}
 	replay, err := db.CreateExternalRefund(requestCtx, actor, invoice, in, "create-refund-1")
 	must(err)
 	if !replay.Replayed {
@@ -48,6 +51,42 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	if _, err = db.ReviewExternalRefund(requestCtx, actor, invoice, pending.Refund.ID, true, review, "self-review-1"); conflictCode(t, err) != "external_refund_self_review" {
 		t.Fatal(err)
 	}
+	// Simulate the real invoice application transaction owning the same
+	// customer advisory lock before adding a pending application.
+	applicationTx, err := db.invoiceCustomerTx(ctx, customer)
+	must(err)
+	var profile, address, application int64
+	must(applicationTx.QueryRow(ctx, `INSERT INTO invoice_profiles(user_id,profile_type,title) VALUES($1,'individual','race') RETURNING id`, customer).Scan(&profile))
+	must(applicationTx.QueryRow(ctx, `INSERT INTO invoice_addresses(user_id,recipient,phone,address) VALUES($1,'race','123','race address') RETURNING id`, customer).Scan(&address))
+	must(applicationTx.QueryRow(ctx, `INSERT INTO invoice_applications(user_id,profile_id,address_id,profile_snapshot,address_snapshot,amount_cents) VALUES($1,$2,$3,'{}','{}',100) RETURNING id`, customer, profile, address).Scan(&application))
+	_, err = applicationTx.Exec(ctx, `INSERT INTO invoice_application_items(application_id,source_invoice_id,invoice_no,description,amount_cents) VALUES($1,$2,'ER-1','race',100)`, application, invoice)
+	must(err)
+	waiting := make(chan error, 1)
+	go func() {
+		_, e := db.ReviewExternalRefund(reviewCtx, reviewer, invoice, pending.Refund.ID, true, review, "invoice-application-race")
+		waiting <- e
+	}()
+	select {
+	case e := <-waiting:
+		t.Fatalf("confirmation did not wait for application transaction: %v", e)
+	case <-time.After(100 * time.Millisecond):
+	}
+	must(applicationTx.Commit(ctx))
+	select {
+	case e := <-waiting:
+		if conflictCode(t, e) != "external_refund_not_supported" {
+			t.Fatal(e)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("confirmation remained blocked")
+	}
+	var outgoing int
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM external_refunds WHERE status='confirmed'`).Scan(&outgoing))
+	if outgoing != 0 {
+		t.Fatal("application race produced outgoing fact")
+	}
+	_, err = db.Pool.Exec(ctx, `UPDATE invoice_applications SET status='rejected',review_note='test cleanup' WHERE id=$1`, application)
+	must(err)
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	results := make(chan ExternalRefundResult, 2)
@@ -106,7 +145,7 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 }
 
 func TestExternalRefundBusinessGuards(t *testing.T) {
-	for _, scenario := range []string{"credit", "application", "mixed", "import", "payment_amount", "payment_status", "future", "before_payment", "version"} {
+	for _, scenario := range []string{"empty_note", "refund_control", "evidence_control", "service", "order", "credit", "application", "mixed", "import", "payment_amount", "payment_status", "future", "before_payment", "version"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := isolatedTestStore(t)
 			actor, customer := topUpFixture(t, db)
@@ -124,8 +163,26 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 			_, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','guard',100)`, invoice)
 			must(err)
 			must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','guard',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, invoice, customer).Scan(&payment))
-			in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "other", ProviderRefundID: "guard-refund", ReceivedAt: time.Now().Add(-time.Minute), EvidenceRef: "redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
+			in := ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "other", ProviderRefundID: "guard-refund", ReceivedAt: time.Now().Add(-time.Minute), Note: "Actual refund receipt", EvidenceRef: "redacted", EvidenceSHA256: strings.Repeat("a", 64), ExpectedVersion: 1}
 			switch scenario {
+			case "empty_note":
+				in.Note = "  "
+			case "refund_control":
+				in.ProviderRefundID = "refund\x00id"
+			case "evidence_control":
+				in.EvidenceRef = "evidence\x00ref"
+			case "service", "order":
+				var product, order, item, service int64
+				must(db.Pool.QueryRow(ctx, `INSERT INTO products(name,slug,price_cents) VALUES('guard-product','guard-product',100) RETURNING id`).Scan(&product))
+				must(db.Pool.QueryRow(ctx, `INSERT INTO orders(order_no,user_id,total_cents,idempotency_key,request_hash) VALUES('guard-order',$1,100,'guard-order-key','guard') RETURNING id`, customer).Scan(&order))
+				must(db.Pool.QueryRow(ctx, `INSERT INTO order_items(order_id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents) VALUES($1,$2,'guard','monthly',1,100,0,100) RETURNING id`, order, product).Scan(&item))
+				must(db.Pool.QueryRow(ctx, `INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle) VALUES($1,$2,$3,$4,'guard','guard.example.test','monthly') RETURNING id`, customer, order, item, product).Scan(&service))
+				if scenario == "service" {
+					_, err = db.Pool.Exec(ctx, `UPDATE invoice_items SET service_id=$2 WHERE invoice_id=$1`, invoice, service)
+				} else {
+					_, err = db.Pool.Exec(ctx, `UPDATE invoices SET invoice_kind='automatic',order_id=$2 WHERE id=$1`, invoice, order)
+				}
+				must(err)
 			case "credit":
 				_, err = db.Pool.Exec(ctx, `INSERT INTO credit_invoice_payments(invoice_id,user_id,amount_cents,remaining_cents,expected_version,idempotency_key) VALUES($1,$2,100,100,1,'guard-credit-key')`, invoice, customer)
 				must(err)
