@@ -591,10 +591,13 @@ function RefundPanel({
                 <Input
                   id={`refund-${key}`}
                   type={type}
+                  step={type === "datetime-local" ? 1 : undefined}
+                  aria-describedby={key === "received_at" ? "refund-received-help" : undefined}
                   maxLength={max}
                   value={draft[key]}
                   onChange={(e) => update(key, e.target.value)}
                 />
+                {key === "received_at" && <p id="refund-received-help" className="text-xs text-muted-foreground break-words">请按真实到账凭证填写，可精确到秒；不得早于原支付完成时间或晚于现在。系统不会自动补入到账时间。{payments.find(payment => payment.id === Number(draft.payment_id))?.completed_at && <>原支付完成：{new Date(payments.find(payment => payment.id === Number(draft.payment_id))!.completed_at!).toLocaleString("zh-CN")}。</>}</p>}
               </div>
             ))}
             <Label htmlFor="refund-note">登记说明</Label>
