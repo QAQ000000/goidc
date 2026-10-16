@@ -114,6 +114,13 @@ func (s *Store) GetTopupLiability(ctx context.Context, actor, invoice int64) (To
 	if err = authorizeTopupLiability(ctx, tx, actor, false); err != nil {
 		return out, err
 	}
+	// Authorization locks the actor row. Recheck scope with a fresh statement
+	// snapshot after any concurrent scope revocation has finished committing.
+	// Keep the initial sales advisory lock before the actor lock to preserve
+	// the established sales-assignment lock order.
+	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+		return out, err
+	}
 	out, err = readTopupLiability(ctx, tx, invoice)
 	if err != nil {
 		return out, err
@@ -137,6 +144,13 @@ func (s *Store) ResolveTopupLiability(ctx context.Context, actor, invoice int64,
 		return out, err
 	}
 	if err = authorizeTopupLiability(ctx, tx, actor, true); err != nil {
+		return out, err
+	}
+	// Authorization locks the actor row. Recheck scope with a fresh statement
+	// snapshot after any concurrent scope revocation has finished committing.
+	// Keep the initial sales advisory lock before the actor lock to preserve
+	// the established sales-assignment lock order.
+	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
 		return out, err
 	}
 	var uid int64
