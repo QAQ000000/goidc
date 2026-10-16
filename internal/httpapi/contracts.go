@@ -77,6 +77,67 @@ func (s *Server) contractRead(w http.ResponseWriter, r *http.Request) {
 			where += " AND enabled"
 		}
 	}
+
+	// Template settings use a dedicated branch: one statement snapshot and no
+	// contract history/document lookups for template IDs.
+	if templates {
+		id := int64(0)
+		if r.PathValue("id") != "" {
+			var valid bool
+			id, valid = pathID(w, r)
+			if !valid {
+				return
+			}
+		}
+		if id > 0 {
+			rows, err := tx.Query(r.Context(), "SELECT c.*"+where+" AND c.id=$2", uid, id)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			item, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
+			if err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			if err = tx.Commit(r.Context()); err != nil {
+				s.fail(w, r, err)
+				return
+			}
+			write(w, 200, item)
+			return
+		}
+		q, status := "", "all"
+		// Customer template visibility and available-templates keep their existing
+		// enabled-only semantics. New filters are the admin settings list contract.
+		if adminRoute(r) {
+			q = strings.TrimSpace(r.URL.Query().Get("q"))
+			if len(q) > 120 {
+				writeError(w, 400, "invalid_query", "搜索条件过长")
+				return
+			}
+			if value := r.URL.Query().Get("status"); value != "" {
+				status = value
+			}
+			if status != "all" && status != "enabled" && status != "disabled" {
+				writeError(w, 400, "invalid_status", "模板状态筛选无效")
+				return
+			}
+		}
+		var items json.RawMessage
+		var total int64
+		err := tx.QueryRow(r.Context(), `WITH filtered AS (SELECT c.*`+where+` AND ($2='' OR c.name ILIKE '%'||$2||'%' OR c.content ILIKE '%'||$2||'%') AND ($3='all' OR c.enabled=($3='enabled'))), page AS (SELECT * FROM filtered ORDER BY id DESC LIMIT $4 OFFSET $5) SELECT coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY id DESC) FROM page),'[]'::jsonb),(SELECT count(*) FROM filtered)`, uid, q, status, limit, offset).Scan(&items, &total)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+		return
+	}
 	eligible := strings.HasSuffix(r.URL.Path, "eligible-services")
 	if eligible {
 		cols = "c.id,c.user_id,u.display_name AS customer_name,u.email AS customer_email,oi.product_name,c.name,c.domain,c.status,i.paid_at"

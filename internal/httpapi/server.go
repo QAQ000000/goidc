@@ -168,6 +168,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/contracts/{id}/document", s.sessionAuth(s.contractRead, true))
 	mux.HandleFunc("POST /api/v1/admin/contracts", s.sessionAuth(s.contractWrite, true))
 	mux.HandleFunc("GET /api/v1/admin/contract-templates", s.sessionAuth(s.contractRead, true))
+	mux.HandleFunc("GET /api/v1/admin/contract-templates/{id}", s.sessionAuth(s.contractRead, true))
 	mux.HandleFunc("GET /api/v1/contracts", s.sessionAuth(s.contractRead, false))
 	mux.HandleFunc("GET /api/v1/contracts/eligible-services", s.sessionAuth(s.contractRead, false))
 	mux.HandleFunc("GET /api/v1/contracts/{id}", s.sessionAuth(s.contractRead, false))

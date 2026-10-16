@@ -176,6 +176,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/customers/page"] = "customers.view"
 	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
 	m["GET /api/v1/admin/contract-templates"] = "settings.view"
+	m["GET /api/v1/admin/contract-templates/{id}"] = "settings.view"
 	m["POST /api/v1/admin/contract-templates"] = "settings.manage"
 	m["PUT /api/v1/admin/contract-templates/{id}"] = "settings.manage"
 	m["GET /api/v1/admin/affiliate/accounts/page"] = "affiliates.view"
