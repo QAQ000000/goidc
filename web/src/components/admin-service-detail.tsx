@@ -9,6 +9,7 @@ import { PermissionGate, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Status } from "./common";
+import { OrderRefundImpact, OrderRefundHoldLabel, orderRefundHold, orderRefundBlocksDelivery } from "./external-refund-order";
 import { SupplierServiceDelivery } from "./supplier-delivery";
 import { NOKVMServiceDelivery, isPowerAction, serviceActionLabels } from "./nokvm-delivery";
 import { ServiceActivityPanel } from "./service-activity";
@@ -62,8 +63,9 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
     </div>
     <header className="admin-page-heading flex flex-wrap items-start justify-between gap-4 mb-5">
       <div className="min-w-0"><h1 className="text-xl font-semibold break-words">{service.name}</h1><p className="text-sm text-muted-foreground mt-2 break-all">服务 #{service.id}<span className="mx-2">·</span>{service.domain}<span className="mx-2">·</span>{service.service_group_name??"未分组"}</p></div>
-      <div className="flex items-center gap-2"><Status value={service.status}/>{pending.length>0&&<button type="button" className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded" onClick={()=>setTab("jobs")}>{pending.length} 个待处理任务</button>}</div>
+      <div className="flex items-center gap-2"><Status value={service.status}/><OrderRefundHoldLabel value={service.external_refund_order_hold} />{pending.length>0&&<button type="button" className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded" onClick={()=>setTab("jobs")}>{pending.length} 个待处理任务</button>}</div>
     </header>
+    {orderRefundHold(service.external_refund_order_hold) && <div className="mb-5"><OrderRefundImpact reversal={orderRefundHold(service.external_refund_order_hold)!} /></div>}
     <Tabs.Root value={tab} onValueChange={setTab}>
       <Tabs.List aria-label="服务详情" className="service-detail-tabs">
         {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="service-detail-tab">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
@@ -90,7 +92,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         </Band>
         {service.provision_mode==="supplier"&&<SupplierServiceDelivery service={service} admin refresh={refresh}/>}
         {service.provision_mode==="nokvm"&&<NOKVMServiceDelivery service={service} admin refresh={refresh}/>}
-        {manualDelivery}
+        {orderRefundBlocksDelivery(service.external_refund_order_hold) ? <p role="status" className="rounded border p-3 text-sm">外部退款冻结或整单已退款，人工交付不可用。退款驳回仅释放冻结，仍须按原流程审核。</p> : manualDelivery}
         <Band title="财务" actions={<><PermissionGate permission="customers.view"><PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=transactions`}><ExternalLink size={15}/>交易流水</Link></Button></PermissionGate></PermissionGate>{service.invoice_id&&<PermissionGate permission="invoices.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/invoices/${service.invoice_id}`}><FileText size={15}/>账单</Link></Button></PermissionGate>}</>}>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
             <Field label="订购时间" value={date(service.created_at)}/>
