@@ -72,46 +72,49 @@ func WithExternalRefundSession(ctx context.Context, hash string) context.Context
 }
 
 type ExternalRefundInput struct {
-	PaymentID        int64     `json:"payment_id"`
-	AmountCents      int64     `json:"amount_cents"`
-	Method           string    `json:"method"`
-	ProviderRefundID string    `json:"provider_refund_id"`
-	ReceivedAt       time.Time `json:"received_at"`
-	EvidenceRef      string    `json:"evidence_ref"`
-	EvidenceSHA256   string    `json:"evidence_sha256"`
-	Note             string    `json:"note"`
-	ExpectedVersion  int64     `json:"expected_version"`
+	PaymentID               int64                          `json:"payment_id"`
+	AmountCents             int64                          `json:"amount_cents"`
+	Method                  string                         `json:"method"`
+	ProviderRefundID        string                         `json:"provider_refund_id"`
+	ReceivedAt              time.Time                      `json:"received_at"`
+	EvidenceRef             string                         `json:"evidence_ref"`
+	EvidenceSHA256          string                         `json:"evidence_sha256"`
+	Note                    string                         `json:"note"`
+	ExpectedVersion         int64                          `json:"expected_version"`
+	ExpectedOrderVersion    int64                          `json:"expected_order_version,omitempty"`
+	ExpectedServiceVersions []ExternalRefundServiceVersion `json:"expected_service_versions,omitempty"`
 }
 type ExternalRefundReviewInput struct {
 	ExpectedVersion int64  `json:"expected_version"`
 	Note            string `json:"note"`
 }
 type ExternalRefund struct {
-	ID                    int64                   `json:"id"`
-	InvoiceID             int64                   `json:"invoice_id"`
-	PaymentID             int64                   `json:"payment_id"`
-	UserID                int64                   `json:"user_id"`
-	AmountCents           int64                   `json:"amount_cents"`
-	Status                string                  `json:"status"`
-	Version               int64                   `json:"version"`
-	Method                string                  `json:"method"`
-	Provider              string                  `json:"provider"`
-	ChannelInstanceID     string                  `json:"channel_instance_id"`
-	MerchantScope         string                  `json:"merchant_scope"`
-	OriginalTransactionID string                  `json:"original_transaction_id"`
-	ProviderPaymentID     string                  `json:"provider_payment_id"`
-	ProviderRefundID      string                  `json:"provider_refund_id"`
-	ReceivedAt            time.Time               `json:"received_at"`
-	EvidenceRef           string                  `json:"evidence_ref"`
-	EvidenceSHA256        string                  `json:"evidence_sha256"`
-	Note                  string                  `json:"note"`
-	RequestedBy           int64                   `json:"requested_by"`
-	ReviewedBy            *int64                  `json:"reviewed_by"`
-	ReviewNote            string                  `json:"review_note"`
-	ConfirmedAt           *time.Time              `json:"confirmed_at"`
-	CreatedAt             time.Time               `json:"created_at"`
-	UpdatedAt             time.Time               `json:"updated_at"`
-	Reversal              *ExternalRefundReversal `json:"reversal,omitempty"`
+	ID                    int64                        `json:"id"`
+	InvoiceID             int64                        `json:"invoice_id"`
+	PaymentID             int64                        `json:"payment_id"`
+	UserID                int64                        `json:"user_id"`
+	AmountCents           int64                        `json:"amount_cents"`
+	Status                string                       `json:"status"`
+	Version               int64                        `json:"version"`
+	Method                string                       `json:"method"`
+	Provider              string                       `json:"provider"`
+	ChannelInstanceID     string                       `json:"channel_instance_id"`
+	MerchantScope         string                       `json:"merchant_scope"`
+	OriginalTransactionID string                       `json:"original_transaction_id"`
+	ProviderPaymentID     string                       `json:"provider_payment_id"`
+	ProviderRefundID      string                       `json:"provider_refund_id"`
+	ReceivedAt            time.Time                    `json:"received_at"`
+	EvidenceRef           string                       `json:"evidence_ref"`
+	EvidenceSHA256        string                       `json:"evidence_sha256"`
+	Note                  string                       `json:"note"`
+	RequestedBy           int64                        `json:"requested_by"`
+	ReviewedBy            *int64                       `json:"reviewed_by"`
+	ReviewNote            string                       `json:"review_note"`
+	ConfirmedAt           *time.Time                   `json:"confirmed_at"`
+	CreatedAt             time.Time                    `json:"created_at"`
+	UpdatedAt             time.Time                    `json:"updated_at"`
+	OrderReversal         *ExternalRefundOrderReversal `json:"order_reversal,omitempty"`
+	Reversal              *ExternalRefundReversal      `json:"reversal,omitempty"`
 }
 type ExternalRefundReversal struct {
 	Status      string     `json:"status"`
@@ -257,7 +260,7 @@ func (s *Store) ListExternalRefunds(ctx context.Context, actorID, invoiceID int6
 	return out, total, tx.Commit(ctx)
 }
 
-const externalRefundJSON = `to_jsonb(r)||jsonb_build_object('reversal',(SELECT jsonb_build_object('status',v.status,'amount_cents',v.amount_cents,'ledger_id',v.ledger_id,'applied_at',v.applied_at,'released_at',v.released_at) FROM external_refund_reversal_reservations v WHERE v.refund_id=r.id))`
+const externalRefundJSON = `to_jsonb(r)||jsonb_build_object('reversal',(SELECT jsonb_build_object('status',v.status,'amount_cents',v.amount_cents,'ledger_id',v.ledger_id,'applied_at',v.applied_at,'released_at',v.released_at) FROM external_refund_reversal_reservations v WHERE v.refund_id=r.id),'order_reversal',(SELECT external_refund_order_reversal_json(h.refund_id) FROM external_refund_order_holds h WHERE h.refund_id=r.id))`
 
 func externalRefundRead(ctx context.Context, tx pgx.Tx, id int64) (ExternalRefund, error) {
 	var r ExternalRefund
@@ -276,10 +279,16 @@ func externalRefundDBError(err error) error {
 	if errors.As(err, &e) && e.Code == "23514" && e.Message == "original transaction is already claimed" {
 		return conflict("external_refund_duplicate", "该原交易已被其他收款或退款占用")
 	}
+	if errors.As(err, &e) && e.Code == "23514" && strings.HasPrefix(e.Message, "external_refund_") {
+		return orderRefundConflict(e.Message)
+	}
 	return err
 }
 
 func (s *Store) CreateExternalRefund(ctx context.Context, actorID, invoiceID int64, in ExternalRefundInput, key string) (ExternalRefundResult, error) {
+	if err := canonicalExternalRefundOrderVersions(&in); err != nil {
+		return ExternalRefundResult{}, err
+	}
 	in.ProviderRefundID = strings.TrimSpace(in.ProviderRefundID)
 	in.EvidenceRef = strings.TrimSpace(in.EvidenceRef)
 	in.Note = strings.TrimSpace(in.Note)
@@ -318,6 +327,18 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	}
 	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
 		return out, err
+	}
+	var orderRefund bool
+	if err = tx.QueryRow(ctx, `SELECT order_id IS NOT NULL OR EXISTS(SELECT 1 FROM external_refund_order_holds WHERE invoice_id=$1) FROM invoices WHERE id=$1`, invoice).Scan(&orderRefund); err != nil {
+		return out, err
+	}
+	if orderRefund {
+		if err = externalRefundAuthorize(ctx, tx, actor, "external_refunds.order_reverse", true); err != nil {
+			return out, err
+		}
+		if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+			return out, err
+		}
 	}
 	var customer int64
 	if err = tx.QueryRow(ctx, "SELECT user_id FROM invoices WHERE id=$1", invoice).Scan(&customer); err != nil {
@@ -373,6 +394,11 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if err = tx.QueryRow(ctx, "SELECT amount_cents,version,status,invoice_kind FROM invoices WHERE id=$1 FOR UPDATE", invoice).Scan(&amount, &version, &status, &kind); err != nil {
 		return out, err
 	}
+	if orderRefund {
+		if _, err = lockExternalRefundOrder(ctx, tx, invoice); err != nil {
+			return out, err
+		}
+	}
 	// Rejection closes a pending record without money movement; changed business
 	// eligibility must never prevent an independent reviewer from rejecting it.
 	if id == 0 || confirm {
@@ -388,10 +414,19 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 				return out, conflict("external_refund_merchant_unavailable", "原支付商户身份已变化")
 			}
 		}
-		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || (kind != "manual" && kind != "topup") {
+		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || (kind != "manual" && kind != "topup" && !orderRefund) {
 			return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付人工账单或已入账充值")
 		}
-		if kind == "manual" {
+		if orderRefund {
+			if err = requireExternalRefundOrder(ctx, tx, invoice); err != nil {
+				return out, err
+			}
+			if id == 0 {
+				if err = validateExternalRefundOrderVersions(ctx, tx, invoice, in); err != nil {
+					return out, err
+				}
+			}
+		} else if kind == "manual" {
 			if err = requireManualInvoiceValid(ctx, tx, invoice); err != nil {
 				return out, err
 			}
@@ -440,6 +475,11 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if err != nil {
 			return out, err
 		}
+		if orderRefund {
+			if err = reserveExternalRefundOrder(ctx, tx, id, invoice); err != nil {
+				return out, err
+			}
+		}
 		if kind == "topup" {
 			if err = reserveExternalRefundBalance(ctx, tx, id, invoice, customer, amount); err != nil {
 				return out, err
@@ -465,12 +505,23 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if confirm {
 			next = "confirmed"
 			action = "external_refund.confirmed"
+			if orderRefund {
+				if err = applyExternalRefundOrder(ctx, tx, actor, id, invoice); err != nil {
+					return out, err
+				}
+			}
 			if kind == "topup" {
 				if err = applyExternalRefundReversal(ctx, tx, actor, id, invoice, customer, amount); err != nil {
 					return out, err
 				}
 			}
-			if _, err = tx.Exec(ctx, "UPDATE invoices SET status='refunded' WHERE id=$1", invoice); err != nil {
+			if !orderRefund {
+				if _, err = tx.Exec(ctx, "UPDATE invoices SET status='refunded' WHERE id=$1", invoice); err != nil {
+					return out, err
+				}
+			}
+		} else if orderRefund {
+			if _, err = tx.Exec(ctx, `UPDATE external_refund_order_holds SET status='released',released_at=clock_timestamp() WHERE refund_id=$1 AND status='pending'`, id); err != nil {
 				return out, err
 			}
 		} else if kind == "topup" {

@@ -190,10 +190,8 @@ FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, 
 		if _, err = tx.Exec(ctx, "UPDATE order_items SET first_price_override_cents=$2,renewal_price_override_cents=$3 WHERE id=$1", orderItemID, v.FirstPriceOverride, v.RenewalPriceOverride); err != nil {
 			return result, err
 		}
-		if v.Stock != nil {
-			if _, err = tx.Exec(ctx, "UPDATE products SET stock=stock-$1,updated_at=now() WHERE id=$2", v.Qty, v.ProductID); err != nil {
-				return result, err
-			}
+		if _, err = tx.Exec(ctx, `INSERT INTO external_refund_order_stock_reservations(order_item_id,order_id,product_id,units,item_snapshot,service_ids) VALUES($1,$2,$3,$4,'{}','[]')`, orderItemID, result.OrderID, v.ProductID, v.Qty); err != nil {
+			return result, err
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO service_navigation_preferences(user_id,group_id,visible)
  SELECT $1,service_group_id,true FROM products WHERE id=$2 AND service_group_id IS NOT NULL

@@ -237,7 +237,7 @@ var adminRoutePermissions = func() map[string]string {
 		"orders.view":                   {"GET /api/v1/admin/orders", "GET /api/v1/admin/orders/{id}", "GET /api/v1/admin/renewal-orders"},
 		"orders.manage":                 {"GET /api/v1/admin/orders/create-options", "POST /api/v1/admin/orders/quote", "POST /api/v1/admin/orders", "POST /api/v1/admin/orders/{id}/invoice", "DELETE /api/v1/admin/orders/{id}", "POST /api/v1/admin/orders/bulk-review", "POST /api/v1/admin/orders/bulk-delete", "POST /api/v1/admin/orders/{id}/cancel", "POST /api/v1/admin/orders/{id}/review", "POST /api/v1/admin/orders/{id}/notes", "POST /api/v1/admin/orders/bulk-cancel"},
 		"invoices.view":                 {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}", "GET /api/v1/admin/invoices/{id}/topup-liability", "GET /api/v1/admin/customer-transactions", "GET /api/v1/admin/transactions/page", "GET /api/v1/admin/transactions/summary"},
-		"external_refunds.view":         {"GET /api/v1/admin/invoices/{id}/external-refunds"},
+		"external_refunds.view":         {"GET /api/v1/admin/invoices/{id}/external-refunds", "GET /api/v1/admin/invoices/{id}/external-refund-order-context"},
 		"external_refunds.create":       {"POST /api/v1/admin/invoices/{id}/external-refunds"},
 		"external_refunds.review":       {"POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", "POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/reject"},
 		"invoices.manage":               {"GET /api/v1/admin/invoice-customers", "POST /api/v1/admin/invoices", "PUT /api/v1/admin/invoices/{id}", "POST /api/v1/admin/invoices/{id}/cancel", "POST /api/v1/admin/invoices/merge"},

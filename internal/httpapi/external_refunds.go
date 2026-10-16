@@ -82,3 +82,21 @@ func (s *Server) reviewExternalRefund(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, status, out)
 }
+
+func (s *Server) externalRefundOrderContext(w http.ResponseWriter, r *http.Request) {
+	invoiceID, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
+		writeError(w, 401, "unauthorized", "请先登录")
+		return
+	}
+	out, err := s.db.ExternalRefundOrderContext(store.WithExternalRefundSession(r.Context(), tokenHash(cookie.Value)), identityFrom(r).ID, invoiceID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, out)
+}
