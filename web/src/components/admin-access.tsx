@@ -80,13 +80,15 @@ export function AdminAccessView() {
     const selected = new Set(roleForm.permissions);
     if (checked) {
       selected.add(code);
-      const view = code === "invoices.refund" ? "invoices.view" : code.replace(/\.manage$/, ".view");
+      const view = code.startsWith("external_refunds.") ? "external_refunds.view" : code === "invoices.refund" ? "invoices.view" : code.replace(/\.manage$/, ".view");
       if (permissions.data.some(p => p.code === view)) selected.add(view);
+      if (code.startsWith("external_refunds.") && permissions.data.some(p => p.code === "invoices.view")) selected.add("invoices.view");
     } else {
       selected.delete(code);
       if (code.endsWith(".view")) {
         selected.delete(code.replace(/\.view$/, ".manage"));
-        if (code === "invoices.view") selected.delete("invoices.refund");
+        if (code === "invoices.view") { selected.delete("invoices.refund"); selected.delete("external_refunds.view"); selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); }
+        if (code === "external_refunds.view") { selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); }
       }
     }
     setRoleForm({ ...roleForm, permissions: [...selected] });

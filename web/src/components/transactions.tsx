@@ -57,6 +57,7 @@ import {
   paymentLabels,
   type PaymentRecord,
 } from "./online-payment";
+import { ExternalRefunds } from "./external-refunds";
 import { PaymentReconciliation } from "./payment-reconciliation";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import { AdminStatusTabs } from "./admin-status-tabs";
@@ -1316,6 +1317,7 @@ export function InvoiceDetailView({
               </Table>
             </div>
           </section>
+          {admin && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
         </>
       )}
     </Workspace>
