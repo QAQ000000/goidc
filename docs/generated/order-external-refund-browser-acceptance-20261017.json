@@ -1,0 +1,3267 @@
+{
+  "status": "PASS",
+  "date": "2026-10-17",
+  "product_core_commit": "f95aeb479e8ec3d124f50ca48591873b1b08e061",
+  "main_core_commit": "beec800",
+  "layout_delta_commit": "1653411",
+  "notes_layout_delta_commit": "c6fdba0",
+  "backend_final_source_commit": "114932f",
+  "backend_main_commit": "0d12e4a",
+  "fixture_local_backend_commit": "69c11fc",
+  "core_build_id": "Bp7S1v4Ep5A0hNbdoOAXJ",
+  "layout_build_id": "KWkhvGQxcDW9WSGvOZgV3",
+  "browser": "Linux /usr/bin/google-chrome headless through Playwright",
+  "api": "real Go TCP HTTP API loopback40639",
+  "schema": "zjmfgo_test_88f9fa5418645da5",
+  "real_external_actions": false,
+  "viewports": [
+    [
+      1440,
+      900
+    ],
+    [
+      1024,
+      768
+    ],
+    [
+      390,
+      844
+    ],
+    [
+      320,
+      740
+    ],
+    [
+      320,
+      568
+    ]
+  ],
+  "phase_note": "Fresh fixture ran all core flows on f95aeb4. c6fdba0 changes only notes row flex-wrap and1653411 only title padding pr-6 to pr-12; rebuilt and reran read-only projections and dialog geometry captures. Old pre-UI-fix fixture evidence excluded.",
+  "checks": [
+    {
+      "name": "registration_and_independent_confirm",
+      "result": "PASS",
+      "evidence": "Real browser registration invoice1; independent reviewer confirms; original paid/review history retained."
+    },
+    {
+      "name": "reject_releases_hold",
+      "result": "PASS",
+      "evidence": "Invoice2 independently rejected; order stays paid, services remain undelivered."
+    },
+    {
+      "name": "committed_create_receipt_loss",
+      "result": "PASS",
+      "evidence": "Real server 201 then browser response aborted; refresh and explicit facts read preserve exact body/key; 200 replay returns same refund."
+    },
+    {
+      "name": "order_version_conflict",
+      "result": "PASS",
+      "evidence": "Independent admin notes write changes order version; stale draft gets409; latest facts do not replace original body/key; explicit archive only."
+    },
+    {
+      "name": "permission_and_scope",
+      "result": "PASS",
+      "evidence": "Reader/no order_reverse return403, owned customer scope404, requester self-review403; approved order entry disabled."
+    },
+    {
+      "name": "identity_before_write",
+      "result": "PASS",
+      "evidence": "Session actor changed before submit; no refund POST sent and draft preserved."
+    },
+    {
+      "name": "hold_projections_and_actions",
+      "result": "PASS",
+      "evidence": "Pending/applied block notes/delete/approval; selected pending blocks bulk cancel/delete/approval; released restores original eligibility."
+    },
+    {
+      "name": "five_viewports_and_short_footer",
+      "result": "PASS",
+      "evidence": "1440x900,1024x768,390x844,320x740,320x568; document/dialog no horizontal overflow, footer scroll reachable, payment-time seconds preserved."
+    },
+    {
+      "name": "title_close_geometry",
+      "result": "PASS",
+      "evidence": "Both dialogs measured at all five sizes with no text/close overlap."
+    },
+    {
+      "name": "narrow_notes_row_delta",
+      "result": "PASS",
+      "evidence": "Only flex-wrap added after core acceptance; final five-size projections/screenshots replaced; no money writes repeated."
+    },
+    {
+      "name": "database_money_inventory",
+      "result": "PASS",
+      "evidence": "Original payments and invoice paid_at unchanged; balance12345 unchanged; only3 new release units, finite stock+2/+1; no new provision jobs."
+    },
+    {
+      "name": "javascript_console",
+      "result": "PASS",
+      "evidence": "Final core browser console0 errors/0 warnings."
+    },
+    {
+      "name": "unlimited_stock_browser",
+      "result": "N/A",
+      "evidence": "Fixture has two finite-stock products; unlimited stock not exercised by this browser run."
+    },
+    {
+      "name": "real_merchant_resource_io",
+      "result": "N/A",
+      "evidence": "Outgoing merchant gateway isolated; real merchant refund, payer receipt and resource teardown not exercised."
+    }
+  ],
+  "facts": {
+    "baseline_db": {
+      "jobs": 3,
+      "holds": [
+        {
+          "status": "pending",
+          "order_id": 5,
+          "refund_id": 1,
+          "stock_units_released": 0
+        },
+        {
+          "status": "applied",
+          "order_id": 6,
+          "refund_id": 2,
+          "stock_units_released": 3
+        },
+        {
+          "status": "released",
+          "order_id": 7,
+          "refund_id": 3,
+          "stock_units_released": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": 1,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 2,
+          "status": "paid",
+          "version": 3,
+          "review_status": "pending"
+        },
+        {
+          "id": 3,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 4,
+          "status": "paid",
+          "version": 3,
+          "review_status": "pending"
+        },
+        {
+          "id": 5,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 6,
+          "status": "refunded",
+          "version": 4,
+          "review_status": "pending"
+        },
+        {
+          "id": 7,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 8,
+          "status": "active",
+          "version": 4,
+          "review_status": "approved"
+        }
+      ],
+      "balance": 12345,
+      "refunds": [
+        {
+          "id": 1,
+          "status": "pending_review",
+          "version": 1,
+          "invoice_id": 5
+        },
+        {
+          "id": 2,
+          "status": "confirmed",
+          "version": 2,
+          "invoice_id": 6
+        },
+        {
+          "id": 3,
+          "status": "rejected",
+          "version": 2,
+          "invoice_id": 7
+        }
+      ],
+      "invoices": [
+        {
+          "id": 1,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:03.861213+08:00",
+          "version": 2
+        },
+        {
+          "id": 2,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:03.995936+08:00",
+          "version": 2
+        },
+        {
+          "id": 3,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.153042+08:00",
+          "version": 2
+        },
+        {
+          "id": 4,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.227326+08:00",
+          "version": 2
+        },
+        {
+          "id": 5,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.37354+08:00",
+          "version": 2
+        },
+        {
+          "id": 6,
+          "status": "refunded",
+          "paid_at": "2026-10-17T04:04:04.489156+08:00",
+          "version": 3
+        },
+        {
+          "id": 7,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.75568+08:00",
+          "version": 2
+        },
+        {
+          "id": 8,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.887948+08:00",
+          "version": 2
+        }
+      ],
+      "payments": [
+        {
+          "id": 1,
+          "status": "succeeded",
+          "invoice_id": 1,
+          "completed_at": "2026-10-17T04:04:03.861213+08:00"
+        },
+        {
+          "id": 2,
+          "status": "succeeded",
+          "invoice_id": 2,
+          "completed_at": "2026-10-17T04:04:03.995936+08:00"
+        },
+        {
+          "id": 3,
+          "status": "succeeded",
+          "invoice_id": 3,
+          "completed_at": "2026-10-17T04:04:04.153042+08:00"
+        },
+        {
+          "id": 4,
+          "status": "succeeded",
+          "invoice_id": 4,
+          "completed_at": "2026-10-17T04:04:04.227326+08:00"
+        },
+        {
+          "id": 5,
+          "status": "succeeded",
+          "invoice_id": 5,
+          "completed_at": "2026-10-17T04:04:04.37354+08:00"
+        },
+        {
+          "id": 6,
+          "status": "succeeded",
+          "invoice_id": 6,
+          "completed_at": "2026-10-17T04:04:04.489156+08:00"
+        },
+        {
+          "id": 7,
+          "status": "succeeded",
+          "invoice_id": 7,
+          "completed_at": "2026-10-17T04:04:04.75568+08:00"
+        },
+        {
+          "id": 8,
+          "status": "succeeded",
+          "invoice_id": 8,
+          "completed_at": "2026-10-17T04:04:04.887948+08:00"
+        }
+      ],
+      "products": [
+        {
+          "id": 1,
+          "stock": 86
+        },
+        {
+          "id": 2,
+          "stock": 93
+        }
+      ],
+      "services": [
+        {
+          "id": 1,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 1,
+          "inventory_released": false
+        },
+        {
+          "id": 2,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 1,
+          "inventory_released": false
+        },
+        {
+          "id": 3,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 1,
+          "inventory_released": false
+        },
+        {
+          "id": 4,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 5,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 6,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 7,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 8,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 9,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 10,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 11,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 12,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 13,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 14,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 15,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 16,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 17,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 18,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 19,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 20,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 21,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 22,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        },
+        {
+          "id": 23,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        },
+        {
+          "id": 24,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        }
+      ],
+      "stock_release_units": 3
+    },
+    "final_db": {
+      "jobs": 3,
+      "holds": [
+        {
+          "status": "pending",
+          "order_id": 5,
+          "refund_id": 1,
+          "stock_units_released": 0
+        },
+        {
+          "status": "applied",
+          "order_id": 6,
+          "refund_id": 2,
+          "stock_units_released": 3
+        },
+        {
+          "status": "released",
+          "order_id": 7,
+          "refund_id": 3,
+          "stock_units_released": 0
+        },
+        {
+          "status": "applied",
+          "order_id": 1,
+          "refund_id": 4,
+          "stock_units_released": 3
+        },
+        {
+          "status": "released",
+          "order_id": 2,
+          "refund_id": 5,
+          "stock_units_released": 0
+        },
+        {
+          "status": "pending",
+          "order_id": 3,
+          "refund_id": 6,
+          "stock_units_released": 0
+        }
+      ],
+      "orders": [
+        {
+          "id": 1,
+          "status": "refunded",
+          "version": 3,
+          "review_status": "pending"
+        },
+        {
+          "id": 2,
+          "status": "paid",
+          "version": 3,
+          "review_status": "pending"
+        },
+        {
+          "id": 3,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 4,
+          "status": "paid",
+          "version": 4,
+          "review_status": "pending"
+        },
+        {
+          "id": 5,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 6,
+          "status": "refunded",
+          "version": 4,
+          "review_status": "pending"
+        },
+        {
+          "id": 7,
+          "status": "paid",
+          "version": 2,
+          "review_status": "pending"
+        },
+        {
+          "id": 8,
+          "status": "active",
+          "version": 4,
+          "review_status": "approved"
+        }
+      ],
+      "balance": 12345,
+      "refunds": [
+        {
+          "id": 1,
+          "status": "pending_review",
+          "version": 1,
+          "invoice_id": 5
+        },
+        {
+          "id": 2,
+          "status": "confirmed",
+          "version": 2,
+          "invoice_id": 6
+        },
+        {
+          "id": 3,
+          "status": "rejected",
+          "version": 2,
+          "invoice_id": 7
+        },
+        {
+          "id": 4,
+          "status": "confirmed",
+          "version": 2,
+          "invoice_id": 1
+        },
+        {
+          "id": 5,
+          "status": "rejected",
+          "version": 2,
+          "invoice_id": 2
+        },
+        {
+          "id": 6,
+          "status": "pending_review",
+          "version": 1,
+          "invoice_id": 3
+        }
+      ],
+      "invoices": [
+        {
+          "id": 1,
+          "status": "refunded",
+          "paid_at": "2026-10-17T04:04:03.861213+08:00",
+          "version": 3
+        },
+        {
+          "id": 2,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:03.995936+08:00",
+          "version": 2
+        },
+        {
+          "id": 3,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.153042+08:00",
+          "version": 2
+        },
+        {
+          "id": 4,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.227326+08:00",
+          "version": 2
+        },
+        {
+          "id": 5,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.37354+08:00",
+          "version": 2
+        },
+        {
+          "id": 6,
+          "status": "refunded",
+          "paid_at": "2026-10-17T04:04:04.489156+08:00",
+          "version": 3
+        },
+        {
+          "id": 7,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.75568+08:00",
+          "version": 2
+        },
+        {
+          "id": 8,
+          "status": "paid",
+          "paid_at": "2026-10-17T04:04:04.887948+08:00",
+          "version": 2
+        }
+      ],
+      "payments": [
+        {
+          "id": 1,
+          "status": "succeeded",
+          "invoice_id": 1,
+          "completed_at": "2026-10-17T04:04:03.861213+08:00"
+        },
+        {
+          "id": 2,
+          "status": "succeeded",
+          "invoice_id": 2,
+          "completed_at": "2026-10-17T04:04:03.995936+08:00"
+        },
+        {
+          "id": 3,
+          "status": "succeeded",
+          "invoice_id": 3,
+          "completed_at": "2026-10-17T04:04:04.153042+08:00"
+        },
+        {
+          "id": 4,
+          "status": "succeeded",
+          "invoice_id": 4,
+          "completed_at": "2026-10-17T04:04:04.227326+08:00"
+        },
+        {
+          "id": 5,
+          "status": "succeeded",
+          "invoice_id": 5,
+          "completed_at": "2026-10-17T04:04:04.37354+08:00"
+        },
+        {
+          "id": 6,
+          "status": "succeeded",
+          "invoice_id": 6,
+          "completed_at": "2026-10-17T04:04:04.489156+08:00"
+        },
+        {
+          "id": 7,
+          "status": "succeeded",
+          "invoice_id": 7,
+          "completed_at": "2026-10-17T04:04:04.75568+08:00"
+        },
+        {
+          "id": 8,
+          "status": "succeeded",
+          "invoice_id": 8,
+          "completed_at": "2026-10-17T04:04:04.887948+08:00"
+        }
+      ],
+      "products": [
+        {
+          "id": 1,
+          "stock": 88
+        },
+        {
+          "id": 2,
+          "stock": 94
+        }
+      ],
+      "services": [
+        {
+          "id": 1,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 1,
+          "inventory_released": true
+        },
+        {
+          "id": 2,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 1,
+          "inventory_released": true
+        },
+        {
+          "id": 3,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 1,
+          "inventory_released": true
+        },
+        {
+          "id": 4,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 5,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 6,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 2,
+          "inventory_released": false
+        },
+        {
+          "id": 7,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 8,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 9,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 3,
+          "inventory_released": false
+        },
+        {
+          "id": 10,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 11,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 12,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 4,
+          "inventory_released": false
+        },
+        {
+          "id": 13,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 14,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 15,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 5,
+          "inventory_released": false
+        },
+        {
+          "id": 16,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 17,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 18,
+          "status": "cancelled",
+          "version": 2,
+          "order_id": 6,
+          "inventory_released": true
+        },
+        {
+          "id": 19,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 20,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 21,
+          "status": "pending_payment",
+          "version": 1,
+          "order_id": 7,
+          "inventory_released": false
+        },
+        {
+          "id": 22,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        },
+        {
+          "id": 23,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        },
+        {
+          "id": 24,
+          "status": "queued",
+          "version": 2,
+          "order_id": 8,
+          "inventory_released": false
+        }
+      ],
+      "stock_release_units": 6
+    },
+    "db_verification": {
+      "balance_cents_unchanged": 12345,
+      "original_payments_unchanged": true,
+      "invoice_paid_at_unchanged": true,
+      "new_release_units": 3,
+      "product_stock_deltas": [
+        2,
+        1
+      ],
+      "unlimited_stock_browser_fixture": "not covered",
+      "no_new_jobs": true,
+      "refund_count": 6,
+      "hold_count": 6,
+      "confirmed_order_refunded_services_cancelled": true,
+      "review_pending_history_preserved": true,
+      "rejected_order_paid_services_undelivered": true,
+      "receipt_replay_no_duplicate": true
+    }
+  },
+  "measurements": {
+    "create-layout": [
+      {
+        "viewport": [
+          1440,
+          900
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 464,
+          "y": 45,
+          "width": 512,
+          "height": 810,
+          "top": 45,
+          "right": 976,
+          "bottom": 855,
+          "left": 464
+        },
+        "seconds": "1",
+        "button": {
+          "x": 849,
+          "y": 794,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          1024,
+          768
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 256,
+          "y": 38.40625,
+          "width": 512,
+          "height": 691.1875,
+          "top": 38.40625,
+          "right": 768,
+          "bottom": 729.59375,
+          "left": 256
+        },
+        "seconds": "1",
+        "button": {
+          "x": 641,
+          "y": 668.40625,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 812,
+          "top": 16,
+          "right": 374,
+          "bottom": 828,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 707,
+          "width": 308,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          740
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 708,
+          "top": 16,
+          "right": 304,
+          "bottom": 724,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 603,
+          "width": 238,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          568
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 536,
+          "top": 16,
+          "right": 304,
+          "bottom": 552,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 431,
+          "width": 238,
+          "height": 44
+        }
+      }
+    ],
+    "review-layout": [
+      {
+        "viewport": [
+          1440,
+          900
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 464,
+          "y": 45,
+          "width": 512,
+          "height": 810,
+          "top": 45,
+          "right": 976,
+          "bottom": 855,
+          "left": 464
+        },
+        "button": {
+          "x": 849,
+          "y": 794,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          1024,
+          768
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 256,
+          "y": 38.40625,
+          "width": 512,
+          "height": 691.1875,
+          "top": 38.40625,
+          "right": 768,
+          "bottom": 729.59375,
+          "left": 256
+        },
+        "button": {
+          "x": 641,
+          "y": 668.40625,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 812,
+          "top": 16,
+          "right": 374,
+          "bottom": 828,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 707,
+          "width": 308,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          740
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 708,
+          "top": 16,
+          "right": 304,
+          "bottom": 724,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 603,
+          "width": 238,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          568
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 536,
+          "top": 16,
+          "right": 304,
+          "bottom": 552,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 431,
+          "width": 238,
+          "height": 44
+        }
+      }
+    ],
+    "create-layout-delta": [
+      {
+        "viewport": [
+          1440,
+          900
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 464,
+          "y": 45,
+          "width": 512,
+          "height": 810,
+          "top": 45,
+          "right": 976,
+          "bottom": 855,
+          "left": 464
+        },
+        "seconds": "1",
+        "button": {
+          "x": 849,
+          "y": 794,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          1024,
+          768
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 256,
+          "y": 38.40625,
+          "width": 512,
+          "height": 691.1875,
+          "top": 38.40625,
+          "right": 768,
+          "bottom": 729.59375,
+          "left": 256
+        },
+        "seconds": "1",
+        "button": {
+          "x": 641,
+          "y": 668.40625,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 812,
+          "top": 16,
+          "right": 374,
+          "bottom": 828,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 707,
+          "width": 308,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          740
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 708,
+          "top": 16,
+          "right": 304,
+          "bottom": 724,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 603,
+          "width": 238,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          568
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 536,
+          "top": 16,
+          "right": 304,
+          "bottom": 552,
+          "left": 16
+        },
+        "seconds": "1",
+        "button": {
+          "x": 41,
+          "y": 431,
+          "width": 238,
+          "height": 44
+        }
+      }
+    ],
+    "review-layout-delta": [
+      {
+        "viewport": [
+          1440,
+          900
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 464,
+          "y": 45,
+          "width": 512,
+          "height": 810,
+          "top": 45,
+          "right": 976,
+          "bottom": 855,
+          "left": 464
+        },
+        "button": {
+          "x": 849,
+          "y": 794,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          1024,
+          768
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 256,
+          "y": 38.40625,
+          "width": 512,
+          "height": 691.1875,
+          "top": 38.40625,
+          "right": 768,
+          "bottom": 729.59375,
+          "left": 256
+        },
+        "button": {
+          "x": 641,
+          "y": 668.40625,
+          "width": 102,
+          "height": 36
+        }
+      },
+      {
+        "viewport": [
+          390,
+          844
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 358,
+          "height": 812,
+          "top": 16,
+          "right": 374,
+          "bottom": 828,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 707,
+          "width": 308,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          740
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 708,
+          "top": 16,
+          "right": 304,
+          "bottom": 724,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 603,
+          "width": 238,
+          "height": 44
+        }
+      },
+      {
+        "viewport": [
+          320,
+          568
+        ],
+        "docOverflow": false,
+        "dialogOverflow": false,
+        "box": {
+          "x": 16,
+          "y": 16,
+          "width": 288,
+          "height": 536,
+          "top": 16,
+          "right": 304,
+          "bottom": 552,
+          "left": 16
+        },
+        "button": {
+          "x": 41,
+          "y": 431,
+          "width": 238,
+          "height": 44
+        }
+      }
+    ],
+    "receipt-loss-recovery": {
+      "original": {
+        "wire": {
+          "body_sha256": "c9f977d8f557ff2df47cfe578ed9e265f611cec0018bb4ed6a5354b8003ffd9c",
+          "request_snapshot": {
+            "expected_version": 2,
+            "expected_order_version": 2,
+            "expected_service_versions": [
+              {
+                "id": 7,
+                "version": 1
+              },
+              {
+                "id": 8,
+                "version": 1
+              },
+              {
+                "id": 9,
+                "version": 1
+              }
+            ]
+          },
+          "key_sha256": "63df8fe3af13aec87377af11622e1f5b0ee729a07b56b4785e06b434771dfaf5",
+          "serverStatus": 201,
+          "refundId": 6
+        },
+        "pending": {
+          "path": "/admin/invoices/3/external-refunds",
+          "body_sha256": "c9f977d8f557ff2df47cfe578ed9e265f611cec0018bb4ed6a5354b8003ffd9c",
+          "request_snapshot": {
+            "expected_version": 2,
+            "expected_order_version": 2,
+            "expected_service_versions": [
+              {
+                "id": 7,
+                "version": 1
+              },
+              {
+                "id": 8,
+                "version": 1
+              },
+              {
+                "id": 9,
+                "version": 1
+              }
+            ]
+          },
+          "key_sha256": "63df8fe3af13aec87377af11622e1f5b0ee729a07b56b4785e06b434771dfaf5",
+          "kind": "create",
+          "recordId": null,
+          "rejected": false
+        }
+      },
+      "replay": {
+        "body_sha256": "c9f977d8f557ff2df47cfe578ed9e265f611cec0018bb4ed6a5354b8003ffd9c",
+        "request_snapshot": {
+          "expected_version": 2,
+          "expected_order_version": 2,
+          "expected_service_versions": [
+            {
+              "id": 7,
+              "version": 1
+            },
+            {
+              "id": 8,
+              "version": 1
+            },
+            {
+              "id": 9,
+              "version": 1
+            }
+          ]
+        },
+        "key_sha256": "63df8fe3af13aec87377af11622e1f5b0ee729a07b56b4785e06b434771dfaf5",
+        "status": 200,
+        "replayed": true,
+        "id": 6
+      }
+    },
+    "version-conflict": {
+      "original": {
+        "path": "/admin/invoices/4/external-refunds",
+        "body_sha256": "4042c6b81b6669f0e0eb12e405a7e15bed9633f02c0760ba7e4677ee1db92c41",
+        "request_snapshot": {
+          "expected_version": 2,
+          "expected_order_version": 3,
+          "expected_service_versions": [
+            {
+              "id": 10,
+              "version": 1
+            },
+            {
+              "id": 11,
+              "version": 1
+            },
+            {
+              "id": 12,
+              "version": 1
+            }
+          ]
+        },
+        "key_sha256": "ad6335770659daed8e5daa2fc1b7705f78cc369383bb02590a303203cadc122c",
+        "kind": "create",
+        "recordId": null,
+        "rejected": true
+      },
+      "unchanged": true,
+      "latest": "最新账单：paid，版本 2；订单 #4，版本 4，交付冻结 无活动记录，服务版本：#10/v1、#11/v1、#12/v1。原请求版本与载荷未改变。"
+    },
+    "permissions": [
+      {
+        "name": "reader",
+        "context": 200,
+        "writeStatus": 403,
+        "error": "permission_denied"
+      },
+      {
+        "name": "no-reverse",
+        "context": 200,
+        "writeStatus": 403,
+        "error": "permission_denied"
+      },
+      {
+        "name": "limited",
+        "context": 404
+      },
+      {
+        "name": "requester",
+        "context": 200,
+        "writeStatus": 403,
+        "error": "external_refund_self_review"
+      },
+      {
+        "approvedDisabled": true
+      }
+    ],
+    "projections-layout-delta": [
+      {
+        "width": 1440,
+        "height": 900,
+        "state": "pending",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "state": "applied",
+        "orderStatus": "refunded",
+        "review": "pending",
+        "serviceStatus": "cancelled",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 1440,
+        "height": 900,
+        "state": "released",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 1024,
+        "height": 768,
+        "state": "pending",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 1024,
+        "height": 768,
+        "state": "applied",
+        "orderStatus": "refunded",
+        "review": "pending",
+        "serviceStatus": "cancelled",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 1024,
+        "height": 768,
+        "state": "released",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "state": "pending",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "state": "applied",
+        "orderStatus": "refunded",
+        "review": "pending",
+        "serviceStatus": "cancelled",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "state": "released",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 740,
+        "state": "pending",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 740,
+        "state": "applied",
+        "orderStatus": "refunded",
+        "review": "pending",
+        "serviceStatus": "cancelled",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 740,
+        "state": "released",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 568,
+        "state": "pending",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 568,
+        "state": "applied",
+        "orderStatus": "refunded",
+        "review": "pending",
+        "serviceStatus": "cancelled",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      },
+      {
+        "width": 320,
+        "height": 568,
+        "state": "released",
+        "orderStatus": "paid",
+        "review": "pending",
+        "serviceStatus": "pending_payment",
+        "orderOverflow": false,
+        "serviceOverflow": false
+      }
+    ],
+    "list-projections": [
+      {
+        "kind": "orders",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付"
+        ]
+      },
+      {
+        "kind": "services",
+        "width": 1440,
+        "height": 900,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核"
+        ]
+      },
+      {
+        "kind": "orders",
+        "width": 1024,
+        "height": 768,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付"
+        ]
+      },
+      {
+        "kind": "services",
+        "width": 1024,
+        "height": 768,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核"
+        ]
+      },
+      {
+        "kind": "orders",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付"
+        ]
+      },
+      {
+        "kind": "services",
+        "width": 390,
+        "height": 844,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核"
+        ]
+      },
+      {
+        "kind": "orders",
+        "width": 320,
+        "height": 740,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付"
+        ]
+      },
+      {
+        "kind": "services",
+        "width": 320,
+        "height": 740,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核"
+        ]
+      },
+      {
+        "kind": "orders",
+        "width": 320,
+        "height": 568,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付"
+        ]
+      },
+      {
+        "kind": "services",
+        "width": 320,
+        "height": 568,
+        "overflow": false,
+        "labels": [
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "整单已退款 · 禁止交付",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "外部退款待复核 · 交付冻结",
+          "退款已驳回 · 冻结已释放，仍须原流程审核",
+          "退款已驳回 · 冻结已释放，仍须原流程审核"
+        ]
+      }
+    ],
+    "layout-delta-titles": [
+      {
+        "type": "create",
+        "width": 1440,
+        "height": 900,
+        "title": [
+          {
+            "x": 489,
+            "y": 69,
+            "width": 123.015625,
+            "height": 20,
+            "top": 69,
+            "right": 612.015625,
+            "bottom": 89,
+            "left": 489
+          },
+          {
+            "x": 612.015625,
+            "y": 69,
+            "width": 55.0625,
+            "height": 20,
+            "top": 69,
+            "right": 667.078125,
+            "bottom": 89,
+            "left": 612.015625
+          }
+        ],
+        "close": {
+          "x": 943,
+          "y": 62,
+          "width": 16,
+          "height": 16,
+          "top": 62,
+          "right": 959,
+          "bottom": 78,
+          "left": 943
+        },
+        "overlap": false
+      },
+      {
+        "type": "create",
+        "width": 1024,
+        "height": 768,
+        "title": [
+          {
+            "x": 281,
+            "y": 62.40625,
+            "width": 123.015625,
+            "height": 20,
+            "top": 62.40625,
+            "right": 404.015625,
+            "bottom": 82.40625,
+            "left": 281
+          },
+          {
+            "x": 404.015625,
+            "y": 62.40625,
+            "width": 55.0625,
+            "height": 20,
+            "top": 62.40625,
+            "right": 459.078125,
+            "bottom": 82.40625,
+            "left": 404.015625
+          }
+        ],
+        "close": {
+          "x": 735,
+          "y": 55.40625,
+          "width": 16,
+          "height": 16,
+          "top": 55.40625,
+          "right": 751,
+          "bottom": 71.40625,
+          "left": 735
+        },
+        "overlap": false
+      },
+      {
+        "type": "create",
+        "width": 390,
+        "height": 844,
+        "title": [
+          {
+            "x": 81.953125,
+            "y": 40,
+            "width": 123.015625,
+            "height": 20,
+            "top": 40,
+            "right": 204.96875,
+            "bottom": 60,
+            "left": 81.953125
+          },
+          {
+            "x": 204.96875,
+            "y": 40,
+            "width": 55.0625,
+            "height": 20,
+            "top": 40,
+            "right": 260.03125,
+            "bottom": 60,
+            "left": 204.96875
+          }
+        ],
+        "close": {
+          "x": 313,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 357,
+          "bottom": 77,
+          "left": 313
+        },
+        "overlap": false
+      },
+      {
+        "type": "create",
+        "width": 320,
+        "height": 740,
+        "title": [
+          {
+            "x": 46.953125,
+            "y": 40,
+            "width": 123.015625,
+            "height": 20,
+            "top": 40,
+            "right": 169.96875,
+            "bottom": 60,
+            "left": 46.953125
+          },
+          {
+            "x": 169.96875,
+            "y": 40,
+            "width": 55.0625,
+            "height": 20,
+            "top": 40,
+            "right": 225.03125,
+            "bottom": 60,
+            "left": 169.96875
+          }
+        ],
+        "close": {
+          "x": 243,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 287,
+          "bottom": 77,
+          "left": 243
+        },
+        "overlap": false
+      },
+      {
+        "type": "create",
+        "width": 320,
+        "height": 568,
+        "title": [
+          {
+            "x": 46.953125,
+            "y": 40,
+            "width": 123.015625,
+            "height": 20,
+            "top": 40,
+            "right": 169.96875,
+            "bottom": 60,
+            "left": 46.953125
+          },
+          {
+            "x": 169.96875,
+            "y": 40,
+            "width": 55.0625,
+            "height": 20,
+            "top": 40,
+            "right": 225.03125,
+            "bottom": 60,
+            "left": 169.96875
+          }
+        ],
+        "close": {
+          "x": 243,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 287,
+          "bottom": 77,
+          "left": 243
+        },
+        "overlap": false
+      },
+      {
+        "type": "review",
+        "width": 1440,
+        "height": 900,
+        "title": [
+          {
+            "x": 489,
+            "y": 69,
+            "width": 198,
+            "height": 20,
+            "top": 69,
+            "right": 687,
+            "bottom": 89,
+            "left": 489
+          }
+        ],
+        "close": {
+          "x": 943,
+          "y": 62,
+          "width": 16,
+          "height": 16,
+          "top": 62,
+          "right": 959,
+          "bottom": 78,
+          "left": 943
+        },
+        "overlap": false
+      },
+      {
+        "type": "review",
+        "width": 1024,
+        "height": 768,
+        "title": [
+          {
+            "x": 281,
+            "y": 62.40625,
+            "width": 198,
+            "height": 20,
+            "top": 62.40625,
+            "right": 479,
+            "bottom": 82.40625,
+            "left": 281
+          }
+        ],
+        "close": {
+          "x": 735,
+          "y": 55.40625,
+          "width": 16,
+          "height": 16,
+          "top": 55.40625,
+          "right": 751,
+          "bottom": 71.40625,
+          "left": 735
+        },
+        "overlap": false
+      },
+      {
+        "type": "review",
+        "width": 390,
+        "height": 844,
+        "title": [
+          {
+            "x": 72,
+            "y": 40,
+            "width": 198,
+            "height": 20,
+            "top": 40,
+            "right": 270,
+            "bottom": 60,
+            "left": 72
+          }
+        ],
+        "close": {
+          "x": 313,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 357,
+          "bottom": 77,
+          "left": 313
+        },
+        "overlap": false
+      },
+      {
+        "type": "review",
+        "width": 320,
+        "height": 740,
+        "title": [
+          {
+            "x": 46,
+            "y": 40,
+            "width": 180,
+            "height": 20,
+            "top": 40,
+            "right": 226,
+            "bottom": 60,
+            "left": 46
+          },
+          {
+            "x": 127,
+            "y": 58,
+            "width": 18,
+            "height": 20,
+            "top": 58,
+            "right": 145,
+            "bottom": 78,
+            "left": 127
+          }
+        ],
+        "close": {
+          "x": 243,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 287,
+          "bottom": 77,
+          "left": 243
+        },
+        "overlap": false
+      },
+      {
+        "type": "review",
+        "width": 320,
+        "height": 568,
+        "title": [
+          {
+            "x": 46,
+            "y": 40,
+            "width": 180,
+            "height": 20,
+            "top": 40,
+            "right": 226,
+            "bottom": 60,
+            "left": 46
+          },
+          {
+            "x": 127,
+            "y": 58,
+            "width": 18,
+            "height": 20,
+            "top": 58,
+            "right": 145,
+            "bottom": 78,
+            "left": 127
+          }
+        ],
+        "close": {
+          "x": 243,
+          "y": 33,
+          "width": 44,
+          "height": 44,
+          "top": 33,
+          "right": 287,
+          "bottom": 77,
+          "left": 243
+        },
+        "overlap": false
+      }
+    ]
+  },
+  "pages": [
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-1024x768.png",
+      "screenshotSha256": "b0c61c629d621fdcd093937170b2249f061c347841288d93c8e3de706dd96613",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-1440x900.png",
+      "screenshotSha256": "a6c1f49370dc3d60fa33195de31f1050e34ef71c68d95b70e0346fec4375383f",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-320x568.png",
+      "screenshotSha256": "ad85a7fcdfe25f3bf7118fa924ceb8269fa9913e6c7386b8cd166a7133204c9b",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-320x740.png",
+      "screenshotSha256": "d6152364150263c788d42979113b21922854b67ce9376288f950bd191abc0dee",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-390x844.png",
+      "screenshotSha256": "103a1e39bcd5d5fe23eee432e6070b50a862354fbdb7e982060e73c04242e941",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/create-short-footer.png",
+      "screenshotSha256": "35e5ba0fd6d7285ddf7afe1b11ec375fd18c5a6e97156bb78f9b8fe3165d614b",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/identity-changed.png",
+      "screenshotSha256": "886a62c8a3976356644f55f3dedc8fd264f5c3bdb7a6113740c11b9dd0107a7a",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-orders-1024x768.png",
+      "screenshotSha256": "56e04e8e5fdff75afdcabadfef60b00179bdc54d52fa215fb63f8fbff6ea46b0",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-orders-1440x900.png",
+      "screenshotSha256": "79d61495b269bfdac0706cf3aa302c4165e32d78cf633d669ee5c937791494cb",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-orders-320x568.png",
+      "screenshotSha256": "d449bfd81640e41e7211831fe0e82c7532932ef4fb74a36eec5c0a91b484d29d",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-orders-320x740.png",
+      "screenshotSha256": "8eae2232e3f8e2b990786dd6ed70887e158b8890af218bb39604283f70c70b25",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-orders-390x844.png",
+      "screenshotSha256": "792922938afe3d328f0eb340b85054045f4d684329d2762943b31c5ed9cb6759",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/services",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-services-1024x768.png",
+      "screenshotSha256": "3d52d0c91996c2a712b956f495f8aa0925a1ee814876442f1fce354a0da4f41f",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/services",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-services-1440x900.png",
+      "screenshotSha256": "ed8da4c2a41b88251949eaae0f68c79ae773fa980177c95355dd2c7a6badff0e",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/services",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-services-320x568.png",
+      "screenshotSha256": "83c14259753d704a0c93564d442926895ad4517dc4256c99ed2fa85884f02021",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/services",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-services-320x740.png",
+      "screenshotSha256": "83c14259753d704a0c93564d442926895ad4517dc4256c99ed2fa85884f02021",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/services",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/list-services-390x844.png",
+      "screenshotSha256": "7c54bbc1c60878730c985269a324e5f13cb43239d7d63689b2184bb816361032",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/lost-receipt-original.png",
+      "screenshotSha256": "36d5016342b3f5134bd8440b00db4fc968516784ebb0ee6d947427c7c1b3ce33",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/orders/1",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-applied-1024x768.png",
+      "screenshotSha256": "f91be09fac4aa2b5af7da69b9365871aa07d1911021fbf3c87413ade8b983b5b",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/1",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-applied-1440x900.png",
+      "screenshotSha256": "de5797e9b458bf45012edddc4297172657f84d4c0c56a2c3687a6deb788a0bc1",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/1",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-applied-320x568.png",
+      "screenshotSha256": "2c9847548333458a54fa2879fe4e94ba8330a18ef46fd7e26bad49ae13384a34",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/1",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-applied-320x740.png",
+      "screenshotSha256": "2c9847548333458a54fa2879fe4e94ba8330a18ef46fd7e26bad49ae13384a34",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/1",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-applied-390x844.png",
+      "screenshotSha256": "20f70abacc137a713d12a91b348345ed9efaf068e286e1502134dd7add7e322c",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/5",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-pending-1024x768.png",
+      "screenshotSha256": "1c785e0be24ef577c867ec8c7718a7072b1f908ebf370fda348d8d9ec8d261f5",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/5",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-pending-1440x900.png",
+      "screenshotSha256": "c817663ba381305aa02d9662072fcbba2b4d0842e89728120e00117b780a9b3f",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-pending-320x568.png",
+      "screenshotSha256": "2bfdeef5cda6bdaf157a8b3cbf522ab10afd4b20489c0bfa5dda46274d2b90a2",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/5",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-pending-320x740.png",
+      "screenshotSha256": "2bfdeef5cda6bdaf157a8b3cbf522ab10afd4b20489c0bfa5dda46274d2b90a2",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/5",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-pending-390x844.png",
+      "screenshotSha256": "c2c8e3757a58f138be753d1fd28ff002f6b58bfd96ab3acfa2b5ff615ce3f614",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/2",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-released-1024x768.png",
+      "screenshotSha256": "f5292da4b8fe0c4b24f82022fca67b67be78ae3a1e2122ce9d9ecc3bbccaa4cf",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/2",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-released-1440x900.png",
+      "screenshotSha256": "dfc7c732b175e3f68136377a8a37703776e6def3d1b7a0243d1695fe839cc41d",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/2",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-released-320x568.png",
+      "screenshotSha256": "48a3910ad6dc60ee79f745c91b2a5f12c2fc85ef0ad4aa8cb5d844b2a8c48088",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/2",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-released-320x740.png",
+      "screenshotSha256": "48a3910ad6dc60ee79f745c91b2a5f12c2fc85ef0ad4aa8cb5d844b2a8c48088",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/orders/2",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/order-released-390x844.png",
+      "screenshotSha256": "8e8220451198c9d122a03c47cff14b804f15254b07b4f2ee4e8359270870f9fd",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/permissions-no-reverse.png",
+      "screenshotSha256": "87d04d1f14953869a93ab49c7694c8cae06ad969749649b3a231c600c5fc4a99",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/permissions-reader.png",
+      "screenshotSha256": "77a720fddf03fb15f83ae891d0a7a4d552b8beb59444d7329e9e7b39606e1208",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/permissions-requester.png",
+      "screenshotSha256": "9b070b74eae4da4692594555333aa042bb5398804b432dfe68815aa09a79c5f1",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/reject-short.png",
+      "screenshotSha256": "addfb95c4c24099e4f6d0278ebf66891d38c4545a7592e51c2da541d23eda528",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/review-1024x768.png",
+      "screenshotSha256": "599fa52c07aa633a773e740c42bde09c01bcee461f1099c73a19b61164ad5bd4",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/review-1440x900.png",
+      "screenshotSha256": "cadbf29b769225ef77111b99cb57154c1cb7ea201d1eaa991b77c22f6193bd0a",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/review-320x568.png",
+      "screenshotSha256": "4f1957c38308724566927913ec0107c2d43fdec111a011585bfb3bb20b78fb14",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/review-320x740.png",
+      "screenshotSha256": "2b4aed488ef7d25d55d59a8bba03d58b48edd7ca67a0162423bca178eaf0f99e",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/review-390x844.png",
+      "screenshotSha256": "b228f72ce52a89376d13bfb22e640614443a1d5f9962fe90c55b73d66fe21ffb",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/1",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-applied-1024x768.png",
+      "screenshotSha256": "3a9808edb604a575cabb810eb850d9062a16c6c0602bb219d7317f81ab5b2df0",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/1",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-applied-1440x900.png",
+      "screenshotSha256": "1c004c6f49c4efdab070cc7bdbbc126968ec18a2d2c05ab931d1dc366a966041",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/1",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-applied-320x568.png",
+      "screenshotSha256": "1aa6074f1490cdf04ddb8f31ba02500e6de0816c8f45fb2b1dc33a6488dbcba6",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/1",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-applied-320x740.png",
+      "screenshotSha256": "1aa6074f1490cdf04ddb8f31ba02500e6de0816c8f45fb2b1dc33a6488dbcba6",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/1",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-applied-390x844.png",
+      "screenshotSha256": "7551ae006da31ccf4b2d636b16c3f794feb29d421dc160e2ca21cdf82a0673f7",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/13",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-pending-1024x768.png",
+      "screenshotSha256": "1fe5a2d48b87e0e6d250bd4840a59ee59216ab18b53d3033ba2d4c23d5a35a2f",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/13",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-pending-1440x900.png",
+      "screenshotSha256": "090503276381ec5be5f3bd75f4ec394161d353ef584e5e83007c466c9d32f05a",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/13",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-pending-320x568.png",
+      "screenshotSha256": "ddf1223efd9d4bdcf556fd938989b6cce2bf91a4cd61be7ed9ff87cf7ebc837b",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/13",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-pending-320x740.png",
+      "screenshotSha256": "ddf1223efd9d4bdcf556fd938989b6cce2bf91a4cd61be7ed9ff87cf7ebc837b",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/13",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-pending-390x844.png",
+      "screenshotSha256": "8e7ae4f9f2b2decb68e3a7e97b46e57aa44fa6414f433ef07f487dcaba94637e",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/4",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-released-1024x768.png",
+      "screenshotSha256": "87749b9ad025fa2476bdf2ee995c48f5f753fc03fc4f061a00c896b48a7d9504",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/4",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-released-1440x900.png",
+      "screenshotSha256": "4d86977e9e311df423a6234115bf05a67fb0317cb7f23bbad1f9e2d449c40758",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-released-320x568.png",
+      "screenshotSha256": "80c307e12e645db09c6fb63324676e90048923e729ac5321d4a40d5853ea939d",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/4",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-released-320x740.png",
+      "screenshotSha256": "80c307e12e645db09c6fb63324676e90048923e729ac5321d4a40d5853ea939d",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/services/4",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/service-released-390x844.png",
+      "screenshotSha256": "3632bee41e4aa24ad950a0c24d4408fee997f8344e17f7ee49a82d74b29ca034",
+      "sourceCommit": "c6fdba0",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-create-1024x768.png",
+      "screenshotSha256": "7697915f07de95baa898f56fd6a83bbe6694b9105f0a707c146b1ba70756670a",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-create-1440x900.png",
+      "screenshotSha256": "34c94ce37ae069d149f79e1ae24914ec490a0f1f8bc3c8bc325d1fb0794578f7",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-create-320x568.png",
+      "screenshotSha256": "33ae398227dd181f4a308b2401500618b38b9dc2c4777acf8e1ddad885e357bf",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-create-320x740.png",
+      "screenshotSha256": "8fe87dbc34189b2fc96c6d6673d321616dbc4f5e0e1cc038296b66fdc43f5f88",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-create-390x844.png",
+      "screenshotSha256": "eae1197ea32a52cd4a3eec3b18cfd1adc718049aacbc0c731dc56856b6792dc8",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 1024,
+      "height": 768,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-review-1024x768.png",
+      "screenshotSha256": "1bb4e2b44be495642baed82e7b69898a6b38ef7969cbb2789dbbdee2912b8daf",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 1440,
+      "height": 900,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-review-1440x900.png",
+      "screenshotSha256": "730689b9d9482a0fb88daa985cd826a770ed98b04bbd0a888a072692bbfb0092",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-review-320x568.png",
+      "screenshotSha256": "6b6c6973ce00c537a88c63dd1e2ecf340885141b68d9a7f707968d814e7431fa",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 320,
+      "height": 740,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-review-320x740.png",
+      "screenshotSha256": "17445fab25ed74a412c68626413edea4a0700f3f74be11324d93d5187fd53470",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/5",
+      "width": 390,
+      "height": 844,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/title-review-390x844.png",
+      "screenshotSha256": "188b1c008aecaa9672711be6ee55f504d2422ebed967a5d17a53b14978173e85",
+      "sourceCommit": "1653411",
+      "phase": "layout_delta"
+    },
+    {
+      "newRoute": "/admin/invoices/4",
+      "width": 320,
+      "height": 568,
+      "screenshot": "output/playwright/order-external-refund-20261017/final/version-conflict-original.png",
+      "screenshotSha256": "88fe050b945195f8512e5cda258911cdaf4ad34b5b7d936fa5ede12695be3c72",
+      "sourceCommit": "f95aeb4",
+      "phase": "full_core_acceptance"
+    }
+  ],
+  "artifact_files": [
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/archive-conflict.txt",
+      "sha256": "7ad9821af8ccf6cce49ce5b655f4147dcd438e4c6563b652de689b71e1544ab3"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/baseline-db.json",
+      "sha256": "683a9bc31b63d19378d2893cdd32a8ccda780b7648804319f79c8288a72010b6"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/console-2026-10-16T19-47-29-733Z.log",
+      "sha256": "0f603cbdf3602d8eaab609f5823c682e822bace7baba6cba9daf017f39a42415"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/console.txt",
+      "sha256": "b439f3ab57f02c4c22b4f84ae005de160e05ccfe4b51b9086feddf0a08325e31"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-1024x768.png",
+      "sha256": "b0c61c629d621fdcd093937170b2249f061c347841288d93c8e3de706dd96613"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-1440x900.png",
+      "sha256": "a6c1f49370dc3d60fa33195de31f1050e34ef71c68d95b70e0346fec4375383f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-320x568.png",
+      "sha256": "ad85a7fcdfe25f3bf7118fa924ceb8269fa9913e6c7386b8cd166a7133204c9b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-320x740.png",
+      "sha256": "d6152364150263c788d42979113b21922854b67ce9376288f950bd191abc0dee"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-390x844.png",
+      "sha256": "103a1e39bcd5d5fe23eee432e6070b50a862354fbdb7e982060e73c04242e941"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-hold.txt",
+      "sha256": "a3ab65640d22232b34a3e80d1bae7faa2b5735763e991c853860c6d90eae5740"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-layout-delta.txt",
+      "sha256": "56f2470dea61cc36e3a200b6c0087df545421243f7f26cf3f0a49ca1c1c26b9f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-layout.txt",
+      "sha256": "e2591f0ef1f771d5cab1b2710fd4f4d1cb46c04c383e4ba6afc022523e51d900"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-short-footer.png",
+      "sha256": "35e5ba0fd6d7285ddf7afe1b11ec375fd18c5a6e97156bb78f9b8fe3165d614b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-snapshot.txt",
+      "sha256": "fa14d64e87a2e2ea4207bc3bec540ec80f2e011282fbce75cbc61b803127fa07"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/create-submit.txt",
+      "sha256": "77565c2b205690f4ee7e35d404e81c8e0da8816a2d633aee51392dc55598940d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/db-verification.json",
+      "sha256": "2d26dd786c858946a29c062840531c67b5108f966e699fc8950df1d4370fe1c0"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/final-db.json",
+      "sha256": "46ddc8ac031097b772e47d6227e75c59bb756614b6855258f4b91472ae3221aa"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/identity-change.txt",
+      "sha256": "a4ddcb8145253d7725ff793227b5b92f7c7c53610ba7cbef5742ac9c37881eb0"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/identity-changed.png",
+      "sha256": "886a62c8a3976356644f55f3dedc8fd264f5c3bdb7a6113740c11b9dd0107a7a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/identity-verify.txt",
+      "sha256": "c74657c2d8091f26b8ff28c0c6eeb43633a1e6a69d3f24eb5825bc421a7f525d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/layout-delta-titles.txt",
+      "sha256": "5c2dfccc8eba42e7751f9444c013187f68d1e192b4b37ebaeea4c7d9be93116b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-orders-1024x768.png",
+      "sha256": "56e04e8e5fdff75afdcabadfef60b00179bdc54d52fa215fb63f8fbff6ea46b0"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-orders-1440x900.png",
+      "sha256": "79d61495b269bfdac0706cf3aa302c4165e32d78cf633d669ee5c937791494cb"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-orders-320x568.png",
+      "sha256": "d449bfd81640e41e7211831fe0e82c7532932ef4fb74a36eec5c0a91b484d29d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-orders-320x740.png",
+      "sha256": "8eae2232e3f8e2b990786dd6ed70887e158b8890af218bb39604283f70c70b25"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-orders-390x844.png",
+      "sha256": "792922938afe3d328f0eb340b85054045f4d684329d2762943b31c5ed9cb6759"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-projections.txt",
+      "sha256": "a4f10a881e2b19c13486097de64b409aa5c51a6b8ab14b2091064c84e498dd59"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-services-1024x768.png",
+      "sha256": "3d52d0c91996c2a712b956f495f8aa0925a1ee814876442f1fce354a0da4f41f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-services-1440x900.png",
+      "sha256": "ed8da4c2a41b88251949eaae0f68c79ae773fa980177c95355dd2c7a6badff0e"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-services-320x568.png",
+      "sha256": "83c14259753d704a0c93564d442926895ad4517dc4256c99ed2fa85884f02021"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-services-320x740.png",
+      "sha256": "83c14259753d704a0c93564d442926895ad4517dc4256c99ed2fa85884f02021"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/list-services-390x844.png",
+      "sha256": "7c54bbc1c60878730c985269a324e5f13cb43239d7d63689b2184bb816361032"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/loss-create.txt",
+      "sha256": "9faf3fe742f1157b5a50eb851de2cad94d70e84e566c928d933a7f9acbcabe3b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/loss-reload.txt",
+      "sha256": "2635b7d2e5029b6140c3e826a483514b51d6aa796ce02170803ab8f5a5c56f2a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/lost-receipt-original.png",
+      "sha256": "36d5016342b3f5134bd8440b00db4fc968516784ebb0ee6d947427c7c1b3ce33"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/open-create.txt",
+      "sha256": "4cad44b1dcc584803b14c44dfaaff7ca4e08115a86a2ec16f4c63fd500480fb1"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/open-layout-create.txt",
+      "sha256": "acb14dffcc970407a0440759eca844b456a54f12b32229301421b9d14708514f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/open-layout-review.txt",
+      "sha256": "3337318b75f082442c96a911e36eec0221e29b35e6661b785a1d0db88e22cbd6"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-applied-1024x768.png",
+      "sha256": "f91be09fac4aa2b5af7da69b9365871aa07d1911021fbf3c87413ade8b983b5b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-applied-1440x900.png",
+      "sha256": "de5797e9b458bf45012edddc4297172657f84d4c0c56a2c3687a6deb788a0bc1"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-applied-320x568.png",
+      "sha256": "2c9847548333458a54fa2879fe4e94ba8330a18ef46fd7e26bad49ae13384a34"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-applied-320x740.png",
+      "sha256": "2c9847548333458a54fa2879fe4e94ba8330a18ef46fd7e26bad49ae13384a34"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-applied-390x844.png",
+      "sha256": "20f70abacc137a713d12a91b348345ed9efaf068e286e1502134dd7add7e322c"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-pending-1024x768.png",
+      "sha256": "1c785e0be24ef577c867ec8c7718a7072b1f908ebf370fda348d8d9ec8d261f5"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-pending-1440x900.png",
+      "sha256": "c817663ba381305aa02d9662072fcbba2b4d0842e89728120e00117b780a9b3f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-pending-320x568.png",
+      "sha256": "2bfdeef5cda6bdaf157a8b3cbf522ab10afd4b20489c0bfa5dda46274d2b90a2"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-pending-320x740.png",
+      "sha256": "2bfdeef5cda6bdaf157a8b3cbf522ab10afd4b20489c0bfa5dda46274d2b90a2"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-pending-390x844.png",
+      "sha256": "c2c8e3757a58f138be753d1fd28ff002f6b58bfd96ab3acfa2b5ff615ce3f614"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-released-1024x768.png",
+      "sha256": "f5292da4b8fe0c4b24f82022fca67b67be78ae3a1e2122ce9d9ecc3bbccaa4cf"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-released-1440x900.png",
+      "sha256": "dfc7c732b175e3f68136377a8a37703776e6def3d1b7a0243d1695fe839cc41d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-released-320x568.png",
+      "sha256": "48a3910ad6dc60ee79f745c91b2a5f12c2fc85ef0ad4aa8cb5d844b2a8c48088"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-released-320x740.png",
+      "sha256": "48a3910ad6dc60ee79f745c91b2a5f12c2fc85ef0ad4aa8cb5d844b2a8c48088"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/order-released-390x844.png",
+      "sha256": "8e8220451198c9d122a03c47cff14b804f15254b07b4f2ee4e8359270870f9fd"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/permissions-no-reverse.png",
+      "sha256": "87d04d1f14953869a93ab49c7694c8cae06ad969749649b3a231c600c5fc4a99"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/permissions-reader.png",
+      "sha256": "77a720fddf03fb15f83ae891d0a7a4d552b8beb59444d7329e9e7b39606e1208"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/permissions-requester.png",
+      "sha256": "9b070b74eae4da4692594555333aa042bb5398804b432dfe68815aa09a79c5f1"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/permissions.txt",
+      "sha256": "3274f24f4b72415a4c3695e0ae5173a1553c97141e7f21c9f93c735072bc2c19"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/post-layout-db.json",
+      "sha256": "46ddc8ac031097b772e47d6227e75c59bb756614b6855258f4b91472ae3221aa"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/projections-layout-delta.txt",
+      "sha256": "e02bbe74e792ea4154c3b2e5e2fc532153a1de95b4a6322a978ac587fce4ea0f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/projections.txt",
+      "sha256": "fe62d02e0c27455a2ee8a06502a2687dfc5b171dcec5f7c77c0eba35f929d3c9"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/receipt-loss-recovery.txt",
+      "sha256": "484500d586b53c772f72b3d9fff044beca471889c0d13777aa8744ad486e1136"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/reject-create.txt",
+      "sha256": "71215227895f159ab4837df0f136873249fb947658c1c974cc6bbea6ab96cd7a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/reject-review.txt",
+      "sha256": "89ce792253c73535229a1d0bff847fc37291b7bd8a033b154cc0267545715af9"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/reject-short.png",
+      "sha256": "addfb95c4c24099e4f6d0278ebf66891d38c4545a7592e51c2da541d23eda528"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-1024x768.png",
+      "sha256": "599fa52c07aa633a773e740c42bde09c01bcee461f1099c73a19b61164ad5bd4"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-1440x900.png",
+      "sha256": "cadbf29b769225ef77111b99cb57154c1cb7ea201d1eaa991b77c22f6193bd0a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-320x568.png",
+      "sha256": "4f1957c38308724566927913ec0107c2d43fdec111a011585bfb3bb20b78fb14"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-320x740.png",
+      "sha256": "2b4aed488ef7d25d55d59a8bba03d58b48edd7ca67a0162423bca178eaf0f99e"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-390x844.png",
+      "sha256": "b228f72ce52a89376d13bfb22e640614443a1d5f9962fe90c55b73d66fe21ffb"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-layout-delta.txt",
+      "sha256": "3e5a8fd0d5e20984bc9bce91f7efd323847e79862359c3bef13dc6c7344d28b3"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-layout.txt",
+      "sha256": "4f4912c41e1b3d7eb7e2218b709c8fc2710c9bbcc47b6f24e6cfb8b8c5f29d5c"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-snapshot.txt",
+      "sha256": "cbf52d0a151752a47be68582fafeb8d2b97565dc41c24bd97ead98a467cecd4f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/review-submit.txt",
+      "sha256": "68181dcedc37bfa8732cdeb2c291524b1f0489d6aefbf6324e04f74535beb567"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-applied-1024x768.png",
+      "sha256": "3a9808edb604a575cabb810eb850d9062a16c6c0602bb219d7317f81ab5b2df0"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-applied-1440x900.png",
+      "sha256": "1c004c6f49c4efdab070cc7bdbbc126968ec18a2d2c05ab931d1dc366a966041"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-applied-320x568.png",
+      "sha256": "1aa6074f1490cdf04ddb8f31ba02500e6de0816c8f45fb2b1dc33a6488dbcba6"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-applied-320x740.png",
+      "sha256": "1aa6074f1490cdf04ddb8f31ba02500e6de0816c8f45fb2b1dc33a6488dbcba6"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-applied-390x844.png",
+      "sha256": "7551ae006da31ccf4b2d636b16c3f794feb29d421dc160e2ca21cdf82a0673f7"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-pending-1024x768.png",
+      "sha256": "1fe5a2d48b87e0e6d250bd4840a59ee59216ab18b53d3033ba2d4c23d5a35a2f"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-pending-1440x900.png",
+      "sha256": "090503276381ec5be5f3bd75f4ec394161d353ef584e5e83007c466c9d32f05a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-pending-320x568.png",
+      "sha256": "ddf1223efd9d4bdcf556fd938989b6cce2bf91a4cd61be7ed9ff87cf7ebc837b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-pending-320x740.png",
+      "sha256": "ddf1223efd9d4bdcf556fd938989b6cce2bf91a4cd61be7ed9ff87cf7ebc837b"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-pending-390x844.png",
+      "sha256": "8e7ae4f9f2b2decb68e3a7e97b46e57aa44fa6414f433ef07f487dcaba94637e"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-released-1024x768.png",
+      "sha256": "87749b9ad025fa2476bdf2ee995c48f5f753fc03fc4f061a00c896b48a7d9504"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-released-1440x900.png",
+      "sha256": "4d86977e9e311df423a6234115bf05a67fb0317cb7f23bbad1f9e2d449c40758"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-released-320x568.png",
+      "sha256": "80c307e12e645db09c6fb63324676e90048923e729ac5321d4a40d5853ea939d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-released-320x740.png",
+      "sha256": "80c307e12e645db09c6fb63324676e90048923e729ac5321d4a40d5853ea939d"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/service-released-390x844.png",
+      "sha256": "3632bee41e4aa24ad950a0c24d4408fee997f8344e17f7ee49a82d74b29ca034"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-create-1024x768.png",
+      "sha256": "7697915f07de95baa898f56fd6a83bbe6694b9105f0a707c146b1ba70756670a"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-create-1440x900.png",
+      "sha256": "34c94ce37ae069d149f79e1ae24914ec490a0f1f8bc3c8bc325d1fb0794578f7"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-create-320x568.png",
+      "sha256": "33ae398227dd181f4a308b2401500618b38b9dc2c4777acf8e1ddad885e357bf"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-create-320x740.png",
+      "sha256": "8fe87dbc34189b2fc96c6d6673d321616dbc4f5e0e1cc038296b66fdc43f5f88"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-create-390x844.png",
+      "sha256": "eae1197ea32a52cd4a3eec3b18cfd1adc718049aacbc0c731dc56856b6792dc8"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-review-1024x768.png",
+      "sha256": "1bb4e2b44be495642baed82e7b69898a6b38ef7969cbb2789dbbdee2912b8daf"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-review-1440x900.png",
+      "sha256": "730689b9d9482a0fb88daa985cd826a770ed98b04bbd0a888a072692bbfb0092"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-review-320x568.png",
+      "sha256": "6b6c6973ce00c537a88c63dd1e2ecf340885141b68d9a7f707968d814e7431fa"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-review-320x740.png",
+      "sha256": "17445fab25ed74a412c68626413edea4a0700f3f74be11324d93d5187fd53470"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/title-review-390x844.png",
+      "sha256": "188b1c008aecaa9672711be6ee55f504d2422ebed967a5d17a53b14978173e85"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/version-conflict-create.txt",
+      "sha256": "7b174ea026289b1900203679201a6d621eb5c46d6b4e3ac10b0c86dd8b87b377"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/version-conflict-original.png",
+      "sha256": "88fe050b945195f8512e5cda258911cdaf4ad34b5b7d936fa5ede12695be3c72"
+    },
+    {
+      "path": "output/playwright/order-external-refund-20261017/final/version-conflict.txt",
+      "sha256": "934b09169ddc42f2e19efdec05bad71acb746043d06c90ee88c2e07b7830e3d7"
+    }
+  ],
+  "lifecycle": {
+    "status": "running_for_parent_readonly_audit",
+    "api_port": 40639,
+    "preview_port": 3094,
+    "production_api_pid": 608393,
+    "production_web_pid": 1647696
+  }
+}
