@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -23,10 +24,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TestSchema153RepresentativeBackupRestore is deliberately opt-in. Both databases
+// TestCurrentSchemaRepresentativeBackupRestore is deliberately opt-in. Both databases
 // must already exist, be dedicated to this run, and have different _test names.
 // It owns random schemas only; it never creates or drops a database.
-func TestSchema153RepresentativeBackupRestore(t *testing.T) {
+func TestCurrentSchemaRepresentativeBackupRestore(t *testing.T) {
 	if os.Getenv("ZJMFGO_BACKUP_RESTORE_ACCEPTANCE") != "1" {
 		t.Skip("set ZJMFGO_BACKUP_RESTORE_ACCEPTANCE=1 and two dedicated loopback PostgreSQL 18 _test DSNs")
 	}
@@ -142,8 +143,13 @@ func TestSchema153RepresentativeBackupRestore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != len(embeddedMigrations) || lastMigration != "153_resolved_topup_external_refunds.sql" {
-		t.Fatalf("expected schema153, got %d migrations ending %s", migrationCount, lastMigration)
+	if len(embeddedMigrations) == 0 {
+		t.Fatal("embedded migrations must not be empty")
+	}
+	sort.Strings(embeddedMigrations)
+	expectedLastMigration := embeddedMigrations[len(embeddedMigrations)-1]
+	if migrationCount != len(embeddedMigrations) || lastMigration != expectedLastMigration {
+		t.Fatalf("expected %d embedded migrations ending %s, got %d migrations ending %s", len(embeddedMigrations), expectedLastMigration, migrationCount, lastMigration)
 	}
 
 	archive := filepath.Join(t.TempDir(), "representative.dump")
@@ -238,7 +244,7 @@ func TestSchema153RepresentativeBackupRestore(t *testing.T) {
 	for _, v := range before.Tables {
 		rowCount += v.Rows
 	}
-	t.Logf("PASS schema153 representative restore: tables=%d rows=%d sequences=%d catalog_records=%d migrations=%d", len(before.Tables), rowCount, len(before.Sequences), len(before.Catalog), migrationCount)
+	t.Logf("PASS current-schema representative restore: latest=%s tables=%d rows=%d sequences=%d catalog_records=%d migrations=%d", lastMigration, len(before.Tables), rowCount, len(before.Sequences), len(before.Catalog), migrationCount)
 	t.Logf("archive_sha256=%x snapshot_sha256=%x", archiveHash, snapshotHash)
 	t.Log("PASS two unchanged Migrate/CheckSchema runs; pending freeze; unknown close and late anomaly freeze; independent refund confirmation; replay without writes; 2 unique negative ledgers; original receipts retained; source schema removed")
 }
