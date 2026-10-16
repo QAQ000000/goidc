@@ -146,6 +146,13 @@ server {
 客户端地址；不要把公网网段列入。`PUBLIC_ORIGIN` 为 `https://` 时 `COOKIE_SECURE`
 必须为 true，否则 API 拒绝启动。切流前复核这两个开关并检查一条管理员登录审计。
 
+Next.js 的 `3088` 端口只应绑定 `127.0.0.1`，项目启动脚本和 systemd 模板已采用此默认值。
+发布已有实例时需要同步更新已安装的 unit，并在重启后用 `ss -ltnp` 验证监听地址。
+Next 的 `/api/*` 本地转发主动删除 `X-Forwarded-For`、`X-Real-IP` 和 `Forwarded`，
+因为 NextRequest 无法验证这些头是否来自真实连接对端。该路径按 Go 看到的本机地址
+限流。生产流量必须使用上面的 `location /api/` 直接到 Go，让 Nginx 追加真实连接地址；
+不要把整个站点（包括 API）都反代给 Next。远程开发需要通过受控反代或 SSH 隧道访问。
+
 ## 3. 冷启动和自愈验收
 
 三个单元的依赖关系是 API 先于 Web/Worker；每个单元配置 `Restart=on-failure`。

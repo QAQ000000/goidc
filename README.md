@@ -124,6 +124,8 @@ NOKVM 服务详情支持 CPU、网络和系统盘/数据盘 I/O 监控，提供 
 
 前端默认 `http://localhost:3088`，Go API `127.0.0.1:8088`，`/healthz` 活性、`/readyz` 数据库就绪。Next.js 代理 `/api/*`，前端不直接跨域连接 Go。
 
+Next.js 的开发、生产启动命令及 systemd 模板默认只监听 `127.0.0.1`。本地 `/api/*` 转发会移除 `X-Forwarded-For`、`X-Real-IP`、`Forwarded`，Go 使用连接对端作为限流与审计地址。生产环境需要按 [切换模板](docs/cutover-runbook.md#2-标准生产-nginx-反代模板) 将 `/api/` 直接反代到 Go，由受控 Nginx 设置客户端地址，并配置 `TRUSTED_PROXY_CIDRS`。不要将生产 API 经 Next 转发，否则所有客户会共用本机 IP 限流桶。
+
 ## 验证
 
 商品目录支持两级购买分组、说明/标题/标语、排序和隐藏，后台 `/admin/products` 提供商品维护及账期价格编辑，`/admin/catalog-groups` 管理分组。版本与库存快照避免覆盖并发变更，默认展示价格和结算价格同步；完整 API、权限和待迁移范围见 [商品目录与维护](docs/catalog-management.md)。
@@ -139,6 +141,7 @@ NOKVM 服务详情支持 CPU、网络和系统盘/数据盘 I/O 监控，提供 
 cd web
 npm run lint
 npm run typecheck
+npm run test:proxy
 npm run build
 ```
 

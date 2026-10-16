@@ -3,6 +3,18 @@ import type { SiteProfile, User } from "./lib/api";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // Next's configured rewrites match case-insensitively, including /API/.
+  if (/^\/api(?:\/|$)/i.test(path)) {
+    // NextRequest has no authoritative socket peer. Never vouch for an IP
+    // supplied by a caller of this rewrite. Production Nginx sends /api/
+    // directly to Go with its own forwarding chain; local Next traffic falls
+    // back to the Go socket peer for rate limiting and audit attribution.
+    const headers = new Headers(request.headers);
+    headers.delete("x-forwarded-for");
+    headers.delete("x-real-ip");
+    headers.delete("forwarded");
+    return NextResponse.next({ request: { headers } });
+  }
   if (path === "/admin" || path.startsWith("/admin/") || ["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
   const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
   let site: SiteProfile | null = null;
@@ -32,4 +44,4 @@ export async function proxy(request: NextRequest) {
   return new NextResponse("站点暂时不可用，请稍后再试。", { status: 503, headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" } });
 }
 
-export const config = { matcher: ["/((?!api/|_next/|assets/|favicon.ico).*)"] };
+export const config = { matcher: ["/api/:path*", "/((?!api/|_next/|assets/|favicon.ico).*)"] };
