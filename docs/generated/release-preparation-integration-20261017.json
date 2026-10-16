@@ -1,0 +1,101 @@
+{
+  "date": "2026-10-17",
+  "status": "local preparation increment passed; G04/G09 open",
+  "candidate": {
+    "sourceCommit": "de85f5db1688c246d2154f624f73f6d5052b5b78",
+    "sourceTree": "5381106f302bcb751feab92af3e4aa1d3ac7870e",
+    "sourceFiles": 1259,
+    "builderVersion": 1,
+    "manifestSHA256": "590f64b5d4d44677771f41223a8bf8c957dac4ad2b49add18d80e544503bc4cc",
+    "artifactFiles": 1064,
+    "artifactBytes": 72989671,
+    "binaryFiles": {
+      "bin/api": "7379353ef62d062275ff762b2c9da1d6f5642e96d2f151d981416dec513d2308",
+      "bin/migrate": "9f535477f8701fef19fe654e5f9f20eb029b8573dc2b5773f3b5117ca0a715ac",
+      "bin/worker": "fdaca7aaf09fcec5c00504a6aca365122a842102423590f804ec382971d992df"
+    },
+    "migrationFiles": 155,
+    "latestMigration": {
+      "path": "db/migrations/153_resolved_topup_external_refunds.sql",
+      "sha256": "848864949a4092619480327cbdb9f37c0aae7de5caf4d2adbbd4873091ab848c",
+      "bytes": 2652
+    },
+    "web": {
+      "bundler": "webpack",
+      "nextVersion": "16.3.8",
+      "apiInternalURL": "http://127.0.0.1:58088",
+      "buildID": "8NG3KzbMx_z16UloA4xjx",
+      "cacheExcluded": true,
+      "runtimeDependenciesIncluded": false
+    },
+    "tools": {
+      "go": "go version go1.25.14 linux/amd64",
+      "node": "v24.16.0",
+      "npm": "11.16.0",
+      "platform": "linux/x64"
+    },
+    "sharedDependencies": {
+      "sha256": "98adfd448eb575e1bda90f0f14c0b2a041197aaa5e8ef66afc220f037b543efd",
+      "files": 32749,
+      "policy": "read-only reuse; full tree before/after; trusted owner required; no installation"
+    },
+    "buildLogSHA256": "a8d11921d7adc2fa849575b6a5c623b246c28d78f51171fe9771496c52345968"
+  },
+  "restore": {
+    "testCommit": "4f06178",
+    "postgresVersion": 180000,
+    "testSeconds": 11.28,
+    "packageSeconds": 12.318,
+    "tables": 204,
+    "rows": 280,
+    "sequences": 134,
+    "catalogRecords": 6036,
+    "migrationFiles": 155,
+    "latestMigration": "153_resolved_topup_external_refunds.sql",
+    "archiveSHA256": "da8dcb6e01a51bf40da13638ed26db9c477808ba95a7b944996c3aa7e9275d0c",
+    "snapshotSHA256": "8a5b748cbc7e43176461e611144385e8ebd86b85dfc1f96e495686b19115eaf9",
+    "logSHA256": "e4dc80db5a811b333b15090a785e877e2f2f69ee7310f537ddfd59a7cd099250",
+    "scope": "same schema153 representative fixture; not earlier-version upgrade, business snapshot, role/key recovery, worker crash recovery or production restore",
+    "remainingTestSchemas": 0,
+    "dedicatedDatabasesDropped": true,
+    "privateConnectionFileRemoved": true
+  },
+  "checks": {
+    "fixedCheckoutCandidateBuild": "PASS",
+    "trustedAnchorCLIWithCleanSource": "PASS",
+    "actualGoBuildinfoMatchesManifest": "PASS",
+    "actualSQLTamperRejected": "PASS",
+    "actualExtraFileRejected": "PASS",
+    "actualSymlinkRejected": "PASS",
+    "sealedCandidateRestoredAndVerified": "PASS",
+    "nodeTests": {
+      "status": "PASS",
+      "passed": 28,
+      "skipped": 0
+    },
+    "mainlineGoBuild": "PASS",
+    "mainlineGoVet": "PASS",
+    "optInRestoreRace": "PASS"
+  },
+  "runtime": {
+    "apiPID": 608393,
+    "workerPID": 608413,
+    "webPID": 1647696,
+    "webBuildID": "0iI9JDdJluwxA2Y10gqnW",
+    "servicesActive": true,
+    "thisIncrementRestartedServices": false,
+    "candidateStarted": false,
+    "newFeaturesDeployed": false
+  },
+  "notVerified": [
+    "controlled runtime dependency installation",
+    "complete standalone release",
+    "authorized business snapshot upgrade and restore",
+    "production HTTPS and proxy",
+    "old static chunk retention",
+    "all services running same candidate",
+    "cutover and rollback",
+    "target load and in-flight worker crash recovery",
+    "real external merchant and supplier outcomes"
+  ]
+}

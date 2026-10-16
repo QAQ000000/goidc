@@ -57,8 +57,10 @@ snapshot_sha256=c38798b13ac7381013e670c7e5e8e8785711ed1dfede86c28557d68c1c4ef1f6
 由调用方在进程环境提供上述两个专用测试 DSN（勿把密码或完整 DSN粘到命令行），运行：
 
 ```bash
-ZJMFGO_BACKUP_RESTORE_ACCEPTANCE=1 \
-  go test ./internal/store -run '^TestSchema153RepresentativeBackupRestore$' -count=1 -v
+REQUIRE_INTEGRATION=1 ZJMFGO_BACKUP_RESTORE_ACCEPTANCE=1 \
+  scripts/go.sh test ./internal/store -run '^TestSchema153RepresentativeBackupRestore$' -count=1 -timeout=3m -v
 ```
 
 这次是**同一 schema153 的合成代表性数据恢复**。未验证真实业务备份完整性、旧版本向 153 的升级、生产角色/ACL/全局对象、对象存储/附件、生产密钥恢复、执行中事务/worker/租约重启、真实网关重试、备份保留与加密策略、RPO/RTO、完整回归或上线切换。5.76 秒仅为该小型夹具的测试时长，不是业务恢复时间目标。G04 仍需真实业务快照及升级/回滚/切换演练证据。
+
+主线集成后，主代理显式开启opt-in并追加 `-race` 复验通过（测试11.28秒、包12.318秒），再次核对两个库无schema/连接残留后仅删除本次专用库，详见[集成验收](release-preparation-integration-acceptance-20261017.md)。
