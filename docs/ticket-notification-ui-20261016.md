@@ -9,3 +9,5 @@
 - 布局使用原有容器、flex-wrap、sm 断点与 break-all；按钮及提示可在窄屏换行。未增加本人 inbox。
 
 验证边界：本 worktree TypeScript、ESLint 通过（全量 7 条既有 warning，变更文件无 warning）；Turbopack 因跨根 node_modules 符号链接失败，独立 `next build --webpack` 通过。四尺寸真实 API 浏览器流程由主代理集成后验收。未外发邮件/SMS，未重启生产。
+
+主审增量：工单已关闭但存在待确认回复时，仍显示原文与原请求重试入口，关闭操作保持禁用；公开回复成功后以工单 version 变更刷新摘要。已知 skipped reason 使用中文解释，未知值保留回退。摘要接收 nullable outbox_status 展示当前队列处理结果，与 queued/skipped 业务事实分别呈现，sent 不声称收件人已读或跨网关送达。
