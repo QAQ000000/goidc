@@ -245,6 +245,40 @@ func (f *supplierFixture) purchase(t *testing.T, pid int64, key string) (int64, 
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoice), map[string]any{}, f.customer, key+"-pay"), 201)
 	return sid, invoice
 }
+
+// queueFailedSync completes the purchase's original create job, then queues a
+// distinct sync job through the public action path. The fixture must never
+// rewrite provision_jobs.action: production treats service/action identity as
+// immutable after insertion.
+func (f *supplierFixture) queueFailedSync(t *testing.T, serviceID int64, key string) int64 {
+	t.Helper()
+	var createID int64
+	var action, status string
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id,action,status FROM provision_jobs WHERE service_id=$1 ORDER BY id LIMIT 1", serviceID).Scan(&createID, &action, &status); err != nil {
+		t.Fatal(err)
+	}
+	if action != "create" || status != "pending" {
+		t.Fatalf("purchase fixture must start with pending create job, got id=%d action=%s status=%s", createID, action, status)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET status='succeeded',completed_at=clock_timestamp(),result='{}'::jsonb WHERE id=$1 AND action='create'", createID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET status='active',upstream_id=$2 WHERE id=$1", serviceID, fmt.Sprint(40+serviceID)); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/admin/services/%d/actions", serviceID)
+	expect(t, request(f.h, "POST", path, map[string]any{"action": "sync"}, f.root, key), 202)
+	var syncID int64
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM provision_jobs WHERE service_id=$1 AND action='sync' ORDER BY id DESC LIMIT 1", serviceID).Scan(&syncID); err != nil {
+		t.Fatal(err)
+	}
+	var createAction string
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT action FROM provision_jobs WHERE id=$1", createID).Scan(&createAction); err != nil || createAction != "create" {
+		t.Fatalf("create job action changed in fixture: %q %v", createAction, err)
+	}
+	return syncID
+}
+
 func (f *supplierFixture) claim(t *testing.T) *store.ProvisionJob {
 	t.Helper()
 	j, err := f.db.ClaimProvisionJob(t.Context())
