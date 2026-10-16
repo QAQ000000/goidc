@@ -1,6 +1,6 @@
 # 支付异常人工核验与责任退回契约
 
-日期：2026-10-16。状态：实施契约，尚未实现或验收。承接迁移149/150，完整补齐G02未知关单及迟到收款的可审计处理流程；真实商户协议、公网和实际出款另列验收，不因本地模拟证明关闭。
+日期：2026-10-16，实施更新：2026-10-17。迁移151/152与真实API页面已集成，后端专项和竞态通过，最终集成与浏览器证据另列验收记录。承接迁移149/150，补齐G02未知关单及迟到收款的可审计处理流程；真实商户协议、公网和实际出款另列验收，不因本地模拟证明关闭。
 
 ## 方向与不可变事实
 
@@ -16,15 +16,15 @@
 
 接口前缀：`/api/v1/admin/invoices/{id}/payments/{payment_id}`。
 
-- GET `/close-verifications?limit&offset`：`items/total/limit/offset`，服务端能力、can_request、原操作与结果、复核、当前invoice版本；不回显密钥/摘要/幂等键。
-- POST `/close-verifications`：`{close_operation_id,expected_version}`，同键只读取原已存结果，不二次调用Lookup；新键可在资格允许时再次只读查询。合法的持久化unknown/unsupported/error也是已完成的“查询记录”，不等于业务解除冻结；以201返回记录，重放200，确实在途202。传输/存储结果未知才保留待核实请求。
+- GET `/close-verifications?limit&offset`：`items/total/limit/offset`，服务端能力、can_request、原操作与结果、复核、当前invoice版本；不回显密钥、凭据摘要或明文幂等键。核验申请仅向其本人返回`request_key_sha256`，用于精确恢复高熵原请求；其他员工不返回该值。
+- POST `/close-verifications`：`{close_operation_id,expected_version}`，同键只读取原已存结果，不二次调用Lookup；新键可在资格允许时再次只读查询。合法的持久化unknown/unsupported/error也是已完成的“查询记录”，不等于业务解除冻结；以201返回记录，重放200，确实在途202。传输/存储结果未知才保留待核实请求。同键重放的只读查询租约已过期且无任何结果时返回409 `close_verification_expired`；明确拒绝后，员工必须按本人原键摘要、原支付/操作、金额/版本、已过租约及无结果精确重读，才能结束本地只读请求，再新建只读查询。不能据此解决原Close或复核写请求，也不解除业务保护。
 - POST `/close-verifications/{verification_id}/confirm|reject`：`{expected_version,note}`，当前invoice版本。确认人不能是核验发起人或原关单员工；前端不能传入target_status。驳回仅追加事实，继续保护。
 
 `CloseStatusGateway`必须只读，返回原三元组及closed/succeeded/unknown。succeeded必须有可信非空原渠道流水；closed必须是不可再收款的最终结果。原密文缺失或不匹配拒绝，不回落当前凭据。模拟适配器只有显式绑定原操作的已记录证据可返回终态；没有证据或模拟证据重启丢失返回unknown，不能“任何操作号默认closed”。真实易支付不新增虚构能力。
 
 确认closed原子追加决策、payment.closed、invoice版本、审计；DB延迟约束同时接受原可信closed操作或关联完整的applied_closed决策。确认succeeded与正常回调/查单共用同一个事务内结算函数，决策、事件、余额/账单/通知/佣金/任务在同一事务提交；不能先确认再另开事务补账。回调先成功则保留真实成功，不关闭或重复入账；不同流水冲突。确认先关闭则后续通知走迟到异常。
 
-统一SQL函数`payment_close_operation_unresolved(operation_id bigint)`：原状态checking/unknown、对应payment仍pending/expired、且无有效应用决策时才持续保护。所有资金/取消/删除和DTO使用一致谓词；原历史状态照常展示。活动checking未过租约时排斥其他核验；过租约不阻断只读状态/收款查询，不解锁付款。
+统一SQL函数`payment_close_operation_unresolved(operation_id bigint)`：原状态checking/unknown、对应payment仍pending/expired、且无有效应用决策时才持续保护。兼容历史`succeeded/provider_paid`但原payment尚未结算的记录：保留原行并继续冻结，允许只读核验；新报告已付款而尚未结算的关单结果统一保存为`unknown/provider_paid`。所有资金/取消/删除和DTO使用一致谓词；原历史状态照常展示。活动checking未过租约时排斥其他核验；过租约不阻断只读状态/收款查询，不解锁付款。
 
 旧关单未知请求的前端恢复不得永久卡死：原POST同key重放可查已追加的最终决策并返回有效解决回执（包含原operation_id及resolution关联/最终状态/版本），不再次调用Close、不改变原记录。UI严格验证同一原操作的合法解决回执后才能归档本员工原请求；无法核验继续保留。支付成功结果不能仅靠原Close报告paid就归档，必须有明确的可信结算/决策事实。
 
