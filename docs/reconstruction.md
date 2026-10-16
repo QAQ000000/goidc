@@ -1,5 +1,7 @@
 # PHP 到 Go / Next.js 重构
 
+2026-10-17 真实Nginx静态保留准备：固定runner5008427，在普通用户私有mount/net/pid空间以真实目标Nginx执行旧220→并集382→恢复382，两次HUP、984组GET/HEAD、131次持续旧URL、31协议反例及7文件夹具通过；独立gpt-6.1-sol复核来源/摘要/日志与退出。candidate2仅作历史静态源，未启动Web或修改封存输入；失败1–4保留，小报告投影和摘要入Git。本批未部署、未推送、未连接业务数据库或重启常驻服务；45页完成/60部分不变。完整双Web/公网切流切回、正式静态保留窗口、业务快照升级、容量与强杀恢复仍待验收，G04/G09保持开放，见[本批验收](release-static-retention-acceptance-20261017.md)。
+
 2026-10-17 完整运行包隔离验收：使用经核验的官方Node和锁定来源依赖，从固定干净949ffe3构建API/worker/migrate、Next standalone并包含156个迁移文件，3058个artifact与独立外锚封存。独立分支修复ELF包内依赖解析、SSR API地址与精确mapped loopback审计后，runner ce19107对同一个candidate3完成双迁移、三服务同包、三页面及21份真实HTTP资源、worker模拟resume一次及TERM重启、66份trace隔离审计、退出/schema清理；主代理及gpt-6.1-sol独立重算通过。原run3审计FAIL保留，小报告与摘要入Git，凭据/依赖/二进制不入Git。强制隔离PG18全量、vet、typecheck/lint和真实webpack构建已通过。本批未部署、未推送、未写业务库，常驻服务未重启；45页完成/60部分不变。G04/G09仍缺公网/旧chunk/切流切回、业务快照升级、容量积压及执行中强杀恢复，详见[真实构建与隔离验收](release-runtime-real-build-acceptance-20261017.md)。
 
 2026-10-11 新建订单优惠码目录：新增`GET /api/v1/admin/promo-codes/page`真实搜索/状态/分页接口，保留旧数组接口兼容；`promos.view`控制目录读取，订单筛选隐藏升级专用码。新建订单新增目录选择与创建弹窗，`promos.manage`控制创建；新码自动选中，订单数据齐全时自动重报价，全部适用性仍由Go报价验证。隔离PG18专项和全量Go回归（httpapi 650.057s）、全量vet、Next typecheck/lint/build通过；开发数据库已应用迁移124/125，API/web active且ready。随后使用隔离管理员会话完成两个弹窗的 1440/1024/390/320 浏览器验收，并修复 Chrome 新正则语法兼容问题；证据见[订单验收](admin-batch-admin-orders-acceptance-20261011.md)。
