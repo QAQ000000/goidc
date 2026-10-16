@@ -4,6 +4,8 @@ export type CloseVerification = {
   id: number; close_operation_id: number; payment_id: number; invoice_id: number;
   requested_by: number; original_actor_id: number; provider: string; provider_payment_id: string;
   operation_id: string; amount_cents: number; expected_version: number; requested_at: string; lease_until: string;
+  /** SHA-256 of this employee's original lookup idempotency key; never the key itself. */
+  request_key_sha256?: string;
   result_status: string; result_code: string; external_transaction_id: string; provider_evidence_id: string;
   received_at: string | null; review_status: string; review_note: string; reviewed_by: number | null; reviewed_at: string | null;
   version: number; payment_status: string; invoice_status: string; status: string; replayed: boolean;

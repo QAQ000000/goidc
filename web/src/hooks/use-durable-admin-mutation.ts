@@ -5,6 +5,7 @@ import { api, ApiError, type User } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
 
 export type DurableRequest = { path: string; body: string; key: string; kind: string; target: number; rejected: boolean };
+export type ReadFactsResult = string | { text: string; canEndRejected?: boolean };
 type Options<T> = {
   actor: number;
   scope: string;
@@ -13,7 +14,7 @@ type Options<T> = {
   permission: (request: DurableRequest) => string;
   receipt: (result: T, request: DurableRequest) => boolean;
   rejectionCodes: ReadonlySet<string>;
-  readFacts: (request: DurableRequest) => Promise<string>;
+  readFacts: (request: DurableRequest) => Promise<ReadFactsResult>;
   onSuccess: (result: T, request: DurableRequest) => void;
 };
 
@@ -95,7 +96,10 @@ export function useDurableAdminMutation<T>(options: Options<T>) {
       await identity(options.readPermission);
       const facts = await options.readFacts(pending);
       await identity(options.readPermission);
-      if (mounted.current) { setLatestFacts(facts); setReviewed(true); }
+      if (mounted.current) {
+        setLatestFacts(typeof facts === "string" ? facts : facts.text);
+        setReviewed(typeof facts === "string" || facts.canEndRejected !== false);
+      }
     } catch (failure) { if (mounted.current) setError((failure as Error).message); }
     finally { running.current = false; if (mounted.current) setBusy(false); }
   }

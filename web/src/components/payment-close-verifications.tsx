@@ -9,13 +9,18 @@ import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { DurableRecovery, ExceptionPager, exactFields, positiveInteger, useExceptionQuery, validNote } from "./payment-exception-common";
+import type { ReadFactsResult } from "@/hooks/use-durable-admin-mutation";
 import type { PaymentRecord } from "./online-payment";
 import type { CloseResolution, CloseVerification, CloseVerificationPage, CloseVerificationReceipt } from "./payment-exception-types";
 
 const decisions: Record<string, string> = { applied_closed: "已独立确认最终关闭", applied_paid: "已独立确认可信收款并结算", already_paid: "已存在可信收款，保留原结算", superseded_paid: "已由可信收款处理，未关闭支付", rejected: "核验申请已驳回" };
 const results: Record<string, string> = { closed: "渠道证明最终关闭", succeeded: "渠道证明已收款", unknown: "可信结果仍未知，继续冻结", unsupported: "原渠道不支持关闭状态核验", error: "本次未取得可信结果，继续冻结" };
-const refusals = new Set(["stale_invoice", "idempotency_conflict", "close_verification_ineligible", "close_verification_in_progress", "close_verification_self_review", "close_verification_reviewed", "close_verification_unverified", "close_verification_resolved", "invalid_close_verification_review"]);
+const refusals = new Set(["stale_invoice", "idempotency_conflict", "close_verification_expired", "close_verification_ineligible", "close_verification_in_progress", "close_verification_self_review", "close_verification_reviewed", "close_verification_unverified", "close_verification_resolved", "invalid_close_verification_review"]);
 const validReviewNote = (value: unknown) => validNote(value) && Array.from((value as string).trim()).length >= 3;
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
 export function validCloseResolution(resolution: CloseResolution | null | undefined, paymentID: number, operation: string, status: string, version: number) {
   // paymentID is checked on the parent receipt; the immutable original remote
   // operation and decision linkage must also match before archiving a request.
@@ -61,7 +66,7 @@ function VerificationPanel({ actor, verify, review, invoiceId, payment, refresh,
       if (request.kind === "reject") return record.review_status === "rejected";
       return !!receipt.resolution && receipt.resolution.verification_id === record.id && receipt.resolution.close_operation_id === record.close_operation_id && validCloseResolution(receipt.resolution, record.payment_id, record.operation_id, record.payment_status, record.version) && record.review_status === receipt.resolution.status;
     },
-    readFacts: async request => {
+    readFacts: async (request: DurableRequest) => {
       let current: CloseVerificationPage | null = null;
       let record: CloseVerification | undefined;
       for (let skip = 0; ; skip += 100) {
@@ -71,8 +76,17 @@ function VerificationPanel({ actor, verify, review, invoiceId, payment, refresh,
         if (record || skip + current.items.length >= current.total || current.items.length === 0) break;
       }
       if (request.kind !== "lookup" && !record) throw new Error("未读到原核验记录，不能结束原请求。");
+      let expiredLookup = false;
+      if (request.kind === "lookup") {
+        const body = JSON.parse(request.body) as { close_operation_id: number; expected_version: number };
+        const operation = current?.operations.find(item => item.id === request.target);
+        const requestKeyHash = await sha256Hex(request.key);
+        expiredLookup = !!record && !!operation && request.rejected && record.requested_by === actor && record.invoice_id === invoiceId && record.payment_id === payment.id && record.close_operation_id === request.target && record.operation_id === operation.operation_id && record.amount_cents === payment.amount_cents && record.expected_version === body.expected_version && record.request_key_sha256 === requestKeyHash && record.status === "expired" && record.result_status === "" && Number.isFinite(Date.parse(record.lease_until)) && Date.parse(record.lease_until) <= Date.now();
+      }
       resource.refresh(); refresh();
-      return `最新账单版本 ${current!.version}${record ? `；核验 #${record.id}：${decisions[record.review_status] ?? results[record.result_status] ?? "核验在途"}` : "；原关单操作尚无已保存核验"}。原请求版本及载荷未改变。`;
+      const text = `最新账单版本 ${current!.version}${record ? `；核验 #${record.id}：${decisions[record.review_status] ?? results[record.result_status] ?? (record.status === "expired" ? "只读查询租约已过期，未取得可信结果" : "核验在途")}` : "；原关单操作尚无已保存核验"}。原请求版本及载荷未改变。`;
+      const result: ReadFactsResult = request.kind === "lookup" ? { text, canEndRejected: expiredLookup } : text;
+      return result;
     },
     onSuccess: (receipt, request) => {
       setDraft(null); setNote("");
