@@ -72,6 +72,12 @@ func (s *Server) closeVerificationWrite(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if v.Replayed {
+		if v.Status == "expired" && v.ResultStatus == "" {
+			// Only a read-only lookup reservation may be retired after rereading
+			// its expired empty result. Never infer the underlying Close outcome.
+			writeError(w, 409, "close_verification_expired", "原只读核验请求已过期且无可信结果，请读取原记录后重新发起核验；原支付继续冻结")
+			return
+		}
 		s.writeCloseVerification(w, r, v)
 		return
 	}
@@ -148,6 +154,9 @@ func (s *Server) closeVerificationReview(w http.ResponseWriter, r *http.Request)
 	s.writeCloseVerification(w, r, v)
 }
 func (s *Server) writeCloseVerification(w http.ResponseWriter, r *http.Request, v store.PaymentCloseVerification) {
+	if identityFrom(r).ID != v.RequestedBy {
+		v.RequestKeySHA256 = ""
+	}
 	resolution, err := s.db.PaymentCloseVerificationResolution(r.Context(), v.PaymentID)
 	if err != nil {
 		s.fail(w, r, err)

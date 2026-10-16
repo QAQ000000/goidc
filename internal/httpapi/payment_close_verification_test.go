@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -79,7 +81,8 @@ func TestPaymentCloseVerificationClosedHTTPIndependentReplayAndProtection(t *tes
 	id := f.lookup(t, "close-lookup-once")
 	replay := request(f.h, "POST", path, map[string]any{"close_operation_id": f.operation.ID, "expected_version": 1}, f.verifier, "close-lookup-once")
 	expect(t, replay, 200)
-	if data(t, replay)["verification"].(map[string]any)["status"] != "awaiting_review" {
+	lookupDigest := sha256.Sum256([]byte("close-lookup-once"))
+	if data(t, replay)["verification"].(map[string]any)["status"] != "awaiting_review" || data(t, replay)["verification"].(map[string]any)["request_key_sha256"] != hex.EncodeToString(lookupDigest[:]) {
 		t.Fatal(replay.Body.String())
 	}
 	review := fmt.Sprintf("%s/%d/confirm", path, id)
@@ -90,6 +93,9 @@ func TestPaymentCloseVerificationClosedHTTPIndependentReplayAndProtection(t *tes
 	expect(t, w, 201)
 	if data(t, w)["verification"].(map[string]any)["status"] != "applied_closed" || data(t, w)["verification"].(map[string]any)["review_note"] != body["note"] {
 		t.Fatal(w.Body.String())
+	}
+	if _, exists := data(t, w)["verification"].(map[string]any)["request_key_sha256"]; exists {
+		t.Fatal("reviewer received another employee recovery digest", w.Body.String())
 	}
 	w = request(f.h, "POST", review, body, f.reviewer, "close-independent-review")
 	expect(t, w, 200)
@@ -517,4 +523,72 @@ func TestPaymentCloseVerificationHTTPBoundaryAndApplicantCannotSelfReview(t *tes
 	expect(t, request(f.h, "POST", review, map[string]any{"expected_version": 1, "note": "申请人即使有权限也不能自审"}, f.verifier, "verify-applicant-no-self-review"), 409)
 	expect(t, request(f.h, "POST", fmt.Sprintf("%s/%d/override", path, id), map[string]any{"expected_version": 1, "note": "禁止任意动作路由"}, f.reviewer, "verify-invalid-action"), 404)
 	closeState(t, f.upgradeFixture, f.invoice, f.pid, "pending", 1)
+}
+
+func TestPaymentCloseVerificationExpiredEmptyLookupCanRecoverWithoutUnlock(t *testing.T) {
+	f := newCloseVerificationFixture(t, false)
+	actor, hash := closeActor(t, f.upgradeFixture, f.verifier)
+	key := "verify-expired-empty-lookup"
+	raw, _ := json.Marshal([]any{"lookup", f.invoice, f.pid, f.operation.ID, int64(1), ""})
+	digest := sha256.Sum256(raw)
+	var id int64
+	// Reproduce a crashed or transport-failed read-only request with its original
+	// creation deadline. Immutable records are never rewritten to force expiry.
+	err := f.db.Pool.QueryRow(t.Context(), `INSERT INTO payment_close_verification_requests(close_operation_id,payment_id,invoice_id,user_id,actor_id,provider,channel_instance_id,provider_payment_id,operation_id,amount_cents,credential_sha256,expected_version,idempotency_key,request_hash,created_at,lease_until)
+ SELECT id,payment_id,invoice_id,user_id,$2,provider,channel_instance_id,provider_payment_id,operation_id,amount_cents,credential_sha256,1,$3,$4,clock_timestamp()-interval '3 minutes',clock_timestamp()-interval '1 minute' FROM payment_close_operations WHERE id=$1 RETURNING id`, f.operation.ID, actor, key, hex.EncodeToString(digest[:])).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := map[string]any{"close_operation_id": f.operation.ID, "expected_version": 1}
+	path := verificationPath(f.invoice, f.pid)
+	for range 2 {
+		w := request(f.h, "POST", path, body, f.verifier, key)
+		expect(t, w, 409)
+		if errorData(t, w)["code"] != "close_verification_expired" {
+			t.Fatal(w.Body.String())
+		}
+	}
+	w := request(f.h, "GET", path, nil, f.verifier, "")
+	expect(t, w, 200)
+	item := data(t, w)["items"].([]any)[0].(map[string]any)
+	keyDigest := sha256.Sum256([]byte(key))
+	if item["id"] != float64(id) || item["close_operation_id"] != float64(f.operation.ID) || item["status"] != "expired" || item["result_status"] != "" || item["can_confirm"] != false || item["can_reject"] != false || item["request_key_sha256"] != hex.EncodeToString(keyDigest[:]) || data(t, w)["can_request"] != true {
+		t.Fatal(w.Body.String())
+	}
+	for _, cookie := range []string{f.root, f.reviewer} {
+		read := request(f.h, "GET", path, nil, cookie, "")
+		expect(t, read, 200)
+		if _, exists := data(t, read)["items"].([]any)[0].(map[string]any)["request_key_sha256"]; exists {
+			t.Fatal("another employee received recovery key digest", read.Body.String())
+		}
+	}
+	v, err := f.db.BeginPaymentCloseVerification(t.Context(), actor, f.invoice, f.pid, f.operation.ID, 1, key, hash)
+	if err != nil || !v.Replayed {
+		t.Fatal(v, err)
+	}
+	if _, err = f.db.CompletePaymentCloseVerification(t.Context(), v, payment.CloseStatusResult{OperationID: f.operation.OperationID, ProviderPaymentID: f.reference, AmountCents: f.operation.AmountCents, Status: "closed"}, "verified", hash); err == nil {
+		t.Fatal("late expired lookup result applied")
+	}
+	for _, action := range []string{"confirm", "reject"} {
+		expect(t, request(f.h, "POST", fmt.Sprintf("%s/%d/%s", path, id, action), map[string]any{"expected_version": 1, "note": "空结果不能形成复核决策"}, f.reviewer, "verify-expired-no-"+action), 409)
+	}
+	var requests, results int
+	if err = f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM payment_close_verification_requests),(SELECT count(*) FROM payment_close_verification_results)`).Scan(&requests, &results); err != nil || requests != 1 || results != 0 {
+		t.Fatal(requests, results, err)
+	}
+	w = request(f.h, "POST", path, body, f.verifier, "verify-expired-new-read-only-key")
+	expect(t, w, 201)
+	if data(t, w)["verification"].(map[string]any)["result_status"] != "unknown" {
+		t.Fatal(w.Body.String())
+	}
+	var oldResults int
+	if err = f.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM payment_close_verification_results WHERE request_id=$1`, id).Scan(&oldResults); err != nil || oldResults != 0 {
+		t.Fatal("expired original result changed", oldResults, err)
+	}
+	closeState(t, f.upgradeFixture, f.invoice, f.pid, "pending", 1)
+	_, rootHash := closeActor(t, f.upgradeFixture, f.root)
+	if _, err = f.db.BeginPaymentClose(t.Context(), f.operation.ActorID, f.invoice, f.pid, 1, "verify-expired-no-second-close", rootHash); err == nil {
+		t.Fatal("expired lookup unlocked Close")
+	}
+	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", f.invoice), map[string]any{"expected_version": 1}, f.customer, "verify-expired-no-balance"), 409)
 }

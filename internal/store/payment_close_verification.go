@@ -22,6 +22,7 @@ type PaymentCloseVerification struct {
 	InvoiceID             int64      `json:"invoice_id"`
 	UserID                int64      `json:"-"`
 	RequestedBy           int64      `json:"requested_by"`
+	RequestKeySHA256      string     `json:"request_key_sha256,omitempty"`
 	OriginalActorID       int64      `json:"original_actor_id"`
 	Provider              string     `json:"provider"`
 	ProviderPaymentID     string     `json:"provider_payment_id"`
@@ -50,14 +51,14 @@ type PaymentCloseVerification struct {
 
 const closeVerificationSelect = `SELECT r.id,r.close_operation_id,r.payment_id,r.invoice_id,r.user_id,r.actor_id,c.actor_id,r.provider,r.provider_payment_id,r.operation_id,r.amount_cents,r.expected_version,r.created_at,r.lease_until,
 COALESCE(v.status,''),COALESCE(v.result_code,''),COALESCE(v.external_transaction_id,''),COALESCE(v.provider_evidence_id,''),v.received_at,
-COALESCE(d.status,''),d.actor_id,d.created_at,COALESCE(d.note,''),i.version,p.status,i.status
+COALESCE(d.status,''),d.actor_id,d.created_at,COALESCE(d.note,''),i.version,p.status,i.status,encode(sha256(convert_to(r.idempotency_key,'UTF8')),'hex')
 FROM payment_close_verification_requests r JOIN payment_close_operations c ON c.id=r.close_operation_id
 JOIN payment_transactions p ON p.id=r.payment_id JOIN invoices i ON i.id=r.invoice_id
 LEFT JOIN payment_close_verification_results v ON v.request_id=r.id LEFT JOIN payment_close_verification_decisions d ON d.request_id=r.id `
 
 func scanCloseVerification(row pgx.Row) (PaymentCloseVerification, error) {
 	var v PaymentCloseVerification
-	err := row.Scan(&v.ID, &v.CloseOperationID, &v.PaymentID, &v.InvoiceID, &v.UserID, &v.RequestedBy, &v.OriginalActorID, &v.Provider, &v.ProviderPaymentID, &v.OperationID, &v.AmountCents, &v.ExpectedVersion, &v.RequestedAt, &v.LeaseUntil, &v.ResultStatus, &v.ResultCode, &v.ExternalTransactionID, &v.ProviderEvidenceID, &v.ReceivedAt, &v.ReviewStatus, &v.ReviewedBy, &v.ReviewedAt, &v.ReviewNote, &v.Version, &v.PaymentStatus, &v.InvoiceStatus)
+	err := row.Scan(&v.ID, &v.CloseOperationID, &v.PaymentID, &v.InvoiceID, &v.UserID, &v.RequestedBy, &v.OriginalActorID, &v.Provider, &v.ProviderPaymentID, &v.OperationID, &v.AmountCents, &v.ExpectedVersion, &v.RequestedAt, &v.LeaseUntil, &v.ResultStatus, &v.ResultCode, &v.ExternalTransactionID, &v.ProviderEvidenceID, &v.ReceivedAt, &v.ReviewStatus, &v.ReviewedBy, &v.ReviewedAt, &v.ReviewNote, &v.Version, &v.PaymentStatus, &v.InvoiceStatus, &v.RequestKeySHA256)
 	v.Status = v.ResultStatus
 	if v.Status == "" {
 		v.Status = "checking"
@@ -506,6 +507,9 @@ func (s *Store) ListPaymentCloseVerifications(ctx context.Context, actor, invoic
 		if e != nil {
 			rows.Close()
 			return nil, e
+		}
+		if actor != v.RequestedBy {
+			v.RequestKeySHA256 = ""
 		}
 		independent := canReview && actor != v.RequestedBy && actor != v.OriginalActorID && v.ReviewStatus == ""
 		v.CanReject = independent && v.ResultStatus != ""
