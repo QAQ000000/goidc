@@ -1,0 +1,162 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import { execFileSync, spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { inventory, sha256 } from './release-candidate-lib.mjs';
+import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+
+async function fixture(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-runtime-builder-test-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  return root;
+}
+const budget = () => ({ format: 'zjmfgo-runtime-budget-v1', approvedBy: 'test-only', maxPeakBytes: 1024 * 1024 * 16, minReserveBytes: 1, minReserveInodes: 1, maxBuildSeconds: 5, components: Object.fromEntries(budgetComponents.map(name => [name, 1024])) });
+const web = { appRoot: 'artifact/web/web', entry: 'artifact/web/web/server.js', apiInternalURL: 'http://127.0.0.1:58088' };
+const binaries = Object.fromEntries(['api', 'worker', 'migrate'].map(name => [name, { path: `artifact/bin/${name}` }]));
+const runtime = { node: { path: 'artifact/runtime/node' }, host: { platform: 'linux/x64', requirements: ['test baseline'] } };
+const launch = () => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'www' });
+
+test('approved peak accounts for all six components and hard reserve', () => {
+  const input = budget();
+  assert.equal(validateBudget(input, { bytes: 1024 ** 3, inodes: 100 }).componentSumBytes, 6144);
+  for (const name of budgetComponents) {
+    const missing = structuredClone(input); delete missing.components[name];
+    assert.throws(() => validateBudget(missing, { bytes: 1024 ** 3, inodes: 100 }), /budget/);
+  }
+  assert.throws(() => validateBudget(input, { bytes: 1, inodes: 100 }), /insufficient/);
+  assert.throws(() => validateBudget(input, { bytes: 1024 ** 3, inodes: 0 }), /insufficient/);
+  assert.throws(() => validateBudget({ ...input, maxPeakBytes: 1024 }, { bytes: 1024 ** 3, inodes: 100 }), /exceed/);
+});
+
+test('external provenance requires independently pinned bytes and forbids input symlinks', async t => {
+  const root = await fixture(t), filename = path.join(root, 'proof.json');
+  const raw = JSON.stringify({ source: 'fixture' }); await writeFile(filename, raw);
+  assert.deepEqual((await pinnedJSON(filename, sha256(raw))).value, { source: 'fixture' });
+  await assert.rejects(pinnedJSON(filename), /anchor/);
+  await assert.rejects(pinnedJSON(filename, 'a'.repeat(64)), /digest/);
+  await symlink(filename, path.join(root, 'proof-link.json'));
+  await assert.rejects(pinnedJSON(path.join(root, 'proof-link.json'), sha256(raw)), /Symlink/);
+});
+
+test('dependency hash alone cannot stand in for trusted installation provenance', async t => {
+  const root = await fixture(t), deps = path.join(root, 'node_modules'); await mkdir(deps);
+  await writeFile(path.join(deps, 'package.json'), '{}');
+  const files = await inventory(deps, { dependencies: true });
+  const tools = { node: process.version, npm: '11.0.0', platform: 'linux/x64' }, lock = 'b'.repeat(64);
+  const proof = { format: 'zjmfgo-runtime-dependency-provenance-v1', lockSHA256: lock, inputTreeSHA256: sha256(JSON.stringify(files)), files, installation: { command: 'npm ci', source: 'trusted fixture install', registry: 'https://registry.npmjs.org', integrityVerified: true, nodeVersion: tools.node, npmVersion: tools.npm, platform: tools.platform, immutability: 'test input owned exclusively' } };
+  await validateDependencies(deps, proof, lock, tools);
+  for (const key of ['source', 'immutability', 'integrityVerified']) {
+    const altered = structuredClone(proof); delete altered.installation[key];
+    await assert.rejects(validateDependencies(deps, altered, lock, tools), /provenance/);
+  }
+  await assert.rejects(validateDependencies(deps, proof, 'c'.repeat(64), tools), /provenance/);
+  await assert.rejects(validateDependencies(deps, proof, lock, { ...tools, node: 'v0' }), /toolchain/);
+  await writeFile(path.join(deps, 'package.json'), '{"tampered":true}');
+  await assert.rejects(validateDependencies(deps, proof, lock, tools), /tree mismatch/);
+});
+
+test('ports are explicit isolated loopback targets, baked config is data-only', () => {
+  assert.equal(runtimeTarget(web.apiInternalURL, 'http://127.0.0.1:53088').api, web.apiInternalURL);
+  for (const target of ['http://127.0.0.1:8088', 'http://127.0.0.1:3088', 'http://localhost:58088', 'http://example.com:58088', 'http://127.0.0.1', 'http://u:p@127.0.0.1:58088']) assert.throws(() => runtimeTarget(target, 'http://127.0.0.1:53088'));
+  const config = standaloneConfig('const nextConfig = {"output":"standalone","distDir":"./.next"}\n');
+  assert.equal(config.output, 'standalone');
+  assert.throws(() => standaloneConfig('const nextConfig = (() => { throw 1 })()'), /Unrecognized/);
+  assert.throws(() => standaloneConfig('const nextConfig = {"output":"export","distDir":"./.next"}\n'), /mismatch/);
+  const routes = { rewrites: { beforeFiles: [{ source: '/api/:path*', destination: `${web.apiInternalURL}/api/:path*` }] } };
+  validateRewrite(routes, web.apiInternalURL);
+  assert.throws(() => validateRewrite(routes, 'http://127.0.0.1:58089'), /rewrite mismatch/);
+});
+
+test('launch binds same package paths, readiness order and bounded cleanup', () => {
+  const description = launch();
+  assert.equal(description.node, runtime.node.path);
+  assert.equal(description.steps.find(step => step.name === 'web').cwd, web.appRoot);
+  assert.equal(description.steps.find(step => step.name === 'migrate').repeat, 2);
+  assert.equal(description.environment.fixed.HTTP_ADDR, '127.0.0.1:58088');
+  assert.equal(description.environment.inherit, false);
+  assert(description.writablePaths.every(item => item.root === 'mutable'));
+  assert.throws(() => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'root' }), /Ordinary/);
+});
+
+test('controlled config rejects mode/version/missing/foreign secrets without echoing values; environment ignores inherited values', async t => {
+  const root = await fixture(t), filename = path.join(root, 'config.json'), description = launch();
+  const values = { DATABASE_URL: 'postgres://test-only', MFA_ENCRYPTION_KEY: 'a'.repeat(64), PURCHASE_FIELD_ENCRYPTION_KEY: 'b'.repeat(64), PROVISION_ENCRYPTION_KEY: 'c'.repeat(64) };
+  async function put(config, mode = 0o600) { await writeFile(filename, JSON.stringify(config), { mode }); await chmod(filename, mode); }
+  await put({ version: description.configVersion, values });
+  const environment = await controlledRuntimeEnvironment(description, filename);
+  assert.deepEqual(Object.keys(environment).sort(), [...Object.keys(values), ...Object.keys(description.environment.fixed)].sort());
+  for (const key of ['PATH', 'HOME', 'NODE_PATH', 'NODE_OPTIONS', 'SMTP_PASSWORD', 'EPAY_KEY']) assert.equal(environment[key], undefined);
+  await put({ version: 'wrong', values }); await assert.rejects(controlledRuntimeEnvironment(description, filename), /version/);
+  await put({ version: description.configVersion, values }, 0o644); await assert.rejects(controlledRuntimeEnvironment(description, filename), /permissions/);
+  const missing = { ...values }; delete missing.DATABASE_URL;
+  await put({ version: description.configVersion, values: missing }); await assert.rejects(controlledRuntimeEnvironment(description, filename), /missing required key: DATABASE_URL/);
+  await writeFile(filename, '{malformed-secret-do-not-echo');
+  await assert.rejects(controlledRuntimeEnvironment(description, filename), error => error.message === 'Controlled config JSON invalid');
+  await put({ version: description.configVersion, values: { ...values, NODE_OPTIONS: 'do-not-echo-this-secret' } });
+  await assert.rejects(controlledRuntimeEnvironment(description, filename), error => !error.message.includes('do-not-echo') && /unallowed/.test(error.message));
+});
+
+async function traceFixture(t) {
+  const root = await fixture(t), checkout = path.join(root, 'checkout'), standalone = path.join(checkout, 'web/.next/standalone'), metaRoot = path.join(root, 'meta');
+  const depRoot = path.join(checkout, 'web/node_modules');
+  await mkdir(path.join(depRoot, 'next'), { recursive: true });
+  await writeFile(path.join(depRoot, 'next/package.json'), '{"name":"next"}');
+  await mkdir(path.join(standalone, 'web/node_modules/next'), { recursive: true });
+  await cp(path.join(depRoot, 'next/package.json'), path.join(standalone, 'web/node_modules/next/package.json'));
+  const traceFile = path.join(checkout, 'web/.next/next-server.js.nft.json');
+  await writeFile(traceFile, JSON.stringify({ version: 1, files: ['../node_modules/next/package.json'] }));
+  const dependencies = { files: await inventory(depRoot, { dependencies: true }) };
+  return { root, checkout, standalone, metaRoot, traceFile, source: { files: [] }, dependencies };
+}
+
+test('same-build trace evidence maps every selected dependency byte and retains exact trace', async t => {
+  const options = await traceFixture(t), result = await collectTraceEvidence(options);
+  assert.deepEqual(result.files, [{ path: 'artifact/web/web/node_modules/next/package.json', sourcePath: 'next/package.json' }]);
+  assert.equal(result.traces[0].entries[0].kind, 'dependency');
+  assert.equal(await readFile(path.join(options.metaRoot, 'traces/next-server.js.nft.json'), 'utf8'), await readFile(options.traceFile, 'utf8'));
+});
+
+test('trace escapes, symlinks, directories, untracked source and changed outputs fail closed', async t => {
+  for (const problem of ['escape', 'link', 'directory', 'untracked', 'tampered', 'extraDependency']) {
+    const options = await traceFixture(t);
+    if (problem === 'escape') await writeFile(options.traceFile, JSON.stringify({ version: 1, files: ['../../../outside'] }));
+    if (problem === 'directory') await writeFile(options.traceFile, JSON.stringify({ version: 1, files: ['../node_modules/next'] }));
+    if (problem === 'link') { await symlink('next/package.json', path.join(options.checkout, 'web/node_modules/link.json')); await writeFile(options.traceFile, JSON.stringify({ version: 1, files: ['../node_modules/link.json'] })); }
+    if (problem === 'untracked') { await writeFile(path.join(options.checkout, 'untracked.json'), '{}'); await writeFile(options.traceFile, JSON.stringify({ version: 1, files: ['../../untracked.json'] })); }
+    if (problem === 'tampered') await writeFile(path.join(options.standalone, 'web/node_modules/next/package.json'), '{"changed":true}');
+    if (problem === 'extraDependency') await writeFile(path.join(options.standalone, 'web/node_modules/next/extra.js'), 'extra');
+    await assert.rejects(collectTraceEvidence(options), undefined, problem);
+  }
+});
+
+test('build command is refused before spawn on reserve failure and bounded on timeout', async t => {
+  const root = await fixture(t), initialFreeBytes = (await freeSpace(root)).bytes, input = { ...budget(), maxPeakBytes: Number.MAX_SAFE_INTEGER };
+  await assert.rejects(runControlled(process.execPath, ['-e', 'throw Error("must not run")'], { cwd: root, env: {}, root, budget: { ...input, minReserveBytes: Number.MAX_SAFE_INTEGER }, initialFreeBytes }), /reserve/);
+  await assert.rejects(runControlled(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: root, env: {}, root, budget: { ...input, maxBuildSeconds: 1 }, initialFreeBytes }), /timed out/);
+  assert.equal(await runControlled(process.execPath, ['-e', 'process.stdout.write("ok")'], { cwd: root, env: {}, root, budget: input, initialFreeBytes, capture: true }), 'ok');
+});
+
+
+test('private readonly bind places actual tracing input inside checkout without copying dependencies', async t => {
+  if (process.platform !== 'linux' || spawnSync('/usr/bin/unshare', ['--mount', '--propagation', 'private', 'true']).status !== 0) { t.skip('BLOCKED: private mount namespace unavailable'); return; }
+  const root = await fixture(t), input = path.join(root, 'trusted-input'), mounted = path.join(root, 'checkout/web/node_modules');
+  await mkdir(input); await mkdir(mounted, { recursive: true }); await writeFile(path.join(input, 'tiny.js'), 'trusted-fixture');
+  const code = `
+    const fs = require('node:fs');
+    const cp = require('node:child_process');
+    const [input, mounted] = process.argv.slice(1);
+    cp.execFileSync('/usr/bin/mount', ['--bind', input, mounted]);
+    cp.execFileSync('/usr/bin/mount', ['-o', 'remount,bind,ro', mounted]);
+    if (fs.realpathSync(mounted + '/tiny.js') !== mounted + '/tiny.js') throw Error('escaped realpath');
+    if (fs.readFileSync(mounted + '/tiny.js', 'utf8') !== 'trusted-fixture') throw Error('bad bytes');
+    try { fs.writeFileSync(mounted + '/tiny.js', 'changed'); throw Error('write unexpectedly succeeded'); }
+    catch (error) { if (error.code !== 'EROFS') throw error; }
+    process.stdout.write('readonly-contained');
+  `;
+  assert.equal(execFileSync('/usr/bin/unshare', ['--mount', '--propagation', 'private', process.execPath, '-e', code, input, mounted], { encoding: 'utf8' }), 'readonly-contained');
+  assert.equal(await readFile(path.join(input, 'tiny.js'), 'utf8'), 'trusted-fixture');
+  // After child exit the parent still sees its empty ordinary mountpoint.
+  await assert.rejects(readFile(path.join(mounted, 'tiny.js')), { code: 'ENOENT' });
+});
