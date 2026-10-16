@@ -82,7 +82,7 @@ function recordFile(record, label) {
 }
 function loopbackOrigin(value) {
   const origin = apiTarget(value), url = new URL(origin);
-  requireThat(url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.port && !['8088', '3088'].includes(url.port), 'Runtime origin must use an independent explicit IPv4 loopback HTTP port');
+  requireThat(url.protocol === 'http:' && url.hostname === '127.0.0.1' && Number(url.port) > 1024 && !['8088', '3088'].includes(url.port), 'Runtime origin must use an independent explicit IPv4 loopback HTTP port above 1024');
   return origin;
 }
 export function readRuntimeGoBuildInfo(filename, goCommand = existsSync('/usr/local/btgo/bin/go') ? '/usr/local/btgo/bin/go' : 'go') {
@@ -243,9 +243,23 @@ export async function validateRuntimeManifest(root, manifest, actual, { goComman
   requireThat(launch.node === node.path && launch.apiInternalURL === target && launch.appRoot === web.appRoot && launch.entry === web.entry && ['api', 'worker', 'migrate'].every(name => launch.binaries?.[name] === manifest.binaries[name].path), 'Launch artifact binding mismatch');
   const webOrigin = loopbackOrigin(launch.webOrigin), webURL = new URL(webOrigin), apiURL = new URL(target);
   requireThat(webOrigin !== target, 'API and Web ports must be separate');
-  requireThat(launch.environment?.inherit === false && launch.environment.fixed?.NODE_ENV === 'production' && launch.environment.fixed.HOSTNAME === webURL.hostname.replace(/^\[|\]$/g, '') && String(launch.environment.fixed.PORT) === webURL.port && launch.environment.fixed.HTTP_ADDR === `${apiURL.hostname}:${apiURL.port}` && launch.environment.fixed.API_INTERNAL_URL === target && launch.environment.fixed.PUBLIC_ORIGIN === webOrigin, 'Launch environment/rewrite binding mismatch');
+  // Partial new declarations cannot silently become legacy packages. The
+  // inventoried build record also activates the new contract on its own.
+  const originFields = ['webOrigin', 'publicOrigin', 'originBuildPath', 'originBuildSHA256'];
+  const declaredOrigins = originFields.some(key => Object.hasOwn(web, key)) || Object.hasOwn(launch, 'publicOrigin') || byPath.has('artifact/meta/origins.json');
+  let publicOrigin = webOrigin;
+  if (declaredOrigins) {
+    requireThat(originFields.every(key => Object.hasOwn(web, key)) && Object.hasOwn(launch, 'publicOrigin'), 'Incomplete runtime origin declaration');
+    publicOrigin = loopbackOrigin(web.publicOrigin);
+    requireThat(web.webOrigin === webOrigin && launch.webOrigin === webOrigin && web.publicOrigin === publicOrigin && launch.publicOrigin === publicOrigin && publicOrigin !== target, 'Runtime public/internal origin binding mismatch');
+    requireThat(web.originBuildPath === 'artifact/meta/origins.json' && hashPattern.test(web.originBuildSHA256 ?? '') && (await file(web.originBuildPath)).sha256 === web.originBuildSHA256, 'Origin build record digest/path mismatch');
+    const origins = await json(web.originBuildPath);
+    requireThat(origins.format === 'zjmfgo-runtime-origins-v1' && origins.sourceCommit === manifest.source.commit && origins.apiInternalURL === target && origins.webOrigin === webOrigin && origins.publicOrigin === publicOrigin && equal(origins.environment, { API_INTERNAL_URL: target, PUBLIC_ORIGIN: publicOrigin, PUBLIC_ORIGINS: publicOrigin }), 'Origin build record binding mismatch');
+    requireThat(launch.environment?.fixed?.PUBLIC_ORIGINS === publicOrigin, 'Public origin set missing/mismatched');
+  }
+  requireThat(launch.environment?.inherit === false && launch.environment.fixed?.NODE_ENV === 'production' && launch.environment.fixed.HOSTNAME === webURL.hostname.replace(/^\[|\]$/g, '') && String(launch.environment.fixed.PORT) === webURL.port && launch.environment.fixed.HTTP_ADDR === `${apiURL.hostname}:${apiURL.port}` && launch.environment.fixed.API_INTERNAL_URL === target && launch.environment.fixed.PUBLIC_ORIGIN === publicOrigin, 'Launch environment/rewrite binding mismatch');
   const permittedFixed = new Set(['NODE_ENV', 'HOSTNAME', 'PORT', 'HTTP_ADDR', 'PUBLIC_ORIGIN', 'PUBLIC_ORIGINS', 'COOKIE_SECURE', 'PAYMENT_MOCK_ENABLED', 'API_INTERNAL_URL', 'WEB_INTERNAL_URL', 'NEXT_TELEMETRY_DISABLED']);
-  requireThat(Object.keys(launch.environment.fixed).every(key => permittedFixed.has(key)) && (launch.environment.fixed.API_INTERNAL_URL === undefined || launch.environment.fixed.API_INTERNAL_URL === target) && (launch.environment.fixed.WEB_INTERNAL_URL === undefined || launch.environment.fixed.WEB_INTERNAL_URL === webOrigin) && (launch.environment.fixed.PUBLIC_ORIGINS === undefined || launch.environment.fixed.PUBLIC_ORIGINS === webOrigin) && (launch.environment.fixed.COOKIE_SECURE === undefined || launch.environment.fixed.COOKIE_SECURE === 'false') && (launch.environment.fixed.PAYMENT_MOCK_ENABLED === undefined || launch.environment.fixed.PAYMENT_MOCK_ENABLED === 'false'), 'Unexpected fixed runtime configuration');
+  requireThat(Object.keys(launch.environment.fixed).every(key => permittedFixed.has(key)) && (launch.environment.fixed.API_INTERNAL_URL === undefined || launch.environment.fixed.API_INTERNAL_URL === target) && (launch.environment.fixed.WEB_INTERNAL_URL === undefined || launch.environment.fixed.WEB_INTERNAL_URL === webOrigin) && (launch.environment.fixed.PUBLIC_ORIGINS === undefined || launch.environment.fixed.PUBLIC_ORIGINS === publicOrigin) && (launch.environment.fixed.COOKIE_SECURE === undefined || launch.environment.fixed.COOKIE_SECURE === 'false') && (launch.environment.fixed.PAYMENT_MOCK_ENABLED === undefined || launch.environment.fixed.PAYMENT_MOCK_ENABLED === 'false'), 'Unexpected fixed runtime configuration');
   const keys = launch.environment.allowlist;
   const allowedConfig = new Set(['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY']);
   requireThat(Array.isArray(keys) && keys.every(key => allowedConfig.has(key)) && new Set(keys).size === keys.length, 'Unsafe environment allowlist');

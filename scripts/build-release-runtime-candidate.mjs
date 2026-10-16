@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { prepareDestination } from './build-release-candidate.mjs';
 import { fileHash, git, inventory, noLinks, selectedDigest, sha256, sourceProof } from './release-candidate-lib.mjs';
-import { collectTraceEvidence, controlledPATH, freeSpace, guardReserve, makeLaunchDescription, ordinaryFiles, ownedBuildTemporaryEnvironment, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+import { collectTraceEvidence, controlledPATH, freeSpace, guardReserve, makeLaunchDescription, makeOriginBuildRecord, ordinaryFiles, ownedBuildTemporaryEnvironment, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
 const goCommand = '/usr/local/btgo/bin/go';
@@ -40,7 +40,8 @@ async function namespaceBuild(requestPath) {
   if (process.ppid !== request.parentPID || await readlink('/proc/self/ns/mnt') === await readlink(`/proc/${process.ppid}/ns/mnt`) || await readlink(`/proc/${process.ppid}/ns/mnt`) !== request.parentMountNamespace) throw new Error('Refusing build outside its private mount namespace');
   const { root, checkout, dependencies, proof, budget, initialFreeBytes, node, tools } = request;
   const temporary = await ownedBuildTemporaryEnvironment(root);
-  const env = { ...temporary, PATH: controlledPATH, HOME: path.join(root, '.scratch/home'), LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', API_INTERNAL_URL: request.apiInternalURL, ZJMFGO_RUNTIME_BUILD: '1', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off', GOCACHE: path.join(root, '.scratch/go-build'), GOMODCACHE: request.goModCache };
+  const originBuild = makeOriginBuildRecord({ ...request, sourceCommit: proof.commit });
+  const env = { ...temporary, ...originBuild.environment, PATH: controlledPATH, HOME: path.join(root, '.scratch/home'), LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', ZJMFGO_RUNTIME_BUILD: '1', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off', GOCACHE: path.join(root, '.scratch/go-build'), GOMODCACHE: request.goModCache };
   await mkdir(env.HOME, { recursive: true });
   const mounted = path.join(checkout, 'web/node_modules');
   await mkdir(mounted);
@@ -82,9 +83,11 @@ async function namespaceBuild(requestPath) {
   // Explicit same-build metadata; never load or ship TS configuration at runtime.
   await cp(path.join(checkout, 'web/.next/required-server-files.json'), path.join(app, '.next/required-server-files.json'));
   await mkdir(path.join(artifact, 'meta'), { recursive: true });
+  const originBuildPath = 'artifact/meta/origins.json';
+  await writeFile(path.join(root, originBuildPath), JSON.stringify(originBuild, null, 2) + '\n', { flag: 'wx' });
   const traceEvidence = await collectTraceEvidence({ checkout, standalone, metaRoot: path.join(artifact, 'meta'), source: proof, dependencies: request.dependencyProof });
   await rename(standalone, path.join(artifact, 'web'));
-  const web = { appRoot: `artifact/web/${appRelative}`, entry: `artifact/web/${appRelative}/server.js`, buildID: (await readFile(path.join(artifact, 'web', appRelative, '.next/BUILD_ID'), 'utf8')).trim(), bundler: 'webpack', nextVersion: JSON.parse(await readFile(path.join(mounted, 'next/package.json'), 'utf8')).version, apiInternalURL: request.apiInternalURL, effectiveStandaloneConfigSHA256: sha256(JSON.stringify(effectiveConfig)), routesManifestSHA256: await fileHash(path.join(artifact, 'web', appRelative, '.next/routes-manifest.json')), runtimeDependenciesIncluded: true };
+  const web = { appRoot: `artifact/web/${appRelative}`, entry: `artifact/web/${appRelative}/server.js`, buildID: (await readFile(path.join(artifact, 'web', appRelative, '.next/BUILD_ID'), 'utf8')).trim(), bundler: 'webpack', nextVersion: JSON.parse(await readFile(path.join(mounted, 'next/package.json'), 'utf8')).version, apiInternalURL: originBuild.apiInternalURL, webOrigin: originBuild.webOrigin, publicOrigin: originBuild.publicOrigin, originBuildPath, originBuildSHA256: await fileHash(path.join(root, originBuildPath)), effectiveStandaloneConfigSHA256: sha256(JSON.stringify(effectiveConfig)), routesManifestSHA256: await fileHash(path.join(artifact, 'web', appRelative, '.next/routes-manifest.json')), runtimeDependenciesIncluded: true };
   await mkdir(path.join(artifact, 'runtime'));
   await cp(node, path.join(artifact, 'runtime/node'));
   await cp(request.nodeLicense, path.join(artifact, 'runtime/LICENSE'));
@@ -98,7 +101,7 @@ async function namespaceBuild(requestPath) {
   const host = await elfBaseline(root, elfFiles, env);
   if (!host.requirements.length) host.requirements.push('Linux kernel/architecture compatible with declared ELF files; no dynamic loader detected');
   const runtime = { node: { path: 'artifact/runtime/node', version: tools.node, source: request.nodeProof.source, licensePath: 'artifact/runtime/LICENSE', sha256: request.nodeProof.sha256, provenancePath: 'artifact/meta/node.json', provenanceSHA256: request.nodeProvenanceSHA256 }, host };
-  const description = makeLaunchDescription({ web, binaries, runtime, webOrigin: request.webOrigin, runtimeUser: request.runtimeUser });
+  const description = makeLaunchDescription({ web, binaries, runtime, webOrigin: request.webOrigin, publicOrigin: request.publicOrigin, runtimeUser: request.runtimeUser });
   await mkdir(path.join(root, 'launch'));
   await writeFile(path.join(root, 'launch/description.json'), JSON.stringify(description, null, 2) + '\n', { flag: 'wx' });
   if (JSON.stringify(await sourceProof(checkout, proof.commit)) !== JSON.stringify(proof)) throw new Error('Build changed tracked checkout source');
@@ -118,7 +121,7 @@ export async function buildRuntimeCandidate(options) {
   const depInput = await pinnedJSON(options.dependencyProvenance, options.dependencyProvenanceSHA256);
   const nodeInput = await pinnedJSON(options.nodeProvenance, options.nodeProvenanceSHA256);
   const budgetInput = await pinnedJSON(options.budget, options.budgetSHA256);
-  const targets = runtimeTarget(options.apiInternalURL, options.webOrigin);
+  const targets = runtimeTarget(options.apiInternalURL, options.webOrigin, options.publicOrigin);
   const dependencies = await noLinks(path.resolve(options.dependencies));
   const node = await noLinks(path.resolve(options.node));
   const nodeLicense = await noLinks(path.resolve(options.nodeLicense));
@@ -148,7 +151,7 @@ export async function buildRuntimeCandidate(options) {
     if (JSON.stringify(await sourceProof(checkout, proof.commit)) !== JSON.stringify(proof)) throw new Error('Fixed checkout source proof mismatch');
     const goModCache = execFileSync(goCommand, ['env', 'GOMODCACHE'], { encoding: 'utf8', env: { PATH: controlledPATH, HOME: process.env.HOME, GOENV: 'off', GOTOOLCHAIN: 'local' } }).trim();
     await noLinks(goModCache);
-    const request = { root, checkout, dependencies, proof, builder, tools, budget, initialFreeBytes: available.bytes, parentPID: process.pid, parentMountNamespace: await readlink('/proc/self/ns/mnt'), node, nodeLicense, nodeProof: nodeInput.value, nodeProofRaw: nodeInput.raw.toString(), nodeProvenanceSHA256: options.nodeProvenanceSHA256, dependencyProof: depInput.value, dependencyProofRaw: depInput.raw.toString(), lockSHA256: locks.web, budgetRaw: budgetInput.raw.toString(), goModCache, apiInternalURL: targets.api, webOrigin: targets.web, runtimeUser: options.runtimeUser };
+    const request = { root, checkout, dependencies, proof, builder, tools, budget, initialFreeBytes: available.bytes, parentPID: process.pid, parentMountNamespace: await readlink('/proc/self/ns/mnt'), node, nodeLicense, nodeProof: nodeInput.value, nodeProofRaw: nodeInput.raw.toString(), nodeProvenanceSHA256: options.nodeProvenanceSHA256, dependencyProof: depInput.value, dependencyProofRaw: depInput.raw.toString(), lockSHA256: locks.web, budgetRaw: budgetInput.raw.toString(), goModCache, apiInternalURL: targets.api, webOrigin: targets.web, publicOrigin: targets.public, runtimeUser: options.runtimeUser };
     const requestPath = path.join(root, '.build-request.json');
     await writeFile(requestPath, JSON.stringify(request), { mode: 0o600, flag: 'wx' });
     await run('/usr/bin/unshare', ['--mount', '--propagation', 'private', node, fileURLToPath(import.meta.url), '--namespace-worker', requestPath]);
@@ -171,21 +174,27 @@ export async function buildRuntimeCandidate(options) {
   }
 }
 
+export function parseRuntimeBuildOptions(argv) {
+  const options = {};
+  const names = { '--source': 'source', '--commit': 'revision', '--output': 'output', '--dependencies': 'dependencies', '--dependency-provenance': 'dependencyProvenance', '--dependency-provenance-sha256': 'dependencyProvenanceSHA256', '--node': 'node', '--node-license': 'nodeLicense', '--node-provenance': 'nodeProvenance', '--node-provenance-sha256': 'nodeProvenanceSHA256', '--budget': 'budget', '--budget-sha256': 'budgetSHA256', '--api-internal-url': 'apiInternalURL', '--web-origin': 'webOrigin', '--public-origin': 'publicOrigin', '--runtime-user': 'runtimeUser' };
+  const args = [...argv];
+  if (args.at(-1) === '--execute') { options.execute = true; args.pop(); }
+  for (let i = 0; i < args.length; i += 2) {
+    if (!names[args[i]] || !args[i + 1] || options[names[args[i]]]) throw new Error('Expected explicit named build inputs; --execute must be last (omit for preflight only)');
+    options[names[args[i]]] = args[i + 1];
+  }
+  const required = Object.keys(names).filter(name => name !== '--public-origin');
+  if (required.some(name => !options[names[name]])) throw new Error(`Required options: ${required.join(' ')} [--public-origin ORIGIN] [--execute]`);
+  return options;
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   try {
     if (process.argv[2] === '--namespace-worker') {
       if (process.argv.length !== 4) throw new Error('Invalid namespace worker invocation');
       await namespaceBuild(process.argv[3]);
     } else {
-      const options = {};
-      const names = { '--source': 'source', '--commit': 'revision', '--output': 'output', '--dependencies': 'dependencies', '--dependency-provenance': 'dependencyProvenance', '--dependency-provenance-sha256': 'dependencyProvenanceSHA256', '--node': 'node', '--node-license': 'nodeLicense', '--node-provenance': 'nodeProvenance', '--node-provenance-sha256': 'nodeProvenanceSHA256', '--budget': 'budget', '--budget-sha256': 'budgetSHA256', '--api-internal-url': 'apiInternalURL', '--web-origin': 'webOrigin', '--runtime-user': 'runtimeUser' };
-      const args = process.argv.slice(2);
-      if (args.at(-1) === '--execute') { options.execute = true; args.pop(); }
-      for (let i = 0; i < args.length; i += 2) {
-        if (!names[args[i]] || !args[i + 1] || options[names[args[i]]]) throw new Error('Expected explicit named build inputs; --execute must be last (omit for preflight only)');
-        options[names[args[i]]] = args[i + 1];
-      }
-      if (Object.keys(names).some(name => !options[names[name]])) throw new Error(`Required options: ${Object.keys(names).join(' ')} [--execute]`);
+      const options = parseRuntimeBuildOptions(process.argv.slice(2));
       console.log(JSON.stringify(await buildRuntimeCandidate(options), null, 2));
     }
   } catch (error) { console.error(`[release-runtime] ${error.message}`); process.exitCode = 1; }

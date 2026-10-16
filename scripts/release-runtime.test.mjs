@@ -95,9 +95,22 @@ async function candidate(t, fixture) {
   return { root, appRoot, manifest, provenance, launch, seal, saveProvenance, digest: await seal(), verify: digest => verifyRuntimeCandidate(root, digest, fixture.source, { goCommand: go }) };
 }
 
+async function declareOrigins(f, publicOrigin = 'http://127.0.0.1:53188') {
+  const web = f.manifest.web;
+  web.webOrigin = f.launch.webOrigin;
+  web.publicOrigin = f.launch.publicOrigin = publicOrigin;
+  f.launch.environment.fixed.PUBLIC_ORIGIN = f.launch.environment.fixed.PUBLIC_ORIGINS = publicOrigin;
+  web.originBuildPath = 'artifact/meta/origins.json';
+  const record = { format: 'zjmfgo-runtime-origins-v1', sourceCommit: f.manifest.source.commit, apiInternalURL: web.apiInternalURL, webOrigin: web.webOrigin, publicOrigin, environment: { API_INTERNAL_URL: web.apiInternalURL, PUBLIC_ORIGIN: publicOrigin, PUBLIC_ORIGINS: publicOrigin } };
+  await put(f.root, web.originBuildPath, JSON.stringify(record));
+  web.originBuildSHA256 = await fileHash(path.join(f.root, web.originBuildPath));
+  await put(f.root, 'launch/description.json', JSON.stringify(f.launch));
+  return record;
+}
+
 test('v2 sealed runtime safety contracts with actual Go build metadata and small fixtures', async t => {
   const fixture = await sourceFixture(t);
-  await t.test('valid package, internal relative file/directory links, relocation and real CLI', async t => {
+  await t.test('legacy package with no new origin declarations, internal links and real CLI', async t => {
     const f = await candidate(t, fixture);
     assert.equal((await f.verify(f.digest)).source.commit, fixture.proof.commit);
     await symlink('next', path.join(f.root, 'artifact/web/web/node_modules/alias'));
@@ -107,6 +120,86 @@ test('v2 sealed runtime safety contracts with actual Go build metadata and small
     assert.equal(cli.status, 0, cli.stderr);
     assert.equal(JSON.parse(cli.stdout).verified, true);
     assert.match(cli.stdout, /no startup/);
+  });
+  for (const publicOrigin of ['http://127.0.0.1:53088', 'http://127.0.0.1:53188', 'http://127.0.0.1:53189']) {
+    await t.test(`new sealed public origin ${publicOrigin} preserves internal endpoints`, async t => {
+      const f = await candidate(t, fixture);
+      await declareOrigins(f, publicOrigin);
+      const verified = await f.verify(await f.seal());
+      assert.equal(verified.web.publicOrigin, publicOrigin);
+      assert.equal(verified.web.webOrigin, 'http://127.0.0.1:53088');
+      assert.equal(f.launch.environment.fixed.PORT, '53088');
+      assert.equal(f.launch.environment.fixed.API_INTERNAL_URL, 'http://127.0.0.1:58088');
+    });
+  }
+  for (const key of ['webOrigin', 'publicOrigin', 'originBuildPath', 'originBuildSHA256']) {
+    await t.test(`partial new origins cannot fall back when Web ${key} is missing`, async t => {
+      const f = await candidate(t, fixture);
+      await declareOrigins(f); delete f.manifest.web[key];
+      await assert.rejects(f.verify(await f.seal()), /Incomplete runtime origin declaration/);
+    });
+  }
+  for (const [name, mutate, error] of [
+    ['launch public origin absent', async f => { delete f.launch.publicOrigin; }, /Incomplete runtime origin declaration/],
+    ['launch public origin null', async f => { f.launch.publicOrigin = null; }, /origin binding mismatch/],
+    ['Web public origin null', async f => { f.manifest.web.publicOrigin = null; }, /Invalid URL/],
+    ['Web internal origin mismatch', async f => { f.manifest.web.webOrigin = 'http://127.0.0.1:53089'; }, /origin binding mismatch/],
+    ['launch public origin mismatch', async f => { f.launch.publicOrigin = f.launch.webOrigin; }, /origin binding mismatch/],
+    ['manifest/launch/env substitution without rebuilding origin record', async f => { const publicOrigin = 'http://127.0.0.1:53189'; f.manifest.web.publicOrigin = f.launch.publicOrigin = f.launch.environment.fixed.PUBLIC_ORIGIN = f.launch.environment.fixed.PUBLIC_ORIGINS = publicOrigin; }, /Origin build record binding mismatch/],
+    ['public origin aliases API', async f => { f.manifest.web.publicOrigin = f.launch.publicOrigin = f.manifest.web.apiInternalURL; }, /origin binding mismatch/],
+    ['public origin privileged port', async f => { f.manifest.web.publicOrigin = 'http://127.0.0.1:1024'; }, /loopback HTTP port above 1024/],
+    ['public origin production port', async f => { f.manifest.web.publicOrigin = 'http://127.0.0.1:3088'; }, /loopback HTTP port/],
+    ['public origin HTTPS', async f => { f.manifest.web.publicOrigin = 'https://127.0.0.1:53188'; }, /loopback HTTP port/],
+    ['public origin localhost', async f => { f.manifest.web.publicOrigin = 'http://localhost:53188'; }, /loopback HTTP port/],
+    ['public origin IPv6', async f => { f.manifest.web.publicOrigin = 'http://[::1]:53188'; }, /loopback HTTP port/],
+    ['public origin port implicit', async f => { f.manifest.web.publicOrigin = 'http://127.0.0.1'; }, /loopback HTTP port/],
+    ['public origin contains credentials', async f => { f.manifest.web.publicOrigin = 'http://user:pass@127.0.0.1:53188'; }, /without credentials/],
+    ['missing build record', async f => { await rm(path.join(f.root, f.manifest.web.originBuildPath)); }, /Required runtime file missing/],
+    ['build record digest differs', async f => { f.manifest.web.originBuildSHA256 = '0'.repeat(64); }, /build record digest/],
+    ['build record path differs', async f => { f.manifest.web.originBuildPath = 'artifact/meta/node.json'; }, /build record digest\/path/],
+    ['PUBLIC_ORIGIN points at internal Web', async f => { f.launch.environment.fixed.PUBLIC_ORIGIN = f.launch.webOrigin; }, /environment\/rewrite/],
+    ['PUBLIC_ORIGINS absent', async f => { delete f.launch.environment.fixed.PUBLIC_ORIGINS; }, /Public origin set/],
+    ['PUBLIC_ORIGINS points at internal Web', async f => { f.launch.environment.fixed.PUBLIC_ORIGINS = f.launch.webOrigin; }, /Public origin set/],
+    ['internal Web privileged port', async f => { f.launch.webOrigin = 'http://127.0.0.1:1024'; }, /loopback HTTP port above 1024/],
+    ['internal API privileged port', async f => { f.manifest.web.apiInternalURL = 'http://127.0.0.1:1024'; }, /loopback HTTP port above 1024/],
+    ['Web listener accidentally public port', async f => { f.launch.environment.fixed.PORT = '53188'; }, /environment\/rewrite/],
+    ['HTTP listener accidentally public port', async f => { f.launch.environment.fixed.HTTP_ADDR = '127.0.0.1:53188'; }, /environment\/rewrite/],
+    ['server component API accidentally public', async f => { f.launch.environment.fixed.API_INTERNAL_URL = f.launch.publicOrigin; }, /environment\/rewrite/],
+    ['API rewrite accidentally public', f => put(f.root, `${f.appRoot}/.next/routes-manifest.json`, JSON.stringify({ rewrites: [{ source: '/api/:path*', destination: `${f.launch.publicOrigin}/api/:path*` }] })), /API rewrite mismatch/],
+  ]) await t.test(`new origin declaration rejects ${name}`, async t => {
+    const f = await candidate(t, fixture); await declareOrigins(f); await mutate(f);
+    await put(f.root, 'launch/description.json', JSON.stringify(f.launch));
+    await assert.rejects(f.verify(await f.seal()), error);
+  });
+  for (const key of ['format', 'sourceCommit', 'apiInternalURL', 'webOrigin', 'publicOrigin', 'environment']) {
+    await t.test(`origin build record binds ${key} even after record digest is refreshed`, async t => {
+      const f = await candidate(t, fixture), record = await declareOrigins(f);
+      record[key] = key === 'environment' ? { API_INTERNAL_URL: f.manifest.web.apiInternalURL, PUBLIC_ORIGIN: f.launch.webOrigin, PUBLIC_ORIGINS: f.launch.webOrigin } : 'foreign-value';
+      await put(f.root, f.manifest.web.originBuildPath, JSON.stringify(record));
+      f.manifest.web.originBuildSHA256 = await fileHash(path.join(f.root, f.manifest.web.originBuildPath));
+      await assert.rejects(f.verify(await f.seal()), /Origin build record binding mismatch/);
+    });
+  }
+  for (const [name, mutate] of [
+    ['only launch new field', async f => { f.launch.publicOrigin = null; }],
+    ['only Web new field', async f => { f.manifest.web.publicOrigin = null; }],
+    ['only origin record remains', async f => { await put(f.root, 'artifact/meta/origins.json', '{}'); }],
+  ]) await t.test(`legacy fallback rejected when ${name}`, async t => {
+    const f = await candidate(t, fixture); await mutate(f);
+    await put(f.root, 'launch/description.json', JSON.stringify(f.launch));
+    await assert.rejects(f.verify(await f.seal()), /Incomplete runtime origin declaration/);
+  });
+  await t.test('legacy explicit PUBLIC_ORIGINS is accepted only at the original Web origin', async t => {
+    const f = await candidate(t, fixture);
+    f.launch.environment.fixed.PUBLIC_ORIGINS = f.launch.webOrigin;
+    await put(f.root, 'launch/description.json', JSON.stringify(f.launch));
+    await f.verify(await f.seal());
+    for (const key of ['PUBLIC_ORIGIN', 'PUBLIC_ORIGINS']) {
+      f.launch.environment.fixed[key] = 'http://127.0.0.1:53188';
+      await put(f.root, 'launch/description.json', JSON.stringify(f.launch));
+      await assert.rejects(f.verify(await f.seal()), /environment\/rewrite|fixed runtime/);
+      f.launch.environment.fixed[key] = f.launch.webOrigin;
+    }
   });
   for (const [name, mutate, error] of [
     ['wrong anchor', async f => { f.digest = '0'.repeat(64); }, /digest mismatch/],

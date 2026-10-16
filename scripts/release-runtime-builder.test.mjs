@@ -5,9 +5,10 @@ import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseRuntimeBuildOptions } from './build-release-runtime-candidate.mjs';
 import { runtimeBuilderFiles } from './release-runtime-lib.mjs';
 import { fileHash, inventory, sha256 } from './release-candidate-lib.mjs';
-import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, ownedBuildTemporaryEnvironment, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, makeOriginBuildRecord, ownedBuildTemporaryEnvironment, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-runtime-builder-test-'));
@@ -75,7 +76,7 @@ test('dependency hash alone cannot stand in for trusted installation provenance'
 
 test('ports are explicit isolated loopback targets, baked config is data-only', () => {
   assert.equal(runtimeTarget(web.apiInternalURL, 'http://127.0.0.1:53088').api, web.apiInternalURL);
-  for (const target of ['http://127.0.0.1:8088', 'http://127.0.0.1:3088', 'http://localhost:58088', 'http://example.com:58088', 'http://127.0.0.1', 'http://u:p@127.0.0.1:58088']) assert.throws(() => runtimeTarget(target, 'http://127.0.0.1:53088'));
+  for (const target of ['http://127.0.0.1:8088', 'http://127.0.0.1:3088', 'http://127.0.0.1:1024', 'http://127.0.0.1:1', 'https://127.0.0.1:58088', 'http://[::1]:58088', 'http://localhost:58088', 'http://example.com:58088', 'http://127.0.0.1', 'http://u:p@127.0.0.1:58088']) assert.throws(() => runtimeTarget(target, 'http://127.0.0.1:53088'));
   const config = standaloneConfig('const nextConfig = {"output":"standalone","distDir":"./.next"}\n');
   assert.equal(config.output, 'standalone');
   assert.throws(() => standaloneConfig('const nextConfig = (() => { throw 1 })()'), /Unrecognized/);
@@ -83,6 +84,46 @@ test('ports are explicit isolated loopback targets, baked config is data-only', 
   const routes = { rewrites: { beforeFiles: [{ source: '/api/:path*', destination: `${web.apiInternalURL}/api/:path*` }] } };
   validateRewrite(routes, web.apiInternalURL);
   assert.throws(() => validateRewrite(routes, 'http://127.0.0.1:58089'), /rewrite mismatch/);
+});
+
+test('public origin defaults to Web, may use a distinct isolated port and never changes API/HTTP listeners', () => {
+  const webOrigin = 'http://127.0.0.1:53088', publicOrigin = 'http://127.0.0.1:53188';
+  assert.deepEqual(runtimeTarget(web.apiInternalURL, webOrigin), { api: web.apiInternalURL, web: webOrigin, public: webOrigin });
+  assert.equal(runtimeTarget(web.apiInternalURL, webOrigin, publicOrigin).public, publicOrigin);
+  for (const origin of [web.apiInternalURL, 'http://127.0.0.1:1024', 'http://127.0.0.1:8088', 'http://127.0.0.1:3088', 'https://127.0.0.1:53188', 'http://localhost:53188', 'http://[::1]:53188', 'http://127.0.0.1', 'http://u:p@127.0.0.1:53188', 'http://127.0.0.1:53188/path']) {
+    assert.throws(() => runtimeTarget(web.apiInternalURL, webOrigin, origin));
+  }
+  const description = makeLaunchDescription({ web, binaries, runtime, webOrigin, publicOrigin, runtimeUser: 'www' });
+  assert.equal(description.webOrigin, webOrigin);
+  assert.equal(description.publicOrigin, publicOrigin);
+  assert.equal(description.environment.fixed.PORT, '53088');
+  assert.equal(description.environment.fixed.HOSTNAME, '127.0.0.1');
+  assert.equal(description.environment.fixed.API_INTERNAL_URL, web.apiInternalURL);
+  assert.equal(description.environment.fixed.HTTP_ADDR, '127.0.0.1:58088');
+  assert.equal(description.environment.fixed.PUBLIC_ORIGIN, publicOrigin);
+  assert.equal(description.environment.fixed.PUBLIC_ORIGINS, publicOrigin);
+  const record = makeOriginBuildRecord({ apiInternalURL: web.apiInternalURL, webOrigin, publicOrigin, sourceCommit: 'a'.repeat(40) });
+  assert.equal(record.sourceCommit, 'a'.repeat(40));
+  assert.equal(record.publicOrigin, publicOrigin);
+  assert.deepEqual(record.environment, { API_INTERNAL_URL: web.apiInternalURL, PUBLIC_ORIGIN: publicOrigin, PUBLIC_ORIGINS: publicOrigin });
+  assert.equal(makeOriginBuildRecord({ apiInternalURL: web.apiInternalURL, webOrigin, sourceCommit: 'a'.repeat(40) }).publicOrigin, webOrigin);
+  assert.throws(() => makeOriginBuildRecord({ apiInternalURL: web.apiInternalURL, webOrigin }), /fixed source commit/);
+});
+
+test('builder CLI keeps public-origin optional and retains explicit duplicate/execute validation', () => {
+  const names = ['source', 'commit', 'output', 'dependencies', 'dependency-provenance', 'dependency-provenance-sha256', 'node', 'node-license', 'node-provenance', 'node-provenance-sha256', 'budget', 'budget-sha256', 'api-internal-url', 'web-origin', 'runtime-user'];
+  const args = names.flatMap(name => [`--${name}`, `fixture-${name}`]);
+  assert.equal(parseRuntimeBuildOptions(args).publicOrigin, undefined);
+  assert.equal(parseRuntimeBuildOptions(args).execute, undefined);
+  const publicOrigin = 'http://127.0.0.1:53189';
+  const options = parseRuntimeBuildOptions([...args, '--public-origin', publicOrigin, '--execute']);
+  assert.equal(options.publicOrigin, publicOrigin);
+  assert.equal(options.execute, true);
+  assert.equal(args.length, names.length * 2);
+  assert.throws(() => parseRuntimeBuildOptions([...args, '--public-origin']), /explicit named/);
+  assert.throws(() => parseRuntimeBuildOptions([...args, '--public-origin', publicOrigin, '--public-origin', publicOrigin]), /explicit named/);
+  assert.throws(() => parseRuntimeBuildOptions([...args, '--execute', '--public-origin', publicOrigin]), /explicit named/);
+  assert.throws(() => parseRuntimeBuildOptions(args.slice(2)), /Required options/);
 });
 
 test('launch binds same package paths, readiness order and bounded cleanup', () => {
@@ -93,6 +134,8 @@ test('launch binds same package paths, readiness order and bounded cleanup', () 
   assert.equal(description.environment.fixed.HTTP_ADDR, '127.0.0.1:58088');
   assert.equal(description.environment.fixed.API_INTERNAL_URL, web.apiInternalURL);
   assert.equal(description.environment.inherit, false);
+  assert.equal(description.publicOrigin, description.webOrigin);
+  assert.equal(description.environment.fixed.PUBLIC_ORIGIN, description.webOrigin);
   assert(description.writablePaths.every(item => item.root === 'mutable'));
   assert.throws(() => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'root' }), /Ordinary/);
 });
@@ -113,6 +156,26 @@ test('controlled config rejects mode/version/missing/foreign secrets without ech
   await assert.rejects(controlledRuntimeEnvironment(description, filename), error => error.message === 'Controlled config JSON invalid');
   await put({ version: description.configVersion, values: { ...values, NODE_OPTIONS: 'do-not-echo-this-secret' } });
   await assert.rejects(controlledRuntimeEnvironment(description, filename), error => !error.message.includes('do-not-echo') && /unallowed/.test(error.message));
+});
+
+test('public origins cannot be inherited or supplied through external config', async t => {
+  const root = await fixture(t), filename = path.join(root, 'config.json');
+  const description = makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', publicOrigin: 'http://127.0.0.1:53188', runtimeUser: 'www' });
+  const values = { DATABASE_URL: 'postgres://test-only', MFA_ENCRYPTION_KEY: 'a'.repeat(64), PURCHASE_FIELD_ENCRYPTION_KEY: 'b'.repeat(64), PROVISION_ENCRYPTION_KEY: 'c'.repeat(64) };
+  const saved = { PUBLIC_ORIGIN: process.env.PUBLIC_ORIGIN, PUBLIC_ORIGINS: process.env.PUBLIC_ORIGINS };
+  try {
+    process.env.PUBLIC_ORIGIN = process.env.PUBLIC_ORIGINS = 'http://127.0.0.1:3088';
+    await writeFile(filename, JSON.stringify({ version: description.configVersion, values }), { mode: 0o600 });
+    const environment = await controlledRuntimeEnvironment(description, filename);
+    assert.equal(environment.PUBLIC_ORIGIN, description.publicOrigin);
+    assert.equal(environment.PUBLIC_ORIGINS, description.publicOrigin);
+    for (const key of ['PUBLIC_ORIGIN', 'PUBLIC_ORIGINS', 'PORT', 'API_INTERNAL_URL']) {
+      await writeFile(filename, JSON.stringify({ version: description.configVersion, values: { ...values, [key]: 'foreign-origin' } }));
+      await assert.rejects(controlledRuntimeEnvironment(description, filename), /unallowed/);
+    }
+  } finally {
+    for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
 });
 
 async function traceFixture(t) {

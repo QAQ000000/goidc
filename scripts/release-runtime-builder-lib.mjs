@@ -86,24 +86,34 @@ export async function validateDependencies(dependencies, provenance, lockSHA256,
   if (inputTreeSHA256 !== provenance.inputTreeSHA256 || JSON.stringify(files) !== JSON.stringify(provenance.files)) throw new Error('Dependency provenance input tree mismatch');
   return { files, inputTreeSHA256, bytes: files.reduce((sum, file) => sum + (file.bytes ?? 0), 0) };
 }
-export function runtimeTarget(apiInternalURL, webOrigin) {
-  const api = apiTarget(apiInternalURL), web = apiTarget(webOrigin);
-  for (const origin of [api, web]) {
+export function runtimeTarget(apiInternalURL, webOrigin, publicOrigin = webOrigin) {
+  const api = apiTarget(apiInternalURL), web = apiTarget(webOrigin), publicTarget = apiTarget(publicOrigin);
+  for (const origin of [api, web, publicTarget]) {
     const url = new URL(origin);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || !url.port || ['8088', '3088'].includes(url.port)) throw new Error('Isolated runtime target must use explicit independent IPv4 loopback ports (not 8088/3088)');
+    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || Number(url.port) <= 1024 || ['8088', '3088'].includes(url.port)) throw new Error('Isolated runtime target must use explicit IPv4 loopback HTTP ports above 1024 (not 8088/3088)');
   }
   if (api === web) throw new Error('API and Web ports must differ');
-  return { api, web };
+  if (api === publicTarget) throw new Error('API and public ports must differ');
+  return { api, web, public: publicTarget };
 }
-export function makeLaunchDescription({ web, binaries, runtime, webOrigin, runtimeUser }) {
-  const targets = runtimeTarget(web.apiInternalURL, webOrigin);
+export function makeOriginBuildRecord({ apiInternalURL, webOrigin, publicOrigin, sourceCommit }) {
+  const targets = runtimeTarget(apiInternalURL, webOrigin, publicOrigin);
+  if (!/^[a-f0-9]{40}$/.test(sourceCommit ?? '')) throw new Error('Origin build record requires fixed source commit');
+  return {
+    format: 'zjmfgo-runtime-origins-v1', sourceCommit,
+    apiInternalURL: targets.api, webOrigin: targets.web, publicOrigin: targets.public,
+    environment: { API_INTERNAL_URL: targets.api, PUBLIC_ORIGIN: targets.public, PUBLIC_ORIGINS: targets.public },
+  };
+}
+export function makeLaunchDescription({ web, binaries, runtime, webOrigin, publicOrigin, runtimeUser }) {
+  const targets = runtimeTarget(web.apiInternalURL, webOrigin, publicOrigin);
   if (!/^[a-z_][a-z0-9_-]*[$]?$/.test(runtimeUser ?? '') || runtimeUser === 'root') throw new Error('Ordinary runtime user is required');
   const keys = ['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY'];
   return {
     version: 1, configVersion: 'zjmfgo-runtime-config-v1', runtimeUser,
-    node: runtime.node.path, apiInternalURL: targets.api, webOrigin: targets.web, appRoot: web.appRoot, entry: web.entry,
+    node: runtime.node.path, apiInternalURL: targets.api, webOrigin: targets.web, publicOrigin: targets.public, appRoot: web.appRoot, entry: web.entry,
     binaries: Object.fromEntries(Object.entries(binaries).map(([name, binary]) => [name, binary.path])),
-    environment: { inherit: false, allowlist: keys, forbidden: ['NODE_PATH', 'NODE_OPTIONS', '__NEXT_PRIVATE_STANDALONE_CONFIG'], fixed: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: new URL(targets.web).port, HTTP_ADDR: new URL(targets.api).host, API_INTERNAL_URL: targets.api, PUBLIC_ORIGIN: targets.web, PUBLIC_ORIGINS: targets.web, COOKIE_SECURE: 'false', PAYMENT_MOCK_ENABLED: 'false' } },
+    environment: { inherit: false, allowlist: keys, forbidden: ['NODE_PATH', 'NODE_OPTIONS', '__NEXT_PRIVATE_STANDALONE_CONFIG'], fixed: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: new URL(targets.web).port, HTTP_ADDR: new URL(targets.api).host, API_INTERNAL_URL: targets.api, PUBLIC_ORIGIN: targets.public, PUBLIC_ORIGINS: targets.public, COOKIE_SECURE: 'false', PAYMENT_MOCK_ENABLED: 'false' } },
     config: { external: true, mode: '0600', required: keys, format: 'JSON object {version, values}; never dotenv/shell', owner: 'launch uid' },
     host: runtime.host, timeouts: { readySeconds: 30, workerSeconds: 30, stopSeconds: 15 },
     writablePaths: ['cache', 'tmp', 'state', 'logs'].map(name => ({ root: 'mutable', path: name })),
