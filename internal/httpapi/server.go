@@ -529,6 +529,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/invoices/page", s.auth(s.invoices, true))
 	mux.HandleFunc("GET /api/v1/admin/invoices/{id}", s.auth(s.invoiceDetail, true))
 	mux.HandleFunc("GET /api/v1/admin/invoice-customers", s.auth(s.invoiceCustomers, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/topup-liability", s.topupLiabilityHTTP(s.topupLiability, false))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/topup-liability/resolve", s.topupLiabilityHTTP(s.resolveTopupLiability, true))
 	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.externalRefunds, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.createExternalRefund, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", s.sessionAuth(func(w http.ResponseWriter, r *http.Request) {
