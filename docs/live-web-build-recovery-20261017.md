@@ -29,3 +29,9 @@
 已集成 `3dd0196`：`web/package.json` 的 `prebuild` 调用 [运行目录检查](../scripts/check-web-build-runtime.mjs)。Linux检测同真实cwd的Next常驻进程，有则拒绝构建。主目录仅运行 `npm run prebuild --prefix web`，实际识别PID `1647696` 并退出1，**没有再执行主目录构建**；独立worktree检查放行。真实子进程测试涵盖next-server、next start/dev、cwd软链接与无关fixture，合并后Node专项15/15通过（其中14项为支付恢复）。
 
 该保护只提供检查时刻的cwd检测，不替代独立发布目录。直接调用Next、禁用lifecycle、共享 `.next` 或检查后才启动进程仍可绕过。正式一致发布、旧页面chunk保留、切流/切回和恢复验收继续按 [G04/G09契约](release-readiness-next-contract-20261017.md)推进，尚未关闭。本次是恢复原Web服务，不是部署本轮新功能。
+
+## 后续历史产物清理
+
+订单外部退款增量验收期间，按已授权的历史构建产物清理范围，逐一检查进程工作目录与打开文件，确认无运行进程使用后，删除上述 `output/live-web-recovery-20261017/overwritten-next`（约528MiB）。它是误覆盖产生的错误构建，不是恢复后常驻服务的 `.next`，也不是原发布的备份。
+
+同时删除三个已结束验收 worktree 的旧 `.next`：工单通知约390MiB、商品升级约393MiB、供应商客户运维约427MiB。保留代码/Git提交、验收文档、共享依赖、数据库、常驻构建和当时封存的schema153候选；清理后文件系统可用空间约2.9GiB。原候选仍是旧基线，不能视为订单退款迁移154的发布候选。本节仅记录已执行的清理，不改变事故和恢复验收结论。
