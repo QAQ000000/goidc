@@ -532,7 +532,7 @@ function RefundPanel({
           showCloseButton={!busy}
         >
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="pr-6">
               登记外部退款 · {money(invoice.amount_cents)}
             </DialogTitle>
             <DialogDescription>
@@ -648,7 +648,7 @@ function RefundPanel({
           showCloseButton={!busy}
         >
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="pr-6">
               {action?.kind === "confirm"
                 ? "独立复核：确认真实到账"
                 : "驳回外部退款登记"}
