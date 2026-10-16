@@ -77,7 +77,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   const [clock, setClock] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   async function requestVerification() {
-    if (verificationBusy || Date.now() < resendAt) return;
+    if (verificationBusy || unknownRegistration || Date.now() < resendAt) return;
     setVerificationBusy(true); setError(""); setVerificationMessage("");
     try {
       const result = await api<{ challenge_id: string; resend_after: number }>("/auth/verification/request", { method: "POST", body: JSON.stringify({ purpose: "register", channel: "email", recipient: email, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
@@ -157,7 +157,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       } else if (register && failure.code === "registration_disabled") {
         setRegistrationDisabled(true); setError("本站暂未开放注册");
       } else if (register && (!(e instanceof ApiError) || e.status >= 500 || e.status === 408)) {
-        setUnknownRegistration(true); setError("注册结果暂时未知，账户可能已创建。请先尝试登录或找回密码核实，避免重复创建。此页已停止再次提交。");
+        setUnknownRegistration(true); setError("");
       } else if (failure.code === "mfa_required" && typeof failure.details?.challenge === "string") {
         setMfaChallenge(failure.details.challenge);
         setError("");
@@ -188,7 +188,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
           {site?.auth_captcha_enabled && !mfaChallenge && (
             <div className="space-y-2">
               <Label htmlFor="captcha_answer">图形验证码</Label>
-              <div className="flex items-center gap-3"><div className="h-16 w-[190px] overflow-hidden border bg-slate-50"><img src={captcha?.image} alt="图形验证码" className="h-16 w-[190px]" /></div><Button type="button" variant="outline" size="icon" title="刷新验证码" aria-label="刷新验证码" onClick={() => void refreshCaptcha()} disabled={captchaBusy}><RefreshCw className={captchaBusy ? "animate-spin" : ""} /></Button></div>
+              <div className="flex items-center gap-3"><div className="h-16 w-[190px] overflow-hidden border bg-slate-50"><img src={captcha?.image} alt="图形验证码" className="h-16 w-[190px]" /></div><Button type="button" variant="outline" size="icon" title="刷新验证码" aria-label="刷新验证码" onClick={() => void refreshCaptcha()} disabled={captchaBusy || (register && unknownRegistration)}><RefreshCw className={captchaBusy ? "animate-spin" : ""} /></Button></div>
               <Input id="captcha_answer" name="captcha_answer" value={captchaAnswer} onChange={event => setCaptchaAnswer(event.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g, "").slice(0, 6))} autoComplete="off" maxLength={6} required />
             </div>
           )}
@@ -237,14 +237,14 @@ export function AuthForm({ register = false }: { register?: boolean }) {
                   onChange={event => { setEmail(event.target.value); setVerificationId(""); setVerificationMessage(""); }}
                 />
               </div>
-              {site?.email_verification_required && <div className="space-y-2"><Label htmlFor="verification_code">邮箱验证码</Label><div className="flex gap-2"><Input id="verification_code" value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required /><Button type="button" variant="outline" disabled={verificationBusy || !email || clock < resendAt || (!!site.auth_captcha_enabled && (!captcha?.captcha_id || !captchaAnswer || captchaBusy))} onClick={() => void requestVerification()}>{verificationBusy ? "发送中" : clock < resendAt ? `${Math.ceil((resendAt - clock) / 1000)} 秒` : "发送验证码"}</Button></div>{verificationMessage && <p role="status" className="text-sm text-emerald-700">{verificationMessage}</p>}</div>}
+              {site?.email_verification_required && <div className="space-y-2"><Label htmlFor="verification_code">邮箱验证码</Label><div className="flex gap-2"><Input id="verification_code" value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required /><Button type="button" variant="outline" disabled={verificationBusy || unknownRegistration || !email || clock < resendAt || (!!site.auth_captcha_enabled && (!captcha?.captcha_id || !captchaAnswer || captchaBusy))} onClick={() => void requestVerification()}>{verificationBusy ? "发送中" : clock < resendAt ? `${Math.ceil((resendAt - clock) / 1000)} 秒` : "发送验证码"}</Button></div>{verificationMessage && <p role="status" className="text-sm text-emerald-700">{verificationMessage}</p>}</div>}
             </>
           )}
           {register && <>
             {schemaChanged && <div role="alert" className="space-y-2 text-sm"><p>注册字段已更新，请加载最新字段并重新核对。</p><Button type="button" variant="outline" disabled={schemaBusy || busy} onClick={() => void loadRegistrationFields()}>加载最新注册字段</Button></div>}
             {schemaNotice && schema && <p role="status" className="text-xs text-muted-foreground break-words">{schemaNotice}</p>}
             <CustomerFieldInputs title="补充资料" singleColumn definitions={{ fields: schema?.items ?? [], ready: !!schema && !schemaBusy, error: schemaError, refresh: () => void loadRegistrationFields() }} values={customFields} onChange={setCustomFields} disabled={busy || schemaBusy || schemaChanged || unknownRegistration} />
-            {unknownRegistration && <p className="text-sm"><Link href="/login" className="underline">检查登录</Link> · <Link href="/forgot-password" className="underline">找回密码</Link></p>}
+            {unknownRegistration && <div role="alert" className="space-y-2 text-sm"><p>注册结果暂时未知，账户可能已创建。请先尝试登录或找回密码核实，避免重复创建。此页已停止再次提交。</p><p><Link href="/login" className="underline">检查登录</Link> · <Link href="/forgot-password" className="underline">找回密码</Link></p></div>}
           </>}
           <div className="space-y-2">
             <Label htmlFor="password">密码</Label>
