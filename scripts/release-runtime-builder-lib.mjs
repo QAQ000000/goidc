@@ -5,6 +5,18 @@ import { apiTarget, fileHash, inventory, noLinks, safeRelative, sha256 } from '.
 
 export const budgetComponents = ['checkout', 'buildTemporary', 'standalone', 'sealed', 'runCopy', 'testDatabaseAndLogs'];
 export const controlledPATH = '/usr/local/btgo/bin:/usr/local/bin:/usr/bin:/bin';
+// Both Go work files and Node/Next os.tmpdir() allocations belong to the same
+// filesystem/namespace as the candidate and its measured reserve.
+export async function ownedBuildTemporaryEnvironment(root) {
+  await noLinks(root);
+  const scratch = path.join(root, '.scratch');
+  await mkdir(scratch, { recursive: true, mode: 0o700 });
+  await noLinks(scratch);
+  const temporary = path.join(root, '.scratch/tmp');
+  await mkdir(temporary, { recursive: true, mode: 0o700 });
+  await noLinks(temporary);
+  return { TMPDIR: temporary, GOTMPDIR: temporary };
+}
 const hashPattern = /^[a-f0-9]{64}$/;
 export async function pinnedJSON(filename, expectedSHA256) {
   if (!hashPattern.test(expectedSHA256 ?? '')) throw new Error('BLOCKED: external JSON SHA256 anchor is required');

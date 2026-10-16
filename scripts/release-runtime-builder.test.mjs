@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runtimeBuilderFiles } from './release-runtime-lib.mjs';
 import { inventory, sha256 } from './release-candidate-lib.mjs';
-import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, ownedBuildTemporaryEnvironment, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-runtime-builder-test-'));
@@ -19,6 +19,20 @@ const web = { appRoot: 'artifact/web/web', entry: 'artifact/web/web/server.js', 
 const binaries = Object.fromEntries(['api', 'worker', 'migrate'].map(name => [name, { path: `artifact/bin/${name}` }]));
 const runtime = { node: { path: 'artifact/runtime/node' }, host: { platform: 'linux/x64', requirements: ['test baseline'] } };
 const launch = () => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'www' });
+
+test('Go and Node temporary writes stay in owned candidate filesystem', async t => {
+  const root = await fixture(t), temporary = await ownedBuildTemporaryEnvironment(root);
+  assert.deepEqual(temporary, { TMPDIR: path.join(root, '.scratch/tmp'), GOTMPDIR: path.join(root, '.scratch/tmp') });
+  const nodeFile = execFileSync(process.execPath, ['-e', `const fs=require('node:fs'),os=require('node:os'),path=require('node:path');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'node-'));fs.writeFileSync(path.join(dir,'proof'),'owned');process.stdout.write(dir)`], { env: temporary, encoding: 'utf8' });
+  assert(nodeFile.startsWith(temporary.TMPDIR + '/'));
+  assert.equal(await readFile(path.join(nodeFile, 'proof'), 'utf8'), 'owned');
+  const go = execFileSync('/usr/local/btgo/bin/go', ['env', 'GOTMPDIR'], { env: { ...temporary, GOTOOLCHAIN: 'local', GOENV: 'off' }, encoding: 'utf8' }).trim();
+  assert.equal(go, temporary.GOTMPDIR);
+  // Prove parent-component links cannot redirect private temporary writes.
+  const unsafe = await fixture(t), outside = await fixture(t);
+  await symlink(outside, path.join(unsafe, '.scratch'));
+  await assert.rejects(ownedBuildTemporaryEnvironment(unsafe), /Symlink/);
+});
 
 test('recorded peak accounts for all six components and hard reserve', () => {
   const input = budget();

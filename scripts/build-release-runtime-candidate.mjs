@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { prepareDestination } from './build-release-candidate.mjs';
 import { fileHash, git, inventory, noLinks, selectedDigest, sha256, sourceProof } from './release-candidate-lib.mjs';
-import { collectTraceEvidence, controlledPATH, freeSpace, guardReserve, makeLaunchDescription, ordinaryFiles, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+import { collectTraceEvidence, controlledPATH, freeSpace, guardReserve, makeLaunchDescription, ordinaryFiles, ownedBuildTemporaryEnvironment, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
 const goCommand = '/usr/local/btgo/bin/go';
@@ -39,7 +39,8 @@ async function namespaceBuild(requestPath) {
   const request = JSON.parse(await readFile(requestPath, 'utf8'));
   if (process.ppid !== request.parentPID || await readlink('/proc/self/ns/mnt') === await readlink(`/proc/${process.ppid}/ns/mnt`) || await readlink(`/proc/${process.ppid}/ns/mnt`) !== request.parentMountNamespace) throw new Error('Refusing build outside its private mount namespace');
   const { root, checkout, dependencies, proof, budget, initialFreeBytes, node, tools } = request;
-  const env = { PATH: controlledPATH, HOME: path.join(root, '.scratch/home'), LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', API_INTERNAL_URL: request.apiInternalURL, ZJMFGO_RUNTIME_BUILD: '1', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off', GOCACHE: path.join(root, '.scratch/go-build'), GOMODCACHE: request.goModCache };
+  const temporary = await ownedBuildTemporaryEnvironment(root);
+  const env = { ...temporary, PATH: controlledPATH, HOME: path.join(root, '.scratch/home'), LANG: 'C.UTF-8', NODE_ENV: 'production', NEXT_TELEMETRY_DISABLED: '1', API_INTERNAL_URL: request.apiInternalURL, ZJMFGO_RUNTIME_BUILD: '1', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off', GOCACHE: path.join(root, '.scratch/go-build'), GOMODCACHE: request.goModCache };
   await mkdir(env.HOME, { recursive: true });
   const mounted = path.join(checkout, 'web/node_modules');
   await mkdir(mounted);
