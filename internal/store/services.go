@@ -569,9 +569,27 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingC
 // supplier adapter advertises create/sync/power/reset/rescue/reinstall but not
 // suspend, resume or terminate.
 func modeSupportsServiceAction(mode, action string) bool {
-	if mode != "supplier" {
-		return true
+	gate, restricted := serviceModeActionGates[mode]
+	return !restricted || gate(action)
+}
+
+// Keep the manual API and scheduler candidate filtering on the same capability
+// rules. Modes without a gate retain their existing unrestricted behavior.
+var serviceModeActionGates = map[string]func(string) bool{
+	"supplier": supplierSupportsServiceAction,
+}
+
+func unsupportedServiceActionModes(action string) []string {
+	modes := make([]string, 0, len(serviceModeActionGates))
+	for mode, gate := range serviceModeActionGates {
+		if !gate(action) {
+			modes = append(modes, mode)
+		}
 	}
+	return modes
+}
+
+func supplierSupportsServiceAction(action string) bool {
 	switch action {
 	case "create", "sync", "reset_password", "rescue_system", "exit_rescue_system", "reinstall":
 		return true
