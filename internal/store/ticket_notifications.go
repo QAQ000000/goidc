@@ -16,6 +16,7 @@ type ticketRecipient struct {
 	email, phone                                           string
 	emailVerified, phoneVerified, emailEnabled, smsEnabled bool
 	preferenceVersion                                      int64
+	active                                                 bool
 }
 
 // QueueTicketNotification records recipient decisions and outbox jobs in the caller's business transaction.
@@ -48,9 +49,9 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 	if err != nil {
 		return err
 	}
-	query := `SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0) FROM users u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=$2`
+	query := `SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0),u.status='active' FROM users u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=$2`
 	if eventKind != "staff_replied" {
-		query = `WITH legal AS (SELECT u.* FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id JOIN tickets t ON t.id=$1 WHERE u.id<>$3 AND u.status='active' AND admin_ticket_department_allowed(u.id,t.department_id) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions)))) SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0) FROM legal u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=(SELECT assignee_id FROM tickets WHERE id=$1) OR NOT EXISTS(SELECT 1 FROM legal a JOIN tickets t ON t.assignee_id=a.id WHERE t.id=$1) ORDER BY u.id`
+		query = `WITH legal AS (SELECT u.* FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id JOIN tickets t ON t.id=$1 WHERE u.id<>$3 AND u.status='active' AND admin_ticket_department_allowed(u.id,t.department_id) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions)))) SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0),u.status='active' FROM legal u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=(SELECT assignee_id FROM tickets WHERE id=$1) OR NOT EXISTS(SELECT 1 FROM legal a JOIN tickets t ON t.assignee_id=a.id WHERE t.id=$1) ORDER BY u.id`
 	}
 	// Use all placeholders even for the owner-only query to keep pgx parameter typing explicit.
 	if eventKind == "staff_replied" {
@@ -63,7 +64,7 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 	recipients := []ticketRecipient{}
 	for rows.Next() {
 		var r ticketRecipient
-		if err = rows.Scan(&r.kind, &r.id, &r.customer, &r.email, &r.phone, &r.emailVerified, &r.phoneVerified, &r.emailEnabled, &r.smsEnabled, &r.preferenceVersion); err != nil {
+		if err = rows.Scan(&r.kind, &r.id, &r.customer, &r.email, &r.phone, &r.emailVerified, &r.phoneVerified, &r.emailEnabled, &r.smsEnabled, &r.preferenceVersion, &r.active); err != nil {
 			rows.Close()
 			return err
 		}
@@ -75,13 +76,13 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 		return err
 	}
 	if eventKind == "staff_replied" {
-		rows, err = tx.Query(ctx, `SELECT id,email,status='active' AND support_emails FROM customer_contacts WHERE customer_id=$1 ORDER BY id`, owner)
+		rows, err = tx.Query(ctx, `SELECT id,email,support_emails,status='active' FROM customer_contacts WHERE customer_id=$1 ORDER BY id`, owner)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			r := ticketRecipient{kind: "contact", customer: owner, emailVerified: true}
-			if err = rows.Scan(&r.id, &r.email, &r.emailEnabled); err != nil {
+			if err = rows.Scan(&r.id, &r.email, &r.emailEnabled, &r.active); err != nil {
 				rows.Close()
 				return err
 			}
@@ -96,9 +97,9 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 	origin, parseErr := url.Parse(publicOrigin)
 	ticketURL := ""
 	if parseErr == nil && (origin.Scheme == "https" || origin.Scheme == "http") && origin.Host != "" && origin.User == nil {
-		ticketURL = strings.TrimRight(origin.Scheme+"://"+origin.Host, "/") + fmt.Sprintf("/tickets/%d", ticketID)
+		ticketURL = strings.TrimRight(origin.Scheme+"://"+origin.Host, "/") + fmt.Sprintf("/console/tickets/%d", ticketID)
 		if eventKind != "staff_replied" {
-			ticketURL = strings.Replace(ticketURL, "/tickets/", "/admin/tickets/", 1)
+			ticketURL = strings.Replace(ticketURL, "/console/tickets/", "/admin/tickets/", 1)
 		}
 	}
 	replacer := strings.NewReplacer("{{ticket_no}}", number, "{{subject}}", subject, "{{body}}", body, "{{author_name}}", author, "{{customer_name}}", customerName, "{{department_name}}", department, "{{ticket_url}}", ticketURL)
@@ -121,15 +122,19 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 		address, enabled, verified = r.phone, r.smsEnabled, r.phoneVerified
 	}
 	normalized := strings.ToLower(strings.TrimSpace(address))
+	// Phone verification accepts canonical E.164 only. Do not invent country codes or
+	// remove interior separators from a verified identity; invalid legacy values skip.
 	reason := ""
-	if !enabled {
+	if !r.active {
+		reason = "inactive_recipient"
+	} else if !enabled {
 		reason = "unsubscribed"
 	} else if !verified {
 		reason = "unverified_address"
 	} else if normalized == "" {
 		reason = "missing_address"
 	}
-	var subject, body, providerID, instance string
+	var subject, body, providerID, instance, implementation string
 	var version, instanceVersion int64
 	var active bool
 	err := tx.QueryRow(ctx, `SELECT subject,body,provider_template_id,version,active FROM notification_templates WHERE channel=$1 AND kind=$2`, channel, kind).Scan(&subject, &body, &providerID, &version, &active)
@@ -147,12 +152,15 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 	if channel == "sms" {
 		category = "sms"
 	}
-	err = tx.QueryRow(ctx, `SELECT id,version FROM channel_instances WHERE category=$1 AND enabled ORDER BY sort_order,id LIMIT 1`, category).Scan(&instance, &instanceVersion)
+	err = tx.QueryRow(ctx, `SELECT id,version,implementation_id FROM channel_instances WHERE category=$1 AND enabled ORDER BY sort_order,id LIMIT 1`, category).Scan(&instance, &instanceVersion, &implementation)
 	if err != nil && err != pgx.ErrNoRows {
 		return err
 	}
 	if reason == "" && err == pgx.ErrNoRows {
 		reason = "missing_channel"
+	}
+	if reason == "" && channel == "sms" && implementation == "idcsmart" && strings.TrimSpace(providerID) == "" {
+		reason = "missing_provider_template"
 	}
 	var duplicate *int64
 	if reason == "" {

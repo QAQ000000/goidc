@@ -1,6 +1,8 @@
 package store
 
 import (
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -60,8 +62,14 @@ func TestTicketNotificationDeliveryTransactions(t *testing.T) {
 		t.Fatalf("events=%d", events)
 	}
 	must(db.Pool.QueryRow(ctx, `SELECT count(*) FILTER(WHERE outcome='queued'),count(*) FILTER(WHERE reason='duplicate_address'),count(*) FILTER(WHERE reason='unsubscribed') FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.kind='staff_replied'`).Scan(&queued, &duplicates, &unsubscribed))
-	if queued != 3 || duplicates != 1 || unsubscribed != 1 {
+	if queued != 3 || duplicates != 1 || unsubscribed != 0 {
 		t.Fatalf("decisions queued=%d duplicate=%d unsubscribed=%d", queued, duplicates, unsubscribed)
+	}
+	var customerURL, staffURL string
+	must(db.Pool.QueryRow(ctx, `SELECT d.rendered_body FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.kind='staff_replied' AND d.channel='email' AND d.recipient_kind='user'`).Scan(&customerURL))
+	must(db.Pool.QueryRow(ctx, `SELECT d.rendered_body FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.kind='customer_created' AND d.channel='email'`).Scan(&staffURL))
+	if !strings.Contains(customerURL, fmt.Sprintf("https://billing.example.test/console/tickets/%d", ticket)) || !strings.Contains(staffURL, fmt.Sprintf("https://billing.example.test/admin/tickets/%d", ticket)) {
+		t.Fatalf("incorrect URLs customer=%q staff=%q", customerURL, staffURL)
 	}
 	// Existing workers consume the exact persisted payload, no external channels are contacted.
 	email, e := db.ClaimEmailJob(ctx)
@@ -118,6 +126,37 @@ func TestTicketNotificationDeliveryTransactions(t *testing.T) {
 	if sent != 2 {
 		t.Fatalf("missing-template decisions=%d", sent)
 	}
+	// Inactive owners remain visible as explicit skipped decisions; contacts keep their own status.
+	_, err = db.Pool.Exec(ctx, `UPDATE users SET status='disabled' WHERE id=$1`, owner)
+	must(err)
+	var inactiveReply int64
+	must(db.Pool.QueryRow(ctx, `INSERT INTO ticket_replies(ticket_id,author_id,body) VALUES($1,$2,'Inactive owner') RETURNING id`, ticket, staff).Scan(&inactiveReply))
+	must(queue("staff_replied", inactiveReply, staff))
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.reply_id=$1 AND d.recipient_kind='user' AND reason='inactive_recipient'`, inactiveReply).Scan(&sent))
+	if sent != 2 {
+		t.Fatalf("inactive owner decisions=%d", sent)
+	}
+	// The idcsmart gateway requires an approved per-kind template ID; no default template is substituted.
+	_, err = db.Pool.Exec(ctx, `UPDATE users SET status='active' WHERE id=$1`, owner)
+	must(err)
+	_, err = db.Pool.Exec(ctx, `UPDATE user_ticket_notification_preferences SET sms_enabled=true WHERE user_id=$1`, owner)
+	must(err)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO notification_templates(channel,kind,name,subject,body,active) VALUES('sms','ticket_staff_replied','Test','Test','Short reply',true); UPDATE channel_instances SET implementation_id='idcsmart' WHERE id='ticket-sms'`)
+	must(err)
+	var templateReply int64
+	must(db.Pool.QueryRow(ctx, `INSERT INTO ticket_replies(ticket_id,author_id,body) VALUES($1,$2,'Missing provider template') RETURNING id`, ticket, staff).Scan(&templateReply))
+	must(queue("staff_replied", templateReply, staff))
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.reply_id=$1 AND reason='missing_provider_template'`, templateReply).Scan(&sent))
+	if sent != 1 {
+		t.Fatalf("missing provider decisions=%d", sent)
+	}
+	// The database and verification endpoint both require canonical E.164; equivalent
+	// numbers with interior separators cannot acquire a stored verified identity.
+	_, err = db.Pool.Exec(ctx, `UPDATE users SET phone='+86 13800138000' WHERE id=$1`, owner)
+	if err == nil {
+		t.Fatal("database accepted noncanonical phone")
+	}
+
 }
 
 func TestTicketNotificationStaffEligibilityAndSkips(t *testing.T) {
