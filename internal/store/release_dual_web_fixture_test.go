@@ -34,6 +34,7 @@ type dualWebCredentials struct {
 type releaseDualWebFixture struct {
 	*releaseRuntimeFixture
 	credentials                       dualWebCredentials
+	siteMarker                        string
 	customerID, adminID               int64
 	businessBaseline, sessionBaseline string
 	continuityChecks                  int
@@ -125,6 +126,12 @@ func (f *releaseDualWebFixture) prepareDual(ctx context.Context) error {
 			return errors.New("dual fixture safe settings preparation failed")
 		}
 	}
+	// This schema-derived ASCII marker is public test data, distinct from the
+	// Web fallback brand. RootLayout consumes API data.site_name for its title.
+	marker := "DualWebSSR_" + f.schema
+	if _, err = tx.Exec(ctx, "UPDATE site_settings SET site_name=$1 WHERE id=1", marker); err != nil {
+		return errors.New("dual fixture SSR marker preparation failed")
+	}
 	for _, account := range []struct {
 		credential dualWebCredential
 		role       string
@@ -149,14 +156,27 @@ func (f *releaseDualWebFixture) prepareDual(ctx context.Context) error {
 		return err
 	}
 	f.prepared = true
+	f.siteMarker = marker
 	return nil
 }
 
-// Only sessions, login rate counters and constrained auth audit rows may change. Hash every
+func dualWebAbortEvidence(dir string, schemaRemoved bool) error {
+	if !schemaRemoved {
+		return nil
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "done.json")); err == nil {
+		return nil // Never overwrite a normal completion or earlier evidence.
+	} else if !os.IsNotExist(err) {
+		return errors.New("dual fixture cleanup evidence unavailable")
+	}
+	return fixtureWrite(dir, "done.json", map[string]any{"ok": false, "phase": "aborted", "schemaRemoved": true}, 0644)
+}
+
+// Only sessions, login rate counters and constrained authentication/API logs may change. Hash every
 // other table, including users, funds, services, jobs and notification settings.
 // Hashes of credentials/session rows remain private in memory, never in reports.
 func (f *releaseDualWebFixture) dualBusinessDigest(ctx context.Context) (string, error) {
-	rows, err := f.db.Pool.Query(ctx, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema() AND tablename NOT IN ('sessions','audit_events','auth_rate_limits') ORDER BY tablename`)
+	rows, err := f.db.Pool.Query(ctx, `SELECT tablename FROM pg_tables WHERE schemaname=current_schema() AND tablename NOT IN ('sessions','audit_events','auth_rate_limits','admin_api_logs') ORDER BY tablename`)
 	if err != nil {
 		return "", errors.New("dual fixture table inventory unavailable")
 	}
@@ -215,6 +235,17 @@ func (f *releaseDualWebFixture) verifyDual(ctx context.Context, logout bool) err
 	err = f.db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM audit_events WHERE actor_id=$1 AND action='auth.login_succeeded')=1 AND (SELECT count(*) FROM audit_events WHERE actor_id=$2 AND action='auth.login_succeeded')=1 AND (NOT $3::boolean OR ((SELECT count(*) FROM audit_events WHERE actor_id=$1 AND action='auth.logout')=1 AND (SELECT count(*) FROM audit_events WHERE actor_id=$2 AND action='auth.logout')=1))`, f.customerID, f.adminID, logout).Scan(&perActor)
 	if err != nil || !perActor {
 		return errors.New("dual fixture per-account authentication invariant failed")
+	}
+	// authWith logs even customer /me reads (including SSR's internal /me).
+	// Permit only this batch's authenticated read/logout routes, never arbitrary
+	// logs or unrelated actors. Permission failures return before this insert.
+	var validAPILogs bool
+	if err = f.db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM admin_api_logs WHERE
+ actor_id IS NULL OR actor_id NOT IN ($1,$2) OR status_code<>200 OR
+ NOT ((method='GET' AND path='/api/v1/me') OR
+      (method='GET' AND path='/api/v1/admin/site-settings' AND actor_id=$2) OR
+      (method='POST' AND path='/api/v1/auth/logout')))`, f.customerID, f.adminID).Scan(&validAPILogs); err != nil || !validAPILogs {
+		return errors.New("dual fixture authenticated API log invariant failed")
 	}
 	// Two genuine HTTP logins from the private IPv4 loopback proxy increment
 	// exactly this single bucket. CSRF/origin rejections happen before authLimit.
@@ -295,7 +326,12 @@ func TestReleaseDualWebFixture(t *testing.T) {
 			}
 		}
 		for _, name := range []string{"config.json", "credentials.json"} {
-			_ = os.Remove(filepath.Join(dir, name))
+			if err := os.Remove(filepath.Join(dir, name)); err != nil && !os.IsNotExist(err) {
+				t.Error("dual fixture deferred private input cleanup failed")
+			}
+		}
+		if err := dualWebAbortEvidence(dir, f.cleaned); err != nil {
+			t.Error(err)
 		}
 	}()
 	f.credentials, err = dualWebPrivateInputs(dir, f.dsn)
@@ -339,6 +375,7 @@ func TestReleaseDualWebFixture(t *testing.T) {
 				result["adminID"] = f.adminID
 				result["safeInputs"] = true
 				result["externalChannelsDisabled"] = true
+				result["siteMarker"] = f.siteMarker
 			}
 		case "verify-session-continuity":
 			if f.finalVerified {
@@ -489,6 +526,49 @@ func TestReleaseDualWebFixturePrivateCredentialsContract(t *testing.T) {
 	}
 }
 
+func TestReleaseDualWebFixtureAbortEvidenceContract(t *testing.T) {
+	dir := t.TempDir()
+	if err := dualWebAbortEvidence(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "done.json")); !os.IsNotExist(err) {
+		t.Fatal("unproven cleanup wrote evidence")
+	}
+	if err := dualWebAbortEvidence(dir, true); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "done.json"))
+	if err != nil {
+		t.Fatal("deferred cleanup evidence missing")
+	}
+	var done struct {
+		OK            bool   `json:"ok"`
+		Phase         string `json:"phase"`
+		SchemaRemoved bool   `json:"schemaRemoved"`
+	}
+	if json.Unmarshal(raw, &done) != nil || done.OK || done.Phase != "aborted" || !done.SchemaRemoved {
+		t.Fatal("deferred cleanup was relabeled as success")
+	}
+	if err := dualWebAbortEvidence(dir, true); err != nil {
+		t.Fatal(err)
+	}
+	normal := t.TempDir()
+	if err := fixtureWrite(normal, "done.json", map[string]any{"ok": true, "phase": "cleaned", "schemaRemoved": true}, 0644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(normal, "done.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dualWebAbortEvidence(normal, true); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(filepath.Join(normal, "done.json"))
+	if err != nil || string(after) != string(before) {
+		t.Fatal("normal completion evidence overwritten")
+	}
+}
+
 // This test checks the fixture's DB invariants with synthetic authentication
 // rows. It is not evidence of HTTP login, API routing, SSR or proxy continuity.
 func TestReleaseDualWebFixtureDatabaseContract(t *testing.T) {
@@ -541,6 +621,10 @@ func TestReleaseDualWebFixtureDatabaseContract(t *testing.T) {
 	if err = f.prepareDual(ctx); err != nil {
 		t.Fatal(err)
 	}
+	site, err := f.db.SiteSettings(ctx)
+	if err != nil || site.Name != f.siteMarker || f.siteMarker != "DualWebSSR_"+f.schema {
+		t.Fatal("public site SSR marker invalid")
+	}
 	if err = f.prepareDual(ctx); err == nil {
 		t.Fatal("second prepare accepted")
 	}
@@ -574,8 +658,20 @@ func TestReleaseDualWebFixtureDatabaseContract(t *testing.T) {
 	if err = f.verifyDual(ctx, false); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = f.db.Pool.Exec(ctx, "INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms) VALUES($1,'GET','/api/v1/me',200,0)", f.customerID); err != nil {
+		t.Fatal("contract authentication log preparation failed")
+	}
 	if err = f.verifyDual(ctx, false); err != nil {
 		t.Fatal("unchanged sessions rejected")
+	}
+	if _, err = f.db.Pool.Exec(ctx, "INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms) VALUES($1,'POST','/api/v1/orders',200,0)", f.customerID); err != nil {
+		t.Fatal("contract unexpected API log preparation failed")
+	}
+	if err = f.verifyDual(ctx, false); err == nil {
+		t.Fatal("unrelated API activity accepted")
+	}
+	if _, err = f.db.Pool.Exec(ctx, "DELETE FROM admin_api_logs WHERE path='/api/v1/orders'"); err != nil {
+		t.Fatal("contract unexpected API log cleanup failed")
 	}
 	if _, err = f.db.Pool.Exec(ctx, "UPDATE users SET balance_cents=1 WHERE id=$1", f.customerID); err != nil {
 		t.Fatal("contract financial tamper failed")
