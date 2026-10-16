@@ -87,7 +87,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 		expect(t, request(h, "GET", path, nil, "", ""), 200)
 	}
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 200)
-	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "maintenance-customer", "password": "integration-password"}, "", ""), 200)
+	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "maintenance-customer@example.test", "password": "integration-password"}, "", ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]any{"identifier": "maintenance-super"}, "", ""), 202)
 	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)

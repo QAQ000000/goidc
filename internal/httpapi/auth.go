@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -33,6 +34,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
+		Identifier    string `json:"identifier"`
 		Username      string `json:"username"`
 		Password      string `json:"password"`
 		CaptchaID     string `json:"captcha_id"`
@@ -49,21 +51,27 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid_captcha", "验证码错误，请刷新后重试")
 		return
 	}
-	if len(input.Username) > 254 || len(input.Password) > 72 || input.Username == "" {
+	identifier := strings.TrimSpace(input.Identifier)
+	if identifier == "" {
+		identifier = strings.TrimSpace(input.Username) // Compatibility for existing API clients.
+	} else if input.Username != "" && strings.TrimSpace(input.Username) != identifier {
+		writeError(w, 400, "invalid_credentials", "请只提供一个登录邮箱或手机号")
+		return
+	}
+	if len(identifier) > 254 || len(input.Password) > 72 || identifier == "" {
 		writeError(w, 400, "invalid_credentials", "登录信息无效")
 		return
 	}
-	username := strings.ToLower(strings.TrimSpace(input.Username))
-	var loginEnabled, usernameEnabled, emailEnabled, phoneEnabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT login_enabled,login_username_enabled,login_email_enabled,login_phone_enabled FROM auth_settings WHERE id=1").Scan(&loginEnabled, &usernameEnabled, &emailEnabled, &phoneEnabled); err != nil {
+	username, method := normalizeLoginIdentifier(identifier)
+	// The administrator form retains the username field, including numeric
+	// administrator names. Customer forms send identifier for phone inference.
+	if input.Identifier == "" && validSlug(strings.ToLower(identifier)) {
+		username, method = strings.ToLower(identifier), "username"
+	}
+	var loginEnabled, emailEnabled, phoneEnabled bool
+	if err := s.db.Pool.QueryRow(r.Context(), "SELECT login_enabled,login_email_enabled,login_phone_enabled FROM auth_settings WHERE id=1").Scan(&loginEnabled, &emailEnabled, &phoneEnabled); err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	method := "username"
-	if strings.Contains(username, "@") {
-		method = "email"
-	} else if strings.HasPrefix(username, "+") {
-		method = "phone"
 	}
 	clientAddr := s.clientIP(r)
 	if s.loginBlocked(r.Context(), username, clientAddr) {
@@ -111,7 +119,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
 		return
 	}
-	if id.Role == "customer" && (method == "username" && !usernameEnabled || method == "email" && !emailEnabled || method == "phone" && !phoneEnabled) {
+	if id.Role == "customer" && (method == "username" || method == "email" && !emailEnabled || method == "phone" && !phoneEnabled) {
 		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放")
 		return
 	}
@@ -151,6 +159,26 @@ WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr !=
 	}
 	write(w, 200, id)
 }
+
+// Domestic mobile numbers use China's calling code. International numbers must
+// include + or 00; normalization never changes a name into an email address.
+func normalizeLoginIdentifier(raw string) (string, string) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if strings.Contains(value, "@") {
+		return value, "email"
+	}
+	phone := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(value)
+	if strings.HasPrefix(phone, "00") {
+		phone = "+" + phone[2:]
+	} else if len(phone) == 11 && phone[0] == '1' && phone[1] >= '3' && phone[1] <= '9' {
+		phone = "+86" + phone
+	}
+	if store.ValidSMSRecipient(phone) {
+		return phone, "phone"
+	}
+	return value, "username" // Administrator accounts only.
+}
+
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	if _, err := r.Cookie(adminSessionCookie); err == nil {
 		s.exitImpersonation(w, r)
@@ -222,11 +250,19 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Username = strings.ToLower(strings.TrimSpace(input.Username))
+	if input.Username == "" {
+		var accountID [16]byte
+		if _, err := rand.Read(accountID[:]); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		input.Username = "customer-" + hex.EncodeToString(accountID[:])
+	}
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
 	input.Name = strings.TrimSpace(input.Name)
 	email, err := mail.ParseAddress(input.Email)
 	if err != nil || email.Address != input.Email || len(input.Email) > 254 || !validSlug(input.Username) || len(input.Username) < 3 || len(input.Username) > 48 || len(input.Password) < 8 || len(input.Password) > 72 || input.Name == "" || len(input.Name) > 120 {
-		writeError(w, 400, "invalid_registration", "请检查账号、邮箱、姓名和密码长度")
+		writeError(w, 400, "invalid_registration", "请检查邮箱、姓名和密码长度")
 		return
 	}
 	tx, err := s.db.Pool.Begin(r.Context())

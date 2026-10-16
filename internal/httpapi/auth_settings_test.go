@@ -43,7 +43,7 @@ func TestAuthSettingsContractAndEnforcement(t *testing.T) {
 	expect(t, request(h, "PUT", path, in, root, ""), 400)
 	saved := request(h, "PUT", path, in, root, "auth-settings-save-1")
 	expect(t, saved, 200)
-	if data(t, saved)["version"] != float64(2) {
+	if data(t, saved)["version"] != float64(3) {
 		t.Fatal(saved.Body.String())
 	}
 	replay := request(h, "PUT", path, in, root, "auth-settings-save-1")
@@ -64,7 +64,7 @@ func TestAuthSettingsContractAndEnforcement(t *testing.T) {
 	}
 	site.EmailVerificationRequired = true
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(site.SiteProfile, site.Version), root, ""), 409)
-	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "auth-settings-customer", "password": "integration-password"}, "", "")
+	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "auth-settings-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, login, 403)
 	if !strings.Contains(login.Body.String(), "login_disabled") {
 		t.Fatal(login.Body.String())
@@ -102,7 +102,7 @@ func TestAuthSettingsSiteVersionAndLoginMethod(t *testing.T) {
 	}
 	settings.RegistrationEnabled = false
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(settings.SiteProfile, settings.Version), root, ""), 200)
-	if version := data(t, request(h, "GET", "/api/v1/admin/auth-settings", nil, root, ""))["version"]; version != float64(3) {
+	if version := data(t, request(h, "GET", "/api/v1/admin/auth-settings", nil, root, ""))["version"]; version != float64(4) {
 		t.Fatal("auth settings version did not advance", version)
 	}
 	in["expected_version"] = 2
@@ -138,7 +138,7 @@ func TestMFASettingsPolicyAndSecrets(t *testing.T) {
 	expect(t, enroll, 200)
 	secret := data(t, enroll)["secret"].(string)
 	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, customer, ""), 200)
-	challengeLogin := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "mfa-settings-customer", "password": "integration-password"}, "", "")
+	challengeLogin := request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "mfa-settings-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, challengeLogin, 401)
 	challenge := errorData(t, challengeLogin)["challenge"].(string)
 	auth := authSettingsInput(t, h, root)
@@ -222,14 +222,14 @@ func TestMFAChallengeRechecksLoginMethod(t *testing.T) {
 	expect(t, enroll, 200)
 	secret := data(t, enroll)["secret"].(string)
 	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 200)
-	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "mfa-method-policy", "password": "integration-password"}, "", "")
+	login := request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "mfa-method-policy@example.test", "password": "integration-password"}, "", "")
 	expect(t, login, 401)
 	challenge := errorData(t, login)["challenge"].(string)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_username_enabled=false WHERE id=1"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_email_enabled=false WHERE id=1"); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/login/mfa", map[string]any{"challenge": challenge, "code": testTOTP(secret, time.Now())}, "", ""), 403)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_username_enabled=true WHERE id=1"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_settings SET login_email_enabled=true WHERE id=1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_challenges SET login_method=NULL WHERE user_id=$1", userID); err != nil {

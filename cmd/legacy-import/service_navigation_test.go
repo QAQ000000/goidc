@@ -320,7 +320,7 @@ func TestImportedNavigationThroughCustomerAPI(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	login := call("POST", "/auth/login", map[string]string{"username": "legacy-10", "password": "navigation-api-fixture"}, "")
+	login := call("POST", "/auth/login", map[string]string{"identifier": "import@example.test", "password": "navigation-api-fixture"}, "")
 	if login.Code != 200 {
 		t.Fatal("imported test login status", login.Code)
 	}

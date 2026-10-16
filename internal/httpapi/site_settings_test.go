@@ -139,7 +139,7 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 	profile := settings.SiteProfile
 	profile.RegistrationEnabled = false
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 1), root, ""), 200)
-	registration := map[string]any{"username": "site-new-customer", "email": "site-new@example.test", "display_name": "New customer", "password": "integration-password"}
+	registration := map[string]any{"email": "site-new@example.test", "display_name": "New customer", "password": "integration-password"}
 	w := request(h, "POST", "/api/v1/auth/register", registration, "", "")
 	expect(t, w, 403)
 	if errorData(t, w)["code"] != "registration_disabled" {
@@ -159,7 +159,6 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := make(chan int, 1)
-	registration["username"] = "site-waiting-customer"
 	registration["email"] = "site-waiting@example.test"
 	go func() { result <- request(h, "POST", "/api/v1/auth/register", registration, "", "").Code }()
 	for {
@@ -191,10 +190,10 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 		t.Fatal("registration did not finish")
 	}
 	var count int
-	if err = db.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE username='site-waiting-customer'").Scan(&count); err != nil || count != 0 {
+	if err = db.Pool.QueryRow(ctx, "SELECT count(*) FROM users WHERE email='site-waiting@example.test'").Scan(&count); err != nil || count != 0 {
 		t.Fatal("registration bypassed disabled setting", err)
 	}
-	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "site-new-customer", "password": "integration-password"}, "", ""), 200)
+	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "site-new@example.test", "password": "integration-password"}, "", ""), 200)
 }
 
 func TestCaptchaSettingsReadOnlyOmittedAndRevokedWhileWaiting(t *testing.T) {

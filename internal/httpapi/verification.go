@@ -103,7 +103,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 		in.Channel = "email"
 	}
 	in.Recipient = strings.TrimSpace(in.Recipient)
-	in.Identifier = strings.ToLower(strings.TrimSpace(in.Identifier))
+	in.Identifier, _ = normalizeLoginIdentifier(in.Identifier)
 	if in.Channel == "email" {
 		in.Recipient = strings.ToLower(in.Recipient)
 	}
@@ -121,7 +121,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 	}
 	if flow == "password_reset" {
 		if in.Identifier == "" || len(in.Identifier) > 254 {
-			writeError(w, 400, "invalid_password_reset", "账号或邮箱无效")
+			writeError(w, 400, "invalid_password_reset", "邮箱或手机号无效")
 			return
 		}
 		if err := s.consumeCaptcha(r.Context(), r, "forgot-password", in.CaptchaID, in.CaptchaAnswer); err != nil {

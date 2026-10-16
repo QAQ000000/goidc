@@ -65,13 +65,12 @@ export function AuthForm({ register = false }: { register?: boolean }) {
     setError("");
     const form = new FormData(e.currentTarget);
     try {
-      const username = String(form.get("username"));
+      const identifier = String(form.get("identifier") ?? "");
       const password = String(form.get("password"));
       if (register) {
         await api("/auth/register", {
           method: "POST",
           body: JSON.stringify({
-            username,
             password,
             email: form.get("email"),
             display_name: form.get("display_name"),
@@ -85,7 +84,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       }
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }) })
-        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ username, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
+        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
       router.push(user.role === "customer" ? "/" : "/admin");
       router.refresh();
     } catch (e) {
@@ -124,17 +123,20 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               <Input id="captcha_answer" name="captcha_answer" value={captchaAnswer} onChange={event => setCaptchaAnswer(event.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g, "").slice(0, 6))} autoComplete="off" maxLength={6} required />
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="username">{register ? "账号" : "账号或邮箱"}</Label>
+          {!register && <div className="space-y-2">
+            <Label htmlFor="identifier">邮箱或手机号</Label>
             <Input
-              id="username"
-              name="username"
+              id="identifier"
+              name="identifier"
               autoComplete="username"
               required
-              maxLength={register ? 48 : 254}
-              minLength={register ? 3 : 1}
+              maxLength={254}
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="邮箱或已验证手机号"
             />
-          </div>
+            <p className="text-xs text-muted-foreground">国内手机号可直接输入，国际号码请加国家区号（如 +1）。</p>
+          </div>}
           {mfaChallenge && !register && (
             <div className="space-y-2">
               <Label htmlFor="mfa_code">身份验证器验证码</Label>

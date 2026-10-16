@@ -112,10 +112,10 @@ func TestCertificationAutoUpdateNameOnApproval(t *testing.T) {
 		}
 		return version
 	}
-	usernameOf := func() string {
+	displayNameOf := func() string {
 		t.Helper()
 		var username string
-		if err := db.Pool.QueryRow(t.Context(), "SELECT username FROM users WHERE id=$1", userID).Scan(&username); err != nil {
+		if err := db.Pool.QueryRow(t.Context(), "SELECT display_name FROM users WHERE id=$1", userID).Scan(&username); err != nil {
 			t.Fatal(err)
 		}
 		return username
@@ -127,7 +127,7 @@ func TestCertificationAutoUpdateNameOnApproval(t *testing.T) {
 
 	// Switch off: approving must not touch the account name.
 	expect(t, reviewPath(profileID, currentVersion(profileID), "cert-autoname-review-off", "approved", ""), http.StatusOK)
-	if username := usernameOf(); username != "cert-autoname-customer" {
+	if username := displayNameOf(); username != "cert-autoname-customer" {
 		t.Fatalf("auto_update_name off still renamed the customer: %s", username)
 	}
 
@@ -136,7 +136,7 @@ func TestCertificationAutoUpdateNameOnApproval(t *testing.T) {
 	resubmit := request(h, http.MethodPost, "/api/v1/account/certification", map[string]any{"type": "individual", "payload": map[string]any{"name": "认证姓名甲", "id_number": "110101199001012222"}}, customer, "")
 	expect(t, resubmit, http.StatusAccepted)
 	expect(t, reviewPath(profileID, currentVersion(profileID), "cert-autoname-review-on", "approved", ""), http.StatusOK)
-	if username := usernameOf(); username != "认证姓名甲" {
+	if username := displayNameOf(); username != "认证姓名甲" {
 		t.Fatalf("approved auto_update_name did not write the certified name: %s", username)
 	}
 	var events int
@@ -161,39 +161,30 @@ func TestCertificationAutoUpdateNameOnApproval(t *testing.T) {
 	resubmit = request(h, http.MethodPost, "/api/v1/account/certification", map[string]any{"type": "individual", "payload": map[string]any{"name": "认证姓名丙", "id_number": "110101199001012222"}}, customer, "")
 	expect(t, resubmit, http.StatusAccepted)
 	expect(t, reviewPath(profileID, currentVersion(profileID), "cert-autoname-review-reject", "rejected", "资料不清晰"), http.StatusOK)
-	if username := usernameOf(); username != "认证姓名甲" {
+	if username := displayNameOf(); username != "认证姓名甲" {
 		t.Fatalf("rejection renamed the customer: %s", username)
 	}
 }
 
-// TestCertificationAutoUpdateNameSkipsTakenUsername pins the deliberate
-// deviation from legacy: clients.username had no unique constraint while Go
-// usernames double as login identifiers, so a duplicate keeps the approval and
-// records certification.name_update_skipped instead of failing the review.
-func TestCertificationAutoUpdateNameSkipsTakenUsername(t *testing.T) {
+// Certified customer names may match another customer's name or account ID.
+func TestCertificationAutoUpdateNameAllowsDuplicateNames(t *testing.T) {
 	db, h := testServer(t)
-	_, root := user(t, db, h, "cert-autoname-conflict-root", "super_admin")
-	customerID, customer := user(t, db, h, "cert-autoname-conflict-customer", "customer")
-	// Occupy the certified name so the writeback hits the unique index.
-	user(t, db, h, "cert-autoname-name-owner", "customer")
+	_, root := user(t, db, h, "cert-same-name-root", "super_admin")
 	setCertificationSettings(t, db, "UPDATE certification_settings SET auto_update_name=true WHERE id=1")
-	submit := request(h, http.MethodPost, "/api/v1/account/certification", map[string]any{"type": "individual", "payload": map[string]any{"name": "cert-autoname-name-owner", "id_number": "110101199001014444"}}, customer, "")
-	expect(t, submit, http.StatusAccepted)
-	profileID := int64(data(t, submit)["profile_id"].(float64))
-	expect(t, request(h, http.MethodPost, fmt.Sprintf("/api/v1/admin/certifications/%d/review", profileID), map[string]any{"decision": "approved", "expected_version": 1}, root, "cert-autoname-conflict-review"), http.StatusOK)
-	var username, status string
-	if err := db.Pool.QueryRow(t.Context(), "SELECT u.username,p.status FROM users u JOIN certification_profiles p ON p.user_id=u.id WHERE u.id=$1", customerID).Scan(&username, &status); err != nil {
-		t.Fatal(err)
-	}
-	if username != "cert-autoname-conflict-customer" || status != "approved" {
-		t.Fatalf("taken username must skip the writeback, not fail the review: username=%s status=%s", username, status)
-	}
-	var skipped int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='certification.name_update_skipped' AND entity_id=$1 AND payload->>'reason'='username_taken'", fmt.Sprint(profileID)).Scan(&skipped); err != nil {
-		t.Fatal(err)
-	}
-	if skipped != 1 {
-		t.Fatalf("expected one username_taken skip audit, got %d", skipped)
+	for i := range 2 {
+		account := fmt.Sprintf("cert-same-name-%d", i)
+		id, cookie := user(t, db, h, account, "customer")
+		submit := request(h, "POST", "/api/v1/account/certification", map[string]any{"type": "individual", "payload": map[string]any{"name": "同名客户", "id_number": fmt.Sprintf("CERT-SAME-NAME-%d", i)}}, cookie, "")
+		expect(t, submit, 202)
+		profile := int64(data(t, submit)["profile_id"].(float64))
+		expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/certifications/%d/review", profile), map[string]any{"decision": "approved", "expected_version": 1}, root, fmt.Sprintf("cert-same-name-review-%d", i)), 200)
+		var username, name string
+		if err := db.Pool.QueryRow(t.Context(), "SELECT username,display_name FROM users WHERE id=$1", id).Scan(&username, &name); err != nil {
+			t.Fatal(err)
+		}
+		if username != account || name != "同名客户" {
+			t.Fatalf("account=%q name=%q", username, name)
+		}
 	}
 }
 

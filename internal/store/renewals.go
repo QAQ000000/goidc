@@ -187,7 +187,7 @@ func extendRenewalDue(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
 	if handled, err := queueSupplierRenewal(ctx, tx, invoiceID, serviceID); handled || err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE services SET next_due_at=GREATEST(COALESCE(next_due_at,now()),now())+interval '%s',version=version+1,updated_at=now() WHERE id=$1`, renewalInterval(cycle)), serviceID)
+	_, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE services SET auto_renew_error='',next_due_at=GREATEST(COALESCE(next_due_at,now()),now())+interval '%s',version=version+1,updated_at=now() WHERE id=$1`, renewalInterval(cycle)), serviceID)
 	return err
 }
 

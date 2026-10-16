@@ -243,7 +243,12 @@ func user(t *testing.T, db *store.Store, h http.Handler, name, role string) (int
 			t.Fatal(err)
 		}
 	}
-	w := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": name, "password": "integration-password"}, "", "")
+	field, identifier := "username", name
+	if role == "customer" {
+		field = "identifier"
+		identifier = name + "@example.test"
+	}
+	w := request(h, "POST", "/api/v1/auth/login", map[string]string{field: identifier, "password": "integration-password"}, "", "")
 	expect(t, w, 200)
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 || !cookies[0].HttpOnly || cookies[0].SameSite != http.SameSiteLaxMode {
@@ -308,18 +313,18 @@ func TestAuthenticationOwnershipAndCSRF(t *testing.T) {
 	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET password_reset_required=true WHERE id=$1", secondID); err != nil {
 		t.Fatal(err)
 	}
-	resetLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "second", "password": "integration-password"}, "", "")
+	resetLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "second@example.test", "password": "integration-password"}, "", "")
 	expect(t, resetLogin, 403)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/password", secondID), map[string]string{"password": "new-integration-password"}, admin, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, second, ""), 401)
-	newLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "second", "password": "new-integration-password"}, "", "")
+	newLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "second@example.test", "password": "new-integration-password"}, "", "")
 	expect(t, newLogin, 200)
 	newCookies := newLogin.Result().Cookies()
 	if len(newCookies) != 1 {
 		t.Fatal("new login did not return a session")
 	}
 	newCookie := newCookies[0].Name + "=" + newCookies[0].Value
-	secondLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "second", "password": "new-integration-password"}, "", "")
+	secondLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "second@example.test", "password": "new-integration-password"}, "", "")
 	expect(t, secondLogin, 200)
 	secondCookies := secondLogin.Result().Cookies()
 	if len(secondCookies) != 1 {
@@ -328,7 +333,7 @@ func TestAuthenticationOwnershipAndCSRF(t *testing.T) {
 	otherCookie := secondCookies[0].Name + "=" + secondCookies[0].Value
 	expect(t, request(h, "PUT", "/api/v1/account/password", map[string]string{"current_password": "new-integration-password", "new_password": "changed-integration-password"}, newCookie, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, otherCookie, ""), 401)
-	changedLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "second", "password": "changed-integration-password"}, "", "")
+	changedLogin := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "second@example.test", "password": "changed-integration-password"}, "", "")
 	expect(t, changedLogin, 200)
 	var passwordAudits int
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM audit_events WHERE action IN ('customer.password_reset','customer.password_changed') AND entity_id=$1", fmt.Sprint(secondID)).Scan(&passwordAudits); err != nil || passwordAudits != 2 {
@@ -350,7 +355,7 @@ func TestPasswordResetUsesOneTimeEmailCode(t *testing.T) {
 	code := verificationEmailCode(t, db, challenge)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"challenge_id": challenge, "code": code, "password": "new-reset-password"}, "", ""), 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, cookie, ""), 401)
-	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "password-reset-customer", "password": "new-reset-password"}, "", "")
+	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "password-reset-customer@example.test", "password": "new-reset-password"}, "", "")
 	expect(t, login, 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/confirm", map[string]string{"challenge_id": challenge, "code": code, "password": "another-reset-password"}, "", ""), 409)
 	var auditCount int

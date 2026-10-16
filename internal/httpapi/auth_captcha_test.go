@@ -92,21 +92,21 @@ func TestCaptchaProtectsAuthAndConsumesOnce(t *testing.T) {
 	seedCaptcha(t, db, id, "login", "ABC234", nonce, 5*time.Minute)
 	cookie := captchaCookie + "=" + nonce
 	wrongCookie := captchaCookie + "=" + "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-	w := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-login", "password": "integration-password", "captcha_id": id, "captcha_answer": "ABC234"}, wrongCookie, "")
+	w := request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "captcha-login@example.test", "password": "integration-password", "captcha_id": id, "captcha_answer": "ABC234"}, wrongCookie, "")
 	if errorData(t, w)["code"] != "invalid_captcha" {
 		t.Fatal("cookie mismatch accepted")
 	}
 	seedCaptcha(t, db, "abababababababababababababababababababababababababababababababab", "register", "ABC234", nonce, 5*time.Minute)
-	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-login", "password": "integration-password", "captcha_id": "abababababababababababababababababababababababababababababababab", "captcha_answer": "ABC234"}, cookie, "")
+	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "captcha-login@example.test", "password": "integration-password", "captcha_id": "abababababababababababababababababababababababababababababababab", "captcha_answer": "ABC234"}, cookie, "")
 	if errorData(t, w)["code"] != "invalid_captcha" {
 		t.Fatal("action mismatch accepted")
 	}
-	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-login", "password": "wrong", "captcha_id": id, "captcha_answer": "ABC234"}, cookie, "")
+	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "captcha-login@example.test", "password": "wrong", "captcha_id": id, "captcha_answer": "ABC234"}, cookie, "")
 	expect(t, w, 401)
 	if errorData(t, w)["code"] != "invalid_credentials" {
 		t.Fatal("valid captcha did not reach credential check")
 	}
-	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "captcha-login", "password": "integration-password", "captcha_id": id, "captcha_answer": "ABC234"}, cookie, "")
+	w = request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "captcha-login@example.test", "password": "integration-password", "captcha_id": id, "captcha_answer": "ABC234"}, cookie, "")
 	expect(t, w, 401)
 	if errorData(t, w)["code"] != "invalid_captcha" {
 		t.Fatal("captcha replay accepted")
@@ -117,7 +117,7 @@ func TestCaptchaProtectsAuthAndConsumesOnce(t *testing.T) {
 	}
 	seedCaptcha(t, db, "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", "login", "ABC234", nonce, 5*time.Minute)
 	goodID := "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-	good := map[string]any{"username": "captcha-login", "password": "integration-password", "captcha_id": goodID, "captcha_answer": "ABC234"}
+	good := map[string]any{"identifier": "captcha-login@example.test", "password": "integration-password", "captcha_id": goodID, "captcha_answer": "ABC234"}
 	var wg sync.WaitGroup
 	statuses := make(chan int, 2)
 	for i := 0; i < 2; i++ {
@@ -185,7 +185,7 @@ func TestIssuedCaptchaCookieRefreshAndLogin(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE auth_captcha_challenges SET answer_hash=$1 WHERE id=$2", tokenHash(answer), tokenHash(firstID)); err != nil {
 		t.Fatal(err)
 	}
-	login := map[string]any{"username": "captcha-issued-login", "password": "integration-password", "captcha_id": firstID, "captcha_answer": " abc234 "}
+	login := map[string]any{"identifier": "captcha-issued-login@example.test", "password": "integration-password", "captcha_id": firstID, "captcha_answer": " abc234 "}
 	expect(t, request(h, "POST", "/api/v1/auth/login", login, cookie.Name+"="+cookie.Value, ""), 200)
 	if errorData(t, request(h, "POST", "/api/v1/auth/login", login, cookie.Name+"="+cookie.Value, ""))["code"] != "invalid_captcha" {
 		t.Fatal("issued challenge replay accepted")

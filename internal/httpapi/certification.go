@@ -178,6 +178,11 @@ func (s *Server) reviewCertification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	ctx := requestFileContext(r)
+	if err = s.db.LockCertificationReview(ctx, tx, identityFrom(r).ID, id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if replay, replayed, e := loadSettingReplayTx(r, tx, identityFrom(r).ID, operation, key, hex.EncodeToString(hash[:])); e != nil {
 		s.fail(w, r, e)
 		return
@@ -186,7 +191,7 @@ func (s *Server) reviewCertification(w http.ResponseWriter, r *http.Request) {
 		write(w, http.StatusOK, replay)
 		return
 	}
-	if err := s.db.ReviewCertificationTx(r.Context(), tx, identityFrom(r).ID, id, in.Decision, in.Note, in.ExpectedVersion); err != nil {
+	if err := s.db.ReviewCertificationTx(ctx, tx, identityFrom(r).ID, id, in.Decision, in.Note, in.ExpectedVersion); err != nil {
 		s.fail(w, r, err)
 		return
 	}
