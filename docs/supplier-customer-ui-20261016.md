@@ -6,4 +6,4 @@
 
 任务进行中或结果待核验时暂停其他操作；错误后刷新状态，不自动重发。动作保留既有同参数幂等键，结果待核验由管理员核验流程处理。客户遇到共享账户阻塞时只显示联系管理员，不提供其他客户服务链接。
 
-本次静态验收通过：`npm run typecheck`、`npm run lint`（0 errors，7 条既有 warning）、独立 worktree 的 `npm run build -- --webpack`。四尺寸浏览器及权限/未知结果链路由主分支集成验收另行记录。未调用真实供应商，未写真实资源，未重启生产进程。
+本次静态验收通过：`npm run typecheck`、`npm run lint`（0 errors，7 条既有 warning）、独立 worktree 的 `npm run build -- --webpack`。主分支已完成四尺寸弹窗/取消、VNC和未知冻结首增量检查，实际成功与未验收动作详见[集成验收](supplier-customer-acceptance-20261016.md)。未调用真实供应商，未写真实资源，未重启生产进程。
