@@ -518,6 +518,7 @@ export type Service = {
   paid_at?:string|null;
   supplier_name?:string|null;
   supplier_provider?:string|null;
+  supplier_capabilities?:SupplierProvider["capabilities"];
   upstream_product_id?:number|null;
   supplier_running_job_id?:number|null;
   supplier_blocking_service_id?:number|null;
