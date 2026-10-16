@@ -1,0 +1,17 @@
+{
+  "format": "zjmfgo-release-runtime-primary-cleanup-v1",
+  "recordedAt": "2026-10-16T22:55:03.842025+00:00",
+  "scope": "primary agent read-only test database and resident process checks after run4; separate from independent agent review",
+  "database": "zjmfgo_release_runtime_20261017_test",
+  "sql": "SELECT current_setting('server_version_num')::int AS version, (SELECT count(*) FROM pg_namespace WHERE nspname LIKE 'release_runtime_%') AS owned_schemas, (SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()) AS other_connections;",
+  "result": {
+    "pgVersion": 180000,
+    "ownedSchemas": 0,
+    "otherConnections": 0
+  },
+  "residentProcessStarts": [
+    "608393 Fri Oct 16 09:39:45 2026",
+    "608413 Fri Oct 16 09:39:47 2026",
+    "1647696 Sat Oct 17 01:58:14 2026"
+  ]
+}

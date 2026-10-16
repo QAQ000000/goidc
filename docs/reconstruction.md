@@ -1,4 +1,7 @@
 # PHP 到 Go / Next.js 重构
+
+2026-10-17 完整运行包隔离验收：使用经核验的官方Node和锁定来源依赖，从固定干净949ffe3构建API/worker/migrate、Next standalone并包含156个迁移文件，3058个artifact与独立外锚封存。独立分支修复ELF包内依赖解析、SSR API地址与精确mapped loopback审计后，runner ce19107对同一个candidate3完成双迁移、三服务同包、三页面及21份真实HTTP资源、worker模拟resume一次及TERM重启、66份trace隔离审计、退出/schema清理；主代理及gpt-6.1-sol独立重算通过。原run3审计FAIL保留，小报告与摘要入Git，凭据/依赖/二进制不入Git。强制隔离PG18全量、vet、typecheck/lint和真实webpack构建已通过。本批未部署、未推送、未写业务库，常驻服务未重启；45页完成/60部分不变。G04/G09仍缺公网/旧chunk/切流切回、业务快照升级、容量积压及执行中强杀恢复，详见[真实构建与隔离验收](release-runtime-real-build-acceptance-20261017.md)。
+
 2026-10-11 新建订单优惠码目录：新增`GET /api/v1/admin/promo-codes/page`真实搜索/状态/分页接口，保留旧数组接口兼容；`promos.view`控制目录读取，订单筛选隐藏升级专用码。新建订单新增目录选择与创建弹窗，`promos.manage`控制创建；新码自动选中，订单数据齐全时自动重报价，全部适用性仍由Go报价验证。隔离PG18专项和全量Go回归（httpapi 650.057s）、全量vet、Next typecheck/lint/build通过；开发数据库已应用迁移124/125，API/web active且ready。随后使用隔离管理员会话完成两个弹窗的 1440/1024/390/320 浏览器验收，并修复 Chrome 新正则语法兼容问题；证据见[订单验收](admin-batch-admin-orders-acceptance-20261011.md)。
 
 2026-10-11 新建工单页面：第100页接入真实客户/部门/服务/处理人选项分页和`POST /api/v1/admin/tickets`事务创建，加入权限/客户范围/部门归属校验、幂等回执、审计、邮件 outbox 状态、草稿恢复、取消确认和创建后附件上传。隔离PG18专项、全量Go回归、vet、前端typecheck通过；Playwright 在 1440/1024/390/320 验证列表与新建页无横向溢出并成功创建后跳详情。证据见[新建工单验收](admin-batch-admin-tickets-acceptance-20261011.md)。附件管理、旧版完整字段和通知日志仍待补齐。
