@@ -168,3 +168,75 @@ VALUES($1,'交叉服务账单','renew',1234,$2)`, supportedInvoice, unsupported)
 		t.Fatalf("concurrent drain audits=%d distinct invoices=%d supported jobs=%d unsupported jobs=%d", audits, distinctInvoices, jobs, unsupportedJobs)
 	}
 }
+
+// Candidate selection and audit/job creation are one transaction. If a later
+// candidate fails after an earlier unsupported candidate has recorded evidence,
+// neither the evidence nor a partial suspend job may escape the rollback.
+func TestOverdueSuspendProgressRollsBackOnQueueFailure(t *testing.T) {
+	db, h := testServer(t)
+	uid, _ := user(t, db, h, "suspend-progress-rollback-customer", "customer")
+	pid := product(t, db, 10)
+	unsupported, _ := billingSchedulerFixture(t, db, uid, pid, 0, true)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", unsupported); err != nil {
+		t.Fatal(err)
+	}
+	supported, _ := billingSchedulerFixture(t, db, uid, pid, 1, true)
+
+	// Fail only the later, supported candidate. The first candidate must have
+	// reached the unsupported audit branch before this trigger runs.
+	functionName := fmt.Sprintf("test_scheduler_queue_failure_%d", supported)
+	triggerName := fmt.Sprintf("test_scheduler_queue_failure_trigger_%d", supported)
+	if _, err := db.Pool.Exec(t.Context(), fmt.Sprintf(`
+CREATE FUNCTION %s() RETURNS trigger
+LANGUAGE plpgsql AS $fn$
+BEGIN
+  IF NEW.service_id = %d THEN
+    RAISE EXCEPTION 'forced overdue suspension queue failure';
+  END IF;
+  RETURN NEW;
+END
+$fn$`, functionName, supported)); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_, _ = db.Pool.Exec(t.Context(), "DROP TRIGGER IF EXISTS "+triggerName+" ON provision_jobs")
+		_, _ = db.Pool.Exec(t.Context(), "DROP FUNCTION IF EXISTS "+functionName+"()")
+	}()
+	if _, err := db.Pool.Exec(t.Context(), fmt.Sprintf(`
+CREATE TRIGGER %s
+BEFORE INSERT ON provision_jobs
+FOR EACH ROW EXECUTE FUNCTION %s()`, triggerName, functionName)); err != nil {
+		t.Fatal(err)
+	}
+
+	if queued, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 2); err == nil || queued != 0 {
+		t.Fatalf("forced queue failure queued=%d err=%v", queued, err)
+	}
+	var audits, jobs int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM provision_jobs WHERE action='suspend')`).Scan(&audits, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 0 || jobs != 0 {
+		t.Fatalf("failed batch escaped partial writes: audits=%d jobs=%d", audits, jobs)
+	}
+
+	if _, err := db.Pool.Exec(t.Context(), "DROP TRIGGER "+triggerName+" ON provision_jobs"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "DROP FUNCTION "+functionName+"()"); err != nil {
+		t.Fatal(err)
+	}
+	if queued, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 2); err != nil || queued != 1 {
+		t.Fatalf("retry after rollback queued=%d err=%v", queued, err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM provision_jobs WHERE action='suspend')`).Scan(&audits, &jobs); err != nil {
+		t.Fatal(err)
+	}
+	if audits != 1 || jobs != 1 {
+		t.Fatalf("retry did not apply complete batch: audits=%d jobs=%d", audits, jobs)
+	}
+}
