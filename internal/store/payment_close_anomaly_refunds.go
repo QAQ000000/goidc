@@ -124,6 +124,11 @@ func (s *Store) paymentAnomalyTx(ctx context.Context, actor, invoice int64, perm
 			return fail(err)
 		}
 	}
+	// Scope may have narrowed while authorization waited for the employee row.
+	// Keep the initial scope lock order, then recheck under the employee lock.
+	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+		return fail(err)
+	}
 	if _, err = lockOnlineTopupCustomer(ctx, tx, invoice); err != nil {
 		return fail(err)
 	}

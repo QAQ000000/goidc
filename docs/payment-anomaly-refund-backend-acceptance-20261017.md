@@ -27,6 +27,8 @@
 
 反向竞争专项覆盖 pending、confirmed 与并发三种顺序；同一原交易在异常退回与另一支付成功中至多一方生效，SQL 直接改成功同样拒绝。成功回调被拒绝时，不留部分结算或回调已处理记录。
 
+追加范围撤权竞态复核：销售人员设置会更新员工客户范围而保留会话。在数据库事务中先将员工范围从全部收窄为本人客户，保持员工行锁，再发起 HTTP 请求；通过 `pg_blocking_pids` 确认请求已经通过初始范围检查并等待员工授权行锁，随后提交范围变更。修复前创建和确认错误返回 201，重放和读取错误返回 200；确认可越权解除责任冻结。修复在锁定员工并核验权限后再次检查客户范围，四条路径统一返回 404，不新增登记或复核记录。修复后全部 `TestPaymentAnomaly*` 专项 race 通过（79.666 秒）。独立日志为 `/tmp/anomaly-scope-wait-red-20261017.log` 与 `/tmp/anomaly-scope-wait-fixed-race-20261017.log`。
+
 机器日志位于 `/tmp/anomaly-refund-reverse-20261017.log`、`/tmp/anomaly-refund-race-regression-20261017.log`、`/tmp/anomaly-refund-same-key-race-20261017.log`、`/tmp/anomaly-refund-store-regression-20261017.log`；日志及隔离连接配置不纳入 Git。
 
 ## 验收边界

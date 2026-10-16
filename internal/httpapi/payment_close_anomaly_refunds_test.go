@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
@@ -344,6 +345,83 @@ func TestPaymentAnomalySameKeyConcurrencyAndRevokedReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", create, in, actor, "anomaly-same-key"), 401)
+}
+
+func TestPaymentAnomalyScopeNarrowedWhileAuthorizationWaits(t *testing.T) {
+	for _, mode := range []string{"create", "confirm", "replay", "read"} {
+		t.Run(mode, func(t *testing.T) {
+			f, invoice, _, _, anchor := paymentAnomalyFixture(t, "merchant:scope-wait")
+			base, create := anomalyPaths(invoice, anchor)
+			actorID, actor := externalRefundActor(t, f.db, f.h, "anomaly-scope-wait", []string{"invoices.view", "payment_anomalies.view", "payment_anomalies.create", "payment_anomalies.review"})
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='all',customer_ownerless=false WHERE id=$1", actorID); err != nil {
+				t.Fatal(err)
+			}
+			method, path, key := "POST", create, "anomaly-scope-wait-create"
+			var body any = paymentAnomalyInput(anchor, "scope-wait-payout")
+			if mode == "confirm" {
+				w := request(f.h, "POST", create, body, f.root, "anomaly-scope-review-source")
+				expect(t, w, 201)
+				path = fmt.Sprintf("%s/payment-anomaly-refunds/%.0f/confirm", base, data(t, w)["refund"].(map[string]any)["id"])
+				body = map[string]any{"expected_version": 1, "expected_group_version": anchor, "note": "独立复核范围竞态"}
+			} else if mode == "replay" {
+				expect(t, request(f.h, method, path, body, actor, key), 201)
+			} else if mode == "read" {
+				method, path, body, key = "GET", base+"/payment-anomaly-groups", nil, ""
+			}
+			tx, err := f.db.Pool.Begin(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(t.Context())
+			var blocker int32
+			if err = tx.QueryRow(t.Context(), "SELECT pg_backend_pid()").Scan(&blocker); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = tx.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", actorID); err != nil {
+				t.Fatal(err)
+			}
+			result := make(chan *httptest.ResponseRecorder, 1)
+			go func() { result <- request(f.h, method, path, body, actor, key) }()
+			deadline := time.Now().Add(10 * time.Second)
+			for {
+				var waiting bool
+				if err = f.db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid)) AND a.query='SELECT role,admin_role_id FROM users WHERE id=$1 AND status=''active'' FOR SHARE')`, blocker).Scan(&waiting); err != nil {
+					t.Fatal(err)
+				}
+				if waiting {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("authorization did not reach observed employee-row lock wait")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			if err = tx.Commit(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case w := <-result:
+				expect(t, w, 404)
+			case <-time.After(10 * time.Second):
+				t.Fatal("scoped request did not complete")
+			}
+			var facts, decisions int
+			if err = f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM payment_close_anomaly_refund_operations)").Scan(&facts, &decisions); err != nil {
+				t.Fatal(err)
+			}
+			if mode == "confirm" || mode == "replay" {
+				if facts != 1 || decisions != 1 {
+					t.Fatal(facts, decisions)
+				}
+			} else if facts != 0 || decisions != 0 {
+				t.Fatal(facts, decisions)
+			}
+			var confirmed int
+			if err = f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM payment_close_anomaly_refunds WHERE status='confirmed'").Scan(&confirmed); err != nil || confirmed != 0 {
+				t.Fatal(confirmed, err)
+			}
+		})
+	}
 }
 
 func TestPaymentAnomalySharedPayoutClaimAcrossRefundWorkflows(t *testing.T) {
