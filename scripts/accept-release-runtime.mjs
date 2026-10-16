@@ -88,7 +88,7 @@ async function verifyControllerSource(revision) {
   requireThat(/^[a-f0-9]{40}$/.test(revision ?? ''), 'BLOCKED: independent full runner commit required');
   const root = path.join(here, '..'), proof = await sourceProof(root, revision);
   requireThat(git(root, 'rev-parse', 'HEAD') === revision, 'Runner HEAD differs from declared fixed revision');
-  for (const name of [...controllerFiles, 'scripts/release-candidate-lib.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-lib.mjs']) {
+  for (const name of [...controllerFiles, 'scripts/release-runtime-lib.mjs']) {
     const input = proof.files.find(row => row.path === name);
     requireThat(input && await fileHash(path.join(root, name)) === input.sha256, 'BLOCKED: runner differs from independently pinned clean source');
   }
@@ -223,7 +223,7 @@ export async function acceptRuntime(options) {
     await mkdir(path.join(release, manifest.web.appRoot, '.next/cache'), { mode: 0o755, recursive: true });
     for (const name of ['home', 'tmp', 'logs', 'state', 'cache']) { const directory = path.join(mutable, name); await mkdir(directory, { mode: 0o700 }); await chown(directory, uid, gid); }
     await chown(mutable, uid, gid);
-    for (const file of [...controllerFiles, 'scripts/release-candidate-lib.mjs', 'scripts/release-runtime-builder-lib.mjs']) await copyFile(path.join(here, '..', file), path.join(control, path.basename(file)));
+    for (const file of controllerFiles) await copyFile(path.join(here, '..', file), path.join(control, path.basename(file)));
     const goEnv = { ...toolEnv, HOME: '/root' }, goTemporary = path.join(runRoot, 'go-tmp'); await mkdir(goTemporary, { mode: 0o700 });
     const fixtureEnv = { ...goEnv, GOCACHE: command('/usr/local/btgo/bin/go', ['env', 'GOCACHE'], goEnv), GOMODCACHE: command('/usr/local/btgo/bin/go', ['env', 'GOMODCACHE'], goEnv), TMPDIR: goTemporary, GOTMPDIR: goTemporary, ZJMFGO_RELEASE_RUNTIME_FIXTURE: '1', ZJMFGO_TEST_DATABASE_URL: pre.databaseURL, ZJMFGO_RELEASE_RUNTIME_FIXTURE_DIR: fixture };
     fixtureProcess = launch('/usr/local/btgo/bin/go', ['test', '-mod=readonly', '-run', '^TestReleaseRuntimeFixture$', '-count=1', '-timeout=15m', './internal/store'], { cwd: options.source, env: fixtureEnv });

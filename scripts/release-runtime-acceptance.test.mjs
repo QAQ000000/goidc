@@ -64,6 +64,9 @@ test('write and network syscall audit rejects successful and denied escapes', ()
   assert.throws(() => auditTraceLine('openat(AT_FDCWD</mutable>, "tmp/../../release/server.js", O_WRONLY) = -1 EROFS'), /Undeclared/);
   assert.doesNotThrow(() => auditTraceLine('openat(AT_FDCWD</release/artifact>, "/mutable/tmp/a", O_WRONLY|O_CREAT, 0600) = 4</mutable/tmp/a>'));
   assert.throws(() => auditTraceLine('rename("/mutable/a", "/release/b") = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('linkat(AT_FDCWD</mutable>, "a", AT_FDCWD</release>, "b", 0) = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('symlinkat("/mutable/a", AT_FDCWD</release>, "b") = -1 EROFS'), /Undeclared/);
+  assert.throws(() => auditTraceLine('mknodat(AT_FDCWD</release>, "b", S_IFREG|0600, 0) = -1 EROFS'), /Undeclared/);
   assert.throws(() => auditTraceLine('connect(3, {sa_family=AF_INET, sin_addr=inet_addr("203.0.113.1")}, 16) = -1 ENETUNREACH'), /Non-loopback/);
   assert.throws(() => auditTraceLine('sendto(0x3, 0x1234, 0x80, 0, 0x5678, 0x10) = -1 ENETUNREACH'), /Unresolved.*network/);
   assert.doesNotThrow(() => auditTraceLine('mkdir("/release/web/.next/cache/a", 0700) = 0', ['/release/web/.next/cache']));

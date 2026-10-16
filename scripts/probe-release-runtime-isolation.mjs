@@ -6,7 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { namespaceArgs } from './accept-release-runtime.mjs';
-import { assertSocket, requireThat } from './release-runtime-acceptance-lib.mjs';
+import { assertSocket, controllerFiles, requireThat } from './release-runtime-acceptance-lib.mjs';
 const socket = process.argv[2];
 requireThat(process.argv.length === 4 && process.argv[3] === '--execute' && process.getuid?.() === 0, 'Usage: root node scripts/probe-release-runtime-isolation.mjs ABSOLUTE_TEST_PG_SOCKET --execute');
 const port = Number(path.basename(socket).replace('.s.PGSQL.', '')); await assertSocket(socket, port);
@@ -30,7 +30,7 @@ try {
   // tiny Node stand-ins and a file-only fixture. No SQL is sent. Deliberately
   // refuse prepare so this checks real fail-closed control flow and cleanup.
   const source = path.dirname(fileURLToPath(import.meta.url));
-  for (const name of ['accept-release-runtime.mjs', 'release-runtime-acceptance-lib.mjs', 'release-candidate-lib.mjs', 'release-runtime-builder-lib.mjs']) await copyFile(path.join(source, name), path.join(root, 'control', name));
+  for (const name of controllerFiles) await copyFile(path.join(source, path.basename(name)), path.join(root, 'control', path.basename(name)));
   await mkdir(path.join(root, 'release/launch')); await mkdir(path.join(root, 'mutable/logs')); await chown(path.join(root, 'mutable/logs'), uid, gid);
   const schema = 'release_runtime_0123456789abcdef01234567';
   const description = { configVersion: 'zjmfgo-runtime-config-v1', environment: { allowlist: ['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY'], fixed: {} }, config: { required: ['DATABASE_URL', 'MFA_ENCRYPTION_KEY', 'PURCHASE_FIELD_ENCRYPTION_KEY', 'PROVISION_ENCRYPTION_KEY'] }, steps: [{ name: 'migrate', executable: 'runtime/node', cwd: 'artifact', args: ['-e', 'process.exit(0)'] }] };

@@ -3,7 +3,9 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileHash, noLinks, safeRelative, sha256 } from './release-candidate-lib.mjs';
 
-export const controllerFiles = ['scripts/accept-release-runtime.mjs', 'scripts/release-runtime-acceptance-lib.mjs'];
+// The same complete transitive runtime module set is pinned and copied into
+// /control. Keep the inner import closure independent from the candidate source.
+export const controllerFiles = ['scripts/accept-release-runtime.mjs', 'scripts/release-runtime-acceptance-lib.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs'];
 export const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function requireThat(condition, message) { if (!condition) throw new Error(message); }
 export async function jsonFile(filename) {
@@ -139,7 +141,7 @@ export function auditTraceLine(line, cacheRoots = []) {
   // strace omits write buffers: only file/network operations are recorded.
   // A denied attempt still fails acceptance; readonly mounts alone do not prove
   // that the application did not require an undeclared writable path.
-  const mutation = /\b(?:open|openat|openat2)\(.*\b(?:O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND)\b/.test(line) || /\b(?:creat|mkdir|mkdirat|unlink|unlinkat|rename|renameat|renameat2|rmdir|truncate|ftruncate|fallocate|chmod|fchmod|fchmodat|fchmodat2|chown|fchown|fchownat|lchown|symlink|link|mknod|utime|utimensat)\(/.test(line);
+  const mutation = /\b(?:open|openat|openat2)\(.*\b(?:O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND)\b/.test(line) || /\b(?:creat|mkdir|mkdirat|unlink|unlinkat|rename|renameat|renameat2|rmdir|truncate|ftruncate|fallocate|chmod|fchmod|fchmodat|fchmodat2|chown|fchown|fchownat|lchown|symlink|symlinkat|link|linkat|mknod|mknodat|utime|utimensat)\(/.test(line);
   if (mutation) {
     const quoted = [...line.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)];
     const fdPaths = [...line.matchAll(/\d+<([^>]+)>/g)].map(row => row[1]);
