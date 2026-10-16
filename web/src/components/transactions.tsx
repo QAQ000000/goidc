@@ -171,7 +171,7 @@ type InvoiceActionRow = Pick<
   | "external_payment_paid"
  | "credit_payment"
   | "version"
-> & { payments?: PaymentRecord[]; invoice_kind?: string; topup?: TopupState };
+> & { payments?: PaymentRecord[]; invoice_kind?: string; topup?: TopupState; topup_status?: string; topup_pending_liability_cents?: number };
 type InvoiceRow = InvoiceActionRow &
   Pick<
     Invoice,
@@ -997,6 +997,13 @@ function InvoiceActions({
       setConfirm(false);
       refresh();
     } catch(e){setError((e as Error).message);if(action==="pay-credit"){if(!(e instanceof ApiError)||e.status>=500){setCreditPending(creditRequest);if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}else{setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}}}finally{setBusy(false);}
+  }
+  if (invoice.invoice_kind === "topup" && !invoice.topup) {
+    const labels: Record<string, string> = { created: "待付款", accepted: "付款待核对", credited: "已入账", pending_liability: "已收到款，余额待核对", cancelled: "已取消" };
+    return <div className="space-y-2">
+      {invoice.topup_status && <p className="text-xs text-muted-foreground whitespace-normal">{labels[invoice.topup_status] ?? "充值状态待核对"}</p>}
+      <Button size="sm" variant="outline" asChild><Link href={`${admin ? "/admin" : "/console"}/invoices/${invoice.id}`}>查看充值账单</Link></Button>
+    </div>;
   }
   if (invoice.invoice_kind === "topup") return <TopupInvoiceActions invoice={invoice} admin={admin} refresh={refresh} />;
   if (admin && (invoice.status !== "paid" || !allowed)) return null;
