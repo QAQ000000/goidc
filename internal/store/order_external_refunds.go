@@ -213,21 +213,21 @@ func canonicalExternalRefundOrderVersions(in *ExternalRefundInput) error {
 }
 func reserveExternalRefundOrder(ctx context.Context, tx pgx.Tx, id, invoice int64) error {
 	_, err := tx.Exec(ctx, `INSERT INTO external_refund_order_holds(refund_id,invoice_id,payment_id,order_id,user_id,amount_cents,invoice_version,order_version,invoice_snapshot,order_snapshot,items_snapshot)
- SELECT r.id,i.id,r.payment_id,o.id,r.user_id,r.amount_cents,i.version,o.version,to_jsonb(i),to_jsonb(o),(SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)
+ SELECT r.id,i.id,r.payment_id,o.id,r.user_id,r.amount_cents,i.version,o.version,external_refund_order_snapshot(i),external_refund_order_snapshot(o),(SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)
  FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id JOIN orders o ON o.id=i.order_id WHERE r.id=$1 AND i.id=$2`, id, invoice)
 	if err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO external_refund_order_services(refund_id,service_id,order_item_id,product_id,unit_number,version,snapshot,stock_at_request)
- SELECT $1,s.id,s.order_item_id,s.product_id,s.unit_number,s.version,to_jsonb(s),p.stock FROM services s JOIN products p ON p.id=s.product_id JOIN invoices i ON i.order_id=s.order_id WHERE i.id=$2 ORDER BY s.id`, id, invoice)
+ SELECT $1,s.id,s.order_item_id,s.product_id,s.unit_number,s.version,external_refund_order_snapshot(s),p.stock FROM services s JOIN products p ON p.id=s.product_id JOIN invoices i ON i.order_id=s.order_id WHERE i.id=$2 ORDER BY s.id`, id, invoice)
 	return err
 }
 func applyExternalRefundOrder(ctx context.Context, tx pgx.Tx, actor, id, invoice int64) error {
 	var valid bool
-	if err := tx.QueryRow(ctx, `SELECT h.status='pending' AND h.invoice_snapshot=to_jsonb(i) AND h.order_snapshot=to_jsonb(o)
- AND h.items_snapshot=(SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)
+	if err := tx.QueryRow(ctx, `SELECT h.status='pending' AND h.invoice_snapshot=external_refund_order_snapshot(i) AND h.order_snapshot=external_refund_order_snapshot(o)
+ AND h.items_snapshot=(SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)
  AND (SELECT count(*) FROM external_refund_order_services WHERE refund_id=h.refund_id)=(SELECT count(*) FROM services WHERE order_id=o.id)
- AND NOT EXISTS(SELECT 1 FROM external_refund_order_services x LEFT JOIN services s ON s.id=x.service_id WHERE x.refund_id=h.refund_id AND (s.id IS NULL OR x.snapshot<>to_jsonb(s)))
+ AND NOT EXISTS(SELECT 1 FROM external_refund_order_services x LEFT JOIN services s ON s.id=x.service_id WHERE x.refund_id=h.refund_id AND (s.id IS NULL OR x.snapshot<>external_refund_order_snapshot(s)))
  FROM external_refund_order_holds h JOIN invoices i ON i.id=h.invoice_id JOIN orders o ON o.id=h.order_id WHERE h.refund_id=$1 AND i.id=$2 FOR UPDATE OF h`, id, invoice).Scan(&valid); err != nil {
 		return err
 	}

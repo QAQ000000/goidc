@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"strings"
 	"testing"
 	"time"
@@ -380,5 +381,68 @@ func TestOrderCheckoutStockReservationRollback(t *testing.T) {
 	var stock, orders, reservations int
 	if e = f.db.Pool.QueryRow(ctx, `SELECT stock,(SELECT count(*) FROM orders),(SELECT count(*) FROM external_refund_order_stock_reservations) FROM products WHERE id=$1`, f.product).Scan(&stock, &orders, &reservations); e != nil || stock != 10 || orders != 1 || reservations != 1 {
 		t.Fatal(stock, orders, reservations, e)
+	}
+}
+
+func TestOrderExternalRefundSnapshotSurvivesConnectionTimezone(t *testing.T) {
+	f := newOrderRefundFixture(t, false)
+	pending := f.create(t)
+	ctx := t.Context()
+	for _, zone := range []string{"UTC", "Pacific/Honolulu"} {
+		cfg := f.db.Pool.Config()
+		cfg.ConnConfig.RuntimeParams["timezone"] = zone
+		next, err := pgxpool.NewWithConfig(ctx, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		previous := f.db.Pool
+		f.db.Pool = next
+		previous.Close()
+		c, err := f.db.ExternalRefundOrderContext(WithExternalRefundSession(ctx, "order-refund-request"), f.actor, f.invoice)
+		if err != nil || c.OrderReversal == nil || c.OrderReversal.Status != "pending" {
+			t.Fatal(c, err)
+		}
+	}
+	applied, err := f.review(t, pending, true, "order-refund-zone-confirm")
+	if err != nil || applied.Refund.OrderReversal.Status != "applied" {
+		t.Fatal(applied, err)
+	}
+}
+
+func TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting(t *testing.T) {
+	f := newOrderRefundFixture(t, false)
+	ctx := t.Context()
+	pending := f.create(t)
+	for _, kind := range []string{"reservation-parent", "snapshot-service", "snapshot-hold"} {
+		t.Run(kind, func(t *testing.T) {
+			blocker, e := f.db.Pool.Begin(ctx)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer blocker.Rollback(ctx)
+			queries := map[string]string{"reservation-parent": `SELECT id FROM orders WHERE id=$1 FOR UPDATE`, "snapshot-service": `SELECT id FROM services WHERE order_id=$1 ORDER BY id FOR UPDATE`, "snapshot-hold": `SELECT refund_id FROM external_refund_order_holds WHERE order_id=$1 FOR UPDATE`}
+			if _, e = blocker.Exec(ctx, queries[kind], f.order); e != nil {
+				t.Fatal(e)
+			}
+			result := make(chan error, 1)
+			go func() {
+				var e error
+				if kind == "reservation-parent" {
+					_, e = f.db.Pool.Exec(ctx, `INSERT INTO external_refund_order_stock_reservations(order_item_id,order_id,product_id,units,item_snapshot,service_ids) SELECT id,order_id,product_id,quantity,'{}','[]' FROM order_items WHERE order_id=$1`, f.order)
+				} else {
+					_, e = f.db.Pool.Exec(ctx, `INSERT INTO external_refund_order_services SELECT * FROM external_refund_order_services WHERE refund_id=$1`, pending.Refund.ID)
+				}
+				result <- e
+			}()
+			select {
+			case e = <-result:
+				if e == nil {
+					t.Fatal("direct reverse-lock mutation accepted")
+				}
+			case <-time.After(2 * time.Second):
+				_ = blocker.Rollback(ctx)
+				t.Fatal("reverse-lock trigger blocked instead of failing immediately")
+			}
+		})
 	}
 }

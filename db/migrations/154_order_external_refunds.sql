@@ -1,3 +1,8 @@
+-- Snapshot timestamps have a stable representation across dump/restore and
+-- session timezone changes. This setting is local to the helper, never global.
+CREATE FUNCTION external_refund_order_snapshot(value anyelement) RETURNS jsonb
+ LANGUAGE sql STABLE SET timezone='UTC' SET datestyle='ISO,YMD' AS $$ SELECT to_jsonb(value) $$;
+
 -- Only objects born under these guards can prove they have never delivered.
 -- History intentionally has no parent FK: a service writer must never acquire
 -- an order lock after its service lock, and deletion must not erase evidence.
@@ -67,7 +72,7 @@ BEGIN
  SELECT status INTO h FROM external_refund_order_holds WHERE order_id=OLD.id AND status<>'released';
  IF h IS NOT NULL THEN
   IF TG_OP='DELETE' OR h<>'applying' OR NEW.status<>'refunded' OR
-   (to_jsonb(NEW)-ARRAY['status','version','updated_at'])<>(to_jsonb(OLD)-ARRAY['status','version','updated_at'])
+   (external_refund_order_snapshot(NEW)-ARRAY['status','version','updated_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','version','updated_at'])
   THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
  ELSE
   IF TG_OP='DELETE' OR NEW.user_id<>OLD.user_id OR NEW.review_status<>OLD.review_status OR NEW.status NOT IN ('pending','paid') OR NEW.deleted_at IS NOT NULL THEN
@@ -96,7 +101,7 @@ BEGIN
   SELECT status INTO h FROM external_refund_order_holds WHERE order_id=OLD.order_id AND status<>'released';
   IF h IS NOT NULL THEN
    IF TG_OP='DELETE' OR h<>'applying' OR NEW.status<>'cancelled' OR NOT NEW.inventory_released OR
-    (to_jsonb(NEW)-ARRAY['status','version','inventory_released','updated_at'])<>(to_jsonb(OLD)-ARRAY['status','version','inventory_released','updated_at'])
+    (external_refund_order_snapshot(NEW)-ARRAY['status','version','inventory_released','updated_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','version','inventory_released','updated_at'])
    THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
    RETURN NEW;
   END IF;
@@ -105,7 +110,7 @@ BEGIN
   INSERT INTO external_refund_delivery_history(order_id,service_id,event) VALUES(OLD.order_id,OLD.id,'service_deleted'); RETURN OLD;
  END IF;
  IF NEW.status<>'pending_payment' OR NEW.provision_mode<>'manual' OR NEW.upstream_id<>'' OR NEW.username<>'' OR NEW.next_due_at IS NOT NULL OR NEW.credentials_encrypted IS NOT NULL OR NEW.resource_info<>'{}'::jsonb OR NEW.installed_os<>'{}'::jsonb OR NEW.last_error<>'' OR NEW.inventory_released OR NEW.import_review_required OR NEW.legacy_source<>'' OR NEW.legacy_id IS NOT NULL OR
-  (TG_OP='UPDATE' AND (external_refund_service_identity(NEW)<>external_refund_service_identity(OLD) OR (EXISTS(SELECT 1 FROM external_refund_order_stock_reservations WHERE order_item_id=OLD.order_item_id) AND to_jsonb(NEW)<>to_jsonb(OLD)))) THEN
+  (TG_OP='UPDATE' AND (external_refund_service_identity(NEW)<>external_refund_service_identity(OLD) OR (EXISTS(SELECT 1 FROM external_refund_order_stock_reservations WHERE order_item_id=OLD.order_item_id) AND external_refund_order_snapshot(NEW)<>external_refund_order_snapshot(OLD)))) THEN
   INSERT INTO external_refund_delivery_history(order_id,service_id,event) VALUES(NEW.order_id,NEW.id,'service_changed');
   IF TG_OP='UPDATE' AND NEW.order_id<>OLD.order_id THEN INSERT INTO external_refund_delivery_history(order_id,service_id,event) VALUES(OLD.order_id,OLD.id,'service_moved'); END IF;
  END IF;
@@ -172,7 +177,7 @@ BEGIN
   (SELECT coalesce(sum(total_cents),0) FROM order_items WHERE order_id=o.id)-o.discount_cents<>o.total_cents OR
   EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND (oi.legacy_source<>'' OR oi.legacy_id IS NOT NULL OR oi.total_cents<>(oi.price_cents+oi.setup_fee_cents)*oi.quantity OR (SELECT count(*) FROM services WHERE order_item_id=oi.id AND order_id=o.id)<>oi.quantity)) OR
   NOT EXISTS(SELECT 1 FROM services WHERE order_id=o.id) OR
-  EXISTS(SELECT 1 FROM order_items oi LEFT JOIN external_refund_order_stock_reservations z ON z.order_item_id=oi.id WHERE oi.order_id=o.id AND (z.order_item_id IS NULL OR z.order_id<>o.id OR z.product_id<>oi.product_id OR z.units<>oi.quantity OR z.item_snapshot<>to_jsonb(oi) OR z.service_ids<>(SELECT jsonb_agg(id ORDER BY id) FROM services WHERE order_item_id=oi.id AND order_id=o.id) OR z.service_snapshots<>(SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM services s WHERE s.order_item_id=oi.id AND s.order_id=o.id))) OR
+  EXISTS(SELECT 1 FROM order_items oi LEFT JOIN external_refund_order_stock_reservations z ON z.order_item_id=oi.id WHERE oi.order_id=o.id AND (z.order_item_id IS NULL OR z.order_id<>o.id OR z.product_id<>oi.product_id OR z.units<>oi.quantity OR z.item_snapshot<>external_refund_order_snapshot(oi) OR z.service_ids<>(SELECT jsonb_agg(id ORDER BY id) FROM services WHERE order_item_id=oi.id AND order_id=o.id) OR z.service_snapshots<>(SELECT jsonb_agg(external_refund_order_snapshot(s) ORDER BY s.id) FROM services s WHERE s.order_item_id=oi.id AND s.order_id=o.id))) OR
   EXISTS(SELECT 1 FROM services s LEFT JOIN order_items oi ON oi.id=s.order_item_id LEFT JOIN external_refund_service_births b ON b.service_id=s.id WHERE s.order_id=o.id AND
    (oi.id IS NULL OR oi.order_id<>o.id OR oi.product_id<>s.product_id OR s.unit_number<1 OR s.unit_number>oi.quantity OR s.user_id<>i.user_id OR s.status<>'pending_payment' OR s.provision_mode<>'manual' OR s.upstream_id<>'' OR s.username<>'' OR s.next_due_at IS NOT NULL OR s.credentials_encrypted IS NOT NULL OR s.resource_info<>'{}'::jsonb OR s.installed_os<>'{}'::jsonb OR s.last_error<>'' OR s.delivery_snapshot<>'{}'::jsonb OR s.inventory_released OR s.import_review_required OR b.service_id IS NULL OR b.order_id<>o.id OR b.identity<>external_refund_service_identity(s))) OR
   EXISTS(SELECT 1 FROM provision_jobs j JOIN services s ON s.id=j.service_id WHERE s.order_id=o.id) OR
@@ -186,7 +191,7 @@ END $$;
 CREATE FUNCTION protect_external_refund_order_hold() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF TG_OP='DELETE' OR OLD.status IN ('released','applied') OR
-  (to_jsonb(NEW)-ARRAY['status','stock_units_released','applied_at','released_at'])<>(to_jsonb(OLD)-ARRAY['status','stock_units_released','applied_at','released_at']) OR
+  (external_refund_order_snapshot(NEW)-ARRAY['status','stock_units_released','applied_at','released_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','stock_units_released','applied_at','released_at']) OR
   NOT((OLD.status='pending' AND NEW.status IN ('applying','released')) OR (OLD.status='applying' AND NEW.status='applied')) THEN
   RAISE EXCEPTION 'external refund order hold is immutable' USING ERRCODE='23514'; END IF;
  RETURN NEW;
@@ -207,16 +212,16 @@ BEGIN
  SELECT count(*) INTO n FROM external_refund_order_services WHERE refund_id=r.id;
  IF n=0 OR n<>(SELECT count(*) FROM services WHERE order_id=h.order_id) OR EXISTS(SELECT 1 FROM external_refund_order_services x JOIN services s ON s.id=x.service_id WHERE x.refund_id=r.id AND (s.order_id<>h.order_id OR s.order_item_id<>x.order_item_id OR s.product_id<>x.product_id OR s.unit_number<>x.unit_number)) THEN RAISE EXCEPTION 'external refund order service set invalid' USING ERRCODE='23514'; END IF;
  IF h.status='pending' THEN
-  IF r.status<>'pending_review' OR external_refund_order_reason(i.id)<>'' OR i.version<>h.invoice_version OR o.version<>h.order_version OR to_jsonb(i)<>h.invoice_snapshot OR to_jsonb(o)<>h.order_snapshot OR (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)<>h.items_snapshot OR h.applied_at IS NOT NULL OR h.released_at IS NOT NULL OR h.stock_units_released<>0 OR
-   EXISTS(SELECT 1 FROM external_refund_order_services x JOIN services s ON s.id=x.service_id WHERE x.refund_id=r.id AND (x.snapshot<>to_jsonb(s) OR x.version<>s.version)) THEN RAISE EXCEPTION 'external refund order pending invalid' USING ERRCODE='23514'; END IF;
+  IF r.status<>'pending_review' OR external_refund_order_reason(i.id)<>'' OR i.version<>h.invoice_version OR o.version<>h.order_version OR external_refund_order_snapshot(i)<>h.invoice_snapshot OR external_refund_order_snapshot(o)<>h.order_snapshot OR (SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)<>h.items_snapshot OR h.applied_at IS NOT NULL OR h.released_at IS NOT NULL OR h.stock_units_released<>0 OR
+   EXISTS(SELECT 1 FROM external_refund_order_services x JOIN services s ON s.id=x.service_id WHERE x.refund_id=r.id AND (x.snapshot<>external_refund_order_snapshot(s) OR x.version<>s.version)) THEN RAISE EXCEPTION 'external refund order pending invalid' USING ERRCODE='23514'; END IF;
  ELSIF h.status='released' THEN
   IF r.status<>'rejected' OR h.released_at IS NULL OR h.applied_at IS NOT NULL OR h.stock_units_released<>0 OR EXISTS(SELECT 1 FROM external_refund_order_stock_releases WHERE refund_id=r.id) THEN RAISE EXCEPTION 'external refund order release invalid' USING ERRCODE='23514'; END IF;
  ELSIF h.status='applied' THEN
   IF r.status<>'confirmed' OR h.applied_at IS NULL OR h.released_at IS NOT NULL OR i.status<>'refunded' OR o.status<>'refunded' OR i.version<>h.invoice_version+1 OR o.version<>h.order_version+1 OR
-   (to_jsonb(i)-ARRAY['status','version','updated_at'])<>(h.invoice_snapshot-ARRAY['status','version','updated_at']) OR
-   (to_jsonb(o)-ARRAY['status','version','updated_at'])<>(h.order_snapshot-ARRAY['status','version','updated_at']) OR
-   (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)<>h.items_snapshot OR h.stock_units_released<>n OR
-   EXISTS(SELECT 1 FROM external_refund_order_services x JOIN services s ON s.id=x.service_id WHERE x.refund_id=r.id AND (s.status<>'cancelled' OR NOT s.inventory_released OR s.version<>x.version+1 OR (to_jsonb(s)-ARRAY['status','inventory_released','version','updated_at'])<>(x.snapshot-ARRAY['status','inventory_released','version','updated_at']))) OR
+   (external_refund_order_snapshot(i)-ARRAY['status','version','updated_at'])<>(h.invoice_snapshot-ARRAY['status','version','updated_at']) OR
+   (external_refund_order_snapshot(o)-ARRAY['status','version','updated_at'])<>(h.order_snapshot-ARRAY['status','version','updated_at']) OR
+   (SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)<>h.items_snapshot OR h.stock_units_released<>n OR
+   EXISTS(SELECT 1 FROM external_refund_order_services x JOIN services s ON s.id=x.service_id WHERE x.refund_id=r.id AND (s.status<>'cancelled' OR NOT s.inventory_released OR s.version<>x.version+1 OR (external_refund_order_snapshot(s)-ARRAY['status','inventory_released','version','updated_at'])<>(x.snapshot-ARRAY['status','inventory_released','version','updated_at']))) OR
    EXISTS(SELECT 1 FROM (SELECT product_id,count(*) AS units FROM external_refund_order_services WHERE refund_id=r.id GROUP BY product_id) x LEFT JOIN external_refund_order_stock_releases z ON z.refund_id=r.id AND z.product_id=x.product_id WHERE z.product_id IS NULL OR z.units<>x.units) OR
    (SELECT count(*) FROM external_refund_order_stock_releases WHERE refund_id=r.id)<>(SELECT count(DISTINCT product_id) FROM external_refund_order_services WHERE refund_id=r.id) OR
    EXISTS(SELECT 1 FROM external_refund_order_stock_releases z JOIN products p ON p.id=z.product_id WHERE z.refund_id=r.id AND p.stock IS DISTINCT FROM z.stock_after) OR
@@ -231,10 +236,12 @@ CREATE CONSTRAINT TRIGGER external_refund_order_fact_complete AFTER INSERT OR UP
 CREATE FUNCTION guard_external_refund_order_service_fact() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE h external_refund_order_holds; s services; stock_now int;
 BEGIN
- SELECT * INTO h FROM external_refund_order_holds WHERE refund_id=NEW.refund_id FOR UPDATE;
- SELECT * INTO s FROM services WHERE id=NEW.service_id FOR UPDATE;
+ BEGIN
+  SELECT * INTO h FROM external_refund_order_holds WHERE refund_id=NEW.refund_id FOR UPDATE NOWAIT;
+  SELECT * INTO s FROM services WHERE id=NEW.service_id FOR UPDATE NOWAIT;
+ EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END;
  SELECT stock INTO stock_now FROM products WHERE id=s.product_id;
- IF h.status<>'pending' OR s.order_id<>h.order_id OR NEW.snapshot<>to_jsonb(s) OR NEW.order_item_id<>s.order_item_id OR NEW.product_id<>s.product_id OR NEW.unit_number<>s.unit_number OR NEW.version<>s.version OR NEW.stock_at_request IS DISTINCT FROM stock_now THEN
+ IF h.status<>'pending' OR s.order_id<>h.order_id OR NEW.snapshot<>external_refund_order_snapshot(s) OR NEW.order_item_id<>s.order_item_id OR NEW.product_id<>s.product_id OR NEW.unit_number<>s.unit_number OR NEW.version<>s.version OR NEW.stock_at_request IS DISTINCT FROM stock_now THEN
   RAISE EXCEPTION 'external refund order snapshot invalid' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $$;
@@ -272,7 +279,7 @@ BEGIN
  END IF;
  IF TG_OP<>'INSERT' THEN
   SELECT status INTO h FROM external_refund_order_holds WHERE invoice_id=OLD.id AND status<>'released';
-  IF h IS NOT NULL AND (TG_OP='DELETE' OR h<>'applying' OR NEW.status<>'refunded' OR (to_jsonb(NEW)-ARRAY['status','version','updated_at'])<>(to_jsonb(OLD)-ARRAY['status','version','updated_at'])) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
+  IF h IS NOT NULL AND (TG_OP='DELETE' OR h<>'applying' OR NEW.status<>'refunded' OR (external_refund_order_snapshot(NEW)-ARRAY['status','version','updated_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','version','updated_at'])) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
  END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW;
 END $$;
@@ -281,11 +288,12 @@ CREATE TRIGGER zz_external_refund_order_invoice BEFORE INSERT OR UPDATE OR DELET
 CREATE FUNCTION guard_external_refund_order_association() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v jsonb; oid bigint; iid bigint; sid bigint; item record;
 BEGIN
- FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(to_jsonb(NEW)) WHEN 'DELETE' THEN jsonb_build_array(to_jsonb(OLD)) ELSE jsonb_build_array(to_jsonb(OLD),to_jsonb(NEW)) END) LOOP
+ FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(external_refund_order_snapshot(NEW)) WHEN 'DELETE' THEN jsonb_build_array(external_refund_order_snapshot(OLD)) ELSE jsonb_build_array(external_refund_order_snapshot(OLD),external_refund_order_snapshot(NEW)) END) LOOP
   iid:=coalesce((v->>'invoice_id')::bigint,(v->>'source_invoice_id')::bigint);
   sid:=(v->>'service_id')::bigint;
   IF iid IS NOT NULL THEN
-   SELECT order_id INTO oid FROM invoices WHERE id=iid FOR UPDATE;
+   BEGIN SELECT order_id INTO oid FROM invoices WHERE id=iid FOR UPDATE NOWAIT;
+   EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END;
    IF external_refund_order_blocked(oid) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
   END IF;
   IF sid IS NOT NULL THEN
@@ -323,14 +331,15 @@ CREATE FUNCTION reserve_external_refund_order_stock() RETURNS trigger LANGUAGE p
 DECLARE oi order_items; o orders; actual_services bigint; stock_now int;
 BEGIN
  SELECT * INTO oi FROM order_items WHERE id=NEW.order_item_id FOR UPDATE;
- SELECT * INTO o FROM orders WHERE id=oi.order_id FOR UPDATE;
+ BEGIN SELECT * INTO o FROM orders WHERE id=oi.order_id FOR UPDATE NOWAIT;
+ EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END;
  IF oi.id IS NULL OR o.status<>'pending' OR NOT EXISTS(SELECT 1 FROM external_refund_order_births WHERE order_id=o.id) OR EXISTS(SELECT 1 FROM invoices WHERE order_id=o.id) OR NEW.order_id<>o.id OR NEW.product_id<>oi.product_id OR NEW.units<>oi.quantity THEN RAISE EXCEPTION 'external refund stock reservation invalid' USING ERRCODE='23514'; END IF;
  SELECT count(*) INTO actual_services FROM services WHERE order_item_id=oi.id AND order_id=o.id AND product_id=oi.product_id AND user_id=o.user_id AND status='pending_payment' AND NOT inventory_released AND unit_number BETWEEN 1 AND oi.quantity;
  IF actual_services<>oi.quantity THEN RAISE EXCEPTION 'external refund stock reservation service set invalid' USING ERRCODE='23514'; END IF;
  SELECT stock INTO stock_now FROM products WHERE id=oi.product_id FOR UPDATE;
  IF NOT FOUND OR stock_now<oi.quantity THEN RAISE EXCEPTION 'external refund stock reservation insufficient' USING ERRCODE='23514'; END IF;
- NEW.item_snapshot:=to_jsonb(oi);
- SELECT jsonb_agg(id ORDER BY id),jsonb_agg(to_jsonb(s) ORDER BY id) INTO NEW.service_ids,NEW.service_snapshots FROM services s WHERE order_item_id=oi.id AND order_id=o.id;
+ NEW.item_snapshot:=external_refund_order_snapshot(oi);
+ SELECT jsonb_agg(id ORDER BY id),jsonb_agg(external_refund_order_snapshot(s) ORDER BY id) INTO NEW.service_ids,NEW.service_snapshots FROM services s WHERE order_item_id=oi.id AND order_id=o.id;
  NEW.stock_before:=stock_now; NEW.stock_after:=stock_now-oi.quantity;
  UPDATE products SET stock=NEW.stock_after,updated_at=clock_timestamp() WHERE id=oi.product_id;
  RETURN NEW;
@@ -345,8 +354,8 @@ BEGIN
  SELECT * INTO i FROM invoices WHERE id=NEW.invoice_id FOR UPDATE;
  SELECT * INTO o FROM orders WHERE id=NEW.order_id FOR UPDATE;
  IF r.status<>'pending_review' OR NEW.status<>'pending' OR NEW.stock_units_released<>0 OR NEW.applied_at IS NOT NULL OR NEW.released_at IS NOT NULL OR
- NEW.invoice_snapshot<>to_jsonb(i) OR NEW.order_snapshot<>to_jsonb(o) OR NEW.invoice_version<>i.version OR NEW.order_version<>o.version OR
- NEW.items_snapshot IS DISTINCT FROM (SELECT jsonb_agg(to_jsonb(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id) OR external_refund_order_reason(i.id)<>'' THEN RAISE EXCEPTION 'external refund order hold snapshot invalid' USING ERRCODE='23514'; END IF;
+ NEW.invoice_snapshot<>external_refund_order_snapshot(i) OR NEW.order_snapshot<>external_refund_order_snapshot(o) OR NEW.invoice_version<>i.version OR NEW.order_version<>o.version OR
+ NEW.items_snapshot IS DISTINCT FROM (SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id) OR external_refund_order_reason(i.id)<>'' THEN RAISE EXCEPTION 'external refund order hold snapshot invalid' USING ERRCODE='23514'; END IF;
  RETURN NEW;
 END $$;
 CREATE TRIGGER external_refund_order_hold_validate BEFORE INSERT ON external_refund_order_holds FOR EACH ROW EXECUTE FUNCTION validate_external_refund_order_hold();
@@ -354,7 +363,7 @@ CREATE TRIGGER external_refund_order_hold_validate BEFORE INSERT ON external_ref
 CREATE FUNCTION guard_external_refund_order_balance() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v jsonb; oid bigint;
 BEGIN
- FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(to_jsonb(NEW)) WHEN 'DELETE' THEN jsonb_build_array(to_jsonb(OLD)) ELSE jsonb_build_array(to_jsonb(OLD),to_jsonb(NEW)) END) LOOP
+ FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(external_refund_order_snapshot(NEW)) WHEN 'DELETE' THEN jsonb_build_array(external_refund_order_snapshot(OLD)) ELSE jsonb_build_array(external_refund_order_snapshot(OLD),external_refund_order_snapshot(NEW)) END) LOOP
   IF v->>'reference_type'='invoice' AND v->>'entry_type' IN ('payment','refund') THEN
    SELECT order_id INTO oid FROM invoices WHERE id=(v->>'reference_id')::bigint FOR UPDATE;
    IF external_refund_order_blocked(oid) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
