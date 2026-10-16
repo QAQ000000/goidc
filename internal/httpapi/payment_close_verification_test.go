@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -24,8 +25,11 @@ type closeVerificationFixture struct {
 }
 
 func newCloseVerificationFixture(t *testing.T, record bool) closeVerificationFixture {
+	return newCloseVerificationProviderFixture(t, "mock", record)
+}
+func newCloseVerificationProviderFixture(t *testing.T, provider string, record bool) closeVerificationFixture {
 	t.Helper()
-	f, invoice, pid, reference := closeFixture(t, "mock")
+	f, invoice, pid, reference := closeFixture(t, provider)
 	actor, hash := closeActor(t, f, f.root)
 	op, err := f.db.BeginPaymentClose(t.Context(), actor, invoice, pid, 1, "close-verify-original", hash)
 	if err != nil {
@@ -84,10 +88,14 @@ func TestPaymentCloseVerificationClosedHTTPIndependentReplayAndProtection(t *tes
 	expect(t, request(f.h, "POST", review, body, f.verifier, "close-verifier-no-review"), 403)
 	w = request(f.h, "POST", review, body, f.reviewer, "close-independent-review")
 	expect(t, w, 201)
-	if data(t, w)["verification"].(map[string]any)["status"] != "applied_closed" {
+	if data(t, w)["verification"].(map[string]any)["status"] != "applied_closed" || data(t, w)["verification"].(map[string]any)["review_note"] != body["note"] {
 		t.Fatal(w.Body.String())
 	}
-	expect(t, request(f.h, "POST", review, body, f.reviewer, "close-independent-review"), 200)
+	w = request(f.h, "POST", review, body, f.reviewer, "close-independent-review")
+	expect(t, w, 200)
+	if data(t, w)["verification"].(map[string]any)["review_note"] != body["note"] {
+		t.Fatal("review note changed on replay", w.Body.String())
+	}
 	closeState(t, f.upgradeFixture, f.invoice, f.pid, "closed", 2)
 	var original string
 	var unresolved bool
@@ -317,4 +325,196 @@ func TestPaymentCloseVerificationConcurrentLookupSameKeyReservesOnce(t *testing.
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_verification_requests),(SELECT count(*) FROM payment_close_verification_results)").Scan(&requests, &results); err != nil || requests != 1 || results != 1 {
 		t.Fatal(requests, results, err)
 	}
+}
+
+func TestPaymentCloseVerificationProviderPaidRemainsFrozenIncludingHistoricalResult(t *testing.T) {
+	for _, historical := range []bool{false, true} {
+		t.Run(fmt.Sprint(historical), func(t *testing.T) {
+			f, invoice, pid, _ := closeFixture(t, "mock")
+			actor, hash := closeActor(t, f, f.root)
+			op, err := f.db.BeginPaymentClose(t.Context(), actor, invoice, pid, 1, "provider-paid-original", hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if historical {
+				// Reproduce the pre-151 terminal outcome without rewriting an existing fact.
+				_, err = f.db.Pool.Exec(t.Context(), `UPDATE payment_close_operations SET status='succeeded',result_code='provider_paid',completed_at=clock_timestamp() WHERE id=$1`, op.ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				result := closeVerified(op)
+				result.Status, result.ExternalTransactionID = "succeeded", "fixture:provider-reported-paid"
+				if _, err = f.db.CompletePaymentClose(t.Context(), op, result, hash); err == nil {
+					t.Fatal("provider paid silently applied")
+				}
+			}
+			var unresolved bool
+			var status, code string
+			if err = f.db.Pool.QueryRow(t.Context(), `SELECT status,result_code,payment_close_operation_unresolved(id) FROM payment_close_operations WHERE id=$1`, op.ID).Scan(&status, &code, &unresolved); err != nil || !unresolved || code != "provider_paid" || (!historical && status != "unknown") {
+				t.Fatal(status, code, unresolved, err)
+			}
+			if _, err = f.db.BeginPaymentClose(t.Context(), actor, invoice, pid, 1, "provider-paid-no-second-close", hash); err == nil {
+				t.Fatal("provider paid allowed a second Close")
+			}
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoice), map[string]any{"expected_version": 1}, f.customer, "provider-paid-funds-locked"), 409)
+			read := request(f.h, "GET", fmt.Sprintf("/api/v1/admin/invoices/%d", invoice), nil, f.root, "")
+			expect(t, read, 200)
+			if data(t, read)["payments"].([]any)[0].(map[string]any)["close_frozen"] != true {
+				t.Fatal(read.Body.String())
+			}
+			w := request(f.h, "POST", verificationPath(invoice, pid), map[string]any{"close_operation_id": op.ID, "expected_version": 1}, f.root, "provider-paid-read-only-lookup")
+			expect(t, w, 201)
+			if data(t, w)["verification"].(map[string]any)["result_status"] != "unknown" {
+				t.Fatal(w.Body.String())
+			}
+			closeState(t, f, invoice, pid, "pending", 1)
+		})
+	}
+}
+
+func TestPaymentCloseVerificationSignedEpayCallbackAndReviewCompete(t *testing.T) {
+	for _, order := range []string{"review_first", "callback_first", "concurrent"} {
+		t.Run(order, func(t *testing.T) {
+			f := newCloseVerificationProviderFixture(t, "epay_alipay", false)
+			var checkout string
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT checkout_url FROM payment_transactions WHERE id=$1", f.pid).Scan(&checkout); err != nil {
+				t.Fatal(err)
+			}
+			u, err := url.Parse(checkout)
+			if err != nil {
+				t.Fatal(err)
+			}
+			trade := "verification-signed-epay-trade"
+			cfg := epayTestConfig()
+			external := payment.EpayMerchantNamespace(cfg.EpayAPIURL, cfg.EpayPID) + ":" + trade
+			actor, hash := closeActor(t, f.upgradeFixture, f.verifier)
+			v, err := f.db.BeginPaymentCloseVerification(t.Context(), actor, f.invoice, f.pid, f.operation.ID, 1, "signed-epay-trusted-fixture", hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// Epay remains unsupported for LookupClose. This typed evidence fixture
+			// exercises settlement competition with the real HTTP MD5 verifier.
+			_, err = f.db.CompletePaymentCloseVerification(t.Context(), v, payment.CloseStatusResult{OperationID: f.operation.OperationID, ProviderPaymentID: f.reference, AmountCents: f.operation.AmountCents, Status: "succeeded", ExternalTransactionID: external}, "verified", hash)
+			if err != nil {
+				t.Fatal(err)
+			}
+			callback := func() int { return epayCallback(f.h, "POST", "epay_alipay", epayNotification(u.Query(), trade)).Code }
+			review := func(version int64) int {
+				return request(f.h, "POST", fmt.Sprintf("%s/%d/confirm", verificationPath(f.invoice, f.pid), v.ID), map[string]any{"expected_version": version, "note": "真实签名回调与独立复核竞争"}, f.reviewer, "signed-epay-review").Code
+			}
+			switch order {
+			case "review_first":
+				if got := review(1); got != 201 {
+					t.Fatal("review", got)
+				}
+				if got := callback(); got != 200 {
+					t.Fatal("callback", got)
+				}
+			case "callback_first":
+				if got := callback(); got != 200 {
+					t.Fatal("callback", got)
+				}
+				if got := review(2); got != 201 {
+					t.Fatal("review", got)
+				}
+			default:
+				start := make(chan struct{})
+				results := make(chan int, 2)
+				go func() { <-start; results <- callback() }()
+				go func() { <-start; results <- review(1) }()
+				close(start)
+				for range 2 {
+					if got := <-results; got != 200 && got != 201 && got != 409 {
+						t.Fatal("competing response", got)
+					}
+				}
+			}
+			var p, i, storedExternal string
+			var version, ledger, decisions int64
+			err = f.db.Pool.QueryRow(t.Context(), `SELECT p.status,i.status,p.external_transaction_id,i.version,(SELECT count(*) FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id),(SELECT count(*) FROM payment_close_verification_decisions) FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE p.id=$1`, f.pid).Scan(&p, &i, &storedExternal, &version, &ledger, &decisions)
+			if err != nil || p != "succeeded" || i != "paid" || storedExternal != external || version != 2 || ledger != 0 || decisions > 1 {
+				t.Fatal(p, i, storedExternal, version, ledger, decisions, err)
+			}
+			if got := callback(); got != 200 {
+				t.Fatal("callback replay", got)
+			}
+		})
+	}
+}
+
+func TestPaymentCloseVerificationRechecksAuthorityAtCompletionAndReview(t *testing.T) {
+	for _, stage := range []string{"lookup_completion", "review"} {
+		for _, mode := range []string{"permission", "session", "scope", "disabled"} {
+			t.Run(stage+"/"+mode, func(t *testing.T) {
+				f := newCloseVerificationFixture(t, true)
+				cookie := f.verifier
+				if stage == "review" {
+					cookie = f.reviewer
+				}
+				actor, hash := closeActor(t, f.upgradeFixture, cookie)
+				var v store.PaymentCloseVerification
+				var err error
+				if stage == "lookup_completion" {
+					v, err = f.db.BeginPaymentCloseVerification(t.Context(), actor, f.invoice, f.pid, f.operation.ID, 1, "verify-authority-reservation", hash)
+				} else {
+					v.ID = f.lookup(t, "verify-authority-candidate")
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch mode {
+				case "permission":
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, actor)
+				case "session":
+					_, err = f.db.Pool.Exec(t.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hash)
+				case "scope":
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, actor)
+				case "disabled":
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET status='disabled' WHERE id=$1`, actor)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if stage == "lookup_completion" {
+					_, err = f.db.CompletePaymentCloseVerification(t.Context(), v, payment.CloseStatusResult{OperationID: f.operation.OperationID, ProviderPaymentID: f.reference, AmountCents: f.operation.AmountCents, Status: "closed"}, "verified", hash)
+				} else {
+					_, err = f.db.ReviewPaymentCloseVerification(t.Context(), actor, f.invoice, f.pid, v.ID, 1, true, "撤权后不可复核", "verify-authority-review", hash)
+				}
+				if err == nil {
+					t.Fatal("authority revocation ignored")
+				}
+				closeState(t, f.upgradeFixture, f.invoice, f.pid, "pending", 1)
+				var decisions int
+				if err = f.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM payment_close_verification_decisions`).Scan(&decisions); err != nil || decisions != 0 {
+					t.Fatal(decisions, err)
+				}
+			})
+		}
+	}
+}
+
+func TestPaymentCloseVerificationHTTPBoundaryAndApplicantCannotSelfReview(t *testing.T) {
+	f := newCloseVerificationFixture(t, true)
+	path := verificationPath(f.invoice, f.pid)
+	body := map[string]any{"close_operation_id": f.operation.ID, "expected_version": 1}
+	w := request(f.h, "GET", path, nil, "", "")
+	expect(t, w, 401)
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("cacheable unauthenticated verification")
+	}
+	expect(t, request(f.h, "POST", path, body, f.customer, "verify-customer-denied"), 403)
+	expect(t, requestBearer(f.h, "POST", path, body, "invalid-api-key"), 403)
+	_, noView := externalRefundActor(t, f.db, f.h, "verify-without-view", []string{"payments.close_verify", "payments.close_review"})
+	expect(t, request(f.h, "POST", path, body, noView, "verify-view-required"), 403)
+	expect(t, request(f.h, "POST", path, map[string]any{"close_operation_id": f.operation.ID, "expected_version": 1, "target_status": "closed"}, f.verifier, "verify-no-forged-status"), 400)
+	id := f.lookup(t, "verify-boundary-candidate")
+	actor, _ := closeActor(t, f.upgradeFixture, f.verifier)
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view','payments.close_verify','payments.close_review'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, actor); err != nil {
+		t.Fatal(err)
+	}
+	review := fmt.Sprintf("%s/%d/confirm", path, id)
+	expect(t, request(f.h, "POST", review, map[string]any{"expected_version": 1, "note": "申请人即使有权限也不能自审"}, f.verifier, "verify-applicant-no-self-review"), 409)
+	expect(t, request(f.h, "POST", fmt.Sprintf("%s/%d/override", path, id), map[string]any{"expected_version": 1, "note": "禁止任意动作路由"}, f.reviewer, "verify-invalid-action"), 404)
+	closeState(t, f.upgradeFixture, f.invoice, f.pid, "pending", 1)
 }

@@ -53,7 +53,7 @@ BEGIN
  WHERE c.id=NEW.close_operation_id AND c.payment_id=NEW.payment_id AND c.invoice_id=NEW.invoice_id AND c.user_id=NEW.user_id
  AND c.provider=NEW.provider AND c.channel_instance_id=NEW.channel_instance_id AND c.provider_payment_id=NEW.provider_payment_id
  AND c.operation_id=NEW.operation_id AND c.amount_cents=NEW.amount_cents AND c.credential_sha256=NEW.credential_sha256
- AND c.status IN ('unknown','checking') AND (c.status='unknown' OR c.lease_until<=clock_timestamp())
+ AND (c.status IN ('unknown','checking') OR (c.status='succeeded' AND c.result_code='provider_paid')) AND (c.status<>'checking' OR c.lease_until<=clock_timestamp())
  AND p.invoice_id=c.invoice_id AND p.user_id=c.user_id AND p.provider=c.provider AND p.provider_payment_id=c.provider_payment_id
  AND p.amount_cents=c.amount_cents AND COALESCE(p.channel_instance_id,'')=c.channel_instance_id
  AND encode(sha256(p.credential_snapshot),'hex')=c.credential_sha256 AND p.status IN ('pending','expired')) THEN
@@ -88,7 +88,7 @@ END $$;
 CREATE TRIGGER payment_close_verification_decision_association BEFORE INSERT ON payment_close_verification_decisions FOR EACH ROW EXECUTE FUNCTION validate_payment_close_verification_decision();
 CREATE FUNCTION payment_close_operation_unresolved(operation_id bigint) RETURNS boolean LANGUAGE sql STABLE AS $$
  SELECT EXISTS(SELECT 1 FROM payment_close_operations c JOIN payment_transactions p ON p.id=c.payment_id
- WHERE c.id=$1 AND c.status IN ('checking','unknown') AND p.status IN ('pending','expired')
+ WHERE c.id=$1 AND (c.status IN ('checking','unknown') OR (c.status='succeeded' AND c.result_code='provider_paid')) AND p.status IN ('pending','expired')
  AND NOT EXISTS(SELECT 1 FROM payment_close_verification_decisions d JOIN payment_close_verification_requests r ON r.id=d.request_id
  JOIN payment_close_verification_results v ON v.request_id=r.id
  WHERE d.close_operation_id=c.id AND d.status IN ('applied_closed','applied_paid','already_paid','superseded_paid')

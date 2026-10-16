@@ -38,6 +38,7 @@ type PaymentCloseVerification struct {
 	ReviewStatus          string     `json:"review_status"`
 	ReviewedBy            *int64     `json:"reviewed_by"`
 	ReviewedAt            *time.Time `json:"reviewed_at"`
+	ReviewNote            string     `json:"review_note"`
 	Version               int64      `json:"version"`
 	PaymentStatus         string     `json:"payment_status"`
 	InvoiceStatus         string     `json:"invoice_status"`
@@ -49,14 +50,14 @@ type PaymentCloseVerification struct {
 
 const closeVerificationSelect = `SELECT r.id,r.close_operation_id,r.payment_id,r.invoice_id,r.user_id,r.actor_id,c.actor_id,r.provider,r.provider_payment_id,r.operation_id,r.amount_cents,r.expected_version,r.created_at,r.lease_until,
 COALESCE(v.status,''),COALESCE(v.result_code,''),COALESCE(v.external_transaction_id,''),COALESCE(v.provider_evidence_id,''),v.received_at,
-COALESCE(d.status,''),d.actor_id,d.created_at,i.version,p.status,i.status
+COALESCE(d.status,''),d.actor_id,d.created_at,COALESCE(d.note,''),i.version,p.status,i.status
 FROM payment_close_verification_requests r JOIN payment_close_operations c ON c.id=r.close_operation_id
 JOIN payment_transactions p ON p.id=r.payment_id JOIN invoices i ON i.id=r.invoice_id
 LEFT JOIN payment_close_verification_results v ON v.request_id=r.id LEFT JOIN payment_close_verification_decisions d ON d.request_id=r.id `
 
 func scanCloseVerification(row pgx.Row) (PaymentCloseVerification, error) {
 	var v PaymentCloseVerification
-	err := row.Scan(&v.ID, &v.CloseOperationID, &v.PaymentID, &v.InvoiceID, &v.UserID, &v.RequestedBy, &v.OriginalActorID, &v.Provider, &v.ProviderPaymentID, &v.OperationID, &v.AmountCents, &v.ExpectedVersion, &v.RequestedAt, &v.LeaseUntil, &v.ResultStatus, &v.ResultCode, &v.ExternalTransactionID, &v.ProviderEvidenceID, &v.ReceivedAt, &v.ReviewStatus, &v.ReviewedBy, &v.ReviewedAt, &v.Version, &v.PaymentStatus, &v.InvoiceStatus)
+	err := row.Scan(&v.ID, &v.CloseOperationID, &v.PaymentID, &v.InvoiceID, &v.UserID, &v.RequestedBy, &v.OriginalActorID, &v.Provider, &v.ProviderPaymentID, &v.OperationID, &v.AmountCents, &v.ExpectedVersion, &v.RequestedAt, &v.LeaseUntil, &v.ResultStatus, &v.ResultCode, &v.ExternalTransactionID, &v.ProviderEvidenceID, &v.ReceivedAt, &v.ReviewStatus, &v.ReviewedBy, &v.ReviewedAt, &v.ReviewNote, &v.Version, &v.PaymentStatus, &v.InvoiceStatus)
 	v.Status = v.ResultStatus
 	if v.Status == "" {
 		v.Status = "checking"
@@ -135,7 +136,7 @@ func (s *Store) BeginPaymentCloseVerification(ctx context.Context, actor, invoic
 		return out, err
 	}
 	var eligible, busy bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE id=$1 AND payment_id=$2 AND payment_close_operation_unresolved(id) AND (status='unknown' OR lease_until<=clock_timestamp())),
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE id=$1 AND payment_id=$2 AND payment_close_operation_unresolved(id) AND (status<>'checking' OR lease_until<=clock_timestamp())),
  EXISTS(SELECT 1 FROM payment_reconciliation_checks WHERE payment_id=$2 AND status='checking' AND lease_until>clock_timestamp()) OR
  EXISTS(SELECT 1 FROM payment_close_verification_requests r WHERE r.payment_id=$2 AND r.lease_until>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM payment_close_verification_results v WHERE v.request_id=r.id))`, operation, paymentID).Scan(&eligible, &busy)
 	if err != nil {
@@ -471,7 +472,7 @@ func (s *Store) ListPaymentCloseVerifications(ctx context.Context, actor, invoic
 		return nil, err
 	}
 	operations := []map[string]any{}
-	opRows, err := tx.Query(ctx, `SELECT id,operation_id,status,lease_until,payment_close_operation_unresolved(id) AND (status='unknown' OR lease_until<=clock_timestamp()) FROM payment_close_operations WHERE payment_id=$1 ORDER BY id DESC LIMIT 50`, paymentID)
+	opRows, err := tx.Query(ctx, `SELECT id,operation_id,status,lease_until,payment_close_operation_unresolved(id) AND (status<>'checking' OR lease_until<=clock_timestamp()) FROM payment_close_operations WHERE payment_id=$1 ORDER BY id DESC LIMIT 50`, paymentID)
 	if err != nil {
 		return nil, err
 	}

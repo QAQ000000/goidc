@@ -248,7 +248,7 @@ func (s *Store) CompletePaymentClose(ctx context.Context, op PaymentCloseOperati
 		return stored, conflict("payment_state_conflict", "账单或支付状态已变化，请刷新后重试")
 	}
 	if result.Status == "succeeded" {
-		if err = finishPaymentCloseOutcome(ctx, tx, stored, "succeeded", "provider_paid", result, "渠道已报告付款成功，请执行查单或等待回调"); err != nil {
+		if err = finishPaymentCloseOutcome(ctx, tx, stored, "unknown", "provider_paid", result, "渠道已报告付款成功，请执行查单或等待回调"); err != nil {
 			return op, err
 		}
 		if err = tx.Commit(ctx); err != nil {
