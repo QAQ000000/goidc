@@ -69,10 +69,13 @@ function VerificationPanel({ actor, verify, review, invoiceId, payment, refresh,
     readFacts: async (request: DurableRequest) => {
       let current: CloseVerificationPage | null = null;
       let record: CloseVerification | undefined;
+      const requestKeyHash = request.kind === "lookup" ? await sha256Hex(request.key) : "";
       for (let skip = 0; ; skip += 100) {
         current = await api<CloseVerificationPage>(`${path}?limit=100&offset=${skip}`);
         if (current.invoice_id !== invoiceId || current.payment_id !== payment.id || !Array.isArray(current.items)) throw new Error("核验案件关联不完整。");
-        record = current.items.find(row => request.kind === "lookup" ? row.close_operation_id === request.target : row.id === request.target);
+        // One Close can have many lookups. Keep paging until the original
+        // employee's exact key is found; a newer lookup cannot stand in for it.
+        record = current.items.find(row => request.kind === "lookup" ? row.close_operation_id === request.target && row.requested_by === actor && row.request_key_sha256 === requestKeyHash : row.id === request.target);
         if (record || skip + current.items.length >= current.total || current.items.length === 0) break;
       }
       if (request.kind !== "lookup" && !record) throw new Error("未读到原核验记录，不能结束原请求。");
@@ -80,7 +83,6 @@ function VerificationPanel({ actor, verify, review, invoiceId, payment, refresh,
       if (request.kind === "lookup") {
         const body = JSON.parse(request.body) as { close_operation_id: number; expected_version: number };
         const operation = current?.operations.find(item => item.id === request.target);
-        const requestKeyHash = await sha256Hex(request.key);
         expiredLookup = !!record && !!operation && request.rejected && record.requested_by === actor && record.invoice_id === invoiceId && record.payment_id === payment.id && record.close_operation_id === request.target && record.operation_id === operation.operation_id && record.amount_cents === payment.amount_cents && record.expected_version === body.expected_version && record.request_key_sha256 === requestKeyHash && record.status === "expired" && record.result_status === "" && Number.isFinite(Date.parse(record.lease_until)) && Date.parse(record.lease_until) <= Date.now();
       }
       resource.refresh(); refresh();
