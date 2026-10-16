@@ -82,7 +82,7 @@ export function OnlinePayment({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [selectedInstance, setSelectedInstance] = useState("");
+  const [selectedOption, setSelectedOption] = useState("");
   const keys = useRef<Record<string, string>>({});
   const providers = useResource<Provider[]>(
     open ? "/payment-providers" : null,
@@ -90,7 +90,7 @@ export function OnlinePayment({
   );
   const options = (providers.data ?? []).filter(value => !invoice.topup || !value.simulation);
   const chosen =
-    options.find((value) => value.instance_id === selectedInstance) ||
+    options.find((value) => `${value.name}:${value.instance_id}` === selectedOption) ||
     options.find((value) => !value.simulation) ||
     options[0];
   const provider = chosen?.name || "";
@@ -155,26 +155,26 @@ export function OnlinePayment({
           if (!busy) setOpen(value);
         }}
       >
-        <DialogContent>
+        <DialogContent className="min-w-0 w-[calc(100vw-2rem)] max-w-lg grid-cols-[minmax(0,1fr)] overflow-x-hidden max-h-[calc(100dvh-2rem)] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>在线支付</DialogTitle>
           </DialogHeader>
           <p className="money text-xl font-semibold">
             {money(invoice.amount_cents)}
           </p>
-          <label className="grid gap-2 text-sm">
+          <label className="grid min-w-0 gap-2 text-sm">
             支付渠道
             <Select
-              value={instanceID}
+              value={chosen ? `${chosen.name}:${chosen.instance_id}` : ""}
               disabled={busy}
-              onValueChange={setSelectedInstance}
+              onValueChange={setSelectedOption}
             >
-              <SelectTrigger aria-label="支付渠道" className="w-full">
+              <SelectTrigger aria-label="支付渠道" className="w-full min-w-0 max-w-full [&>span]:min-w-0 [&>span]:truncate">
                 <SelectValue placeholder="选择支付渠道" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-w-[calc(100vw-3rem)]">
                 {options.map((value) => (
-                  <SelectItem key={`${value.name}:${value.instance_id}`} value={value.instance_id}>
+                  <SelectItem key={`${value.name}:${value.instance_id}`} value={`${value.name}:${value.instance_id}`} className="min-w-0 [&_span]:truncate">
                     {value.label}
                   </SelectItem>
                 ))}
@@ -187,7 +187,7 @@ export function OnlinePayment({
               {error || providers.error?.message}
             </p>
           )}
-          <DialogFooter>
+          <DialogFooter className="min-w-0 [&>button]:max-w-full">
             <Button
               variant="outline"
               disabled={busy}
