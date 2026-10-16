@@ -98,7 +98,7 @@ export function OnlinePayment({
   const [checkout, setCheckout] = useState("");
   const pending = invoice.payments?.find(
     (value) =>
-      value.status === "pending" &&
+      (value.status === "pending" || (invoice.topup?.status === "accepted" && value.status === "expired")) &&
       value.provider !== "mock" &&
       value.checkout_url,
   );
@@ -144,10 +144,11 @@ export function OnlinePayment({
         <Button variant="outline" size="sm" asChild>
           <a href={link} target="_blank" rel="noopener noreferrer">
             <ExternalLink />
-            前往付款
+            {invoice.topup?.status === "accepted" ? "查看原支付单" : "前往付款"}
           </a>
         </Button>
       )}
+      {invoice.topup?.status === "accepted" && (pending?.expired || pending?.status === "expired") && <p className="text-xs text-muted-foreground whitespace-normal">本地已过期，收款结果仍待核实，请勿重复创建付款。</p>}
       <Dialog
         open={open}
         onOpenChange={(value) => {
