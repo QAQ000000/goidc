@@ -37,6 +37,9 @@ func TestPromoRestorationStatesPaginationAndLegacyFilters(t *testing.T) {
 		if int(d["total"].(float64)) != total || len(d["items"].([]any)) != 1 {
 			t.Fatalf("wrong %s page: %s", status, w.Body.String())
 		}
+		if status != "all" && d["items"].([]any)[0].(map[string]any)["status"] != status {
+			t.Fatalf("row state disagrees with filter: %s", w.Body.String())
+		}
 	}
 	first := request(f.h, "GET", base+"&limit=2&offset=0", nil, f.root, "")
 	second := request(f.h, "GET", base+"&limit=2&offset=2", nil, f.root, "")
