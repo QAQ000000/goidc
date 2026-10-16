@@ -21,7 +21,7 @@ API 日志页面在服务器端使用 `requireUser(true)` 与 `can(user, "audit.
 | `cd web && npx eslint src/lib/admin-navigation.ts src/app/admin/logs/api/page.tsx src/components/admin-notification-logs.tsx` | PASS | 本次改动的三个前端文件。 |
 | `git diff --check` | PASS | 无空白错误。 |
 | `REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/httpapi -run '^TestAPILogNavigationHTTPPermissionBoundary$' -count=1 -v` | PASS（三身份子测试） | 使用主代理新建的专用 PostgreSQL 18 测试角色及 `_test` 数据库；真实 HTTP 验证 API 200/403、1 行专用样本及其余三日志反向权限边界，测试结束清理独立 schema。 |
-| 完整生产构建 | 未验证 | 由主代理在隔离环境统一运行。 |
+| 完整生产构建 | PASS | 主代理在独立导航 worktree 执行 `npm run build -- --webpack`，使用真实隔离 API；未覆盖常驻构建。 |
 
 `TestAPILogNavigationHTTPPermissionBoundary` 使用既有 `testServer` 为 `_test` 数据库创建独立 schema，建立权限互斥账号并写入专用日志样本。样本指定管理员 actor，遵循既有 API 日志查询只返回管理员请求记录的规则。验证三身份的真实 HTTP 200/403，以及成功响应确实包含筛选后的日志行；同时验证其他三个日志接口的反向权限边界。运行方式：
 
@@ -47,10 +47,16 @@ REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/httpapi -run '^TestAPILogN
 
 ready 文件包含真实测试 API origin 和 schema。前端通过 `API_INTERNAL_URL` 连接该 origin。验收结束创建 finish 文件，由公共 fixture 关闭服务并清理 schema。
 
-| 浏览器检查 | 1440×900 | 1024×768 | 390×844 | 320×800 |
+| 浏览器检查 | 1440×900 | 1024×900 | 390×900 | 320×900 |
 | --- | --- | --- | --- | --- |
-| audit-only 菜单、页签、直接访问、数据 | 未验证 | 未验证 | 未验证 | 未验证 |
-| notification-only 菜单及页签隐藏、直接访问重定向、API 403 | 未验证 | 未验证 | 未验证 | 未验证 |
-| super 菜单、全部日志页签及数据 | 未验证 | 未验证 | 未验证 | 未验证 |
+| audit-only 菜单、页签、直接访问、真实日志数据 | PASS | PASS | PASS | PASS |
+| notification-only 不显示 API 入口、仅通知日志页签、直接访问重定向 | PASS | PASS | PASS | PASS |
+| super 菜单、全部日志页签及真实数据 | PASS | PASS | PASS | PASS |
 
-真实浏览器、响应式交互与完整生产构建由主代理继续验收；自动模块测试不替代这些检查。
+以上为主代理真实 Playwright CLI / Linux Chrome 无头浏览器验收，三身份均从登录表单进入；HTTP 测试独立确认 API 403，未把前端隐藏当后端授权证明。四尺寸页面整体 `scrollWidth` 等于视口宽度，表格在内部横向滚动；人工查看 320px 审计及 super 截图，控件和文本可辨。关键词经真实 API 筛选、刷新恢复、无结果空态和清空恢复通过；实际点击下一页到 `offset=25`，刷新后页码仍为 2。
+
+在独立浏览器中仅对日志请求注入一次 503，确认错误提示出现；解除注入后点击“重新加载”，真实 API 数据恢复。13 张独立路径截图及原始 SHA-256 记录见 [本批证据](core-replacement-stage1-browser-evidence-20261016.json)，校验器 `--strict` 为 PASS。它只覆盖本次范围，不修复历史 6 张失配或 8 张缺摘要。
+
+验收期间未捕获 JavaScript 异常或非预期 API 失败。首次打开存在既有 `/favicon.ico` 404；错误恢复另有预期注入 503，不能据此宣称整个浏览器控制台零错误。外部撤权后 API 立即拒绝；当前身份 hook 不轮询，页签变化依赖身份刷新，未宣称界面实时撤权。此页只读，保存、取消、409 版本冲突和危险写操作幂等为 N/A；加载完成可观察，未做独立慢响应断言。
+
+集成后的完整 PG18 回归、相关 race 与环境清理结果见 [阶段一验收](core-replacement-stage1-acceptance-20261016.md)。未部署、重启常驻服务或调用真实第三方。
