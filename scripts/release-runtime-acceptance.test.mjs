@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { assetArtifact, auditProcesses, auditTraceLine, pageAssets, validateTestDSN, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
@@ -36,9 +36,11 @@ test('independent copy accepts ordinary directories and never shares file inodes
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, 'source'), copy = path.join(root, 'copy');
   await mkdir(path.join(source, 'nested'), { recursive: true }); await writeFile(path.join(source, 'nested/file'), 'original');
+  await chmod(source, 0o700);
   await copyIndependent(source, copy);
   const [a, b] = await Promise.all([lstat(path.join(source, 'nested/file')), lstat(path.join(copy, 'nested/file'))]);
   assert.equal(b.nlink, 1); assert.notEqual(`${a.dev}:${a.ino}`, `${b.dev}:${b.ino}`); assert.equal(b.mode & 0o222, 0);
+  assert.equal((await lstat(copy)).mode & 0o777, 0o755); assert.equal((await lstat(source)).mode & 0o777, 0o700);
   await writeFile(path.join(source, 'nested/file'), 'changed'); assert.equal(await readFile(path.join(copy, 'nested/file'), 'utf8'), 'original');
 });
 

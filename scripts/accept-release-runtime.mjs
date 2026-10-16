@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { chmod, chown, copyFile, cp, lstat, mkdir, readFile, readdir, readlink, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, chown, copyFile, cp, lstat, mkdir, readFile, readdir, readlink, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
@@ -10,6 +10,38 @@ import { controllerFiles, assertAvailablePort, assertSocket, auditProcesses, jso
 const here = path.dirname(fileURLToPath(import.meta.url));
 const toolEnv = { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off' };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// This acceptance entry is specific to the pinned sharp 0.35.5 package. It
+// exercises native libvips from memory and records only loaded-library metadata.
+export const sharpLoaderProbeCode = String.raw`
+const fs=require('fs'),path=require('path'),crypto=require('crypto');
+(async()=>{
+ const manifest=JSON.parse(fs.readFileSync('/release/manifest.json'));
+ const baseline=JSON.parse(fs.readFileSync('/control/request.json')).hostBaseline;
+ for(const ignored of baseline.ignoredSearchPaths)if(fs.existsSync(ignored.path))throw Error('Unreviewed ELF search directory visible');
+ const packageFile=path.resolve('node_modules/sharp/package.json');
+ if(JSON.parse(fs.readFileSync(packageFile)).version!=='0.35.5')throw Error('Unreviewed sharp version');
+ const sharp=require(path.resolve('node_modules/sharp'));
+ const png=await sharp({create:{width:1,height:1,channels:4,background:{r:0,g:0,b:0,alpha:1}}}).png().toBuffer();
+ if(png.length<8||png.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')throw Error('Native PNG operation failed');
+ const maps=[...new Set(fs.readFileSync('/proc/self/maps','utf8').split('\n').map(line=>line.match(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\/.*)$/)?.[1]).filter(Boolean).map(value=>fs.realpathSync(value)))];
+ const digest=filename=>crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
+ const loaded=[];
+ for(const mapped of maps.filter(value=>value.startsWith('/release/'))){
+  const relative=mapped.slice('/release/'.length),record=manifest.artifacts.find(row=>row.path===relative);
+  if(!record||record.link||digest(mapped)!==record.sha256)throw Error('Loaded package ELF differs from inventory');
+  loaded.push({provider:'bundled',path:relative,sha256:record.sha256});
+ }
+ for(const dependency of baseline.dependencies){
+  const target=dependency.provider==='bundled'?'/release/'+dependency.path:dependency.path;
+  const expected=fs.statSync(target);
+  const mapped=maps.find(filename=>{const actual=fs.statSync(filename);return actual.dev===expected.dev&&actual.ino===expected.ino});
+  if(!mapped||digest(mapped)!==dependency.sha256)throw Error('Actual loader provider differs from static dependency resolution');
+ }
+ for(const native of manifest.artifacts.filter(row=>row.path.endsWith('.node')&&!row.link))if(!loaded.some(row=>row.path===native.path))throw Error('Package native ELF was not loaded');
+ const host=[...new Map(baseline.dependencies.filter(row=>row.provider==='host').map(row=>{const expected=fs.statSync(row.path),mappedPath=maps.find(filename=>{const actual=fs.statSync(filename);return actual.dev===expected.dev&&actual.ino===expected.ino});return [row.path,{provider:'host',path:row.path,mappedPath,sha256:row.sha256}]})).values()];
+ fs.writeFileSync('/mutable/native-loader.json',JSON.stringify({ok:true,uid:process.getuid(),gid:process.getgid(),entry:'sharp@0.35.5 memory 1x1 PNG',pngBytes:png.length,loaded:[...loaded,...host],matchesStaticResolution:true}),{mode:384,flag:'wx'});
+})().catch(()=>process.exitCode=1);
+`;
 async function deadline(promise, milliseconds, label) {
   let timer;
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(label)), milliseconds); })]); }
@@ -50,6 +82,7 @@ async function waitHealthy(handle, check, seconds, label) {
 }
 export async function copyIndependent(source, target) {
   await cp(source, target, { recursive: true, dereference: false, errorOnExist: true, force: false });
+  await chmod(target, 0o755);
   async function visit(relative = '') {
     for (const name of await readdir(path.join(target, relative))) {
       const rel = relative ? `${relative}/${name}` : name, dest = path.join(target, rel), info = await lstat(dest);
@@ -63,19 +96,80 @@ export async function copyIndependent(source, target) {
   }
   await visit();
 }
+export async function verifyELFDependencies(manifest, sealed, entries) {
+  const inventory = new Map(manifest.artifacts.map(row => [row.path, row]));
+  const libraries = command('/usr/sbin/ldconfig', ['-p']).split('\n');
+  const evidence = { inspection: 'readelf only; no ELF execution or ldd', objects: [], dependencies: [], ignoredSearchPaths: [] }, visited = new Set();
+  async function inspect(binary, inherited = []) {
+    const filename = path.join(sealed, binary.path);
+    await noLinks(filename);
+    const record = inventory.get(binary.path), digest = await fileHash(filename);
+    requireThat(record && !record.link && digest === record.sha256 && (!binary.sha256 || digest === binary.sha256), 'ELF inventory digest mismatch');
+    const elf = command('/usr/bin/readelf', ['-h', '-l', '-d', filename]);
+    requireThat(/Class:\s+ELF64\b/.test(elf) && /Machine:\s+Advanced Micro Devices X86-64\b/.test(elf), 'Unsupported runtime ELF format/architecture');
+    const interpreter = elf.match(/Requesting program interpreter: ([^\]]+)/)?.[1] ?? null;
+    const needed = [...elf.matchAll(/Shared library: \[([^\]]+)\]/g)].map(row => row[1]).sort();
+    if (binary.needed) requireThat(binary.interpreter === interpreter && same(binary.needed, needed), 'Actual ELF baseline differs from manifest');
+    if (interpreter) requireThat(['/lib/', '/lib64/', '/usr/lib/', '/usr/lib64/'].some(root => interpreter.startsWith(root)) && (await stat(interpreter)).isFile(), 'BLOCKED: target ELF loader missing or outside mounted library roots');
+    const rpath = elf.match(/\(RPATH\)[^\n]*\[([^\]]*)\]/)?.[1], runpath = elf.match(/\(RUNPATH\)[^\n]*\[([^\]]*)\]/)?.[1];
+    function directories(value) {
+      return (value?.split(':') ?? []).flatMap(item => {
+        if (!/^\$(?:ORIGIN|\{ORIGIN\})(?:\/|$)/.test(item)) {
+          requireThat(item.startsWith('/') && !item.includes('$'), 'Unsupported relative or variable ELF search path');
+          evidence.ignoredSearchPaths.push({ object: binary.path, path: item }); return [];
+        }
+        const suffix = item.replace(/^\$(?:ORIGIN|\{ORIGIN\})/, '');
+        requireThat(!suffix.includes('$') && !suffix.includes('\\'), 'Unsupported ELF search path variable');
+        const relative = path.posix.normalize(`${path.posix.dirname(binary.path)}${suffix}`);
+        requireThat(relative === 'artifact/web' || relative.startsWith('artifact/web/'), 'ELF search path escapes sealed Web artifact');
+        return [relative];
+      });
+    }
+    // DT_RUNPATH is direct-only. DT_RPATH is inherited when RUNPATH is absent.
+    const ownRpath = runpath === undefined ? directories(rpath) : [], ownRunpath = directories(runpath);
+    const search = [...new Set([...ownRpath, ...inherited, ...ownRunpath])];
+    const key = `${binary.path}\0${search.join('\0')}`; if (visited.has(key)) return; visited.add(key);
+    evidence.objects.push({ path: binary.path, sha256: digest, interpreter, needed, rpath: rpath ?? null, runpath: runpath ?? null });
+    for (const name of needed) {
+      requireThat(/^[A-Za-z0-9_.+\-]+$/.test(name), 'Unsupported ELF dependency name');
+      const found = [];
+      for (const directory of search) {
+        const relative = `${directory}/${name}`, target = path.join(sealed, relative), info = await lstat(target).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+        if (!info) continue;
+        requireThat(info.isFile() && !info.isSymbolicLink() && inventory.has(relative), 'ELF package dependency is unmapped or special');
+        await noLinks(target);
+        const input = inventory.get(relative);
+        requireThat(!input.link && input.sha256 === await fileHash(target), 'ELF package dependency digest mismatch');
+        found.push(relative);
+      }
+      requireThat(new Set(found).size <= 1, 'Ambiguous same-name package ELF dependency');
+      if (found.length) {
+        const relative = found[0];
+        evidence.dependencies.push({ requestedBy: binary.path, needed: name, provider: 'bundled', path: relative, sha256: inventory.get(relative).sha256 });
+        await inspect({ path: relative }, [...new Set([...ownRpath, ...inherited])]);
+      } else {
+        const cached = libraries.filter(line => line.trim().startsWith(`${name} `) && line.includes('x86-64')).map(line => line.split('=>')[1]?.trim()).filter(Boolean);
+        const providers = [];
+        for (const cachedPath of cached) {
+          const actual = await realpath(cachedPath);
+          requireThat(['/lib/', '/lib64/', '/usr/lib/', '/usr/lib64/'].some(root => actual.startsWith(root)), 'Host ELF dependency outside mounted library roots');
+          requireThat((await stat(actual)).isFile(), 'Host ELF dependency is not a file');
+          providers.push(actual);
+        }
+        const unique = [...new Set(providers)];
+        requireThat(unique.length === 1, 'BLOCKED: missing or ambiguous required target system library');
+        evidence.dependencies.push({ requestedBy: binary.path, needed: name, provider: 'host', path: unique[0], sha256: await fileHash(unique[0]) });
+      }
+    }
+  }
+  for (const binary of entries) await inspect(binary);
+  return evidence;
+}
 export async function verifyHostBaseline(manifest, sealed) {
   const host = manifest.runtime.host;
   const expected = [...Object.values(manifest.binaries).map(row => row.path), manifest.runtime.node.path, ...manifest.artifacts.filter(row => row.path.endsWith('.node') && !row.link).map(row => row.path)].sort();
   requireThat(Array.isArray(host.elf) && same(host.elf.map(row => row.path).sort(), expected), 'BLOCKED: complete actual ELF host baseline required');
-  for (const binary of host.elf) {
-    const filename = path.join(sealed, binary.path), elf = command('/usr/bin/readelf', ['-l', '-d', filename]);
-    const interpreter = elf.match(/Requesting program interpreter: ([^\]]+)/)?.[1] ?? null;
-    const needed = [...elf.matchAll(/Shared library: \[([^\]]+)\]/g)].map(row => row[1]).sort();
-    requireThat(binary.sha256 === await fileHash(filename) && binary.interpreter === interpreter && same(binary.needed, needed), 'Actual ELF baseline differs from manifest');
-    if (interpreter) requireThat((await stat(interpreter)).isFile(), 'BLOCKED: target ELF loader missing');
-    const libraries = command('/usr/sbin/ldconfig', ['-p']);
-    for (const name of needed) requireThat(libraries.split('\n').some(line => line.trim().startsWith(`${name} `) && line.includes('x86-64')), 'BLOCKED: required target system library missing');
-  }
+  return verifyELFDependencies(manifest, sealed, host.elf);
 }
 export function namespaceArgs({ release, control, fixture, mutable, pgSocket, uid, gid, appRoot }) {
   const args = ['--die-with-parent', '--unshare-all', '--clearenv', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--dir', '/etc', '--dir', '/usr', '--dir', '/usr/bin'];
@@ -123,11 +217,11 @@ export async function preflight(options) {
   const databasePeak = budget.components.testDatabaseAndLogs + budget.components.buildTemporary;
   requireThat(databaseFree.bytes >= databasePeak + budget.minReserveBytes && databaseFree.inodes >= budget.minReserveInodes, 'BLOCKED: database/tool cache filesystem reserve insufficient');
   requireThat(manifest.artifacts.reduce((sum, row) => sum + (row.bytes ?? 0), 0) <= budget.components.runCopy, 'BLOCKED: runtime copy exceeds recorded budget');
-  await verifyHostBaseline(manifest, options.sealed);
+  const hostBaseline = await verifyHostBaseline(manifest, options.sealed);
   requireThat(await fileHash(process.execPath) === await fileHash(path.join(options.sealed, manifest.runtime.node.path)), 'BLOCKED: controller Node must match trusted bundled Node');
   command('/usr/bin/unshare', ['--mount', '--propagation', 'private', '/usr/bin/true']);
   command('/usr/bin/setpriv', ['--reuid', String(uid), '--regid', String(gid), '--clear-groups', '--', '/usr/bin/bwrap', '--unshare-all', '--ro-bind', '/usr', '/usr', '--symlink', 'usr/lib', '/lib', '--symlink', 'usr/lib64', '/lib64', '--uid', String(uid), '--gid', String(gid), '--cap-drop', 'ALL', '--', '/usr/bin/true']);
-  return { manifest, runner, description, uid, gid, database, databaseURL, runRoot, budget, available, budgetEvidence, databaseFree, databasePeak };
+  return { manifest, runner, description, uid, gid, database, databaseURL, runRoot, budget, available, budgetEvidence, databaseFree, databasePeak, hostBaseline };
 }
 async function fixtureCall(dir, state, operation, seconds = 30) {
   const sequence = ++state.sequence;
@@ -137,11 +231,19 @@ async function fixtureCall(dir, state, operation, seconds = 30) {
   return result;
 }
 async function superviseInner() {
+  let phase = 'bootstrap', phaseSequence = 0;
+  const markPhase = async name => { phase = name; await writeJSON(`/mutable/phase-${++phaseSequence}.json`, { phase: name }); };
+  await markPhase('bootstrap');
   const { controlledRuntimeEnvironment } = await import('./release-runtime-builder-lib.mjs');
   const request = await jsonFile('/control/request.json'), manifest = await jsonFile('/release/manifest.json'), description = await jsonFile('/release/launch/description.json');
   requireThat(process.getuid() === request.uid && process.getgid() === request.gid, 'Ordinary runtime identity mismatch');
+  // The dynamic loader still sees an ELF's literal absolute search entries.
+  // Their omission from static resolution is safe only when this namespace
+  // proves those build-machine directories are absent before any native load.
+  for (const ignored of request.hostBaseline?.ignoredSearchPaths ?? []) requireThat(!(await lstat(ignored.path).catch(error => { if (error.code === 'ENOENT') return null; throw error; })), 'Unreviewed ELF search directory is visible in runtime namespace');
   const env = await controlledRuntimeEnvironment(description, '/fixture/config.json', { uid: request.uid });
   const database = validateTestDSN(env.DATABASE_URL, request.schema);
+  await markPhase('namespace');
   // New network namespace has only loopback; the sole external endpoint is this explicit Unix socket.
   const interfaces = (await readFile('/proc/net/dev', 'utf8')).split('\n').slice(2).filter(line => line.includes(':')).map(line => line.split(':')[0].trim()).sort();
   requireThat(same(interfaces, ['lo']) && await readlink('/proc/self/ns/net') !== request.parentNetNamespace, 'Unexpected runtime network namespace/interface');
@@ -169,40 +271,52 @@ async function superviseInner() {
   async function oneMigration(name, step) { const h = service(name, step); await deadline(h.done, 120000, 'Migration deadline exceeded'); requireThat(!h.failed && h.code === 0, 'Same-package migration failed'); await call('verify-migrations'); }
   try {
     const steps = Object.fromEntries(description.steps.map(row => [row.name, row]));
-    await oneMigration('migrate-first', steps.migrate); await oneMigration('migrate-second', steps.migrate);
+    await markPhase('native-loader');
+    let nativeLoader = { status: 'N/A', reason: 'No inventoried native Node ELF' };
+    if (manifest.artifacts?.some(row => row.path.endsWith('.node') && !row.link)) {
+      const native = service('native-loader', { executable: manifest.runtime.node.path, cwd: manifest.web.appRoot, args: ['-e', sharpLoaderProbeCode] });
+      await deadline(native.done, 30000, 'Native loader deadline exceeded');
+      requireThat(!native.failed && native.code === 0, 'Actual native loader differs from static ELF resolution');
+      nativeLoader = await jsonFile('/mutable/native-loader.json'); requireThat(nativeLoader.ok && nativeLoader.matchesStaticResolution, 'Native loader proof incomplete');
+    }
+    await markPhase('migrate-first'); await oneMigration('migrate-first', steps.migrate);
+    await markPhase('migrate-second'); await oneMigration('migrate-second', steps.migrate);
+    await markPhase('fixture-prepare');
     const prepared = await call('prepare'); requireThat(prepared.safeInputs, 'Fixture external-effect boundaries not proven');
-    const api = service('api', steps.api);
+    await markPhase('api-ready'); const api = service('api', steps.api);
     await waitHealthy(api, async () => { try { const r = await fetch(steps.api.readyURL, { signal: AbortSignal.timeout(500) }); return r.status === 200; } catch { return false; } }, description.timeouts.readySeconds, 'API readiness');
-    const web = service('web', steps.web);
+    await markPhase('web-ready'); const web = service('web', steps.web);
     await waitHealthy(web, async () => { try { const r = await fetch(description.webOrigin, { signal: AbortSignal.timeout(500) }); return r.status === 200; } catch { return false; } }, description.timeouts.readySeconds, 'Web readiness');
-    const pages = await verifyPages(manifest, '/release', description.webOrigin);
-    let worker = service('worker-first', steps.worker);
+    await markPhase('pages-assets'); const pages = await verifyPages(manifest, '/release', description.webOrigin);
+    await markPhase('worker-first'); let worker = service('worker-first', steps.worker);
     await waitHealthy(worker, async () => !(await call('verify-first')).pending, description.timeouts.workerSeconds, 'worker simulation completion');
-    const identities = await auditProcesses('/release', [steps.api, steps.web, steps.worker].map((step, i) => ({ ...step, name: ['api', 'web', 'worker'][i], traceName: ['api', 'web', 'worker-first'][i] })), '/mutable/logs');
+    await markPhase('identities'); const identities = await auditProcesses('/release', [steps.api, steps.web, steps.worker].map((step, i) => ({ ...step, name: ['api', 'web', 'worker'][i], traceName: ['api', 'web', 'worker-first'][i] })), '/mutable/logs');
     requireThat(['api', 'web', 'worker'].every(name => identities.some(row => row.name === name)), 'Actual package runtime identity missing');
     for (const identity of identities) requireThat(manifest.artifacts.find(row => row.path === identity.executable)?.sha256 === identity.sha256, 'Actual running executable differs from sealed artifact');
-    await stop(worker, description.timeouts.stopSeconds);
+    await markPhase('worker-stop'); await stop(worker, description.timeouts.stopSeconds);
+    await markPhase('worker-restart');
     worker = service('worker-restart', steps.worker);
     // Observe a complete scheduler polling window before checking duplicate execution.
     await pause(6000); requireThat(!worker.exited, 'Restarted worker exited'); await call('verify-restart');
     const restartIdentities = await auditProcesses('/release', [{ ...steps.worker, name: 'worker-restart', traceName: 'worker-restart' }], '/mutable/logs');
     requireThat(restartIdentities.length === 1 && restartIdentities[0].sha256 === manifest.artifacts.find(row => row.path === steps.worker.executable)?.sha256, 'Actual restarted package worker identity missing');
-    for (const handle of [...owned].reverse()) await stop(handle, description.timeouts.stopSeconds);
+    await markPhase('runtime-stop'); for (const handle of [...owned].reverse()) await stop(handle, description.timeouts.stopSeconds);
     await new Promise(resolve => bridge.close(resolve));
     for (const target of [description.apiInternalURL, description.webOrigin]) await assertAvailablePort(Number(new URL(target).port));
-    await call('finish'); await waitFor(() => jsonFile('/fixture/done.json').catch(() => null), 15, 'fixture cleanup');
-    await writeJSON('/mutable/result.json', { ok: true, pages, identities, restartIdentities, migrations: evidence.filter(row => row.operation === 'verify-migrations'), fixture: evidence, allOwnedExited: owned.every(row => row.exited && row.groupGone), listenersGone: true });
+    await markPhase('fixture-finish'); await call('finish'); await waitFor(() => jsonFile('/fixture/done.json').catch(() => null), 15, 'fixture cleanup');
+    await markPhase('complete');
+    await writeJSON('/mutable/result.json', { ok: true, pages, identities, restartIdentities, nativeLoader, migrations: evidence.filter(row => row.operation === 'verify-migrations'), fixture: evidence, allOwnedExited: owned.every(row => row.exited && row.groupGone), listenersGone: true });
     process.removeListener('SIGTERM', emergencyStop); process.removeListener('SIGINT', emergencyStop);
   } catch (error) {
     for (const handle of [...owned].reverse()) await stop(handle).catch(() => {});
     bridge.close(); await call('abort').catch(() => {});
-    await writeJSON('/mutable/failure.json', { ok: false, phase: 'runtime', reason: 'Runtime boundary or acceptance check failed' }).catch(() => {});
+    await writeJSON('/mutable/failure.json', { ok: false, phase: 'runtime', step: phase, reason: 'Runtime boundary or acceptance check failed' }).catch(() => {});
     throw error;
   }
 }
 export async function acceptRuntime(options) {
   const pre = await preflight(options);
-  if (!options.execute) return { status: 'PREFLIGHT_ONLY', commit: pre.manifest.source.commit, runnerCommit: pre.runner.commit, budget: pre.budgetEvidence, fullAcceptanceExecuted: false };
+  if (!options.execute) return { status: 'PREFLIGHT_ONLY', commit: pre.manifest.source.commit, runnerCommit: pre.runner.commit, budget: pre.budgetEvidence, hostBaseline: pre.hostBaseline, fullAcceptanceExecuted: false };
   const { runtimeInventory } = await import('./release-runtime-lib.mjs');
   const { guardReserve } = await import('./release-runtime-builder-lib.mjs');
   const { manifest, runRoot, uid, gid } = pre;
@@ -211,7 +325,7 @@ export async function acceptRuntime(options) {
   let fixtureProcess, sandbox, timer, failure;
   const interrupted = () => { failure ??= new Error('Controller interrupted'); stop(sandbox).catch(() => {}); };
   process.once('SIGTERM', interrupted); process.once('SIGINT', interrupted);
-  const report = { status: 'FAIL', commit: manifest.source.commit, runnerCommit: pre.runner.commit, manifestSHA256: options.manifestSHA, checks: [] };
+  const report = { status: 'FAIL', commit: manifest.source.commit, runnerCommit: pre.runner.commit, manifestSHA256: options.manifestSHA, hostBaseline: pre.hostBaseline, checks: [] };
   try {
     timer = setInterval(() => Promise.all([
       guardReserve(runRoot, pre.budget, pre.available.bytes),
@@ -232,7 +346,7 @@ export async function acceptRuntime(options) {
     const config = await jsonFile(path.join(fixture, 'config.json')); validateTestDSN(config.values.DATABASE_URL, ready.schema);
     requireThat(!failure, 'Disk reserve crossed before runtime launch');
     await chown(fixture, uid, gid); await chown(path.join(fixture, 'config.json'), uid, gid);
-    await writeJSON(path.join(control, 'request.json'), { uid, gid, schema: ready.schema, pgSocket: `/pg/${path.basename(options.pgSocket)}`, hiddenSource: options.source, parentNetNamespace: await readlink('/proc/self/ns/net') });
+    await writeJSON(path.join(control, 'request.json'), { uid, gid, schema: ready.schema, pgSocket: `/pg/${path.basename(options.pgSocket)}`, hiddenSource: options.source, parentNetNamespace: await readlink('/proc/self/ns/net'), hostBaseline: pre.hostBaseline });
     await chmod(path.join(control, 'request.json'), 0o444);
     const socketStageDirectory = path.join(runRoot, 'socket'); await mkdir(socketStageDirectory, { mode: 0o755 });
     const socketStage = path.join(socketStageDirectory, path.basename(options.pgSocket)); await writeFile(socketStage, '', { flag: 'wx', mode: 0o644 });
