@@ -1048,7 +1048,7 @@ function AdminCustomerRelatedView({
                       "-"
                     )}
                   </TableCell>
-                  <TableCell>{String(row.label ?? "-")}</TableCell>
+                  <TableCell>{row.label === "gateway_topup" ? "在线充值入账" : String(row.label ?? "-")}</TableCell>
                   <TableCell className="money">
                     {row.kind === "ledger" || row.kind === "external_refund"
                       ? `${Number(row.delta_cents) > 0 ? "+" : ""}${money(Number(row.delta_cents))}`

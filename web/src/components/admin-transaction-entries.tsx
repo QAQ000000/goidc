@@ -26,7 +26,7 @@ type CashSummary = { gateway_income_cents: number; external_refund_cents: number
 const kinds = { topup: "充值", product: "产品", renew: "续费", other: "其他" };
 const kindValues = Object.keys(kinds);
 const defaults = { customer_id: "", from: "", to: "", direction: "", channel: "", min_cents: "", max_cents: "", limit: "20" };
-const channels: Record<string, string> = { balance: "账户余额", admin_topup: "后台充值", credit: "信用额度", unrecorded: "未记录渠道", ...paymentLabels };
+const channels: Record<string, string> = { gateway_topup: "在线充值入账", balance: "账户余额", admin_topup: "后台充值", credit: "信用额度", unrecorded: "未记录渠道", ...paymentLabels };
 const sources: Record<string, string> = { payment: "成功支付", external_refund: "外部退款到账", ledger: "余额记录", invoice: "已付账单" };
 const directions: Record<string, string> = { income: "收入", expense: "支出", neutral: "账单结算" };
 
@@ -110,7 +110,7 @@ export function AdminTransactionEntriesView() {
             <TableCell className="whitespace-nowrap">{date(row.occurred_at)}</TableCell>
             <TableCell className="whitespace-nowrap">{channels[row.channel] ?? row.channel}</TableCell>
             <TableCell className="min-w-44 max-w-80"><p className="break-words">{row.description}</p>{row.invoice_no && <p className="text-xs text-muted-foreground">{row.invoice_no}</p>}</TableCell>
-            <TableCell className="whitespace-nowrap"><div className={row.direction === "expense" ? "text-destructive" : ""}>{row.direction === "expense" ? "−" : row.direction === "income" ? "+" : ""}{money(row.amount_cents)}</div><div className="text-xs text-muted-foreground">{directions[row.direction]}{row.balance_after !== null && <><br />余额 {money(row.balance_after)}</>}</div></TableCell>
+            <TableCell className="whitespace-nowrap"><div className={row.direction === "expense" ? "text-destructive" : ""}>{row.direction === "expense" ? "−" : row.direction === "income" ? "+" : ""}{money(row.amount_cents)}</div><div className="text-xs text-muted-foreground">{row.channel === "gateway_topup" && row.direction === "neutral" ? "余额内部入账" : directions[row.direction]}{row.balance_after !== null && <><br />余额 {money(row.balance_after)}</>}</div></TableCell>
             <TableCell className="whitespace-nowrap">{row.sales_owner_name ?? "—"}</TableCell>
             <TableCell className="max-w-56 break-all font-mono text-xs">{row.transaction_no}</TableCell>
             <TableCell className="whitespace-nowrap">{kinds[row.kind as keyof typeof kinds] ?? row.kind}<p className="text-xs text-muted-foreground">{sources[row.source] ?? row.source}</p></TableCell>
