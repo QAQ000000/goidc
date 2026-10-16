@@ -7,7 +7,7 @@ import { Failure, Loading } from "./common";
 type Item = { id:number; event_key:string; event_kind:string; reply_id:number|null; channel:string; outcome:string; reason:string; created_at:string; recipient_kind:string; address:string|null; outbox_status?:string|null };
 type Page = { items:Item[]; total:number; limit:number; offset:number };
 const events:Record<string,string> = {customer_created:"客户创建工单",customer_replied:"客户公开回复",staff_replied:"客服公开回复"};
-const reasons:Record<string,string> = {unsubscribed:"收件人未订阅此渠道",unverified_address:"收件地址尚未验证",missing_address:"未设置收件地址",missing_template:"未配置通知模板",inactive_template:"通知模板未启用",missing_channel:"未配置可用发送渠道",duplicate_address:"收件地址重复，已避免重复发送",invalid_sms_payload:"短信内容不符合发送要求",inactive_recipient:"收件人已停用",missing_provider_template:"未配置供应商短信模板 ID"};
+const reasons:Record<string,string> = {unsubscribed:"收件人未订阅此渠道",unverified_address:"收件地址尚未验证",missing_address:"未设置收件地址",missing_template:"未配置通知模板",inactive_template:"通知模板未启用",missing_channel:"未配置可用发送渠道",duplicate_address:"收件地址重复，已避免重复发送",invalid_sms_payload:"短信内容不符合发送要求",invalid_email_payload:"邮件内容或地址不符合发送要求",inactive_recipient:"收件人已停用",missing_provider_template:"未配置供应商短信模板 ID"};
 const deliveryStates:Record<string,string> = {pending:"等待发送",processing:"发送处理中",sending:"发送处理中",sent:"发送完成",failed:"发送失败",dead:"已停止重试",dead_letter:"已停止重试",expired:"已过期，停止发送"};
 export function TicketNotifications({ticketID,reloadKey}:{ticketID:number;reloadKey?:number}) {
  const [offset,setOffset]=useState(0);
