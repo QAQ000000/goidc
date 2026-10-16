@@ -67,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/captcha", s.issueCaptcha)
 	mux.HandleFunc("POST /api/v1/auth/login/mfa", s.loginMFA)
+	mux.HandleFunc("GET /api/v1/auth/registration-fields", s.registrationFields)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("GET /api/v1/auth/verification/channels", s.verificationChannels)
 	mux.HandleFunc("POST /api/v1/auth/verification/request", s.requestRegistrationVerification)

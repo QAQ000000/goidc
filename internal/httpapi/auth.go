@@ -236,15 +236,17 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Username         string `json:"username"`
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		Name             string `json:"display_name"`
-		VerificationID   string `json:"verification_id"`
-		VerificationCode string `json:"verification_code"`
-		AffiliateCode    string `json:"affiliate_code"`
-		CaptchaID        string `json:"captcha_id"`
-		CaptchaAnswer    string `json:"captcha_answer"`
+		Username            string         `json:"username"`
+		Email               string         `json:"email"`
+		Password            string         `json:"password"`
+		Name                string         `json:"display_name"`
+		VerificationID      string         `json:"verification_id"`
+		VerificationCode    string         `json:"verification_code"`
+		AffiliateCode       string         `json:"affiliate_code"`
+		CaptchaID           string         `json:"captcha_id"`
+		CaptchaAnswer       string         `json:"captcha_answer"`
+		CustomFields        map[string]any `json:"custom_fields"`
+		CustomFieldsVersion string         `json:"custom_fields_version"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -272,12 +274,26 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	var id int64
-	if err = tx.QueryRow(r.Context(), "SELECT s.registration_enabled AND a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1 FOR SHARE").Scan(&enabled); err != nil {
+	schema, allowed, err := registrationFieldsTx(r.Context(), tx)
+	if err != nil {
+		s.registrationFieldsError(w, r, err)
+		return
+	}
+	if enabled, err = registrationEnabledTx(r.Context(), tx); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if !enabled {
 		writeError(w, 403, "registration_disabled", "本站暂未开放注册")
+		return
+	}
+	if (len(allowed) > 0 || input.CustomFieldsVersion != "") && input.CustomFieldsVersion != schema.Version {
+		writeError(w, 409, "registration_fields_changed", "注册字段已变化，请加载最新字段后重试")
+		return
+	}
+	custom, fieldErr := validateCustomFieldValues(allowed, input.CustomFields, nil)
+	if fieldErr != nil {
+		writeError(w, 400, "invalid_custom_fields", "请检查注册自定义字段")
 		return
 	}
 	if err := s.consumeCaptcha(r.Context(), r, "register", input.CaptchaID, input.CaptchaAnswer); err != nil {
@@ -316,6 +332,15 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = tx.QueryRow(r.Context(), "INSERT INTO users(username,email,password_hash,display_name) VALUES($1,$2,$3,$4) RETURNING id", input.Username, input.Email, string(hash), input.Name).Scan(&id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	customRaw, err := json.Marshal(custom)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err = tx.Exec(r.Context(), "INSERT INTO customer_profiles(customer_id,custom_fields) VALUES($1,$2)", id, customRaw); err != nil {
 		s.fail(w, r, err)
 		return
 	}
