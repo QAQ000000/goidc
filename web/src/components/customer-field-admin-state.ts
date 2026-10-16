@@ -178,8 +178,18 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
       const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
       if (link && !event.ctrlKey && !event.metaKey && !window.confirm("当前有未提交草稿或待核实请求。确认离开？资料保留在原员工空间。")) { event.preventDefault(); event.stopPropagation(); }
     };
-    window.addEventListener("beforeunload", unload); document.addEventListener("click", click, true);
-    return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", click, true); };
+    // The Navigation API runs before same-document history traversal. Cancel it
+    // there; popstate itself cannot be canceled without rewriting user history.
+    const navigation = (window as Window & { navigation?: EventTarget }).navigation;
+    const navigate = (event: Event) => {
+      const transition = event as Event & { navigationType?: string; destination?: { url: string; sameDocument: boolean } };
+      if (transition.navigationType !== "traverse" || !transition.destination?.sameDocument || !event.cancelable) return;
+      const destination = new URL(transition.destination.url);
+      if (destination.pathname === window.location.pathname) return;
+      if (!window.confirm("当前有未提交草稿或待核实请求。确认离开？资料保留在原员工空间。")) event.preventDefault();
+    };
+    window.addEventListener("beforeunload", unload); document.addEventListener("click", click, true); navigation?.addEventListener("navigate", navigate);
+    return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", click, true); navigation?.removeEventListener("navigate", navigate); };
   }, [pending, drafts, busy]);
   const hideIdentity = useCallback(() => { setIdentityReady(false); setReviewed(false); }, []);
   return { pending, drafts, ready, storageError, busy, error, setError, identityReady, hideIdentity, reviewed, setReviewed, receipt, read, verify, persistDraft, replaceDraft, send, endRejected, running, reloadStorage: () => setStorageRevision(value => value + 1) };
