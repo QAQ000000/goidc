@@ -40,7 +40,7 @@ var AdminPermissions = []Permission{
 	{"orders.view", "订单", "读取订单"}, {"orders.manage", "订单", "审核、备注和取消订单"},
 	{"invoices.view", "财务", "读取账单"}, {"invoices.manage", "财务", "创建、编辑和作废人工账单"}, {"invoices.refund", "财务", "退款"}, {"balance.manage", "财务", "客户余额充值"}, {"balance.topup.resolve", "财务", "在线充值待补账处理"},
 	{"credit.view", "信用额", "读取客户信用额"}, {"credit.manage", "信用额", "调整客户信用额"},
-	{"payments.reconcile", "财务", "查询在线支付并补结算"},
+	{"payments.reconcile", "财务", "查询在线支付并补结算"}, {"payments.close", "财务", "核验上游最终关闭并解除支付保护"},
 	{"invoice_applications.view", "发票", "读取授权客户的发票申请"}, {"invoice_applications.manage", "发票", "审核、登记开具及邮寄信息"},
 	{"services.view", "服务", "读取服务和取消申请"}, {"services.manage", "服务", "执行服务动作、交付和取消审核"},
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
@@ -158,7 +158,7 @@ func validateRole(in *AdminRoleInput) error {
 	// A mutation grant always includes the corresponding read capability.
 	for _, p := range in.Permissions {
 		view := strings.TrimSuffix(p, ".manage") + ".view"
-		if p == "invoices.refund" || p == "payments.reconcile" || p == "balance.topup.resolve" {
+		if p == "invoices.refund" || p == "payments.reconcile" || p == "payments.close" || p == "balance.topup.resolve" {
 			view = "invoices.view"
 		}
 		if valid[view] && view != p && !slices.Contains(in.Permissions, view) {

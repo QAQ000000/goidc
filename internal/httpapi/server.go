@@ -321,6 +321,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/invoices/{id}/payments", s.auth(s.createPayment, false))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/payments/{payment_id}/reconcile", s.auth(s.reconcilePayment, false))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/reconcile", s.auth(s.reconcilePayment, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payments/{payment_id}/close", s.paymentCloseHTTP(s.paymentCloseStatus))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close", s.paymentCloseHTTP(s.closePayment))
 	mux.HandleFunc("GET /api/v1/payment-providers", s.auth(s.paymentProviders, false))
 	mux.HandleFunc("POST /api/v1/payments/{provider}/webhook", s.paymentWebhook)
 	mux.HandleFunc("GET /api/v1/payments/{provider}/webhook", s.paymentWebhook)

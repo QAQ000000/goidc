@@ -165,8 +165,15 @@ func (s *Store) cancelUnpaidOrder(ctx context.Context, tx pgx.Tx, actorID, order
 	if invoiceStatus != "unpaid" {
 		return 0, conflict("order_not_cancellable", "账单当前状态不可取消订单")
 	}
+	var anomaly bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies a JOIN invoices i ON i.id=a.invoice_id WHERE i.order_id=$1)`, orderID).Scan(&anomaly); err != nil {
+		return 0, err
+	}
+	if anomaly {
+		return 0, conflict("payment_close_anomaly", "订单存在关闭后收款异常，需财务核验")
+	}
 	var pending bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE i.order_id=$1 AND p.status IN ('pending','expired') AND p.provider<>'mock')", orderID).Scan(&pending); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE i.order_id=$1 AND p.status IN ('pending','expired') AND p.provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_operations c JOIN invoices i ON i.id=c.invoice_id WHERE i.order_id=$1 AND c.status IN ('checking','unknown'))", orderID).Scan(&pending); err != nil {
 		return 0, err
 	}
 	if pending {

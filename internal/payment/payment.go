@@ -1,6 +1,7 @@
 package payment
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -40,6 +41,29 @@ type Gateway interface {
 	DecodeWebhook(body []byte) (Webhook, error)
 }
 
+// CloseGateway is intentionally stricter than QueryGateway. Implementations
+// must return a provider-confirmed terminal close result; a local expiry,
+// pending response, timeout, or 404 is not a close. The operation ID is
+// stable for retries so a provider can make its close request idempotent.
+type CloseRequest struct {
+	ProviderPaymentID string
+	AmountCents       int64
+	OperationID       string
+}
+
+type CloseResult struct {
+	ProviderPaymentID     string `json:"payment_id"`
+	ExternalTransactionID string `json:"external_transaction_id"`
+	AmountCents           int64  `json:"amount_cents"`
+	OperationID           string `json:"operation_id"`
+	Status                string `json:"status"`
+}
+
+type CloseGateway interface {
+	QueryGateway
+	Close(context.Context, CloseRequest) (CloseResult, error)
+}
+
 // gatewayRegistry is the payment-specific typed view over the common
 // compiled-in module registry. Database channel instances select an ID, while
 // this registry supplies the executable implementation.
@@ -75,7 +99,7 @@ func New(name string, config FactoryConfig) (Gateway, error) {
 func init() {
 	gatewayRegistry.MustRegister(channel.Descriptor{
 		ID: "mock", Name: "模拟支付", Category: channel.Payment,
-		Capabilities: []string{"create_intent", "verify_webhook"},
+		Capabilities: []string{"create_intent", "verify_webhook", "query", "close_intent"},
 		Fields:       []channel.Field{{Key: "secret_source", Label: "签名密钥来源", Type: channel.Select, Options: []string{"deployment"}}},
 	}, func(config FactoryConfig) (Gateway, error) {
 		return MockGateway{Secret: []byte(config.Secret)}, nil
@@ -122,6 +146,26 @@ func (g MockGateway) DecodeWebhook(body []byte) (Webhook, error) {
 		return event, errors.New("webhook status is invalid")
 	}
 	return event, nil
+}
+
+func (g MockGateway) Query(ctx context.Context, req QueryRequest) (QueryResult, error) {
+	if err := ctx.Err(); err != nil {
+		return QueryResult{}, err
+	}
+	if req.ProviderPaymentID == "" || req.AmountCents < 1 {
+		return QueryResult{}, ErrQueryInvalid
+	}
+	return QueryResult{ProviderPaymentID: req.ProviderPaymentID, AmountCents: req.AmountCents, Status: "pending", ExternalTransactionID: "mock-query:" + req.ProviderPaymentID}, nil
+}
+
+func (g MockGateway) Close(ctx context.Context, req CloseRequest) (CloseResult, error) {
+	if err := ctx.Err(); err != nil {
+		return CloseResult{}, ErrCloseUnknown
+	}
+	if req.ProviderPaymentID == "" || req.AmountCents < 1 || req.OperationID == "" {
+		return CloseResult{}, ErrCloseInvalid
+	}
+	return CloseResult{ProviderPaymentID: req.ProviderPaymentID, OperationID: req.OperationID, AmountCents: req.AmountCents, Status: "closed"}, nil
 }
 
 func For(name, secret string, configs ...EpayConfig) (Gateway, bool) {

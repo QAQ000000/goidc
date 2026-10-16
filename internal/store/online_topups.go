@@ -193,6 +193,17 @@ func acceptOnlineTopup(ctx context.Context, tx pgx.Tx, uid, invoice int64) error
 	if err := tx.QueryRow(ctx, "SELECT amount_cents,settings_version,status FROM balance_topups WHERE invoice_id=$1 AND user_id=$2 FOR UPDATE", invoice, uid).Scan(&amount, &version, &state); err != nil {
 		return err
 	}
+	if state == "accepted" {
+		var safelyClosed bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status='closed') AND NOT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') AND NOT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1) AND NOT EXISTS(SELECT 1 FROM balance_topup_settlements WHERE invoice_id=$1)`, invoice).Scan(&safelyClosed); err != nil {
+			return err
+		}
+		// Reuse the original accepted reservation and immutable policy snapshot;
+		// never reserve the same topup twice or silently accept current policies.
+		if safelyClosed {
+			return nil
+		}
+	}
 	if state != "created" {
 		return conflict("topup_not_payable", "充值已接纳或已结束，请继续原支付单")
 	}
@@ -307,14 +318,14 @@ func (s *Store) CancelOnlineTopup(ctx context.Context, uid, invoice int64, in On
 	if err != nil {
 		return out, err
 	}
-	if out.Status != "created" {
+	if out.Status != "created" && out.Status != "accepted" {
 		return out, conflict("topup_payment_protected", "已接纳或已结束的充值不能取消；请继续原支付或联系财务核对")
 	}
 	if out.Version != in.ExpectedVersion {
 		return out, conflict("version_conflict", "充值账单版本已变化")
 	}
 	var hasPayment bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1)", invoice).Scan(&hasPayment); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1)", invoice).Scan(&hasPayment); err != nil {
 		return out, err
 	}
 	if hasPayment {

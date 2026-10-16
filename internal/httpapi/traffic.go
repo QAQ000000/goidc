@@ -407,7 +407,7 @@ func (s *Server) cancelTrafficOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var paymentPending bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock')", invoiceID).Scan(&paymentPending); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1) OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND status IN ('checking','unknown'))", invoiceID).Scan(&paymentPending); err != nil {
 		s.fail(w, r, err)
 		return
 	}

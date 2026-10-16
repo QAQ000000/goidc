@@ -114,6 +114,9 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 	if err = requireInvoiceReviewed(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
+	if err = requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
+		return out, err
+	}
 	var pending bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND (provider=$2 OR provider<>'mock' OR $2<>'mock'))", invoiceID, provider).Scan(&pending); err != nil {
 		return out, err
@@ -157,8 +160,11 @@ VALUES($1,$2,COALESCE(NULLIF($9,''),(SELECT id FROM channel_instances WHERE cate
 // Called while holding the invoice row lock. Local expiry cannot prove that
 // a real provider will no longer collect payment or retry its notification.
 func requireNoRealPaymentPending(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
+	if err := requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
+		return err
+	}
 	var pending bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock')", invoiceID).Scan(&pending); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND status IN ('checking','unknown'))", invoiceID).Scan(&pending); err != nil {
 		return err
 	}
 	if pending {
@@ -245,6 +251,37 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 	if savedInvoice != invoiceID || savedAmount != amountCents {
 		return out, conflict("payment_amount_mismatch", "支付金额或账单不匹配")
 	}
+	// A trusted provider close releases this intent for a new payment, but it
+	// does not erase the old callback identity. Late success notifications are
+	// acknowledged and retained as ignored evidence; they can never settle the
+	// invoice a second time.
+	if txStatus == "closed" {
+		var invID int64
+		if err = tx.QueryRow(ctx, `SELECT id FROM invoices WHERE id=$1 FOR UPDATE`, invoiceID).Scan(&invID); err != nil {
+			return out, err
+		}
+		if status == "succeeded" {
+			var userID int64
+			if err = tx.QueryRow(ctx, `SELECT user_id FROM payment_transactions WHERE id=$1`, txID).Scan(&userID); err != nil {
+				return out, err
+			}
+			external := ""
+			if len(externalTransaction) > 0 {
+				external = externalTransaction[0]
+			}
+			if _, err = tx.Exec(ctx, `INSERT INTO payment_close_anomalies(payment_id,invoice_id,user_id,provider,event_id,amount_cents,external_transaction_id,payload_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, txID, invoiceID, userID, provider, eventID, amountCents, external, payloadHash); err != nil {
+				return out, err
+			}
+		}
+		if _, err = tx.Exec(ctx, "UPDATE payment_webhook_events SET status='ignored' WHERE provider=$1 AND event_id=$2", provider, eventID); err != nil {
+			return out, err
+		}
+		if err = Audit(ctx, tx, 0, "payment.webhook.ignored_after_close", "invoice", invoiceID, map[string]any{"provider": provider, "event_id": eventID, "payment_id": providerPaymentID}); err != nil {
+			return out, err
+		}
+		out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: "closed"}
+		return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+	}
 	if txStatus == "succeeded" {
 		if len(externalTransaction) > 0 {
 			var current string
@@ -272,6 +309,9 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 	if status == "succeeded" {
 		var invoiceStatus string
 		if err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
+			return out, err
+		}
+		if err = requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
 		if invoiceStatus != "unpaid" {
@@ -310,4 +350,16 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 	}
 	out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: status}
 	return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+}
+
+// Call while holding the invoice lock, shared with the late callback writer.
+func requireNoPaymentCloseAnomaly(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
+	var held bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1)`, invoiceID).Scan(&held); err != nil {
+		return err
+	}
+	if held {
+		return conflict("payment_close_anomaly", "账单出现关闭后收款异常，已冻结付款及取消，请联系财务核验")
+	}
+	return nil
 }

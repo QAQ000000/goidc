@@ -82,6 +82,13 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 	if err = tx.QueryRow(ctx, "SELECT status FROM payment_transactions WHERE id=$1 FOR UPDATE", paymentID).Scan(&state); err != nil {
 		return check, err
 	}
+	var closing bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND status='checking')`, paymentID).Scan(&closing); err != nil {
+		return check, err
+	}
+	if closing {
+		return check, conflict("payment_close_in_progress", "支付单正在核验关单，请稍后重试")
+	}
 	if (state != "pending" && state != "expired") || !strings.HasPrefix(check.Provider, "epay_") {
 		return check, conflict("payment_not_queryable", "只有待处理的在线支付可以查询")
 	}

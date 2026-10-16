@@ -231,7 +231,7 @@ func (s *Store) DeleteOrder(ctx context.Context, actor, id, expected int64, reas
 		return out, err
 	}
 	var live bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM services WHERE order_id=$1 AND (status NOT IN ('cancelled','terminated') OR NOT inventory_released)) OR EXISTS(SELECT 1 FROM provision_jobs WHERE service_id IN(SELECT id FROM services WHERE order_id=$1) AND status IN ('pending','running','waiting_manual','waiting_verification')) OR EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id IN(SELECT id FROM invoices WHERE order_id=$1) AND provider<>'mock' AND status IN ('pending','expired'))`, id).Scan(&live); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM services WHERE order_id=$1 AND (status NOT IN ('cancelled','terminated') OR NOT inventory_released)) OR EXISTS(SELECT 1 FROM provision_jobs WHERE service_id IN(SELECT id FROM services WHERE order_id=$1) AND status IN ('pending','running','waiting_manual','waiting_verification')) OR EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id IN(SELECT id FROM invoices WHERE order_id=$1) AND provider<>'mock' AND status IN ('pending','expired')) OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id IN(SELECT id FROM invoices WHERE order_id=$1)) OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id IN(SELECT id FROM invoices WHERE order_id=$1) AND status IN ('checking','unknown'))`, id).Scan(&live); err != nil {
 		return out, err
 	}
 	if live {

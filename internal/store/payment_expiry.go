@@ -147,7 +147,7 @@ func (s *Store) preserveLegacyPaymentCredentials(ctx context.Context, tx pgx.Tx,
 		sealed, sealErr := s.snapshotPaymentCredentials(item.reference, previous, true)
 		if sealErr != nil {
 			var unavailable *Conflict
-			if (item.status != "succeeded" && item.status != "failed") || !errors.As(sealErr, &unavailable) || unavailable.Code != "payment_credentials_unavailable" {
+			if (item.status != "succeeded" && item.status != "failed" && item.status != "closed") || !errors.As(sealErr, &unavailable) || unavailable.Code != "payment_credentials_unavailable" {
 				return sealErr
 			}
 			// Lost credentials on historical terminal payments must never resolve
