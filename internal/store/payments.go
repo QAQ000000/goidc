@@ -355,7 +355,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 // Call while holding the invoice lock, shared with the late callback writer.
 func requireNoPaymentCloseAnomaly(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
 	var held bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1)`, invoiceID).Scan(&held); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id))`, invoiceID).Scan(&held); err != nil {
 		return err
 	}
 	if held {

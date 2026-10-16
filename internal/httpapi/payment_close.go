@@ -156,7 +156,8 @@ func (s *Server) paymentCloseStatus(w http.ResponseWriter, r *http.Request) {
  'operations_total',(SELECT count(*) FROM payment_close_operations c WHERE c.payment_id=p.id),
  'operations',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'operation_id',c.operation_id,'status',c.status,'result_code',c.result_code,'actor_id',c.actor_id,'expected_version',c.expected_version,'started_at',c.started_at,'completed_at',c.completed_at) ORDER BY c.id DESC) FROM (SELECT * FROM payment_close_operations WHERE payment_id=p.id ORDER BY id DESC LIMIT 50) c),'[]'::jsonb),
  'anomalies_total',(SELECT count(*) FROM payment_close_anomalies a WHERE a.payment_id=p.id),
- 'anomalies',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'status',a.status,'amount_cents',a.amount_cents,'external_transaction_id',a.external_transaction_id,'created_at',a.created_at) ORDER BY a.id DESC) FROM (SELECT * FROM payment_close_anomalies WHERE payment_id=p.id ORDER BY id DESC LIMIT 50) a),'[]'::jsonb))
+ 'anomalies_unresolved_total',(SELECT count(*) FROM payment_close_anomalies a WHERE a.payment_id=p.id AND payment_close_anomaly_unresolved(a.id)),
+ 'anomalies',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'status',CASE WHEN payment_close_anomaly_unresolved(a.id) THEN a.status ELSE 'resolved' END,'unresolved',payment_close_anomaly_unresolved(a.id),'amount_cents',a.amount_cents,'external_transaction_id',a.external_transaction_id,'created_at',a.created_at) ORDER BY a.id DESC) FROM (SELECT * FROM payment_close_anomalies WHERE payment_id=p.id ORDER BY id DESC LIMIT 50) a),'[]'::jsonb))
  FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id AND i.user_id=p.user_id WHERE p.id=$1 AND p.invoice_id=$2 AND admin_customer_allowed($3,p.user_id)`, paymentID, invoiceID, identityFrom(r).ID).Scan(&raw)
 	if err != nil {
 		s.fail(w, r, err)

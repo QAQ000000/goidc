@@ -166,7 +166,7 @@ func (s *Store) cancelUnpaidOrder(ctx context.Context, tx pgx.Tx, actorID, order
 		return 0, conflict("order_not_cancellable", "账单当前状态不可取消订单")
 	}
 	var anomaly bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies a JOIN invoices i ON i.id=a.invoice_id WHERE i.order_id=$1)`, orderID).Scan(&anomaly); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies a JOIN invoices i ON i.id=a.invoice_id WHERE i.order_id=$1 AND payment_close_anomaly_unresolved(a.id))`, orderID).Scan(&anomaly); err != nil {
 		return 0, err
 	}
 	if anomaly {

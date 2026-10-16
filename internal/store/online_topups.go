@@ -195,7 +195,7 @@ func acceptOnlineTopup(ctx context.Context, tx pgx.Tx, uid, invoice int64) error
 	}
 	if state == "accepted" {
 		var safelyClosed bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status='closed') AND NOT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') AND NOT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1) AND NOT EXISTS(SELECT 1 FROM balance_topup_settlements WHERE invoice_id=$1)`, invoice).Scan(&safelyClosed); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status='closed') AND NOT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') AND NOT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id)) AND NOT EXISTS(SELECT 1 FROM balance_topup_settlements WHERE invoice_id=$1)`, invoice).Scan(&safelyClosed); err != nil {
 			return err
 		}
 		// Reuse the original accepted reservation and immutable policy snapshot;
@@ -325,7 +325,7 @@ func (s *Store) CancelOnlineTopup(ctx context.Context, uid, invoice int64, in On
 		return out, conflict("version_conflict", "充值账单版本已变化")
 	}
 	var hasPayment bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1)", invoice).Scan(&hasPayment); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status<>'closed') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id))", invoice).Scan(&hasPayment); err != nil {
 		return out, err
 	}
 	if hasPayment {

@@ -11,14 +11,14 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const topupRetryProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM balance_topups t WHERE t.invoice_id=i.id AND t.status='accepted') AND EXISTS(SELECT 1 FROM payment_transactions p WHERE p.invoice_id=i.id AND p.status='closed') AND NOT EXISTS(SELECT 1 FROM payment_transactions p WHERE p.invoice_id=i.id AND p.status<>'closed') AND NOT EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id) AND NOT EXISTS(SELECT 1 FROM balance_topup_settlements s WHERE s.invoice_id=i.id)`
-const invoicePendingProjection = `EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id) AS payment_close_anomaly,
+const topupRetryProjection = `i.status='unpaid' AND EXISTS(SELECT 1 FROM balance_topups t WHERE t.invoice_id=i.id AND t.status='accepted') AND EXISTS(SELECT 1 FROM payment_transactions p WHERE p.invoice_id=i.id AND p.status='closed') AND NOT EXISTS(SELECT 1 FROM payment_transactions p WHERE p.invoice_id=i.id AND p.status<>'closed') AND NOT EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AND NOT EXISTS(SELECT 1 FROM balance_topup_settlements s WHERE s.invoice_id=i.id)`
+const invoicePendingProjection = `EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS payment_close_anomaly,
  ` + topupRetryProjection + ` AS topup_can_retry,
 (SELECT t.status FROM balance_topups t WHERE t.invoice_id=i.id) AS topup_status,
  (SELECT s.amount_cents FROM balance_topup_settlements s WHERE s.invoice_id=i.id AND s.status='pending_liability' AND NOT EXISTS(SELECT 1 FROM balance_topup_liability_resolutions r WHERE r.topup_id=s.topup_id)) AS topup_pending_liability_cents,
- (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired'))) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id) AS payment_pending,
+ (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired'))) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS payment_pending,
  EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded') AS external_payment_paid,
- (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock')) OR EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.invoice_id=i.id AND c.status IN ('checking','unknown')) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id) AS real_payment_pending, (SELECT jsonb_build_object('remaining_cents',cp.remaining_cents,'status',cp.status,'amount_cents',cp.amount_cents) FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) AS credit_payment`
+ (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock')) OR EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.invoice_id=i.id AND c.status IN ('checking','unknown')) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS real_payment_pending, (SELECT jsonb_build_object('remaining_cents',cp.remaining_cents,'status',cp.status,'amount_cents',cp.amount_cents) FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) AS credit_payment`
 const maskedPurchaseFields = `coalesce((SELECT jsonb_agg(CASE WHEN field->>'encrypted'='true' THEN jsonb_set(field,'{value}','"********"'::jsonb) ELSE field END) FROM jsonb_array_elements(purchase_fields) field),'[]'::jsonb)`
 const orderItemProjection = `id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,` + maskedPurchaseFields + ` AS purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit`
 
@@ -184,7 +184,7 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
  (SELECT c.status FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_status,
  (SELECT c.result_code FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_code,
  (SELECT c.started_at FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_requested_at,
- EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.payment_id=pt.id) AS close_anomaly,
+ EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.payment_id=pt.id AND payment_close_anomaly_unresolved(a.id)) AS close_anomaly,
  EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=pt.id AND c.status IN ('checking','unknown')) AS close_frozen,
  pt.next_reconcile_at,pt.auto_reconcile_attempts,
  pt.status IN ('pending','expired') AND pt.provider LIKE 'epay_%' AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
