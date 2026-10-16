@@ -242,17 +242,20 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if err = tx.QueryRow(ctx, "SELECT amount_cents,version,status,invoice_kind FROM invoices WHERE id=$1 FOR UPDATE", invoice).Scan(&amount, &version, &status, &kind); err != nil {
 		return out, err
 	}
-	if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || kind != "manual" {
-		return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付普通人工账单")
-	}
-	if err = requireManualInvoiceValid(ctx, tx, invoice); err != nil {
-		return out, err
-	}
-	if err = requireInvoiceReviewed(ctx, tx, invoice); err != nil {
-		return out, err
-	}
-	var blocked bool
-	if err = tx.QueryRow(ctx, `SELECT
+	// Rejection closes a pending record without money movement; changed business
+	// eligibility must never prevent an independent reviewer from rejecting it.
+	if id == 0 || confirm {
+		if paidInvoice != invoice || paidUser != customer || paidAmount != amount || paidStatus != "succeeded" || status != "paid" || kind != "manual" {
+			return out, conflict("external_refund_not_supported", "仅支持实际外部全额收款的已付普通人工账单")
+		}
+		if err = requireManualInvoiceValid(ctx, tx, invoice); err != nil {
+			return out, err
+		}
+		if err = requireInvoiceReviewed(ctx, tx, invoice); err != nil {
+			return out, err
+		}
+		var blocked bool
+		if err = tx.QueryRow(ctx, `SELECT
  (SELECT count(*)<>1 FROM payment_transactions WHERE invoice_id=$1 AND status='succeeded')
  OR EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=$1 AND entry_type IN ('payment','refund'))
  OR EXISTS(SELECT 1 FROM credit_invoice_payments WHERE invoice_id=$1)
@@ -260,11 +263,13 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
  OR EXISTS(SELECT 1 FROM service_configuration_changes WHERE invoice_id=$1)
  OR EXISTS(SELECT 1 FROM affiliate_commission_entries WHERE invoice_id=$1)
  OR EXISTS(SELECT 1 FROM invoice_application_items x JOIN invoice_applications a ON a.id=x.application_id WHERE x.source_invoice_id=$1 AND a.status IN ('pending','issued'))`, invoice).Scan(&blocked); err != nil {
-		return out, err
+			return out, err
+		}
+		if blocked {
+			return out, conflict("external_refund_not_supported", "账单存在混合收款、业务关联或有效发票申请")
+		}
 	}
-	if blocked {
-		return out, conflict("external_refund_not_supported", "账单存在混合收款、业务关联或有效发票申请")
-	}
+
 	action := "external_refund.created"
 	if id == 0 {
 		if completedAt == nil || in.ReceivedAt.Before(*completedAt) {
@@ -311,7 +316,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if out.Refund, err = externalRefundRead(ctx, tx, id); err != nil {
 		return out, err
 	}
-	if err = Audit(ctx, tx, actor, action, "external_refund", id, map[string]any{"invoice_id": invoice, "payment_id": payment, "amount_cents": amount, "status": out.Refund.Status}); err != nil {
+	if err = Audit(ctx, tx, actor, action, "external_refund", id, map[string]any{"invoice_id": invoice, "payment_id": payment, "amount_cents": out.Refund.AmountCents, "status": out.Refund.Status}); err != nil {
 		return out, err
 	}
 	result, err = json.Marshal(out)

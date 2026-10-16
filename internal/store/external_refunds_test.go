@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -85,7 +86,26 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	if outgoing != 0 {
 		t.Fatal("application race produced outgoing fact")
 	}
+	rejected, err := db.ReviewExternalRefund(reviewCtx, reviewer, invoice, pending.Refund.ID, false, review, "reject-with-active-application")
+	must(err)
+	if rejected.Refund.Status != "rejected" || rejected.Refund.ConfirmedAt != nil {
+		t.Fatal("rejection produced outgoing fact")
+	}
+	rejectedReplay, err := db.ReviewExternalRefund(reviewCtx, reviewer, invoice, pending.Refund.ID, false, review, "reject-with-active-application")
+	must(err)
+	if !rejectedReplay.Replayed {
+		t.Fatal("rejection did not replay")
+	}
+	var unchangedInvoice, unchangedPayment string
+	var unchangedVersion, audits int64
+	must(db.Pool.QueryRow(ctx, `SELECT i.status,i.version,p.status,(SELECT count(*) FROM audit_events WHERE action='external_refund.rejected' AND entity_id=$2) FROM invoices i JOIN payment_transactions p ON p.invoice_id=i.id WHERE i.id=$1`, invoice, fmt.Sprint(pending.Refund.ID)).Scan(&unchangedInvoice, &unchangedVersion, &unchangedPayment, &audits))
+	if unchangedInvoice != "paid" || unchangedVersion != 1 || unchangedPayment != "succeeded" || audits != 1 {
+		t.Fatal("rejection changed funds or duplicated audit")
+	}
 	_, err = db.Pool.Exec(ctx, `UPDATE invoice_applications SET status='rejected',review_note='test cleanup' WHERE id=$1`, application)
+	must(err)
+	in.ProviderRefundID = "refund-after-rejected-record"
+	pending, err = db.CreateExternalRefund(requestCtx, actor, invoice, in, "create-refund-after-reject")
 	must(err)
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
