@@ -64,7 +64,7 @@ DECLARE h text;
 BEGIN
  IF TG_OP='INSERT' THEN
   INSERT INTO external_refund_order_births(order_id,user_id) VALUES(NEW.id,NEW.user_id);
-  IF NEW.status<>'pending' OR NEW.review_status<>'pending' THEN
+  IF NEW.status<>'pending' OR NEW.review_status<>'pending' OR NEW.legacy_source<>'' OR NEW.legacy_id IS NOT NULL THEN
    INSERT INTO external_refund_delivery_history(order_id,event) VALUES(NEW.id,'order_birth_not_pending');
   END IF;
   RETURN NEW;
@@ -75,7 +75,7 @@ BEGIN
    (external_refund_order_snapshot(NEW)-ARRAY['status','version','updated_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','version','updated_at'])
   THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
  ELSE
-  IF TG_OP='DELETE' OR NEW.user_id<>OLD.user_id OR NEW.review_status<>OLD.review_status OR NEW.status NOT IN ('pending','paid') OR NEW.deleted_at IS NOT NULL THEN
+  IF TG_OP='DELETE' OR NEW.user_id<>OLD.user_id OR NEW.review_status<>OLD.review_status OR NEW.status NOT IN ('pending','paid') OR NEW.deleted_at IS NOT NULL OR NEW.legacy_source IS DISTINCT FROM OLD.legacy_source OR NEW.legacy_id IS DISTINCT FROM OLD.legacy_id THEN
    INSERT INTO external_refund_delivery_history(order_id,event) VALUES(OLD.id,'order_changed');
   END IF;
  END IF;
@@ -159,7 +159,7 @@ BEGIN
  SELECT * INTO i FROM invoices WHERE id=target_invoice;
  IF NOT FOUND OR i.order_id IS NULL THEN RETURN 'external_refund_order_not_eligible'; END IF;
  SELECT * INTO o FROM orders WHERE id=i.order_id;
- IF i.invoice_kind<>'automatic' OR i.status<>'paid' OR i.import_review_required OR i.legacy_source<>'' OR i.legacy_id IS NOT NULL OR o.status<>'paid' OR o.review_status<>'pending' OR o.deleted_at IS NOT NULL OR o.user_id<>i.user_id OR o.total_cents<>i.amount_cents OR
+ IF i.invoice_kind<>'automatic' OR i.status<>'paid' OR i.import_review_required OR i.legacy_source<>'' OR i.legacy_id IS NOT NULL OR o.legacy_source<>'' OR o.legacy_id IS NOT NULL OR o.status<>'paid' OR o.review_status<>'pending' OR o.deleted_at IS NOT NULL OR o.user_id<>i.user_id OR o.total_cents<>i.amount_cents OR
   NOT EXISTS(SELECT 1 FROM external_refund_order_births b WHERE b.order_id=o.id AND b.user_id=o.user_id) OR
   (SELECT count(*) FROM invoices WHERE order_id=o.id)<>1 OR
   (SELECT count(*) FROM payment_transactions WHERE invoice_id=i.id AND status='succeeded')<>1 OR
@@ -280,6 +280,10 @@ BEGIN
  IF TG_OP<>'INSERT' THEN
   SELECT status INTO h FROM external_refund_order_holds WHERE invoice_id=OLD.id AND status<>'released';
   IF h IS NOT NULL AND (TG_OP='DELETE' OR h<>'applying' OR NEW.status<>'refunded' OR (external_refund_order_snapshot(NEW)-ARRAY['status','version','updated_at'])<>(external_refund_order_snapshot(OLD)-ARRAY['status','version','updated_at'])) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
+  IF TG_OP='UPDATE' AND (NEW.legacy_source IS DISTINCT FROM OLD.legacy_source OR NEW.legacy_id IS DISTINCT FROM OLD.legacy_id OR NEW.import_review_required IS DISTINCT FROM OLD.import_review_required) THEN
+   IF OLD.order_id IS NOT NULL THEN INSERT INTO external_refund_delivery_history(order_id,event) VALUES(OLD.order_id,'invoice_origin_changed'); END IF;
+   IF NEW.order_id IS NOT NULL AND NEW.order_id IS DISTINCT FROM OLD.order_id THEN INSERT INTO external_refund_delivery_history(order_id,event) VALUES(NEW.order_id,'invoice_origin_changed'); END IF;
+  END IF;
  END IF;
  IF TG_OP='DELETE' THEN RETURN OLD; END IF; RETURN NEW;
 END $$;
