@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 
@@ -68,6 +69,31 @@ func TestContractSettingsRestorationTemplateSearchAndPermissions(t *testing.T) {
 	expect(t, request(h, "GET", detail, nil, reader, ""), 200)
 	expect(t, request(h, "PUT", detail, map[string]any{"name": "denied", "content": "正文", "enabled": true, "expected_version": 1}, reader, "reader-write"), 403)
 	expect(t, request(h, "GET", "/api/v1/admin/contract-templates?status=bad", nil, root, ""), 400)
+	expect(t, request(h, "GET", "/api/v1/admin/contract-templates?q="+strings.Repeat("x", 121), nil, root, ""), 400)
+	expect(t, request(h, "GET", "/api/v1/admin/contract-templates/999999999", nil, root, ""), 404)
+	_, customer := user(t, db, h, "contract-rest-customer", "customer")
+	for _, check := range []struct {
+		path, cookie string
+		summary      bool
+	}{{"/api/v1/contract-templates?limit=100", customer, false}, {"/api/v1/admin/contracts/available-templates?limit=100", root, true}} {
+		w := request(h, "GET", check.path, nil, check.cookie, "")
+		expect(t, w, 200)
+		d := data(t, w)
+		if d["total"] != float64(18) {
+			t.Fatal("enabled-only compatibility changed", w.Body.String())
+		}
+		for _, raw := range d["items"].([]any) {
+			row := raw.(map[string]any)
+			if check.summary {
+				if _, ok := row["content"]; ok {
+					t.Fatal("summary exposed content")
+				}
+			} else if row["enabled"] != true {
+				t.Fatal("customer saw disabled template")
+			}
+		}
+	}
+
 }
 
 func TestContractSettingsRestorationConcurrencyReplayRollback(t *testing.T) {
@@ -146,17 +172,36 @@ func TestContractSettingsRestorationConcurrencyReplayRollback(t *testing.T) {
 			contentRole(t, db, staffID, "settings.view", "settings.manage")
 			v := version()
 			before := auditCount()
+			business := func() string {
+				var value string
+				query := "SELECT enabled::text FROM contract_settings WHERE id=$1"
+				if kind == "template" {
+					query = "SELECT json_build_array(name,content,enabled)::text FROM contract_templates WHERE id=$1"
+				}
+				if err := db.Pool.QueryRow(t.Context(), query, rowID).Scan(&value); err != nil {
+					t.Fatal(err)
+				}
+				return value
+			}
+			originalBusiness := business()
+			failureBody := body(v, "rollback")
+			if kind == "settings" {
+				failureBody["enabled"] = false
+			} else {
+				failureBody["content"] = "审计失败应回滚的正文"
+			}
+
 			if _, err := db.Pool.Exec(t.Context(), `CREATE OR REPLACE FUNCTION reject_rest_settings_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action IN ('contract.settings_updated','contract.template_saved') THEN RAISE EXCEPTION 'fixture audit rejected'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_rest_settings BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_rest_settings_audit()`); err != nil {
 				t.Fatal(err)
 			}
-			expect(t, request(h, method, path, body(v, "rollback"), staff, kind+"-audit-fail"), 500)
-			if version() != v || auditCount() != before {
+			expect(t, request(h, method, path, failureBody, staff, kind+"-audit-fail"), 500)
+			if version() != v || auditCount() != before || business() != originalBusiness {
 				t.Fatal("audit failure left mutation")
 			}
 			if _, err := db.Pool.Exec(t.Context(), "DROP TRIGGER reject_rest_settings ON audit_events"); err != nil {
 				t.Fatal(err)
 			}
-			expect(t, request(h, method, path, body(v, "rollback"), staff, kind+"-audit-fail"), 200)
+			expect(t, request(h, method, path, failureBody, staff, kind+"-audit-fail"), 200)
 		})
 	}
 }
@@ -176,12 +221,25 @@ func TestContractSettingsRestorationHistoricalBodyAndClosed(t *testing.T) {
 		t.Fatal("historical body changed", before, after)
 	}
 	expect(t, request(h, "PUT", "/api/v1/admin/contract-settings", map[string]any{"enabled": false, "expected_version": 1}, root, "history-close"), 200)
-	expect(t, request(h, "POST", path+"/submit", map[string]any{"signer_name": "验收客户", "accepted": true, "expected_version": 1}, customer, "closed-submit"), 409)
+	closed := request(h, "POST", path+"/submit", map[string]any{"signer_name": "验收客户", "accepted": true, "expected_version": 1}, customer, "closed-submit")
+	expect(t, closed, 409)
+	var failure struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(closed.Body.Bytes(), &failure); err != nil || failure.Error.Code != "contracts_disabled" {
+		t.Fatal("wrong closed reason", closed.Body.String(), err)
+	}
 	newSID, iid := billingSchedulerFixture(t, db, uid, product(t, db, 5), 779, false)
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1", iid); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": newSID, "template_id": tid}, customer, "closed-create"), 409)
+	closed = request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": newSID, "template_id": tid}, customer, "closed-create")
+	expect(t, closed, 409)
+	if err := json.Unmarshal(closed.Body.Bytes(), &failure); err != nil || failure.Error.Code != "contracts_disabled" {
+		t.Fatal("wrong closed reason", closed.Body.String(), err)
+	}
 	expect(t, request(h, "GET", path, nil, customer, ""), 200)
 }
 
