@@ -143,6 +143,7 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
     } catch (failure) {
       if (!mounted.current) return false;
       const e = failure as Error;
+      if (e instanceof ApiError && [401,403].includes(e.status)) setIdentityReady(false);
       if (dispatched && e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401,403,404,408,429].includes(e.status)) {
         const rejected = { request, rejected: true, reason: e.message };
         setPending(rejected); setReviewed(false);
