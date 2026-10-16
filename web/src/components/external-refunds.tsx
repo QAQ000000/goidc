@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { api, ApiError, money } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminIdentity, useAdminPermission } from "./workspace";
@@ -88,7 +89,26 @@ export function ExternalRefunds({
   const create = useAdminPermission("external_refunds.create");
   const review = useAdminPermission("external_refunds.review");
   const user = useAdminIdentity();
-  const [offset, setOffset] = useState(0);
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const requestedOffset = searchParams.get("refund_offset") ?? "0";
+  const parsedOffset = /^\d+$/.test(requestedOffset)
+    ? Number(requestedOffset)
+    : 0;
+  const offset =
+    Number.isSafeInteger(parsedOffset) && parsedOffset <= 2147483640
+      ? Math.floor(parsedOffset / 10) * 10
+      : 0;
+  function onPageChange(nextOffset: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (nextOffset > 0) params.set("refund_offset", String(nextOffset));
+    else params.delete("refund_offset");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, {
+      scroll: false,
+    });
+  }
   const path = `/admin/invoices/${invoice.id}/external-refunds`;
   const list = useResource<Page>(
     view ? `${path}?limit=10&offset=${offset}` : null,
@@ -361,7 +381,7 @@ export function ExternalRefunds({
                 size="sm"
                 variant="outline"
                 disabled={offset === 0 || busy}
-                onClick={() => setOffset(Math.max(0, offset - 10))}
+                onClick={() => onPageChange(Math.max(0, offset - 10))}
               >
                 上一页
               </Button>
@@ -371,7 +391,7 @@ export function ExternalRefunds({
                 disabled={
                   offset + list.data.items.length >= list.data.total || busy
                 }
-                onClick={() => setOffset(offset + 10)}
+                onClick={() => onPageChange(offset + 10)}
               >
                 下一页
               </Button>
