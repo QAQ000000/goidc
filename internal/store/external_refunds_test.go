@@ -89,10 +89,14 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	if _, err = db.ReviewExternalRefund(reviewCtx, reviewer, invoice, pending.Refund.ID, true, review, "confirm-refund-1"); err == nil {
 		t.Fatal("revoked session replay accepted")
 	}
-	_, err = db.Pool.Exec(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by) SELECT invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by FROM external_refunds WHERE id=$1`, pending.Refund.ID)
+	var secondInvoice, secondPayment int64
+	must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents) VALUES('ER-2',$1,'manual','paid',100) RETURNING id`, customer).Scan(&secondInvoice))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at) VALUES('test','original-2',$1,$2,100,'succeeded',now()-interval '1 hour') RETURNING id`, secondInvoice, customer).Scan(&secondPayment))
+	_, err = db.Pool.Exec(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by) SELECT $2,$3,user_id,amount_cents,method,provider,channel_instance_id,'original-2',provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by FROM external_refunds WHERE id=$1`, pending.Refund.ID, secondInvoice, secondPayment)
 	if err == nil {
-		t.Fatal("database allowed duplicate merchant refund reference")
+		t.Fatal("database allowed merchant refund reference reuse on another invoice/payment")
 	}
+
 	_, err = db.Pool.Exec(ctx, `UPDATE external_refunds SET note='overwrite' WHERE id=$1`, pending.Refund.ID)
 	if err == nil {
 		t.Fatal("confirmed fact mutable")
