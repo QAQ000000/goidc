@@ -216,3 +216,80 @@ func TestTicketNotificationConcurrentKeyedWrites(t *testing.T) {
 		t.Fatalf("version=%d replies=%d events=%d", version, count, events)
 	}
 }
+
+func TestAdminTicketEmailOwnershipAndHistoricalFailClosed(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "notify-admin-owner-root", "super_admin")
+	staffID, staff := user(t, db, h, "notify-admin-owner-staff", "admin")
+	customerID, _ := user(t, db, h, "notify-admin-owner-client", "customer")
+	contentRole(t, db, staffID, "tickets.view", "tickets.manage", "notifications.view", "notifications.manage")
+	var dept, other int64
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('归属部门','notify-admin-own') RETURNING id`).Scan(&dept); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('其他部门','notify-admin-other') RETURNING id`).Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET email_verified=true WHERE id=$1`, customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='departments' WHERE id=$1`, staffID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2);`, staffID, dept); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('admin-owned-mail','mail','smtp','测试邮件',true)`); err != nil {
+		t.Fatal(err)
+	}
+	created := request(h, "POST", "/api/v1/admin/tickets", map[string]any{"customer_id": customerID, "department_id": dept, "subject": "代建邮件", "body": "公开正文", "priority": "normal", "send_email": true, "cc": []string{"notify-admin-owner-client@example.test", "cc-owner@example.test"}}, root, "admin-owned-create")
+	expect(t, created, 201)
+	if data(t, created)["email_status"] != "queued" {
+		t.Fatalf("email status %#v", data(t, created))
+	}
+	ticketID := int64(data(t, created)["id"].(float64))
+	var linked int
+	var jobID int64
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*),min(id) FROM email_outbox WHERE ticket_id=$1`, ticketID).Scan(&linked, &jobID); err != nil {
+		t.Fatal(err)
+	}
+	if linked != 2 {
+		t.Fatalf("primary/CC dedup changed, jobs=%d", linked)
+	}
+	var historicalID int64
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind) VALUES('historical@example.test','不可猜归属','正文','ticket_created') RETURNING id`).Scan(&historicalID); err != nil {
+		t.Fatal(err)
+	}
+	assertCount := func(cookie string, want int) {
+		old := request(h, "GET", "/api/v1/admin/email-outbox", nil, cookie, "")
+		expect(t, old, 200)
+		if len(listData(t, old)) != want {
+			t.Fatalf("old count=%d want=%d", len(listData(t, old)), want)
+		}
+		log := request(h, "GET", "/api/v1/admin/logs/email", nil, cookie, "")
+		expect(t, log, 200)
+		if data(t, log)["total"] != float64(want) {
+			t.Fatalf("log %#v want=%d", data(t, log), want)
+		}
+	}
+	assertCount(staff, 2)
+	assertCount(root, 3)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", jobID), nil, staff, ""), 200)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", historicalID), nil, staff, ""), 404)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", historicalID), nil, root, ""), 200)
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE tickets SET department_id=$2 WHERE id=$1`, ticketID, other); err != nil {
+		t.Fatal(err)
+	}
+	assertCount(staff, 0)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", jobID), nil, staff, ""), 404)
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
+		t.Fatal(err)
+	}
+	contentRole(t, db, staffID, "notifications.view", "notifications.manage")
+	assertCount(staff, 0)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", jobID), nil, staff, ""), 404)
+	var unlinked int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM email_outbox WHERE id=$1 AND ticket_id IS NULL`, historicalID).Scan(&unlinked); err != nil || unlinked != 1 {
+		t.Fatalf("historical fabricated association %d %v", unlinked, err)
+	}
+}

@@ -191,5 +191,10 @@ func ticketNotificationPermissionSQL(actor, department, permission string) strin
 	return `EXISTS(SELECT 1 FROM users tu LEFT JOIN admin_roles tr ON tr.id=tu.admin_role_id WHERE tu.id=` + actor + ` AND tu.status='active' AND (tu.role='super_admin' OR (tu.role='admin' AND tr.active AND '` + permission + `'=ANY(tr.permissions))) AND admin_ticket_department_allowed(tu.id,` + department + `))`
 }
 func ticketNotificationOutboxSQL(channel, id, actor, permission string) string {
-	return `NOT EXISTS(SELECT 1 FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets tt ON tt.id=te.ticket_id WHERE td.` + channel + `_outbox_id=` + id + ` AND NOT (` + ticketNotificationPermissionSQL(actor, "tt.department_id", permission) + `))`
+	relation := `SELECT tt.department_id FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets tt ON tt.id=te.ticket_id WHERE td.` + channel + `_outbox_id=` + id
+	if channel == "email" {
+		relation += ` UNION ALL SELECT tt.department_id FROM email_outbox direct_job JOIN tickets tt ON tt.id=direct_job.ticket_id WHERE direct_job.id=` + id
+	}
+	// Unlinked historical ticket messages are visible/retryable only by active superadmins.
+	return `NOT EXISTS(SELECT 1 FROM (` + relation + `) scope WHERE NOT (` + ticketNotificationPermissionSQL(actor, "scope.department_id", permission) + `)) AND (EXISTS(` + relation + `) OR NOT EXISTS(SELECT 1 FROM ` + channel + `_outbox orphan WHERE orphan.id=` + id + ` AND orphan.kind IN ('ticket_created','ticket_customer_created','ticket_customer_replied','ticket_staff_replied')) OR EXISTS(SELECT 1 FROM users su WHERE su.id=` + actor + ` AND su.status='active' AND su.role='super_admin'))`
 }

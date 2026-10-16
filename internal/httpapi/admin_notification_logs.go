@@ -86,7 +86,7 @@ func (s *Server) adminSMSLog(w http.ResponseWriter, r *http.Request) {
 		idx := len(f.args)
 		f.where[len(f.where)-1] = fmt.Sprintf("(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)", idx, idx, idx)
 	}
-	if !addTicketNotificationLogFilters(w, r, &f) {
+	if !addTicketNotificationLogFilters(w, r, &f, "sms") {
 		return
 	}
 	where := strings.Join(f.where, " AND ")
@@ -154,7 +154,7 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
 		return
 	}
-	if !addTicketNotificationLogFilters(w, r, &f) {
+	if !addTicketNotificationLogFilters(w, r, &f, "email") {
 		return
 	}
 	where := strings.Join(f.where, " AND ")
@@ -163,7 +163,8 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 ) ev ON true LEFT JOIN LATERAL (
  SELECT te.ticket_id,te.event_key,te.kind AS event_kind,td.recipient_kind,td.customer_id,t.department_id
  FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
- WHERE td.email_outbox_id=j.id ORDER BY td.id LIMIT 1
+ WHERE td.email_outbox_id=j.id
+ UNION ALL SELECT t.id,NULL::text,NULL::text,NULL::text,t.user_id,t.department_id FROM tickets t WHERE t.id=j.ticket_id LIMIT 1
  ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
 	var total int
 	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
@@ -324,8 +325,9 @@ func validOutboxStatus(value string) bool {
 }
 
 // Ticket messages retain the live ticket department boundary even for log viewers.
-func addTicketNotificationLogFilters(w http.ResponseWriter, r *http.Request, f *adminLogFilters) bool {
-	f.add(identityFrom(r).ID, "(tv.ticket_id IS NULL OR ("+ticketNotificationPermissionSQL("$%d", "tv.department_id", "tickets.view")+"))")
+func addTicketNotificationLogFilters(w http.ResponseWriter, r *http.Request, f *adminLogFilters, channel string) bool {
+	f.args = append(f.args, identityFrom(r).ID)
+	f.where = append(f.where, ticketNotificationOutboxSQL(channel, "j.id", "$"+strconv.Itoa(len(f.args)), "tickets.view"))
 	if value := strings.TrimSpace(r.URL.Query().Get("ticket_id")); value != "" {
 		id, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || id < 1 {
