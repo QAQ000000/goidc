@@ -31,19 +31,62 @@ type ConfigurationUpgradePolicy struct {
 	ExpectedRevision int64 `json:"expected_revision"`
 }
 
-func (s *Store) SaveConfigurationUpgradePolicy(ctx context.Context, actor, productID int64, in ConfigurationUpgradePolicy) error {
+func (s *Store) SaveConfigurationUpgradePolicy(ctx context.Context, actor, productID int64, in ConfigurationUpgradePolicy, keys ...string) error {
 	if !in.Enabled && in.AllowDowngrade {
 		return conflict("invalid_upgrade_policy", "请先开启配置变更")
 	}
-	tx, err := s.configurationTx(ctx, actor, productID, &in.ExpectedRevision, true)
+	tx, err := s.CatalogTx(ctx, actor)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err = CheckAdminCreationPermission(ctx, tx, actor, "products"); err != nil {
+		return err
+	}
+	key := ""
+	if len(keys) > 0 {
+		key = keys[0]
+	}
+	operation := fmt.Sprintf("product.configuration_upgrade_policy.updated.%d", productID)
+	var receipt struct {
+		ProductID int64 `json:"product_id"`
+	}
+	hash, replay, err := CreationReceipt(ctx, tx, actor, operation, key, in, &receipt)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return tx.Commit(ctx)
+	}
+	var current int64
+	if err = tx.QueryRow(ctx, "SELECT revision FROM products WHERE id=$1 FOR UPDATE", productID).Scan(&current); err != nil {
+		return err
+	}
+	if in.ExpectedRevision < 1 || current != in.ExpectedRevision {
+		return conflict("version_conflict", "商品配置已变更，请重新加载")
+	}
+
+	var mode string
+	if err = tx.QueryRow(ctx, "SELECT provision_mode FROM products WHERE id=$1", productID).Scan(&mode); err != nil {
+		return err
+	}
+	if in.Enabled && (mode == "supplier" || mode == "nokvm") {
+		return conflict("unsupported_supplier_upgrade", "该交付方式暂不支持配置升级")
+	}
 	if _, err = tx.Exec(ctx, "UPDATE products SET config_upgrade_enabled=$2,config_downgrade_enabled=$3 WHERE id=$1", productID, in.Enabled, in.AllowDowngrade); err != nil {
 		return err
 	}
-	return configurationCommit(ctx, tx, actor, productID, productID, "product.configuration_upgrade_policy.updated")
+	if _, err = tx.Exec(ctx, "UPDATE products SET revision=revision+1,updated_at=now() WHERE id=$1", productID); err != nil {
+		return err
+	}
+	if err = Audit(ctx, tx, actor, "product.configuration_upgrade_policy.updated", "product", productID, map[string]any{"configuration_id": productID}); err != nil {
+		return err
+	}
+	receipt.ProductID = productID
+	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, receipt); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 type ConfigurationChange struct {

@@ -115,7 +115,7 @@ func (s *Server) saveConfigurationUpgradePolicy(w http.ResponseWriter, r *http.R
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := s.db.SaveConfigurationUpgradePolicy(r.Context(), identityFrom(r).ID, id, in); err != nil {
+	if err := s.db.SaveConfigurationUpgradePolicy(requestFileContext(r), identityFrom(r).ID, id, in, r.Header.Get("Idempotency-Key")); err != nil {
 		s.fail(w, r, err)
 		return
 	}

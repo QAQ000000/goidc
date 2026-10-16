@@ -25,15 +25,41 @@ type ProductChangeInput struct {
 	ConfigurationChangeInput
 }
 
-func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID int64, in ProductUpgradeTargetsInput) error {
+func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID int64, in ProductUpgradeTargetsInput, keys ...string) error {
 	if len(in.Targets) > 100 {
 		return conflict("invalid_upgrade_targets", "升级目标最多100个")
 	}
-	tx, err := s.configurationTx(ctx, actor, productID, &in.ExpectedRevision, true)
+	tx, err := s.CatalogTx(ctx, actor)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err = CheckAdminCreationPermission(ctx, tx, actor, "products"); err != nil {
+		return err
+	}
+	key := ""
+	if len(keys) > 0 {
+		key = keys[0]
+	}
+	operation := fmt.Sprintf("product.upgrade_targets.updated.%d", productID)
+	var receipt struct {
+		ProductID int64 `json:"product_id"`
+	}
+	hash, replay, err := CreationReceipt(ctx, tx, actor, operation, key, in, &receipt)
+	if err != nil {
+		return err
+	}
+	if replay {
+		return tx.Commit(ctx)
+	}
+	var current int64
+	if err = tx.QueryRow(ctx, "SELECT revision FROM products WHERE id=$1 FOR UPDATE", productID).Scan(&current); err != nil {
+		return err
+	}
+	if in.ExpectedRevision < 1 || current != in.ExpectedRevision {
+		return conflict("version_conflict", "商品配置已变更，请重新加载")
+	}
+
 	var kind, mode string
 	if err = tx.QueryRow(ctx, "SELECT product_type,provision_mode FROM products WHERE id=$1", productID).Scan(&kind, &mode); err != nil {
 		return err
@@ -63,7 +89,17 @@ func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID 
 			return err
 		}
 	}
-	return configurationCommit(ctx, tx, actor, productID, productID, "product.upgrade_targets.updated")
+	if _, err = tx.Exec(ctx, "UPDATE products SET revision=revision+1,updated_at=now() WHERE id=$1", productID); err != nil {
+		return err
+	}
+	if err = Audit(ctx, tx, actor, "product.upgrade_targets.updated", "product", productID, map[string]any{"configuration_id": productID}); err != nil {
+		return err
+	}
+	receipt.ProductID = productID
+	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, receipt); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s *Store) QuoteProductChange(ctx context.Context, userID, serviceID int64, in ProductChangeInput) (ConfigurationChange, error) {
