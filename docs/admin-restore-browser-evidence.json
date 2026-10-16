@@ -154,7 +154,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "770745e83ef9205a54bec39c779f74096b85bcc870730d79ba073360cc90ce7b"
+      "screenshotSha256": "770745e83ef9205a54bec39c779f74096b85bcc870730d79ba073360cc90ce7b",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "770745e83ef9205a54bec39c779f74096b85bcc870730d79ba073360cc90ce7b",
+        "observedSha256": "9d0bd0dd4cfadd1f0ce8ec2c519a4a68f9c232c4081847d97f6743d781f6eefd",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/settings",
@@ -286,7 +294,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "a89a76ddc0a7bb9d2c32a93ecf7d47d6ac5799f2d5318e50fc385ccf8d30736c"
+      "screenshotSha256": "a89a76ddc0a7bb9d2c32a93ecf7d47d6ac5799f2d5318e50fc385ccf8d30736c",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "a89a76ddc0a7bb9d2c32a93ecf7d47d6ac5799f2d5318e50fc385ccf8d30736c",
+        "observedSha256": "17477eeca69538bb83ee44ad7969c4becc0cbdfee5a752d376e06aaf9ee86ab9",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/jobs/queue",
@@ -330,7 +346,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "75cf63ed533fb4fbdd30e27fe3514dd5bbd1570bc26d8f8506c42addf47c21e7"
+      "screenshotSha256": "75cf63ed533fb4fbdd30e27fe3514dd5bbd1570bc26d8f8506c42addf47c21e7",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "75cf63ed533fb4fbdd30e27fe3514dd5bbd1570bc26d8f8506c42addf47c21e7",
+        "observedSha256": "4ba79e0a1191bcc907c19ee63374c216e1c5f6dc173fdb3e7f7214efd144eee5",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/settings",
@@ -506,7 +530,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "c8d72844da092c7ceb8936bdbc7982f3170646dbd84ac2cf90668a21df7ad7c0"
+      "screenshotSha256": "c8d72844da092c7ceb8936bdbc7982f3170646dbd84ac2cf90668a21df7ad7c0",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "c8d72844da092c7ceb8936bdbc7982f3170646dbd84ac2cf90668a21df7ad7c0",
+        "observedSha256": "b9e62f9bc28d0dae13b05c84677d70ab64cc322eb608fa34ec8a055638053423",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/settings",
@@ -638,7 +670,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "5220491593a4670d78b968861050b66cd1e493c7b72cef3fcf1a78fd7a54faa7"
+      "screenshotSha256": "5220491593a4670d78b968861050b66cd1e493c7b72cef3fcf1a78fd7a54faa7",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "5220491593a4670d78b968861050b66cd1e493c7b72cef3fcf1a78fd7a54faa7",
+        "observedSha256": "bf5e53fc2177f4541f2d432fe0eb04f3d80432bcf9f688acb8796ae7486b7dcf",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/jobs/queue",
@@ -682,7 +722,15 @@
         "alerts": []
       },
       "scope": "真实API页面加载与布局；交互状态见独立验收文档",
-      "screenshotSha256": "4456ddeb58a4df35e39985684b3d8b66338b546bb847458146f74fdc7f5bdab7"
+      "screenshotSha256": "4456ddeb58a4df35e39985684b3d8b66338b546bb847458146f74fdc7f5bdab7",
+      "screenshotIntegrity": {
+        "status": "mismatch",
+        "checkedAt": "2026-10-16",
+        "expectedSha256": "4456ddeb58a4df35e39985684b3d8b66338b546bb847458146f74fdc7f5bdab7",
+        "observedSha256": "1428f6ccab981da984ae4cc78ad23c2df7ec76a3058005e70268c9b571efd210",
+        "usableForIntegrityProof": false,
+        "reason": "当前文件摘要与原记录失配；共享历史截图目录未按验收批次隔离，具体覆盖来源未证明。保留原摘要和历史PASS范围，本次不可用于完整性证明，需重新浏览器验收并使用独立截图路径。"
+      }
     },
     {
       "newRoute": "/admin/settings",
@@ -2275,7 +2323,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/configurable-options",
@@ -2290,7 +2344,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/configurable-options",
@@ -2305,7 +2365,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/configurable-options",
@@ -2320,7 +2386,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/order-settings",
@@ -2335,7 +2407,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/order-settings",
@@ -2350,7 +2428,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/order-settings",
@@ -2365,7 +2449,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/order-settings",
@@ -2380,7 +2470,13 @@
         "apiFailures": 0,
         "scope": "最终隔离实例页面真实API加载；动作及故障注入另见批次验收文档"
       },
-      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md"
+      "acceptanceDocument": "docs/admin-options-order-acceptance-20261012.md",
+      "screenshotIntegrity": {
+        "status": "missing_hash",
+        "checkedAt": "2026-10-16",
+        "usableForIntegrityProof": false,
+        "reason": "历史条目未登记摘要，完整性未建立；保留历史PASS和检查范围，不能用当前重算值补作历史证据。"
+      }
     },
     {
       "newRoute": "/admin/contracts",
@@ -3457,6 +3553,17 @@
   "notes": [
     "截图保留于本机 output/playwright/admin-restore-20261011，未把屏幕截图体积加入git。",
     "PASS仅表示已列出的加载布局检查，不代表105页全量业务验收通过。",
-    "2026-10-11 schema123订单批次：PASS仅指最终稳定阶段的四尺寸布局；原过程包含预期409、重启500及会话恢复失败，详见订单批次验收。"
-  ]
+    "2026-10-11 schema123订单批次：PASS仅指最终稳定阶段的四尺寸布局；原过程包含预期409、重启500及会话恢复失败，详见订单批次验收。",
+    "2026-10-16 只读完整性复核：143项摘要匹配、6项失配需重验、8项摘要未建立。原摘要与历史PASS范围全部保留，未重算替换摘要、未覆盖截图、未重新运行浏览器。"
+  ],
+  "integrityReview": {
+    "checkedAt": "2026-10-16",
+    "method": "read-only file existence and SHA-256 comparison; no browser rerun",
+    "total": 157,
+    "verified": 143,
+    "mismatch": 6,
+    "missing_hash": 8,
+    "missing_file": 0,
+    "scope": "仅复核当前本机截图字节与原摘要；匹配不证明业务完整、截图内容或历史生成过程。result/checks/scope 保留历史原值；逐条 screenshotIntegrity 声明失配或摘要未建立。"
+  }
 }
