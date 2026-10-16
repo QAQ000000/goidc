@@ -86,18 +86,68 @@ export async function verifyPages(manifest, releaseRoot, origin) {
 export async function auditProcesses(releaseRoot, expected) {
   const rows = [];
   for (const name of (await readdir('/proc')).filter(value => /^\d+$/.test(value))) {
-    let exe, cwd;
-    try { [exe, cwd] = await Promise.all([readlink(`/proc/${name}/exe`), readlink(`/proc/${name}/cwd`)]); } catch { continue; }
+    let exe, cwd, cmdline;
+    try { [exe, cwd, cmdline] = await Promise.all([readlink(`/proc/${name}/exe`), readlink(`/proc/${name}/cwd`), readFile(`/proc/${name}/cmdline`)]); } catch { continue; }
     const item = expected.find(row => exe === path.join(releaseRoot, row.executable) && cwd === path.join(releaseRoot, row.cwd));
     if (!item) continue;
-    rows.push({ name: item.name, pid: Number(name), executable: item.executable, cwd: item.cwd, sha256: await fileHash(`/proc/${name}/exe`) });
+    const argv = cmdline.toString().split('\0').filter(Boolean);
+    requireThat(sameArguments(argv.slice(1), item.args ?? []), 'Runtime process arguments differ from package launch');
+    rows.push({ name: item.name, pid: Number(name), executable: item.executable, cwd: item.cwd, args: argv.slice(1), sha256: await fileHash(`/proc/${name}/exe`) });
   }
   return rows;
 }
+function sameArguments(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 export async function assertSocket(filename, expectedPort) {
   await noLinks(filename);
   requireThat((await lstat(filename)).isSocket() && path.basename(filename) === `.s.PGSQL.${expectedPort}`, 'Explicit matching PostgreSQL Unix socket required');
 }
 export async function writeJSON(filename, data) {
   await writeFile(filename, JSON.stringify(data, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+}
+
+export function auditTraceLine(line, cacheRoots = []) {
+  // strace omits write buffers: only file/network operations are recorded.
+  // A denied attempt still fails acceptance; readonly mounts alone do not prove
+  // that the application did not require an undeclared writable path.
+  const mutation = /\b(?:open|openat|openat2)\(.*\b(?:O_WRONLY|O_RDWR|O_CREAT|O_TRUNC|O_APPEND)\b/.test(line) || /\b(?:creat|mkdir|mkdirat|unlink|unlinkat|rename|renameat|renameat2|rmdir|truncate|chmod|fchmodat|chown|lchown|symlink|link|mknod|utime|utimensat)\(/.test(line);
+  if (mutation) {
+    const quoted = [...line.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"/g)].map(row => row[1]);
+    const paths = quoted.filter(value => value.startsWith('/') || !/^[A-Z_]+$/.test(value));
+    requireThat(paths.length > 0 && paths.every(value => value === '/dev/null' || value.startsWith('/mutable/') || cacheRoots.some(root => value === root || value.startsWith(`${root}/`))), 'Undeclared runtime write attempt');
+  }
+  if (/\b(?:connect|sendto|sendmsg|bind)\(/.test(line) && /AF_INET6?/.test(line)) {
+    const addresses = [...line.matchAll(/(?:inet_addr|inet_pton)\([^)]*?"([^"]+)"/g)].map(row => row[1]);
+    requireThat(addresses.length > 0 && addresses.every(value => value === '127.0.0.1' || value === '::1'), 'Non-loopback runtime network attempt');
+  }
+  return { mutation, network: /\b(?:connect|sendto|sendmsg)\(/.test(line) };
+}
+export async function auditTraceFiles(root, cacheRoots = []) {
+  const files = (await readdir(root)).filter(name => /\.trace\.\d+$/.test(name)).sort();
+  requireThat(files.length > 0, 'Actual runtime syscall audit missing');
+  let mutations = 0, network = 0; const evidence = [], migrations = new Set();
+  for (const name of files) {
+    const filename = path.join(root, name), stat = await lstat(filename);
+    requireThat(stat.isFile() && stat.size <= 16 * 1024 * 1024, 'Runtime trace exceeds bounded audit');
+    for (const line of (await readFile(filename, 'utf8')).split('\n')) {
+      const result = auditTraceLine(line, cacheRoots); mutations += Number(result.mutation); network += Number(result.network);
+      if (/execve\("\/release\/artifact\/bin\/migrate".*= 0/.test(line)) migrations.add(name.split('.trace.')[0]);
+    }
+    evidence.push({ path: name, bytes: stat.size, sha256: await fileHash(filename) });
+  }
+  requireThat(migrations.has('migrate-first') && migrations.has('migrate-second'), 'Both actual same-package migration executions must be audited');
+  return { files: evidence, mutationCalls: mutations, networkCalls: network, undeclaredWrites: 0, nonLoopbackAttempts: 0 };
+}
+
+export async function mutableAudit(root) {
+  const records = [];
+  async function visit(relative = '') {
+    for (const name of (await readdir(path.join(root, relative))).sort()) {
+      const item = relative ? `${relative}/${name}` : name, filename = path.join(root, item), stat = await lstat(filename);
+      safeRelative(item);
+      requireThat(!stat.isSymbolicLink(), 'Mutable output must not contain symlinks');
+      if (stat.isDirectory()) await visit(item);
+      else { requireThat(stat.isFile() && stat.nlink === 1, 'Mutable output contains special or hard-linked file'); records.push({ path: item, bytes: stat.size, sha256: await fileHash(filename) }); }
+    }
+  }
+  await visit(); return records;
 }

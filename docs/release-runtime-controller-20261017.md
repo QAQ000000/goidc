@@ -1,11 +1,36 @@
-# G04 opt-in runtime controller implementation (2026-10-17)
+# G04 opt-in runtime controller (2026-10-17)
 
-Status: interface and negative-test preparation only. No complete candidate was built or launched in this branch. Do not treat the controller's implementation as same-package acceptance. G04/G09 remain open.
+Status: implemented and small kernel/negative tests only. No complete candidate was built or launched by this branch. G04/G09 remain open. The controller and candidate have separate fixed source identities; it never asserts that an older candidate contains the later controller.
 
-`node scripts/accept-release-runtime.mjs` requires `--sealed`, `--manifest-sha256`, `--source`, `--config`, `--fixture-dir`, `--api-port`, `--web-port`, and `--pg-socket`; default behavior is preflight only. `--execute` must be final and is the explicit execution opt-in. The caller independently preserves the manifest digest. Execution creates only a new owned run directory, copies ordinary runtime files without hard links, and keeps the sealed tree separate. It expects `ZJMFGO_TEST_DATABASE_URL` for the opt-in Go fixture and a new empty fixture directory; the generated configuration replaces the supplied `--config` path during execution.
+Run this from the independently reviewed, committed, clean runner worktree. `--runner-commit` is its full HEAD; `--source` is a separate clean repository proving the candidate commit. Capture `ZJMFGO_TEST_DATABASE_URL` through a controlled process environment (never print it). Its URL must target an explicitly ported IPv4 loopback PG18 `_test` database. No infrastructure is started. All options are mandatory; default is read-only preflight. `--execute` must be final.
 
-The fixture protocol is an opt-in `TestReleaseRuntimeFixture` under `internal/store`: it creates a random isolated schema only in a loopback PG18 `_test` database, emits `schema-ready.json` and `config.json`, then accepts sequential `command-N.json` operations (`prepare`, `verify-first`, `verify-restart`, `finish`, `abort`) and writes matching `result-N.json`. Only the fixture holds database credentials; reports contain schema and task identifiers, not DSNs or keys. The controller never starts database infrastructure.
+```sh
+node scripts/accept-release-runtime.mjs \
+  --sealed /absolute/sealed-candidate \
+  --manifest-sha256 INDEPENDENT_MANIFEST_SHA256 \
+  --source /absolute/clean-candidate-source \
+  --runner-commit FULL_RUNNER_HEAD \
+  --run-root /dev/shm/NEW-EXCLUSIVE-RUNTIME-RUN \
+  --pg-socket /controlled/test-cluster/.s.PGSQL.55439 \
+  --budget /controlled/runtime-budget.json \
+  --budget-sha256 INDEPENDENT_BUDGET_SHA256
+# Append --execute only to perform the dedicated-target acceptance.
+```
 
-The intended runtime boundary is a `www` child in Bubblewrap network/mount/PID/IPC/UTS namespaces. The standalone release is read-only and mutable state has a separate root. A loopback-to-Unix-socket bridge permits the one declared PostgreSQL socket without host networking. Source checkout and shared `node_modules` are not mounted. Package migrations precede API, Web, and worker, and pages `/`, `/login`, `/admin-login` must serve real referenced assets matching package bytes; `/api/v1/site` must match through Web proxy and direct API.
+The budget uses the existing pinned `zjmfgo-runtime-budget-v1` structure. Both runtime and PostgreSQL/cache filesystems need reserve. Runtime copy size must fit `runCopy`; database/cache growth uses `testDatabaseAndLogs + buildTemporary`. A 250ms monitor terminates only owned runtime processes on threshold crossing. Run roots must be new exclusive children of `/tmp` or `/dev/shm`; controller does not delete other output. Approved budget wording records existing execution authorization and is not another user permission flow.
 
-This first review checkpoint does not claim the execution branch is ready for a full acceptance run. Full namespace launch, runtime identity/read-only-copy enforcement, deadline/termination proof, strace write audit, host ELF baseline checks, fixture handshake completion and cleanup under every failure need independent review before `--execute` is used. Three small tests currently cover dedicated DSN/schema rejection, page/static path mapping, and symlink refusal; existing builder/verifier tests remain separate.
+Preflight checks the external manifest digest, clean candidate source, separate clean runner commit and actual imported helpers, `www` from `getent`, actual ELF loader/NEEDED metadata and host libraries, trusted Node digest, matching PostgreSQL socket, explicit unused API/Web ports from the package, namespace capability, and pinned disk budget. Credentials stay in a fixture-generated JSON file with exact `0600` ownership; no DSN/key appears in CLI, namespace arguments, reports, or inherited runtime environment. Captured application/fixture stdout and stderr are discarded.
+
+Execution builds an ordinary independent run copy, forbids shared file inodes/hardlinks, verifies its complete inventory, then uses an outer private mount namespace to stage only the explicitly selected PostgreSQL socket. It drops to actual `www` before entering Bubblewrap, which creates separate user/network/mount/PID/IPC/UTS namespaces. Only system library directories, exact `strace`, the read-only release/controller, dedicated fixture, and mutable roots are visible; checkout, global Node/npm/Go, original shared `node_modules`, and host network are absent. The inner package Node bridges its own loopback port to the one read-only mounted Unix socket. No source directory or broad PostgreSQL socket parent is mounted.
+
+Inside this namespace, package `migrate` executes twice, each followed by the Go fixture `verify-migrations` CheckSchema/checksum/schema digest comparison. The fixture `prepare` creates a legitimate safe simulation resume job. API readiness precedes Web, `/`, `/login`, `/admin-login` are GET-checked, every extracted same-origin JS/CSS reference must resolve to the actual sealed static bytes, and `/api/v1/site` must match through direct API and Web proxy. The actual package worker consumes the job, is stopped with TERM and a deadline, restarts for a complete provisioning poll window, then must leave service/job/audit/history and financial/unrelated rows unchanged. The fixture only drops its owned random schema after all runtime processes and connections exit.
+
+`strace -ff` records file and network syscalls, excluding application payload buffers. Post-run audit rejects undeclared successful or denied write attempts and any non-loopback network attempt. The release is read-only; only the explicitly mounted `.next/cache` maps to mutable cache, while other state/temp/log roots are external. Full copy and sealed inventories are rechecked. The report records process executable/cwd/digest identity, real page/asset bytes, fixture/migration results, syscall trace digests, mutable files, listeners gone, owned exits and schema cleanup. It preserves sanitized evidence under the exclusive run root and removes the duplicate release plus private config. Failure never changes shared services or kills foreign processes.
+
+Kernel probe (explicit opt-in, sends no PostgreSQL protocol/SQL):
+
+```sh
+node scripts/probe-release-runtime-isolation.mjs /controlled/test-cluster/.s.PGSQL.55439 --execute
+```
+
+The real probe passed on 2026-10-17 with dynamic `www` UID/GID1000, only `lo`, source/toolchain hidden, read-only release, successful syscall tracing, and loopback-to-single-socket connection. It exposed two issues fixed here: a PostgreSQL parent with mode0700 requires private socket staging, and root `bwrap --uid` maps the wrong host identity unless `setpriv` drops to actual www first. Temporary probe files and connections were removed. This evidence does not replace a real candidate run. Full PG18 migration/page/worker acceptance remains the main agent's separate execution responsibility.
