@@ -16,6 +16,12 @@ async function put(root, name, value, executable = false) {
   await writeFile(path.join(root, name), value, { mode: executable ? 0o755 : 0o644 });
 }
 function git(root, ...args) { return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim(); }
+
+test('the checked-in HEAD contains every v2 builder and verifier input', () => {
+  const tracked = new Set(git(project, 'ls-tree', '-r', '--name-only', 'HEAD').split('\n').filter(Boolean));
+  for (const filename of runtimeBuilderFiles) assert.ok(tracked.has(filename), `HEAD is missing runtime contract input: ${filename}`);
+});
+
 async function sourceFixture(t) {
   const source = await temp(t);
   git(source, 'init', '--quiet'); git(source, 'config', 'user.name', 'Runtime Fixture'); git(source, 'config', 'user.email', 'fixture@example.test');
