@@ -137,6 +137,15 @@ export async function writeJSON(filename, data) {
   } finally { await rm(temporary, { force: true }); }
 }
 
+function permittedLoopbackAddress(value) {
+  if (net.isIP(value) === 4) return value === '127.0.0.1';
+  if (net.isIP(value) !== 6) return false;
+  try {
+    const canonical = new URL(`http://[${value}]/`).hostname;
+    return canonical === '[::1]' || canonical === '[::ffff:7f00:1]';
+  } catch { return false; }
+}
+
 export function auditTraceLine(line, cacheRoots = []) {
   // strace omits write buffers: only file/network operations are recorded.
   // A denied attempt still fails acceptance; readonly mounts alone do not prove
@@ -170,7 +179,7 @@ export function auditTraceLine(line, cacheRoots = []) {
   requireThat(!/\b(?:sendto|sendmsg|sendmmsg)\(/.test(line), 'Unresolved runtime network send target');
   if (/\b(?:connect|bind)\(/.test(line) && /AF_INET6?/.test(line)) {
     const addresses = [...line.matchAll(/(?:inet_addr|inet_pton)\([^)]*?"([^"]+)"/g)].map(row => row[1]);
-    requireThat(addresses.length > 0 && addresses.every(value => value === '127.0.0.1' || value === '::1'), 'Non-loopback runtime network attempt');
+    requireThat(addresses.length > 0 && addresses.every(permittedLoopbackAddress), 'Non-loopback runtime network attempt');
   }
   return { mutation, network: /\b(?:connect|sendto|sendmsg)\(/.test(line) };
 }

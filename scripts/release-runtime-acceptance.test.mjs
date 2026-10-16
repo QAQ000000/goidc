@@ -74,6 +74,14 @@ test('write and network syscall audit rejects successful and denied escapes', ()
   assert.doesNotThrow(() => auditTraceLine('mkdir("/release/web/.next/cache/a", 0700) = 0', ['/release/web/.next/cache']));
 });
 
+test('IPv6 mapped loopback accepts only exact IPv4 127.0.0.1 and rejects wildcards', () => {
+  const syscall = address => `bind(3, {sa_family=AF_INET6, sin6_port=htons(0), inet_pton(AF_INET6, "${address}", &sin6_addr), sin6_scope_id=0}, 28) = 0`;
+  for (const address of ['::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '0:0:0:0:0:ffff:127.0.0.1']) assert.doesNotThrow(() => auditTraceLine(syscall(address)), address);
+  for (const address of ['::', '::ffff:0.0.0.0', '::ffff:127.0.0.2', '::ffff:203.0.113.1', '::ffff:cb00:7101', '::127.0.0.1', '2001:db8::1', 'localhost', '::1%eth0']) assert.throws(() => auditTraceLine(syscall(address)), /Non-loopback/, address);
+  assert.throws(() => auditTraceLine('bind(3, {sa_family=AF_INET, sin_addr=inet_addr("0.0.0.0")}, 16) = 0'), /Non-loopback/);
+  assert.throws(() => auditTraceLine('connect(3, {sa_family=AF_INET6, inet_pton(AF_INET6, "::ffff:203.0.113.1", &sin6_addr)}, 28) = -1 ENETUNREACH'), /Non-loopback/);
+});
+
 test('atomic command publication exposes complete JSON and refuses overwrite', async t => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'runtime-command-'));
   t.after(() => rm(root, { recursive: true, force: true }));
