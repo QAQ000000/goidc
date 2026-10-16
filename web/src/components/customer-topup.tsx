@@ -26,7 +26,7 @@ export function CustomerTopup() {
   const router = useRouter();
   const options = useResource<Options>("/balance/topup-options", false);
   const me = useResource<User>("/me", false);
-  const [restored, setRestored] = useState(false);
+  const [restoredKey, setRestoredKey] = useState("");
   const storageKey = me.data ? `customer-topup:${me.data.id}` : "";
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,10 +35,15 @@ export function CustomerTopup() {
   const request = useRef<Request | null>(null);
   const lock = useRef(false);
   useEffect(() => {
-    if (!storageKey) return;
+    request.current = null;
     let active = true;
     void Promise.resolve().then(() => {
     if (!active) return;
+    setUnknown(false);
+    setRestoredKey("");
+    setAmount("");
+    setError("");
+    if (!storageKey) return;
     try {
       const saved = sessionStorage.getItem(storageKey);
       if (saved) {
@@ -51,7 +56,7 @@ export function CustomerTopup() {
         }
       }
     } catch { /* A malformed saved request cannot be replayed. */ }
-    setRestored(true);
+    setRestoredKey(storageKey);
     });
     return () => { active = false; };
   }, [storageKey]);
@@ -61,7 +66,7 @@ export function CustomerTopup() {
   const validation = !value ? "" : !value.enabled ? "当前未开放在线充值" : value.require_active_order && !value.has_active_order ? "需先拥有已付款或已启用的订单才能充值" : !Number.isSafeInteger(cents) || cents <= 0 ? "请输入大于零的金额，最多两位小数" : cents < value.min_topup_cents ? `最低充值 ${money(value.min_topup_cents)}` : value.max_topup_cents > 0 && cents > value.max_topup_cents ? `单笔最多充值 ${money(value.max_topup_cents)}` : value.available_capacity_cents !== null && cents > value.available_capacity_cents ? "充值金额超过当前可用充值额度" : "";
 
   async function submit() {
-    if (lock.current || !value || (!unknown && validation)) return;
+    if (lock.current || restoredKey !== storageKey || !storageKey || !value || (!unknown && validation)) return;
     lock.current = true;
     setBusy(true);
     setError("");
@@ -90,7 +95,7 @@ export function CustomerTopup() {
       <dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-muted-foreground">单笔范围</dt><dd>{money(value.min_topup_cents)} 起 · {value.max_topup_cents > 0 ? `最高 ${money(value.max_topup_cents)}` : "无单笔上限"}</dd></div><div><dt className="text-muted-foreground">可用充值额度</dt><dd>{value.available_capacity_cents === null ? "不限" : money(value.available_capacity_cents)}（已预留 {money(value.reserved_cents)}）</dd></div></dl>
       <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={e => { e.preventDefault(); void submit(); }}>
         <label className="grid gap-2 text-sm">充值金额（元）<Input inputMode="decimal" autoComplete="off" placeholder="请输入充值金额" value={amount} maxLength={15} disabled={busy || unknown} onChange={e => { setAmount(e.target.value); setError(""); request.current = null; }} /></label>
-        <Button className="sm:self-end" type="submit" disabled={busy || !restored || !storageKey || !!options.error || (!unknown && !!validation)}>{busy ? "正在确认" : unknown ? "以原请求确认创建结果" : "创建充值账单"}</Button>
+        <Button className="sm:self-end" type="submit" disabled={busy || restoredKey !== storageKey || !storageKey || !!options.error || (!unknown && !!validation)}>{busy ? "正在确认" : unknown ? "以原请求确认创建结果" : "创建充值账单"}</Button>
       </form>
       {validation && !unknown && <p className="text-sm text-muted-foreground">{validation}</p>}
       <p className="text-xs text-muted-foreground">创建账单后选择在线渠道付款，到账后计入账户余额。已接纳的付款须核实原支付结果，请勿重复付款。</p>

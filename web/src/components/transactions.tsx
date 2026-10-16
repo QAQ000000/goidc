@@ -1190,7 +1190,7 @@ export function InvoiceDetailView({
           )}
           <div className="pb-5 flex flex-wrap gap-3">
             <InvoiceActions
-              key={`${data.id}:${data.version}:${data.status}`}
+              key={data.invoice_kind === "topup" ? `topup:${data.id}` : `${data.id}:${data.version}:${data.status}`}
               invoice={data}
               admin={admin}
               refresh={refresh}
