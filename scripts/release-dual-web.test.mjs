@@ -83,6 +83,7 @@ test('exact static locations guard raw aliases and methods; unknown static URLs 
   const locations = [...config.matchAll(/location = "\/_next\/static\/[^\n]+ \{([\s\S]*?)\n    \}/g)];
   assert.equal(locations.length, 3);
   for (const [, body] of locations) {
+    assert.match(body, /limit_rate \$dual_drain_rate;/);
     assert.match(body, /if \(\$retention_exact_request = 0\) \{ return 404; \}/);
     assert.match(body, /if \(\$request_method !~ \^\(GET\|HEAD\)\$\) \{ return 405; \}/);
   }
@@ -115,4 +116,10 @@ test('shared-schema preparation rejects changed or missing migration contracts',
     input => { input.next.manifest.migrations[0].sha256 = 'd'.repeat(64); },
     input => { input.next.manifest.migrations.push(input.next.manifest.migrations[0]); },
   ]) { const input = inputs(); alter(input); assert.throws(() => buildDualWebPlan(input), /migration/i); }
+});
+
+test('private in-flight drain uses bounded real static transfer only when explicitly requested', () => {
+  const config = renderDualWebNginx(buildDualWebPlan(inputs()), { phase: 'old' });
+  assert.match(config, /map \$http_x_release_drain \$dual_drain_rate \{ default 0; "1" 16384; \}/);
+  assert.equal((config.match(/limit_rate \$dual_drain_rate;/g) ?? []).length, 3);
 });

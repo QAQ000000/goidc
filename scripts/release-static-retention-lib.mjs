@@ -96,7 +96,8 @@ export async function verifyStaticRetentionFiles(root, entries) {
 const quote = value => JSON.stringify(value);
 const regexEscape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function staticRetentionParts(plan, { phase, generation, locationGuards = false } = {}) {
+export function staticRetentionParts(plan, { phase, generation, locationGuards = false, drainRate = false } = {}) {
+  check(typeof drainRate === 'boolean', 'Invalid private drain option');
   check(typeof locationGuards === 'boolean', 'Invalid location guard option');
   check(['old', 'union', 'restored'].includes(phase) && typeof generation === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(generation), 'Invalid retention Nginx phase, generation or port');
   check(plan?.version === 1 && Array.isArray(plan.entries) && Array.isArray(plan.oldEntries), 'Invalid retention plan');
@@ -112,7 +113,7 @@ export function staticRetentionParts(plan, { phase, generation, locationGuards =
     `    ${quote(`~^${regexEscape(row.url)}\\?[A-Za-z0-9_.~=&+\\-]*$`)} 1;`,
   ]).join('\n');
   const locations = entries.map(row => `    location = ${quote(row.url)} {${locationGuards ? '\n      if ($retention_exact_request = 0) { return 404; }\n      if ($request_method !~ ^(GET|HEAD)$) { return 405; }' : ''}
-      alias ${quote(`${roots[row.release]}/${row.path}`)};
+      alias ${quote(`${roots[row.release]}/${row.path}`)};${drainRate ? '\n      limit_rate $dual_drain_rate;' : ''}
       types { }
       default_type ${row.contentType};
       add_header Cache-Control $retention_cache_control always;

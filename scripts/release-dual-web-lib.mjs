@@ -54,7 +54,7 @@ export function renderDualWebNginx(plan, { phase } = {}) {
   const endpoints = [origin(plan.old.api), origin(plan.old.web), origin(plan.next.api), origin(plan.next.web), publicOrigin];
   check(new Set(endpoints).size === 5 && plan.old.buildID !== plan.next.buildID, 'Invalid dual Web targets');
   const active = phase === 'next' ? plan.next : plan.old;
-  const { rawRequests, locations } = staticRetentionParts(plan.retention, { phase: 'union', generation: phase, locationGuards: true });
+  const { rawRequests, locations } = staticRetentionParts(plan.retention, { phase: 'union', generation: phase, locationGuards: true, drainRate: true });
   const rawPathGuard = String.raw`  map $request_uri $dual_raw_path { "~^([^?]*)" $1; }
   map $dual_raw_path $dual_unsafe_path {
     default 0;
@@ -87,6 +87,8 @@ http {
   server_tokens off;
   map_hash_bucket_size 512;
   map_hash_max_size 8192;
+  # Private acceptance instrumentation only; not a production gateway template.
+  map $http_x_release_drain $dual_drain_rate { default 0; "1" 16384; }
   map $status $retention_cache_control {
     default "no-store";
     200 "public, max-age=300, immutable";
