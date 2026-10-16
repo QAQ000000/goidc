@@ -19,7 +19,7 @@ export type ManualInvoiceRecord = {
   id: number;
   user_id: number;
   invoice_no: string;
-  invoice_kind: "manual" | "automatic";
+  invoice_kind: "manual" | "automatic" | "topup";
   status: string;
   version: number;
   amount_cents: number;

@@ -57,6 +57,7 @@ import {
   paymentLabels,
   type PaymentRecord,
 } from "./online-payment";
+import { TopupInvoiceActions, type TopupState } from "./topup-invoice-actions";
 import { ExternalRefunds } from "./external-refunds";
 import { PaymentReconciliation } from "./payment-reconciliation";
 import { PurchaseFieldDetails } from "./purchase-fields";
@@ -101,6 +102,7 @@ type Order = {
   }[];
 };
 type Invoice = Omit<ManualInvoiceRecord, "items"> & {
+  topup?: TopupState;
   id: number;
   invoice_no: string;
   order_id: number | null;
@@ -169,7 +171,7 @@ type InvoiceActionRow = Pick<
   | "external_payment_paid"
  | "credit_payment"
   | "version"
-> & { payments?: PaymentRecord[] };
+> & { payments?: PaymentRecord[]; invoice_kind?: string; topup?: TopupState };
 type InvoiceRow = InvoiceActionRow &
   Pick<
     Invoice,
@@ -996,6 +998,7 @@ function InvoiceActions({
       refresh();
     } catch(e){setError((e as Error).message);if(action==="pay-credit"){if(!(e instanceof ApiError)||e.status>=500){setCreditPending(creditRequest);if(actorKey.current)sessionStorage.setItem(actorKey.current,JSON.stringify(creditRequest));}else{setCreditPending(null);if(actorKey.current)sessionStorage.removeItem(actorKey.current);}}}finally{setBusy(false);}
   }
+  if (invoice.invoice_kind === "topup") return <TopupInvoiceActions invoice={invoice} admin={admin} refresh={refresh} />;
   if (admin && (invoice.status !== "paid" || !allowed)) return null;
   if (admin && invoice.external_payment_paid) {
     return (
@@ -1113,9 +1116,9 @@ export function InvoiceDetailView({
   return (
     <Workspace title="账单详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : "/console/invoices"}>
+        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : searchParams.get("from") === "topup" ? "/console/account" : "/console/invoices"}>
           <ArrowLeft />
-          {transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
+          {!admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
         </Link>
       </Button>
       {error ? (
@@ -1183,7 +1186,7 @@ export function InvoiceDetailView({
             </div>
           </div>
           {admin && (
-            <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
+            <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "topup" ? "在线充值账单" : data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
           )}
           <div className="pb-5 flex flex-wrap gap-3">
             <InvoiceActions
@@ -1260,7 +1263,7 @@ export function InvoiceDetailView({
                   {data.ledger.map((entry) => (
                     <TableRow key={`balance-${entry.id}`}>
                       <TableCell>
-                        {entry.entry_type === "refund"
+                        {data.invoice_kind === "topup" ? "在线充值入账" : entry.entry_type === "refund"
                           ? "余额退款"
                           : "余额支付"}
                       </TableCell>
@@ -1317,7 +1320,7 @@ export function InvoiceDetailView({
               </Table>
             </div>
           </section>
-          {admin && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
+          {admin && data.invoice_kind !== "topup" && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
         </>
       )}
     </Workspace>

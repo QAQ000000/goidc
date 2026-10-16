@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { CreditCard, ExternalLink } from "lucide-react";
-import { api, money } from "@/lib/api";
+import { api, ApiError, money } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
 import {
@@ -75,6 +75,7 @@ export function OnlinePayment({
     import_review_required: boolean;
     payment_pending: boolean;
     payments?: PaymentRecord[];
+    topup?: { status: string };
   };
   refresh: () => void;
 }) {
@@ -87,7 +88,7 @@ export function OnlinePayment({
     open ? "/payment-providers" : null,
     false,
   );
-  const options = providers.data ?? [];
+  const options = (providers.data ?? []).filter(value => !invoice.topup || !value.simulation);
   const chosen =
     options.find((value) => value.instance_id === selectedInstance) ||
     options.find((value) => !value.simulation) ||
@@ -121,6 +122,7 @@ export function OnlinePayment({
       refresh();
     } catch (e) {
       setError((e as Error).message);
+      if (e instanceof ApiError && e.status === 409) refresh();
     } finally {
       setBusy(false);
     }
@@ -131,7 +133,7 @@ export function OnlinePayment({
         size="sm"
         variant="outline"
         disabled={
-          busy || invoice.import_review_required || invoice.payment_pending
+          busy || invoice.import_review_required || invoice.payment_pending || (!!invoice.topup && invoice.topup.status !== "created")
         }
         onClick={() => setOpen(true)}
       >
@@ -178,6 +180,7 @@ export function OnlinePayment({
               </SelectContent>
             </Select>
           </label>
+          {!providers.error && providers.data && !options.length && <p className="text-sm text-muted-foreground">暂无可用在线支付渠道，请稍后重试。</p>}
           {(error || providers.error) && (
             <p role="alert" className="text-sm text-destructive break-words">
               {error || providers.error?.message}
@@ -192,7 +195,7 @@ export function OnlinePayment({
               返回
             </Button>
             <Button
-              disabled={busy || !provider || !options.length}
+              disabled={busy || !!providers.error || !provider || !options.length}
               onClick={() => void create()}
             >
               <CreditCard />
