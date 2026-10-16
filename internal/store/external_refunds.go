@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+var externalRefundEvidenceHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
 type externalRefundSessionKey struct{}
 
 func WithExternalRefundSession(ctx context.Context, hash string) context.Context {
@@ -37,28 +39,29 @@ type ExternalRefundReviewInput struct {
 	Note            string `json:"note"`
 }
 type ExternalRefund struct {
-	ID                int64      `json:"id"`
-	InvoiceID         int64      `json:"invoice_id"`
-	PaymentID         int64      `json:"payment_id"`
-	UserID            int64      `json:"user_id"`
-	AmountCents       int64      `json:"amount_cents"`
-	Status            string     `json:"status"`
-	Version           int64      `json:"version"`
-	Method            string     `json:"method"`
-	Provider          string     `json:"provider"`
-	ChannelInstanceID string     `json:"channel_instance_id"`
-	ProviderPaymentID string     `json:"provider_payment_id"`
-	ProviderRefundID  string     `json:"provider_refund_id"`
-	ReceivedAt        time.Time  `json:"received_at"`
-	EvidenceRef       string     `json:"evidence_ref"`
-	EvidenceSHA256    string     `json:"evidence_sha256"`
-	Note              string     `json:"note"`
-	RequestedBy       int64      `json:"requested_by"`
-	ReviewedBy        *int64     `json:"reviewed_by"`
-	ReviewNote        string     `json:"review_note"`
-	ConfirmedAt       *time.Time `json:"confirmed_at"`
-	CreatedAt         time.Time  `json:"created_at"`
-	UpdatedAt         time.Time  `json:"updated_at"`
+	ID                    int64      `json:"id"`
+	InvoiceID             int64      `json:"invoice_id"`
+	PaymentID             int64      `json:"payment_id"`
+	UserID                int64      `json:"user_id"`
+	AmountCents           int64      `json:"amount_cents"`
+	Status                string     `json:"status"`
+	Version               int64      `json:"version"`
+	Method                string     `json:"method"`
+	Provider              string     `json:"provider"`
+	ChannelInstanceID     string     `json:"channel_instance_id"`
+	OriginalTransactionID string     `json:"original_transaction_id"`
+	ProviderPaymentID     string     `json:"provider_payment_id"`
+	ProviderRefundID      string     `json:"provider_refund_id"`
+	ReceivedAt            time.Time  `json:"received_at"`
+	EvidenceRef           string     `json:"evidence_ref"`
+	EvidenceSHA256        string     `json:"evidence_sha256"`
+	Note                  string     `json:"note"`
+	RequestedBy           int64      `json:"requested_by"`
+	ReviewedBy            *int64     `json:"reviewed_by"`
+	ReviewNote            string     `json:"review_note"`
+	ConfirmedAt           *time.Time `json:"confirmed_at"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 type ExternalRefundResult struct {
 	Refund   ExternalRefund `json:"refund"`
@@ -153,13 +156,16 @@ func externalRefundDBError(err error) error {
 }
 
 func (s *Store) CreateExternalRefund(ctx context.Context, actorID, invoiceID int64, in ExternalRefundInput, key string) (ExternalRefundResult, error) {
-	if in.PaymentID < 1 || in.AmountCents < 1 || in.ExpectedVersion < 1 || (in.Method != "original_route" && in.Method != "bank_transfer" && in.Method != "other") || in.ReceivedAt.IsZero() || in.ReceivedAt.After(time.Now()) || strings.TrimSpace(in.ProviderRefundID) == "" || len(in.ProviderRefundID) > 200 || strings.TrimSpace(in.EvidenceRef) == "" || len(in.EvidenceRef) > 500 || !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(in.EvidenceSHA256) || !contentTextValid(in.Note, 500, true) {
+	in.ProviderRefundID = strings.TrimSpace(in.ProviderRefundID)
+	in.EvidenceRef = strings.TrimSpace(in.EvidenceRef)
+	in.Note = strings.TrimSpace(in.Note)
+	if in.PaymentID < 1 || in.AmountCents < 1 || in.ExpectedVersion < 1 || (in.Method != "original_route" && in.Method != "bank_transfer" && in.Method != "other") || in.ReceivedAt.IsZero() || in.ReceivedAt.After(time.Now()) || strings.TrimSpace(in.ProviderRefundID) == "" || !contentTextValid(in.ProviderRefundID, 200, false) || strings.TrimSpace(in.EvidenceRef) == "" || !contentTextValid(in.EvidenceRef, 500, false) || !externalRefundEvidenceHash.MatchString(in.EvidenceSHA256) || in.Note == "" || !contentTextValid(in.Note, 1000, true) {
 		return ExternalRefundResult{}, conflict("invalid_external_refund", "退款金额、版本、到账时间或证据无效")
 	}
 	return s.externalRefundWrite(ctx, actorID, invoiceID, 0, false, in, ExternalRefundReviewInput{}, key)
 }
 func (s *Store) ReviewExternalRefund(ctx context.Context, actorID, invoiceID, refundID int64, confirm bool, in ExternalRefundReviewInput, key string) (ExternalRefundResult, error) {
-	if refundID < 1 || in.ExpectedVersion < 1 || strings.TrimSpace(in.Note) == "" || !contentTextValid(in.Note, 500, true) {
+	if refundID < 1 || in.ExpectedVersion < 1 || strings.TrimSpace(in.Note) == "" || !contentTextValid(in.Note, 1000, true) {
 		return ExternalRefundResult{}, conflict("invalid_external_refund_review", "退款版本或审核说明无效")
 	}
 	return s.externalRefundWrite(ctx, actorID, invoiceID, refundID, confirm, ExternalRefundInput{}, in, key)
@@ -224,11 +230,11 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	}
 	// Callback order is payment transaction, then invoice. Customer advisory lock
 	// serializes invoice-application creation and other financial mutations.
-	var provider, channel, original string
+	var provider, channel, original, originalTransaction string
 	var paidInvoice, paidUser, paidAmount int64
 	var paidStatus string
 	var completedAt *time.Time
-	if err = tx.QueryRow(ctx, "SELECT provider,coalesce(channel_instance_id,''),provider_payment_id,invoice_id,user_id,amount_cents,status,completed_at FROM payment_transactions WHERE id=$1 FOR UPDATE", payment).Scan(&provider, &channel, &original, &paidInvoice, &paidUser, &paidAmount, &paidStatus, &completedAt); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT provider,coalesce(channel_instance_id,''),provider_payment_id,external_transaction_id,invoice_id,user_id,amount_cents,status,completed_at FROM payment_transactions WHERE id=$1 FOR UPDATE", payment).Scan(&provider, &channel, &original, &originalTransaction, &paidInvoice, &paidUser, &paidAmount, &paidStatus, &completedAt); err != nil {
 		return out, err
 	}
 	var amount, version int64
@@ -270,7 +276,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		if amount != in.AmountCents {
 			return out, conflict("external_refund_amount_mismatch", "仅支持原单全额退款")
 		}
-		err = tx.QueryRow(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`, invoice, payment, customer, amount, in.Method, provider, channel, original, in.ProviderRefundID, in.ReceivedAt, in.EvidenceRef, in.EvidenceSHA256, in.Note, actor).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,original_transaction_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, invoice, payment, customer, amount, in.Method, provider, channel, original, in.ProviderRefundID, in.ReceivedAt, in.EvidenceRef, in.EvidenceSHA256, in.Note, actor, originalTransaction).Scan(&id)
 		if err != nil {
 			return out, err
 		}

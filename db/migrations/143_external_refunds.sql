@@ -6,7 +6,7 @@ CREATE TABLE external_refunds (
  status text NOT NULL DEFAULT 'pending_review' CHECK(status IN ('pending_review','confirmed','rejected')),
  version bigint NOT NULL DEFAULT 1 CHECK(version>0),
  method text NOT NULL CHECK(method IN ('original_route','bank_transfer','other')),
- provider text NOT NULL, channel_instance_id text NOT NULL, provider_payment_id text NOT NULL,
+ provider text NOT NULL, channel_instance_id text NOT NULL, provider_payment_id text NOT NULL, original_transaction_id text NOT NULL DEFAULT '',
  provider_refund_id text NOT NULL CHECK(char_length(trim(provider_refund_id)) BETWEEN 1 AND 200),
  received_at timestamptz NOT NULL, evidence_ref text NOT NULL CHECK(char_length(trim(evidence_ref)) BETWEEN 1 AND 500),
  evidence_sha256 text NOT NULL CHECK(evidence_sha256 ~ '^[0-9a-f]{64}$'), note text NOT NULL,
