@@ -47,7 +47,7 @@
 ## 首批准入：每项均在申请与确认事务内重验
 
 1. 沿用external_refunds商户身份、原支付与证据摘要保护。唯一succeeded原支付属于同客户和同账单，金额等于账单/订单全额，账单paid、order_id非空、automatic新购账单、订单status=paid、review_status=pending、未软删除；本地paid_at不变。拒绝其他成功支付、余额payment/refund、credit_invoice_payments、其他未可信关闭的pending/expired意图、未解决关单/迟到收款异常、活动发票申请、迁移待复核及历史导入来源。
-2. 订单只有这一张业务账单；invoice_items必须完整对应同订单order_items与服务的新购/安装费/优惠明细，采用现有下单快照合计与整数金额规则；不得用随意固定item_type列表误拒正常优惠或遗漏跨单明细。正式实现前应以真实cart/admin创建路径各生成一例证明完整映射。无续费/升级/流量/配置变更、无其他已付或待付服务账单、无服务取消/迁移/转移/外部操作关联。
+2. 订单只有这一张业务账单。真实 cart/admin 新购路径以 `order_items` 保存商品、安装费及数量，订单保存优惠，并按逐单位建立 `services`；它们不写 `invoice_items`。因此本批要求 `sum(order_items.total_cents)-orders.discount_cents=orders.total_cents=invoices.amount_cents`，逐项校验 `(price_cents+setup_fee_cents)*quantity` 与服务完整集合，并要求该新购账单的 `invoice_items` 为空。不能套用续费或人工账单的分项结构。正式验收仍须从真实 cart/admin 路径各生成一例证明映射。无续费/升级/流量/配置变更、无其他已付或待付服务账单、无服务取消/迁移/转移/外部操作关联。
 3. 所有订单服务均manual、pending_payment、next_due_at=NULL、upstream_id/username为空、无资源/凭据/外部绑定有效载荷、未曾交付/导入、inventory_released=false；服务数和order_item数量/逐unit映射完整。缺少服务、数量不符、关联其他客户/订单/商品/单位序号均拒绝。若现有库不足以证明从未改回pending_payment，则首批只允许新迁移后创建、受新防护覆盖的订单；不以当前空字段替代历史证明。
 4. 整个订单全部服务**没有任何provision_jobs历史**，不接受cancelled/failed任务。拒绝supplier/NOKVM/simulation和手工等待、已激活/挂起/失败后改回等情况；没有“人工确认未交付”例外。
 5. 无affiliate_turnover_entries、affiliate_commission_entries及相关提现/追偿事实。佣金为0或已reversed仍属于关联，不接受。无pending也不能跳过turnover检查；不得删除营业额来获得资格。
