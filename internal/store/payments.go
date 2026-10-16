@@ -60,7 +60,10 @@ func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64
 	}
 	defer tx.Rollback(ctx)
 	topup, err := lockOnlineTopupCustomer(ctx, tx, invoiceID)
-	if err != nil {
+	// Classification is only a lock-order preflight. A missing invoice must
+	// retain the existing configuration/idempotency validation precedence;
+	// the authoritative owned-invoice read below will report missing resources.
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
 	}
 	if topup {

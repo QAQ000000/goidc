@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/payment"
+	"github.com/jackc/pgx/v5"
 )
 
 func onlineTopupFixture(t *testing.T) (*Store, context.Context, int64, int64) {
@@ -421,5 +422,21 @@ func TestAdminTopupDoesNotHoldSettingsWhileWaitingForCustomer(t *testing.T) {
 		if e := <-errs; e != nil {
 			t.Fatal(e)
 		}
+	}
+}
+
+func TestPaymentIntentMissingClassificationKeepsConfigurationPrecedence(t *testing.T) {
+	db, ctx, _, uid := onlineTopupFixture(t)
+	var version int64
+	if err := db.Pool.QueryRow(ctx, `SELECT version FROM payment_settings WHERE id=1`).Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.CreatePaymentIntent(WithPaymentConfigurationVersion(ctx, version+1), uid, 9223372036854775807, "epay_alipay", "missing-stale", "", "missing-stale-key", 1)
+	if conflictCode(t, err) != "version_conflict" {
+		t.Fatal(err)
+	}
+	_, err = db.CreatePaymentIntent(WithPaymentConfigurationVersion(ctx, version), uid, 9223372036854775807, "epay_alipay", "missing-current", "", "missing-current-key", 1)
+	if !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("current configuration must reach owned invoice lookup: %v", err)
 	}
 }
