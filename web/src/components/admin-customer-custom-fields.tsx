@@ -63,11 +63,12 @@ function FieldManager({ actor, manage }: { actor: number; manage: boolean }) {
     const next = { ...draft, form: { ...draft.form, ...patch } };
     setDraft(next); state.persistDraft(String(next.form.id ?? "new"), JSON.stringify(next.form) !== JSON.stringify(next.original) ? next : null);
   }
-  function close() {
+  async function close() {
     if (state.busy || reading) return;
+    try { await state.verify(); } catch (e) { state.setError((e as Error).message); return; }
     if (state.pending) { setDraft(null); return; }
     if (dirty && !window.confirm("放弃尚未提交的字段更改？")) return;
-    if (draft && state.drafts[String(draft.form.id ?? "new")] && !state.persistDraft(String(draft.form.id ?? "new"), null)) return;
+    if (draft && state.drafts[String(draft.form.id ?? "new")] && !await state.persistDraft(String(draft.form.id ?? "new"), null)) return;
     setDraft(null); setLatest(null); setDetailMessage("");
   }
   async function detail(id: number) {
@@ -108,10 +109,10 @@ function FieldManager({ actor, manage }: { actor: number; manage: boolean }) {
       else { state.setError((e as Error).message); state.setReviewed(false); }
     }
   }
-  function applyLatest(keep: boolean) {
-    if (!draft || !latest || state.pending || !window.confirm(keep ? "保留输入并采用最新版本？提交前请重新核对字段规则。" : "以最新服务端对象替换当前草稿？")) return;
+  async function applyLatest(keep: boolean) {
+    if (!draft || !latest || locked || !window.confirm(keep ? "保留输入并采用最新版本？提交前请重新核对字段规则。" : "以最新服务端对象替换当前草稿？")) return;
     const form = keep ? { ...draft.form, id: latest.id, field_key: latest.field_key, version: latest.version } : latest;
-    const next = { form, original: latest }; setDraft(next); state.persistDraft(String(form.id), JSON.stringify(form) === JSON.stringify(latest) ? null : next); setDetailMessage(""); setLatest(null);
+    const next = { form, original: latest }; if (!await state.persistDraft(String(form.id), JSON.stringify(form) === JSON.stringify(latest) ? null : next)) return; setDraft(next); setDetailMessage(""); setLatest(null);
   }
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (locked || !draft || !dirty || detailMessage) return;
@@ -136,7 +137,7 @@ function FieldManager({ actor, manage }: { actor: number; manage: boolean }) {
     {state.storageError && <div role="alert" className="text-sm text-destructive space-y-2"><p>{state.storageError}</p><Button type="button" size="sm" variant="outline" disabled={state.busy} onClick={state.reloadStorage}>重新读取本员工恢复资料</Button></div>}
     {state.error && <p role="alert" className="text-sm text-destructive break-words">{state.error}</p>}
     {state.receipt && <p role="status" className="text-sm text-emerald-700">{state.receipt}</p>}
-    {state.pending && <div className="rounded border p-3 space-y-3 text-sm" role="status"><p>原{state.pending.request.method === "DELETE" ? "删除" : state.pending.request.method === "POST" ? "新增" : "修改"}请求待核实：{state.identityReady ? state.pending.request.label : "原员工请求（核实身份后显示目标）"}。即使目标已删除、停用或不在当前页，原请求仍保留；刷新不会自动提交。</p>{state.pending.rejected && <p>明确拒绝：{state.identityReady ? state.pending.reason : "请核实原员工身份后查看"}。请显式读取最新事实，不能自动换键。</p>}<div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={state.busy || !manage || !state.ready || reading || state.pending.rejected && !state.reviewed} onClick={async () => { if (state.pending && await state.send(state.pending.request,true)) { setDraft(null); setDeleting(null); } refresh(); }}>以原请求核实结果</Button><Button type="button" size="sm" variant="outline" disabled={state.busy || reading} onClick={() => void reread()}>读取最新字段事实</Button>{state.pending.rejected && state.reviewed && <Button type="button" size="sm" variant="outline" onClick={state.endRejected}>已核对，结束被拒绝请求</Button>}</div></div>}
+    {state.pending && <div className="rounded border p-3 space-y-3 text-sm" role="status"><p>原{state.pending.request.method === "DELETE" ? "删除" : state.pending.request.method === "POST" ? "新增" : "修改"}请求待核实：{state.identityReady ? state.pending.request.label : "原员工请求（核实身份后显示目标）"}。即使目标已删除、停用或不在当前页，原请求仍保留；刷新不会自动提交。</p>{state.pending.rejected && <p>明确拒绝：{state.identityReady ? state.pending.reason : "请核实原员工身份后查看"}。请显式读取最新事实，不能自动换键。</p>}<div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={state.busy || !manage || !state.ready || reading || state.pending.rejected && !state.reviewed} onClick={async () => { if (state.pending && await state.send(state.pending.request,true)) { setDraft(null); setDeleting(null); } refresh(); }}>以原请求核实结果</Button><Button type="button" size="sm" variant="outline" disabled={state.busy || reading} onClick={() => void reread()}>读取最新字段事实</Button>{state.pending.rejected && state.reviewed && <Button type="button" size="sm" variant="outline" disabled={!state.identityReady || state.busy || reading} onClick={() => void state.endRejected()}>已核对，结束被拒绝请求</Button>}</div></div>}
   </>;
   if (!manage) return <p role="alert">需要客户管理权限才能配置字段；原员工空间的草稿与请求保留。</p>;
   return <div className="min-w-0 max-w-full space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="page-title">客户自定义字段</h1><p className="mt-2 text-sm text-muted-foreground">定义客户资料字段；仅启用、注册显示且非仅管理员可见的字段公开于注册。</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="icon" title="刷新字段列表" aria-label="刷新字段列表" onClick={refresh}><RefreshCw /></Button><Button disabled={locked || !!draft || !!state.drafts.new} onClick={() => { const form = emptyFieldForm(); setDraft({ form, original: form }); setLatest(null); setDetailMessage(""); state.setError(""); }}><Plus />添加字段</Button></div></div>

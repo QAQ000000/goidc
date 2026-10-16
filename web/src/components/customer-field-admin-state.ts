@@ -63,7 +63,7 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
   const [identityReady, setIdentityReady] = useState(false), [reviewed, setReviewed] = useState(false);
   const [receipt, setReceipt] = useState("");
   const [storageRevision, setStorageRevision] = useState(0);
-  const running = useRef(false), mounted = useRef(true);
+  const running = useRef(false), mounted = useRef(true), draftMutation = useRef(0);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -89,7 +89,7 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
       if (!mounted.current || signal?.aborted) throw new Error("页面已离开，原资料保留");
       setIdentityReady(true);
       return user;
-    } catch (e) { if (mounted.current && !signal?.aborted) setIdentityReady(false); throw e; }
+    } catch (e) { if (mounted.current && !signal?.aborted) setIdentityReady(false); setReviewed(false); throw e; }
   }, [actor]);
   const read = useCallback(async <T,>(path: string, signal?: AbortSignal) => {
     await verify(signal);
@@ -102,10 +102,13 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
         if (!Array.isArray(page.items) || !page.items.every(validField) || !Number.isSafeInteger(page.total) || page.total! < 0 || !Number.isSafeInteger(page.limit) || page.limit! < 1 || page.limit! > 100 || !Number.isSafeInteger(page.offset) || page.offset! < 0 || page.items.length > page.limit!) throw new Error("字段列表响应不完整，请重新读取");
       } else if (!validField(result)) throw new Error("字段详情响应不完整，请重新读取");
       return result;
-    } catch (e) { if (e instanceof ApiError && [401,403].includes(e.status)) setIdentityReady(false); throw e; }
+    } catch (e) { if (e instanceof ApiError && [401,403].includes(e.status)) { setIdentityReady(false); setReviewed(false); } setReviewed(false); throw e; }
   }, [verify]);
-  function persistDraft(key: string, draft: FieldDraft | null) {
-    if (!ready) return false;
+  async function persistDraft(key: string, draft: FieldDraft | null) {
+    if (!ready || !allowed) return false;
+    const mutation = ++draftMutation.current;
+    try { await verify(); } catch (e) { setError((e as Error).message); return false; }
+    if (!mounted.current || mutation !== draftMutation.current) return false;
     const next = { ...drafts };
     if (draft) next[key] = draft; else delete next[key];
     setDrafts(next);
@@ -143,7 +146,7 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
     } catch (failure) {
       if (!mounted.current) return false;
       const e = failure as Error;
-      if (e instanceof ApiError && [401,403].includes(e.status)) setIdentityReady(false);
+      if (e instanceof ApiError && [401,403].includes(e.status)) { setIdentityReady(false); setReviewed(false); }
       if (dispatched && e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401,403,404,408,429].includes(e.status)) {
         const rejected = { request, rejected: true, reason: e.message };
         setPending(rejected); setReviewed(false);
@@ -153,10 +156,15 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
       return false;
     } finally { running.current = false; if (mounted.current) setBusy(false); }
   }
-  function endRejected() {
-    if (!pending?.rejected || !reviewed || busy || !window.confirm("已核对明确拒绝与最新事实，确认结束此被拒绝请求？输入草稿保留，重新提交前仍须再次确认。")) return;
-    try { sessionStorage.removeItem(pendingKey); setPending(null); setReviewed(false); setError(""); }
-    catch { setStorageError("无法清理被拒绝请求，已暂停新写入。"); setReady(false); }
+  async function endRejected() {
+    if (!pending?.rejected || !reviewed || running.current || busy || !window.confirm("已核对明确拒绝与最新事实，确认结束此被拒绝请求？输入草稿保留，重新提交前仍须再次确认。")) return;
+    running.current = true; setBusy(true);
+    try {
+      try { await verify(); } catch (e) { setReviewed(false); setError((e as Error).message); return; }
+      if (!mounted.current) return;
+      try { sessionStorage.removeItem(pendingKey); setPending(null); setReviewed(false); setError(""); }
+      catch { setStorageError("无法清理被拒绝请求，已暂停新写入。"); setReady(false); }
+    } finally { running.current = false; if (mounted.current) setBusy(false); }
   }
   useEffect(() => {
     if (!pending && !Object.keys(drafts).length && !busy) return;
@@ -168,6 +176,6 @@ export function useCustomerFieldAdminState(actor: number, allowed: boolean) {
     window.addEventListener("beforeunload", unload); document.addEventListener("click", click, true);
     return () => { window.removeEventListener("beforeunload", unload); document.removeEventListener("click", click, true); };
   }, [pending, drafts, busy]);
-  const hideIdentity = useCallback(() => setIdentityReady(false), []);
-  return { pending, drafts, ready, storageError, busy, error, setError, identityReady, hideIdentity, reviewed, setReviewed, receipt, read, persistDraft, send, endRejected, running, reloadStorage: () => setStorageRevision(value => value + 1) };
+  const hideIdentity = useCallback(() => { setIdentityReady(false); setReviewed(false); }, []);
+  return { pending, drafts, ready, storageError, busy, error, setError, identityReady, hideIdentity, reviewed, setReviewed, receipt, read, verify, persistDraft, send, endRejected, running, reloadStorage: () => setStorageRevision(value => value + 1) };
 }
