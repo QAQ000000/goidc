@@ -3,9 +3,8 @@
  * editor; the API contract remains the source of truth for these records. */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { ContractTemplates, ContractSystemSettings } from "./contracts";
+import { useState } from "react";
+import { ContractSettingsAdmin } from "./contract-settings-admin";
 import { Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 import { api, ApiError, date } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
@@ -45,13 +44,8 @@ function CurrencyEditor({ data, refresh }: { data: any; refresh: () => void }) {
 
 export function FinanceSettingsView() { return <SettingsFrame title="充值与财务" path="/admin/finance-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="finance" />}</SettingsFrame>; }
 export function InvoiceSettingsView() { return <SettingsFrame title="发票设置" path="/admin/invoice-settings">{(data, refresh) => <SingletonForm key={`${data.version}-${(data.shipping_methods ?? []).map((m: any) => `${m.id}:${m.version}`).join(",")}`} data={data} refresh={refresh} kind="invoice" />}</SettingsFrame>; }
-export function ContractSettingsView() {
-  const params = useSearchParams(); const router = useRouter();
-  const [tab, setTab] = useState(params.get("tab") === "templates" ? "templates" : "settings");
-  useEffect(() => { const apply = () => setTab(new URLSearchParams(window.location.search).get("tab") === "templates" ? "templates" : "settings"); window.addEventListener("popstate", apply); return () => window.removeEventListener("popstate", apply); }, []);
-  function changeTab(next: string) { setTab(next); const p = new URLSearchParams(window.location.search); if (next === "templates") p.set("tab", next); else p.delete("tab"); router.replace(`/admin/contract-settings${p.toString() ? `?${p}` : ""}`); }
-  return <SettingsFrame title="合同设置" path="/admin/contract-settings">{(data, refresh) => <div className="space-y-5"><div role="tablist" aria-label="合同设置分类" className="flex flex-wrap gap-2 border-b pb-3"><Button role="tab" aria-selected={tab === "settings"} variant={tab === "settings" ? "default" : "outline"} onClick={() => changeTab("settings")}>系统设置</Button><Button role="tab" aria-selected={tab === "templates"} variant={tab === "templates" ? "default" : "outline"} onClick={() => changeTab("templates")}>合同模板管理</Button></div><div hidden={tab !== "settings"}><ContractSystemSettings key={data.version} data={data} refresh={refresh} /></div><div hidden={tab !== "templates"}><ContractTemplates /></div></div>}</SettingsFrame>;
-}
+export function ContractSettingsView() { return <ContractSettingsAdmin/>; }
+
 export function CreditSettingsView() { return <SettingsFrame title="信用额设置" path="/admin/credit-settings">{(data, refresh) => <SingletonForm key={data.version} data={data} refresh={refresh} kind="credit" />}</SettingsFrame>; }
 
 function SingletonForm({ data, refresh, kind }: { data: any; refresh: () => void; kind: "finance" | "invoice" | "contract" | "credit" }) {
