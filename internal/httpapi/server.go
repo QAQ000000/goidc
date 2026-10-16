@@ -481,6 +481,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}", s.auth(s.adminCustomer, true))
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}/affiliate", s.auth(s.adminCustomerAffiliate, true))
 	mux.HandleFunc("POST /api/v1/admin/customers/{id}/impersonate", s.auth(s.adminImpersonateCustomer, true))
+	mux.HandleFunc("GET /api/v1/admin/transactions/summary", s.auth(s.adminTransactionSummary, true))
 	mux.HandleFunc("GET /api/v1/admin/transactions/page", s.auth(s.adminTransactionEntries, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-transactions", s.auth(s.adminCustomerTransactions, true))
 	mux.HandleFunc("GET /api/v1/admin/sales-owners", s.sessionAuth(s.salesOwners, true))
@@ -515,6 +516,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/invoices/page", s.auth(s.invoices, true))
 	mux.HandleFunc("GET /api/v1/admin/invoices/{id}", s.auth(s.invoiceDetail, true))
 	mux.HandleFunc("GET /api/v1/admin/invoice-customers", s.auth(s.invoiceCustomers, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.externalRefunds, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.createExternalRefund, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", s.sessionAuth(func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("action", "confirm")
+		s.reviewExternalRefund(w, r)
+	}, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/reject", s.sessionAuth(s.reviewExternalRefund, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices", s.auth(s.saveManualInvoice, true))
 	mux.HandleFunc("PUT /api/v1/admin/invoices/{id}", s.auth(s.saveManualInvoice, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/cancel", s.auth(s.cancelManualInvoice, true))
@@ -813,7 +821,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 			writeError(w, 401, c.Code, c.Message)
 			return
 		}
-		if c.Code == "permission_denied" {
+		if c.Code == "permission_denied" || c.Code == "external_refund_self_review" {
 			writeError(w, 403, c.Code, c.Message)
 			return
 		}
