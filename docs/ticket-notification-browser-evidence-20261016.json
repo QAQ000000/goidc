@@ -1,0 +1,554 @@
+{
+  "date": "2026-10-16",
+  "scope": "工单公开事件邮件/SMS：隔离PG18、真实Go API、Next生产构建、本地队列sink；无第三方外发。",
+  "browserBackendBaseline": "82fd509 (同一源码编译fixture，未含随后146代建归属/邮件payload保护；后续由独立PG/race/全量覆盖)",
+  "browserFrontendBaseline": "b50258e first scenarios; eb16a30 final closed customer capture (preview19db68c同内容)",
+  "productionChanged": false,
+  "layoutWidths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "pages": [
+    {
+      "newRoute": "/admin/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "admin-pagination-page2-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/admin-pagination-page2-320.png",
+      "screenshotSha256": "3230eef79c6c55093796647e74f0570ba90a6094717f171a699af7ea2a267c13",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/admin/tickets/2",
+      "width": 1024,
+      "height": 900,
+      "scenario": "admin-summary-1024",
+      "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-1024.png",
+      "screenshotSha256": "c2430da675bfebdd3549949155a6c7270e14fd2957a006cda47f657a2f46ac41",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/admin/tickets/2",
+      "width": 1440,
+      "height": 900,
+      "scenario": "admin-summary-1440",
+      "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-1440.png",
+      "screenshotSha256": "1b9b157299411cae59005989172fd40a4986e757c5997bdd5a929688ef2b8655",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/admin/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "admin-summary-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-320.png",
+      "screenshotSha256": "bd289eab1f3682c343ed1cb7a3363cc9956f40ba720e93c11b2e5ed5107ce401",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/admin/tickets/2",
+      "width": 390,
+      "height": 900,
+      "scenario": "admin-summary-390",
+      "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-390.png",
+      "screenshotSha256": "1652db2ba02c0cc9212b61e916e2d9ea5a891237024aa3008b75ca257399fcb0",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/new",
+      "width": 1024,
+      "height": 900,
+      "scenario": "create-1024",
+      "screenshot": "output/playwright/ticket-notifications-20261016/create-1024.png",
+      "screenshotSha256": "08b70c73e7b8910dbd50c0202ecc8b847549261e11b5cd4a16d20e84421789ae",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/new",
+      "width": 1440,
+      "height": 900,
+      "scenario": "create-1440",
+      "screenshot": "output/playwright/ticket-notifications-20261016/create-1440.png",
+      "screenshotSha256": "a522b9ca9f9f998a356b443cc15bbe575a76d2c1cee62839fa0b2782d54ab702",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/new",
+      "width": 320,
+      "height": 900,
+      "scenario": "create-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/create-320.png",
+      "screenshotSha256": "037111e3c11f392536fdc56ccebc26f6444dcfcd5b9b4c370779f5fc06867b47",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/new",
+      "width": 390,
+      "height": 900,
+      "scenario": "create-390",
+      "screenshot": "output/playwright/ticket-notifications-20261016/create-390.png",
+      "screenshotSha256": "198ffc6e5970eef45b02388139b96ba66c0318e04de5a5a64378b5bf9672f30b",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/new",
+      "width": 320,
+      "height": 900,
+      "scenario": "create-unknown-restored",
+      "screenshot": "output/playwright/ticket-notifications-20261016/create-unknown-restored.png",
+      "screenshotSha256": "192e2429c2b9fcf7f01b0c7838e38b155fe17f66afb63541aaded615feea50bc",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。初始CLI脚本被beforeunload工具暂停，后续真实页面/DB核对通过，未补造脚本聚合结果。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 1024,
+      "height": 900,
+      "scenario": "customer-summary-1024",
+      "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-1024.png",
+      "screenshotSha256": "b77762de54594f1ee391c782dd3af5cf85a056a5a2e5140f4b10c7b2216260e1",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 1440,
+      "height": 900,
+      "scenario": "customer-summary-1440",
+      "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-1440.png",
+      "screenshotSha256": "ac4aac8277046483f5fa7ff686fe4eefe827fd6bf78ee9ab39b29117513fe019",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "customer-summary-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-320.png",
+      "screenshotSha256": "8e70a9312f49b571a71872114f148ddc748c10e3ffde40dbf5c9a32e1f0f36d4",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 390,
+      "height": 900,
+      "scenario": "customer-summary-390",
+      "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-390.png",
+      "screenshotSha256": "37beff5fde53ef1543a012e03093ee9fe7818bbdc338231ef6617155c79d1633",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 1024,
+      "height": 900,
+      "scenario": "final-closed-customer-1024",
+      "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-1024.png",
+      "screenshotSha256": "281ced70dd95eac27e1630cde6271631f56e8211e49035ede46534ea8dee2894",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 1440,
+      "height": 900,
+      "scenario": "final-closed-customer-1440",
+      "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-1440.png",
+      "screenshotSha256": "0fd6b22776093fe22ce93ef413a66381e1f56da23450ca00f8259ede6d0d8a43",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "final-closed-customer-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-320.png",
+      "screenshotSha256": "87520950ca3a8c521063254618b864f96d9452cdc54bb8221eb2e6cd17157e3c",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 390,
+      "height": 900,
+      "scenario": "final-closed-customer-390",
+      "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-390.png",
+      "screenshotSha256": "82446f151930fcaab2f8d1325574a38e41c5338c34e57787fe61bdc12a699f80",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1024,
+      "height": 900,
+      "scenario": "preferences-1024",
+      "screenshot": "output/playwright/ticket-notifications-20261016/preferences-1024.png",
+      "screenshotSha256": "95b8e0ac0fd0f9e1f73a9894e2008a1ced08e5d70fb1f198e9d21d7341b5912f",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1440,
+      "height": 900,
+      "scenario": "preferences-1440",
+      "screenshot": "output/playwright/ticket-notifications-20261016/preferences-1440.png",
+      "screenshotSha256": "c7eee0aab2917875de777f87fd44a715ebdb4f88113b0a56b36fbb351a68a9da",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 900,
+      "scenario": "preferences-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/preferences-320.png",
+      "screenshotSha256": "66d8c4f8b111b18cf0eb86f59114100ab7b728973a36858fd2e8442a1449559b",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 390,
+      "height": 900,
+      "scenario": "preferences-390",
+      "screenshot": "output/playwright/ticket-notifications-20261016/preferences-390.png",
+      "screenshotSha256": "afff2a8707ff7ac00744e2998b1f47ff33d35ab6e1ad7f2d84535b1edb1c62db",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 900,
+      "scenario": "preferences-conflict",
+      "screenshot": "output/playwright/ticket-notifications-20261016/preferences-conflict.png",
+      "screenshotSha256": "1ff048ab395f0191fc6bba53b5d4d2ea1b1e1ca9f022cb593738a14000fae142",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "reply-before-close-unknown",
+      "screenshot": "output/playwright/ticket-notifications-20261016/reply-before-close-unknown.png",
+      "screenshotSha256": "ad8a7930675eccfa582aee31757653a6310ab882e5a7bf19bf97521c6a09ec0a",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "reply-closed-unknown-restored",
+      "screenshot": "output/playwright/ticket-notifications-20261016/reply-closed-unknown-restored.png",
+      "screenshotSha256": "d8d3d5eca44d3542a3e5aac12736f43a3dc4b628640e19d274f5409a5e658013",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "reply-unknown-restored",
+      "screenshot": "output/playwright/ticket-notifications-20261016/reply-unknown-restored.png",
+      "screenshotSha256": "a84d3cf7073e3e54c226cfd5fd6f705f9ca4da49ef7ff43aa2efdd80701dc9a7",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "reply-unknown",
+      "screenshot": "output/playwright/ticket-notifications-20261016/reply-unknown.png",
+      "screenshotSha256": "84afc96e5c7c157e6d0aedf8dd9665ec6e35bf75b3afc83989140f4777a7c523",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    },
+    {
+      "newRoute": "/console/tickets/2",
+      "width": 320,
+      "height": 900,
+      "scenario": "summary-error-320",
+      "screenshot": "output/playwright/ticket-notifications-20261016/summary-error-320.png",
+      "screenshotSha256": "070ea950b3ec12b8682a0e2848b0a0365fae98eba63e5ecb3c8a49e1270f0c16",
+      "usableForLayoutProof": true,
+      "note": "真实API截图；仅该场景证据，不等于整页状态矩阵通过。"
+    }
+  ],
+  "checks": {
+    "preferences": {
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/preferences-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "width": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/preferences-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "width": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/preferences-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "width": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/preferences-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": [
+        {
+          "status": 409,
+          "path": "/api/v1/me/ticket-notification-preferences"
+        }
+      ],
+      "cancel": true,
+      "real409": true,
+      "persisted": true
+    },
+    "reply-unknown": {
+      "actual": {
+        "status": 200,
+        "body": {
+          "data": {
+            "reply_id": 1,
+            "status": "open",
+            "version": 2
+          }
+        },
+        "request": {
+          "version": 1,
+          "body": "客户补充公开问题：请确认网络。",
+          "idempotency_key": "d7ff9aab-f3d4-43c1-a4f3-070f7b7ff94f"
+        }
+      },
+      "errors": [],
+      "failures": [
+        {
+          "status": 503,
+          "path": "/api/v1/tickets/2/replies"
+        }
+      ],
+      "unknownFieldsDisabled": true
+    },
+    "reply-replay": {
+      "status": 200,
+      "replyID": 1,
+      "sameReply": true,
+      "restoredUnknown": true
+    },
+    "staff": {
+      "replyID": 2,
+      "version": 3,
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "width": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "width": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "width": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/admin-summary-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": []
+    },
+    "note-pagination": {
+      "noteBefore": 12,
+      "noteAfter": 12,
+      "noteNoNotification": true,
+      "pagination": true,
+      "errors": [],
+      "failures": []
+    },
+    "customer-summary": {
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "width": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "width": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "width": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/customer-summary-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": [
+        {
+          "status": 503,
+          "path": "/api/v1/tickets/2/notifications"
+        }
+      ],
+      "recipientPrivacy": true,
+      "noInternalNote": true,
+      "errorRecovery": true,
+      "count": 10,
+      "deliveryStates": [
+        "sent"
+      ]
+    },
+    "closed-unknown": {
+      "actual": {
+        "status": 200,
+        "body": {
+          "data": {
+            "reply_id": 7,
+            "status": "open",
+            "version": 8
+          }
+        },
+        "request": {
+          "version": 7,
+          "body": "关闭后确认原回复。",
+          "idempotency_key": "f9bc0581-33db-4946-90a4-3088ebbfef0c"
+        }
+      },
+      "errors": [],
+      "failures": [
+        {
+          "status": 503,
+          "path": "/api/v1/tickets/2/replies"
+        }
+      ],
+      "unknownFieldsDisabled": true
+    },
+    "closed-replay": {
+      "status": 200,
+      "replyID": 7,
+      "sameReply": true,
+      "restoredUnknown": true
+    },
+    "final-capture": {
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "width": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "width": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "width": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "width": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/ticket-notifications-20261016/final-closed-customer-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": [],
+      "closedNoNewReply": true
+    }
+  },
+  "databaseFactsBeforeClose": "SET\nid|version|replies|events|receipts\n2|7|6|7|7\n(1 row)\nkind|channel|outcome|reason|outbox_status|count\ncustomer_created|email|queued||sent|1\ncustomer_created|email|skipped|unverified_address||1\ncustomer_created|sms|skipped|unsubscribed||2\ncustomer_replied|email|queued||sent|1\ncustomer_replied|email|skipped|unverified_address||1\ncustomer_replied|sms|skipped|unsubscribed||2\nstaff_replied|email|queued||sent|10\nstaff_replied|email|skipped|unsubscribed||5\nstaff_replied|sms|queued||sent|5\n(9 rows)\nwrongly_notified\n0\n(1 row)\ninternal_note_leaks\n0\n(1 row)\n",
+  "databaseFactsFinal": "SET\nid|status|version|replies|events|receipts\n2|closed|9|7|8|8\n(1 row)\nmatching_created_ticket\n1\n(1 row)\noperation|ticket_id|count\ncreate|2|1\nreply:2|2|7\n(2 rows)\nwrongly_notified\n0\n(1 row)\ninternal_note_leaks\n0\n(1 row)\n",
+  "boundaries": [
+    "初次preview运行未显式配置API_INTERNAL_URL，服务端读请求回退常驻API而重定向登录；重启专用preview并显式配置后验收，未放宽鉴权或改业务数据。",
+    "首次CLI错误将heading引用用于fill，纠正真实textbox引用后完成登录。",
+    "create脚本在beforeunload对话框处未返回聚合JSON；截图、同键原单id2、真实回放及数据库一条create回执分别核对，未伪造聚合成功。",
+    "CLI报告beforeunload时已注册接受处理，后续dialog-accept提示无待处理dialog；快照与原reply_id返回独立确认恢复。",
+    "503、409为特意注入或真实版本拒绝场景；最终成功窗口没有JS异常/非预期API失败。",
+    "关闭场景通过隔离DB将工单设closed/version9模拟另一端关闭；页面及reply回执由真实API验证，不宣称本次浏览器执行了管理员关闭按钮。",
+    "浏览器未单独复验受限员工/登录撤权/代建邮件归属146及payload超长分支；使用HTTP/PG测试，无全页面浏览器覆盖声明。",
+    "队列sent来自隔离sink；本地SMTP/SMS真实协议另由TestTicketNotificationLoopbackTransport验证，不代表真实手机/邮箱收件。"
+  ]
+}
