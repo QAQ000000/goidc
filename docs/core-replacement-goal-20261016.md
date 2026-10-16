@@ -41,4 +41,5 @@
 - 第五阶段按[供应商契约](supplier-customer-operations-contract-20261016.md)集成客户动作与VNC授权，真实双worker续费进程已在两个独立schema通过；主代理隔离全量/race、前端检查及四尺寸通过，见[供应商验收](supplier-customer-acceptance-20261016.md)。真实云主机结果仍单列待验收，未追认所有动作成功。
 - 第六阶段按[优惠码契约](promo-code-restoration-contract-20261016.md)集成独立分支的后端/测试/UI，主代理复核修补日期精度、跨时区原请求重放、身份隔离、后页最新和Chrome原生正则；隔离全量/race、Go/前端检查、四尺寸37张最终截图及数据库唯一审计通过，见[验收](promo-code-acceptance-20261016.md)。#36登记关闭，合同设置模板检索/冲突恢复按[下一批契约](contract-settings-restoration-contract-20261016.md)继续推进。
 - 合同设置本批在 `a69bc3b` 集成完成，隔离全量/race、Go和前端检查、49张四尺寸/短屏截图及数据库唯一审计通过，见[验收](contract-settings-restoration-acceptance-20261016.md)。#38保留部分完成，总台账仍45完成/60部分；商品升级分区按[下一批契约](product-upgrade-restoration-contract-20261016.md)推进。
+- 商品升级分区本批在 `defa346` 集成完成：后台两策略独立草稿、版本冲突及原请求恢复；客户商品变更未知回执和写前实时身份核对。隔离全量、追加专项race、Go/前端检查、112张四尺寸/短屏截图摘要及数据库扣款/快照/唯一回执审计通过，见[验收](product-upgrade-restoration-acceptance-20261016.md)。#103继续部分，总台账仍45完成/60部分；真实供应商升级及商品其余分区未据此关闭。下一批按[客户字段注册契约](customer-registration-fields-contract-20261016.md)推进，不把规划登记为实现。
 - 总体目标仍进行中，未推送、部署或执行生产切流。
