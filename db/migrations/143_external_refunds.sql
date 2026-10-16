@@ -6,6 +6,7 @@ CREATE TABLE external_refunds (
  status text NOT NULL DEFAULT 'pending_review' CHECK(status IN ('pending_review','confirmed','rejected')),
  version bigint NOT NULL DEFAULT 1 CHECK(version>0),
  method text NOT NULL CHECK(method IN ('original_route','bank_transfer','other')),
+ merchant_scope text NOT NULL CHECK(merchant_scope='mock:test-only' OR merchant_scope ~ '^epay:[0-9a-f]{64}$'),
  provider text NOT NULL, channel_instance_id text NOT NULL, provider_payment_id text NOT NULL, original_transaction_id text NOT NULL DEFAULT '',
  provider_refund_id text NOT NULL CHECK(char_length(trim(provider_refund_id)) BETWEEN 1 AND 200),
  received_at timestamptz NOT NULL, evidence_ref text NOT NULL CHECK(char_length(trim(evidence_ref)) BETWEEN 1 AND 500),
@@ -17,7 +18,7 @@ CREATE TABLE external_refunds (
  CHECK((status='pending_review' AND reviewed_by IS NULL AND confirmed_at IS NULL) OR
  (status='confirmed' AND reviewed_by IS NOT NULL AND confirmed_at IS NOT NULL) OR
  (status='rejected' AND reviewed_by IS NOT NULL AND confirmed_at IS NULL)),
- UNIQUE(provider,channel_instance_id,provider_refund_id)
+ UNIQUE(merchant_scope,provider_refund_id)
 );
 CREATE UNIQUE INDEX external_refunds_one_live_invoice ON external_refunds(invoice_id) WHERE status<>'rejected';
 CREATE UNIQUE INDEX external_refunds_one_live_payment ON external_refunds(payment_id) WHERE status<>'rejected';
