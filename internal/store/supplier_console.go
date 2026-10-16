@@ -161,7 +161,7 @@ func (s *Store) ServiceVNC(ctx context.Context, actor, serviceID int64, admin bo
 func (s *Store) ServiceSupplierCapabilitiesTx(ctx context.Context, tx pgx.Tx, serviceID int64, admin bool) (supplier.Capabilities, error) {
 	var provider string
 	var caps supplier.Capabilities
-	err := tx.QueryRow(ctx, `SELECT a.provider FROM services s JOIN supplier_accounts a ON a.id=(s.delivery_snapshot->>'supplier_id')::bigint JOIN supplier_product_bindings b ON b.id=(s.delivery_snapshot->>'binding_id')::bigint AND b.supplier_id=a.id WHERE s.id=$1 AND s.provision_mode='supplier' AND a.active`, serviceID).Scan(&provider)
+	err := tx.QueryRow(ctx, `SELECT a.provider FROM services s JOIN supplier_accounts a ON a.id::text=s.delivery_snapshot->>'supplier_id' JOIN supplier_product_bindings b ON b.id::text=s.delivery_snapshot->>'binding_id' AND b.supplier_id=a.id WHERE s.id=$1 AND s.provision_mode='supplier' AND a.active`, serviceID).Scan(&provider)
 	if err == pgx.ErrNoRows {
 		return caps, nil
 	}

@@ -173,3 +173,66 @@ func TestSupplierCapabilitiesWithoutCredentials(t *testing.T) {
 		})
 	}
 }
+
+func TestSupplierCapabilitiesInvalidSnapshot(t *testing.T) {
+	for _, field := range []string{"supplier_id", "binding_id"} {
+		for _, value := range []string{"not-a-number", "9223372036854775808"} {
+			t.Run(field+"/"+value, func(t *testing.T) {
+				f := supplierSetup(t)
+				f.publish(t, f.pid, "local-vm")
+				sid, _ := f.purchase(t, f.pid, "invalid-capability-snapshot")
+				j := f.claim(t)
+				if err := f.db.ProcessProvisionJob(t.Context(), *j); err != nil {
+					t.Fatal(err)
+				}
+				// Model imported historical corruption within this test-only schema.
+				if _, err := f.db.Pool.Exec(t.Context(), `ALTER TABLE services DISABLE TRIGGER services_delivery_snapshot_immutable`); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := f.db.Pool.Exec(t.Context(), `UPDATE services SET delivery_snapshot=jsonb_set(delivery_snapshot,ARRAY[$2::text],to_jsonb($3::text)) WHERE id=$1`, sid, field, value); err != nil {
+					t.Fatal(err)
+				}
+				path := fmt.Sprintf("/api/v1/services/%d", sid)
+				w := request(f.h, "GET", path, nil, f.customer, "")
+				expect(t, w, 200)
+				for _, enabled := range data(t, w)["supplier_capabilities"].(map[string]any) {
+					if enabled != false {
+						t.Fatal("invalid snapshot enabled operation")
+					}
+				}
+				w = request(f.h, "POST", path+"/vnc", map[string]any{}, f.customer, "")
+				if w.Code == 200 || f.consoleCalls.Load() != 0 {
+					t.Fatal("invalid snapshot reached upstream")
+				}
+			})
+		}
+	}
+}
+
+func TestSupplierCapabilitiesUseServiceSnapshot(t *testing.T) {
+	f := supplierSetup(t)
+	f.publish(t, f.pid, "local-vm")
+	sid, _ := f.purchase(t, f.pid, "immutable-capability-snapshot")
+	j := f.claim(t)
+	if err := f.db.ProcessProvisionJob(t.Context(), *j); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate an out-of-band product rebind in the isolated schema; ordinary writes are immutable.
+	if _, err := f.db.Pool.Exec(t.Context(), `ALTER TABLE products DISABLE TRIGGER products_supplier_source`); err != nil {
+		t.Fatal(err)
+	}
+	// Product metadata may change; the purchased service retains its original binding.
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE products SET delivery_config='{"supplier_id":9223372036854775807,"binding_id":9223372036854775807,"provider":"unknown-provider"}'::jsonb WHERE id=$1`, f.pid); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/api/v1/services/%d", sid)
+	w := request(f.h, "GET", path, nil, f.customer, "")
+	expect(t, w, 200)
+	if data(t, w)["supplier_capabilities"].(map[string]any)["vnc"] != true {
+		t.Fatal("current product replaced immutable service capability binding")
+	}
+	expect(t, request(f.h, "POST", path+"/vnc", map[string]any{}, f.customer, ""), 200)
+	if f.consoleCalls.Load() != 1 {
+		t.Fatal("original service resource was not used")
+	}
+}
