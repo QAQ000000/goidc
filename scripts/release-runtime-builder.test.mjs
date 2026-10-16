@@ -6,7 +6,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runtimeBuilderFiles } from './release-runtime-lib.mjs';
-import { inventory, sha256 } from './release-candidate-lib.mjs';
+import { fileHash, inventory, sha256 } from './release-candidate-lib.mjs';
 import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, ownedBuildTemporaryEnvironment, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 async function fixture(t) {
@@ -118,11 +118,14 @@ async function traceFixture(t) {
   const root = await fixture(t), checkout = path.join(root, 'checkout'), standalone = path.join(checkout, 'web/.next/standalone'), metaRoot = path.join(root, 'meta');
   const depRoot = path.join(checkout, 'web/node_modules');
   await mkdir(path.join(depRoot, 'next'), { recursive: true });
-  await writeFile(path.join(depRoot, 'next/package.json'), '{"name":"next"}');
+  await writeFile(path.join(depRoot, 'next/package.json'), '{"name":"next","version":"16.3.8"}');
   await mkdir(path.join(standalone, 'web/node_modules/next'), { recursive: true });
   await cp(path.join(depRoot, 'next/package.json'), path.join(standalone, 'web/node_modules/next/package.json'));
   const traceFile = path.join(checkout, 'web/.next/next-server.js.nft.json');
   await writeFile(traceFile, JSON.stringify({ version: 1, files: ['../node_modules/next/package.json'] }));
+  await writeFile(path.join(checkout, 'web/.next/next-minimal-server.js.nft.json'), JSON.stringify({ version: 1, files: [] }));
+  const manifests = { 'server/pages-manifest.json': {}, 'server/app-paths-manifest.json': {}, 'server/middleware-manifest.json': { version: 3, middleware: {}, functions: {} }, 'server/functions-config-manifest.json': { version: 1, functions: {} }, 'required-server-files.json': { files: [] } };
+  for (const [name, value] of Object.entries(manifests)) { await mkdir(path.dirname(path.join(checkout, 'web/.next', name)), { recursive: true }); await writeFile(path.join(checkout, 'web/.next', name), JSON.stringify(value)); }
   const dependencies = { files: await inventory(depRoot, { dependencies: true }) };
   return { root, checkout, standalone, metaRoot, traceFile, source: { files: [] }, dependencies };
 }
@@ -132,6 +135,7 @@ test('same-build trace evidence maps every selected dependency byte and retains 
   assert.deepEqual(result.files, [{ path: 'artifact/web/web/node_modules/next/package.json', sourcePath: 'next/package.json' }]);
   assert.equal(result.traces[0].entries[0].kind, 'dependency');
   assert.equal(await readFile(path.join(options.metaRoot, 'traces/next-server.js.nft.json'), 'utf8'), await readFile(options.traceFile, 'utf8'));
+  assert.deepEqual(result.omitted, [{ path: 'artifact/meta/traces/next-minimal-server.js.nft.json', sha256: await fileHash(path.join(options.checkout, 'web/.next/next-minimal-server.js.nft.json')), reason: 'next16-copyTracedFiles-uses-next-server-not-minimal-server' }]);
 });
 
 test('trace escapes, symlinks, directories, untracked source and changed outputs fail closed', async t => {
@@ -145,6 +149,12 @@ test('trace escapes, symlinks, directories, untracked source and changed outputs
     if (problem === 'extraDependency') await writeFile(path.join(options.standalone, 'web/node_modules/next/extra.js'), 'extra');
     await assert.rejects(collectTraceEvidence(options), undefined, problem);
   }
+});
+
+test('unknown Next trace names fail closed rather than entering the standalone closure', async t => {
+  const options = await traceFixture(t);
+  await writeFile(path.join(options.checkout, 'web/.next/unexpected.nft.json'), JSON.stringify({ version: 1, files: [] }));
+  await assert.rejects(collectTraceEvidence(options), /Unknown or unselected Next trace/);
 });
 
 test('build command is refused before spawn on reserve failure and bounded on timeout', async t => {

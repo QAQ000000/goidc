@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fileHash, selectedDigest, sha256, sourceProof, verifyCandidate } from './release-candidate-lib.mjs';
+import { traceSelectionFormat } from './release-runtime-trace-selection.mjs';
 import { readRuntimeGoBuildInfo, runtimeBuilderFiles, runtimeFormat, runtimeInventory, verifyRuntimeCandidate } from './release-runtime-lib.mjs';
 
 const project = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -55,8 +56,14 @@ async function candidate(t, fixture) {
   await put(root, `${appRoot}/server.js`, 'const nextConfig = {"output":"standalone","distDir":"./.next"}\n');
   await put(root, `${appRoot}/.next/BUILD_ID`, 'unit-build\n');
   await put(root, `${appRoot}/.next/routes-manifest.json`, JSON.stringify({ rewrites: { beforeFiles: [], afterFiles: [{ source: '/api/:path*', destination: 'http://127.0.0.1:58088/api/:path*' }], fallback: [] } }));
-  await put(root, `${appRoot}/.next/required-server-files.json`, JSON.stringify({ config: { output: 'standalone', distDir: '.next' } }));
+  await put(root, `${appRoot}/.next/required-server-files.json`, JSON.stringify({ config: { output: 'standalone', distDir: '.next' }, files: [] }));
   await put(root, `${appRoot}/.next/server/pages-manifest.json`, '{}');
+  const selectionManifests = { 'server/pages-manifest.json': {}, 'server/app-paths-manifest.json': {}, 'server/middleware-manifest.json': { version: 3, middleware: {}, functions: {} }, 'server/functions-config-manifest.json': { version: 1, functions: {} } };
+  for (const [name, value] of Object.entries(selectionManifests)) await put(root, `${appRoot}/.next/${name}`, JSON.stringify(value));
+  const selectionPath = 'artifact/meta/trace-selection.json', omittedPath = 'artifact/meta/traces/next-minimal-server.js.nft.json';
+  await put(root, omittedPath, JSON.stringify({ version: 1, files: [] }));
+  await put(root, selectionPath, JSON.stringify({ format: traceSelectionFormat, nextVersion: '16.3.8', manifests: selectionManifests, requiredFiles: [], available: ['next-minimal-server.js.nft.json', 'next-server.js.nft.json'] }));
+
   await put(root, `${appRoot}/.next/server/app/page.js`, 'unit-generated-app');
   await put(root, `${appRoot}/.next/static/chunks/page.js`, 'unit-client-chunk');
   await put(root, `${appRoot}/public/fixture.txt`, 'public-fixture\n');
@@ -82,7 +89,7 @@ async function candidate(t, fixture) {
   const host = { platform: `${process.platform}/${process.arch}`, requirements: ['unit host baseline; no portability claimed'] };
   const launch = { version: 1, configVersion: 'runtime-unit-config-v1', runtimeUser: 'www', node: 'artifact/runtime/node', apiInternalURL: 'http://127.0.0.1:58088', webOrigin: 'http://127.0.0.1:53088', appRoot, entry: `${appRoot}/server.js`, binaries: Object.fromEntries(Object.entries(binaries).map(([key, row]) => [key, row.path])), environment: { inherit: false, allowlist: ['DATABASE_URL'], fixed: { NODE_ENV: 'production', HOSTNAME: '127.0.0.1', PORT: '53088', HTTP_ADDR: '127.0.0.1:58088', PUBLIC_ORIGIN: 'http://127.0.0.1:53088' }, forbidden: ['NODE_PATH', 'NODE_OPTIONS', '__NEXT_PRIVATE_STANDALONE_CONFIG'] }, config: { required: ['DATABASE_URL'], mode: '0600', external: true }, timeouts: { readySeconds: 30, workerSeconds: 30, stopSeconds: 15 }, writablePaths: [{ root: 'mutable', path: 'cache' }], releaseVerification: 'full-inventory-before-and-after', steps: [{ name: 'verify' }, { name: 'migrate', executable: binaries.migrate.path, cwd: 'artifact', repeat: 2 }, { name: 'api', executable: binaries.api.path, cwd: 'artifact', readyURL: 'http://127.0.0.1:58088/readyz' }, { name: 'web', executable: 'artifact/runtime/node', args: ['server.js'], cwd: appRoot }, { name: 'worker', executable: binaries.worker.path, cwd: 'artifact' }, { name: 'stop' }], host };
   await put(root, 'launch/description.json', JSON.stringify(launch));
-  const manifest = { format: runtimeFormat, source: proof, builder: { version: 2, ...selectedDigest(proof.files, runtimeBuilderFiles) }, tools: { go: 'unit-host-go', node: process.version, npm: 'unit-npm', platform: host.platform }, locks: { goMod: proof.files.find(row => row.path === 'go.mod').sha256, goSum: proof.files.find(row => row.path === 'go.sum').sha256, web: provenance.lockSHA256 }, binaries, runtime: { node: { path: 'artifact/runtime/node', version: process.version, source: 'unit-node fixture; no actual runtime claimed', licensePath: 'artifact/runtime/LICENSE', provenancePath: 'artifact/meta/node.json', provenanceSHA256: await fileHash(path.join(root, 'artifact/meta/node.json')) }, host }, web: { appRoot, entry: `${appRoot}/server.js`, buildID: 'unit-build', bundler: 'webpack', nextVersion: '16.3.8', apiInternalURL: launch.apiInternalURL }, migrations: proof.files.filter(row => row.path.startsWith('db/migrations/')), dependencies: { provenancePath, provenanceSHA256: await fileHash(path.join(root, provenancePath)), lockSHA256: provenance.lockSHA256, inputTreeSHA256: provenance.inputTreeSHA256, files: selected, traces: [{ path: tracePath, entries }] }, launch: { path: 'launch/description.json' }, artifacts: await runtimeInventory(root) };
+  const manifest = { format: runtimeFormat, source: proof, builder: { version: 2, ...selectedDigest(proof.files, runtimeBuilderFiles) }, tools: { go: 'unit-host-go', node: process.version, npm: 'unit-npm', platform: host.platform }, locks: { goMod: proof.files.find(row => row.path === 'go.mod').sha256, goSum: proof.files.find(row => row.path === 'go.sum').sha256, web: provenance.lockSHA256 }, binaries, runtime: { node: { path: 'artifact/runtime/node', version: process.version, source: 'unit-node fixture; no actual runtime claimed', licensePath: 'artifact/runtime/LICENSE', provenancePath: 'artifact/meta/node.json', provenanceSHA256: await fileHash(path.join(root, 'artifact/meta/node.json')) }, host }, web: { appRoot, entry: `${appRoot}/server.js`, buildID: 'unit-build', bundler: 'webpack', nextVersion: '16.3.8', apiInternalURL: launch.apiInternalURL }, migrations: proof.files.filter(row => row.path.startsWith('db/migrations/')), dependencies: { provenancePath, provenanceSHA256: await fileHash(path.join(root, provenancePath)), lockSHA256: provenance.lockSHA256, inputTreeSHA256: provenance.inputTreeSHA256, files: selected, selectionPath, traces: [{ path: tracePath, entries }], omitted: [{ path: omittedPath, sha256: await fileHash(path.join(root, omittedPath)), reason: 'next16-copyTracedFiles-uses-next-server-not-minimal-server' }] }, launch: { path: 'launch/description.json' }, artifacts: await runtimeInventory(root) };
   async function seal() { manifest.artifacts = await runtimeInventory(root); const raw = JSON.stringify(manifest, null, 2) + '\n'; await put(root, 'manifest.json', raw); return sha256(raw); }
   async function saveProvenance() { await put(root, provenancePath, JSON.stringify(provenance)); manifest.dependencies.provenanceSHA256 = await fileHash(path.join(root, provenancePath)); }
   return { root, appRoot, manifest, provenance, launch, seal, saveProvenance, digest: await seal(), verify: digest => verifyRuntimeCandidate(root, digest, fixture.source, { goCommand: go }) };
@@ -126,6 +133,11 @@ test('v2 sealed runtime safety contracts with actual Go build metadata and small
     ['dependency input tree tamper', async f => { f.provenance.files[0].sha256 = '0'.repeat(64); await f.saveProvenance(); }, /input tree mismatch/],
     ['selected dependency bytes mismatch', f => put(f.root, 'artifact/web/web/node_modules/next/index.js', 'bad dependency bytes'), /dependency bytes mismatch/],
     ['unmapped dependency file', f => put(f.root, 'artifact/web/web/node_modules/extra/index.js', 'unmapped'), /Unmapped runtime dependency/],
+    ['omitted trace reason tampered', async f => { f.manifest.dependencies.omitted[0].reason = 'ignore-missing'; }, /omission bytes\/reason/],
+    ['omitted trace bytes tampered', async f => { await put(f.root, 'artifact/meta/traces/next-minimal-server.js.nft.json', JSON.stringify({version:1,files:['changed']})); }, /omission bytes\/reason/],
+    ['omitted trace record missing', async f => { f.manifest.dependencies.omitted=[]; }, /omission proof/],
+    ['trace selection manifest substituted', async f => { const filename=path.join(f.root, 'artifact/meta/trace-selection.json'); const selection=JSON.parse(await readFile(filename,'utf8'));selection.manifests['server/pages-manifest.json']['/new']='pages/new.html';await put(f.root,'artifact/meta/trace-selection.json',JSON.stringify(selection)); }, /differs from standalone/],
+    ['unknown trace proof artifact', async f => { await put(f.root,'artifact/meta/traces/new.js.nft.json',JSON.stringify({version:1,files:[]})); }, /Unknown or missing trace/],
     ['trace mapping omitted', async f => { f.manifest.dependencies.traces[0].entries.pop(); }, /mapping is incomplete/],
     ['trace dependency disguised as generated', async f => { const row = f.manifest.dependencies.traces[0].entries[0]; row.kind = 'generated'; delete row.sourcePath; }, /Unknown trace provenance kind/],
     ['trace absolute input', async f => { f.manifest.dependencies.traces[0].entries[0].input = '/tmp/foreign'; }, /Unsafe\/duplicate trace input/],
@@ -138,7 +150,7 @@ test('v2 sealed runtime safety contracts with actual Go build metadata and small
     ['ambiguous duplicate API rewrite', f => put(f.root, `${f.appRoot}/.next/routes-manifest.json`, JSON.stringify({ rewrites: Array(2).fill({ source: '/api/:path*', destination: 'http://127.0.0.1:58088/api/:path*' }) })), /API rewrite mismatch/],
     ['embedded standalone config mismatch', f => put(f.root, `${f.appRoot}/server.js`, 'const nextConfig = {"output":"export","distDir":".next"}\n'), /embedded configuration mismatch/],
     ['embedded environment secret rejected', f => put(f.root, `${f.appRoot}/server.js`, 'const nextConfig = {"output":"standalone","distDir":".next","env":{"PRIVATE":"unit-secret"}}\n'), /embedded configuration mismatch/],
-    ['Next actual package version mismatch', async f => { f.manifest.web.nextVersion = '0.0.0'; }, /Actual Next version/],
+    ['Next actual package version mismatch', async f => { f.manifest.web.nextVersion = '0.0.0'; }, /Actual Next version|Trace selection required files\/Next version/],
     ['mutable cache enters sealed output', f => put(f.root, `${f.appRoot}/.next/cache/cache.bin`, 'mutable'), /Mutable Web cache/],
     ['root runtime user', async f => { f.launch.runtimeUser = 'root'; }, /runtime user/],
     ['implicit environment inheritance', async f => { f.launch.environment.inherit = true; }, /environment\/rewrite/],

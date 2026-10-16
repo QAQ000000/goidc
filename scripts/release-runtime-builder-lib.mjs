@@ -1,6 +1,7 @@
 import { lstat, mkdir, readFile, readdir, realpath, statfs, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { selectStandaloneTraces, traceSelectionFormat, traceSelectionManifestPaths } from './release-runtime-trace-selection.mjs';
 import { apiTarget, fileHash, inventory, noLinks, safeRelative, sha256 } from './release-candidate-lib.mjs';
 
 export const budgetComponents = ['checkout', 'buildTemporary', 'standalone', 'sealed', 'runCopy', 'testDatabaseAndLogs'];
@@ -176,8 +177,22 @@ export function validateRewrite(config, apiInternalURL) {
 // relative path and compare the actual framework-selected standalone file.
 export async function collectTraceEvidence({ checkout, standalone, metaRoot, source, dependencies }) {
   const buildRoot = path.join(checkout, 'web/.next');
-  const names = (await ordinaryFiles(buildRoot)).filter(name => !name.startsWith('standalone/') && name.endsWith('.nft.json'));
-  if (!names.length) throw new Error('No same-build trace evidence');
+  const allNames = (await ordinaryFiles(buildRoot)).filter(name => !name.startsWith('standalone/') && name.endsWith('.nft.json'));
+  const manifests = {};
+  for (const name of traceSelectionManifestPaths) manifests[name] = JSON.parse(await readFile(path.join(buildRoot, name), 'utf8'));
+  const requiredFiles = JSON.parse(await readFile(path.join(buildRoot, 'required-server-files.json'), 'utf8')).files;
+  const nextVersion = JSON.parse(await readFile(path.join(checkout, 'web/node_modules/next/package.json'), 'utf8')).version;
+  const metadata = { format: traceSelectionFormat, nextVersion, manifests, requiredFiles, available: allNames.sort() };
+  const selection = selectStandaloneTraces(metadata), names = selection.selected, omitted = [];
+  await mkdir(metaRoot, { recursive: true });
+  await writeFile(path.join(metaRoot, 'trace-selection.json'), JSON.stringify(metadata, null, 2) + '\n', { flag: 'wx' });
+  for (const entry of selection.omitted) {
+    const raw = await readFile(path.join(buildRoot, entry.name));
+    const destination = path.join(metaRoot, 'traces', entry.name);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, raw, { flag: 'wx' });
+    omitted.push({ path: `artifact/meta/traces/${entry.name}`, sha256: sha256(raw), reason: entry.reason });
+  }
   const sourceFiles = new Map(source.files.map(file => [file.path, file]));
   const depFiles = new Map(dependencies.files.map(file => [file.path, file]));
   const traces = [], selected = new Map();
@@ -224,5 +239,5 @@ export async function collectTraceEvidence({ checkout, standalone, metaRoot, sou
     const sourcePath = relative.slice(17), artifactPath = `artifact/web/${relative}`;
     if (!selected.has(artifactPath) || await fileHash(path.join(standalone, relative)) !== depFiles.get(sourcePath)?.sha256) throw new Error(`Unmapped standalone dependency: ${relative}`);
   }
-  return { traces, files: [...selected.values()].sort((a, b) => a.path.localeCompare(b.path)) };
+  return { selectionPath: 'artifact/meta/trace-selection.json', traces, omitted, files: [...selected.values()].sort((a, b) => a.path.localeCompare(b.path)) };
 }

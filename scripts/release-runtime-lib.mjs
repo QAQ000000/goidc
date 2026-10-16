@@ -2,11 +2,12 @@ import { existsSync } from 'node:fs';
 import { lstat, readdir, readFile, readlink, realpath } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
+import { selectStandaloneTraces, traceSelectionManifestPaths } from './release-runtime-trace-selection.mjs';
 import { apiTarget, fileHash, noLinks, safeRelative, selectedDigest, sha256, sourceProof } from './release-candidate-lib.mjs';
 
 export const schemaVersion = 2;
 export const runtimeFormat = 'zjmfgo-release-candidate-v2';
-export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'web/next.config.ts'];
+export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'web/next.config.ts'];
 const hashPattern = /^[a-f0-9]{64}$/;
 const inside = (root, file) => file.startsWith(`${root}/`);
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -169,6 +170,22 @@ export async function validateRuntimeManifest(root, manifest, actual, { goComman
   }
   for (const output of actual) if (output.path.includes('/node_modules/') && output.link === undefined) requireThat(selected.has(output.path), 'Unmapped runtime dependency file');
   requireThat(Array.isArray(deps.traces) && deps.traces.length > 0, 'Dependency tracing proof missing');
+  requireThat(deps.selectionPath === 'artifact/meta/trace-selection.json', 'Next trace selection proof missing');
+  const selectionMetadata = await json(deps.selectionPath);
+  const selection = selectStandaloneTraces(selectionMetadata);
+  const webTraceRoot = `${manifest.web.appRoot}/.next`;
+  for (const name of traceSelectionManifestPaths) requireThat(equal(selectionMetadata.manifests[name], await json(`${webTraceRoot}/${name}`)), 'Trace selection manifest differs from standalone metadata');
+  requireThat(equal(selectionMetadata.requiredFiles, (await json(`${webTraceRoot}/required-server-files.json`)).files) && selectionMetadata.nextVersion === manifest.web.nextVersion, 'Trace selection required files/Next version mismatch');
+  requireThat(equal(deps.traces.map(trace => trace.path), selection.selected.map(name => `artifact/meta/traces/${name}`)), 'Selected Next trace set mismatch');
+  requireThat(Array.isArray(deps.omitted) && deps.omitted.length === selection.omitted.length, 'Next trace omission proof missing');
+  for (const [index, entry] of selection.omitted.entries()) {
+    const omitted = deps.omitted[index], expectedPath = `artifact/meta/traces/${entry.name}`;
+    requireThat(omitted.path === expectedPath && omitted.reason === entry.reason && omitted.sha256 === (await file(expectedPath)).sha256, 'Next trace omission bytes/reason mismatch');
+    const raw = await json(expectedPath);
+    requireThat(raw.version === 1 && Array.isArray(raw.files), 'Omitted trace schema invalid');
+  }
+  const expectedTraceArtifacts = [...selection.selected, ...selection.omitted.map(entry => entry.name)].map(name => `artifact/meta/traces/${name}`).sort();
+  requireThat(equal(actual.filter(record => record.path.startsWith('artifact/meta/traces/')).map(record => record.path).sort(), expectedTraceArtifacts), 'Unknown or missing trace proof artifact');
   const tracePaths = new Set(), traced = new Set();
   for (const trace of deps.traces) {
     requireThat(trace.path?.startsWith('artifact/meta/traces/') && !tracePaths.has(trace.path), 'Duplicate/unsafe trace proof');
