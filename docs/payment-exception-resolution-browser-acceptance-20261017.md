@@ -1,6 +1,6 @@
 # 支付异常核验与责任退回浏览器验收
 
-日期：2026-10-17。运行在隔离 PG18 `_test` schema 和真实 TCP HTTP API；支付网关为 loopback fixture，未调用真实商户、退款、短信、资源或生产数据库。前端基线为 `7d0440a`，过期查询恢复补丁为 `ecbe2db`，后端为 `c58563b`、`d5ebdfe`、`1f4cbac`、`38996fc`。
+日期：2026-10-17。运行在隔离 PG18 `_test` schema 和真实 TCP HTTP API；支付网关为 loopback fixture，未调用真实商户、退款、短信、资源或生产数据库。浏览器前端基线为 `7d0440a`；后续过期查询恢复补丁 `ecbe2db` 和原键跨页修复 `f7c4f38` 不在本次 18 项/67 张截图的已验收范围内，须以独立专项证据为准。后端验收另覆盖 `c58563b`、`d5ebdfe`、`1f4cbac`、`38996fc`。
 
 关闭状态核验已通过 18 个场景、67 张截图：空态、查询取消、可信 closed 与 paid、unknown/unsupported 冻结、独立确认/驳回、原请求丢回执恢复、同键幂等、409 版本冲突、身份撤权、客户范围隔离、加载/503/重试、URL 分页恢复、损坏 sessionStorage、setItem 失败零 POST，以及 320x568 弹窗底部可达。页面 JavaScript 异常为 0，截图 SHA-256 已在[索引](generated/payment-close-verification-browser-acceptance-20261017.json)核对。
 
