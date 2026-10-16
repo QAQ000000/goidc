@@ -38,4 +38,6 @@ node scripts/check-admin-browser-evidence.mjs \
   --root /tmp/zjmfgo-order-external-refund-ui-20261017 --strict
 ```
 
-当前保留隔离 fixture 与3094预览，供主代理只读复核资金/库存及截图；尚未宣称清理完成。finish、API及schema的最终回收结果将追加到本记录与索引。常驻生产服务原PID为API608393、Web1647696，检查中保持原监听。
+主代理已独立 strict 复核68/68截图，并用只读SQL重查余额、付款、账单、订单、服务、hold、退款、商品、释放单位、任务10个投影，均与索引 facts.final_db 完全一致。
+
+2026-10-17 04:45（UTC+08:00）清理完成：创建本次唯一finish文件后，fixture正常退出PASS（2403.288秒）；精确SQL查询schema残留0、对应schema会话0，ready/fixture manifest/finish均自动移除。专用40639 API与3094预览无监听，PID1795833/1823469已退出；仅关闭orderrefundfinal20261017浏览器会话，CLI列表为空。/proc文件描述符检查中，独立worktree的web/.next与最终证据目录无打开文件。68张截图和去敏证据完整保留，清理后strict摘要仍68/68通过；未清空worktree/output。常驻API8088 PID608393、Web3088 PID1647696维持原监听，未操作worker。

@@ -3258,10 +3258,33 @@
     }
   ],
   "lifecycle": {
-    "status": "running_for_parent_readonly_audit",
+    "status": "cleaned",
+    "checked_at": "2026-10-17T04:45:06+08:00",
+    "shutdown_method": "unique finish file followed by normal fixture exit; TERM dedicated preview; close dedicated Playwright session",
+    "fixture_result": "PASS",
+    "fixture_elapsed_seconds": 2403.288,
+    "schema": "zjmfgo_test_88f9fa5418645da5",
+    "remaining_schema_count": 0,
+    "matching_schema_session_count": 0,
+    "ready_fixture_manifest_finish_files_remaining": 0,
     "api_port": 40639,
+    "api_listener_closed": true,
+    "api_pid": 1795833,
+    "api_pid_exited": true,
     "preview_port": 3094,
+    "preview_listener_closed": true,
+    "preview_pid": 1823469,
+    "preview_pid_exited": true,
+    "browser_session": "orderrefundfinal20261017",
+    "browser_closed": true,
+    "browser_cli_list_empty": true,
+    "open_next_or_evidence_file_descriptors": 0,
+    "retained_screenshot_count": 68,
+    "retained_screenshot_sha256_verified": 68,
     "production_api_pid": 608393,
-    "production_web_pid": 1647696
+    "production_web_pid": 1647696,
+    "production_listeners_unchanged": true,
+    "worker_actions": "none",
+    "parent_independent_audit": "strict screenshot SHA68/68 and10 SQL projections matched facts.final_db before cleanup"
   }
 }
