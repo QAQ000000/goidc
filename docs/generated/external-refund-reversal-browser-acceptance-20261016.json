@@ -1,0 +1,997 @@
+{
+  "commit": "d980903",
+  "browser": "Chrome headless via Playwright",
+  "api": "isolated real Go API, local non-paying gateway",
+  "widths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "checks": [
+    {
+      "name": "create validation and cancel have no financial write",
+      "result": "PASS",
+      "source": "first browser run assertions before self-review HTTP expectation was corrected from 409 to actual 403"
+    },
+    {
+      "name": "create freezes once and requester cannot review",
+      "result": "PASS",
+      "source": "first browser run real API and isolated schema before/after assertions"
+    },
+    {
+      "name": "independent confirm deducts frozen balance exactly once and preserves originals",
+      "result": "PASS",
+      "source": "first browser run real API and isolated schema before/after assertions"
+    },
+    {
+      "name": "self review hidden and Go API rejects even super admin",
+      "result": "PASS",
+      "status": 403,
+      "code": "external_refund_self_review"
+    },
+    {
+      "name": "independent reject releases reserve without ledger deduction",
+      "result": "PASS",
+      "before": {
+        "refunds": [
+          {
+            "id": 5,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 9,
+            "reversal_status": "pending"
+          }
+        ],
+        "version": 2,
+        "invoice_id": 3,
+        "balance_cents": 103570,
+        "invoice_status": "paid",
+        "reserved_total": 2468,
+        "reversal_ledger": 0,
+        "original_receipts": 1,
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "refunds": [
+          {
+            "id": 5,
+            "status": "rejected",
+            "version": 2,
+            "ledger_id": null,
+            "requested_by": 9,
+            "reversal_status": "released"
+          }
+        ],
+        "version": 2,
+        "invoice_id": 3,
+        "balance_cents": 103570,
+        "invoice_status": "paid",
+        "reserved_total": 1234,
+        "reversal_ledger": 0,
+        "original_receipts": 1,
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "real concurrent 409 preserves original request until explicit reread and end",
+      "result": "PASS",
+      "status": 409,
+      "originalVersion": 2,
+      "unchanged": true
+    },
+    {
+      "name": "committed response loss survives refresh and identity switch then replays fixed body/key",
+      "result": "PASS",
+      "committedStatus": 201,
+      "replaySameKey": true,
+      "replaySameBody": true,
+      "requestHash": "f20d7aee0b70ac22bead0281eee309402cfa50519f760e21866dee670893abb0",
+      "after": {
+        "refunds": [
+          {
+            "id": 8,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "version": 2,
+        "invoice_id": 5,
+        "balance_cents": 103570,
+        "invoice_status": "paid",
+        "reserved_total": 3702,
+        "reversal_ledger": 0,
+        "original_receipts": 1,
+        "original_topup_ledger": 1
+      }
+    },
+    {
+      "name": "reader cannot write",
+      "result": "PASS",
+      "status": 403
+    },
+    {
+      "name": "staff without refund view cannot read evidence",
+      "result": "PASS",
+      "status": 403
+    },
+    {
+      "name": "owned-customer scope prevents refund evidence read",
+      "result": "PASS",
+      "status": 404
+    },
+    {
+      "name": "four-size states have no document/dialog overflow or JavaScript errors",
+      "result": "PASS",
+      "screenshots": 36,
+      "jsErrors": 0,
+      "unexpectedApiFailures": 0
+    },
+    {
+      "name": "review response loss survives refresh and fixed replay applies exactly one deduction",
+      "result": "PASS",
+      "before": {
+        "refunds": [
+          {
+            "id": 8,
+            "status": "pending_review",
+            "version": 1,
+            "ledger_id": null,
+            "requested_by": 4,
+            "reversal_status": "pending"
+          }
+        ],
+        "version": 2,
+        "invoice_id": 5,
+        "balance_cents": 103570,
+        "invoice_status": "paid",
+        "reserved_total": 3702,
+        "reversal_ledger": 0,
+        "original_receipts": 1,
+        "original_topup_ledger": 1
+      },
+      "after": {
+        "refunds": [
+          {
+            "id": 8,
+            "status": "confirmed",
+            "version": 2,
+            "ledger_id": 13,
+            "requested_by": 4,
+            "reversal_status": "applied"
+          }
+        ],
+        "version": 3,
+        "invoice_id": 5,
+        "balance_cents": 102336,
+        "invoice_status": "refunded",
+        "reserved_total": 2468,
+        "reversal_ledger": 1,
+        "original_receipts": 1,
+        "original_topup_ledger": 1
+      },
+      "requestHash": "9232eacf860902e0ddd5fd02b5459cf4a7e76f76e743184a1116acc2e9534487",
+      "replayedSameBody": true,
+      "replayedSameKey": true
+    },
+    {
+      "name": "transaction summary renders final income refund net state",
+      "result": "PASS"
+    },
+    {
+      "name": "four-size states have no document/dialog overflow or JavaScript errors",
+      "result": "PASS",
+      "screenshots": 12,
+      "jsErrors": 0,
+      "unexpectedApiFailures": 0
+    },
+    {
+      "name": "injected list failure displays error then real API reload recovers",
+      "result": "PASS",
+      "status": 503,
+      "injected": true,
+      "recovered": true
+    },
+    {
+      "name": "transaction summary real API amounts and net arithmetic match page",
+      "result": "PASS",
+      "summary": {
+        "currency": "CNY",
+        "external_refund_cents": 3702,
+        "gateway_income_cents": 9872,
+        "net_gateway_cents": 6170
+      }
+    },
+    {
+      "name": "four-size states have no document/dialog overflow or JavaScript errors",
+      "result": "PASS",
+      "screenshots": 8,
+      "jsErrors": 0,
+      "unexpectedApiFailures": 0
+    }
+  ],
+  "screenshots": [
+    {
+      "scenario": "reject-dialog",
+      "width": 1440,
+      "file": "reject-dialog-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": {
+          "left": 473.97528076171875,
+          "right": 966.0247192382812,
+          "scrollWidth": 510,
+          "clientWidth": 510
+        }
+      },
+      "sha256": "864f083cd2ba2017b1b586a47ed1ccfde480107da8a1479638ed7d4f803de733"
+    },
+    {
+      "scenario": "reject-dialog",
+      "width": 1024,
+      "file": "reject-dialog-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": {
+          "left": 256,
+          "right": 768,
+          "scrollWidth": 510,
+          "clientWidth": 510
+        }
+      },
+      "sha256": "67f145b04b591cea9503f2bc386fbdea7e3c552df31e2946678956860e7580a5"
+    },
+    {
+      "scenario": "reject-dialog",
+      "width": 390,
+      "file": "reject-dialog-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": {
+          "left": 0,
+          "right": 390,
+          "scrollWidth": 388,
+          "clientWidth": 388
+        }
+      },
+      "sha256": "66fde91570991854388b187ed7e5d1e6a0af455b6253ec43179e7a6c789441a7"
+    },
+    {
+      "scenario": "reject-dialog",
+      "width": 320,
+      "file": "reject-dialog-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": {
+          "left": 1.8359375,
+          "right": 318.1640625,
+          "scrollWidth": 314,
+          "clientWidth": 314
+        }
+      },
+      "sha256": "37091c826374ed98f2e421210c5defe40d0aabfbcd895eb58b3671a8f40c5eae"
+    },
+    {
+      "scenario": "rejected",
+      "width": 1440,
+      "file": "rejected-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "c5099af9201646d15792d783bb3e0727e44c2bcc80aeb289125211af5ebcb605"
+    },
+    {
+      "scenario": "rejected",
+      "width": 1024,
+      "file": "rejected-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "8524af6a86e4e78658aefe7831f34a374016392cd7c2b3000f63c55af71fc19d"
+    },
+    {
+      "scenario": "rejected",
+      "width": 390,
+      "file": "rejected-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "9bbf4a4e4159c854bb5491c31b57b0eb86d7c901ac9755384b94d944549153fb"
+    },
+    {
+      "scenario": "rejected",
+      "width": 320,
+      "file": "rejected-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "756011522ca83c3f2096a1386219e5b52b58ff32ca5345dbbcc1b489be708662"
+    },
+    {
+      "scenario": "conflict-reviewed",
+      "width": 1440,
+      "file": "conflict-reviewed-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "dd85176f60ada3f100116d95713bbca6d3fb0ba4735596b17b3913408c122f27"
+    },
+    {
+      "scenario": "conflict-reviewed",
+      "width": 1024,
+      "file": "conflict-reviewed-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "f532bdb2cab73010669a86e1f1539dbcf9113b07d9d164bed6a785b17d4f97d5"
+    },
+    {
+      "scenario": "conflict-reviewed",
+      "width": 390,
+      "file": "conflict-reviewed-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "7163331345271b286adf5bbd6d5bc41c57a3f80e7e177bde44d7a499f2359981"
+    },
+    {
+      "scenario": "conflict-reviewed",
+      "width": 320,
+      "file": "conflict-reviewed-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "8c679b6c6252382d5cf91f5b3c46a66e8f7a15afd199d16fc77857f305f3b47d"
+    },
+    {
+      "scenario": "lost-response-restored",
+      "width": 1440,
+      "file": "lost-response-restored-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "eeac73513a0e96e7b4d8d61529b9f890728d2d5bb5a3b19798c5ca5b738a8c4f"
+    },
+    {
+      "scenario": "lost-response-restored",
+      "width": 1024,
+      "file": "lost-response-restored-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "7a5b4231971254d231a31fef8ca4774901fa9068e880e760afdd9e6bb36de7cd"
+    },
+    {
+      "scenario": "lost-response-restored",
+      "width": 390,
+      "file": "lost-response-restored-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "d20efca9f1ba5978cd82d7a84f019697d8c8e89a5c286efdf4973a4bc2cd5f5b"
+    },
+    {
+      "scenario": "lost-response-restored",
+      "width": 320,
+      "file": "lost-response-restored-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "2a317fcb84e09bc6318821458b5833ff9b075315d11ebaf7085f4392a198dfbf"
+    },
+    {
+      "scenario": "reader-isolated",
+      "width": 1440,
+      "file": "reader-isolated-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "45bf7adfd45645687877b918e1f667f248bd0fe44350e6f044a440c9d29df7af"
+    },
+    {
+      "scenario": "reader-isolated",
+      "width": 1024,
+      "file": "reader-isolated-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "978e73f1acc0716cc444679afd4b61f935edf8d1936a6fa111baa7835a8d68a7"
+    },
+    {
+      "scenario": "reader-isolated",
+      "width": 390,
+      "file": "reader-isolated-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "ec4e3a8fc372b9746ff2f5a67ab8fcab944aa4f0aa87fa2c380e57d8d65386c2"
+    },
+    {
+      "scenario": "reader-isolated",
+      "width": 320,
+      "file": "reader-isolated-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "2de658d3247f72f10908e6e629028d83976e892cce2f7c545964fda0e8e4fd70"
+    },
+    {
+      "scenario": "denied-no-evidence",
+      "width": 1440,
+      "file": "denied-no-evidence-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "fe5ad61335208d53ac07efb2ef5774168365cf1b55d62d83c86de1b0bc5c8b03"
+    },
+    {
+      "scenario": "denied-no-evidence",
+      "width": 1024,
+      "file": "denied-no-evidence-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "6b1b887ac7344b266d8c4c5d84425ee4f882fe46387660b0299fe0c81c400196"
+    },
+    {
+      "scenario": "denied-no-evidence",
+      "width": 390,
+      "file": "denied-no-evidence-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "8de8a9998d82c5b626c8fad70579c36b0ed1f7a1efc0572a1423030557610f8b"
+    },
+    {
+      "scenario": "denied-no-evidence",
+      "width": 320,
+      "file": "denied-no-evidence-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "1c278cb610720a1f83a876393d8d7179a671b0e009c0ab7f54ff8a72befa811d"
+    },
+    {
+      "scenario": "reviewer-pending",
+      "width": 1440,
+      "file": "reviewer-pending-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "8a9e7bb687f35a2df58c198ba6a3f3c111bc951d61b53485e7ed36928491c6d9"
+    },
+    {
+      "scenario": "reviewer-pending",
+      "width": 1024,
+      "file": "reviewer-pending-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "ffa6eb4836b80025491739d85d18f3fbdce6fcc306cfeb8482cc978e407b1ba7"
+    },
+    {
+      "scenario": "reviewer-pending",
+      "width": 390,
+      "file": "reviewer-pending-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "cc6af0899d193c9e12ca7750ed353b0b1a5b11f7e1351d947f93463b9206e33f"
+    },
+    {
+      "scenario": "reviewer-pending",
+      "width": 320,
+      "file": "reviewer-pending-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "2043b5f008955ebc5bd9894b7803758ee366b1151288e95eb1641e93cdf25d23"
+    },
+    {
+      "scenario": "existing-confirmed",
+      "width": 1440,
+      "file": "existing-confirmed-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "8b649cdaa437f7d87bde1c7f1f9176a07bc3120e38b411bce1322d9bb7509aa9"
+    },
+    {
+      "scenario": "existing-confirmed",
+      "width": 1024,
+      "file": "existing-confirmed-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "4bab059116d7bb694f30c47562a37ecfed655d984f36d95126eaf65f137d0cf4"
+    },
+    {
+      "scenario": "existing-confirmed",
+      "width": 390,
+      "file": "existing-confirmed-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "510ee7711a160f5f4d99a3c82b77bfd7e8b371be01b2fcb70328fb66711398ce"
+    },
+    {
+      "scenario": "existing-confirmed",
+      "width": 320,
+      "file": "existing-confirmed-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "e15368a5b61bb2dae1a9398bfe5dec1d954d293f7adb60cd279136964150b69e"
+    },
+    {
+      "scenario": "existing-rejected",
+      "width": 1440,
+      "file": "existing-rejected-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "22f3f7ae732b889f1dce7bd77bbbc597129af7c53ef15889d56fe869e45f9894"
+    },
+    {
+      "scenario": "existing-rejected",
+      "width": 1024,
+      "file": "existing-rejected-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "d3fc08ef6f53746231e975aa85b59e69a08a76b9abd87d76b09699f975b4d8af"
+    },
+    {
+      "scenario": "existing-rejected",
+      "width": 390,
+      "file": "existing-rejected-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "68a0084154c617aa2de2206f867db5d115a3c48f6cd1352cbb4d4975c60f188b"
+    },
+    {
+      "scenario": "existing-rejected",
+      "width": 320,
+      "file": "existing-rejected-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "5b828e10d6b53cb886605b8ec3b4301f1812189f0458d286df2fc5d26137a9eb"
+    },
+    {
+      "scenario": "review-lost-response-restored",
+      "width": 1440,
+      "file": "review-lost-response-restored-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "50ecfa03f704827c6550881912393c41a531c6499cf504d46866eb3fd0ebf9ab"
+    },
+    {
+      "scenario": "review-lost-response-restored",
+      "width": 1024,
+      "file": "review-lost-response-restored-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "1f055d67b6ddc318f5c58da54846b7d6f3456cc3b9569ddbeb190f55bc454d58"
+    },
+    {
+      "scenario": "review-lost-response-restored",
+      "width": 390,
+      "file": "review-lost-response-restored-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "97377946d32bf6a3aecdb51f929505b7e75f5cdc86c8d6e9b7cd7832f1c67bb7"
+    },
+    {
+      "scenario": "review-lost-response-restored",
+      "width": 320,
+      "file": "review-lost-response-restored-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "0dd85ca2cac460d5a437ac2bba9378b6be1164b5f1d74a040607bcf6a6e9bf95"
+    },
+    {
+      "scenario": "review-replay-confirmed",
+      "width": 1440,
+      "file": "review-replay-confirmed-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "6cb337a8175512646441fb11e8d44a4e7468c543f294fd057b5248d24b252485"
+    },
+    {
+      "scenario": "review-replay-confirmed",
+      "width": 1024,
+      "file": "review-replay-confirmed-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "e1a0c35179a1d16f0359ed69e00dc4504214acdb796acb68069d8eed366b090e"
+    },
+    {
+      "scenario": "review-replay-confirmed",
+      "width": 390,
+      "file": "review-replay-confirmed-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "b0478e2ee7a05c19192ecc41eb3f136aff2ce30099d2dc449f72eeeb2f4681bc"
+    },
+    {
+      "scenario": "review-replay-confirmed",
+      "width": 320,
+      "file": "review-replay-confirmed-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "57a1cf9fd436a4d0e4e1842a913fca5fe7ee93962da967c59919b399527e91aa"
+    },
+    {
+      "scenario": "final-transactions-summary",
+      "width": 1440,
+      "file": "final-transactions-summary-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "440058fd9ca59b97896c7420e5625e5f684ecc2719d03c24cefa71f04d8aaf37"
+    },
+    {
+      "scenario": "final-transactions-summary",
+      "width": 1024,
+      "file": "final-transactions-summary-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "09e42e4b6b2b7b1eaec2da1c7d5f0eb60a810bdaf0e5f517ddf27d3edf52d677"
+    },
+    {
+      "scenario": "final-transactions-summary",
+      "width": 390,
+      "file": "final-transactions-summary-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "f974df90013e653dea53beafbc9de179a81f66538d71ee16be492c5375b4dda0"
+    },
+    {
+      "scenario": "final-transactions-summary",
+      "width": 320,
+      "file": "final-transactions-summary-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "896495234e12a439a83ce6c23f9db3c33a98d90b31b8269190ace66abf34f89d"
+    },
+    {
+      "file": "confirm-dialog-1024.png",
+      "scenario": "confirm-dialog",
+      "width": 1024,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "9ba040ec84a9627ff0badd7166e3e14d149d4753e9d575a34ff684b63573b258"
+    },
+    {
+      "file": "confirm-dialog-1440.png",
+      "scenario": "confirm-dialog",
+      "width": 1440,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "163ec483a52a8b11e52ec91d577fc696065679370dc3cbd43813d3251eb107b9"
+    },
+    {
+      "file": "confirm-dialog-320.png",
+      "scenario": "confirm-dialog",
+      "width": 320,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "38960d51ff87eaa3a34b5572481c03f66ef46580e025170949d3d09b24732c0f"
+    },
+    {
+      "file": "confirm-dialog-390.png",
+      "scenario": "confirm-dialog",
+      "width": 390,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "bee1b57f75ea584f3e0eb305490399e362a82852dd21e2c7c10bc5554eef80ab"
+    },
+    {
+      "file": "confirmed-1024.png",
+      "scenario": "confirmed",
+      "width": 1024,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "53af652e246173c13e7ba7c9ed8d0542772d25aaf2e379be5724b4ef512a6bd0"
+    },
+    {
+      "file": "confirmed-1440.png",
+      "scenario": "confirmed",
+      "width": 1440,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "51ed699a4c725c5b821d43ef567dad88c98286e4ecf0d3a054ec0c1ff2e5c4d6"
+    },
+    {
+      "file": "confirmed-320.png",
+      "scenario": "confirmed",
+      "width": 320,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "e6fc4b9bd91d87f4e614c3f559fa8e170f118b05b0968acd0c3efa364970f2e7"
+    },
+    {
+      "file": "confirmed-390.png",
+      "scenario": "confirmed",
+      "width": 390,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "2d09be608c9c544f0fc6716ad9a4c6b54ae0f7d0395348b00c7badd66c0e278b"
+    },
+    {
+      "file": "create-form-1024.png",
+      "scenario": "create-form",
+      "width": 1024,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "031727916b9d7ffe8c1521e22f571df3a555a97d84741c64be21820d3092cbda"
+    },
+    {
+      "file": "create-form-1440.png",
+      "scenario": "create-form",
+      "width": 1440,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "bd47d7fbe2cda6406cb43b600012a9560f20f276b07f183d7ad9b109fbb9308b"
+    },
+    {
+      "file": "create-form-320.png",
+      "scenario": "create-form",
+      "width": 320,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "7f36333561dab542c74fffb17da0f702f6e440af1a0ae1e3e20f5b3adf69848b"
+    },
+    {
+      "file": "create-form-390.png",
+      "scenario": "create-form",
+      "width": 390,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "fbbef5baef7f922253bdf926019a81f5f1b6fa491a459788d36d0bd0aa7e2631"
+    },
+    {
+      "file": "requester-pending-1024.png",
+      "scenario": "requester-pending",
+      "width": 1024,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "10d10bd83f54b23656030cab275cf103b437e0b3119c9d8da83c8cd8985928b6"
+    },
+    {
+      "file": "requester-pending-1440.png",
+      "scenario": "requester-pending",
+      "width": 1440,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "1b3a6b1d66ebca696e052952687ee164a9c49579b287300f5d31e9f2c2635fca"
+    },
+    {
+      "file": "requester-pending-320.png",
+      "scenario": "requester-pending",
+      "width": 320,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "932b2597cfa0fda5d9aa126865ee4925848e6771ba6f6444b766c2768ef57fef"
+    },
+    {
+      "file": "requester-pending-390.png",
+      "scenario": "requester-pending",
+      "width": 390,
+      "source": "first browser run, layout assertions passed before screenshot",
+      "sha256": "6f6e95787a44c80337b2a3dc1ebb66c4d6b11ab8b2e5295afbb8546261251541"
+    },
+    {
+      "scenario": "api-error",
+      "width": 1440,
+      "file": "api-error-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "f1dabf4c81f3f256c1fdcd8ae6bd174d1ffc7ff1693602a813badf21db58a472"
+    },
+    {
+      "scenario": "api-error",
+      "width": 1024,
+      "file": "api-error-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "d0d56679c896cea89bc8d61975ac3cad863f5f2fb80477ef09cf1ed04c66cb8d"
+    },
+    {
+      "scenario": "api-error",
+      "width": 390,
+      "file": "api-error-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "33556ada1ab1a44316d1bd24c5707f3efc2b741ebe5b5a758d1408b8ef14cb16"
+    },
+    {
+      "scenario": "api-error",
+      "width": 320,
+      "file": "api-error-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "cf3ef644bc85435233a1903db313f98efdc81bab00cbcf4136864d4f3c51e50a"
+    },
+    {
+      "scenario": "summary-financial-verified",
+      "width": 1440,
+      "file": "summary-financial-verified-1440.png",
+      "metrics": {
+        "viewport": 1440,
+        "documentWidth": 1440,
+        "dialog": null
+      },
+      "sha256": "64d139a481924e71dd803c792c1c7e72557e5aa261cd456c893c6b42685bf8c6"
+    },
+    {
+      "scenario": "summary-financial-verified",
+      "width": 1024,
+      "file": "summary-financial-verified-1024.png",
+      "metrics": {
+        "viewport": 1024,
+        "documentWidth": 1024,
+        "dialog": null
+      },
+      "sha256": "2f2a72621ed9e1088b0bc368454fd84dccabcfb92995e6fe66e17181e7b3673f"
+    },
+    {
+      "scenario": "summary-financial-verified",
+      "width": 390,
+      "file": "summary-financial-verified-390.png",
+      "metrics": {
+        "viewport": 390,
+        "documentWidth": 390,
+        "dialog": null
+      },
+      "sha256": "c18b677e87c977c78a31dcc642a887009c6a16cebc7b82bcda6a3555ab3fe041"
+    },
+    {
+      "scenario": "summary-financial-verified",
+      "width": 320,
+      "file": "summary-financial-verified-320.png",
+      "metrics": {
+        "viewport": 320,
+        "documentWidth": 320,
+        "dialog": null
+      },
+      "sha256": "896495234e12a439a83ce6c23f9db3c33a98d90b31b8269190ace66abf34f89d"
+    }
+  ],
+  "jsErrors": [],
+  "expectedFailures": [
+    {
+      "path": "/api/v1/admin/invoices/4/external-refunds",
+      "status": 409
+    },
+    {
+      "path": "/api/v1/admin/invoices/6/external-refunds",
+      "status": 503
+    }
+  ],
+  "unexpectedFailures": [],
+  "harnessNotes": [
+    "CLI launched with temporary chromiumSandbox:false config after root Chrome sandbox failure; stateful scenarios used one Node Playwright process, no test specs.",
+    "An initial preview build omitted build-time API_INTERNAL_URL and login was rejected by default backend origin check; no login or business write succeeded in that probe. Final webpack build rewrites verified isolated API target.",
+    "First browser run expected self-review status 409; actual 403 external_refund_self_review and unchanged state were correct. Assertion corrected; continued from current state without repeating committed mutations."
+  ],
+  "screenshot_count": 72,
+  "viewport_height": 900,
+  "artifact_directory": "output/playwright/refund-reversal-verify-20261016",
+  "production_build": "PASS next build --webpack with build-time API_INTERNAL_URL",
+  "visual_review": [
+    "create-form-320.png",
+    "confirm-dialog-390.png",
+    "lost-response-restored-320.png"
+  ],
+  "notes": [
+    "Screenshots remain local ignored output artifacts; tracked manifest preserves names and hashes.",
+    "No real payment, SMS, SMTP, supplier or deployment actions occurred."
+  ]
+}
