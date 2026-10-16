@@ -27,7 +27,7 @@ func (s *Server) salesReport(w http.ResponseWriter, r *http.Request) {
 	}
 	rows, e := s.db.Pool.Query(r.Context(), `
 WITH cash AS (
- SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+ SELECT i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
  UNION ALL SELECT r.user_id,r.amount_cents,r.received_at FROM credit_repayments r
 ), customer_orders AS (
  SELECT user_id,count(*)::bigint AS order_count FROM orders
