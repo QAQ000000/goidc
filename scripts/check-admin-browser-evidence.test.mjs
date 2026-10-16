@@ -17,6 +17,7 @@ async function fixture(run) {
 }
 const entry = overrides => ({ newRoute: '/admin/jobs', width: 320, result: 'PASS', scope: 'historical layout only', screenshot: 'capture.png', screenshotSha256: digest('historical screenshot'), ...overrides });
 const declaration = { status: 'mismatch', expectedSha256: digest('historical screenshot'), observedSha256: digest('current screenshot'), usableForIntegrityProof: false, checkedAt: '2026-10-16', reason: 'Historical path reused; revalidation required.' };
+const missingHashDeclaration = { status: 'missing_hash', usableForIntegrityProof: false, checkedAt: '2026-10-16', reason: 'No digest was recorded for the historical screenshot.' };
 
 test('distinguishes matching, mismatched, unestablished, absent and invalid evidence without changing input', async () => fixture(async root => {
   const manifest = { pages: [entry({ screenshotSha256: digest('current screenshot') }), entry({}), entry({ screenshotSha256: undefined }), entry({ screenshot: 'absent.png' }), entry({ screenshotSha256: 'broken' }), entry({ screenshot: root })] };
@@ -24,6 +25,7 @@ test('distinguishes matching, mismatched, unestablished, absent and invalid evid
   const report = await checkEvidence({ root, manifest });
   assert.deepEqual(report.pages.map(e => e.status), ['verified', 'mismatch', 'missing_hash', 'missing_file', 'invalid_hash', 'read_error']);
   assert.equal(report.summary.strict_failures, 5);
+  assert.equal(report.summary.unacknowledged_failures, 5);
   assert.equal(report.pages[0].usableForIntegrityProof, true);
   assert.ok(report.pages.slice(1).every(e => !e.usableForIntegrityProof));
   assert.equal(JSON.stringify(manifest), before);
@@ -31,7 +33,7 @@ test('distinguishes matching, mismatched, unestablished, absent and invalid evid
 }));
 
 test('a declared historical mismatch is visible and unusable, and does not hide a later overwrite or changed expected hash', async () => fixture(async root => {
-  const manifest = { pages: [entry({ screenshotIntegrity: declaration }), entry({ screenshotSha256: undefined })] };
+  const manifest = { pages: [entry({ screenshotIntegrity: declaration }), entry({ screenshotSha256: undefined, screenshotIntegrity: missingHashDeclaration })] };
   const report = await checkEvidence({ root, manifest });
   assert.equal(report.strictPassed, false);
   assert.equal(report.overallIncomplete, true);
@@ -51,6 +53,21 @@ test('a declared historical mismatch is visible and unusable, and does not hide 
 test('a status label alone cannot exempt mismatches from strict checks', async () => fixture(async root => {
   for (const screenshotIntegrity of [{ status: 'mismatch' }, { ...declaration, usableForIntegrityProof: true }, { ...declaration, reason: '' }]) {
     assert.equal((await checkEvidence({ root, manifest: { pages: [entry({ screenshotIntegrity })] } })).strictPassed, false);
+  }
+}));
+
+test('missing hashes require complete declarations to count as recorded and always remain incomplete', async () => fixture(async root => {
+  for (const screenshotIntegrity of [undefined, { status: 'missing_hash' }, { ...missingHashDeclaration, status: 'mismatch' }, { ...missingHashDeclaration, usableForIntegrityProof: true }, { ...missingHashDeclaration, checkedAt: ' ' }, { ...missingHashDeclaration, reason: '' }, missingHashDeclaration]) {
+    const report = await checkEvidence({ root, manifest: { pages: [entry({ screenshotSha256: undefined, screenshotIntegrity })] } });
+    const declared = screenshotIntegrity === missingHashDeclaration;
+    assert.equal(report.strictPassed, false);
+    assert.equal(report.overallIncomplete, true);
+    assert.equal(report.recordingConsistent, declared);
+    assert.equal(report.pages[0].declaredMissingHash, declared);
+    assert.equal(report.pages[0].usableForIntegrityProof, false);
+    assert.equal(report.summary.declared_missing_hash, declared ? 1 : 0);
+    assert.equal(report.summary.unexpected_missing_hash, declared ? 0 : 1);
+    assert.equal(report.summary.unacknowledged_failures, declared ? 0 : 1);
   }
 }));
 
@@ -80,6 +97,17 @@ test('CLI reports JSON and enforces strict exit code while leaving manifest and 
   assert.equal(unestablished.status, 1, unestablished.stderr);
   assert.equal(JSON.parse(unestablished.stdout).summary.missing_hash, 1);
   assert.equal(JSON.parse(unestablished.stdout).summary.mismatch, 0);
+  const undeclaredHash = spawnSync(process.execPath, [...args, '--strict-unacknowledged'], { encoding: 'utf8' });
+  assert.equal(undeclaredHash.status, 1, undeclaredHash.stderr);
+  assert.equal(JSON.parse(undeclaredHash.stdout).recordingConsistent, false);
+  await writeFile(filename, JSON.stringify({ pages: [entry({ screenshotSha256: undefined, screenshotIntegrity: missingHashDeclaration })] }));
+  const recordedHash = spawnSync(process.execPath, [...args, '--strict-unacknowledged'], { encoding: 'utf8' });
+  assert.equal(recordedHash.status, 0, recordedHash.stderr);
+  assert.equal(JSON.parse(recordedHash.stdout).recordingConsistent, true);
+  assert.equal(JSON.parse(recordedHash.stdout).strictPassed, false);
+  assert.equal(JSON.parse(recordedHash.stdout).overallIncomplete, true);
+  const recordedHashStrict = spawnSync(process.execPath, [...args, '--strict'], { encoding: 'utf8' });
+  assert.equal(recordedHashStrict.status, 1, recordedHashStrict.stderr);
   await writeFile(filename, JSON.stringify({ pages: [entry({ screenshotSha256: digest('current screenshot') })] }));
   const verified = spawnSync(process.execPath, [...args, '--strict'], { encoding: 'utf8' });
   assert.equal(verified.status, 0, verified.stderr);
