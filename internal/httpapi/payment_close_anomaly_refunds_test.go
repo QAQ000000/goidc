@@ -302,6 +302,50 @@ func TestPaymentAnomalyRefundConcurrencyAndRollback(t *testing.T) {
 	}
 }
 
+func TestPaymentAnomalySameKeyConcurrencyAndRevokedReplay(t *testing.T) {
+	f, invoice, _, _, anchor := paymentAnomalyFixture(t, "merchant:same-key")
+	_, create := anomalyPaths(invoice, anchor)
+	actorID, actor := externalRefundActor(t, f.db, f.h, "anomaly-requester", []string{"invoices.view", "payment_anomalies.view", "payment_anomalies.create"})
+	in := paymentAnomalyInput(anchor, "same-key-payout")
+	var wg sync.WaitGroup
+	codes := make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes <- request(f.h, "POST", create, in, actor, "anomaly-same-key").Code
+		}()
+	}
+	wg.Wait()
+	close(codes)
+	created, replayed := 0, 0
+	for code := range codes {
+		switch code {
+		case 201:
+			created++
+		case 200:
+			replayed++
+		default:
+			t.Fatal(code)
+		}
+	}
+	if created != 1 || replayed != 7 {
+		t.Fatal(created, replayed)
+	}
+	var facts, receipts, claims int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM payment_close_anomaly_refund_operations),(SELECT count(*) FROM external_refund_payout_claims)").Scan(&facts, &receipts, &claims); err != nil || facts != 1 || receipts != 1 || claims != 1 {
+		t.Fatal(facts, receipts, claims, err)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actorID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(f.h, "POST", create, in, actor, "anomaly-same-key"), 403)
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1", actorID); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(f.h, "POST", create, in, actor, "anomaly-same-key"), 401)
+}
+
 func TestPaymentAnomalySharedPayoutClaimAcrossRefundWorkflows(t *testing.T) {
 	for _, mode := range []string{"ordinary_first", "anomaly_first", "concurrent"} {
 		t.Run(mode, func(t *testing.T) {
