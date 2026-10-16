@@ -103,6 +103,9 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
+	if !admin && mode == "supplier" && (action == "create" || action == "sync") {
+		return out, conflict("permission_denied", "该服务动作仅限管理员")
+	}
 	if !modeSupportsServiceAction(mode, action) {
 		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
 	}

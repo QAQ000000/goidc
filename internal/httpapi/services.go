@@ -107,6 +107,14 @@ WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NO
 		s.fail(w, r, err)
 		return
 	}
+	if service["provision_mode"] == "supplier" {
+		caps, capErr := s.db.ServiceSupplierCapabilitiesTx(r.Context(), tx, id, adminRoute(r))
+		if capErr != nil {
+			s.fail(w, r, capErr)
+			return
+		}
+		service["supplier_capabilities"] = caps
+	}
 	if adminRoute(r) {
 		metadata, queryErr := tx.Query(r.Context(), `SELECT p.name AS product_name,
  o.order_no,oi.price_cents AS first_price_cents,oi.setup_fee_cents,i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.paid_at,

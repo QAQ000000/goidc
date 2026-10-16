@@ -324,6 +324,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/service-navigation/{id}", s.auth(s.setServiceNavigation, false))
 	mux.HandleFunc("GET /api/v1/services/{id}", s.auth(s.serviceDetail, false))
 	mux.HandleFunc("GET /api/v1/services/{id}/activity", s.auth(s.serviceActivity, false))
+	mux.HandleFunc("POST /api/v1/services/{id}/vnc", s.auth(s.serviceVNC, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/credentials", s.auth(s.serviceCredentials, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/reset-password", s.auth(s.resetServicePassword, false))
 	mux.HandleFunc("GET /api/v1/services/{id}/reinstall-templates", s.auth(s.reinstallTemplates, false))

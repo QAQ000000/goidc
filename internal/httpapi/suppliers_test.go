@@ -36,6 +36,9 @@ type supplierFixture struct {
 	entered                                chan struct{}
 	once                                   sync.Once
 	actions                                atomic.Int64
+	consoleCalls                           atomic.Int64
+	consoleEntered, consoleBlocked         chan struct{}
+	consoleUnknown                         atomic.Bool
 	systemPassword, systemOS, consoleURL   atomic.Value
 	syncFailure                            atomic.Bool
 	invoiceOnly                            atomic.Bool
@@ -152,6 +155,15 @@ func supplierSetup(t *testing.T) *supplierFixture {
 				t.Error("invalid supplier action identity")
 			}
 			if r.PostFormValue("func") == "vnc" {
+				f.consoleCalls.Add(1)
+				if f.consoleEntered != nil {
+					close(f.consoleEntered)
+					<-f.consoleBlocked
+				}
+				if f.consoleUnknown.Load() {
+					fmt.Fprint(w, `{"status":200,"data":`)
+					return
+				}
 				u, _ := f.consoleURL.Load().(string)
 				if u == "" {
 					u = "https://console.example/vnc?token=private-console-token"
