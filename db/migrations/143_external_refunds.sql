@@ -17,9 +17,9 @@ CREATE TABLE external_refunds (
  CHECK(reviewed_by IS NULL OR reviewed_by<>requested_by),
  CHECK((status='pending_review' AND reviewed_by IS NULL AND confirmed_at IS NULL) OR
  (status='confirmed' AND reviewed_by IS NOT NULL AND confirmed_at IS NOT NULL) OR
- (status='rejected' AND reviewed_by IS NOT NULL AND confirmed_at IS NULL)),
- UNIQUE(merchant_scope,provider_refund_id)
+ (status='rejected' AND reviewed_by IS NOT NULL AND confirmed_at IS NULL))
 );
+CREATE UNIQUE INDEX external_refunds_one_live_merchant_refund ON external_refunds(merchant_scope,provider_refund_id) WHERE status<>'rejected';
 CREATE UNIQUE INDEX external_refunds_one_live_invoice ON external_refunds(invoice_id) WHERE status<>'rejected';
 CREATE UNIQUE INDEX external_refunds_one_live_payment ON external_refunds(payment_id) WHERE status<>'rejected';
 CREATE INDEX external_refunds_invoice ON external_refunds(invoice_id,id DESC);

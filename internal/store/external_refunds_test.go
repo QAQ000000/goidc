@@ -106,9 +106,27 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 	}
 	_, err = db.Pool.Exec(ctx, `UPDATE invoice_applications SET status='rejected',review_note='test cleanup' WHERE id=$1`, application)
 	must(err)
-	in.ProviderRefundID = "refund-after-rejected-record"
+	in.EvidenceRef = "evidence/corrected-receipt"
 	pending, err = db.CreateExternalRefund(requestCtx, actor, invoice, in, "create-refund-after-reject")
 	must(err)
+	oldReplay, e := db.CreateExternalRefund(requestCtx, actor, invoice, ExternalRefundInput{PaymentID: payment, AmountCents: 100, Method: "original_route", ProviderRefundID: "refund-1", ReceivedAt: in.ReceivedAt, EvidenceRef: "evidence/redacted", EvidenceSHA256: strings.Repeat("a", 64), Note: "Actual refund receipt", ExpectedVersion: 1}, "create-refund-1")
+	must(e)
+	if !oldReplay.Replayed || oldReplay.Refund.Status != "pending_review" {
+		t.Fatal("original create idempotency snapshot overwritten")
+	}
+	oldReject, e := db.ReviewExternalRefund(reviewCtx, reviewer, invoice, rejected.Refund.ID, false, review, "reject-with-active-application")
+	must(e)
+	if !oldReject.Replayed || oldReject.Refund.Status != "rejected" {
+		t.Fatal("old rejected operation overwritten")
+	}
+	var history int
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM external_refunds WHERE invoice_id=$1`, invoice).Scan(&history))
+	if history != 2 {
+		t.Fatal("rejected history overwritten")
+	}
+	if _, e = db.CreateExternalRefund(requestCtx, actor, invoice, in, "duplicate-live-same-invoice"); conflictCode(t, e) != "external_refund_duplicate" {
+		t.Fatal(e)
+	}
 	var wg sync.WaitGroup
 	errs := make(chan error, 2)
 	results := make(chan ExternalRefundResult, 2)
