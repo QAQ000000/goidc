@@ -14,14 +14,14 @@ export async function pinnedJSON(filename, expectedSHA256) {
   return { raw, value: JSON.parse(raw) };
 }
 export function validateBudget(budget, available) {
-  if (budget.format !== 'zjmfgo-runtime-budget-v1' || typeof budget.approvedBy !== 'string' || !budget.approvedBy.trim()) throw new Error('BLOCKED: approved disk budget required');
+  if (budget.format !== 'zjmfgo-runtime-budget-v1' || typeof budget.approvedBy !== 'string' || !budget.approvedBy.trim()) throw new Error('BLOCKED: measured disk budget record required');
   for (const key of ['maxPeakBytes', 'minReserveBytes', 'minReserveInodes', 'maxBuildSeconds', ...budgetComponents.map(x => `components.${x}`)]) {
     const value = key.startsWith('components.') ? budget.components?.[key.slice(11)] : budget[key];
     if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`BLOCKED: missing/invalid budget ${key}`);
   }
   const peak = budgetComponents.reduce((sum, key) => sum + budget.components[key], 0);
-  if (!Number.isSafeInteger(peak) || peak > budget.maxPeakBytes) throw new Error('BLOCKED: peak components exceed approved maximum');
-  if (available.bytes < budget.maxPeakBytes + budget.minReserveBytes || available.inodes < budget.minReserveInodes) throw new Error('BLOCKED: insufficient disk bytes/inodes for approved peak and reserve');
+  if (!Number.isSafeInteger(peak) || peak > budget.maxPeakBytes) throw new Error('BLOCKED: peak components exceed recorded maximum');
+  if (available.bytes < budget.maxPeakBytes + budget.minReserveBytes || available.inodes < budget.minReserveInodes) throw new Error('BLOCKED: insufficient disk bytes/inodes for recorded peak and reserve');
   return { available, approvedPeakBytes: budget.maxPeakBytes, componentSumBytes: peak };
 }
 export async function freeSpace(root) {
@@ -30,7 +30,7 @@ export async function freeSpace(root) {
 }
 export async function guardReserve(root, budget, initialFreeBytes) {
   const available = await freeSpace(root);
-  if (available.bytes < budget.minReserveBytes || available.inodes < budget.minReserveInodes || initialFreeBytes - available.bytes > budget.maxPeakBytes) throw new Error('BLOCKED: disk reserve/approved peak crossed during build');
+  if (available.bytes < budget.minReserveBytes || available.inodes < budget.minReserveInodes || initialFreeBytes - available.bytes > budget.maxPeakBytes) throw new Error('BLOCKED: disk reserve/recorded peak crossed during build');
   return available;
 }
 // No shell, no inherited Node/Go options, bounded output and only our process
@@ -95,16 +95,31 @@ export function makeLaunchDescription({ web, binaries, runtime, webOrigin, runti
     host: runtime.host, timeouts: { readySeconds: 30, workerSeconds: 30, stopSeconds: 15 },
     writablePaths: ['cache', 'tmp', 'state', 'logs'].map(name => ({ root: 'mutable', path: name })),
     releaseVerification: 'full-inventory-before-and-after',
+    pathResolution: 'executable and cwd relative to release root; args passed literally, relative file arguments resolve from cwd; use resolveLaunchStep',
     writeAudit: 'pending isolated runtime acceptance; do not assume unobserved writable paths',
     steps: [
       { name: 'verify', requirement: 'trusted manifest anchor, clean source proof, run-copy full inventory, host and external config; no process started on failure' },
       { name: 'migrate', executable: binaries.migrate.path, cwd: 'artifact', repeat: 2, requirement: 'both exit 0; exact candidate migration checksums/schema before API' },
       { name: 'api', executable: binaries.api.path, cwd: 'artifact', readyURL: `${targets.api}/readyz`, requirement: 'bounded ready wait; readiness alone is not business acceptance' },
-      { name: 'web', executable: runtime.node.path, args: [web.entry], cwd: web.appRoot, requirement: 'after API ready; real pages, chunks and proxy acceptance' },
+      { name: 'web', executable: runtime.node.path, args: [path.posix.relative(web.appRoot, web.entry)], cwd: web.appRoot, requirement: 'after API ready; real pages, chunks and proxy acceptance' },
       { name: 'worker', executable: binaries.worker.path, cwd: 'artifact', requirement: 'after API ready; isolated simulation resume business acceptance' },
       { name: 'stop', requirement: 'TERM only owned PIDs; bounded wait, own listeners gone; sealed full inventory unchanged' },
     ],
   };
+}
+// Resolve only against an independently verified runtime-copy root. Never use
+// the invoking process cwd to resolve package files. Arguments retain normal
+// child-process semantics: relative file arguments are relative to resolved cwd.
+export async function resolveLaunchStep(releaseRoot, step) {
+  const root = await noLinks(path.resolve(releaseRoot));
+  if (!(await lstat(root)).isDirectory()) throw new Error('Release root must be a directory');
+  const executable = await noLinks(path.join(root, safeRelative(step.executable)));
+  const cwd = await noLinks(path.join(root, safeRelative(step.cwd)));
+  const stat = await lstat(executable);
+  if (!stat.isFile() || !(stat.mode & 0o111) || !(await lstat(cwd)).isDirectory()) throw new Error('Launch executable/cwd invalid');
+  const args = step.args ?? [];
+  if (!Array.isArray(args) || args.some(argument => typeof argument !== 'string' || /[\x00-\x1f\x7f]/.test(argument))) throw new Error('Launch arguments invalid');
+  return { executable, args: [...args], cwd };
 }
 export async function controlledRuntimeEnvironment(description, configFile, { uid = process.getuid?.() } = {}) {
   await noLinks(configFile);

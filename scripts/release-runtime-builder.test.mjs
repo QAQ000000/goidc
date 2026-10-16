@@ -5,7 +5,7 @@ import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { inventory, sha256 } from './release-candidate-lib.mjs';
-import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
+import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-runtime-builder-test-'));
@@ -18,7 +18,7 @@ const binaries = Object.fromEntries(['api', 'worker', 'migrate'].map(name => [na
 const runtime = { node: { path: 'artifact/runtime/node' }, host: { platform: 'linux/x64', requirements: ['test baseline'] } };
 const launch = () => makeLaunchDescription({ web, binaries, runtime, webOrigin: 'http://127.0.0.1:53088', runtimeUser: 'www' });
 
-test('approved peak accounts for all six components and hard reserve', () => {
+test('recorded peak accounts for all six components and hard reserve', () => {
   const input = budget();
   assert.equal(validateBudget(input, { bytes: 1024 ** 3, inodes: 100 }).componentSumBytes, 6144);
   for (const name of budgetComponents) {
@@ -159,4 +159,27 @@ test('private readonly bind places actual tracing input inside checkout without 
   assert.equal(await readFile(path.join(input, 'tiny.js'), 'utf8'), 'trusted-fixture');
   // After child exit the parent still sees its empty ordinary mountpoint.
   await assert.rejects(readFile(path.join(mounted, 'tiny.js')), { code: 'ENOENT' });
+});
+
+
+test('Web launch step resolves after relocation and executes server.js from app cwd', async t => {
+  const root = await fixture(t), old = path.join(root, 'original'), moved = path.join(root, 'relocated');
+  const description = launch(), step = description.steps.find(item => item.name === 'web');
+  assert.deepEqual(step.args, ['server.js']);
+  await mkdir(path.join(old, description.appRoot), { recursive: true });
+  await mkdir(path.join(old, 'artifact/runtime'), { recursive: true });
+  // A tiny fixture wrapper invokes the real trusted test Node. This test covers
+  // path resolution only; bundled Node byte provenance is a verifier concern.
+  const quotedNode = "'" + process.execPath.replaceAll("'", "'\\''") + "'";
+  await writeFile(path.join(old, step.executable), '#!/bin/sh\nexec ' + quotedNode + ' "$@"\n', { mode: 0o700 });
+  await writeFile(path.join(old, description.entry), 'process.stdout.write(JSON.stringify({cwd:process.cwd(),entry:require.resolve("./server.js")}))');
+  await cp(old, moved, { recursive: true });
+  await rm(old, { recursive: true });
+  const resolved = await resolveLaunchStep(moved, step);
+  assert.equal(resolved.executable, path.join(moved, step.executable));
+  const result = spawnSync(resolved.executable, resolved.args, { cwd: resolved.cwd, env: {}, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { cwd: path.join(moved, description.appRoot), entry: path.join(moved, description.entry) });
+  await assert.rejects(resolveLaunchStep(moved, { ...step, executable: '../escape' }), /Unsafe/);
+  await assert.rejects(resolveLaunchStep(moved, { ...step, cwd: '../escape' }), /Unsafe/);
 });
