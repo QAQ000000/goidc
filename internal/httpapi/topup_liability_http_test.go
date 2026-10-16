@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -209,4 +210,79 @@ func TestTopupLiabilityBrowserFixture(t *testing.T) {
 		}
 		t.Cleanup(func() { os.Remove(p) })
 	})
+}
+
+func TestTopupLiabilityHTTPScopeRevocationWhileActorLocked(t *testing.T) {
+	for _, scenario := range []string{"read", "resolve", "replay"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := onlineTopupFixture(t)
+			invoice, _ := topupLiabilityPendingHTTP(t, f, "scope-race-"+scenario)
+			staffID, staff := user(t, f.db, f.h, "scope-race-finance", "admin")
+			contentRole(t, f.db, staffID, "invoices.view", "balance.topup.resolve")
+			body := map[string]any{"expected_version": topupLiabilityVersion(t, f, invoice), "note": "范围变更并发核实"}
+			path := topupLiabilityPath(invoice)
+			if scenario == "replay" {
+				expect(t, request(f.h, "POST", path+"/resolve", body, staff, "scope-race-resolve"), 201)
+			}
+			snapshot := func() string {
+				var value string
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_array((SELECT balance_cents FROM users WHERE id=$1),(SELECT count(*) FROM balance_topup_liability_resolutions WHERE invoice_id=$2),(SELECT count(*) FROM balance_ledger WHERE reference_type='gateway_topup' AND reference_id=$2),(SELECT count(*) FROM audit_events WHERE action='balance.topup.liability_resolved' AND entity_id=$2::bigint::text))::text`, f.uid, invoice).Scan(&value); err != nil {
+					t.Fatal(err)
+				}
+				return value
+			}
+			before := snapshot()
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+			defer cancel()
+			tx, err := f.db.Pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(context.Background())
+			var blocker int
+			if err = tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&blocker); err != nil {
+				t.Fatal(err)
+			}
+			// The sales-staff settings endpoint updates this row without revoking sessions.
+			if _, err = tx.Exec(ctx, "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+				t.Fatal(err)
+			}
+			result := make(chan *httptest.ResponseRecorder, 1)
+			go func() {
+				if scenario == "read" {
+					result <- request(f.h, "GET", path, nil, staff, "")
+				} else {
+					result <- request(f.h, "POST", path+"/resolve", body, staff, "scope-race-resolve")
+				}
+			}()
+			for {
+				var waiting bool
+				if err = f.db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid AND NOT l.granted WHERE $1::int=ANY(pg_blocking_pids(a.pid)) AND a.query LIKE 'SELECT role,admin_role_id FROM users%FOR SHARE')`, blocker).Scan(&waiting); err != nil {
+					t.Fatal(err)
+				}
+				if waiting {
+					break
+				}
+				select {
+				case w := <-result:
+					t.Fatalf("request completed before actor lock: %d %s", w.Code, w.Body.String())
+				case <-ctx.Done():
+					t.Fatal("request did not wait on actor lock")
+				case <-time.After(10 * time.Millisecond):
+				}
+			}
+			if err = tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case w := <-result:
+				expect(t, w, 404)
+			case <-ctx.Done():
+				t.Fatal("request did not finish after scope commit")
+			}
+			if after := snapshot(); after != before {
+				t.Fatalf("denied request changed financial facts: before=%s after=%s", before, after)
+			}
+		})
+	}
 }
