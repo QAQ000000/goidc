@@ -1,51 +1,154 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
-import { api } from "@/lib/api";
-import { useResource } from "@/hooks/use-resource";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ApiError } from "@/lib/api";
 import { AdminPagination } from "./admin-pagination";
 import { Failure, Loading } from "./common";
-import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { Workspace, useAdminIdentity, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
-import { Checkbox } from "./ui/checkbox";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Label } from "./ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { emptyFieldForm, fieldForm, fieldTypes, formPayload, useCustomerFieldAdminState, type CustomerAdminField, type FieldDraft, type FieldForm, type FieldRequest } from "./customer-field-admin-state";
 
-type Field = { id: number; field_key: string; label: string; field_type: string; description: string; validation_pattern: string; choices: string[]; sort_order: number; admin_only: boolean; required: boolean; show_on_register: boolean; active: boolean; version: number };
-type Result = { items: Field[]; total: number; limit: number; offset: number };
-type Form = Omit<Field, "id" | "version"> & { id?: number; version?: number; choicesText: string };
-const types: Record<string, string> = { text: "单行文本", textarea: "多行文本", number: "数字", date: "日期", select: "下拉选择", boolean: "开关" };
-
-function emptyForm(): Form { return { field_key: "", label: "", field_type: "text", description: "", validation_pattern: "", choices: [], choicesText: "", sort_order: 0, admin_only: false, required: false, show_on_register: false, active: true }; }
-
+type Result = { items: CustomerAdminField[]; total: number; limit: number; offset: number };
 export function AdminCustomerCustomFieldsView() {
-  const [query, setQuery] = useState({ q: "", field_type: "", active: "", offset: 0, limit: 25 });
-  const resource = useResource<Result>(`/admin/customer-fields?q=${encodeURIComponent(query.q)}&field_type=${query.field_type}&active=${query.active}&offset=${query.offset}&limit=${query.limit}`, false);
-  const manage = useAdminPermission("customers.manage");
-  const [form, setForm] = useState<Form | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  function change(patch: Partial<typeof query>) { setQuery(current => ({ ...current, ...patch, ...(patch.offset === undefined ? { offset: 0 } : {}) })); }
-  function edit(item: Field) { setMessage(""); setForm({ ...item, choicesText: item.choices.join(",") }); }
-  async function save(event: React.FormEvent) {
-    event.preventDefault(); if (!form || busy) return;
-    setBusy(true); setMessage("");
+  const actor = useAdminIdentity(), manage = useAdminPermission("customers.manage");
+  return <Workspace title="客户自定义字段" admin><FieldManager key={`${actor?.id ?? "none"}:${manage}`} actor={actor?.id ?? 0} manage={manage} /></Workspace>;
+}
+function FieldManager({ actor, manage }: { actor: number; manage: boolean }) {
+  const router = useRouter(), params = useSearchParams();
+  const q = params.get("q") ?? "", type = params.get("field_type") ?? "", active = params.get("active") ?? "";
+  const rawPage = Number(params.get("page") ?? 1), page = Number.isSafeInteger(rawPage) && rawPage > 0 && Number.isSafeInteger((rawPage - 1) * 100) ? rawPage - 1 : 0;
+  const size = [25,50,100].includes(Number(params.get("limit"))) ? Number(params.get("limit")) : 25;
+  const query = new URLSearchParams({ q, field_type: type, active, limit: String(size), offset: String(page * size) });
+  const path = `/admin/customer-fields?${query}`;
+  const state = useCustomerFieldAdminState(actor, manage), { read, hideIdentity } = state;
+  const [revision, setRevision] = useState(0);
+  const [list, setList] = useState<{ path: string; revision: number; data: Result | null; error: Error | null } | null>(null);
+  const [search, setSearch] = useState(q);
+  const [draft, setDraft] = useState<FieldDraft | null>(null);
+  const [latest, setLatest] = useState<FieldForm | null>(null);
+  const [detailMessage, setDetailMessage] = useState("");
+  const [reading, setReading] = useState(false);
+  const [deleting, setDeleting] = useState<CustomerAdminField | null>(null);
+  const detailRequest = useRef<AbortController | null>(null);
+  const refresh = useCallback(() => setRevision(value => value + 1), []);
+  useEffect(() => { queueMicrotask(() => setSearch(q)); }, [q]);
+  useEffect(() => {
+    const focus = () => { hideIdentity(); refresh(); };
+    const visibility = () => { if (document.visibilityState === "hidden") hideIdentity(); else focus(); };
+    window.addEventListener("focus", focus); document.addEventListener("visibilitychange", visibility);
+    return () => { window.removeEventListener("focus", focus); document.removeEventListener("visibilitychange", visibility); detailRequest.current?.abort(); };
+  }, [hideIdentity, refresh]);
+  useEffect(() => {
+    if (!manage || !actor) return;
+    const controller = new AbortController();
+    void read<Result>(path, controller.signal).then(data => { if (!controller.signal.aborted) setList({ path, revision, data, error: null }); }).catch((error: Error) => { if (!controller.signal.aborted) setList({ path, revision, data: null, error }); });
+    return () => controller.abort();
+  }, [path, revision, manage, actor, read]);
+  const current = state.identityReady && list?.path === path && list.revision === revision ? list : null;
+  const dirty = !!draft && JSON.stringify(draft.form) !== JSON.stringify(draft.original);
+  const locked = !manage || !state.ready || !state.identityReady || state.busy || reading || !!state.pending;
+  function change(values: Record<string, string>, reset = true) {
+    const next = new URLSearchParams(params.toString());
+    for (const [key,value] of Object.entries(values)) { if (value) next.set(key,value); else next.delete(key); }
+    if (reset) next.delete("page");
+    router.push(`/admin/customer-fields${next.size ? `?${next}` : ""}`, { scroll: false });
+  }
+  function update(patch: Partial<FieldForm>) {
+    if (!draft || locked) return;
+    const next = { ...draft, form: { ...draft.form, ...patch } };
+    setDraft(next); state.persistDraft(String(next.form.id ?? "new"), JSON.stringify(next.form) !== JSON.stringify(next.original) ? next : null);
+  }
+  function close() {
+    if (state.busy || reading) return;
+    if (state.pending) { setDraft(null); return; }
+    if (dirty && !window.confirm("放弃尚未提交的字段更改？")) return;
+    if (draft && state.drafts[String(draft.form.id ?? "new")] && !state.persistDraft(String(draft.form.id ?? "new"), null)) return;
+    setDraft(null); setLatest(null); setDetailMessage("");
+  }
+  async function detail(id: number) {
+    detailRequest.current?.abort(); const controller = new AbortController(); detailRequest.current = controller;
+    setReading(true); setDetailMessage("");
+    try { return await read<CustomerAdminField>(`/admin/customer-fields/${id}`, controller.signal); }
+    finally { if (!controller.signal.aborted) setReading(false); }
+  }
+  async function edit(item: CustomerAdminField) {
+    if (locked || draft) return;
+    if (state.drafts[String(item.id)]) { state.setError("此字段有本员工未提交草稿，请先选择恢复或丢弃该草稿。"); return; }
+    try { const form = fieldForm(await detail(item.id)); setDraft({ form, original: form }); setLatest(null); }
+    catch (e) { state.setError((e as Error).message); }
+  }
+  async function restore(key: string) {
+    if (locked || draft) return;
+    const saved = state.drafts[key];
+    if (!saved) return;
+    setDraft(saved); setLatest(null);
+    if (saved.form.id) {
+      try {
+        const next = fieldForm(await detail(saved.form.id));
+        setLatest(next);
+        if (next.version !== saved.original.version) setDetailMessage("服务端字段已变化。输入草稿保留，请选择保留输入并采用最新版本，或以最新对象替换草稿。");
+      } catch (e) { setDetailMessage(e instanceof ApiError && e.status === 404 ? "该字段已不存在，草稿保留。请核实后关闭或联系支持。" : (e as Error).message); }
+    }
+  }
+  async function reread() {
+    if (state.busy || reading) return;
+    const request = state.pending?.request;
+    const id = request?.method !== "POST" && request ? Number(request.path.split("/").at(-1)) : draft?.form.id;
     try {
-      const choices = form.choicesText.split(",").map(value => value.trim()).filter(Boolean);
-      const body = { field_key: form.field_key, label: form.label, field_type: form.field_type, description: form.description, validation_pattern: form.validation_pattern, choices, sort_order: Number(form.sort_order), admin_only: form.admin_only, required: form.required, show_on_register: form.show_on_register, active: form.active, ...(form.id ? { expected_version: form.version } : {}) };
-      const operation = form.id ? `customer-field-update-${form.id}-${form.version}` : "customer-field-create";
-      await api(form.id ? `/admin/customer-fields/${form.id}` : "/admin/customer-fields", { method: form.id ? "PATCH" : "POST", headers: { "Idempotency-Key": `${operation}-${crypto.randomUUID()}` }, body: JSON.stringify(body) });
-      setForm(null); resource.refresh();
-    } catch (error) { setMessage((error as Error).message); } finally { setBusy(false); }
+      if (id) { const next = fieldForm(await detail(id)); setLatest(next); setDetailMessage("已读取最新字段，请核对后明确选择如何处理保留的输入。"); }
+      else { await read<Result>(path); setDetailMessage("已重新读取当前字段列表，请核对标识冲突等拒绝原因。"); }
+      state.setReviewed(true); refresh();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) { setLatest(null); setDetailMessage("该字段已不存在。此事实不替代原请求回执；原请求恢复入口仍保留。"); state.setReviewed(true); }
+      else { state.setError((e as Error).message); state.setReviewed(false); }
+    }
   }
-  async function remove(item: Field) {
-    if (busy || !window.confirm(`确认删除字段“${item.label}”吗？`)) return;
-    setBusy(true); setMessage("");
-    try { await api(`/admin/customer-fields/${item.id}`, { method: "DELETE", headers: { "Idempotency-Key": `customer-field-delete-${item.id}-${item.version}-${crypto.randomUUID()}` }, body: JSON.stringify({ expected_version: item.version }) }); resource.refresh(); }
-    catch (error) { setMessage((error as Error).message); } finally { setBusy(false); }
+  function applyLatest(keep: boolean) {
+    if (!draft || !latest || state.pending || !window.confirm(keep ? "保留输入并采用最新版本？提交前请重新核对字段规则。" : "以最新服务端对象替换当前草稿？")) return;
+    const form = keep ? { ...draft.form, id: latest.id, field_key: latest.field_key, version: latest.version } : latest;
+    const next = { form, original: latest }; setDraft(next); state.persistDraft(String(form.id), JSON.stringify(form) === JSON.stringify(latest) ? null : next); setDetailMessage(""); setLatest(null);
   }
-  return <Workspace title="客户自定义字段" admin><div className="min-w-0 max-w-full space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="page-title">客户自定义字段</h1><p className="mt-2 text-sm text-muted-foreground">字段会显示在客户资料中；未启用字段不会进入注册或资料表单。</p></div><div className="flex gap-2"><Button variant="outline" size="icon" title="刷新" aria-label="刷新" onClick={resource.refresh}><RefreshCw /></Button><PermissionGate permission="customers.manage"><Button onClick={() => { setMessage(""); setForm(emptyForm()); }}><Plus />添加字段</Button></PermissionGate></div></div><div className="flex flex-wrap gap-3 border-y py-4"><Input aria-label="关键词" placeholder="搜索字段名、标识或描述" value={query.q} onChange={event => change({ q: event.target.value })} /><select aria-label="字段类型" value={query.field_type} onChange={event => change({ field_type: event.target.value })}><option value="">全部类型</option>{Object.entries(types).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select><select aria-label="启用状态" value={query.active} onChange={event => change({ active: event.target.value })}><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></div>{message && !form && <p role="alert" className="text-sm text-destructive">{message}</p>}{resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <><div className="min-w-0 overflow-x-auto"><Table className="min-w-[900px]"><TableHeader><TableRow>{["字段名称","标识","类型","注册显示","必填","状态","排序","操作"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{resource.data.items.map(item => <TableRow key={item.id}><TableCell>{item.label}<div className="text-xs text-muted-foreground">{item.description || "无描述"}</div></TableCell><TableCell className="font-mono text-xs">{item.field_key}</TableCell><TableCell>{types[item.field_type] ?? item.field_type}</TableCell><TableCell>{item.show_on_register ? "是" : "否"}</TableCell><TableCell>{item.required ? "是" : "否"}</TableCell><TableCell>{item.active ? "启用" : "停用"}</TableCell><TableCell>{item.sort_order}</TableCell><TableCell><div className="flex gap-1"><PermissionGate permission="customers.manage"><Button size="icon-sm" variant="ghost" title="编辑" aria-label={`编辑${item.label}`} onClick={() => edit(item)}><Pencil /></Button><Button size="icon-sm" variant="ghost" title="删除" aria-label={`删除${item.label}`} onClick={() => void remove(item)}><Trash2 /></Button></PermissionGate></div></TableCell></TableRow>)}{resource.data.items.length === 0 && <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">暂无客户自定义字段</TableCell></TableRow>}</TableBody></Table></div><AdminPagination total={resource.data.total} page={Math.floor(resource.data.offset / resource.data.limit)} pageSize={resource.data.limit} onPageChange={page => change({ offset: page * resource.data!.limit })} onPageSizeChange={limit => change({ limit, offset: 0 })} /></>}</div><Dialog open={form !== null} onOpenChange={open => { if (!open && !busy) setForm(null); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{form?.id ? "编辑客户自定义字段" : "添加客户自定义字段"}</DialogTitle><DialogDescription>保存后会增加字段版本，旧版本提交会被拒绝。注册只展示已启用、注册时显示且非仅管理员可见的字段；仅管理员可见优先，内部必填不会要求注册用户填写。</DialogDescription></DialogHeader>{form && <form onSubmit={save} className="space-y-4"><fieldset disabled={busy || !manage} className="space-y-4"><div className="grid sm:grid-cols-2 gap-4"><label className="space-y-2 text-sm"><Label>字段标识</Label><Input required pattern="[a-z][a-z0-9_]{1,63}" maxLength={64} disabled={!!form.id} value={form.field_key} onChange={event => setForm({ ...form, field_key: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>字段名称</Label><Input required maxLength={120} value={form.label} onChange={event => setForm({ ...form, label: event.target.value })} /></label></div><label className="space-y-2 text-sm"><Label>字段类型</Label><select className="h-9 w-full rounded-md border bg-background px-3" value={form.field_type} onChange={event => setForm({ ...form, field_type: event.target.value, choicesText: event.target.value === "select" ? form.choicesText : "" })}>{Object.entries(types).map(([key, value]) => <option key={key} value={key}>{value}</option>)}</select></label>{form.field_type === "select" && <label className="space-y-2 text-sm"><Label>选项（逗号分隔）</Label><Input required value={form.choicesText} onChange={event => setForm({ ...form, choicesText: event.target.value })} /></label>}<label className="space-y-2 text-sm"><Label>描述</Label><Input maxLength={500} value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>验证正则</Label><Input maxLength={500} value={form.validation_pattern} onChange={event => setForm({ ...form, validation_pattern: event.target.value })} /></label><label className="space-y-2 text-sm"><Label>显示排序</Label><Input type="number" min={-100000} max={100000} value={form.sort_order} onChange={event => setForm({ ...form, sort_order: Number(event.target.value) })} /></label><div className="grid sm:grid-cols-3 gap-3"><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.required} onCheckedChange={checked => setForm({ ...form, required: checked === true })} />必填</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.show_on_register} onCheckedChange={checked => setForm({ ...form, show_on_register: checked === true })} />注册时显示</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.admin_only} onCheckedChange={checked => setForm({ ...form, admin_only: checked === true })} />仅管理员可见</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={form.active} onCheckedChange={checked => setForm({ ...form, active: checked === true })} />启用</label></div>{message && <p role="alert" className="text-sm text-destructive">{message}</p>}<div className="flex flex-wrap gap-2 border-t pt-4"><Button><Save />{busy ? "保存中" : "保存"}</Button><Button type="button" variant="outline" onClick={() => setForm(null)}>取消</Button></div></fieldset></form>}</DialogContent></Dialog></Workspace>;
+  async function save(event: React.FormEvent) {
+    event.preventDefault(); if (locked || !draft || !dirty || detailMessage) return;
+    try {
+      const payload = formPayload(draft.form);
+      const request: FieldRequest = { path: draft.form.id ? `/admin/customer-fields/${draft.form.id}` : "/admin/customer-fields", method: draft.form.id ? "PATCH" : "POST", key: `web-customer-field-${crypto.randomUUID()}`, body: JSON.stringify(payload), draftKey: String(draft.form.id ?? "new"), label: draft.form.label };
+      if (await state.send(request)) { setDraft(null); setLatest(null); }
+    } catch (e) { state.setError((e as Error).message); }
+    finally { refresh(); }
+  }
+  async function prepareDelete(item: CustomerAdminField) {
+    if (locked || draft) return;
+    try { setDeleting(await detail(item.id)); }
+    catch (e) { state.setError((e as Error).message); }
+  }
+  async function remove() {
+    if (!deleting || locked) return;
+    const request: FieldRequest = { path: `/admin/customer-fields/${deleting.id}`, method: "DELETE", key: `web-customer-field-${crypto.randomUUID()}`, body: JSON.stringify({ expected_version: deleting.version }), draftKey: String(deleting.id), label: deleting.label };
+    await state.send(request); setDeleting(null); refresh();
+  }
+  const notices = <>
+    {state.storageError && <div role="alert" className="text-sm text-destructive space-y-2"><p>{state.storageError}</p><Button type="button" size="sm" variant="outline" disabled={state.busy} onClick={state.reloadStorage}>重新读取本员工恢复资料</Button></div>}
+    {state.error && <p role="alert" className="text-sm text-destructive break-words">{state.error}</p>}
+    {state.receipt && <p role="status" className="text-sm text-emerald-700">{state.receipt}</p>}
+    {state.pending && <div className="rounded border p-3 space-y-3 text-sm" role="status"><p>原{state.pending.request.method === "DELETE" ? "删除" : state.pending.request.method === "POST" ? "新增" : "修改"}请求待核实：{state.identityReady ? state.pending.request.label : "原员工请求（核实身份后显示目标）"}。即使目标已删除、停用或不在当前页，原请求仍保留；刷新不会自动提交。</p>{state.pending.rejected && <p>明确拒绝：{state.identityReady ? state.pending.reason : "请核实原员工身份后查看"}。请显式读取最新事实，不能自动换键。</p>}<div className="flex flex-wrap gap-2"><Button type="button" size="sm" disabled={state.busy || !manage || !state.ready || reading || state.pending.rejected && !state.reviewed} onClick={async () => { if (state.pending && await state.send(state.pending.request,true)) { setDraft(null); setDeleting(null); } refresh(); }}>以原请求核实结果</Button><Button type="button" size="sm" variant="outline" disabled={state.busy || reading} onClick={() => void reread()}>读取最新字段事实</Button>{state.pending.rejected && state.reviewed && <Button type="button" size="sm" variant="outline" onClick={state.endRejected}>已核对，结束被拒绝请求</Button>}</div></div>}
+  </>;
+  if (!manage) return <p role="alert">需要客户管理权限才能配置字段；原员工空间的草稿与请求保留。</p>;
+  return <div className="min-w-0 max-w-full space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="page-title">客户自定义字段</h1><p className="mt-2 text-sm text-muted-foreground">定义客户资料字段；仅启用、注册显示且非仅管理员可见的字段公开于注册。</p></div><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="icon" title="刷新字段列表" aria-label="刷新字段列表" onClick={refresh}><RefreshCw /></Button><Button disabled={locked || !!draft || !!state.drafts.new} onClick={() => { const form = emptyFieldForm(); setDraft({ form, original: form }); setLatest(null); setDetailMessage(""); state.setError(""); }}><Plus />添加字段</Button></div></div>
+    {notices}
+    {!state.ready && !state.storageError && <p role="status" className="text-sm">正在检查本员工的草稿与原请求，完成前不可写入。</p>}
+    {state.identityReady && Object.keys(state.drafts).length > 0 && <section className="border rounded p-3 space-y-2 text-sm"><h2 className="font-medium">本员工未提交草稿</h2>{Object.entries(state.drafts).map(([key,value]) => <div key={key} className="flex flex-wrap items-center gap-2"><span className="break-words">{key === "new" ? "新增" : `字段 #${key}`} · {value.form.label || "未命名"}</span><Button size="sm" variant="outline" disabled={locked || !!draft} onClick={() => void restore(key)}>恢复草稿</Button><Button size="sm" variant="outline" disabled={locked || !!draft} onClick={() => { if (window.confirm("确认丢弃此未提交草稿？不会清理任何原请求。")) state.persistDraft(key,null); }}>丢弃草稿</Button></div>)}</section>}
+    <form className="flex flex-wrap items-end gap-3 border-y py-4" onSubmit={event => { event.preventDefault(); if (Array.from(search.trim()).length > 100) { state.setError("关键词最多100个Unicode字符"); return; } change({q:search.trim()}); }}><label className="grid gap-2 text-sm min-w-0 w-full sm:w-72">关键词<Input placeholder="字段名、标识或描述（字面搜索）" value={search} onChange={event => setSearch(event.target.value)} /></label><label className="grid gap-2 text-sm">字段类型<select className="h-9 rounded border bg-background px-2" value={type} onChange={event => change({field_type:event.target.value})}><option value="">全部类型</option>{Object.entries(fieldTypes).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label><label className="grid gap-2 text-sm">启用状态<select className="h-9 rounded border bg-background px-2" value={active} onChange={event => change({active:event.target.value})}><option value="">全部状态</option><option value="true">启用</option><option value="false">停用</option></select></label><Button variant="outline">搜索</Button><Button type="button" variant="outline" onClick={() => router.push("/admin/customer-fields",{scroll:false})}>重置筛选</Button></form>
+    {list?.path === path && list.revision === revision && list.error ? <Failure error={list.error} retry={refresh} /> : !current?.data ? <Loading /> : <><div className="min-w-0 overflow-x-auto"><Table className="min-w-[950px]"><TableHeader><TableRow>{["字段名称","标识","类型","注册标志 / 实际公开","必填","状态","排序","操作"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{current.data.items.map(item => <TableRow key={item.id}><TableCell className="max-w-64 break-words whitespace-normal">{item.label}<p className="text-xs text-muted-foreground">{item.description || "无描述"}</p></TableCell><TableCell>{item.field_key}</TableCell><TableCell>{fieldTypes[item.field_type]}</TableCell><TableCell>{item.show_on_register ? "注册标志：是" : "注册标志：否"}<p className="text-xs text-muted-foreground">{!item.active ? "不公开：已停用" : item.admin_only ? "不公开：仅管理员可见" : item.show_on_register ? "实际公开" : "不在注册展示"}</p></TableCell><TableCell>{item.required ? "是" : "否"}</TableCell><TableCell>{item.active ? "启用" : "停用"}</TableCell><TableCell>{item.sort_order}</TableCell><TableCell><div className="flex gap-1"><Button size="icon-sm" variant="ghost" aria-label={`编辑${item.label}`} disabled={locked || !!draft} onClick={() => void edit(item)}><Pencil /></Button><Button size="icon-sm" variant="ghost" aria-label={`删除${item.label}`} disabled={locked || !!draft} onClick={() => void prepareDelete(item)}><Trash2 /></Button></div></TableCell></TableRow>)}{!current.data.items.length && <TableRow><TableCell colSpan={8} className="py-10 text-center">{current.data.total ? <>当前页已超出记录范围。<Button variant="link" onClick={() => change({page:"1"},false)}>回到第一页</Button></> : "暂无符合条件的客户自定义字段"}</TableCell></TableRow>}</TableBody></Table></div><AdminPagination total={current.data.total} page={page} pageSize={size} onPageChange={next => change({page:String(next+1)},false)} onPageSizeChange={next => change({limit:String(next)})} /></>}
+    <Dialog open={!!draft} onOpenChange={value => { if (!value) close(); }}><DialogContent showCloseButton={!state.busy && !reading} className="max-h-[85dvh] overflow-y-auto"><DialogTitle>{draft?.form.id ? "编辑客户自定义字段" : "添加客户自定义字段"}</DialogTitle><DialogDescription>标识创建后不可修改。仅管理员可见优先于注册显示；内部必填不要求注册用户填写。</DialogDescription>{!state.identityReady ? <div className="space-y-2"><p>正在核实原员工身份，暂不展示字段草稿；输入与原请求保留。</p><Button variant="outline" onClick={refresh}>重新核实身份</Button></div> : draft && <><div className="space-y-3">{state.error && <p role="alert" className="text-sm text-destructive break-words">{state.error}</p>}{detailMessage && <p role="status" className="text-sm">{detailMessage}</p>}{latest && !state.pending && <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={() => applyLatest(true)}>保留输入并采用最新版本</Button><Button size="sm" variant="outline" onClick={() => applyLatest(false)}>用最新字段替换草稿</Button></div>}{draft.form.id && <Button size="sm" variant="outline" disabled={state.busy || reading} onClick={() => void reread()}>读取最新字段事实</Button>}</div><FieldEditor form={draft.form} disabled={locked} dirty={dirty} blocked={!!detailMessage} onChange={update} onSubmit={save} onClose={close} busy={state.busy} pending={!!state.pending} /></>}{state.pending && <p className="text-sm">原请求已保存。关闭弹窗后，可在页面恢复区以原请求核实，关闭不会删除请求。</p>}</DialogContent></Dialog>
+    <Dialog open={!!deleting} onOpenChange={value => { if (!value && !state.busy) setDeleting(null); }}><DialogContent showCloseButton={!state.busy} className="max-h-[85dvh] overflow-y-auto"><DialogTitle>确认删除字段定义</DialogTitle><DialogDescription>{state.identityReady ? <>删除“{deleting?.label}”（{deleting?.field_key}，版本{deleting?.version}）只移除定义，不清理客户已有资料值；活动表单不再展示该定义。此操作需要确认。</> : "请先核实原员工身份；暂不展示删除目标，原资料保留。"}</DialogDescription>{state.error && <p role="alert" className="text-sm text-destructive">{state.error}</p>}<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={state.busy} onClick={() => setDeleting(null)}>取消删除</Button><Button variant="destructive" disabled={locked} onClick={() => void remove()}>确认删除定义</Button></div></DialogContent></Dialog>
+  </div>;
+}
+function FieldEditor({ form, disabled, dirty, blocked, onChange, onSubmit, onClose, busy, pending }: { form: FieldForm; disabled: boolean; dirty: boolean; blocked: boolean; onChange: (value: Partial<FieldForm>) => void; onSubmit: (event: React.FormEvent) => void; onClose: () => void; busy: boolean; pending: boolean }) {
+  return <form onSubmit={onSubmit} className="space-y-4"><fieldset disabled={disabled} className="space-y-4"><div className="grid sm:grid-cols-2 gap-4"><label className="grid gap-2 text-sm">字段标识<Input required pattern="[a-z][a-z0-9_]{1,63}" maxLength={64} disabled={!!form.id} value={form.field_key} onChange={event => onChange({field_key:event.target.value})} /></label><label className="grid gap-2 text-sm">字段名称<Input required value={form.label} onChange={event => onChange({label:event.target.value})} /></label></div><label className="grid gap-2 text-sm">字段类型<select className="h-9 w-full rounded border bg-background px-3" value={form.field_type} onChange={event => onChange({field_type:event.target.value,choicesText:event.target.value === "select" ? form.choicesText : ""})}>{Object.entries(fieldTypes).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>{form.field_type === "select" && <label className="grid gap-2 text-sm">选项（英文逗号分隔）<Input required value={form.choicesText} onChange={event => onChange({choicesText:event.target.value})} /></label>}<label className="grid gap-2 text-sm">向客户显示的描述<Input value={form.description} onChange={event => onChange({description:event.target.value})} /></label><label className="grid gap-2 text-sm">验证正则（Go regexp，最多500字节）<Input value={form.validation_pattern} onChange={event => onChange({validation_pattern:event.target.value})} /></label><label className="grid gap-2 text-sm">显示排序<Input type="number" min={-100000} max={100000} step={1} value={form.sort_order} onChange={event => onChange({sort_order:Number(event.target.value)})} /></label><div className="grid sm:grid-cols-2 gap-3">{([['required','必填'],['show_on_register','注册时显示'],['admin_only','仅管理员可见'],['active','启用']] as const).map(([key,label]) => <label key={key} className="flex gap-2 items-center text-sm"><input type="checkbox" checked={form[key]} onChange={event => onChange({[key]:event.target.checked})} />{label}</label>)}</div></fieldset><div className="flex flex-wrap gap-2 border-t pt-4"><Button disabled={disabled || !dirty || blocked}>{busy ? "提交中" : "保存字段"}</Button><Button type="button" variant="outline" disabled={busy} onClick={onClose}>{pending ? "关闭，保留原请求" : "取消更改"}</Button></div></form>;
 }
