@@ -280,14 +280,19 @@ async function inner() {
     report.checked = checked;
     report.identities = identities;
     report.master = { pid: master.child.pid, sha256: await digest(`/proc/${master.child.pid}/exe`) };
+    report.step = 'tooling-maps';
     const mapped = [...new Set((await readFile(`/proc/${master.child.pid}/maps`, 'utf8')).split('\n').map(line => line.match(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\/.*)$/)?.[1]).filter(Boolean))];
-    report.toolingMaps = await Promise.all(mapped.map(async filename => ({ path: filename, sha256: await digest(filename) })));
+    // Nginx creates anonymous shared memory via /dev/zero. This is a device
+    // mapping, not an ELF input. Other deleted file mappings still fail closed.
+    report.anonymousDeviceMappings = mapped.filter(filename => filename === '/dev/zero (deleted)');
+    report.toolingMaps = await Promise.all(mapped.filter(filename => filename !== '/dev/zero (deleted)').map(async filename => ({ path: filename, sha256: await digest(filename) })));
+    report.step = 'stop';
     await terminate(master); check(master.status === 0, 'Nginx did not exit cleanly');
     const live = [];
     for (const name of (await readdir('/proc')).filter(n => /^\d+$/.test(n))) if (await readlink(`/proc/${name}/exe`).catch(() => '') === '/tools/nginx') live.push(Number(name));
     check(live.length === 0, 'Owned Nginx child survived');
     const server = net.createServer(); await new Promise((resolve, reject) => { server.once('error', reject); server.listen(53188, '127.0.0.1', () => server.close(resolve)); });
-    report.allOwnedExited = true; report.listenerGone = true; report.status = 'PASS';
+    report.allOwnedExited = true; report.listenerGone = true; report.status = 'PASS'; report.step = 'complete';
   } catch (error) {
     report.reason = 'Static protocol, isolation, process or cleanup check failed';
     throw error;
