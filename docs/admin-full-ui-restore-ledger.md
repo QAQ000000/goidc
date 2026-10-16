@@ -23,7 +23,7 @@
 | 11 | 业务列表 `#/customer-product` | `/admin/services` | 已完成 | `GET /admin/services/page` | `services.view` / 状态页签 |
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
 | 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/transactions/page` | `invoices.view` / 成功支付、余额与已付账单事件分页；整数分金额/渠道/方向/上海日期筛选、客户范围、URL与详情回跳；不提供混合现金汇总；[本批验收](admin-entry-pages-acceptance-20261013.md) |
-| 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page` | `invoices.view/manage` / 合并和取消 |
+| 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page`；`GET /admin/invoices/{id}/topup-liability`、`POST /admin/invoices/{id}/topup-liability/resolve` | `invoices.view/manage` / 合并和取消；补账另需`balance.topup.resolve`及客户范围，见[增量验收](topup-liability-resolution-acceptance-20261016.md) |
 | 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit` + `PUT /admin/credit/{id}/limit` + `GET /admin/credit/consumptions` + `GET /admin/credit/repayments` + `POST /admin/credit/consumptions/{id}/repay` + `PUT /admin/credit/{id}/freeze` + `POST /invoices/{id}/pay-credit` + `GET /credit/account` + `GET /credit/consumptions` + `GET /credit/repayments` + `GET /invoices/{id}/credit` | `credit.view/manage`、客户会话本人归属 / 独立账户、信用消费/真实线下还款/冻结、客户/日期/债务状态分页、余额隔离、权限/范围/版本/幂等/审计；三标签四尺寸与未知结果恢复；客户门户4API、实际额度/消费/还款/债务、显示开关和原请求恢复已通过[146张四尺寸/短屏及资金验收](customer-credit-portal-acceptance-20261016.md)；线上还款、账期合账、已还款现金退付、授信审批仍待补；[既有后台验收](admin-credit-supplier-acceptance-20261012.md) |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
@@ -152,3 +152,5 @@
 2026-10-16 供应商客户运维首增量：owner范围VNC、注册能力展示和客户动作入口通过隔离全量/race及四尺寸弹窗/取消/冻结；双worker常驻续费进程验证通过。真实云主机动作、升级和暂停/恢复仍待验收，不将本地受理当外部成功，见[供应商验收](supplier-customer-acceptance-20261016.md)。台账保持44完成/61部分。
 
 2026-10-16 优惠码主页面：#36按独立契约补齐起止时间/清空、服务器有效状态、搜索分页、草稿取消、版本冲突、幂等和原请求恢复；Chrome原生pattern问题已修复后重新构建/截图。隔离PG18全量、专项race、Go及前端检查、四尺寸37张最终截图通过，见[验收](promo-code-acceptance-20261016.md)。登记调整为45完成/60部分；其他历史截图失配和生产外部验收不因此关闭。
+
+2026-10-16 账单#14增量：在线充值待补账补入原客户余额、独立权限和不可变解决事实、范围撤销在途保护及原请求恢复通过[独立验收](topup-liability-resolution-acceptance-20261016.md)。本增量不新增逻辑页关闭，台账仍45完成/60部分。

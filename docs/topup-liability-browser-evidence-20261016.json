@@ -1,0 +1,2037 @@
+{
+  "date": "2026-10-16",
+  "backendBaseline": "05970b5",
+  "frontendBaseline": "1a7645b",
+  "productionChanged": false,
+  "externalMerchantCalled": false,
+  "layoutWidths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "pages": [
+    {
+      "scenario": "admin-pending",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-pending-1440-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "c60e681bc50c6d626eb71f78a3b609bd9c8fa1948184fcb561faffbe232c1a66",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-pending",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-pending-1024-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "52bdfd8e91e4ea25c2a1fb4fed0a94cda7dcd413dd5b1ca19907b090f0e4c0ab",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-pending",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-pending-390-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "a6039038d1299ee5f3c4c587b4437e98b4917c8f763ed941d1e0786a9823deac",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-pending",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-pending-320-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "884a7a3622adb5bb2e808641d04499ea234a39f7583369805fb537c269d6197b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-1440-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "53032a3a3b3ef3e5a21f497a89289ce2a64a75ecec689e80d02f0f60fbe53234",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-1024-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "25e27e743eaf8370bb46184b58ee1dfc5299593aaff14b48078f8930686815f0",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-390-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "91a94bbfffa169e0bb6dcd8472dbccffcda8b58b166f2de93a34580aaaef9e1c",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-320-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "daf263c7f01aef1f2980b6dbc175f202bbab321360ee622924aff240a7e1baa5",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation-short",
+      "width": 390,
+      "height": 500,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-short-390-500.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "27a748e36a4c59f8e7f3daadf92c1f6d752243c25026f64a4d6f2a035dbca335",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-confirmation-short",
+      "width": 320,
+      "height": 500,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-confirmation-short-320-500.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "63beaef11de29a4bab3e2235a40c72a74e599fb4ae456a8f6ed7e471980409d2",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-resolved",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-resolved-1440-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "1ad88fc998094ce82098f7748f671bce293a6401497224fdeac52836af01a278",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-resolved",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-resolved-1024-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "2b33cfd8ec7d4cd358622278b2478b76e287f8ee31f2aada4663c2b34edd370d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-resolved",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-resolved-390-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "4b5865dd4ff56073ee676360a4419fda611a9e9db273d19958e6b589211da93d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-resolved",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-resolved-320-900.png",
+      "newRoute": "/admin/invoices/2",
+      "screenshotSha256": "9f8b36c7bb6d2b005fd8c454da3371c95e8da3c4ab0c2c1dbedddb504d71b2bd",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-confirm-viewport",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-confirm-viewport-320-500.png",
+      "newRoute": "/admin/invoices/3",
+      "buttonBounds": {
+        "x": 181,
+        "y": 366,
+        "width": 88,
+        "height": 44
+      },
+      "screenshotSha256": "5ec24029bf5e4f99009c2d2a25bc32434725ee6b898e520a68d9af47cdcb0421",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "viewport"
+    },
+    {
+      "scenario": "unknown-receipt-modal",
+      "width": 390,
+      "height": 500,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-receipt-modal-390-500.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "054c0b39a8fb8913f6c1be9a6e1e640c031c40364aa48517a73a2d8e2c0072e4",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-receipt-modal",
+      "width": 320,
+      "height": 500,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-receipt-modal-320-500.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "ef69f09c2fbff3e660f9e14819df0e609537ac7a6738f71bee90300255fc545e",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-read-failure",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-read-failure-1440-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "54fa6a5c40c1c6ba1803c3083b6efaa6b3c85854cbf86f931911a80d6bc27b60",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-read-failure",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-read-failure-1024-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "4f49609bd9a477978920683b577bbffa8e158349e083ab9d1f0e98797a5237ef",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-read-failure",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-read-failure-390-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "f645bb9c07d17c95416ce868130b105992f2611c9ef8769edb65bd9029f19ba7",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-read-failure",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-read-failure-320-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "bd33094b2baa17e2c72ed669ea01b022a027c0030a160bd3c4f5d8b2a8b8b9ff",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-switched",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-switched-1440-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "449043a90a9fe2338eda7ea54ade772d9a92274f07286c8775b5fd085114fab7",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-switched",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-switched-1024-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "119d283bb9e245f0cc14cdf569bdadb1bb257225e69ae2b273b0688665720732",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-switched",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-switched-390-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "2bd92afbb820dab95a2e7df614a0695a2ea6a961bb274a3fd76f8bddedd74695",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "identity-switched",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/identity-switched-320-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "a36fb6e8fe99b1d1339d5cfc70c1328312526193de0047efeee15ddcd4f3e68f",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-restored-1440-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "9b41f10f09e67dbf6608285bdc480cf8ac0676e9cffb35f5f018a058a5e6641a",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-restored-1024-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "957f754e44eedf3209c94c04e57cc7449019541ca7b06728168b812c216f1f4d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-restored-390-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "e8e34ab15a66fe2c9e8f3b3c2e17f60346d417c87e0fd11e1123cf140a851f4d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-restored-320-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "15abb0318c8bc214454cf39b8285d35ef495a66117dae03a2b59523cbc73ca3d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-recovered",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-recovered-1440-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "9ee4f963f639666ea050700be9f0c078319f5434694fcc5da8e5bdc3b00c8fbe",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-recovered",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-recovered-1024-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "09f33aaf22292573443598c7c725a149d5ce08b2358f44b86a2580ac8f7bb555",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-recovered",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-recovered-390-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "a7f8d7511dd32670c3c112729e80d8033a98580127ecb8ee3b052460a635ac60",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "unknown-recovered",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/unknown-recovered-320-900.png",
+      "newRoute": "/admin/invoices/3",
+      "screenshotSha256": "5709499ac6ba7716e44cabbfd04eb9916809ce0b681a3a5a94beb57b693e4455",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "reader-pending",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/reader-pending-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "42f0113b629def73452269e7a38da27e959427ca056158d4bb87e04e7fd9b851",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "reader-pending",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/reader-pending-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "3e418ee0fe444885428e59deeaa44f031370c015794c750a23780d0ca57c9246",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "reader-pending",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/reader-pending-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "c82c9d5d5e301311081b0f839bf752d3a93df9544213477e8f48d0fbd54ab25a",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "reader-pending",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/reader-pending-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "a6da5fc32b2a695baa8730a8c963db99ea010c9d01076308fee8dfeac5374a2f",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "2ae5a5cbe44bf868226a114b36847bff74d9193025cfb827fb45ccac92d56a92",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "ee83d7d6060b8f2b5b7bb03cf1cd8f2a6d899ba811b285e09965e26e4854db80",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "d711b74c11b860be9ba668d302f4d17e39c2ecf2ee5634921e6f31595100e29b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "1de578e7f7cf3116a322db5d5a63afe24aa90c46efb2ae5050fc82f5f60fd6e8",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict-reviewed",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-reviewed-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "6116486e6ecfcecf39332de6dfcbc9a9503b9160b2ec67bc7f4ec3aa8c2bfe4b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict-reviewed",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-reviewed-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "3bc4d3cdd0ed1eeba2cf8a6de8f06ea01a74cb8b8202dd0c3d5ec6ac487a2889",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict-reviewed",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-reviewed-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "f466f96a59764013f1aa43c7d30eaad2714243cf5a0cb1bca1fd303cc87d114d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "version-conflict-reviewed",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/version-conflict-reviewed-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "de910569001cbf7752f6b6791a922b08a1b9f5a0068123faf757a7c9152d3b69",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-2",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-2-1440-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "9eee002791ad28c6834e890c1d14fba868aa58bddfb4c4526c3a29a3a483b1dd",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-2",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-2-1024-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "d7976549d8a731ce6c1deb8ce21df3e88e8d055166d2890cf2fc4ae69d48eb19",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-2",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-2-390-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "92b051724d4fe5959055712456309e0dc25f4bfb55e3b0f8eb52ab64dd1ead18",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-2",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-2-320-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "150b8a7d4f34526315d49217a97f12b1c2150caa77e564dede95b4f3bf68a58a",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-3",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-3-1440-900.png",
+      "newRoute": "/console/invoices/3",
+      "screenshotSha256": "e1947ed7bf1532040312a35c915fd16cc3e483341e835d6ac9aa7b543a2c4485",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-3",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-3-1024-900.png",
+      "newRoute": "/console/invoices/3",
+      "screenshotSha256": "ca6d8b5b9de1c315e9ec0bc95b66f7db06cce0fdc9c29c5549d245e137b3e049",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-3",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-3-390-900.png",
+      "newRoute": "/console/invoices/3",
+      "screenshotSha256": "5645768fd1422b7fdc1a0fe7487b37106e7faabe5ceae057c38ab852c2b34c3b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-credited-3",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-credited-3-320-900.png",
+      "newRoute": "/console/invoices/3",
+      "screenshotSha256": "3367f11060685524cd4c92c3e30cab4c0c895550f4ceb1d02e4dbd2c13d4b58c",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-account",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-account-1440-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "97a90850638fc5fd0e070882abeb2c9ec5af0e9171dba1a716bb118f0245eff0",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-account",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-account-1024-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "42e3602b0506152df217f05743d3a3678fe3ceff3c94084d60a72b8823252540",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-account",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-account-390-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "fce4709818acf938dd147401276853d91403b7ef482300b4f921e7c569d5a9ce",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-account",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-account-320-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "86bbcdca94918f0ac6d645c682c52db308416cb8afd215aa1041af1f524ebc59",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-no-settlement",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-no-settlement-1440-900.png",
+      "newRoute": "/admin/invoices/7",
+      "screenshotSha256": "0a1122a98d992bd9467876bbca61797759a62556793577b78612ce77bc1f6dd1",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-no-settlement",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-no-settlement-1024-900.png",
+      "newRoute": "/admin/invoices/7",
+      "screenshotSha256": "8eebf40f19d7ee75b71dc1778f9992a63d8934208447938f7899c04e9a9b0861",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-no-settlement",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-no-settlement-390-900.png",
+      "newRoute": "/admin/invoices/7",
+      "screenshotSha256": "9e710c840a3659cb33935f242f7874eb527d81b9f592ffe8427aaac5eae49265",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-no-settlement",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-no-settlement-320-900.png",
+      "newRoute": "/admin/invoices/7",
+      "screenshotSha256": "58717680108aae9b4f6533a1e4957703d0a3bac1a0a36ce886c0e21f9761f736",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-loading",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-loading-1440-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "794970a2198e0f7b5b447937e54034b5ffa399411b1790a71664bedfde51f24b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-loading",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-loading-1024-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "a213f683d709863cfa1f4586b0bc5596169a55884cd8933d3f2b4c963af533a3",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-loading",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-loading-390-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "3d8cd6bd5e7f0831e51cf09a33ed46b20088def756e9ff261de4090fd4e47ab9",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-loading",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-loading-320-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "d89be11bc9e37217fde1dac280febd577d306aa685f1327c8fdd71914db08d76",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-read-error",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-read-error-1440-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "5afb924d3f773ac6bc780aef003bab810b3ee4d38228102961f9de2b0e8ea119",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-read-error",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-read-error-1024-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "ece9d1bed1879c51813b3fe5cf84f60ff799ba5905a09f8a126acaf53af9b7a4",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-read-error",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-read-error-390-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "27a4b7e7c62aef9c450dd3b4f10ad91ef49322dadcc816000887b99da381ecd5",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "admin-liability-read-error",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/admin-liability-read-error-320-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "73b0aa22f9a7a8fd6f12adb904eff1775cb631db5d0f6792207fe33bf8a24ceb",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-scope-denied",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-scope-denied-1440-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "408818cb6d1da1d54b97aea09f26c8eaff60bfc4ace06b2afefaa8787da0468e",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-scope-denied",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-scope-denied-1024-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "c914e94f550a5a0da162360d48f0e61b21fd83cc0e37c60bba55471316046f79",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-scope-denied",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-scope-denied-390-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "3164b0b8b57891a5ccbb1731890a358e340ab5100b91f6fb8a7d363573b8f231",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "customer-scope-denied",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/customer-scope-denied-320-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "cb790eddf4762697284121afbe27e463a544d783a728baaaaab33ba13b7ef5d7",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "26cb348",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-reloaded-original",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-reloaded-original-1440-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "f827b50d1f25356b7e96151ad00e7b5ab53ec069b9f1717f69afb5ce58f1bcaa",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-reloaded-original",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-reloaded-original-1024-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "61cf330a0a23db82852edc49267ca2bc3a5b621b21187c5e9bd84162465bffe8",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-reloaded-original",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-reloaded-original-390-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "a17ac95c95a0e58103232b04f10fe7402170ef85b57a64968334df55fe346584",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-reloaded-original",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-reloaded-original-320-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "01716c8f47cd2c4a0d52671ebfd5d33f0c9979676fc96a4f63dd6c81a54a3d83",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-session-expired",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-session-expired-1440-900.png",
+      "newRoute": "/admin-login",
+      "screenshotSha256": "e16345e15372ce11443301a0f32dbf509825dd4b2cd548b79f4908ffdd3d9192",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-session-expired",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-session-expired-1024-900.png",
+      "newRoute": "/admin-login",
+      "screenshotSha256": "2d2e4272d5c08a93ca65755432c8abf13852b9226c3b12b0e0a0ab434f29a033",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-session-expired",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-session-expired-390-900.png",
+      "newRoute": "/admin-login",
+      "screenshotSha256": "f36a9e06cf9ed7c875f1b8594060333d0abda9e893104cf486671408a32df7cd",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-session-expired",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-session-expired-320-900.png",
+      "newRoute": "/admin-login",
+      "screenshotSha256": "351a48333cc4c7d0175d5e5e589d70082babcffe9c56a3ad204a43c186d325da",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-original-confirmed",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-original-confirmed-1440-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "cf14704b61becae443a290441149998a538832643987edbefdf213e2ec944068",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-original-confirmed",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-original-confirmed-1024-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "af3cf48dbd184856022bb80a33a8624d8e13d0f4489b94fea695fd7e9238d81c",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-original-confirmed",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-original-confirmed-390-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "42643f81366f61a41d7847799d3f414f333ec3b7de541a43825794861ae35ae8",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-original-confirmed",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-original-confirmed-320-900.png",
+      "newRoute": "/admin/invoices/5",
+      "screenshotSha256": "f509e7026865f433f65efd4f9aa89bac29de744d8326fef547960d906f797865",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-close-confirmation",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-close-confirmation-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "fc0ea837a5fa72393447dbb8e001f0a0d5c2fbbf993b133b92261e7f9583c264",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-close-confirmation",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-close-confirmation-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "1e38b506e45986b412fe96730003dd37c64e53631c6832249dd7e0e2a7d13152",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-close-confirmation",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-close-confirmation-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "8afefa21acf3c8f406fd9484491c827a50933a3f2a3882273ebc6eae2ad46811",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-close-confirmation",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-close-confirmation-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "2007cf24d84805c36a33223513c985daed4247922ebbc4d651b94074a7ae65e3",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-closed-request-preserved",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-closed-request-preserved-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "6116486e6ecfcecf39332de6dfcbc9a9503b9160b2ec67bc7f4ec3aa8c2bfe4b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-closed-request-preserved",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-closed-request-preserved-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "3bc4d3cdd0ed1eeba2cf8a6de8f06ea01a74cb8b8202dd0c3d5ec6ac487a2889",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-closed-request-preserved",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-closed-request-preserved-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "f466f96a59764013f1aa43c7d30eaad2714243cf5a0cb1bca1fd303cc87d114d",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-closed-request-preserved",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-closed-request-preserved-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "de910569001cbf7752f6b6791a922b08a1b9f5a0068123faf757a7c9152d3b69",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-credited",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-credited-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "9f16a29b51da0acb2026faaf5159500ef403afa5f73aa6e9f2b88c1161e21c86",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-credited",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-credited-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "cde996ff34f5d7a3c7868d8f852c3590b05bf30b3277eba5fc16cd405aafa737",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-credited",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-credited-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "7e79512d00bd9f7a64cfc3139dd4f71e632d14bef26eebcddb9731bf8434f43b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-credited",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-credited-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "54b34fa9f4c01a993d6eeb0002eeb3ef6cf2c56861bb7c5e0c9a22177c60281f",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-account",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-account-1440-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "32f2579e50d29d149920d79934de37110ad648f14d232182435e8a528f1fb4b1",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-account",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-account-1024-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "51c2df32f3233a8103a620d17c0bee0a20f7b9860f67e88ff582dc8b8376485a",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-account",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-account-390-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "560b21bc82abc299df792885da14c1d113ed7983eac4ca4b89248757351e4136",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "final-customer-account",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/final-customer-account-320-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "7ceab0a30559e03930bdde37412cb31cccf724c911fa9e331491eb28d0bd875b",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "corrupt-recovery-protected",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/corrupt-recovery-protected-1440-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "861ed2f1cd3d66f6fd53dd0f7e8b336a460ff7eba9eff37ec0d2ab5bf4044c68",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "corrupt-recovery-protected",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/corrupt-recovery-protected-1024-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "3aa327e7cd07c2db07f96cabcb4c05f34a3cf530238d442c0135495d1a191fdd",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "corrupt-recovery-protected",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/corrupt-recovery-protected-390-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "ab88cd7370f89ea9986b607832c0dbdf1d34b2d5321655d015d469d9ba70f329",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    },
+    {
+      "scenario": "corrupt-recovery-protected",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/topup-liability-20261016/corrupt-recovery-protected-320-900.png",
+      "newRoute": "/admin/invoices/4",
+      "screenshotSha256": "1cc41db55980c20a028ed99e021ede0e406a0b7cb3fd4d48c5573dc02242ba09",
+      "usableForLayoutProof": true,
+      "backendBaseline": "05970b5",
+      "frontendBaseline": "1a7645b",
+      "captureMode": "fullPage"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "initial",
+      "checks": [
+        "required note and explicit checkbox; draft modal four widths and short screen"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "success",
+      "checks": [
+        "cancelled draft cleared, no funds request",
+        {
+          "savedBeforeSend": true,
+          "current": "credited",
+          "original": "pending_liability",
+          "ledger": 9
+        },
+        "list liability amount cleared, original settlement retained"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "unknown",
+      "checks": [
+        {
+          "realAPICommitted": 201,
+          "clientSaw": 503,
+          "persistedBeforeDispatch": true,
+          "shortScreenButton": {
+            "x": 181,
+            "y": 366,
+            "width": 88,
+            "height": 44
+          }
+        }
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/admin/invoices/3/topup-liability/resolve"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ]
+    },
+    {
+      "name": "isolation",
+      "checks": [
+        {
+          "identityFailurePOSTs": 0,
+          "changedEmployeePOSTs": 0,
+          "originalPreserved": true
+        },
+        "same original key/payload replay200 after identity restored, exactly one write request"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/me"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ]
+    },
+    {
+      "name": "reader-login",
+      "checks": [
+        "reader real page no write control and direct POST403"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 403,
+          "path": "/api/v1/admin/invoices/4/topup-liability/resolve"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      ]
+    },
+    {
+      "name": "conflict-draft",
+      "checks": [
+        "prepared versioned actual UI request before concurrent test change"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "conflict",
+      "checks": [
+        "actual database version changed after form read, POST409 preserves original"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/admin/invoices/4/topup-liability/resolve"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ]
+    },
+    {
+      "name": "conflict-review",
+      "checks": [
+        "409 requires explicit latest; original payload intact; no new request until rejected request explicitly ended"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "customer-final",
+      "checks": [
+        {
+          "customerBalance": 101102,
+          "reservedLiability": 2468
+        },
+        {
+          "noSettlementInvoice": 7
+        }
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "empty-and-errors",
+      "checks": [
+        "explicitly ended rejected request, no automatic new operation",
+        "real no-settlement empty state; delayed read loading; read503 blocks writes and explicit retry recovers"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/admin/invoices/5/topup-liability"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ]
+    },
+    {
+      "name": "limited-final",
+      "checks": [
+        "sales limited employee real page and direct read/write404"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 404,
+          "path": "/api/v1/admin/invoices/5"
+        },
+        {
+          "status": 404,
+          "path": "/api/v1/admin/invoices/5/topup-liability"
+        },
+        {
+          "status": 404,
+          "path": "/api/v1/admin/invoices/5/topup-liability/resolve"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ]
+    },
+    {
+      "name": "final-session-expiry",
+      "checks": [
+        "injected me401 redirects admin-login, zero mutation and exact original preserved",
+        "login and final original replay200, storage cleared only after receipt and live identity"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 401,
+          "path": "/api/v1/me"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ]
+    },
+    {
+      "name": "final-close-draft",
+      "checks": [
+        "final frontend confirmation ready before concurrent version change"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "final-close",
+      "checks": [
+        "actual POST409 then pending-close no discard prompt; waits for exit transition; original intact and explicit read required"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/admin/invoices/4/topup-liability/resolve"
+        }
+      ],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ]
+    },
+    {
+      "name": "final-customer",
+      "checks": [
+        {
+          "balance_cents": 102336,
+          "pending_liability_cents": 1234
+        }
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    },
+    {
+      "name": "corrupt-recovery",
+      "checks": [
+        "after known rejected original ended, malformed injected storage blocks all new writes with Chinese message, no raw parse leak; only exact synthetic value removed"
+      ],
+      "applicationJavaScriptErrors": [],
+      "expectedAPIFailures": [],
+      "consoleErrors": []
+    }
+  ],
+  "databaseProof": {
+    "invoices": [
+      {
+        "id": 2,
+        "version": 3,
+        "amount_cents": 1234,
+        "topup_status": "credited",
+        "resolution_id": 2,
+        "invoice_status": "paid",
+        "original_ledger_id": null,
+        "original_settlement": "pending_liability",
+        "resolution_ledger_id": 9
+      },
+      {
+        "id": 3,
+        "version": 3,
+        "amount_cents": 1234,
+        "topup_status": "credited",
+        "resolution_id": 3,
+        "invoice_status": "paid",
+        "original_ledger_id": null,
+        "original_settlement": "pending_liability",
+        "resolution_ledger_id": 10
+      },
+      {
+        "id": 4,
+        "version": 4,
+        "amount_cents": 1234,
+        "topup_status": "pending_liability",
+        "resolution_id": null,
+        "invoice_status": "paid",
+        "original_ledger_id": null,
+        "original_settlement": "pending_liability",
+        "resolution_ledger_id": null
+      },
+      {
+        "id": 5,
+        "version": 3,
+        "amount_cents": 1234,
+        "topup_status": "credited",
+        "resolution_id": 4,
+        "invoice_status": "paid",
+        "original_ledger_id": null,
+        "original_settlement": "pending_liability",
+        "resolution_ledger_id": 11
+      },
+      {
+        "id": 6,
+        "version": 3,
+        "amount_cents": 1234,
+        "topup_status": "credited",
+        "resolution_id": 1,
+        "invoice_status": "paid",
+        "original_ledger_id": null,
+        "original_settlement": "pending_liability",
+        "resolution_ledger_id": 8
+      },
+      {
+        "id": 7,
+        "version": 1,
+        "amount_cents": 1234,
+        "topup_status": "created",
+        "resolution_id": null,
+        "invoice_status": "unpaid",
+        "original_ledger_id": null,
+        "original_settlement": null,
+        "resolution_ledger_id": null
+      }
+    ],
+    "customer_id": 2,
+    "balance_cents": 102336,
+    "gateway_ledgers": 4,
+    "resolution_count": 4,
+    "resolution_audits": 4,
+    "association_violations": 0,
+    "gateway_credited_cents": 4936,
+    "remaining_reserved_cents": 1234,
+    "readonly_resolution_audits": 0,
+    "original_succeeded_payments": 5,
+    "original_pending_settlements": 5
+  },
+  "excludedAttempts": [
+    {
+      "name": "customer",
+      "reason": "CLI incorrectly expected login redirect /console; actual redirects /. No acceptance result; rerun customer-final passed."
+    },
+    {
+      "name": "limited",
+      "reason": "CLI expected resource error text rather than actual record error. No acceptance result; rerun limited-final passed."
+    },
+    {
+      "name": "final-unknown",
+      "reason": "CLI checked dialog count before exit animation ended; actual payment POST committed and original was retained. Attempt not counted as PASS. Final close and final session expiry independently reran successful checks."
+    }
+  ]
+}
