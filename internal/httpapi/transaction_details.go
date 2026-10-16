@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -140,6 +141,20 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	var topupJSON []byte
+	if invoice["invoice_kind"] == "topup" {
+		err = tx.QueryRow(ctx, `SELECT jsonb_build_object('status',t.status,'settings_version',t.settings_version,'accepted_at',t.accepted_at,'failure_code',coalesce(s.failure_code,'')) FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1`, id).Scan(&topupJSON)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		var topup any
+		if err = json.Unmarshal(topupJSON, &topup); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		invoice["topup"] = topup
+	}
 	items, err := collectTransactionRows(tx.Query(ctx, `SELECT ii.id,ii.description,ii.item_type,ii.amount_cents,ii.renewal_base_cents,ii.renewal_discount_cents,ii.renewal_discount_percent,ii.renewal_promo_code,ii.renewal_fixed_discount_cents,ii.renewal_discount_limit,ii.renewal_discount_ordinal,ii.upgrade_base_cents,ii.upgrade_discount_cents,ii.upgrade_promo_code,s.id AS service_id,s.name AS service_name
  FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id LEFT JOIN services s ON s.id=ii.service_id AND s.user_id=i.user_id
  WHERE ii.invoice_id=$1 ORDER BY ii.id`, id))
@@ -181,7 +196,7 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	ledger, err := collectTransactionRows(tx.Query(ctx, `SELECT l.id,l.entry_type,l.delta_cents,l.balance_after,l.created_at
  FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id AND i.user_id=l.user_id
- WHERE l.reference_type='invoice' AND i.id=$1 ORDER BY l.id DESC LIMIT 50`, id))
+ WHERE l.reference_type IN ('invoice','gateway_topup') AND i.id=$1 ORDER BY l.id DESC LIMIT 50`, id))
 	if err != nil {
 		s.fail(w, r, err)
 		return

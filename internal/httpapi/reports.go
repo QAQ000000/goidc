@@ -76,7 +76,7 @@ func (s *Server) incomeReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.db.Pool.Query(r.Context(), `
-WITH cash AS (SELECT i.id invoice_id,i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+WITH cash AS (SELECT p.invoice_id,p.user_id,p.amount_cents,p.completed_at received_at FROM payment_transactions p WHERE p.status='succeeded'
 UNION ALL SELECT r.invoice_id,r.user_id,r.amount_cents,r.received_at FROM credit_repayments r)
 SELECT to_char(date_trunc('month', received_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM'),
        coalesce(sum(amount_cents),0)::bigint, count(DISTINCT invoice_id)::bigint

@@ -110,6 +110,9 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	if err != nil {
 		return out, err
 	}
+	if kind == "topup" {
+		return out, conflict("topup_external_payment_required", "充值只能使用在线支付渠道，不能使用余额或信用")
+	}
 	if ownerID != userID {
 		return out, pgx.ErrNoRows
 	}
@@ -312,7 +315,11 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	}
 	// max_balance_cents=0 keeps the migration/legacy default meaning of "no
 	// configured ceiling" so default installations continue to allow top-ups.
-	if maxBalance > 0 && balance+amount > maxBalance {
+	var reserved int64
+	if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=$1 AND status='accepted'", userID).Scan(&reserved); err != nil {
+		return 0, false, err
+	}
+	if maxBalance > 0 && (balance+amount > maxBalance || reserved > maxBalance-balance-amount) {
 		return 0, false, conflict("topup_balance_limit", fmt.Sprintf("充值后余额将超过上限 %d 分", maxBalance))
 	}
 	balance += amount
@@ -412,6 +419,9 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		Scan(&out.InvoiceID, &userID, &orderID, &out.InvoiceNo, &out.AmountCents, &out.Status, &kind)
 	if err != nil {
 		return out, err
+	}
+	if kind == "topup" {
+		return out, conflict("topup_refund_not_supported", "充值退款尚未开放，请联系财务核对")
 	}
 	var creditRemaining int64
 	var creditRefunded bool

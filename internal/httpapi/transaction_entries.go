@@ -17,7 +17,7 @@ const transactionEntries = `(
  'income'::text AS direction,coalesce(nullif(pt.external_transaction_id,''),pt.provider_payment_id) AS transaction_no,
  '支付成功 · '||i.invoice_no AS description,
  CASE WHEN EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
- WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END AS kind,NULL::bigint AS balance_after
+ WHEN i.invoice_kind='topup' THEN 'topup' WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END AS kind,NULL::bigint AS balance_after
  FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE pt.status='succeeded'
  UNION ALL
  SELECT 'external-refund:'||r.id,'external_refund',r.id,r.user_id,i.id,i.invoice_no,r.received_at,
@@ -27,12 +27,12 @@ const transactionEntries = `(
  UNION ALL
  SELECT 'ledger:'||l.id,'ledger',l.id,l.user_id,i.id,i.invoice_no,l.created_at,
  CASE WHEN l.reference_type='admin_topup' THEN 'admin_topup' ELSE 'balance' END,abs(l.delta_cents),
- CASE WHEN l.delta_cents<0 THEN 'expense' WHEN l.delta_cents>0 THEN 'income' ELSE 'neutral' END,
+ CASE WHEN l.reference_type='gateway_topup' THEN 'neutral' WHEN l.delta_cents<0 THEN 'expense' WHEN l.delta_cents>0 THEN 'income' ELSE 'neutral' END,
  'L-'||l.id,coalesce(nullif(l.note,''),l.entry_type),
  CASE WHEN l.entry_type='topup' THEN 'topup'
  WHEN l.entry_type='payment' AND EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
  WHEN l.entry_type='payment' AND i.order_id IS NOT NULL THEN 'product' ELSE 'other' END,l.balance_after
- FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type='invoice' AND i.id=l.reference_id AND i.user_id=l.user_id
+ FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type IN ('invoice','gateway_topup') AND i.id=l.reference_id AND i.user_id=l.user_id
  UNION ALL
  SELECT 'invoice:'||i.id,'invoice',i.id,i.user_id,i.id,i.invoice_no,i.paid_at,
  CASE WHEN EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) THEN 'credit' ELSE 'unrecorded' END,

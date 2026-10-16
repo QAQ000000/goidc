@@ -59,6 +59,9 @@ func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = lockOnlineTopupCustomer(ctx, tx, invoiceID); err != nil {
+		return out, err
+	}
 	if err = checkPaymentConfigurationVersion(ctx, tx, provider); err != nil {
 		return out, err
 	}
@@ -108,6 +111,14 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 	}
 	if pending {
 		return out, conflict("invoice_payment_pending", "账单已有待处理支付，请继续原支付单")
+	}
+	if kind == "topup" {
+		if !realPaymentProvider(provider) {
+			return out, conflict("topup_external_payment_required", "充值仅允许真实在线支付渠道")
+		}
+		if err = acceptOnlineTopup(ctx, tx, userID, invoiceID); err != nil {
+			return out, err
+		}
 	}
 	var sealed []byte
 	if realPaymentProvider(provider) {
@@ -189,6 +200,10 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	topup, err := lockOnlineTopupCustomer(ctx, tx, invoiceID)
+	if err != nil {
+		return out, err
+	}
 	if check != nil {
 		if err = authorizePaymentCheck(ctx, tx, check); err != nil {
 			return out, err
@@ -234,7 +249,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: "succeeded", Replayed: true}
 		return out, finishPaymentCheck(ctx, tx, check, "succeeded")
 	}
-	if txStatus == "failed" && status == "succeeded" {
+	if txStatus == "failed" && status == "succeeded" && !topup {
 		return out, conflict("payment_state_conflict", "失败支付不能直接标记成功")
 	}
 	if len(externalTransaction) > 0 {
@@ -256,14 +271,21 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		if err = requireInvoiceReviewed(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
-		if err = settleExternalInvoice(ctx, tx, invoiceID); err != nil {
+		if topup {
+			err = settleOnlineTopup(ctx, tx, invoiceID, txID)
+		} else {
+			err = settleExternalInvoice(ctx, tx, invoiceID)
+		}
+		if err != nil {
 			return out, err
 		}
 		if err = s.QueuePaymentSuccessNotifications(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
-		if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, txID); err != nil {
-			return out, err
+		if !topup {
+			if err = s.QueueAffiliateCommissions(ctx, tx, invoiceID, txID); err != nil {
+				return out, err
+			}
 		}
 	}
 	if _, err = tx.Exec(ctx, "UPDATE payment_transactions SET status=$2,completed_at=CASE WHEN $2 IN ('succeeded','failed') THEN now() ELSE completed_at END,raw_result=$3,next_reconcile_at=NULL,updated_at=now() WHERE id=$1", txID, status, json.RawMessage(raw)); err != nil {

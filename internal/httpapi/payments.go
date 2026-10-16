@@ -60,6 +60,18 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	paymentContext := store.WithPaymentConfiguration(r.Context(), configuration)
+	if details.InvoiceKind == "topup" {
+		if bearerCredential(r) != "" {
+			writeError(w, 403, "session_required", "充值需要客户浏览器会话")
+			return
+		}
+		cookie, e := r.Cookie("zjmfgo_session")
+		if e != nil {
+			writeError(w, 401, "unauthorized", "请先登录")
+			return
+		}
+		paymentContext = store.WithTopupSession(paymentContext, tokenHash(cookie.Value))
+	}
 	if strings.TrimSpace(input.ChannelInstanceID) != "" {
 		paymentContext = store.WithPaymentChannelInstance(paymentContext, strings.TrimSpace(input.ChannelInstanceID))
 	}
