@@ -994,7 +994,7 @@ function InvoiceActions({
      originalCreditOwner.current=u.id;
      creditOwner.current=u.id;actorKey.current=`credit-pay-pending:${u.id}:${invoice.id}`;
      try{const raw=sessionStorage.getItem(actorKey.current);if(raw){const saved:unknown=JSON.parse(raw);if(!saved||typeof saved!=="object"||!("key" in saved)||typeof saved.key!=="string"||!("body" in saved)||typeof saved.body!=="string")throw new Error("原信用付款恢复资料无法读取，请联系支持核实后再付款");setCreditPending({key:saved.key,body:saved.body});}}
-     catch(e){setCreditOwnerError((e as Error).message);return;}
+     catch{setCreditOwnerError("原信用付款恢复资料无法读取，请联系支持核实后再付款。");return;}
      setCreditOwnerReady(true);
    }).catch((e:Error)=>{if(!controller.signal.aborted)setCreditOwnerError(`无法核实信用付款账户：${e.message}`);});
    return()=>controller.abort();
