@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -123,7 +124,20 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 		fixtureConfig.EpayKey = "integration-epay-secret"
 		fixtureConfig.EpayTypes = []string{"alipay", "wxpay"}
 	}
-	server := httptest.NewServer(New(db, fixtureConfig, slog.Default()).Handler())
+	server := httptest.NewUnstartedServer(New(db, fixtureConfig, slog.Default()).Handler())
+	if address := os.Getenv("ZJMFGO_BROWSER_LISTEN_ADDR"); address != "" {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil || host != "127.0.0.1" {
+			t.Fatal("browser fixture listen address must use 127.0.0.1")
+		}
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.Listener.Close()
+		server.Listener = listener
+	}
+	server.Start()
 	defer server.Close()
 	var schema string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
