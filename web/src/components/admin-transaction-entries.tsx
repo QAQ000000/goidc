@@ -22,11 +22,12 @@ type Entry = {
   description: string; kind: string; balance_after: number | null;
 };
 type EntriesPage = { items: Entry[]; total: number; limit: number; offset: number };
+type CashSummary = { gateway_income_cents: number; external_refund_cents: number; net_gateway_cents: number };
 const kinds = { topup: "充值", product: "产品", renew: "续费", other: "其他" };
 const kindValues = Object.keys(kinds);
 const defaults = { customer_id: "", from: "", to: "", direction: "", channel: "", min_cents: "", max_cents: "", limit: "20" };
 const channels: Record<string, string> = { balance: "账户余额", admin_topup: "后台充值", credit: "信用额度", unrecorded: "未记录渠道", ...paymentLabels };
-const sources: Record<string, string> = { payment: "成功支付", ledger: "余额记录", invoice: "已付账单" };
+const sources: Record<string, string> = { payment: "成功支付", external_refund: "外部退款到账", ledger: "余额记录", invoice: "已付账单" };
 const directions: Record<string, string> = { income: "收入", expense: "支出", neutral: "账单结算" };
 
 // Convert decimal input without floating-point currency arithmetic.
@@ -56,6 +57,9 @@ export function AdminTransactionEntriesView() {
   params.set("limit", String(limit));
   params.set("offset", String(nav.page * limit));
   const resource = useResource<EntriesPage>(allowed && nav.ready ? `/admin/transactions/page?${params}` : null, false);
+  const summaryParams = new URLSearchParams(params);
+  summaryParams.delete("limit"); summaryParams.delete("offset");
+  const summary = useResource<CashSummary>(allowed && nav.ready ? `/admin/transactions/summary?${summaryParams}` : null, false);
   const returnHref = `/admin/transactions${nav.suffix}`;
   function apply(form: HTMLFormElement) {
     const values = new FormData(form);
@@ -71,7 +75,7 @@ export function AdminTransactionEntriesView() {
   return <Workspace title="交易流水" admin>
     <div className="admin-page-heading mb-5 flex flex-wrap items-start justify-between gap-3">
       <div><h1 className="text-xl font-semibold">交易流水</h1><p className="mt-1 text-sm text-muted-foreground">查看成功支付、余额收支和已完成账单；金额单位为人民币。</p></div>
-      <Button variant="outline" onClick={resource.refresh} disabled={!allowed}><RefreshCw size={15} />刷新</Button>
+      <Button variant="outline" onClick={() => { resource.refresh(); summary.refresh(); }} disabled={!allowed}><RefreshCw size={15} />刷新</Button>
     </div>
     {!allowed ? <p role="alert" className="rounded border p-6 text-destructive">无权查看交易流水，需要账单查看权限。</p> : !nav.ready ? <Loading /> : <>
       <AdminStatusTabs value={nav.status} states={kinds} label="交易类型" onChange={value => { nav.setStatus(value); nav.setPage(0); }} />
@@ -94,6 +98,10 @@ export function AdminTransactionEntriesView() {
         </div>}
         {filterError && <p role="alert" className="mt-3 text-sm text-destructive">{filterError}</p>}
       </form>
+      {summary.error ? <Failure error={summary.error} retry={summary.refresh} /> : !summary.data ? <Loading /> : <section aria-label="网关收退款汇总" className="mb-5 grid gap-3 sm:grid-cols-3">
+        {[["网关收款", summary.data.gateway_income_cents], ["外部退款到账", summary.data.external_refund_cents], ["网关净额", summary.data.net_gateway_cents]].map(([label, amount]) => <div key={label} className="min-w-0 rounded border bg-card p-4"><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 break-all text-xl font-semibold">{money(Number(amount))}</p></div>)}
+        <p className="text-xs text-muted-foreground sm:col-span-3">按当前筛选汇总全部匹配记录；原收款与已确认外部退款分别保留，净额为两者之差。余额和信用结算不计入此汇总。</p>
+      </section>}
       {resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <>
         <div className="overflow-x-auto rounded border bg-card"><Table>
           <TableHeader><TableRow>{["客户名", "时间", "付款方式", "描述", "金额", "销售（当前）", "流水号", "类型 / 来源", "操作"].map(label => <TableHead key={label} className="whitespace-nowrap">{label}</TableHead>)}</TableRow></TableHeader>
