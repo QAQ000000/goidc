@@ -16,7 +16,7 @@ const messages: Record<TopupState["status"], string> = {
   cancelled: "充值账单已取消。",
 };
 
-export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id: number; version: number; amount_cents: number; import_review_required: boolean; payment_pending: boolean; payments?: PaymentRecord[]; topup?: TopupState }; admin: boolean; refresh: () => void }) {
+export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id: number; status?: string; version: number; amount_cents: number; import_review_required: boolean; payment_pending: boolean; payments?: PaymentRecord[]; topup?: TopupState }; admin: boolean; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [unknown, setUnknown] = useState(false);
@@ -44,7 +44,7 @@ export function TopupInvoiceActions({ invoice, admin, refresh }: { invoice: { id
     finally { lock.current = false; setBusy(false); }
   }
   return <div className="space-y-3 max-w-xl">
-    <p role="status" className="text-sm">{invoice.topup?.resolution ? "原充值收款已补入账户余额，请查看余额流水。" : status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
+    <p role="status" className="text-sm">{invoice.status === "refunded" ? "已退款，原入账及余额冲正保留历史。" : invoice.topup?.resolution ? "原充值收款已补入账户余额，请查看余额流水。" : status ? messages[status] : "正在读取充值状态，请刷新账单确认后再操作。"}</p>
     {!admin && invoice.topup?.resolution && <p className="text-sm">入账金额 {money(invoice.topup.resolution.amount_cents)} · {date(invoice.topup.resolution.created_at)} · 余额流水 #{invoice.topup.resolution.ledger_id}</p>}
     {admin && <TopupLiabilityPanel invoiceId={invoice.id} refreshInvoice={refresh} />}
     <div className="flex flex-wrap gap-2">

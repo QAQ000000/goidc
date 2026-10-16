@@ -229,7 +229,7 @@ function RefundPanel({
   }
   async function write(url: string, body: object, kind: Pending["kind"], recordId: number | null, original?: Pending) {
     if (running.current || !storageReady || storageError || (!original && pending)) return;
-    const request: Pending = original ?? { path: url, body: JSON.stringify(body), key: `external-refund-${crypto.randomUUID()}`, kind, recordId, rejected: false };
+    const request: Pending = original ? { ...original, rejected: false } : { path: url, body: JSON.stringify(body), key: `external-refund-${crypto.randomUUID()}`, kind, recordId, rejected: false };
     running.current = true; setBusy(true); setError(""); setNotice("");
     let dispatched = false;
     let responseReceived = false;
@@ -238,7 +238,7 @@ function RefundPanel({
       if (!mounted.current) return;
       try { sessionStorage.setItem(storage, JSON.stringify(request)); }
       catch { throw new Error("浏览器无法保存原退款请求，已停止发送。请检查浏览器存储。"); }
-      setPending(request); dispatched = true;
+      setPending(request); setConflict(false); setReviewed(false); setLatestFacts(""); dispatched = true;
       const result = await api<{ refund: Refund; replayed: boolean }>(request.path, { method: "POST", body: request.body, headers: { "Idempotency-Key": request.key } });
       responseReceived = true;
       if (topup && (!result?.refund?.reversal || result.refund.reversal.status !== (request.kind === "create" ? "pending" : request.kind === "confirm" ? "applied" : "released") || result.refund.reversal.amount_cents !== invoice.amount_cents || (request.kind === "confirm" && (!Number.isSafeInteger(result.refund.reversal.ledger_id) || (result.refund.reversal.ledger_id ?? 0) < 1)))) throw new Error("充值冲正回执不完整，请保留原请求核实冻结及扣减事实。");

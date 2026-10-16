@@ -1335,13 +1335,13 @@ export function InvoiceDetailView({
                   {data.ledger.map((entry) => (
                     <TableRow key={`balance-${entry.id}`}>
                       <TableCell>
-                        {data.invoice_kind === "topup" ? "在线充值入账" : entry.entry_type === "refund"
+                        {entry.entry_type === "refund" && entry.delta_cents < 0 ? "外部退款余额冲正" : data.invoice_kind === "topup" ? "在线充值入账" : entry.entry_type === "refund"
                           ? "余额退款"
                           : "余额支付"}
                       </TableCell>
                       <TableCell>#{entry.id}</TableCell>
                       <TableCell className="money">
-                        {money(Math.abs(entry.delta_cents))}
+                        {money(entry.entry_type === "refund" && entry.delta_cents < 0 ? entry.delta_cents : Math.abs(entry.delta_cents))}
                       </TableCell>
                       <TableCell>{time(entry.created_at)}</TableCell>
                       <TableCell>
