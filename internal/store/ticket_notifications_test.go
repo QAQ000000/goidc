@@ -68,6 +68,9 @@ func TestTicketNotificationDeliveryTransactions(t *testing.T) {
 	var customerURL, staffURL string
 	must(db.Pool.QueryRow(ctx, `SELECT d.rendered_body FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.kind='staff_replied' AND d.channel='email' AND d.recipient_kind='user'`).Scan(&customerURL))
 	must(db.Pool.QueryRow(ctx, `SELECT d.rendered_body FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.kind='customer_created' AND d.channel='email'`).Scan(&staffURL))
+	if !strings.Contains(customerURL, "\n") {
+		t.Fatal("template did not render real newlines")
+	}
 	if !strings.Contains(customerURL, fmt.Sprintf("https://billing.example.test/console/tickets/%d", ticket)) || !strings.Contains(staffURL, fmt.Sprintf("https://billing.example.test/admin/tickets/%d", ticket)) {
 		t.Fatalf("incorrect URLs customer=%q staff=%q", customerURL, staffURL)
 	}
@@ -225,5 +228,55 @@ func TestTicketNotificationStaffEligibilityAndSkips(t *testing.T) {
 	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.reply_id=$1 AND recipient_id=$2`, reply, staff).Scan(&count))
 	if count != 0 {
 		t.Fatal("NULL department scope bypassed")
+	}
+}
+
+func TestTicketNotificationInvalidEmailPayloadSkips(t *testing.T) {
+	db := isolatedTestStore(t)
+	ctx := t.Context()
+	staff, owner := topUpFixture(t, db)
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := db.Pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, staff)
+	must(err)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('ticket-mail','mail','smtp','Local test',true);UPDATE notification_templates SET active=true WHERE channel='email' AND kind='ticket_customer_created'`)
+	must(err)
+	cases := []struct{ name, subject, body, recipient string }{
+		{"long_subject", strings.Repeat("x", 240), "Body", "topup-root@example.test"},
+		{"long_body", "Subject", strings.Repeat("文", 100000), "topup-root@example.test"},
+		{"newline_header", "Subject\r\nBcc: other@example.test", "Body", "topup-root@example.test"},
+		{"invalid_recipient", "Subject", "Body", "Display Name <root@example.test>"},
+	}
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := db.Pool.Exec(ctx, `UPDATE users SET email=$2 WHERE id=$1`, staff, tc.recipient)
+			must(err)
+			_, err = db.Pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, staff)
+			must(err)
+			tx, err := db.Pool.Begin(ctx)
+			must(err)
+			defer tx.Rollback(ctx)
+			var ticket int64
+			must(tx.QueryRow(ctx, `INSERT INTO tickets(ticket_no,user_id,subject,body,assignee_id) VALUES($1,$2,$3,$4,$5) RETURNING id`, fmt.Sprintf("TN-INVALID-%d", i), owner, tc.subject, tc.body, staff).Scan(&ticket))
+			must(db.QueueTicketNotification(ctx, tx, ticket, 0, owner, "customer_created", "https://billing.example.test"))
+			must(tx.Commit(ctx))
+			var outcome, reason, rendered string
+			must(db.Pool.QueryRow(ctx, `SELECT d.outcome,d.reason,d.rendered_body FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.ticket_id=$1 AND d.channel='email'`, ticket).Scan(&outcome, &reason, &rendered))
+			if outcome != "skipped" || reason != "invalid_email_payload" {
+				t.Fatalf("outcome=%s reason=%s", outcome, reason)
+			}
+			if !strings.Contains(rendered, tc.body) {
+				t.Fatal("user body truncated")
+			}
+		})
+	}
+	var count int
+	must(db.Pool.QueryRow(ctx, `SELECT count(*) FROM email_outbox`).Scan(&count))
+	if count != 0 {
+		t.Fatalf("invalid payload queued %d jobs", count)
 	}
 }

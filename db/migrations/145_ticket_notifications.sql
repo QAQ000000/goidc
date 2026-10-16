@@ -23,7 +23,7 @@ CREATE TABLE ticket_notification_deliveries (
 );
 CREATE UNIQUE INDEX ticket_notification_address ON ticket_notification_deliveries(event_id,channel,normalized_address) WHERE outcome='queued';
 CREATE INDEX ticket_notification_ticket ON ticket_notification_events(ticket_id,id);
-INSERT INTO notification_templates(channel,kind,name,subject,body,active) SELECT channel,kind,name,'工单 {{ticket_no}}：{{subject}}','{{author_name}}\n{{body}}\n{{ticket_url}}',false FROM (VALUES
+INSERT INTO notification_templates(channel,kind,name,subject,body,active) SELECT channel,kind,name,'工单 {{ticket_no}}：{{subject}}',E'{{author_name}}\n{{body}}\n{{ticket_url}}',false FROM (VALUES
  ('email','ticket_customer_created','客户新建工单'),('email','ticket_customer_replied','客户回复工单'),('email','ticket_staff_replied','客服回复工单'),
  ('sms','ticket_customer_created','客户新建工单'),('sms','ticket_customer_replied','客户回复工单'),('sms','ticket_staff_replied','客服回复工单')) AS v(channel,kind,name);
 CREATE TABLE ticket_mutation_receipts (

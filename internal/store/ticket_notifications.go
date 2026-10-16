@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -178,6 +180,12 @@ func (s *Store) queueTicketRecipient(ctx context.Context, tx pgx.Tx, eventID int
 	body = replacer.Replace(body)
 	if reason == "" && channel == "sms" && (!ValidSMSRecipient(normalized) || len(body) > 4096) {
 		reason = "invalid_sms_payload"
+	}
+	if reason == "" && channel == "email" {
+		parsed, parseErr := mail.ParseAddress(normalized)
+		if parseErr != nil || parsed.Address != normalized || len(normalized) > 254 || strings.ContainsAny(normalized, "\r\n\x00") || utf8.RuneCountInString(subject) < 1 || utf8.RuneCountInString(subject) > 240 || strings.ContainsAny(subject, "\r\n\x00") || utf8.RuneCountInString(body) < 1 || utf8.RuneCountInString(body) > 100000 || strings.ContainsRune(body, 0) {
+			reason = "invalid_email_payload"
+		}
 	}
 	outcome := "queued"
 	if reason != "" {
