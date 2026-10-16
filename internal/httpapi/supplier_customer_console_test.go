@@ -125,3 +125,51 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 		})
 	}
 }
+
+// A read-only service detail must not depend on decrypting operational credentials.
+func TestSupplierCapabilitiesWithoutCredentials(t *testing.T) {
+	for _, change := range []string{"missing_key", "invalid_ciphertext", "unknown_provider"} {
+		t.Run(change, func(t *testing.T) {
+			f := supplierSetup(t)
+			f.publish(t, f.pid, "local-vm")
+			sid, _ := f.purchase(t, f.pid, "capability-secret-independent")
+			j := f.claim(t)
+			if err := f.db.ProcessProvisionJob(t.Context(), *j); err != nil {
+				t.Fatal(err)
+			}
+			switch change {
+			case "missing_key":
+				f.db.ProvisionEncryptionKey = nil
+			case "invalid_ciphertext":
+				if _, err := f.db.Pool.Exec(t.Context(), `UPDATE supplier_accounts SET credentials_encrypted='invalid'::bytea WHERE id=$1`, f.supplierID); err != nil {
+					t.Fatal(err)
+				}
+			case "unknown_provider":
+				if _, err := f.db.Pool.Exec(t.Context(), `UPDATE supplier_accounts SET provider='unknown-compiled-provider' WHERE id=$1`, f.supplierID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path := fmt.Sprintf("/api/v1/services/%d", sid)
+			for _, caller := range []struct{ path, token string }{{path, f.customer}, {fmt.Sprintf("/api/v1/admin/services/%d", sid), f.root}} {
+				w := request(f.h, "GET", caller.path, nil, caller.token, "")
+				expect(t, w, 200)
+				caps := data(t, w)["supplier_capabilities"].(map[string]any)
+				if caps["power"] != (change != "unknown_provider") {
+					t.Fatal("incorrect public capabilities")
+				}
+				if caller.token == f.customer && (caps["create"] != false || caps["sync"] != false) {
+					t.Fatal("customer administrator capabilities exposed")
+				}
+			}
+			// Operational console access must still reject unavailable secrets/provider.
+			w := request(f.h, "POST", path+"/vnc", map[string]any{}, f.customer, "")
+			if w.Code == 200 || f.consoleCalls.Load() != 0 {
+				t.Fatal("invalid operational credentials reached upstream")
+			}
+			// Password writes retain encryption-key validation; do not enqueue with no key.
+			if change == "missing_key" {
+				expect(t, request(f.h, "POST", path+"/reset-password", map[string]any{"password": "Valid-Test-Password!"}, f.customer, "capability-missing-key-write"), 409)
+			}
+		})
+	}
+}

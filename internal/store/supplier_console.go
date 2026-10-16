@@ -159,20 +159,22 @@ func (s *Store) ServiceVNC(ctx context.Context, actor, serviceID int64, admin bo
 // ServiceSupplierCapabilitiesTx is called only after the service visibility check.
 // It reads the immutable service binding, never the current product binding or a remote API.
 func (s *Store) ServiceSupplierCapabilitiesTx(ctx context.Context, tx pgx.Tx, serviceID int64, admin bool) (supplier.Capabilities, error) {
-	var id int64
+	var provider string
 	var caps supplier.Capabilities
-	err := tx.QueryRow(ctx, `SELECT a.id FROM services s JOIN supplier_accounts a ON a.id=(s.delivery_snapshot->>'supplier_id')::bigint JOIN supplier_product_bindings b ON b.id=(s.delivery_snapshot->>'binding_id')::bigint AND b.supplier_id=a.id WHERE s.id=$1 AND s.provision_mode='supplier' AND a.active`, serviceID).Scan(&id)
+	err := tx.QueryRow(ctx, `SELECT a.provider FROM services s JOIN supplier_accounts a ON a.id=(s.delivery_snapshot->>'supplier_id')::bigint JOIN supplier_product_bindings b ON b.id=(s.delivery_snapshot->>'binding_id')::bigint AND b.supplier_id=a.id WHERE s.id=$1 AND s.provision_mode='supplier' AND a.active`, serviceID).Scan(&provider)
 	if err == pgx.ErrNoRows {
 		return caps, nil
 	}
 	if err != nil {
 		return caps, err
 	}
-	adapter, _, err := s.supplierAdapterWith(ctx, tx, id)
-	if err != nil {
-		return caps, err
+	// Capability metadata is public compiled information, independent of secrets.
+	for _, compiled := range supplier.Providers() {
+		if compiled.ID == provider {
+			caps = compiled.Capabilities
+			break
+		}
 	}
-	caps = adapter.Capabilities()
 	if !admin {
 		caps.Create, caps.Sync = false, false
 	}
