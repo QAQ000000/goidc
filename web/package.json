@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1 -p 3088",
+    "prebuild": "node ../scripts/check-web-build-runtime.mjs",
     "build": "next build",
     "start": "next start -H 127.0.0.1 -p 3088",
     "typecheck": "tsc --noEmit",

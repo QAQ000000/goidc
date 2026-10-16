@@ -142,8 +142,26 @@ cd web
 npm run lint
 npm run typecheck
 npm run test:proxy
+# 仅在没有 Next 服务使用的独立 checkout / worktree 中构建
 npm run build
 ```
+
+`npm run build` 的 `prebuild` 会在 Linux 扫描 `/proc`，发现同一真实 Web 目录正在运行 `next-server` 或 `next start/dev` 时拒绝构建；目录软链接不能绕过。无法读取进程信息时停止构建，非 Linux 或没有挂载 `/proc` 时明确提示无法自动保护。此检查不扫描环境变量，不会停止服务；它是构建前快照，不能防止检查后又启动服务，也不能保护直接调用 `next build`、`npm --ignore-scripts` 或共享/软链接 `.next` 的情况。不要绕过检查。
+
+常驻实例保持原目录和 `.next` 不动，在独立 worktree 构建。例如以下命令只准备候选，不发布、不重启服务：
+
+```bash
+# 在仓库根目录执行；选择全新的绝对路径及已经审核的提交
+build_dir=/tmp/zjmfgo-web-candidate-20261017
+reviewed_commit='<已审核提交>'
+git worktree add --detach "$build_dir" "$reviewed_commit"
+# 依赖锁定且共享目录不会被修改时可复用；不要复制 node_modules
+ln -s /www/wwwroot/zjmfgo/web/node_modules "$build_dir/web/node_modules"
+API_INTERNAL_URL=http://127.0.0.1:8088 npm --prefix "$build_dir/web" run build
+node --test scripts/check-web-build-runtime.test.mjs
+```
+
+候选 `.next` 必须独立，不能软链接回运行目录；依赖需要变更时在独立目录安装，不能对常驻进程共享的 `node_modules` 执行 `npm ci`。Next rewrite 会绑定构建时 API 地址，临时 API 预览产物不能直接晋升正式发布。发布需要成套产物及静态资源、schema兼容和切回验收，见[发布验收契约](docs/release-readiness-next-contract-20261017.md)。
 
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
 
