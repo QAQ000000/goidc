@@ -316,7 +316,14 @@ BEGIN
   iid:=coalesce((v->>'invoice_id')::bigint,(v->>'source_invoice_id')::bigint);
   sid:=(v->>'service_id')::bigint;
   IF iid IS NOT NULL THEN
-   BEGIN SELECT order_id INTO oid FROM invoices WHERE id=iid FOR UPDATE NOWAIT;
+   BEGIN
+    IF TG_OP='INSERT' AND TG_TABLE_NAME IN ('affiliate_commission_entries','affiliate_turnover_entries') THEN
+     -- Commission queue callers already hold SHARE before their customer
+     -- advisory lock. Concurrent shared readers must not upgrade to UPDATE.
+     -- Refund application owns UPDATE, which still conflicts with this SHARE.
+     SELECT order_id INTO oid FROM invoices WHERE id=iid FOR SHARE NOWAIT;
+    ELSE SELECT order_id INTO oid FROM invoices WHERE id=iid FOR UPDATE NOWAIT;
+    END IF;
    EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END;
    IF external_refund_order_blocked(oid) THEN RAISE EXCEPTION 'external_refund_order_hold' USING ERRCODE='23514'; END IF;
   END IF;

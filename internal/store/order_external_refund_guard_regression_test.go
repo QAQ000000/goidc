@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -171,4 +172,71 @@ func TestOrderExternalRefundAffiliateBucketsPreserveInvoiceAccountLockOrder(t *t
 // normal application errors into assumed conflicts.
 func isPGErrorCode(err error, code string, out **pgconn.PgError) bool {
 	return errors.As(err, out) && (*out).Code == code
+}
+
+func TestOrderExternalRefundAffiliateInsertAllowsConcurrentSharedInvoiceReaders(t *testing.T) {
+	f := newOrderRefundFixture(t, false)
+	ctx := t.Context()
+	var owner, account int64
+	if e := f.db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name) VALUES('shared-affiliate-owner','shared-affiliate@example.test','unused','Affiliate') RETURNING id`).Scan(&owner); e != nil {
+		t.Fatal(e)
+	}
+	if e := f.db.Pool.QueryRow(ctx, `INSERT INTO affiliate_accounts(user_id,program_id,status) SELECT $1,id,'approved' FROM affiliate_programs ORDER BY id LIMIT 1 RETURNING id`, owner).Scan(&account); e != nil {
+		t.Fatal(e)
+	}
+	// QueueAffiliateCommissions obtains invoice SHARE before serializing on the
+	// customer advisory. Both callers may therefore own SHARE simultaneously;
+	// the first inserts while the second still owns its shared parent lock.
+	reader, e := f.db.Pool.Begin(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer reader.Rollback(ctx)
+	writer, e := f.db.Pool.Begin(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer writer.Rollback(ctx)
+	for _, tx := range []pgx.Tx{reader, writer} {
+		if _, e = tx.Exec(ctx, `SELECT id FROM invoices WHERE id=$1 FOR SHARE`, f.invoice); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, e = writer.Exec(ctx, `INSERT INTO affiliate_turnover_entries(invoice_id,account_id,basis_cents,paid_at) VALUES($1,$2,2400,now())`, f.invoice, account); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = writer.Exec(ctx, `INSERT INTO affiliate_commission_entries(account_id,referred_user_id,order_id,invoice_id,order_item_id,product_id,event_type,amount_cents,basis_cents,rate_bps,available_at,rule_snapshot,source_snapshot,idempotency_key)
+ SELECT $1,$2,$3,$4,oi.id,oi.product_id,'first_purchase',100,2400,1000,now(),'{}','{}','shared-invoice-commission' FROM order_items oi WHERE order_id=$3 LIMIT 1`, account, f.customer, f.order, f.invoice); e != nil {
+		t.Fatal(e)
+	}
+	if e = writer.Commit(ctx); e != nil {
+		t.Fatal(e)
+	}
+	if e = reader.Rollback(ctx); e != nil {
+		t.Fatal(e)
+	}
+	c, e := f.db.ExternalRefundOrderContext(WithExternalRefundSession(ctx, "order-refund-request"), f.actor, f.invoice)
+	if e != nil || c.Eligible || c.ReasonCode != "external_refund_affiliate_linked" {
+		t.Fatal(c, e)
+	}
+}
+
+func TestOrderExternalRefundAffiliateInsertStillRejectsPendingHold(t *testing.T) {
+	f := newOrderRefundFixture(t, false)
+	ctx := t.Context()
+	var account int64
+	if e := f.db.Pool.QueryRow(ctx, `INSERT INTO affiliate_accounts(user_id,program_id,status) SELECT $1,id,'approved' FROM affiliate_programs ORDER BY id LIMIT 1 RETURNING id`, f.actor).Scan(&account); e != nil {
+		t.Fatal(e)
+	}
+	f.create(t)
+	queries := []string{`INSERT INTO affiliate_turnover_entries(invoice_id,account_id,basis_cents,paid_at) VALUES($1,$2,2400,now())`,
+		`INSERT INTO affiliate_commission_entries(account_id,referred_user_id,order_id,invoice_id,order_item_id,product_id,event_type,amount_cents,basis_cents,rate_bps,available_at,rule_snapshot,source_snapshot,idempotency_key)
+ SELECT $2,o.user_id,o.id,$1,oi.id,oi.product_id,'first_purchase',100,2400,1000,now(),'{}','{}','held-invoice-commission' FROM orders o JOIN order_items oi ON oi.order_id=o.id JOIN invoices i ON i.order_id=o.id WHERE i.id=$1 LIMIT 1`}
+	for _, query := range queries {
+		_, e := f.db.Pool.Exec(ctx, query, f.invoice, account)
+		var pe *pgconn.PgError
+		if !errors.As(e, &pe) || pe.Code != "23514" || pe.Message != "external_refund_order_hold" {
+			t.Fatal("shared invoice insert bypassed pending hold", e)
+		}
+	}
 }
