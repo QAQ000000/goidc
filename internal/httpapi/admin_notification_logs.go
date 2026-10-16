@@ -86,10 +86,17 @@ func (s *Server) adminSMSLog(w http.ResponseWriter, r *http.Request) {
 		idx := len(f.args)
 		f.where[len(f.where)-1] = fmt.Sprintf("(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)", idx, idx, idx)
 	}
+	if !addTicketNotificationLogFilters(w, r, &f) {
+		return
+	}
 	where := strings.Join(f.where, " AND ")
 	base := ` FROM sms_outbox j LEFT JOIN LATERAL (
  SELECT n.user_id FROM notification_delivery_events n WHERE n.sms_outbox_id=j.id ORDER BY n.id LIMIT 1
-) ev ON true LEFT JOIN users e ON e.id=ev.user_id WHERE ` + where
+) ev ON true LEFT JOIN LATERAL (
+ SELECT te.ticket_id,te.event_key,te.kind AS event_kind,td.recipient_kind,td.customer_id,t.department_id
+ FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
+ WHERE td.sms_outbox_id=j.id ORDER BY td.id LIMIT 1
+ ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
 	var total int
 	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
 		s.fail(w, r, err)
@@ -98,7 +105,7 @@ func (s *Server) adminSMSLog(w http.ResponseWriter, r *http.Request) {
 	args := append(append([]any{}, f.args...), limit, offset)
 	query := `SELECT j.id,j.created_at,j.recipient,j.recipient AS phone,j.kind,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
  j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
- (j.status='sent') AS success,
+ tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success,
  CASE WHEN j.body_encrypted<>''::bytea THEN '[已加密]' ELSE '' END AS content` + base +
 		" ORDER BY j.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
@@ -147,10 +154,17 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
 		return
 	}
+	if !addTicketNotificationLogFilters(w, r, &f) {
+		return
+	}
 	where := strings.Join(f.where, " AND ")
 	base := ` FROM email_outbox j LEFT JOIN LATERAL (
  SELECT n.user_id FROM notification_delivery_events n WHERE n.email_outbox_id=j.id ORDER BY n.id LIMIT 1
-) ev ON true LEFT JOIN users e ON e.id=ev.user_id WHERE ` + where
+) ev ON true LEFT JOIN LATERAL (
+ SELECT te.ticket_id,te.event_key,te.kind AS event_kind,td.recipient_kind,td.customer_id,t.department_id
+ FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
+ WHERE td.email_outbox_id=j.id ORDER BY td.id LIMIT 1
+ ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
 	var total int
 	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
 		s.fail(w, r, err)
@@ -159,7 +173,7 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 	args := append(append([]any{}, f.args...), limit, offset)
 	query := `SELECT j.id,j.created_at,j.subject,j.recipient,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
  j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
- (j.status='sent') AS success` + base +
+ tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success` + base +
 		" ORDER BY j.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
 	if err != nil {
@@ -307,4 +321,18 @@ func validOutboxStatus(value string) bool {
 	default:
 		return false
 	}
+}
+
+// Ticket messages retain the live ticket department boundary even for log viewers.
+func addTicketNotificationLogFilters(w http.ResponseWriter, r *http.Request, f *adminLogFilters) bool {
+	f.add(identityFrom(r).ID, "(tv.ticket_id IS NULL OR admin_ticket_department_allowed($%d,tv.department_id))")
+	if value := strings.TrimSpace(r.URL.Query().Get("ticket_id")); value != "" {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, 400, "invalid_ticket", "工单编号无效")
+			return false
+		}
+		f.add(id, "tv.ticket_id=$%d")
+	}
+	return true
 }
