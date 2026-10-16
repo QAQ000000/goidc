@@ -4,7 +4,7 @@
 
 状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面或交互仍缺一部分；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。登记状态不是全量浏览器或生产验收结论。
 
-2026-10-16 当前登记：105 项中 **44 项已完成、61 项部分完成、0 项待实现、0 项后端阻塞**。本次按已知能力缺口将 36/38/103 三项降为部分完成；下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](restore-evidence-scope-acceptance-20261016.md)。
+2026-10-16 当前登记：105 项中 **45 项已完成、60 项部分完成、0 项待实现、0 项后端阻塞**。此前按已知能力缺口将36/38/103三项降为部分完成；#36现已补齐并通过[本批验收](promo-code-acceptance-20261016.md)。下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](restore-evidence-scope-acceptance-20261016.md)。
 
 所有新版路径保持 `/admin/*` 稳定路由。列表页统一使用 `items/total/limit/offset`，设置页统一使用 `version/expected_version`，写操作必须经过权限、审计、幂等和版本冲突校验。
 
@@ -45,7 +45,7 @@
 | 33 | 货币配置 `#/currency-settings` | `/admin/currencies` | 已完成 | `GET/POST/PATCH/DELETE /admin/currencies`、`POST /admin/currencies/{id}/default` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 34 | 支付接口 `#/payment-interface` | `/admin/channels?category=payment` | 已完成 | `GET/POST/PUT/DELETE /admin/channel-instances` | `@super` / 能力、密钥、启停 |
 | 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
-| 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 部分完成 | `GET/POST/PATCH /admin/promo-codes` | `promos.view/manage` / 已有新增、启停、循环/升级优惠与本页状态过滤；主页面未接起止时间编辑和真实分页。建单弹窗已有 `/admin/promo-codes/page` 目录分页，不等于主页面补齐；[能力映射](restore-evidence-scope-acceptance-20261016.md) |
+| 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET /admin/promo-codes/page`、`POST/PATCH /admin/promo-codes` | `promos.view/manage` / 原九列及状态、标签/六状态筛选、搜索分页/URL恢复、新增取消、日期编辑清空；147版本/日期约束、幂等/冲突/审计；原请求恢复与账号隔离；隔离PG18全量/race及四尺寸37张最终截图通过；旧客户端仍兼容无键/版本；[验收](promo-code-acceptance-20261016.md) |
 | 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
 | 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 部分完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `PUT /admin/contract-templates/{id}` | `settings.view` / `settings.manage`；总开关与纯文本模板管理、草稿和URL页签分页、版本幂等审计、事务会话锁；两个页签历史四尺寸通过；强制签订/商品模板绑定策略未实现；[验收](admin-contract-lifecycle-acceptance-20261012.md)、[能力映射](restore-evidence-scope-acceptance-20261016.md) |
 | 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
@@ -150,3 +150,5 @@
 2026-10-16 核心替代增量：普通人工账单外部退款登记/复核及客户在线充值已通过隔离PG18、资金race与四尺寸；工单三种公开事件已集成事务邮件/SMS队列、本人偏好、收件身份/去重与通知摘要，最终邮件渲染边界全量已通过。见[外部退款](external-refund-acceptance-20261016.md)、[在线充值](customer-online-topup-acceptance-20261016.md)、[工单通知](ticket-notification-acceptance-20261016.md)。这批没有关闭完整工单签名、部门自定义字段、上游协同、真实用户inbox及第三方收件验收，仍保持44完成/61部分；新增局部截图不替换历史失配记录。
 
 2026-10-16 供应商客户运维首增量：owner范围VNC、注册能力展示和客户动作入口通过隔离全量/race及四尺寸弹窗/取消/冻结；双worker常驻续费进程验证通过。真实云主机动作、升级和暂停/恢复仍待验收，不将本地受理当外部成功，见[供应商验收](supplier-customer-acceptance-20261016.md)。台账保持44完成/61部分。
+
+2026-10-16 优惠码主页面：#36按独立契约补齐起止时间/清空、服务器有效状态、搜索分页、草稿取消、版本冲突、幂等和原请求恢复；Chrome原生pattern问题已修复后重新构建/截图。隔离PG18全量、专项race、Go及前端检查、四尺寸37张最终截图通过，见[验收](promo-code-acceptance-20261016.md)。登记调整为45完成/60部分；其他历史截图失配和生产外部验收不因此关闭。

@@ -1,12 +1,12 @@
 # 优惠码恢复HTTP/PG定向验收
 
-状态：测试草案已编写，后端契约交付后定向执行；不代表页面浏览器验收完成。本测试只写 `promo_restoration_test.go`，不改后端或前端。
+状态：本域定向HTTP/PG/race及主分支全量已通过；最终四尺寸和页面结果见[本批验收](promo-code-acceptance-20261016.md)。以下保留测试草案和分支验证历史，未执行措辞不代表最终状态。本测试只写 `promo_restoration_test.go`，不改后端或前端。
 
 使用 `/tmp/zjmfgo-refund-local.env` 的显式测试DSN，沿用testServer的 `_test`库名检查、随机schema及清理，不接触生产库和真实上游。
 
 ```sh
 source /tmp/zjmfgo-refund-local.env
-go test ./internal/httpapi -run '^(TestPromoRestoration.*|TestPromoCodeLifecycleAndCheckoutDiscount|TestPromoCodesPageSearchPaginationOrderFilterAndPermissions)$' -count=1 -v
+scripts/go.sh test ./internal/httpapi -run '^(TestPromoRestoration.*|TestPromoCodeLifecycleAndCheckoutDiscount|TestPromoCodesPageSearchPaginationOrderFilterAndPermissions)$' -count=1 -v
 ```
 
 新增业务断言覆盖状态优先级/失效边界、旧active参数、搜索分页/零结果；日期omitted/clear(null与空串)/合并非法；两编辑者版本竞争；并发同键创建、异参冲突、唯一审计；无权限/只读/管理及会话中撤权。相关既有消费测试验证折扣计算和checkout使用次数语义。只断言公开行为和持久化结果，不复制实现。
