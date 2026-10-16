@@ -291,6 +291,9 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	if pending.Refund.Status != "pending_review" {
 		t.Fatalf("pending status=%s", pending.Refund.Status)
 	}
+	if pending.Refund.Reversal == nil || pending.Refund.Reversal.Status != "pending" || pending.Refund.Reversal.AmountCents != 400 || pending.Refund.Reversal.LedgerID != nil {
+		t.Fatalf("missing reservation projection: %+v", pending.Refund.Reversal)
+	}
 	// A pending reversal must reduce spendable balance even though displayed
 	// balance remains unchanged until independent review.
 	manual := int64(0)
@@ -312,12 +315,34 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	if err = db.Pool.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1", uid).Scan(&balance); err != nil || balance != 400 {
 		t.Fatalf("reject changed balance=%d err=%v", balance, err)
 	}
+	if _, err = db.PayInvoice(ctx, uid, manual, "topup-released-spend", 1); err != nil {
+		t.Fatalf("released reservation still blocked spend: %v", err)
+	}
+	// Restore just the legitimately spent amount; this is a real top-up path,
+	// not a direct fixture balance overwrite.
+	if _, _, err = db.TopUp(ctx, actor, uid, 100, "topup-refund-replenish", "restore spend fixture"); err != nil {
+		t.Fatal(err)
+	}
 	in.EvidenceRef = "test://topup-refund-corrected"
 	pending, err = db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "external-topup-refund-corrected")
 	if err != nil {
 		t.Fatal(err)
 	}
 	review.Note = "independently verified corrected top-up refund"
+	if _, err = db.Pool.Exec(ctx, `CREATE FUNCTION reject_refund_reversal_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='external_refund.confirmed' THEN RAISE EXCEPTION 'isolated refund audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_refund_reversal_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_refund_reversal_audit()`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-confirm"); err == nil {
+		t.Fatal("audit failure accepted confirmation")
+	}
+	var rollbackBalance, rollbackLedger int64
+	var rollbackStatus string
+	if err = db.Pool.QueryRow(ctx, `SELECT u.balance_cents,r.status,(SELECT count(*) FROM balance_ledger WHERE entry_type='refund' AND reference_id=$1) FROM users u JOIN external_refunds r ON r.user_id=u.id WHERE r.id=$2`, topup.InvoiceID, pending.Refund.ID).Scan(&rollbackBalance, &rollbackStatus, &rollbackLedger); err != nil || rollbackBalance != 400 || rollbackStatus != "pending_review" || rollbackLedger != 0 {
+		t.Fatalf("partial confirmation after audit failure: balance=%d status=%s ledgers=%d err=%v", rollbackBalance, rollbackStatus, rollbackLedger, err)
+	}
+	if _, err = db.Pool.Exec(ctx, "DROP TRIGGER reject_refund_reversal_audit ON audit_events"); err != nil {
+		t.Fatal(err)
+	}
 	confirmed, err := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-confirm")
 	if err != nil || confirmed.Refund.Status != "confirmed" {
 		t.Fatalf("confirm=%+v err=%v", confirmed, err)
@@ -336,6 +361,101 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	}
 	if invoiceStatus != "refunded" || topupStatus != "credited" || reservationStatus != "applied" || topupLedger != 1 || refundLedger != 1 || reservations != 2 || balance != 0 {
 		t.Fatalf("invoice=%s topup=%s reservation=%s topupLedger=%d refundLedger=%d reservations=%d balance=%d", invoiceStatus, topupStatus, reservationStatus, topupLedger, refundLedger, reservations, balance)
+	}
+	var auditActor int64
+	if err = db.Pool.QueryRow(ctx, `SELECT actor_id FROM audit_events WHERE action='external_refund.balance_reversed' AND entity_id=$1`, fmt.Sprint(pending.Refund.ID)).Scan(&auditActor); err != nil || auditActor != reviewer {
+		t.Fatalf("reversal attributed to wrong actor: %d err=%v", auditActor, err)
+	}
+	for _, query := range []string{`UPDATE external_refund_reversal_reservations SET amount_cents=399 WHERE refund_id=$1`, `DELETE FROM external_refund_reversal_reservations WHERE refund_id=$1`} {
+		if _, err = db.Pool.Exec(ctx, query, pending.Refund.ID); err == nil {
+			t.Fatal("confirmed reversal fact mutable")
+		}
+	}
+	// A negative external reversal can never be replayed as a positive local
+	// balance refund by guessing its deterministic ledger idempotency key.
+	if _, err = db.RefundInvoice(ctx, actor, topup.InvoiceID, fmt.Sprintf("external-refund-balance-%d", pending.Refund.ID)); conflictCode(t, err) != "topup_refund_not_supported" {
+		t.Fatalf("negative reversal mistaken for balance refund: %v", err)
+	}
+}
+
+func TestExternalRefundTopupReservationRacesSpendingAndAdminCredit(t *testing.T) {
+	db, ctx, actor, uid := onlineTopupFixture(t)
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	var reviewer, spendInvoice int64
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('race-reviewer','race-reviewer@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('race-refund-request',$1,now()+interval '1 hour'),('race-refund-review',$2,now()+interval '1 hour')`, actor, reviewer); err != nil {
+		t.Fatal(err)
+	}
+	requestCtx := WithExternalRefundSession(ctx, "race-refund-request")
+	reviewCtx := WithExternalRefundSession(ctx, "race-refund-review")
+	topup := createTopup(t, db, ctx, uid, 400, "race-refund-topup")
+	intent, err := topupIntent(db, ctx, uid, topup, "race-refund-intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = topupSuccess(db, ctx, intent, "race-refund-success"); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,amount_cents) VALUES('RACE-REFUND-SPEND',$1,'manual',100) RETURNING id`, uid).Scan(&spendInvoice); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(ctx, `INSERT INTO invoice_items(invoice_id,item_type,description,amount_cents) VALUES($1,'manual','race spend',100)`, spendInvoice); err != nil {
+		t.Fatal(err)
+	}
+	in := ExternalRefundInput{PaymentID: intent.PaymentID, AmountCents: 400, Method: "bank_transfer", ProviderRefundID: "race-refund-receipt", ReceivedAt: time.Now(), EvidenceRef: "test://race", EvidenceSHA256: strings.Repeat("c", 64), Note: "race verified receipt", ExpectedVersion: 2}
+	type result struct {
+		action string
+		refund ExternalRefundResult
+		err    error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 3)
+	go func() {
+		<-start
+		r, e := db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "race-refund-register")
+		results <- result{"refund", r, e}
+	}()
+	go func() {
+		<-start
+		_, e := db.PayInvoice(ctx, uid, spendInvoice, "race-refund-pay", 1)
+		results <- result{action: "spend", err: e}
+	}()
+	go func() {
+		<-start
+		_, _, e := db.TopUp(ctx, actor, uid, 100, "race-refund-credit", "")
+		results <- result{action: "credit", err: e}
+	}()
+	close(start)
+	var pending ExternalRefundResult
+	for range 3 {
+		r := <-results
+		if r.err != nil {
+			code := conflictCode(t, r.err)
+			if !(r.action == "refund" && code == "external_refund_balance_reserved") && !(r.action == "spend" && code == "balance_reserved") {
+				t.Fatalf("%s: %v", r.action, r.err)
+			}
+		} else if r.action == "refund" {
+			pending = r.refund
+		}
+	}
+	if pending.Refund.ID == 0 {
+		pending, err = db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "race-refund-register")
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	var balance, reserved, delta int64
+	if err = db.Pool.QueryRow(ctx, `SELECT balance_cents,(SELECT coalesce(sum(amount_cents),0)::bigint FROM external_refund_reversal_reservations WHERE user_id=$1 AND status='pending'),(SELECT coalesce(sum(delta_cents),0)::bigint FROM balance_ledger WHERE user_id=$1) FROM users WHERE id=$1`, uid).Scan(&balance, &reserved, &delta); err != nil || balance < reserved || reserved != 400 || balance != delta {
+		t.Fatalf("reservation conservation balance=%d reserve=%d ledger=%d err=%v", balance, reserved, delta, err)
+	}
+	if _, err = db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, ExternalRefundReviewInput{ExpectedVersion: 1, Note: "independently checked"}, "race-refund-confirm"); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(ctx, `SELECT balance_cents,(SELECT coalesce(sum(delta_cents),0)::bigint FROM balance_ledger WHERE user_id=$1),(SELECT count(*) FROM balance_ledger WHERE reference_type='invoice' AND reference_id=$2 AND entry_type='refund') FROM users WHERE id=$1`, uid, topup.InvoiceID).Scan(&balance, &delta, &reserved); err != nil || balance != delta || reserved != 1 || balance < 0 {
+		t.Fatalf("confirmed conservation balance=%d ledger=%d refunds=%d err=%v", balance, delta, reserved, err)
 	}
 }
 

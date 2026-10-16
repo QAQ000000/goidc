@@ -387,7 +387,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 		return out, err
 	}
 	var keyInvoice int64
-	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
+	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND delta_cents>0 AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
 	if err == nil && keyInvoice != invoiceID {
 		return out, conflict("idempotency_conflict", "退款幂等键对应其他账单")
 	}
@@ -407,7 +407,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 	}
 	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
 FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id
-WHERE l.entry_type='refund' AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
+WHERE l.entry_type='refund' AND l.delta_cents>0 AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
 		Scan(&replayInvoiceID, &out.InvoiceNo, &delta, &out.Status)
 	if err == nil {
 		if replayInvoiceID != invoiceID {

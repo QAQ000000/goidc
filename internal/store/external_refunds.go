@@ -152,7 +152,7 @@ func releaseExternalRefundReservation(ctx context.Context, tx pgx.Tx, refundID i
 // applyExternalRefundReversal performs the only supported balance reversal.
 // It intentionally does not change the immutable gateway receipt or create a
 // second payment/refund fact.  The customer lock is held by the caller.
-func applyExternalRefundReversal(ctx context.Context, tx pgx.Tx, refundID, invoiceID, userID, amount int64) error {
+func applyExternalRefundReversal(ctx context.Context, tx pgx.Tx, actorID, refundID, invoiceID, userID, amount int64) error {
 	var reservedAmount int64
 	var reservationStatus string
 	if err := tx.QueryRow(ctx, `SELECT amount_cents,status FROM external_refund_reversal_reservations WHERE refund_id=$1 AND invoice_id=$2 AND user_id=$3 FOR UPDATE`, refundID, invoiceID, userID).Scan(&reservedAmount, &reservationStatus); err != nil {
@@ -180,7 +180,7 @@ VALUES($1,'refund',$2,$3,'invoice',$4,$5,'外部退款余额冲正') RETURNING i
 	if _, err := tx.Exec(ctx, `UPDATE external_refund_reversal_reservations SET status='applied',ledger_id=$2,applied_at=clock_timestamp() WHERE refund_id=$1 AND status='pending'`, refundID, ledgerID); err != nil {
 		return err
 	}
-	return Audit(ctx, tx, userID, "external_refund.balance_reversed", "external_refund", refundID, map[string]any{"invoice_id": invoiceID, "amount_cents": amount, "ledger_id": ledgerID})
+	return Audit(ctx, tx, actorID, "external_refund.balance_reversed", "external_refund", refundID, map[string]any{"invoice_id": invoiceID, "amount_cents": amount, "ledger_id": ledgerID})
 }
 
 func externalRefundAuthorize(ctx context.Context, tx pgx.Tx, actor int64, permission string, session bool) error {
@@ -388,10 +388,10 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 			var topupStatus, settlementStatus string
 			var settlementLedger *int64
 			if err = tx.QueryRow(ctx, `SELECT t.status,s.status,s.ledger_id FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1 FOR UPDATE OF t`, invoice).Scan(&topupStatus, &settlementStatus, &settlementLedger); err != nil {
-				return out, conflict("external_refund_topup_not_credited", "充值尚未形成可冲正的余额入账事实")
+				return out, conflict("external_refund_topup_not_credited", "仅支持原结算直接入账的充值；待补账或后补账充值需专项核对")
 			}
 			if topupStatus != "credited" || settlementStatus != "credited" || settlementLedger == nil {
-				return out, conflict("external_refund_topup_not_credited", "充值尚未形成可冲正的余额入账事实")
+				return out, conflict("external_refund_topup_not_credited", "仅支持原结算直接入账的充值；待补账或后补账充值需专项核对")
 			}
 		}
 		if err = requireInvoiceReviewed(ctx, tx, invoice); err != nil {
@@ -454,7 +454,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 			next = "confirmed"
 			action = "external_refund.confirmed"
 			if kind == "topup" {
-				if err = applyExternalRefundReversal(ctx, tx, id, invoice, customer, amount); err != nil {
+				if err = applyExternalRefundReversal(ctx, tx, actor, id, invoice, customer, amount); err != nil {
 					return out, err
 				}
 			}
