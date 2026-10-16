@@ -157,11 +157,11 @@ reviewed_commit='<已审核提交>'
 git worktree add --detach "$build_dir" "$reviewed_commit"
 # 依赖锁定且共享目录不会被修改时可复用；不要复制 node_modules
 ln -s /www/wwwroot/zjmfgo/web/node_modules "$build_dir/web/node_modules"
-API_INTERNAL_URL=http://127.0.0.1:8088 npm --prefix "$build_dir/web" run build
+API_INTERNAL_URL=http://127.0.0.1:8088 npm --prefix "$build_dir/web" run build -- --webpack
 node --test scripts/check-web-build-runtime.test.mjs
 ```
 
-候选 `.next` 必须独立，不能软链接回运行目录；依赖需要变更时在独立目录安装，不能对常驻进程共享的 `node_modules` 执行 `npm ci`。Next rewrite 会绑定构建时 API 地址，临时 API 预览产物不能直接晋升正式发布。发布需要成套产物及静态资源、schema兼容和切回验收，见[发布验收契约](docs/release-readiness-next-contract-20261017.md)。
+上例显式使用webpack，以支持worktree外的共享依赖软链接；本项目已观察到默认Turbopack拒绝该链接，不能把失败构建算作通过。候选 `.next` 必须独立，不能软链接回运行目录；依赖需要变更时在独立目录安装，不能对常驻进程共享的 `node_modules` 执行 `npm ci`。Next rewrite 会绑定构建时 API 地址，临时 API 预览产物不能直接晋升正式发布。发布需要成套产物及静态资源、schema兼容和切回验收，见[发布验收契约](docs/release-readiness-next-contract-20261017.md)。
 
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
 
