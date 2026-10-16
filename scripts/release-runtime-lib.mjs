@@ -6,7 +6,7 @@ import { apiTarget, fileHash, noLinks, safeRelative, selectedDigest, sha256, sou
 
 export const schemaVersion = 2;
 export const runtimeFormat = 'zjmfgo-release-candidate-v2';
-export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'web/next.config.ts'];
+export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'web/next.config.ts'];
 const hashPattern = /^[a-f0-9]{64}$/;
 const inside = (root, file) => file.startsWith(`${root}/`);
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);

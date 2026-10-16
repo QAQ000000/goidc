@@ -4,6 +4,8 @@ import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'nod
 import os from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { runtimeBuilderFiles } from './release-runtime-lib.mjs';
 import { inventory, sha256 } from './release-candidate-lib.mjs';
 import { budgetComponents, collectTraceEvidence, controlledRuntimeEnvironment, freeSpace, makeLaunchDescription, pinnedJSON, resolveLaunchStep, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
@@ -182,4 +184,36 @@ test('Web launch step resolves after relocation and executes server.js from app 
   assert.deepEqual(JSON.parse(result.stdout), { cwd: path.join(moved, description.appRoot), entry: path.join(moved, description.entry) });
   await assert.rejects(resolveLaunchStep(moved, { ...step, executable: '../escape' }), /Unsafe/);
   await assert.rejects(resolveLaunchStep(moved, { ...step, cwd: '../escape' }), /Unsafe/);
+});
+
+
+test('running transitive builder helpers must match the independently clean selected source', async t => {
+  const root = await fixture(t), source = path.join(root, 'source'), runner = path.join(root, 'runner');
+  const project = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  for (const name of runtimeBuilderFiles) {
+    for (const target of [source, runner]) {
+      await mkdir(path.dirname(path.join(target, name)), { recursive: true });
+      await cp(path.join(project, name), path.join(target, name));
+    }
+  }
+  const git = (...args) => execFileSync('/usr/bin/git', ['-C', source, ...args], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' } }).trim();
+  git('init', '--quiet'); git('config', 'user.name', 'Builder Fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('add', '.'); git('commit', '--quiet', '-m', 'fixed clean builder source');
+  const revision = git('rev-parse', 'HEAD');
+  const code = `
+    import { pathToFileURL } from 'node:url';
+    const [builder, source, revision] = process.argv.slice(1);
+    const { buildRuntimeCandidate } = await import(pathToFileURL(builder));
+    try { await buildRuntimeCandidate({ source, revision }); process.exitCode = 2; }
+    catch (error) { process.stderr.write(error.message); process.exitCode = 1; }
+  `;
+  for (const name of ['scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs']) {
+    const original = await readFile(path.join(runner, name));
+    await writeFile(path.join(runner, name), Buffer.concat([original, Buffer.from('\n// changed external running helper\n')]));
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', code, path.join(runner, 'scripts/build-release-runtime-candidate.mjs'), source, revision], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } });
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /Running builder\/config differs from selected commit/);
+    assert.equal(git('status', '--porcelain'), '');
+    await writeFile(path.join(runner, name), original);
+  }
 });
