@@ -18,3 +18,7 @@ scripts/go.sh test -race ./internal/httpapi -run '^(TestProductUpgradeRestoratio
 ```
 
 实际专项-race执行退出0，包耗时34.759s，全部匹配测试PASS（含新增四类报价边界、策略编辑与既有手工/模拟交付、快照、库存、取消退款、权限审计回归）。日志在/tmp/product-upgrade-restoration-race-20261016.log。报价目录改价测试故意不提升revision以验证经济快照；正常后台改价会提升revision，既有ProductChangePermissionsStaleAndAuditRollback覆盖该冲突，不声称后台改价可无条件提交旧报价。
+
+最终补测：叠加test-only e1959f1（策略原子审计/凭据撤销），上述相关全部-race退出0，墙钟89.02s、包70.807s；scripts/go.sh build ./...退出0/10.61s，scripts/go.sh vet ./...退出0/10.19s。独立日志/tmp/product-upgrade-final-20261016/{race,build,vet}.{log,time}。未重复运行全量，未操作主代理活跃fixture。
+
+正式改价边界：客户只生成报价但尚未提交时，后台正常改价提升商品revision；提交旧报价将409，须重新报价。已经提交生成升级账单后，账单/变更存储既定金额和新周期价，后续目录改价不重算该账单，付款及交付沿用已提交快照；服务商品只在交付成功后切换。新增price测试直接SQL只改价不升revision，用来单独证明冻结金额，不证明正常后台改价前后都能提交旧报价。正常revision变化导致未提交报价拒绝已有相关回归，已提交后正式改价场景本次主要为源码核对，不能冒称新专项逐项端到端验证。
