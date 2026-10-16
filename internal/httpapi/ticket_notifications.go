@@ -166,7 +166,7 @@ func (s *Server) ticketNotifications(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	rows, err := tx.Query(r.Context(), `SELECT d.id,e.event_key,e.kind AS event_kind,e.reply_id,d.channel,d.outcome,d.reason,d.created_at,CASE WHEN $2 THEN d.recipient_kind ELSE 'user' END AS recipient_kind,CASE WHEN $2 THEN d.address ELSE NULL END AS address,d.email_outbox_id,d.sms_outbox_id`+where+` ORDER BY d.id DESC LIMIT $4 OFFSET $5`, id, staff, identityFrom(r).ID, limit, offset)
+	rows, err := tx.Query(r.Context(), `SELECT d.id,e.event_key,e.kind AS event_kind,e.reply_id,d.channel,d.outcome,d.reason,d.created_at,CASE WHEN $2 THEN d.recipient_kind ELSE 'user' END AS recipient_kind,CASE WHEN $2 THEN d.address ELSE NULL END AS address,d.email_outbox_id,d.sms_outbox_id,coalesce((SELECT status FROM email_outbox WHERE id=d.email_outbox_id),(SELECT status FROM sms_outbox WHERE id=d.sms_outbox_id)) AS outbox_status`+where+` ORDER BY d.id DESC LIMIT $4 OFFSET $5`, id, staff, identityFrom(r).ID, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -184,4 +184,12 @@ func (s *Server) ticketNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+}
+
+// SQL arguments are fixed server-owned column/placeholder names and permission constants.
+func ticketNotificationPermissionSQL(actor, department, permission string) string {
+	return `EXISTS(SELECT 1 FROM users tu LEFT JOIN admin_roles tr ON tr.id=tu.admin_role_id WHERE tu.id=` + actor + ` AND tu.status='active' AND (tu.role='super_admin' OR (tu.role='admin' AND tr.active AND '` + permission + `'=ANY(tr.permissions))) AND admin_ticket_department_allowed(tu.id,` + department + `))`
+}
+func ticketNotificationOutboxSQL(channel, id, actor, permission string) string {
+	return `NOT EXISTS(SELECT 1 FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets tt ON tt.id=te.ticket_id WHERE td.` + channel + `_outbox_id=` + id + ` AND NOT (` + ticketNotificationPermissionSQL(actor, "tt.department_id", permission) + `))`
 }

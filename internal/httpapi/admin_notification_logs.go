@@ -325,7 +325,7 @@ func validOutboxStatus(value string) bool {
 
 // Ticket messages retain the live ticket department boundary even for log viewers.
 func addTicketNotificationLogFilters(w http.ResponseWriter, r *http.Request, f *adminLogFilters) bool {
-	f.add(identityFrom(r).ID, "(tv.ticket_id IS NULL OR admin_ticket_department_allowed($%d,tv.department_id))")
+	f.add(identityFrom(r).ID, "(tv.ticket_id IS NULL OR ("+ticketNotificationPermissionSQL("$%d", "tv.department_id", "tickets.view")+"))")
 	if value := strings.TrimSpace(r.URL.Query().Get("ticket_id")); value != "" {
 		id, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || id < 1 {

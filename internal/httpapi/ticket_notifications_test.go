@@ -73,7 +73,7 @@ func TestTicketNotificationReplayUsesCurrentAuthority(t *testing.T) {
 	ownerID, owner := user(t, db, h, "notify-authority-owner", "customer")
 	otherID, _ := user(t, db, h, "notify-authority-other", "customer")
 	staffID, staff := user(t, db, h, "notify-authority-staff", "admin")
-	contentRole(t, db, staffID, "tickets.view", "tickets.manage", "notifications.view")
+	contentRole(t, db, staffID, "tickets.view", "tickets.manage", "notifications.view", "notifications.manage")
 	var dept int64
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('权限部门','notify-authority') RETURNING id`).Scan(&dept); err != nil {
 		t.Fatal(err)
@@ -104,6 +104,31 @@ func TestTicketNotificationReplayUsesCurrentAuthority(t *testing.T) {
 	if data(t, visibleLog)["total"] != float64(1) {
 		t.Fatalf("missing ticket log: %#v", data(t, visibleLog))
 	}
+	var smsID int64
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO sms_outbox(recipient,body_encrypted,kind,expires_at) VALUES('+8613800138000','payload'::bytea,'ticket_customer_created',now()+interval '1 day') RETURNING id`).Scan(&smsID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE ticket_notification_deliveries SET sms_outbox_id=$2 WHERE id=(SELECT d.id FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.ticket_id=$1 AND d.channel='sms' ORDER BY d.id LIMIT 1)`, id, smsID); err != nil {
+		t.Fatal(err)
+	}
+	for _, channel := range []string{"email", "sms"} {
+		visible := request(h, "GET", "/api/v1/admin/"+channel+"-outbox", nil, staff, "")
+		expect(t, visible, 200)
+		if len(listData(t, visible)) != 1 {
+			t.Fatalf("missing %s outbox", channel)
+		}
+	}
+	summary := request(h, "GET", path+"/notifications", nil, staff, "")
+	expect(t, summary, 200)
+	foundStatus := false
+	for _, raw := range data(t, summary)["items"].([]any) {
+		if raw.(map[string]any)["outbox_status"] == "pending" {
+			foundStatus = true
+		}
+	}
+	if !foundStatus {
+		t.Fatal("summary missing current outbox status")
+	}
 	if _, err := db.Pool.Exec(t.Context(), `DELETE FROM admin_ticket_departments WHERE user_id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +142,28 @@ func TestTicketNotificationReplayUsesCurrentAuthority(t *testing.T) {
 		}
 	}
 
+	assertHidden := func() {
+		for channel, outID := range map[string]int64{"email": outboxID, "sms": smsID} {
+			old := request(h, "GET", "/api/v1/admin/"+channel+"-outbox", nil, staff, "")
+			expect(t, old, 200)
+			if len(listData(t, old)) != 0 {
+				t.Fatalf("%s outbox leaked", channel)
+			}
+			expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/%s-outbox/%d/retry", channel, outID), nil, staff, ""), 404)
+			log := request(h, "GET", "/api/v1/admin/logs/"+channel, nil, staff, "")
+			expect(t, log, 200)
+			if data(t, log)["total"] != float64(0) {
+				t.Fatalf("%s logs leaked", channel)
+			}
+		}
+	}
+	assertHidden()
+	// All-department scope alone does not grant ticket content access.
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
+		t.Fatal(err)
+	}
+	contentRole(t, db, staffID, "notifications.view", "notifications.manage")
+	assertHidden()
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE tickets SET user_id=$2 WHERE id=$1`, id, otherID); err != nil {
 		t.Fatal(err)
 	}
