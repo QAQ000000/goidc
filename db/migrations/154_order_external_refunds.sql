@@ -134,6 +134,17 @@ END $$;
 -- INSERT is the race we must serialize. UPDATE/DELETE already imply durable
 -- job history (including cancelled/failed); never take service after job locks.
 CREATE TRIGGER external_refund_job_insert BEFORE INSERT ON provision_jobs FOR EACH ROW EXECUTE FUNCTION guard_external_refund_job();
+-- Workers lock job before service when claiming; identity protection must not
+-- acquire parents. Every job keeps the service/action whose birth was logged.
+CREATE FUNCTION protect_external_refund_job_identity() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.service_id IS DISTINCT FROM OLD.service_id OR NEW.action IS DISTINCT FROM OLD.action THEN
+  RAISE EXCEPTION 'provision job service and action are immutable' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER external_refund_job_identity BEFORE UPDATE ON provision_jobs FOR EACH ROW EXECUTE FUNCTION protect_external_refund_job_identity();
+
 
 CREATE FUNCTION guard_external_refund_order_item() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE oid bigint;
@@ -292,6 +303,15 @@ CREATE TRIGGER zz_external_refund_order_invoice BEFORE INSERT OR UPDATE OR DELET
 CREATE FUNCTION guard_external_refund_order_association() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v jsonb; oid bigint; iid bigint; sid bigint; item record;
 BEGIN
+ -- An existing commission already excludes its invoice/order from refund
+ -- qualification. Bucket movement preserves every association and must not
+ -- invert withdrawal account -> entry into financial invoice -> account locks.
+ -- Subtract an explicit mutable-field allowlist so future identity fields are
+ -- guarded by default, as are INSERT/DELETE and every association change.
+ IF TG_TABLE_NAME='affiliate_commission_entries' AND TG_OP='UPDATE' AND
+  (external_refund_order_snapshot(NEW)-ARRAY['status','pending_cents','available_cents','reserved_cents','paid_cents','reversed_cents','reversal_at'])=
+  (external_refund_order_snapshot(OLD)-ARRAY['status','pending_cents','available_cents','reserved_cents','paid_cents','reversed_cents','reversal_at']) THEN RETURN NEW; END IF;
+
  FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(external_refund_order_snapshot(NEW)) WHEN 'DELETE' THEN jsonb_build_array(external_refund_order_snapshot(OLD)) ELSE jsonb_build_array(external_refund_order_snapshot(OLD),external_refund_order_snapshot(NEW)) END) LOOP
   iid:=coalesce((v->>'invoice_id')::bigint,(v->>'source_invoice_id')::bigint);
   sid:=(v->>'service_id')::bigint;
