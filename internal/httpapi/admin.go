@@ -147,6 +147,10 @@ FROM (
  FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id
  WHERE i.user_id=$1 AND admin_customer_allowed($2,i.user_id)
  UNION ALL
+ SELECT 'external_refund',r.id,i.id,i.invoice_no,r.provider,r.amount_cents,-r.amount_cents,r.status,NULL::bigint,r.created_at,r.confirmed_at,'外部退款到账'
+ FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id AND i.user_id=r.user_id
+ WHERE r.status='confirmed' AND r.user_id=$1 AND admin_customer_allowed($2,r.user_id)
+ UNION ALL
  SELECT 'ledger'::text,l.id,i.id AS invoice_id,i.invoice_no,l.entry_type AS label,NULL::bigint,l.delta_cents,'posted'::text,l.balance_after,l.created_at,NULL::timestamptz,l.note
  FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type='invoice' AND i.id=l.reference_id AND i.user_id=l.user_id
  WHERE l.user_id=$1 AND admin_customer_allowed($2,l.user_id)
