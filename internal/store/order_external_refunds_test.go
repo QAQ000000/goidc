@@ -446,3 +446,44 @@ func TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting(t *testing.T) {
 		})
 	}
 }
+
+func TestOrderExternalRefundServiceMovesCheckBothOrders(t *testing.T) {
+	for _, held := range []bool{false, true} {
+		t.Run(fmt.Sprint(held), func(t *testing.T) {
+			f := newOrderRefundFixture(t, false)
+			ctx := t.Context()
+			var otherOrder, item, service int64
+			if e := f.db.Pool.QueryRow(ctx, `INSERT INTO orders(order_no,user_id,total_cents,idempotency_key,request_hash,review_status) VALUES('MOVE-OTHER',$1,1200,'move-other-key','move-other-hash','pending') RETURNING id`, f.customer).Scan(&otherOrder); e != nil {
+				t.Fatal(e)
+			}
+			if held {
+				f.create(t)
+				if e := f.db.Pool.QueryRow(ctx, `INSERT INTO order_items(order_id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents) VALUES($1,$2,'move-source','monthly',1,1000,200,1200) RETURNING id`, otherOrder, f.product).Scan(&item); e != nil {
+					t.Fatal(e)
+				}
+				if e := f.db.Pool.QueryRow(ctx, `INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle) VALUES($1,$2,$3,$4,'move-source','move-source-domain','monthly') RETURNING id`, f.customer, otherOrder, item, f.product).Scan(&service); e != nil {
+					t.Fatal(e)
+				}
+				if _, e := f.db.Pool.Exec(ctx, `UPDATE services SET order_id=$2 WHERE id=$1`, service, f.order); e == nil {
+					t.Fatal("service moved into a held target order")
+				}
+			} else {
+				service = f.in.ExpectedServiceVersions[0].ID
+				if _, e := f.db.Pool.Exec(ctx, `UPDATE services SET order_id=$2 WHERE id=$1`, service, otherOrder); e != nil {
+					t.Fatal(e)
+				}
+				if _, e := f.db.Pool.Exec(ctx, `UPDATE services SET order_id=$2 WHERE id=$1`, service, f.order); e != nil {
+					t.Fatal(e)
+				}
+				var tainted int
+				if e := f.db.Pool.QueryRow(ctx, `SELECT count(DISTINCT order_id) FROM external_refund_delivery_history WHERE order_id=ANY($1)`, []int64{f.order, otherOrder}).Scan(&tainted); e != nil || tainted != 2 {
+					t.Fatal("both order identities must remain tainted", tainted, e)
+				}
+				c, e := f.db.ExternalRefundOrderContext(WithExternalRefundSession(ctx, "order-refund-request"), f.actor, f.invoice)
+				if e != nil || c.Eligible || c.ReasonCode != "external_refund_delivery_started" {
+					t.Fatal(c, e)
+				}
+			}
+		})
+	}
+}
