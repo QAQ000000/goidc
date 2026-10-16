@@ -216,7 +216,7 @@ INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-op
 		t.Fatalf("migration grants=%d err=%v", len(grants), err)
 	}
 	for _, p := range store.AdminPermissions {
-		if p.Code == "resources.view" || p.Code == "resources.manage" || p.Code == "credit.view" || p.Code == "credit.manage" || p.Code == "contracts.view" || p.Code == "contracts.manage" {
+		if p.Code == "balance.topup.resolve" || p.Code == "resources.view" || p.Code == "resources.manage" || p.Code == "credit.view" || p.Code == "credit.manage" || p.Code == "contracts.view" || p.Code == "contracts.manage" {
 			for _, grant := range grants {
 				if grant == p.Code {
 					t.Fatalf("later permission implicitly granted: %s", grant)
