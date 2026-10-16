@@ -39,6 +39,7 @@ type supplierFixture struct {
 	consoleCalls                           atomic.Int64
 	consoleEntered, consoleBlocked         chan struct{}
 	consoleUnknown                         atomic.Bool
+	actionUnknown                          atomic.Bool
 	systemPassword, systemOS, consoleURL   atomic.Value
 	syncFailure                            atomic.Bool
 	invoiceOnly                            atomic.Bool
@@ -171,6 +172,10 @@ func supplierSetup(t *testing.T) *supplierFixture {
 				json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]any{"url": u, "pass": "private-console-password"}})
 			} else {
 				f.actions.Add(1)
+				if f.actionUnknown.Load() {
+					fmt.Fprint(w, `{"status":200,"data":`)
+					return
+				}
 				if r.URL.Path == "/provision/custom/42" && r.PostFormValue("func") != "exitRescue" {
 					t.Error("invalid custom function")
 				}
