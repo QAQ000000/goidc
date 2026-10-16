@@ -17,3 +17,9 @@
 - supplier/NOKVM不出现可提交配置；同时捕获pageerror及console.error。新组件无native pattern。
 
 本次静态验收：typecheck PASS、两个修改组件专项ESLint PASS（0 warning）、独立webpack build PASS，日志 `/tmp/zjmfgo-upgrade-ui-build.log`。未调用生产API、未重启生产。
+
+## 客户升级账单提交恢复
+
+外层 `ProductChangeWriteBoundary` 通过真实 `/me` 核对customer身份与service.user_id，按actor/service重挂载，不依赖后台身份context。仅商品升级生成账单纳入 `zjmfgo:product-change-submit:{actor}:{service}`，存原path/method/body/key；读取完成前禁新动作，存储失败停止写。刷新无自动写，未知结果锁新报价/提交与其他配置/账期入口；即便历史已显示unpaid，服务配置区外层仍提供原请求回执核对按钮。可关闭弹窗访问外层恢复，不丢pending。确定400/409解除未知锁供重新核对；401/403/408/429保留原请求。成功才清pending并刷新服务。配置和账期自己的提交恢复仍不在本次修改范围。
+
+定向静态验收：typecheck和三文件ESLint PASS（0 warning），按任务边界未重跑build。浏览器需补响应丢失→刷新→历史unpaid仍可原key重放、无/me或他人归属无新动作、unknown期间商品/配置/账期互斥。
