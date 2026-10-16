@@ -58,8 +58,8 @@ export function customerFieldValues(fields: CustomerFieldDefinition[], values: R
   }
   return output;
 }
-export function CustomerFieldInputs({ definitions, values, onChange, disabled = false, singleColumn = false }: { definitions: { fields: CustomerFieldDefinition[]; ready: boolean; error: Error | null; refresh: () => void }; values: Record<string, unknown>; onChange: (values: Record<string, unknown>) => void; disabled?: boolean; singleColumn?: boolean }) {
-  return <section className="min-w-0 rounded border bg-background p-4 space-y-3"><h2 className="text-sm font-semibold">自定义字段</h2>{definitions.error ? <Failure error={definitions.error} retry={definitions.refresh} /> : !definitions.ready ? <Loading /> : !definitions.fields.length ? <p className="text-sm text-muted-foreground">暂无启用的自定义字段</p> : <div className={singleColumn ? "grid min-w-0 gap-4" : "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4"}>{definitions.fields.map(field => {
+export function CustomerFieldInputs({ definitions, values, onChange, disabled = false, singleColumn = false, title = "自定义字段" }: { definitions: { fields: CustomerFieldDefinition[]; ready: boolean; error: Error | null; refresh: () => void }; values: Record<string, unknown>; onChange: (values: Record<string, unknown>) => void; disabled?: boolean; singleColumn?: boolean; title?: string }) {
+  return <section className="min-w-0 rounded border bg-background p-4 space-y-3"><h2 className="text-sm font-semibold">{title}</h2>{definitions.error ? <Failure error={definitions.error} retry={definitions.refresh} /> : !definitions.ready ? <Loading /> : !definitions.fields.length ? <p className="text-sm text-muted-foreground">暂无启用的自定义字段</p> : <div className={singleColumn ? "grid min-w-0 gap-4" : "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4"}>{definitions.fields.map(field => {
     const value = values[field.field_key];
     const update = (next: unknown) => onChange({ ...values, [field.field_key]: next });
     const shared = { disabled, required: field.required, "aria-label": field.label, className: "w-full min-w-0 mt-1.5" };

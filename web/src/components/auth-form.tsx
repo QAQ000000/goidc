@@ -23,6 +23,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   const [unknownRegistration, setUnknownRegistration] = useState(false);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const submitting = useRef(false);
+  const recoveringSchema = useRef(false);
   const loadedSchema = useRef<RegistrationFields | null>(null);
   const schemaRequest = useRef<AbortController | null>(null);
   const loadRegistrationFields = useCallback(async () => {
@@ -50,10 +51,11 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         return kept;
       });
       setSchema(next); setSchemaChanged(false);
-      setSchemaNotice("已加载最新注册字段。仅保留仍公开且类型、选项兼容的输入；已移除或不再适用的值已清除。请核对后手动提交。");
+      setSchemaNotice(recoveringSchema.current ? "注册资料要求已更新，请检查保留的信息，补全后重新提交。" : "");
+      recoveringSchema.current = false;
     } catch (failure) {
       if (!controller.signal.aborted) {
-        setSchemaError(failure as Error);
+        setSchemaError(new Error("暂时无法加载注册资料要求，请重试。"));
         if (failure instanceof ApiError && failure.status === 403 && failure.code === "registration_disabled") setRegistrationDisabled(true);
       }
     } finally { if (!controller.signal.aborted) setSchemaBusy(false); }
@@ -151,10 +153,10 @@ export function AuthForm({ register = false }: { register?: boolean }) {
     } catch (e) {
       const failure = e as Error & { code?: string; details?: Record<string, unknown> };
       if (register && failure.code === "registration_fields_changed") {
-        setSchemaChanged(true); setError("注册字段已变更，输入保留在当前页面。请加载最新字段并核对后再提交。");
+        recoveringSchema.current = true; setSchemaChanged(true); setError("注册字段已变更，输入保留在当前页面。请加载最新字段并核对后再提交。");
       } else if (register && failure.code === "registration_disabled") {
         setRegistrationDisabled(true); setError("本站暂未开放注册");
-      } else if (register && (!(e instanceof ApiError) || e.status >= 500)) {
+      } else if (register && (!(e instanceof ApiError) || e.status >= 500 || e.status === 408)) {
         setUnknownRegistration(true); setError("注册结果暂时未知，账户可能已创建。请先尝试登录或找回密码核实，避免重复创建。此页已停止再次提交。");
       } else if (failure.code === "mfa_required" && typeof failure.details?.challenge === "string") {
         setMfaChallenge(failure.details.challenge);
@@ -182,7 +184,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         <p className="text-muted-foreground mb-8">
           {register ? "云服务客户中心" : "欢迎回来"}
         </p>
-        {register && siteError ? <Failure error={siteError} retry={refresh} /> : register && !site ? <Loading /> : register && (!site?.registration_enabled || registrationDisabled) ? <p role="status" className="py-6 text-muted-foreground">本站暂未开放注册</p> : <form className="space-y-5" onSubmit={submit}>
+        {register && siteError ? <Failure error={siteError} retry={refresh} /> : register && !site ? <Loading /> : register && (!site?.registration_enabled || registrationDisabled) ? <p role="status" className="py-6 text-muted-foreground">本站暂未开放注册，请刷新页面后查看是否重新开放。</p> : <form className="space-y-5" onSubmit={submit}>
           {site?.auth_captcha_enabled && !mfaChallenge && (
             <div className="space-y-2">
               <Label htmlFor="captcha_answer">图形验证码</Label>
@@ -241,7 +243,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
           {register && <>
             {schemaChanged && <div role="alert" className="space-y-2 text-sm"><p>注册字段已更新，请加载最新字段并重新核对。</p><Button type="button" variant="outline" disabled={schemaBusy || busy} onClick={() => void loadRegistrationFields()}>加载最新注册字段</Button></div>}
             {schemaNotice && schema && <p role="status" className="text-xs text-muted-foreground break-words">{schemaNotice}</p>}
-            <CustomerFieldInputs singleColumn definitions={{ fields: schema?.items ?? [], ready: !!schema && !schemaBusy, error: schemaError, refresh: () => void loadRegistrationFields() }} values={customFields} onChange={setCustomFields} disabled={busy || schemaBusy || schemaChanged || unknownRegistration} />
+            <CustomerFieldInputs title="补充资料" singleColumn definitions={{ fields: schema?.items ?? [], ready: !!schema && !schemaBusy, error: schemaError, refresh: () => void loadRegistrationFields() }} values={customFields} onChange={setCustomFields} disabled={busy || schemaBusy || schemaChanged || unknownRegistration} />
             {unknownRegistration && <p className="text-sm"><Link href="/login" className="underline">检查登录</Link> · <Link href="/forgot-password" className="underline">找回密码</Link></p>}
           </>}
           <div className="space-y-2">
