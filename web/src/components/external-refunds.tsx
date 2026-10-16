@@ -181,7 +181,7 @@ function RefundPanel({
   );
   const topup = invoice.invoice_kind === "topup";
   const eligible =
-    (topup ? invoice.topup?.status === "credited" && !invoice.topup.resolution : invoice.invoice_kind === "manual") &&
+    (topup ? invoice.topup?.status === "credited" && (!invoice.topup.resolution || (invoice.topup.resolution.amount_cents === invoice.amount_cents && invoice.topup.resolution.ledger_id > 0)) : invoice.invoice_kind === "manual") &&
     invoice.status === "paid" &&
     invoice.external_payment_paid &&
     !invoice.order_id &&
@@ -371,7 +371,7 @@ function RefundPanel({
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
-        这里只登记已在外部发生的退款，不执行退款、不增加客户余额。确认须核实真实到账并由其他员工独立复核；原收款记录永久保留。支持无业务关联的普通人工账单及原始结算已入账的充值整单退款，最终资格由服务端重验。
+        这里只登记已在外部发生的退款，不执行退款、不增加客户余额。确认须核实真实到账并由其他员工独立复核；原收款记录永久保留。支持无业务关联的普通人工账单及实际已入账（含有完整补账事实）的充值整单退款，最终资格由服务端重验。
       </p>
       {topup && <p className="text-sm rounded border p-3">充值退款申请会冻结对应可用余额；独立确认后扣减，驳回后释放。可用余额不足时服务端拒绝申请，不允许透支或重复冲正。</p>}
       {!storageReady && !storageError && <p role="status" className="text-sm">正在检查本员工的原退款请求，完成前不可新操作。</p>}
@@ -380,7 +380,7 @@ function RefundPanel({
       {!open && !action && error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
       {!eligible && (
         <p className="text-sm">
-          此账单当前不满足登记条件：须为已付普通人工账单或原始结算已入账充值，匹配唯一全额成功外部收款，且无订单、资源或信用等关联。补账后入账的充值暂不支持。
+          此账单当前不满足登记条件：须为已付普通人工账单或实际已入账充值，匹配唯一全额成功外部收款，且无订单、资源或信用等关联。补账充值须保留完整补账事实与入账流水；未补入余额暂不支持。
         </p>
       )}
       {notice && (

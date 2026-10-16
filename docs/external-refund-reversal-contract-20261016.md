@@ -4,6 +4,8 @@
 
 旧版事实参考：`/www/wwwroot/zjmf-manger-decoded/app/admin/controller/InvoiceController.php:1151` 以原 accounts 收款/退款合计约束金额，区分 `addascredit` 与 `only`，`only` 记外部出款并把账单改 `Refunded`；`ClientsServicesController.php:1452` 另有按天/全额/自定义的资源退款。Go 保留原收款与出款分开追溯的语义，但不照搬未核验到账、浮点金额、只改资源退款记录的宽松状态操作。
 
+2026-10-17 后续单一增量：[补账后充值整单外部退款契约](resolved-topup-external-refund-contract-20261017.md)扩展了下表“已由迁移148补入余额”的拒绝边界；未补账仍拒绝。旧批次描述保留为历史验收范围。
+
 ## 目标和不变事实
 
 登记请求只保存原支付、客户、账单、金额、商户身份快照、商户退款流水和证据摘要。`pending_review` 不是出款事实；只有独立员工确认后的 `confirmed` 才能改变本地账务。相同幂等键重放原响应，载荷变化返回 409；账单版本、会话、权限、客户销售范围和申请人与复核人都在资金事务内重新核对。审计失败或任何冲正失败必须整体回滚。

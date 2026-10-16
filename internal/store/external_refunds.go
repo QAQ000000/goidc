@@ -219,6 +219,9 @@ func (s *Store) ListExternalRefunds(ctx context.Context, actorID, invoiceID int6
 		return out, 0, err
 	}
 	defer tx.Rollback(ctx)
+	if err = LockAdminResourceCustomer(ctx, tx, actorID, "invoice", invoiceID); err != nil {
+		return out, 0, err
+	}
 	if err = externalRefundAuthorize(ctx, tx, actorID, "external_refunds.view", false); err != nil {
 		return out, 0, err
 	}
@@ -305,6 +308,11 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if id > 0 {
 		permission = "external_refunds.review"
 	}
+	// Match sales assignment and liability resolution: scope advisory lock
+	// precedes actor locks, then reread scope after a possible actor-row wait.
+	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+		return out, err
+	}
 	if err = externalRefundAuthorize(ctx, tx, actor, permission, true); err != nil {
 		return out, err
 	}
@@ -388,13 +396,14 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 				return out, err
 			}
 		} else {
-			var topupStatus, settlementStatus string
-			var settlementLedger *int64
-			if err = tx.QueryRow(ctx, `SELECT t.status,s.status,s.ledger_id FROM balance_topups t LEFT JOIN balance_topup_settlements s ON s.topup_id=t.id WHERE t.invoice_id=$1 FOR UPDATE OF t`, invoice).Scan(&topupStatus, &settlementStatus, &settlementLedger); err != nil {
-				return out, conflict("external_refund_topup_not_credited", "仅支持原结算直接入账的充值；待补账或后补账充值需专项核对")
+			// The financial customer lock also serializes liability resolution.
+			// Use the same full credit proof as the reservation's DB trigger.
+			var credited bool
+			if err = tx.QueryRow(ctx, `SELECT external_refund_topup_credit_valid($1,$2,$3,$4)`, invoice, payment, customer, amount).Scan(&credited); err != nil {
+				return out, err
 			}
-			if topupStatus != "credited" || settlementStatus != "credited" || settlementLedger == nil {
-				return out, conflict("external_refund_topup_not_credited", "仅支持原结算直接入账的充值；待补账或后补账充值需专项核对")
+			if !credited {
+				return out, conflict("external_refund_topup_not_credited", "充值缺少匹配原收款的实际入账流水或不可变补账事实，需专项核对")
 			}
 		}
 		if err = requireInvoiceReviewed(ctx, tx, invoice); err != nil {

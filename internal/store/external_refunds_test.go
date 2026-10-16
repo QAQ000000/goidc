@@ -265,6 +265,14 @@ func TestExternalRefundBusinessGuards(t *testing.T) {
 }
 
 func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
+	externalRefundTopupBalanceLifecycle(t, false)
+}
+
+func TestExternalRefundResolvedTopupBalanceReservationAndReversal(t *testing.T) {
+	externalRefundTopupBalanceLifecycle(t, true)
+}
+
+func externalRefundTopupBalanceLifecycle(t *testing.T, resolved bool) {
 	db, ctx, actor, uid := onlineTopupFixture(t)
 	var reviewer int64
 	if err := db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('topup-refund-reviewer','topup-refund-reviewer@example.test','unused','Topup refund reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
@@ -280,10 +288,35 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if resolved {
+		if _, err = db.Pool.Exec(ctx, `CREATE FUNCTION fail_initial_credit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.reference_type='gateway_topup' THEN RAISE EXCEPTION 'isolated posting failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_initial_credit BEFORE INSERT ON balance_ledger FOR EACH ROW EXECUTE FUNCTION fail_initial_credit()`); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err = topupSuccess(db, ctx, intent, "external-topup-success"); err != nil {
 		t.Fatal(err)
 	}
+	if resolved {
+		if _, err = db.Pool.Exec(ctx, `DROP TRIGGER fail_initial_credit ON balance_ledger`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.ResolveTopupLiability(WithTopupLiabilitySession(ctx, "topup-refund-request"), actor, topup.InvoiceID, ResolveTopupLiabilityInput{ExpectedVersion: 2, Note: "isolated full credit proof"}, "external-refund-resolution"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var originalFacts string
+	if err = db.Pool.QueryRow(ctx, `SELECT jsonb_build_array(to_jsonb(s),(SELECT to_jsonb(x) FROM balance_topup_liability_resolutions x WHERE x.topup_id=s.topup_id))::text FROM balance_topup_settlements s WHERE invoice_id=$1`, topup.InvoiceID).Scan(&originalFacts); err != nil {
+		t.Fatal(err)
+	}
 	in := ExternalRefundInput{PaymentID: intent.PaymentID, AmountCents: 400, Method: "original_route", ProviderRefundID: "external-topup-refund", ReceivedAt: time.Now(), EvidenceRef: "test://topup-refund", EvidenceSHA256: strings.Repeat("b", 64), Note: "verified external top-up refund", ExpectedVersion: 2}
+	if resolved {
+		in.ExpectedVersion = 3
+	}
+	partial := in
+	partial.AmountCents--
+	if _, e := db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, partial, "external-topup-partial"); conflictCode(t, e) != "external_refund_amount_mismatch" {
+		t.Fatal(e)
+	}
 	pending, err := db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "external-topup-refund-create")
 	if err != nil {
 		t.Fatal(err)
@@ -318,6 +351,9 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	if _, err = db.PayInvoice(ctx, uid, manual, "topup-released-spend", 1); err != nil {
 		t.Fatalf("released reservation still blocked spend: %v", err)
 	}
+	if _, e := db.CreateExternalRefund(requestCtx, actor, topup.InvoiceID, in, "external-topup-consumed"); conflictCode(t, e) != "external_refund_balance_reserved" {
+		t.Fatal(e)
+	}
 	// Restore just the legitimately spent amount; this is a real top-up path,
 	// not a direct fixture balance overwrite.
 	if _, _, err = db.TopUp(ctx, actor, uid, 100, "topup-refund-replenish", "restore spend fixture"); err != nil {
@@ -329,6 +365,18 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 		t.Fatal(err)
 	}
 	review.Note = "independently verified corrected top-up refund"
+	if resolved {
+		// Fault injection only: simulate an old writer bypassing the reservation.
+		if _, err = db.Pool.Exec(ctx, `UPDATE users SET balance_cents=399 WHERE id=$1`, uid); err != nil {
+			t.Fatal(err)
+		}
+		if _, e := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-insufficient"); conflictCode(t, e) != "external_refund_balance_insufficient" {
+			t.Fatal(e)
+		}
+		if _, err = db.Pool.Exec(ctx, `UPDATE users SET balance_cents=400 WHERE id=$1`, uid); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err = db.Pool.Exec(ctx, `CREATE FUNCTION reject_refund_reversal_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='external_refund.confirmed' THEN RAISE EXCEPTION 'isolated refund audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_refund_reversal_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_refund_reversal_audit()`); err != nil {
 		t.Fatal(err)
 	}
@@ -350,6 +398,13 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 	replay, err := db.ReviewExternalRefund(reviewCtx, reviewer, topup.InvoiceID, pending.Refund.ID, true, review, "external-topup-confirm")
 	if err != nil || !replay.Replayed {
 		t.Fatalf("confirm replay=%+v err=%v", replay, err)
+	}
+	if _, err = topupSuccess(db, ctx, intent, "external-topup-post-refund-replay"); err != nil {
+		t.Fatal(err)
+	}
+	var finalFacts string
+	if err = db.Pool.QueryRow(ctx, `SELECT jsonb_build_array(to_jsonb(s),(SELECT to_jsonb(x) FROM balance_topup_liability_resolutions x WHERE x.topup_id=s.topup_id))::text FROM balance_topup_settlements s WHERE invoice_id=$1`, topup.InvoiceID).Scan(&finalFacts); err != nil || finalFacts != originalFacts {
+		t.Fatalf("original facts changed: %s/%s err=%v", originalFacts, finalFacts, err)
 	}
 	var invoiceStatus, topupStatus, reservationStatus string
 	var topupLedger, refundLedger, reservations int
@@ -379,6 +434,12 @@ func TestExternalRefundTopupBalanceReservationAndReversal(t *testing.T) {
 }
 
 func TestExternalRefundTopupReservationRacesSpendingAndAdminCredit(t *testing.T) {
+	externalRefundTopupReservationRace(t, false)
+}
+func TestExternalRefundResolvedTopupReservationRacesSpendingAndAdminCredit(t *testing.T) {
+	externalRefundTopupReservationRace(t, true)
+}
+func externalRefundTopupReservationRace(t *testing.T, resolved bool) {
 	db, ctx, actor, uid := onlineTopupFixture(t)
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
@@ -396,8 +457,21 @@ func TestExternalRefundTopupReservationRacesSpendingAndAdminCredit(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if resolved {
+		if _, err = db.Pool.Exec(ctx, `CREATE FUNCTION fail_race_credit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.reference_type='gateway_topup' THEN RAISE EXCEPTION 'isolated posting failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_race_credit BEFORE INSERT ON balance_ledger FOR EACH ROW EXECUTE FUNCTION fail_race_credit()`); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if _, err = topupSuccess(db, ctx, intent, "race-refund-success"); err != nil {
 		t.Fatal(err)
+	}
+	if resolved {
+		if _, err = db.Pool.Exec(ctx, `DROP TRIGGER fail_race_credit ON balance_ledger`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.ResolveTopupLiability(WithTopupLiabilitySession(ctx, "race-refund-request"), actor, topup.InvoiceID, ResolveTopupLiabilityInput{ExpectedVersion: 2, Note: "isolated concurrent credit proof"}, "race-refund-resolution"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,amount_cents) VALUES('RACE-REFUND-SPEND',$1,'manual',100) RETURNING id`, uid).Scan(&spendInvoice); err != nil {
 		t.Fatal(err)
@@ -406,6 +480,9 @@ func TestExternalRefundTopupReservationRacesSpendingAndAdminCredit(t *testing.T)
 		t.Fatal(err)
 	}
 	in := ExternalRefundInput{PaymentID: intent.PaymentID, AmountCents: 400, Method: "bank_transfer", ProviderRefundID: "race-refund-receipt", ReceivedAt: time.Now(), EvidenceRef: "test://race", EvidenceSHA256: strings.Repeat("c", 64), Note: "race verified receipt", ExpectedVersion: 2}
+	if resolved {
+		in.ExpectedVersion = 3
+	}
 	type result struct {
 		action string
 		refund ExternalRefundResult
