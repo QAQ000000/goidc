@@ -105,13 +105,19 @@ func (s *Store) PaymentTransactionGatewayTx(ctx context.Context, tx pgx.Tx, prov
 	}
 	var cfg struct {
 		payment.EpayConfig
-		Unavailable bool `json:"unavailable"`
+		Unavailable    bool   `json:"unavailable"`
+		Implementation string `json:"implementation"`
+		MockSecret     string `json:"mock_secret"`
 	}
 	if json.Unmarshal(raw, &cfg) != nil {
 		return nil, false, fmt.Errorf("payment credentials unavailable")
 	}
 	if cfg.Unavailable {
 		return nil, false, nil
+	}
+	if provider == "mock" && cfg.Implementation == "mock" && cfg.MockSecret != "" {
+		gateway, ok := payment.For(provider, cfg.MockSecret)
+		return gateway, ok, nil
 	}
 	gateway, ok := payment.For(provider, fallback.MockSecret, cfg.EpayConfig)
 	return gateway, ok, nil

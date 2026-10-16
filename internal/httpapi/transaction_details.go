@@ -18,7 +18,7 @@ const invoicePendingProjection = `EXISTS(SELECT 1 FROM payment_close_anomalies a
  (SELECT s.amount_cents FROM balance_topup_settlements s WHERE s.invoice_id=i.id AND s.status='pending_liability' AND NOT EXISTS(SELECT 1 FROM balance_topup_liability_resolutions r WHERE r.topup_id=s.topup_id)) AS topup_pending_liability_cents,
  (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired'))) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS payment_pending,
  EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded') AS external_payment_paid,
- (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock')) OR EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.invoice_id=i.id AND c.status IN ('checking','unknown')) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS real_payment_pending, (SELECT jsonb_build_object('remaining_cents',cp.remaining_cents,'status',cp.status,'amount_cents',cp.amount_cents) FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) AS credit_payment`
+ (i.status='unpaid' AND EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status IN ('pending','expired') AND pt.provider<>'mock')) OR EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.invoice_id=i.id AND payment_close_operation_unresolved(c.id)) OR EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.invoice_id=i.id AND payment_close_anomaly_unresolved(a.id)) AS real_payment_pending, (SELECT jsonb_build_object('remaining_cents',cp.remaining_cents,'status',cp.status,'amount_cents',cp.amount_cents) FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) AS credit_payment`
 const maskedPurchaseFields = `coalesce((SELECT jsonb_agg(CASE WHEN field->>'encrypted'='true' THEN jsonb_set(field,'{value}','"********"'::jsonb) ELSE field END) FROM jsonb_array_elements(purchase_fields) field),'[]'::jsonb)`
 const orderItemProjection = `id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,` + maskedPurchaseFields + ` AS purchase_fields,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit`
 
@@ -181,11 +181,15 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
  (SELECT c.result_code FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS check_code,
  (SELECT c.started_at FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS checked_at,
  (SELECT c.source FROM payment_reconciliation_checks c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS check_source,
+ (SELECT c.id FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_operation_id,
+ (SELECT c.operation_id FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_operation_external_id,
+ EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=pt.id AND payment_close_operation_unresolved(c.id) AND (c.status='unknown' OR c.lease_until<=clock_timestamp())) AS close_verification_required,
+ EXISTS(SELECT 1 FROM payment_close_verification_requests r WHERE r.payment_id=pt.id AND r.lease_until>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM payment_close_verification_results v WHERE v.request_id=r.id)) OR EXISTS(SELECT 1 FROM payment_reconciliation_checks q WHERE q.payment_id=pt.id AND q.status='checking' AND q.lease_until>clock_timestamp()) AS close_verification_busy,
  (SELECT c.status FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_status,
  (SELECT c.result_code FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_code,
  (SELECT c.started_at FROM payment_close_operations c WHERE c.payment_id=pt.id ORDER BY c.id DESC LIMIT 1) AS close_requested_at,
  EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.payment_id=pt.id AND payment_close_anomaly_unresolved(a.id)) AS close_anomaly,
- EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=pt.id AND c.status IN ('checking','unknown')) AS close_frozen,
+ EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=pt.id AND payment_close_operation_unresolved(c.id)) AS close_frozen,
  pt.next_reconcile_at,pt.auto_reconcile_attempts,
  pt.status IN ('pending','expired') AND pt.provider LIKE 'epay_%' AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
  FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE i.id=$1 ORDER BY pt.id DESC LIMIT 50`, id, admin))
@@ -203,6 +207,24 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 		payment["query_enabled"] = gatewayErr == nil && enabled
 		_, closeSupported := gateway.(paymentapi.CloseGateway)
 		payment["close_supported"] = gatewayErr == nil && enabled && closeSupported
+		_, lookupSupported := gateway.(paymentapi.CloseStatusGateway)
+		var snapshotPresent bool
+		if err = tx.QueryRow(ctx, "SELECT octet_length(credential_snapshot)>0 FROM payment_transactions WHERE id=$1", payment["id"]).Scan(&snapshotPresent); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		payment["lookup_supported"] = gatewayErr == nil && enabled && lookupSupported && snapshotPresent
+		payment["close_verification_can_request"] = admin && identityFrom(r).can("payments.close_verify") && payment["lookup_supported"] == true && payment["close_verification_required"] == true && payment["close_verification_busy"] != true && invoice["payment_close_anomaly"] != true && invoice["status"] == "unpaid"
+		resolution, resolutionErr := s.db.PaymentCloseResolutionTx(ctx, tx, payment["id"].(int64))
+		if resolutionErr != nil {
+			s.fail(w, r, resolutionErr)
+			return
+		}
+		payment["close_resolution"] = resolution
+		payment["effective_close_status"] = payment["close_status"]
+		if resolution != nil {
+			payment["effective_close_status"] = resolution.PaymentStatus
+		}
 		payment["close_enabled"] = admin && identityFrom(r).can("payments.close") && gatewayErr == nil && enabled && closeSupported && (payment["status"] == "pending" || payment["status"] == "expired") && payment["close_frozen"] != true && invoice["payment_close_anomaly"] != true
 		if payment["provider"] == "mock" {
 			payment["query_enabled"] = false

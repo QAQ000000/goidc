@@ -21,6 +21,7 @@ type PaymentCloseOperation struct {
 	ExternalTransactionID                                                   string
 	Version                                                                 int64
 	Replayed                                                                bool
+	Resolution                                                              *PaymentCloseResolution
 }
 
 func closeOperationHash(invoiceID, paymentID, expectedVersion int64) string {
@@ -36,7 +37,11 @@ func newCloseOperationID() (string, error) {
 	return "close_" + hex.EncodeToString(raw), nil
 }
 
-func authorizePaymentClose(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string, invoiceID int64) error {
+func authorizePaymentClose(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string, invoiceID int64, required ...string) error {
+	permission := "payments.close"
+	if len(required) > 0 {
+		permission = required[0]
+	}
 	if strings.TrimSpace(sessionHash) == "" {
 		return conflict("unauthorized", "关单操作需要有效浏览器会话")
 	}
@@ -60,7 +65,7 @@ func authorizePaymentClose(ctx context.Context, tx pgx.Tx, actorID int64, sessio
 	}
 	var active bool
 	var permissions []string
-	if err := tx.QueryRow(ctx, "SELECT active,permissions FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&active, &permissions); err != nil || !active || (!slices.Contains(permissions, "payments.close") || !slices.Contains(permissions, "invoices.view")) {
+	if err := tx.QueryRow(ctx, "SELECT active,permissions FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&active, &permissions); err != nil || !active || (!slices.Contains(permissions, permission) || !slices.Contains(permissions, "invoices.view")) {
 		return conflict("permission_denied", "没有支付关单权限")
 	}
 	// Employee scope may have changed while the employee row lock was awaited.
@@ -106,6 +111,14 @@ func (s *Store) BeginPaymentClose(ctx context.Context, actorID, invoiceID, payme
 		if out.Status == "closed" {
 			out.Version = out.ExpectedVersion + 1
 		}
+		out.Resolution, err = paymentCloseResolution(ctx, tx, out.PaymentID, out.ID)
+		if err != nil {
+			return out, err
+		}
+		if out.Resolution != nil {
+			out.Status = out.Resolution.PaymentStatus
+			out.Version = out.Resolution.Version
+		}
 		out.Replayed = true
 		return out, tx.Commit(ctx)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -136,7 +149,7 @@ func (s *Store) BeginPaymentClose(ctx context.Context, actorID, invoiceID, payme
 		return out, conflict("payment_not_closable", "支付单当前状态不可关单")
 	}
 	var busy bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_reconciliation_checks WHERE payment_id=$1 AND status='checking') OR EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND status IN ('checking','unknown'))`, paymentID).Scan(&busy); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_reconciliation_checks WHERE payment_id=$1 AND status='checking') OR EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND payment_close_operation_unresolved(id))`, paymentID).Scan(&busy); err != nil {
 		return out, err
 	}
 	if busy {
@@ -197,7 +210,7 @@ func (s *Store) CompletePaymentClose(ctx context.Context, op PaymentCloseOperati
 		return op, conflict("payment_close_expired", "关单操作已失效，原支付单继续冻结")
 	}
 	var credentialsUnchanged bool
-	if err = tx.QueryRow(ctx, `SELECT c.credential_sha256=encode(sha256(p.credential_snapshot),'hex') FROM payment_close_operations c JOIN payment_transactions p ON p.id=c.payment_id WHERE c.id=$1`, op.ID).Scan(&credentialsUnchanged); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT c.credential_sha256=encode(sha256(p.credential_snapshot),'hex') AND c.channel_instance_id=COALESCE(p.channel_instance_id,'') FROM payment_close_operations c JOIN payment_transactions p ON p.id=c.payment_id WHERE c.id=$1`, op.ID).Scan(&credentialsUnchanged); err != nil {
 		return op, err
 	}
 	if !credentialsUnchanged {
@@ -226,7 +239,7 @@ func (s *Store) CompletePaymentClose(ctx context.Context, op PaymentCloseOperati
 		return stored, conflict("payment_already_closed", "支付单已经关闭")
 	}
 	if paymentStatus != "pending" && paymentStatus != "expired" || invoiceStatus != "unpaid" || invoiceVersion != stored.ExpectedVersion {
-		if err = finishPaymentCloseOutcome(ctx, tx, stored, "error", "state_changed", result, "账单或支付状态已变化"); err != nil {
+		if err = finishPaymentCloseOutcome(ctx, tx, stored, "unknown", "state_changed", result, "账单或支付状态已变化"); err != nil {
 			return op, err
 		}
 		if err = tx.Commit(ctx); err != nil {
@@ -285,7 +298,7 @@ func (s *Store) FailPaymentClose(ctx context.Context, op PaymentCloseOperation, 
 	}
 	defer tx.Rollback(ctx)
 	resultJSON, _ := json.Marshal(map[string]any{"status": status, "code": code})
-	result, err := tx.Exec(ctx, `UPDATE payment_close_operations SET status=$2,result_code=$3,result=$4,completed_at=clock_timestamp(),updated_at=clock_timestamp(),lease_until=clock_timestamp() WHERE id=$1 AND status='checking'`, op.ID, status, code, resultJSON)
+	result, err := tx.Exec(ctx, `UPDATE payment_close_operations SET status=$2,result_code=$3,result=$4,completed_at=clock_timestamp(),updated_at=clock_timestamp(),lease_until=clock_timestamp() WHERE id=$1 AND status='checking' AND lease_until>clock_timestamp()`, op.ID, status, code, resultJSON)
 	if err != nil {
 		return err
 	}

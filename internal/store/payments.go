@@ -133,6 +133,14 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 		}
 	}
 	var sealed []byte
+	if provider == "mock" {
+		if cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration); ok && cfg.MockSecret != "" {
+			raw, _ := json.Marshal(map[string]string{"implementation": "mock", "mock_secret": cfg.MockSecret})
+			if sealed, err = s.paymentCredentials(providerPaymentID, raw, true); err != nil {
+				return out, err
+			}
+		}
+	}
 	if realPaymentProvider(provider) {
 		cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration)
 		if !ok {
@@ -164,7 +172,7 @@ func requireNoRealPaymentPending(ctx context.Context, tx pgx.Tx, invoiceID int64
 		return err
 	}
 	var pending bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND status IN ('checking','unknown'))", invoiceID).Scan(&pending); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND payment_close_operation_unresolved(id))", invoiceID).Scan(&pending); err != nil {
 		return err
 	}
 	if pending {
@@ -208,8 +216,6 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 	if provider == "" || eventID == "" || providerPaymentID == "" || invoiceID < 1 || amountCents < 0 || (status != "succeeded" && status != "failed") || len(raw) == 0 {
 		return out, conflict("invalid_payment_webhook", "支付回调参数无效")
 	}
-	hash := sha256.Sum256(raw)
-	payloadHash := hex.EncodeToString(hash[:])
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return out, err
@@ -224,6 +230,20 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 			return out, err
 		}
 	}
+	out, err = s.processPaymentWebhookTx(ctx, tx, provider, eventID, providerPaymentID, invoiceID, amountCents, status, raw, externalTransaction, check, topup)
+	if err != nil {
+		return out, err
+	}
+	return out, tx.Commit(ctx)
+}
+
+// Shared transaction core for notifications, queries and independently reviewed
+// close evidence. Its caller owns authentication, lock preflight and commit.
+func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider, eventID, providerPaymentID string, invoiceID, amountCents int64, status string, raw []byte, externalTransaction []string, check *PaymentCheck, topup bool) (WebhookResult, error) {
+	var out WebhookResult
+	var err error
+	hash := sha256.Sum256(raw)
+	payloadHash := hex.EncodeToString(hash[:])
 	if err = lockOperationKey(ctx, tx, "payment-webhook", provider+":"+eventID); err != nil {
 		return out, err
 	}
@@ -234,7 +254,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 			return out, conflict("webhook_replay_mismatch", "重复回调内容不一致")
 		}
 		out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: "processed", Replayed: true}
-		return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+		return out, finishPaymentCheckInTx(ctx, tx, check, "succeeded")
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
@@ -280,7 +300,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 			return out, err
 		}
 		out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: "closed"}
-		return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+		return out, finishPaymentCheckInTx(ctx, tx, check, "succeeded")
 	}
 	if txStatus == "succeeded" {
 		if len(externalTransaction) > 0 {
@@ -293,7 +313,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 			}
 		}
 		out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: "succeeded", Replayed: true}
-		return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+		return out, finishPaymentCheckInTx(ctx, tx, check, "succeeded")
 	}
 	if txStatus == "failed" && status == "succeeded" && !topup {
 		return out, conflict("payment_state_conflict", "失败支付不能直接标记成功")
@@ -349,7 +369,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		return out, err
 	}
 	out = WebhookResult{EventID: eventID, Provider: provider, ProviderPaymentID: providerPaymentID, InvoiceID: invoiceID, Status: status}
-	return out, finishPaymentCheck(ctx, tx, check, "succeeded")
+	return out, finishPaymentCheckInTx(ctx, tx, check, "succeeded")
 }
 
 // Call while holding the invoice lock, shared with the late callback writer.

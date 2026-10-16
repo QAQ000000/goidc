@@ -83,7 +83,7 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 		return check, err
 	}
 	var closing bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND status='checking')`, paymentID).Scan(&closing); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND status='checking' AND lease_until>clock_timestamp())`, paymentID).Scan(&closing); err != nil {
 		return check, err
 	}
 	if closing {
@@ -115,8 +115,15 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 }
 
 func finishPaymentCheck(ctx context.Context, tx pgx.Tx, check *PaymentCheck, status string) error {
+	if err := finishPaymentCheckInTx(ctx, tx, check, status); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func finishPaymentCheckInTx(ctx context.Context, tx pgx.Tx, check *PaymentCheck, status string) error {
 	if check == nil {
-		return tx.Commit(ctx)
+		return nil
 	}
 	// A replay may reach this point without having locked the payment yet.
 	// Keep payment-before-check ordering consistent with reservations.
@@ -139,7 +146,7 @@ func finishPaymentCheck(ctx context.Context, tx pgx.Tx, check *PaymentCheck, sta
 	if err = Audit(ctx, tx, check.ActorID, "payment.reconciliation.completed", "invoice", check.InvoiceID, map[string]any{"payment_id": check.PaymentID, "check_id": check.ID, "status": status, "source": check.source()}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *Store) CompletePaymentCheck(ctx context.Context, check PaymentCheck, result payment.QueryResult) (WebhookResult, error) {

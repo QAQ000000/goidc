@@ -99,7 +99,7 @@ func New(name string, config FactoryConfig) (Gateway, error) {
 func init() {
 	gatewayRegistry.MustRegister(channel.Descriptor{
 		ID: "mock", Name: "模拟支付", Category: channel.Payment,
-		Capabilities: []string{"create_intent", "verify_webhook", "query", "close_intent"},
+		Capabilities: []string{"create_intent", "verify_webhook", "query", "close_intent", "lookup_close"},
 		Fields:       []channel.Field{{Key: "secret_source", Label: "签名密钥来源", Type: channel.Select, Options: []string{"deployment"}}},
 	}, func(config FactoryConfig) (Gateway, error) {
 		return MockGateway{Secret: []byte(config.Secret)}, nil
@@ -165,7 +165,9 @@ func (g MockGateway) Close(ctx context.Context, req CloseRequest) (CloseResult, 
 	if req.ProviderPaymentID == "" || req.AmountCents < 1 || req.OperationID == "" {
 		return CloseResult{}, ErrCloseInvalid
 	}
-	return CloseResult{ProviderPaymentID: req.ProviderPaymentID, OperationID: req.OperationID, AmountCents: req.AmountCents, Status: "closed"}, nil
+	result := CloseResult{ProviderPaymentID: req.ProviderPaymentID, OperationID: req.OperationID, AmountCents: req.AmountCents, Status: "closed"}
+	g.recordCloseEvidence(result)
+	return result, nil
 }
 
 func For(name, secret string, configs ...EpayConfig) (Gateway, bool) {

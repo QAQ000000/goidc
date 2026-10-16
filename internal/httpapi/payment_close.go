@@ -45,6 +45,7 @@ func paymentClosePayload(op store.PaymentCloseOperation) map[string]any {
 		"operation_id":            op.OperationID,
 		"external_transaction_id": op.ExternalTransactionID,
 		"replayed":                op.Replayed,
+		"resolution":              op.Resolution,
 		"version":                 op.Version,
 	}
 }
@@ -121,6 +122,10 @@ func (s *Server) closePayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writePaymentCloseReplay(w http.ResponseWriter, r *http.Request, op store.PaymentCloseOperation) {
+	if op.Resolution != nil && (op.Status == "closed" || op.Status == "succeeded") {
+		write(w, http.StatusOK, paymentClosePayload(op))
+		return
+	}
 	switch op.Status {
 	case "closed":
 		write(w, http.StatusOK, paymentClosePayload(op))
