@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -262,4 +263,70 @@ func TestCustomerCreditPortalBrowserFixture(t *testing.T) {
 		}
 		t.Cleanup(func() { os.Remove(p) })
 	})
+}
+
+func TestCustomerCreditPortalQueryBoundsAndRevokedSession(t *testing.T) {
+	f := newCreditPortalFixture(t)
+	id := f.invoice(t, f.aid, f.a, "query-bounds-credit", true)
+	for _, base := range []string{"/api/v1/credit/consumptions", "/api/v1/credit/repayments"} {
+		for _, query := range []string{"q=a&q=b", "limit=1&limit=2", "invoice_id=1&invoice_id=2"} {
+			expect(t, request(f.h, "GET", base+"?"+query, nil, f.a, ""), 400)
+		}
+		hundred := url.QueryEscape(strings.Repeat("信", 100))
+		w := request(f.h, "GET", base+"?q="+hundred, nil, f.a, "")
+		expect(t, w, 200)
+		if data(t, w)["total"] != float64(0) {
+			t.Fatal("unexpected long literal query match")
+		}
+		expect(t, request(f.h, "GET", base+"?q="+url.QueryEscape(strings.Repeat("信", 101)), nil, f.a, ""), 400)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE user_id=$1", f.aid); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/credit/account", "/api/v1/credit/consumptions", "/api/v1/credit/repayments", fmt.Sprintf("/api/v1/invoices/%d/credit", id)} {
+		expect(t, request(f.h, "GET", path, nil, f.a, ""), 401)
+	}
+}
+
+func TestCustomerCreditPortalHiddenDisplayAndMissingSettings(t *testing.T) {
+	f := newCreditPortalFixture(t)
+	id := f.invoice(t, f.aid, f.a, "display-hidden-credit", true)
+	f.repay(t, id, 1000, 1, "display-hidden-repay")
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE site_settings SET admin_settings=jsonb_set(admin_settings,'{frontend_credit_enabled}','false')`); err != nil {
+		t.Fatal(err)
+	}
+	w := request(f.h, "GET", "/api/v1/credit/account", nil, f.a, "")
+	expect(t, w, 200)
+	account := data(t, w)
+	if account["display_enabled"] != false || account["payment_enabled"] != true || account["used_cents"] != float64(2000) {
+		t.Fatal("display preference altered credit authorization or debt", account)
+	}
+	d := creditPortalDetail(t, f, id)
+	if d["remaining_cents"] != float64(2000) || d["repaid_cents"] != float64(1000) {
+		t.Fatal("hidden display hid historical facts", d)
+	}
+	for _, suffix := range []string{"consumptions", "repayments"} {
+		w := request(f.h, "GET", "/api/v1/credit/"+suffix, nil, f.a, "")
+		expect(t, w, 200)
+		if data(t, w)["total"] != float64(1) {
+			t.Fatal("hidden display hid historical rows")
+		}
+	}
+	for _, table := range []string{"credit_settings"} {
+		t.Run(table, func(t *testing.T) {
+
+			// Keep a copy before deletion so each missing-row case is independent.
+			var raw []byte
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT row_to_json(s) FROM "+table+" s WHERE id=1").Scan(&raw); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Pool.Exec(t.Context(), "DELETE FROM "+table+" WHERE id=1"); err != nil {
+				t.Fatal(err)
+			}
+			expect(t, request(f.h, "GET", "/api/v1/credit/account", nil, f.a, ""), 503)
+			if _, err := f.db.Pool.Exec(t.Context(), "INSERT INTO "+table+" SELECT * FROM json_populate_record(NULL::"+table+",$1::json)", string(raw)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }

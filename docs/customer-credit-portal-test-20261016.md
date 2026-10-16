@@ -25,3 +25,5 @@ root credit-portal-super；manager credit-portal-manager（credit.view/manage、
 所有状态由真实manual账单/信用付款/后台还款/退款形成，没有伪造资金行。短时ready/stop烟测PASS23.307s，6账单ID及0600检查通过，采样schema结束计数0，临时清单清理。四宽1440/1024/390/320浏览器与全量尚未执行，由主代理另验，不把fixture烟测算页面通过。
 
 上述专项-race实际退出0，包9.099s，所有匹配测试PASS（opt-in fixture默认SKIP）。日志/tmp/customer-credit-portal-race-20261016.log。预期缺账户诊断ERROR及旧审计故障注入ERROR分别有503/回滚断言。非快照跨请求刷新不声称原子；分页测试为稳定数据集，无持续并发写压力承诺。
+
+补充专项：重复query拒绝、100Unicode字符接受/101拒绝、撤销会话后4API401、display_enabled=false仍保留债务/还款历史且不改变payment_enabled、credit_settings缺行503。独立-race两项PASS6.832s。site_settings缺行另发现全局maintenanceAllowed读取失败经s.fail映射404（在客户API前截获）；未把404写成PASS，已报主代理独立判断修复范围，本测试提交不修改生产middleware。
