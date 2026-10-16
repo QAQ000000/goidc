@@ -1035,7 +1035,7 @@ function AdminCustomerRelatedView({
               )}
               {tab === "transactions" && (
                 <>
-                  <TableCell>{String(row.kind) === "payment" ? "支付" : "余额流水"}</TableCell>
+                  <TableCell>{row.kind === "payment" ? "支付" : row.kind === "external_refund" ? "外部退款到账" : "余额流水"}</TableCell>
                   <TableCell>
                     {row.invoice_id ? (
                       <Link
@@ -1050,7 +1050,7 @@ function AdminCustomerRelatedView({
                   </TableCell>
                   <TableCell>{String(row.label ?? "-")}</TableCell>
                   <TableCell className="money">
-                    {row.kind === "ledger"
+                    {row.kind === "ledger" || row.kind === "external_refund"
                       ? `${Number(row.delta_cents) > 0 ? "+" : ""}${money(Number(row.delta_cents))}`
                       : money(Number(row.amount_cents))}
                   </TableCell>
