@@ -36,7 +36,6 @@ import {
   RotateCcw,
   KeyRound,
   Copy,
-  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,7 +57,7 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table";
-import { api, date, money, type ApiKey, type CustomerGroup, type PromoCode, type Service, type TicketDepartment, type User } from "@/lib/api";
+import { api, date, money, type ApiKey, type CustomerGroup, type Service, type TicketDepartment, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Failure, Loading, Status, statusNames } from "./common";
 import { Workspace, PermissionGate, PermissionFields, useAdminPermission } from "./workspace";
@@ -207,33 +206,6 @@ export function CustomerGroupsView() {
   return <Workspace title="客户分组" admin><PageHeading title="客户分组" description="设置客户折扣和账单属性"><Button variant="outline" asChild><Link href="/admin/customers"><ArrowUpRight size={16} />返回客户管理</Link></Button></PageHeading><PermissionGate permission="customer_groups.manage"><section className="data-surface p-6 mb-6"><form className="grid md:grid-cols-[1fr_5rem_7rem_auto_auto] gap-3 items-center" onSubmit={create}><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="分组名称" aria-label="分组名称" required maxLength={120} /><Input type="color" value={color} onChange={(e) => setColor(e.target.value)} aria-label="分组颜色" className="p-1 h-9" /><Input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="折扣 %" aria-label="折扣百分比" /><label className="flex items-center gap-2 text-sm whitespace-nowrap"><Checkbox checked={separateInvoices} onCheckedChange={(v) => setSeparateInvoices(v === true)} />拆分账单</label><Button disabled={busy || !name.trim()}><Plus size={16} />新增分组</Button></form>{message && <p role="alert" className="text-sm text-destructive mt-3">{message}</p>}</section></PermissionGate>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <div className="data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>名称</TableHead><TableHead>折扣</TableHead><TableHead>账单</TableHead><TableHead>客户数</TableHead><TableHead /></TableRow></TableHeader><TableBody>{data.length === 0 ? <TableRow><TableCell colSpan={5} className="h-28 text-center text-muted-foreground">暂无分组</TableCell></TableRow> : data.map((group) => <TableRow key={group.id}><TableCell><span className="inline-block w-3 h-3 rounded-sm mr-2" style={{ backgroundColor: group.color }} />{group.name}</TableCell><TableCell>{group.discount_percent}%</TableCell><TableCell>{group.separate_invoices ? "拆分" : "合并"}</TableCell><TableCell>{group.member_count}</TableCell><TableCell><PermissionGate permission="customer_groups.manage"><Button size="icon-sm" variant="ghost" aria-label={`删除${group.name}`} title="删除分组" disabled={busy || group.member_count > 0} onClick={() => void remove(group.id)}><Trash2 size={15} /></Button></PermissionGate></TableCell></TableRow>)}</TableBody></Table></div>}</Workspace>;
 }
 
-export function PromoCodesView() {
-  const [promoStatus, setPromoStatus] = useState("all");
-  const { data, error, refresh } = useResource<PromoCode[]>("/admin/promo-codes");
-  const [code, setCode] = useState("");
-  const [discountType, setDiscountType] = useState<"percent" | "fixed" | "free">("percent");
-  const [value, setValue] = useState("10");
-  const [maxUses, setMaxUses] = useState("0");
-  const [oncePerCustomer, setOncePerCustomer] = useState(false);
-  const [onlyNewCustomer, setOnlyNewCustomer] = useState(false);
-  const [recurring, setRecurring] = useState(false);
-  const [recurringLimit,setRecurringLimit]=useState("0");
-  const [upgradeOnly,setUpgradeOnly]=useState(false);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const visiblePromos = data?.filter(item => promoStatus === "all" || (promoStatus === "active" ? item.active : !item.active)) ?? [];
-  async function create(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setMessage("");
-    try { await api("/admin/promo-codes", { method: "POST", body: JSON.stringify({ code, discount_type: discountType, value: discountType === "free" ? 0 : Number(value), max_uses: Number(maxUses), once_per_customer: oncePerCustomer, only_new_customer: onlyNewCustomer, recurring: discountType !== "free" && recurring, recurring_limit: recurring ? Number(recurringLimit) : 0, upgrade_only: upgradeOnly }) }); setCode(""); setValue("10"); setMaxUses("0"); setRecurring(false); setRecurringLimit("0"); setUpgradeOnly(false); refresh(); }
-    catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
-  }
-  async function toggle(item: PromoCode) {
-    setBusy(true); setMessage("");
-    try { await api(`/admin/promo-codes/${item.id}`, { method: "PATCH", body: JSON.stringify({ active: !item.active }) }); refresh(); }
-    catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
-  }
-  return <Workspace title="优惠码" admin><PageHeading title="优惠码" description="配置购买折扣、循环续费和升级优惠"><p className="text-xs text-muted-foreground max-w-sm">升级专用优惠只在商品升级差额上生效，不影响首购、续费或降级返还。</p></PageHeading><PermissionGate permission="promos.manage"><section className="data-surface p-4 mb-5"><h2 className="mb-4 text-sm font-semibold">新增优惠码</h2><form className="grid md:grid-cols-[1fr_8rem_7rem_7rem_auto] gap-3 items-center" onSubmit={create}><label className="grid gap-2 text-sm">优惠码<Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="优惠码" aria-label="优惠码" maxLength={50} required /></label><label className="grid gap-2 text-sm">优惠类型<Select value={discountType} onValueChange={(v) => { setDiscountType(v as typeof discountType); setRecurring(false); setRecurringLimit("0"); }}><SelectTrigger aria-label="优惠类型"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percent">百分比</SelectItem><SelectItem value="fixed">固定金额（分）</SelectItem><SelectItem value="free">免初装费</SelectItem></SelectContent></Select></label><label className="grid gap-2 text-sm">优惠值<Input type="number" min={discountType === "free" ? 0 : 1} max={discountType === "percent" ? 100 : undefined} value={value} onChange={(e) => setValue(e.target.value)} aria-label="优惠值" disabled={discountType === "free"} /></label><label className="grid gap-2 text-sm">最多使用次数<Input type="number" min="0" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} aria-label="最大发码次数" placeholder="不限次数" /></label><Button className="md:self-end" disabled={busy || !code.trim()}><Plus size={16} />新增</Button><label className="flex items-center gap-2 text-sm"><Checkbox checked={oncePerCustomer} onCheckedChange={(v) => setOncePerCustomer(v === true)} />每客户一次</label><label className="flex items-center gap-2 text-sm"><Checkbox checked={onlyNewCustomer} onCheckedChange={(v) => setOnlyNewCustomer(v === true)} />仅新客户</label><label className="flex items-center gap-2 text-sm md:col-span-3"><Checkbox checked={recurring} disabled={discountType === "free" || upgradeOnly || busy} onCheckedChange={(v) => setRecurring(v === true)} />循环续费优惠</label>{recurring&&<label className="grid gap-2 text-sm md:col-span-3">每件服务优惠续费次数（0为不限）<Input type="number" min={0} max={10000} required disabled={busy} value={recurringLimit} onChange={e=>setRecurringLimit(e.target.value)} aria-label="优惠续费次数"/></label>}<label className="flex items-center gap-2 text-sm md:col-span-3"><Checkbox checked={upgradeOnly} disabled={recurring || discountType === "free" || busy} onCheckedChange={(v) => { setUpgradeOnly(v === true); setRecurring(false); }} />仅用于商品升级</label></form>{message && <p role="alert" className="text-sm text-destructive mt-3">{message}</p>}</section></PermissionGate><AdminStatusTabs label="本页优惠码状态" value={promoStatus} states={{active:"已启用",inactive:"已停用"}} onChange={setPromoStatus}/>{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <div className="admin-list-surface data-surface overflow-auto"><Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>代码</TableHead><TableHead>类型</TableHead><TableHead>值</TableHead><TableHead>发码次数</TableHead><TableHead>状态</TableHead><TableHead>操作</TableHead></TableRow></TableHeader><TableBody>{visiblePromos.length === 0 ? <TableRow><TableCell colSpan={7} className="h-28 text-center text-muted-foreground">暂无优惠码</TableCell></TableRow> : visiblePromos.map((item) => <TableRow key={item.id}><TableCell>{item.id}</TableCell><TableCell className="font-mono"><Tag size={14} className="inline mr-2" />{item.code}{item.recurring && <span className="block text-xs text-muted-foreground mt-1 font-sans">循环续费 · {item.recurring_limit>0?`${item.recurring_limit} 次 / 件`:"不限次数"}</span>}{item.upgrade_only && <span className="block text-xs text-muted-foreground mt-1 font-sans">仅升级</span>}</TableCell><TableCell>{item.discount_type === "percent" ? "百分比" : item.discount_type === "fixed" ? "固定金额" : "免初装费"}</TableCell><TableCell>{item.discount_type === "percent" ? `${item.value}%` : item.discount_type === "fixed" ? money(item.value) : "初装费"}</TableCell><TableCell>{item.used_count}{item.max_uses > 0 ? ` / ${item.max_uses}` : " / 不限"}</TableCell><TableCell><Status value={item.active ? "active" : "disabled"} /></TableCell><TableCell><PermissionGate permission="promos.manage"><Button size="sm" variant="outline" disabled={busy} onClick={() => void toggle(item)}>{item.active ? "停用" : "启用"}</Button></PermissionGate></TableCell></TableRow>)}</TableBody></Table></div>}</Workspace>;
-}
 
 type Row = Record<string, unknown>;
 function readAdminListState(kind: string) {

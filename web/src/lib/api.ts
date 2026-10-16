@@ -238,6 +238,8 @@ export type CustomerProductDiscount = {
   version: number;
 };
 export type PromoCode = {
+  version: number;
+  status?: "active" | "expired" | "disabled" | "scheduled" | "exhausted";
   id: number;
   code: string;
   discount_type: "percent" | "fixed" | "free";
