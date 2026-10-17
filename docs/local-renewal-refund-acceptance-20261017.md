@@ -1,6 +1,6 @@
 # 本地未消费续费退款与精确冲正验收
 
-日期：2026-10-17。产品实现基线 `5179259`；独立增量复核已集成 `7f4a23c`。当前状态：专项、恢复和浏览器已验证；首个唯一串行全量因陈旧断言失败，`56d07ac`修复后已重新启动唯一全量，未据此关闭 G03。迁移155仅应用到隔离 PG18，不部署或写入业务运行库。
+日期：2026-10-17。产品实现基线 `5179259`；独立增量复核已集成 `7f4a23c`，并发回调修复为 `c6d2314`。当前状态：专项、恢复、浏览器及最终强制隔离PG18全量已通过；历史失败逐轮保留，G03整体仍未关闭。迁移155仅应用到隔离 PG18，不部署或写入业务运行库。
 
 ## 本批范围
 
@@ -24,7 +24,18 @@
 | HTTP专项 race | PASS 150.565秒；真实签名收款、登记/独立确认/驳回、并发、权限及8组实际数据库锁等待后撤权/范围撤销；见 `http-race.log`。默认 SKIP 的浏览器 opt-in 不计此项通过 |
 | 前端 | typecheck、lint、独立 webpack build 退出0；lint为0错误、7个既有warning。见 `web-typecheck.log` / `web-lint.log` / `web-build.log`；预览只代理隔离API28089 |
 | 独立最终复核 | [固定实现增量审查](local-renewal-refund-independent-review-20261017.md)未发现新增阻断；真实PG两个定向用例通过，静态UI结论与浏览器结论分列 |
-| 强制隔离PG18全量 | 两个重叠轮次均失败；已修夹具轮达到原45分钟上限。唯一串行轮退出1（HTTP2069.738秒、store272.985秒）：仅供应商并发续费 `auto_renew_disabled` 断言仍要求旧`pgx.ErrNoRows`，实际已正确拒绝为`auto_renewal_race`。`56d07ac`仅修测试并增强零账单/零审计/开关保持关闭断言，专项PG/race通过；快照`f6e8cb4`的下一唯一全量也退出1（HTTP1659.871秒、store229.621秒，未超时）：供应商断言通过，但`TestEpayPendingGuardsAndServiceSettlement/upgrade`并发回调出现一次500。见`serial-fixed-full-suite.log`及`serial-fixed-full-suite-result.json`；正在定位，不能将本批登记为最终全量通过 |
+| 强制隔离PG18全量 | 两个重叠轮次均失败；已修夹具轮达到原45分钟上限。唯一串行轮退出1（HTTP2069.738秒、store272.985秒）：仅供应商并发续费 `auto_renew_disabled` 断言仍要求旧`pgx.ErrNoRows`，实际已正确拒绝为`auto_renewal_race`。`56d07ac`仅修测试并增强零账单/零审计/开关保持关闭断言，专项PG/race通过；快照`f6e8cb4`的下一唯一全量也退出1（HTTP1659.871秒、store229.621秒，未超时）：供应商断言通过，但`TestEpayPendingGuardsAndServiceSettlement/upgrade`并发回调出现一次500。见`serial-fixed-full-suite.log`及`serial-fixed-full-suite-result.json`；该轮失败保留；修复及最终通过结果见下方追加记录 |
+
+最终追加：`c6d2314` 将回调原有 invoice 行锁前移到第一次 payment 更新前，解决普通取消锁竞争被154关联保护误判为退款冻结的问题；154/155及真实hold保护未改，见[复现及修复证据](evidence/epay-upgrade-callback-20261017/README.md)。上述表格中的旧失败是历史记录，最终结果如下：
+
+| 最终固定源码 `c6d2314` | 实测结论 |
+| --- | --- |
+| 强制隔离PG18全量 | `scripts/test-all.sh` 退出0；HTTP1653.256秒、store237.273秒，其余包通过或无测试。原45分钟包时限未改；见 `epay-upgrade-callback-20261017/integrated-full/` |
+| 五项组合race | SMTP三种可选字段、确定性取消/回调竞争、source API→Node、两个真实worker通知/模拟开通小链、真实退款hold拒绝均实际PASS，无SKIP；HTTP15.543秒、store2.637秒，见 `integrated-race/` |
+| Go build / vet / diff | 三命令退出0，见 `integrated-static/` |
+| 环境与清理 | 三轮源码固定，schema集合恢复；常驻API/worker/Web身份未变，前后API/Web均200；各 `result.json` 独立记录 |
+
+完整回归的默认opt-in入口不计专项执行，五项实际运行以race日志为准。上述全量只证明固定产品快照，不追认后来新增G09工具；本批无前端新增修改，沿用此前对应源码的浏览器及前端检查证据。
 
 恢复归档摘要以 `restore.log` 内实际记录为准；代表性隔离夹具不等同于正式业务快照或真实资金到账。
 

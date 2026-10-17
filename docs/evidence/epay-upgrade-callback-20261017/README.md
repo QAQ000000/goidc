@@ -73,3 +73,13 @@ After results:
 Post-test PostgreSQL verification: version `180000`, zero other active sessions or transactions. No `store_topup_*` or `order_refund_upgrade_*` schemas remain. Two `zjmfgo_test_*` namespaces remain with zero relation objects; they are preserved rather than assuming ownership and deleting them. Static `git diff --check` passed. Default no-DSN runs of both new tests compiled and explicitly skipped; these are compilation/guard checks, not integration passes.
 
 Full-suite validation belongs to the parent integration run; none was run in this worktree.
+
+## Parent integration, fixed c6d2314
+
+The parent integrated this repair as `c6d2314f25941941a01613172bef810262ddac0c`. Each run records source hashes, test database version, schema sets, resident process identities and API/Web health in its own `result.json`.
+
+- `integrated-race/`: five actual top-level tests PASS, no SKIP; HTTP15.543s/store2.637s. This combines SMTP optional/null/empty transport, deterministic callback competition, source API/Node, actual two-worker simulation/mail/SMS smoke and genuine refund hold rejection.
+- `integrated-static/`: Go build, vet and diff check all exit0.
+- `integrated-full/`: `scripts/test-all.sh` exits0; HTTP1653.256s/store237.273s, original45m package cap. Started2026-10-17 13:00:36+08, finished13:28:23+08. Optional smoke execution is established by the separate race run, not inferred from default full-suite output.
+
+All three runs preserve the initial schema set and resident API/worker/Web identities; API/Web health is200 before and after. No production database, deployment, push or service restart. Historical full-suite and before-repair failures remain FAIL. The fixed-snapshot pass does not include subsequently merged G09 helpers or establish capacity/real upstream acceptance.
