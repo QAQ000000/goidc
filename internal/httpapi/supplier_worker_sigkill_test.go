@@ -214,15 +214,21 @@ func TestSupplierWorkerSIGKILLRecovery(t *testing.T) {
 				wanted = "waiting_verification"
 			}
 			wait(wanted, func() bool { inspect(); return state == wanted })
+			blockedObserved := func() bool {
+				var blocked bool
+				err := f.db.Pool.QueryRow(t.Context(), `SELECT status='pending' AND attempts=0 AND last_error='供应商账户正在处理其他任务或等待核验' AND locked_at IS NULL AND external_started_at IS NULL AND available_at>clock_timestamp() FROM provision_jobs WHERE service_id=$1 AND action='create'`, blockedSID).Scan(&blocked)
+				return err == nil && blocked
+			}
+			if blockedSID != 0 {
+				wait("queued create actually rejected by supplier account lease", blockedObserved)
+				t.Log("PASS second create actually blocked: pending attempts=0 lease=NULL dispatch=NULL future available_at and account-busy last_error")
+			}
 			check := func() {
 				t.Helper()
-				if blockedSID != 0 {
-					var bs string
-					var ba int
-					if err := f.db.Pool.QueryRow(t.Context(), "SELECT status,attempts FROM provision_jobs WHERE service_id=$1 AND action='create'", blockedSID).Scan(&bs, &ba); err != nil || bs != "pending" || ba != 0 {
-						t.Fatal("frozen account consumed queued job", bs, ba, err)
-					}
+				if blockedSID != 0 && !blockedObserved() {
+					t.Fatal("queued create lost observed account-busy backoff")
 				}
+
 				inspect()
 				if action == "sync" {
 					if state != "succeeded" || attempts != 2 || lease != nil || calls.Load() != 2 || f.creates.Load() != 1 || f.pays.Load() != 1 {
