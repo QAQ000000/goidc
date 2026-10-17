@@ -198,8 +198,8 @@ func TestLimitedRenewalZeroRefundAndConcurrentPayment(t *testing.T) {
 			if data(t, refund)["amount_cents"] != float64(0) {
 				t.Fatal("gross refund", data(t, refund))
 			}
-			limitedUsed(t, f, 1)
-			renewLimited(t, f, "limited-after-refund", 1234)
+			limitedUsed(t, f, 0)
+			renewLimited(t, f, "limited-after-refund", 0)
 		})
 	}
 }

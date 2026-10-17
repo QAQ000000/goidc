@@ -98,6 +98,10 @@ func TestCompiledAppsBrowserFixture(t *testing.T) {
 }
 
 func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store, http.Handler)) {
+	adminBrowserFixtureStore(t, username, nil, setup)
+}
+
+func adminBrowserFixtureStore(t *testing.T, username string, db *store.Store, setup func(*store.Store, http.Handler)) {
 	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
 	if ready == "" || finish == "" {
 		t.Skip("opt-in browser fixture")
@@ -109,8 +113,15 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 			t.Fatal(err)
 		}
 	}
-	db, h := testServer(t)
-	setup(db, h)
+	var h http.Handler
+	if db == nil {
+		db, h = testServer(t)
+	} else {
+		h = New(db, config.Config{PublicOrigin: "http://localhost:3089", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.Default()).Handler()
+	}
+	if setup != nil {
+		setup(db, h)
+	}
 	user(t, db, h, username, "super_admin")
 	origin := os.Getenv("ZJMFGO_BROWSER_ORIGIN")
 	if origin == "" {
