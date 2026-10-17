@@ -31,3 +31,11 @@ ZJMFGO_TEST_DATABASE_URL='postgres://postgres@127.0.0.1:55439/zjmfgo_release_run
 通知属于至少一次尝试语义。第一次请求已经到达网关，再次发送可能产生外部重复短信；这次 fixture 明确观察到两次接收。本地成功后重启不重复领取不能证明外部 exactly-once。
 
 最终增强版本 `-race` PASS：总测试 24.84 秒（进程退出报告 25.878 秒），limit 3 用时 13.29 秒、limit 1 用时 10.60 秒；恢复退避剩 59.99 秒。每例均启动两名竞争恢复 worker。无 race 报告。日志 `/tmp/notification-sigkill-race.log`（仅当前验收主机）。缺失 DSN 的开启场景预期 FAIL，错误 `fixture requires explicit IPv4 loopback PostgreSQL URL`，在编译 worker、连接或创建 schema 前拒绝。
+
+## Ready barrier 补强复验
+
+每次 `start()` 均读取子进程文件日志，通过 `strings.Contains` 精确匹配 JSON 字段 `"msg":"provision worker started"`，20 秒内未出现或提前退出立即失败。统一的 Wait goroutine 和退出 channel 处理早退及回收，日志记录 ready PID。终态重启的 4.5 秒观察窗口从此 ready barrier 返回后开始，避免尚未进入轮询便误判不重复发送。
+
+恢复时两名 worker 均经过相同 ready barrier；这证明两个已 ready 的进程参与运行，不声称两者各自领取过同一任务。实际只有一次新 claim 完成，attempt 及外部计数断言维持不变。
+
+补强后真实 `-race` 复验 PASS：22.22 秒（进程退出报告 23.252 秒），limit 3 为 10.55 秒，limit 1 为 10.96 秒。日志 `/tmp/notification-sigkill-ready-race.log`。同样不含完整五分钟租约和一分钟退避的真实时长等待。

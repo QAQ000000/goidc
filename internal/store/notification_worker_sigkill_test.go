@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"testing"
@@ -95,13 +96,14 @@ func TestNotificationWorkerSIGKILLRecovery(t *testing.T) {
 				cmd     *exec.Cmd
 				log     *os.File
 				stopped bool
+				done    chan error
 			}
 			start := func() *child {
 				log, err := os.CreateTemp(dir, "worker-*.log")
 				if err != nil {
 					t.Fatal(err)
 				}
-				c := &child{cmd: exec.Command(binary), log: log}
+				c := &child{cmd: exec.Command(binary), log: log, done: make(chan error, 1)}
 				c.cmd.Dir = dir
 				c.cmd.Env = []string{"DATABASE_URL=" + f.dsn, "PROVISION_ENCRYPTION_KEY=" + hex.EncodeToString(db.ProvisionEncryptionKey), "PUBLIC_ORIGIN=http://127.0.0.1:3088", "SMTP_HOST=127.0.0.1", "SMTP_PORT=1", "SMTP_TLS_MODE=none", "PAYMENT_MOCK_ENABLED=false"}
 				c.cmd.Stdout = log
@@ -109,29 +111,48 @@ func TestNotificationWorkerSIGKILLRecovery(t *testing.T) {
 				if err = c.cmd.Start(); err != nil {
 					t.Fatal(err)
 				}
-				t.Logf("worker started pid=%d schema=%s", c.cmd.Process.Pid, f.schema)
+				go func() { c.done <- c.cmd.Wait() }()
 				t.Cleanup(func() {
 					if !c.stopped {
 						c.cmd.Process.Kill()
-						c.cmd.Wait()
+						<-c.done
 					}
 					log.Close()
 				})
-				return c
+				deadline := time.Now().Add(20 * time.Second)
+				for time.Now().Before(deadline) {
+					select {
+					case err := <-c.done:
+						c.stopped = true
+						data, _ := os.ReadFile(log.Name())
+						t.Fatalf("worker exited before ready: %v %s", err, data)
+					default:
+					}
+					data, err := os.ReadFile(log.Name())
+					if err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(string(data), `"msg":"provision worker started"`) {
+						t.Logf("worker ready pid=%d schema=%s", c.cmd.Process.Pid, f.schema)
+						return c
+					}
+					time.Sleep(25 * time.Millisecond)
+				}
+				t.Fatal("worker readiness timeout")
+				return nil
 			}
 			stop := func(c *child, sig syscall.Signal) {
 				t.Helper()
 				if err := c.cmd.Process.Signal(sig); err != nil {
 					t.Fatal(err)
 				}
-				done := make(chan error, 1)
-				go func() { done <- c.cmd.Wait() }()
 				var err error
 				select {
-				case err = <-done:
+				case err = <-c.done:
 				case <-time.After(10 * time.Second):
 					c.cmd.Process.Kill()
-					err = <-done
+					err = <-c.done
+					c.stopped = true
 					t.Fatal("worker stop timeout", err)
 				}
 				c.stopped = true
