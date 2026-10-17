@@ -53,6 +53,11 @@ func ValidateRequest(raw []byte, runID string, last uint64) (Request, error) {
 		if !ok || seen[name] {
 			return r, errors.New("duplicate control key")
 		}
+		switch name {
+		case "runId", "sequence", "action", "slot":
+		default:
+			return r, errors.New("unsupported control key")
+		}
 		seen[name] = true
 		var value json.RawMessage
 		if err := keys.Decode(&value); err != nil {
@@ -65,7 +70,7 @@ func ValidateRequest(raw []byte, runID string, last uint64) (Request, error) {
 	if err := d.Decode(new(any)); err != io.EOF {
 		return r, errors.New("trailing control data")
 	}
-	if runID == "" || r.RunID != runID || r.Sequence != last+1 {
+	if runID == "" || r.RunID != runID || last == ^uint64(0) || r.Sequence != last+1 {
 		return r, errors.New("control identity or sequence mismatch")
 	}
 	switch r.Action {

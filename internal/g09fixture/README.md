@@ -18,9 +18,11 @@ occurs. These unassigned synthetic numbers are not real phone subscribers.
 
 Each accepted SMTP recipient or SMS request appends a sequence, UTC acceptance
 time, channel, SHA-256 recipient hash and message hash. The journal is fsynced
-before SMTP `250`/HTTP `200`. Evidence contains no raw destination, body or token.
+before SMTP `250`/HTTP `200`; initialization also fsyncs the parent directory.
+Evidence contains no raw destination, body or token. SMTP hashes the plain envelope
+address without angle brackets so it can be correlated with the source identity.
 SMTP rejects messages exceeding 1 MiB, command lines exceeding its 4 KiB buffer,
-more than ten recipients, and connections exceeding 30 seconds. HTTP request
+more than ten recipients, more than 128 simultaneous connections, and connections exceeding 30 seconds. HTTP request
 bodies are limited to 1 MiB; its eventual server must also set bounded server
 timeouts. `SMTP.Close()` closes and joins owned connections. Close listeners
 before closing the journal.
@@ -29,8 +31,11 @@ Acceptance is not proof of recipient delivery or exactly-once behavior. SMTP DAT
 is recorded after dot unescaping/newline canonicalization; its hash need not equal
 the original wire-byte hash. A lost protocol response can cause a legitimate retry
 and a second acceptance. `Snapshot` returns a detached, in-memory record copy;
-the private journal remains the durable record. A journal failure returns failure
-to the worker and must invalidate the fixture run.
+the private journal remains the durable record. At most 8192 acceptances are stored.
+A journal persistence or budget failure remains latched, returns failure to all
+later sends, and must invalidate the fixture run (check `Journal.Err()`). These
+protocol hashes alone do not establish ticket/outbox IDs or the 600-task cohort;
+the runner still needs an explicit source-to-evidence mapping.
 
 ## Private control building blocks
 
@@ -38,7 +43,7 @@ to the worker and must invalidate the fixture run.
 the actions specified in the design contract: `prepare`, `start-workers`,
 `stop-workers`, `snapshot`, `seal-cohorts`, `verify-drain`, `finish`, `abort`.
 Only worker actions take slot `0` or `1`. Unknown/duplicate fields, trailing JSON,
-unknown actions, replayed sequences and arbitrary SQL/shell/PID/path/env fields
+unknown actions, replayed/overflowed sequences, case-variant keys and arbitrary SQL/shell/PID/path/env fields
 are rejected. This is validation only: it does **not execute any action**.
 After validation the runner must consume the sequence even if execution fails.
 

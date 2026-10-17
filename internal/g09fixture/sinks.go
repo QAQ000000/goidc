@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/mail"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -21,6 +22,8 @@ import (
 )
 
 const maxMessage = 1 << 20
+const maxAcceptances = 8192
+const maxSMTPConnections = 128
 
 // Acceptance records protocol acceptance, not recipient delivery. It deliberately
 // excludes plaintext addresses, credentials and message bodies.
@@ -39,10 +42,11 @@ type Journal struct {
 	file     *os.File
 	sequence uint64
 	records  []Acceptance
+	failed   error
 }
 
 func NewJournal(path string) (*Journal, error) {
-	if !filepath.IsAbs(path) {
+	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, errors.New("journal requires absolute private path")
 	}
 	if err := privateDir(filepath.Dir(path)); err != nil {
@@ -52,12 +56,29 @@ func NewJournal(path string) (*Journal, error) {
 	if err != nil {
 		return nil, err
 	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err == nil {
+		err = dir.Sync()
+		dir.Close()
+	}
+	if err != nil {
+		f.Close()
+		os.Remove(path)
+		return nil, errors.New("sync journal directory failed")
+	}
 	return &Journal{file: f}, nil
 }
 func digest(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 func (j *Journal) accept(channel, recipient, message string) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
+	if j.failed != nil {
+		return j.failed
+	}
+	if len(j.records) >= maxAcceptances {
+		j.failed = errors.New("journal acceptance budget exceeded")
+		return j.failed
+	}
 	r := Acceptance{Sequence: j.sequence + 1, Channel: channel, AcceptedAt: time.Now().UTC(), RecipientHash: digest(recipient), MessageHash: digest(message)}
 	b, err := json.Marshal(r)
 	if err != nil {
@@ -65,9 +86,11 @@ func (j *Journal) accept(channel, recipient, message string) error {
 	}
 	b = append(b, '\n')
 	if _, err = j.file.Write(b); err != nil {
+		j.failed = errors.New("journal persistence failed")
 		return err
 	}
 	if err = j.file.Sync(); err != nil {
+		j.failed = errors.New("journal persistence failed")
 		return err
 	}
 	j.sequence = r.Sequence
@@ -79,6 +102,10 @@ func (j *Journal) Snapshot() []Acceptance {
 	defer j.mu.Unlock()
 	return append([]Acceptance{}, j.records...)
 }
+
+// Err invalidates the entire run after any persistence or budget failure, even
+// if all earlier accepted records were valid. Never clear it to salvage a run.
+func (j *Journal) Err() error   { j.mu.Lock(); defer j.mu.Unlock(); return j.failed }
 func (j *Journal) Close() error { j.mu.Lock(); defer j.mu.Unlock(); return j.file.Close() }
 
 // SMSHandler implements generic_http_json's actual 2xx success contract. An
@@ -168,6 +195,11 @@ func StartSMTP(j *Journal) (*SMTP, error) {
 				return
 			default:
 			}
+			if len(s.conns) >= maxSMTPConnections {
+				s.mu.Unlock()
+				c.Close()
+				continue
+			}
 			s.conns[c] = true
 			s.wg.Add(1)
 			s.mu.Unlock()
@@ -238,8 +270,13 @@ func (s *SMTP) serve(c net.Conn) {
 				return
 			}
 		case "RCPT":
-			a := strings.TrimSpace(strings.TrimPrefix(arg, "TO:"))
-			if !mail || !strings.HasPrefix(strings.ToUpper(arg), "TO:") || !strings.HasSuffix(strings.ToLower(a), ".test>") {
+			hasPrefix := strings.HasPrefix(strings.ToUpper(arg), "TO:")
+			a := ""
+			if hasPrefix {
+				a = strings.TrimSpace(arg[3:])
+			}
+			address, parseErr := mailpkgAddress(a)
+			if !mail || !hasPrefix || parseErr != nil || !strings.HasSuffix(strings.ToLower(address), ".test") {
 				if !reply(550, "fixture .test recipients only") {
 					return
 				}
@@ -249,7 +286,7 @@ func (s *SMTP) serve(c net.Conn) {
 				reply(452, "recipient limit")
 				continue
 			}
-			recipients = append(recipients, a)
+			recipients = append(recipients, address)
 			if !reply(250, "recipient accepted") {
 				return
 			}
@@ -297,4 +334,15 @@ func (s *SMTP) serve(c net.Conn) {
 			}
 		}
 	}
+}
+
+func mailpkgAddress(envelope string) (string, error) {
+	if len(envelope) < 3 || envelope[0] != '<' || envelope[len(envelope)-1] != '>' {
+		return "", errors.New("invalid envelope")
+	}
+	a, err := mail.ParseAddress(envelope[1 : len(envelope)-1])
+	if err != nil || a.Name != "" || a.Address != envelope[1:len(envelope)-1] {
+		return "", errors.New("invalid envelope address")
+	}
+	return a.Address, nil
 }

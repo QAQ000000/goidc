@@ -1,8 +1,10 @@
 package g09fixture
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
@@ -10,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func testJournal(t *testing.T) *Journal {
@@ -42,6 +45,9 @@ func TestSMTPProductionClientAcceptance(t *testing.T) {
 	records := j.Snapshot()
 	if len(records) != 1 || records[0].Channel != "email" || records[0].Sequence != 1 {
 		t.Fatalf("unexpected records: %+v", records)
+	}
+	if records[0].RecipientHash != digest("staff@example.test") {
+		t.Fatal("SMTP envelope recipient was not normalized for entity correlation")
 	}
 	b, err := os.ReadFile(j.file.Name())
 	if err != nil {
@@ -120,6 +126,9 @@ func TestPrivateControlRejectsInjectionAndReplay(t *testing.T) {
 		`{"runId":"run","sequence":1,"action":"shell"}`,
 		`{"runId":"run","sequence":1,"action":"start-workers","slot":2}`,
 		`{"runId":"run","sequence":1,"action":"snapshot","slot":0}`,
+		`{"RunId":"run","sequence":1,"action":"snapshot"}`,
+		`{"runId":"other","RunId":"run","sequence":1,"action":"snapshot"}`,
+		`{"runId":"run","sequence":1,"Action":"snapshot"}`,
 	} {
 		if _, err := ValidateRequest([]byte(raw), "run", 0); err == nil {
 			t.Fatalf("accepted %s", raw)
@@ -131,6 +140,81 @@ func TestPrivateControlRejectsInjectionAndReplay(t *testing.T) {
 	}
 	if _, err := ValidateRequest(raw, "run", 1); err == nil {
 		t.Fatal("replayed request")
+	}
+	if _, err := ValidateRequest([]byte(`{"runId":"run","sequence":0,"action":"snapshot"}`), "run", ^uint64(0)); err == nil {
+		t.Fatal("sequence wrapped after uint64 exhaustion")
+	}
+}
+
+func TestJournalBudgetAndPersistenceErrorsRemainLatched(t *testing.T) {
+	t.Run("budget", func(t *testing.T) {
+		j := testJournal(t)
+		j.records = make([]Acceptance, maxAcceptances)
+		if err := j.accept("sms", "+999000000001", "body"); err == nil || j.Err() == nil {
+			t.Fatal("unbounded acceptance journal")
+		}
+		j.records = nil
+		if err := j.accept("sms", "+999000000001", "body"); err == nil {
+			t.Fatal("journal resumed after invalidating run")
+		}
+	})
+	t.Run("storage", func(t *testing.T) {
+		j := testJournal(t)
+		j.file.Close()
+		if err := j.accept("email", "staff@example.test", "body"); err == nil || j.Err() == nil {
+			t.Fatal("storage failure not latched")
+		}
+		f, err := os.CreateTemp(filepath.Dir(j.file.Name()), "replacement-*")
+		if err != nil {
+			t.Fatal(err)
+		}
+		j.file = f
+		if err := j.accept("email", "staff@example.test", "body"); err == nil || len(j.Snapshot()) != 0 {
+			t.Fatal("journal accepted after storage became available again")
+		}
+	})
+}
+
+func TestSMTPConnectionBudgetAndMixedCaseEnvelope(t *testing.T) {
+	j := testJournal(t)
+	sink, err := StartSMTP(j)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sink.Close()
+	connections := []net.Conn{}
+	defer func() {
+		for _, c := range connections {
+			c.Close()
+		}
+	}()
+	for i := 0; i < maxSMTPConnections; i++ {
+		c, err := net.DialTimeout("tcp", sink.Addr(), time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		connections = append(connections, c)
+		c.SetReadDeadline(time.Now().Add(time.Second))
+		if _, err = bufio.NewReader(c).ReadString('\n'); err != nil {
+			t.Fatal(err)
+		}
+	}
+	extra, err := net.DialTimeout("tcp", sink.Addr(), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer extra.Close()
+	extra.SetReadDeadline(time.Now().Add(time.Second))
+	if _, err = bufio.NewReader(extra).ReadString('\n'); err == nil {
+		t.Fatal("SMTP connection budget not enforced")
+	}
+	if address, err := mailpkgAddress("<staff@example.test>"); err != nil || address != "staff@example.test" {
+		t.Fatal("invalid normalized envelope", address, err)
+	}
+	for _, bad := range []string{"staff@example.test", "<Name <staff@example.test>>", "<staff@example.test> extra"} {
+		if _, err := mailpkgAddress(bad); err == nil {
+			t.Fatal("accepted malformed envelope", bad)
+		}
 	}
 }
 func TestPrivateManifestExclusiveAndSymlinkRejection(t *testing.T) {
