@@ -117,7 +117,7 @@ func adminBrowserFixtureStore(t *testing.T, username string, db *store.Store, se
 	if db == nil {
 		db, h = testServer(t)
 	} else {
-		h = New(db, config.Config{PublicOrigin: "http://localhost:3089", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.Default()).Handler()
+		h = New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.Default()).Handler()
 	}
 	if setup != nil {
 		setup(db, h)

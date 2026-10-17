@@ -377,7 +377,7 @@ func TestLocalRenewalExternalRefundHTTPRevocationAfterActualLockWait(t *testing.
 		for _, revoke := range []string{"scope", "permission"} {
 			t.Run(operation+"_"+revoke, func(t *testing.T) {
 				f := newLocalRenewalRefundHTTPFixture(t)
-				snapshotter := orderExternalRefundHTTPFixture{db: f.db}
+				snapshotter := orderExternalRefundHTTPFixture{db: f.db, uid: f.uid}
 				staffID, staff := externalRefundActor(t, f.db, f.h, "local-renewal-lock-staff", []string{"external_refunds.view", "external_refunds.create", "external_refunds.review", "external_refunds.renewal_reverse"})
 				input := f.input(t, "local-renewal-lock-proof")
 				path := orderExternalRefundPath(f.invoice)
