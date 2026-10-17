@@ -1,0 +1,36 @@
+=== RUN   TestRegisteredProductionProvidersReachDurableSinks
+--- PASS: TestRegisteredProductionProvidersReachDurableSinks (0.04s)
+=== RUN   TestSMTPProductionClientAcceptance
+--- PASS: TestSMTPProductionClientAcceptance (0.01s)
+=== RUN   TestSMSAuthValidationAndPersistence
+--- PASS: TestSMSAuthValidationAndPersistence (0.02s)
+=== RUN   TestJournalFailureNeverReturnsSuccess
+--- PASS: TestJournalFailureNeverReturnsSuccess (0.01s)
+=== RUN   TestPrivateControlRejectsInjectionAndReplay
+--- PASS: TestPrivateControlRejectsInjectionAndReplay (0.00s)
+=== RUN   TestJournalBudgetAndPersistenceErrorsRemainLatched
+=== RUN   TestJournalBudgetAndPersistenceErrorsRemainLatched/budget
+=== RUN   TestJournalBudgetAndPersistenceErrorsRemainLatched/storage
+--- PASS: TestJournalBudgetAndPersistenceErrorsRemainLatched (0.01s)
+    --- PASS: TestJournalBudgetAndPersistenceErrorsRemainLatched/budget (0.00s)
+    --- PASS: TestJournalBudgetAndPersistenceErrorsRemainLatched/storage (0.01s)
+=== RUN   TestSMTPConnectionBudgetAndMixedCaseEnvelope
+--- PASS: TestSMTPConnectionBudgetAndMixedCaseEnvelope (0.14s)
+=== RUN   TestPrivateManifestExclusiveAndSymlinkRejection
+--- PASS: TestPrivateManifestExclusiveAndSymlinkRejection (0.07s)
+=== RUN   TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity
+=== RUN   TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity/cart/settle
+=== RUN   TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity/apply_credit
+--- PASS: TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity (0.35s)
+    --- PASS: TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity/cart/settle (0.25s)
+    --- PASS: TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity/apply_credit (0.10s)
+=== RUN   TestSupplierSinkCompiledCreateSyncReplay
+--- PASS: TestSupplierSinkCompiledCreateSyncReplay (0.28s)
+=== RUN   TestSupplierSinkConcurrentDuplicateSettlementHasOneResource
+--- PASS: TestSupplierSinkConcurrentDuplicateSettlementHasOneResource (0.05s)
+=== RUN   TestSupplierSinkRejectsUnauthenticatedUnknownAndOverBudget
+--- PASS: TestSupplierSinkRejectsUnauthenticatedUnknownAndOverBudget (0.01s)
+=== RUN   TestSupplierSinkPersistenceFailurePreventsResourceAdmission
+--- PASS: TestSupplierSinkPersistenceFailurePreventsResourceAdmission (0.01s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/g09fixture	2.036s
