@@ -318,6 +318,13 @@ func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider
 	if txStatus == "failed" && status == "succeeded" && !topup {
 		return out, conflict("payment_state_conflict", "失败支付不能直接标记成功")
 	}
+	// Acquire the invoice before updating the payment: the refund association
+	// guard uses NOWAIT on this row. Ordinary cancellation contention must wait
+	// here instead of being mistaken for an external refund hold by that guard.
+	var invoiceStatus string
+	if err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
+		return out, err
+	}
 	if len(externalTransaction) > 0 {
 		if len(externalTransaction) != 1 || externalTransaction[0] == "" || len(externalTransaction[0]) > 160 {
 			return out, conflict("invalid_payment_webhook", "渠道流水号无效")
@@ -327,10 +334,6 @@ func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider
 		}
 	}
 	if status == "succeeded" {
-		var invoiceStatus string
-		if err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
-			return out, err
-		}
 		// A late receipt already reserved for independent refund review cannot
 		// be reused to settle another intent. Match the conservative global
 		// transaction identity enforced for Epay, and serialize both directions.

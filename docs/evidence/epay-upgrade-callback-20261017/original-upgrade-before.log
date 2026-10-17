@@ -1,0 +1,44 @@
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (1.85s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.85s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (1.86s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.86s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (2.20s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (2.20s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (2.70s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (2.70s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (1.87s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.87s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (1.97s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.96s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (2.03s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (2.03s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+    epay_test.go:347: concurrent notification rejected 500 fail
+--- FAIL: TestEpayPendingGuardsAndServiceSettlement (1.85s)
+    --- FAIL: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.85s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (1.95s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (1.95s)
+=== RUN   TestEpayPendingGuardsAndServiceSettlement
+=== RUN   TestEpayPendingGuardsAndServiceSettlement/upgrade
+--- PASS: TestEpayPendingGuardsAndServiceSettlement (2.02s)
+    --- PASS: TestEpayPendingGuardsAndServiceSettlement/upgrade (2.02s)
+FAIL
+FAIL	github.com/codex/zjmfgo/internal/httpapi	20.301s
+FAIL

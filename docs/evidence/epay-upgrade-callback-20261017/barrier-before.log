@@ -1,0 +1,6 @@
+=== RUN   TestEpayUpgradeCallbackWaitsForConcurrentCancellation
+    epay_callback_lock_test.go:136: concurrent notification rejected 500 fail; settlement diagnostic: time=2026-10-17T12:47:50.362+08:00 level=ERROR msg="payment callback settlement failed" provider=epay_alipay invoice_id=2 error="ERROR: external_refund_order_hold (SQLSTATE 23514)"
+--- FAIL: TestEpayUpgradeCallbackWaitsForConcurrentCancellation (1.84s)
+FAIL
+FAIL	github.com/codex/zjmfgo/internal/httpapi	1.844s
+FAIL
