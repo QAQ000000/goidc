@@ -1,6 +1,6 @@
 # 完整双 Web 隔离切换准备验收（2026-10-17）
 
-状态：**run1–5 全部 FAIL，完整双 Web 切换准备尚未通过；G04/G09 保持开放。** 本文记录固定候选的五次失败及其脱敏证据，不将后续修复或新候选封装计为运行通过。本批按[双 Web 契约](release-dual-web-contract-20261017.md)执行，没有部署、推送、重启常驻服务、操作业务库或真实资金/供应商资源；本文整理只读报告并提交文档。105 页台账仍为 45 完成 / 60 部分。
+状态：**run6 完整双 Web 隔离切换准备 PASS；run1–5 原 FAIL 保留，G04/G09 总体仍开放。** run6 从修复后的干净 `6b95102` 正常构建双包并实际运行，关闭隔离双 Web、统一公共 Origin、SSR/API 会话与 upstream 切换/切回准备子项。本批按[双 Web 契约](release-dual-web-contract-20261017.md)执行，没有部署、推送、重启常驻服务、操作业务库或真实资金/供应商资源；本文整理只读报告并提交文档。105 页台账仍为 45 完成 / 60 部分。
 
 ## run1–5 使用的固定候选
 
@@ -34,20 +34,62 @@ run5 的关键记录为：客户 `/api/v1/admin/site-settings` 返回 403、客�
 
 五轮均没有切到 B 或执行切回；原报告的 reload/observation 数均为 0。因此不得据其中局部页面、登录或库加载成功，宣称切换、排空、跨代会话连续性及注销反例已验收。
 
-## 清理与隔离证据的边界
+## run1–5 清理与隔离证据的边界
 
 所有原报告均记录外层 `sandboxStop.groupGone=true, forced=false`、`fixtureStop.groupGone=true, forced=false`，fixture 最终 `phase=cleaned, schemaRemoved=true`；双封存与独立副本字节、工具、PG 存储/进程身份和常驻宿主身份保持不变。run2–5 另有 `privatePIDNamespaceGone=true`；run1 在内层证据形成前失败，该字段为 false，不能追认为已取得内层 namespace 退出证明。
 
 run2–5 的内层失败结果仍保留 `allOwnedExited=true`、`listenersGone=false`、`fixtureCleaned=false`；它们不能改写成成功运行的退出证据。外层之后的正常组退出、namespace 消失和 fixture abort/schema 删除单独证明失败清理完成，不使本轮整体通过。本次只复核这些报告字段和摘要，未重跑退出探针或连接数据库。
 
-## 测试记录与后续修复候选
+## 历史测试与中间候选
 
 历史最终控制器/场景集成的 209 项 Node 联合回归及 fixture PG18 四项 race 通过，原日志摘要保留在输入索引；这些结果属于当时提交。后续主线实际执行 `node --test scripts/release-*.test.mjs` 为 214/214，通过的双 Web 定向控制器/场景测试为 37/37，均退出 0；该次输出由工具会话返回，未落日志，本文不编造日志 SHA256，也不据此声称重新执行 Go 全量、前端全量或双 Web 实际运行。
 
-主线 `dbe347fb0e43542276dfc0e7ef7081ebf432ad13` 的 A v2 已正常构建封装：BUILD_ID `bHtkK1VY-1TMB1w3Rnht0`、3059 个产物文件、manifest SHA256 `b7322623106c115ae33e4a776fc07a48d27e2d928e92e9da8c5e9d78da453c46`。本次只读核对该 manifest 的实际摘要、源码与 BUILD_ID 一致；**A v2 尚未运行验收**，不能套用旧 A/B 的原报告。console 入口补丁仍在另一独立分支进行；后续须先冻结最终修复源码，再按契约正常构建合法双候选并完整重跑。
+中间源码 `dbe347fb0e43542276dfc0e7ef7081ebf432ad13` 的 A v2 曾正常构建封装：BUILD_ID `bHtkK1VY-1TMB1w3Rnht0`、3059 个产物文件、manifest SHA256 `b7322623106c115ae33e4a776fc07a48d27e2d928e92e9da8c5e9d78da453c46`；它没有运行验收，现已按授权清理，不套用旧 A/B 或 run6 报告。后台入口修复 `dbe347f` 与 console 入口修复 `511034d` 均包含在最终 `6b95102`，run6 使用下文 v3 两包独立验证。
+
+## run6 最终候选与构建
+
+源码及 runner 均固定为干净 `6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3`。两包顺序正常构建，每包均含 3059 个产物；使用同一受控 Node/依赖、相同迁移及独立启动声明。公共 Origin 仍为私有 `http://127.0.0.1:53188`，A 内部 API/Web 为 58088/53088，B 为 58089/53089；这不是公网候选。
+
+| 项目 | A v3 | B v3 |
+| --- | --- | --- |
+| BUILD_ID | `gVh6-Rk5BjGrBgTCjeQ7r` | `HxIiLKYNudHdPZVX0nl9m` |
+| manifest SHA256 | `73cb22adf7d7b8590c07c5b3700a54a8becdbdce26a8a63703968d1c2ebbdf46` | `1b21bcfb71b46a282cb95c4cfe3fe7287f83040862bc45c03da5f2507554a63f` |
+| 封存位置 | `/dev/shm/zjmfgo-runtime-dualA-20261017-v3` | `/tmp/zjmfgo-dual-build-rootfs-20261017-v3/zjmfgo-runtime-dualB-20261017-v3` |
+| 独立外锚投影 | [A v3](evidence/release-dual-web-20261017/a-v3-build-anchor.json) | [B v3](evidence/release-dual-web-20261017/b-v3-build-anchor.json) |
+
+文档复核再次计算两份 manifest 和各 3059 个产物的实际字节 SHA256，与独立外锚、源码及 run6 报告相同。静态集为 220 + 220、共享 58、并集 382，和 run1–5 的并集 383 不混用。
+
+[构建与测试索引](evidence/release-dual-web-20261017/run6-build-and-test-index.json)保留原路径、日志与资源观察 SHA256。A2、B2 构建均退出 0，外部采样分别为 196/186 点，根盘最低可用 3464790016/3513692160 字节；这些是观察值，不是未采样峰值保证。B1 在记录峰值及保留空间预检被拒（退出 1），原日志 SHA256 `adefa0b2d3dee5795c1534fbc7306f015d574b358daaae94007641fb5ea782f8` 保留为 FAIL；后续 B2 使用独立 rootfs 构建，不覆盖该失败。
+
+最终 Node 回归日志 `/tmp/zjmfgo-dual-final-regression-20261017-v3.log` 为 221/221、0 失败/跳过，SHA256 `91ada81497b9d6325b388803e3bf83d6a102f26b6b3fbde772f76f0961dd573c`；日志内容和摘要在本次只读复核中一致。主代理还执行 Go vet（退出0、空日志）、Web typecheck（退出0）、lint（退出0、0错误/7条既有warning）及隔离PG18四项 opt-in fixture race（退出0）；vet/lint/race日志摘要见同一索引，typecheck仅有工具会话8953输出，不编造日志摘要。本批没有重跑全量Go数据库回归或四尺寸浏览器，页面布局没有变更；本次文档整理只读复核，不重新运行代码测试或构建。
+
+## run6 实际运行与清理
+
+原报告 `/tmp/zjmfgo-dual-web-run6-20261017/report.json` 为 **PASS**，1495485 字节，SHA256 `e636bd14952582e5b744b5b36f72d8307059081d220e89bd3dafe5e7153793c3`。[白名单摘要投影](evidence/release-dual-web-20261017/run6-summary.json)绑定 runner/源码、两个候选锚、plan/config 摘要、退出和检查数组摘要。原始响应头、正文、cookie、凭据及夹具配置均未复制入 Git。本次另重算99份trace及114份mutable证据文件的长度/SHA256，与报告索引逐项一致；原报告字节保持不变。
+
+| 检查 | run6 证据与实际范围 |
+| --- | --- |
+| 同包迁移及预热 | A/B 各 migrate 两次均退出 0，四份 schema 摘要相同；两代内部真实页面、资源、site 代理和 SSR 标记通过，4 个运行身份及8组库映射记录在原报告。 |
+| A→B→A | 真实目标 Nginx 在私有 namespace 内两次 HUP；实际 API/Web upstream 分别为 58088/53088→58089/53089→58088/53088。页面/身份断言与累计 Web→API syscall 连接记录作为组合证据；后者也可能来自 proxy/site/readiness，不能单独归因某一次受保护 SSR。 |
+| 旧/新静态资源 | 三阶段均复核 382 个并集资源，共 1146 条 `retained-union` 检查；真实页面有 A/B 独有资源引用，切回继续保留 B 资源同字节。 |
+| 会话与权限 | 客户与管理员各真实登录一次，三阶段同会话读取 API 与 SSR；客户后台 API 均 403、客户 `/admin` 均 307，合法客户/管理员 SSR 200。错误 Origin/请求标识写入被拒，匿名/无效会话、转发头及注销后双 API/Web 反例通过。fixture 三次连续性检查均同身份、业务摘要不变，最后活动会话 0。 |
+| 有界在途排空 | 两次 HUP 后旧 worker 都在原静态请求完成后自然退出；原请求分别 4011/4005ms、同一 72632 字节资源摘要一致。master 不变，新代接管时旧请求仍在途；这是受控静态传输排空，不是业务任务队列排空或容量证明。 |
+| 持续观察 | 450 次离散探针、错误 0，generation 为 old45/next236/restored169；覆盖切换和切回及三代配置响应，观察在注销前停止。这不代表所有请求零停机。包括旧/新独有 chunk、公共 HTML、客户/管理员只读身份请求。 |
+| 审计 | 共 1449 条检查记录（其中8条为原生/配置/连接元数据，不等同1449次HTTP请求），99 份 syscall trace；未声明写入尝试及非回环网络尝试均 0。预期 3xx/400/403/404/405 等按契约单列，不把全部非200视为意外失败。 |
+| 清理和不变量 | 内层 `ok/allOwnedExited/listenersGone/fixtureCleaned/fixtureSchemaRemoved` 全 true；外层两组退出且无强杀、private PID namespace 消失、fixture schema 删除。双封存/副本、工具、PG 存储身份和常驻宿主身份前后不变。 |
+
+`authenticatedSSR` 是受控 HTTP 状态200及固定title等最小断言，不证明所有受保护业务组件完整渲染。原报告只保存响应摘要、不保存正文或原始headers，因此title、cache和Origin等断言依赖固定源码的执行记录及报告，不能由摘要独立重建；连接trace只作为组合证据。本次PASS限于该契约及实际观察，不扩大为所有浏览器页面、每次SSR请求归因或生产零停机证明。
+
+报告记录运行预算峰值 2GiB、组件和 2046820352 字节，250ms 预算监控独立于采样；观察到 Go 临时/缓存 319614790 字节，不能把本次小夹具时间或内存推导为生产容量。本次文档复核只读报告、日志、锚和实际封存字节，没有操作进程或连接数据库。
+
+## 已授权历史候选清理与证据留存
+
+用户授权的历史产物清理已删除旧 candidate2/3、旧 dualA/B 和未运行的 A v2；[清理摘要](evidence/release-dual-web-20261017/historical-candidate-cleanup-summary.json)绑定既有清理报告 SHA256、旧 manifest/启动描述的本机保留位置和摘要，常驻服务身份保持不变。本次文档复核确认这些旧候选路径已不存在，留存 manifest 字节摘要与原记录一致；没有再次删除任何文件。
+
+旧 manifest 保存在 `/tmp/zjmfgo-cleanup-evidence-20261017`，run1–5 原始失败报告仍保留在各原运行目录，Git 里的历史失败投影不变。旧文档中的候选目录已成为历史位置，不能据路径继续宣称完整包当前存在。run6 最终两包、原报告和本机证据仍不是永久离机归档。
 
 ## 验收边界
 
-这是一批相同源码、同迁移集合、共同隔离 schema 的部署代际准备；即使后续通过，也不证明历史源码/schema 升级、公网 HTTPS/安全 Cookie、正式静态保留与清理、生产切流、目标容量、积压排空或业务 worker 执行中强杀恢复。G04/G09 的这些缺口保持开放。未用 NOKVM 不阻断当前魔方商品范围。
+本批已通过相同源码、同迁移集合、共同隔离 schema 的双 Web 部署代际准备；通过范围不包括历史源码/schema 升级、公网 HTTPS/安全 Cookie、正式静态保留与清理、生产切流、目标容量、积压排空或业务 worker 执行中强杀恢复。G04/G09 的这些缺口保持开放。未用 NOKVM 不阻断当前魔方商品范围。
 
 本机原始证据在 `/tmp` 与 `/dev/shm`，可能随清理/重启丢失；Git 只保留脱敏摘要与外锚，尚非永久离机归档。本次提交排除凭据、cookie、响应正文、依赖、构建产物和业务数据；保存的响应证据仅有固定路径、状态、时间、长度与摘要。

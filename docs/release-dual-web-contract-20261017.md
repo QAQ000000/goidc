@@ -1,6 +1,8 @@
 # 隔离双 Web 切换最小可执行契约（2026-10-17）
 
-**状态：计划，未执行、未验收，不计通过。** 文档基线 `7c62a309d5662c05d7da2b7224c8e9818e9c9f44`。本轮文档工作不启动服务、构建或数据库；下文是后续明确执行批次的最小方案。目标是在私有环境用两个合法完整候选、两套 API/Web 和真实目标 Nginx，验证预热、同一公共入口切换/切回、真实页面及资源、同源 API 与 SSR 会话连续性。没有生产切流、业务库或外部业务写入授权。
+**状态：本契约的隔离双 Web 准备已由 [run6](release-dual-web-acceptance-20261017.md) 实测通过；原 run1–5 FAIL 保留，G04/G09 总体仍开放。** 下文保留实施前最小方案；最终候选与实际结果以验收报告及摘要为准。
+
+原契约文档基线 `7c62a309d5662c05d7da2b7224c8e9818e9c9f44`。本轮文档工作不启动服务、构建或数据库；下文是后续明确执行批次的最小方案。目标是在私有环境用两个合法完整候选、两套 API/Web 和真实目标 Nginx，验证预热、同一公共入口切换/切回、真实页面及资源、同源 API 与 SSR 会话连续性。没有生产切流、业务库或外部业务写入授权。
 
 已有证据可复用：[candidate3 完整 runtime](release-runtime-real-build-acceptance-20261017.md)、[真实 Nginx 静态220→382→382](release-static-retention-acceptance-20261017.md)及[静态保留契约](release-static-retention-contract-20261017.md)。本批补动态 upstream 和公共 Origin 边界，不重复已有 worker 业务演练或无差异全量业务测试；上层[G04/G09契约](release-readiness-next-contract-20261017.md)继续开放。
 

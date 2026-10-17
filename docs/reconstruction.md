@@ -1,5 +1,7 @@
 # PHP 到 Go / Next.js 重构
 
+2026-10-17 隔离双 Web 准备：同一干净6b95102正常双构建的v3候选完成真实Nginx A→B→A、API/SSR同会话、两代独有资源与382份静态并集、受控在途排空和内外层清理，run6 PASS；1449条检查、两次HUP、450次持续观察错误0，221项Node回归通过，原run1–5 FAIL保留。报告SHA与双候选外锚已绑定，见[验收](release-dual-web-acceptance-20261017.md)。G04隔离双Web子项关闭；真实目标HTTPS/维护/回调、正式静态保留窗口、历史代码/schema和业务快照升级、生产切流切回及G09容量/强杀恢复仍开放。用户授权清理已移除旧candidate2/3、旧dualA/B和中间A v2，仅保留历史manifest/启动描述及原报告；不抹去历史验收。未部署/推送或重启常驻服务、写业务库，45完成/60部分不变。
+
 2026-10-17 真实Nginx静态保留准备：固定runner5008427，在普通用户私有mount/net/pid空间以真实目标Nginx执行旧220→并集382→恢复382，两次HUP、984组GET/HEAD、131次持续旧URL、31协议反例及7文件夹具通过；独立gpt-6.1-sol复核来源/摘要/日志与退出。candidate2仅作历史静态源，未启动Web或修改封存输入；失败1–4保留，小报告投影和摘要入Git。本批未部署、未推送、未连接业务数据库或重启常驻服务；45页完成/60部分不变。完整双Web/公网切流切回、正式静态保留窗口、业务快照升级、容量与强杀恢复仍待验收，G04/G09保持开放，见[本批验收](release-static-retention-acceptance-20261017.md)。
 
 2026-10-17 完整运行包隔离验收：使用经核验的官方Node和锁定来源依赖，从固定干净949ffe3构建API/worker/migrate、Next standalone并包含156个迁移文件，3058个artifact与独立外锚封存。独立分支修复ELF包内依赖解析、SSR API地址与精确mapped loopback审计后，runner ce19107对同一个candidate3完成双迁移、三服务同包、三页面及21份真实HTTP资源、worker模拟resume一次及TERM重启、66份trace隔离审计、退出/schema清理；主代理及gpt-6.1-sol独立重算通过。原run3审计FAIL保留，小报告与摘要入Git，凭据/依赖/二进制不入Git。强制隔离PG18全量、vet、typecheck/lint和真实webpack构建已通过。本批未部署、未推送、未写业务库，常驻服务未重启；45页完成/60部分不变。G04/G09仍缺公网/旧chunk/切流切回、业务快照升级、容量积压及执行中强杀恢复，详见[真实构建与隔离验收](release-runtime-real-build-acceptance-20261017.md)。

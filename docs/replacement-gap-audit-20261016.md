@@ -14,6 +14,8 @@
 
 原始审计轮为静态源码与既有验收证据审计；当时只读探针确认 API `/healthz`、`/readyz` 均 HTTP 200，三个 systemd 服务 active。这不证明现场运行的是当前源码。当时未运行浏览器、全量测试、写业务库或真实第三方操作、未部署。后续实现、测试和旧Web恢复按上文各独立记录，不与原审计范围混称。
 
+2026-10-17 双 Web 后续：[run6](release-dual-web-acceptance-20261017.md) 从同一干净 `6b95102` 正常双构建后，完成真实隔离双 Web、统一公共 Origin、API/SSR 同会话、两次 HUP 切换/切回、有界在途排空、382 份静态并集及内外层清理；1449 条检查、450 次持续观察错误 0，原 run1–5 FAIL 保留。G04 的隔离双 Web 准备子项已关闭，真实目标 HTTPS/维护/回调、正式静态保留窗口/清理、历史代码/schema 和业务快照升级、生产切流/切回及 G09 容量/强杀恢复仍未关闭；当前判断见[补充审计](replacement-gap-audit-20261017.md)。已授权历史候选清理后，candidate2/3、旧 dualA/B、A v2 仅保留本机 manifest/启动描述与历史报告，不能再据历史路径声称完整候选仍在。
+
 ## 可核对的数量
 
 | 指标 | 原审计记录 / 明示后续更新 | 含义 |
@@ -37,7 +39,7 @@
 | G01 | P0 | 商户适配与验收 | 真实 0.01 元扫码和异步通知已有通过记录；当前商户标准主动查单实际 404，公网 HTTPS 通知及退款到账未验收。补齐所选商户可信查单及公网链路，验证丢通知后的对账。见 [真实支付验收](real-payment-acceptance-20261013.md:7)。 |
 | G02 | P0 | 本地实现及异常解决通过，真实商户仍缺 | 迁移150至152已实现可信关单、未知关单只读核验/独立应用或驳回、迟到收款责任退回及客户冻结；精确原键跨页恢复已单独验收。mock可提供可信Close，当前易支付商户仍不具备可验证关单能力，未知结果继续冻结。全量/race及各自四尺寸证据见[异常验收](payment-exception-resolution-browser-acceptance-20261017.md)和[过期恢复专项](close-expired-recovery-browser-acceptance-20261017.md)，不能用人工说明替代可信渠道结果。 |
 | G03 | P0 | 登记与充值冲正增量通过，复杂业务及真实到账仍缺 | 已支持普通人工账单、原结算直接入账及迁移153实际补账后充值的外部退款登记/冻结/独立冲正；原支付、失败结算与补账事实保留。最新全量、专项race及15项/30图真实API浏览器通过，见[补账充值退款验收](resolved-topup-external-refund-acceptance-20261017.md)。154新增待审manual、从未交付且无佣金的新购订单整单冻结/冲正，通过最终强制全量/race/恢复及五尺寸浏览器验收，见[集成验收](order-external-refund-acceptance-20261017.md)；已交付订单/服务、续费/升级/信用/佣金、部分退款及自动原路退款仍不支持，真实商户出款与付款人到账仍待核验。 |
-| G04 | P0 | 完整运行包、同包隔离运行与静态保留准备通过，正式发布未验收 | 首增量完成schema153代表性恢复；后续candidate3（949ffe3）含受控Node/依赖、三二进制/Web/迁移，3058文件封存及外锚通过。run4双迁移、三服务同包、21份HTTP资源、worker一次模拟任务及TERM重启、隔离审计与清理经独立复核通过，见[运行包验收](release-runtime-real-build-acceptance-20261017.md)。真实Nginx静态220→382→382、984组GET/HEAD及持续旧URL通过[单独验收](release-static-retention-acceptance-20261017.md)，candidate2仅供历史静态来源。完整双Web/会话/upstream切换、正式静态保留窗口与清理、授权业务快照升级、实际目标HTTPS/维护及生产切流/切回仍缺；不把静态准备、空schema启动或模拟任务当生产/真实供应商证明。 |
+| G04 | P0 | 完整运行包、同包运行、静态保留及双Web隔离切换准备通过，正式发布未验收 | 首增量完成schema153代表性恢复；后续candidate3（949ffe3）含受控Node/依赖、三二进制/Web/迁移，3058文件封存及外锚通过。run4双迁移、三服务同包、21份HTTP资源、worker一次模拟任务及TERM重启、隔离审计与清理经独立复核通过，见[运行包验收](release-runtime-real-build-acceptance-20261017.md)。真实Nginx静态220→382→382、984组GET/HEAD及持续旧URL通过[单独验收](release-static-retention-acceptance-20261017.md)，candidate2仅供历史静态来源。完整隔离双Web/会话/upstream切换/切回已由[run6](release-dual-web-acceptance-20261017.md)通过；正式静态保留窗口与清理、历史代码/schema及授权业务快照升级、实际目标HTTPS/维护及生产切流/切回仍缺；不把静态准备、空schema启动或模拟任务当生产/真实供应商证明。 |
 | G05 | P1（正确性） | 已修复并通过隔离复核 | 候选在 `LIMIT` 前排除已按当前模式记录的 unsupported 项；100 条 unsupported 后的第 101 条可暂停服务能够在下一轮入队，模式变化可重新评估，并发不重复入队。追加故障测试证明后续任务插入失败时整批审计/任务回滚，解除故障可重试；主代理在 `5b8eb69` 独立复跑 PG18 race、build/vet 通过。见 [契约及证据](scheduler-candidate-progress-contract-20261016.md)。真实供应商暂停、容量与发布仍另列。 |
 | G06 | P1 | 缺通知触发 | 客户新建工单和双方回复未排邮件/SMS outbox，只有后台代开工单可发首次邮件。需接通客户与客服互相通知、权限范围、幂等与模板。见 [新建工单](../internal/httpapi/tickets.go:120)、[回复](../internal/httpapi/tickets.go:881)、[后台首次邮件](../internal/httpapi/admin_tickets.go:318)。 |
 | G07 | P1 | 已实现待端到端验收 | 指定魔方商品已有真实无人值守购买与手动续费证据；常驻新版本自动续费定时触发、所售真实云主机的电源/VNC/重装/密码/救援动作还需逐项验收。CDN 商品路径成功不能代替所有虚拟机产品的验收。见 [无人值守](supplier-unattended-acceptance-20261013.md)、[续费](supplier-renewal-acceptance-20261013.md:39)、[云主机动作边界](supplier-acceptance.md:30)。 |
