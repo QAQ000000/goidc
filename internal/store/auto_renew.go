@@ -24,6 +24,9 @@ func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enab
 	if !admin && ownerID != actorID {
 		return pgx.ErrNoRows
 	}
+	if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+		return err
+	}
 	if enabled {
 		var supplierMode bool
 		if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
@@ -110,6 +113,7 @@ func (s *Store) RunDailyAutoRenewals(ctx context.Context, log *slog.Logger) (int
 
 type autoRenewCandidate struct {
 	id, userID int64
+	generation int64
 	due        time.Time
 }
 
@@ -131,8 +135,9 @@ func (s *Store) ProcessAutoRenewals(ctx context.Context, pageSize int) (int, err
 	processed := 0
 	var persistenceErr error
 	for cursor < upperID {
-		rows, err := s.Pool.Query(ctx, `SELECT id,user_id,next_due_at FROM services
+		rows, err := s.Pool.Query(ctx, `SELECT id,user_id,next_due_at,renewal_generation FROM services
 WHERE auto_renew AND NOT import_review_required AND status IN ('active','suspended') AND billing_cycle <> 'once'
+  AND NOT local_renewal_service_blocked(id)
   AND next_due_at IS NOT NULL AND next_due_at <= $2 AND id>$3 AND id<=$4
   AND NOT EXISTS (SELECT 1 FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
                   WHERE ii.service_id=services.id AND ii.item_type='renew' AND i.status='unpaid')
@@ -143,7 +148,7 @@ ORDER BY id LIMIT $1`, pageSize, cutoff, cursor, upperID)
 		items := []autoRenewCandidate{}
 		for rows.Next() {
 			var item autoRenewCandidate
-			if err = rows.Scan(&item.id, &item.userID, &item.due); err != nil {
+			if err = rows.Scan(&item.id, &item.userID, &item.due, &item.generation); err != nil {
 				rows.Close()
 				return processed, errors.Join(persistenceErr, err)
 			}
@@ -168,7 +173,7 @@ ORDER BY id LIMIT $1`, pageSize, cutoff, cursor, upperID)
 			if paid {
 				processed++
 			}
-			if _, err = s.Pool.Exec(ctx, "UPDATE services SET auto_renew_error=$2,updated_at=now() WHERE id=$1 AND next_due_at=$3", item.id, message, item.due); err != nil {
+			if _, err = s.Pool.Exec(ctx, "UPDATE services SET auto_renew_error=$2,updated_at=now() WHERE id=$1 AND next_due_at=$3 AND renewal_generation=$4 AND auto_renew AND NOT local_renewal_service_blocked(id)", item.id, message, item.due, item.generation); err != nil {
 				persistenceErr = errors.Join(persistenceErr, err)
 			}
 		}
@@ -178,7 +183,10 @@ ORDER BY id LIMIT $1`, pageSize, cutoff, cursor, upperID)
 
 func (s *Store) attemptAutoRenewal(ctx context.Context, item autoRenewCandidate) (bool, string) {
 	key := fmt.Sprintf("auto-renew-%d-%s", item.id, item.due.UTC().Format("20060102150405"))
-	invoice, err := s.CreateAutoRenewalInvoice(ctx, item.userID, item.id, item.due, key)
+	if item.generation > 0 {
+		key += fmt.Sprintf("-g%d", item.generation)
+	}
+	invoice, err := s.CreateAutoRenewalInvoice(ctx, item.userID, item.id, item.due, key, item.generation)
 	if err != nil {
 		return false, autoRenewErrorText(err)
 	}

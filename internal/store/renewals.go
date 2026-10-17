@@ -52,6 +52,21 @@ func (s *Store) createRenewalInvoiceStep(ctx context.Context, userID, serviceID 
 	if err = lockOperationKey(ctx, tx, "renewal", fmt.Sprintf("%d:%s", serviceID, key)); err != nil {
 		return out, nil, err
 	}
+	if automaticDue != nil {
+		var generation int64
+		var enabled bool
+		var actualDue *time.Time
+		if err = tx.QueryRow(ctx, `SELECT renewal_generation,auto_renew,next_due_at FROM services WHERE id=$1 AND user_id=$2 FOR UPDATE`, serviceID, userID).Scan(&generation, &enabled, &actualDue); err != nil {
+			return out, nil, err
+		}
+		expected, _ := ctx.Value(autoRenewGenerationKey{}).(int64)
+		if generation != expected || !enabled || actualDue == nil || !actualDue.Equal(*automaticDue) {
+			return out, nil, conflict("auto_renewal_race", "自动续费代次、开关或期限已变化")
+		}
+		if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+			return out, nil, err
+		}
+	}
 	err = tx.QueryRow(ctx, `SELECT id,invoice_no,amount_cents FROM invoices
 WHERE user_id=$1 AND idempotency_key=$2`, userID, key).Scan(&out.InvoiceID, &out.InvoiceNo, &out.AmountCents)
 	if err == nil {
@@ -94,6 +109,9 @@ FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON
 		if due.Sub(*automaticDue) > time.Second || automaticDue.Sub(*due) > time.Second || due.After(time.Now().Add(24*time.Hour)) {
 			return out, nil, conflict("auto_renewal_race", "服务到期时间已变化，请稍后重试")
 		}
+	}
+	if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+		return out, nil, err
 	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, nil, err
@@ -160,7 +178,17 @@ VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, out.InvoiceID, productN
 	return out, nil, tx.Commit(ctx)
 }
 
-func (s *Store) CreateAutoRenewalInvoice(ctx context.Context, userID, serviceID int64, due time.Time, key string) (RenewalResult, error) {
+type autoRenewGenerationKey struct{}
+
+func (s *Store) CreateAutoRenewalInvoice(ctx context.Context, userID, serviceID int64, due time.Time, key string, expectedGeneration ...int64) (RenewalResult, error) {
+	if len(expectedGeneration) > 1 || (len(expectedGeneration) == 1 && expectedGeneration[0] < 0) {
+		return RenewalResult{}, conflict("invalid_auto_renewal", "自动续费代次无效")
+	}
+	var generation int64
+	if len(expectedGeneration) == 1 {
+		generation = expectedGeneration[0]
+	}
+	ctx = context.WithValue(ctx, autoRenewGenerationKey{}, generation)
 	if due.IsZero() {
 		return RenewalResult{}, conflict("invalid_auto_renewal", "自动续费到期时间无效")
 	}
@@ -181,6 +209,15 @@ func renewalInterval(cycle string) string {
 }
 
 func extendRenewalDue(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
+	// Local entitlement is settled by the invoice unpaid -> paid trigger. Check
+	// before consuming a discount ordinal; supplier renewals retain their adapter.
+	var localEffect bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM service_renewal_effects WHERE invoice_id=$1)", invoiceID).Scan(&localEffect); err != nil {
+		return err
+	}
+	if localEffect {
+		return nil
+	}
 	var serviceID, ordinal int64
 	var snapshot RenewalBenefit
 	if err := tx.QueryRow(ctx, "SELECT service_id,renewal_discount_ordinal,renewal_discount_percent,renewal_fixed_discount_cents,renewal_discount_limit,renewal_promo_code FROM invoice_items WHERE invoice_id=$1 AND item_type='renew' LIMIT 1", invoiceID).Scan(&serviceID, &ordinal, &snapshot.Percent, &snapshot.FixedCents, &snapshot.Limit, &snapshot.Code); err != nil {
@@ -205,8 +242,7 @@ func extendRenewalDue(ctx context.Context, tx pgx.Tx, invoiceID int64) error {
 	if handled, err := queueSupplierRenewal(ctx, tx, invoiceID, serviceID); handled || err != nil {
 		return err
 	}
-	_, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE services SET auto_renew_error='',next_due_at=GREATEST(COALESCE(next_due_at,now()),now())+interval '%s',version=version+1,updated_at=now() WHERE id=$1`, renewalInterval(cycle)), serviceID)
-	return err
+	return conflict("renewal_effect_missing", "本地续费缺少与收款事务关联的生效事实")
 }
 
 func settleServiceInvoice(ctx context.Context, tx pgx.Tx, invoiceID int64) error {

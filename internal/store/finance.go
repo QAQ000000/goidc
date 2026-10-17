@@ -348,8 +348,8 @@ VALUES($1,'topup',$2,$3,'admin_topup',$4,$5)`, userID, amount, balance, key, not
 	return balance, false, tx.Commit(ctx)
 }
 
-func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key string) (PaymentResult, error) {
-	var out PaymentResult
+func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key string) (out PaymentResult, err error) {
+	defer func() { err = externalRefundDBError(err) }()
 	if actorID < 1 || invoiceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_refund", "账单或幂等键无效")
 	}
@@ -387,7 +387,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 		return out, err
 	}
 	var keyInvoice int64
-	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND delta_cents>0 AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
+	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND delta_cents>=0 AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
 	if err == nil && keyInvoice != invoiceID {
 		return out, conflict("idempotency_conflict", "退款幂等键对应其他账单")
 	}
@@ -407,7 +407,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 	}
 	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
 FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id
-WHERE l.entry_type='refund' AND l.delta_cents>0 AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
+WHERE l.entry_type='refund' AND l.delta_cents>=0 AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
 		Scan(&replayInvoiceID, &out.InvoiceNo, &delta, &out.Status)
 	if err == nil {
 		if replayInvoiceID != invoiceID {
@@ -538,6 +538,11 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		} else if err = requireNoConfigurationChange(ctx, tx, renewalServiceID); err != nil {
 			return out, err
 		}
+		if upgradeID == 0 && !supplierRenewalRefund {
+			if err = requireLocalRenewalRefund(ctx, tx, invoiceID, 0, false); err != nil {
+				return out, err
+			}
+		}
 	}
 	if creditPayment {
 		if _, err = tx.Exec(ctx, "UPDATE customer_credit_accounts SET used_cents=used_cents-$2,version=version+1,updated_at=now() WHERE user_id=$1 AND used_cents>=$2", userID, creditRemaining); err != nil {
@@ -560,15 +565,6 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 	}
 	if orderID > 0 {
 		if _, err = tx.Exec(ctx, "UPDATE orders SET status='refunded',updated_at=now() WHERE id=$1", orderID); err != nil {
-			return out, err
-		}
-	}
-	if orderID == 0 && upgradeID == 0 && kind != "manual" && !traffic && !supplierRenewalRefund {
-		var cycle string
-		if err = tx.QueryRow(ctx, "SELECT billing_cycle FROM services WHERE id=$1 FOR UPDATE", renewalServiceID).Scan(&cycle); err != nil {
-			return out, err
-		}
-		if _, err = tx.Exec(ctx, fmt.Sprintf("UPDATE services SET next_due_at=GREATEST(now(),next_due_at-interval '%s'),version=version+1,updated_at=now() WHERE id=$1", renewalInterval(cycle)), renewalServiceID); err != nil {
 			return out, err
 		}
 	}
