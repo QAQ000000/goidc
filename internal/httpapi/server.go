@@ -862,6 +862,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23514" && pg.Message == "renewal_refund_hold" {
+		writeError(w, 409, "renewal_refund_hold", "服务存在待复核续费退款，核实后再操作")
+		return
+	}
 	if errors.As(err, &pg) && (pg.Code == "23505" || pg.Code == "23503" || pg.Code == "23514") {
 		writeError(w, 409, "constraint_conflict", "记录重复或关联数据无效")
 		return

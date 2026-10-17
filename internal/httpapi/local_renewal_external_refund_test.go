@@ -236,7 +236,7 @@ func TestLocalRenewalExternalRefundHTTPRevocationAndHold(t *testing.T) {
 	f := newLocalRenewalRefundHTTPFixture(t)
 	refund := f.create(t, "renewal-hold-create")
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", f.sid), map[string]any{}, f.customer, "renewal-under-hold"), 409)
-	expect(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", f.sid), map[string]any{"enabled": false}, f.customer, ""), 409)
+	orderExternalRefundCode(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", f.sid), map[string]any{"enabled": false}, f.customer, ""), 409, "renewal_refund_hold")
 	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, f.requesterID); err != nil {
 		t.Fatal(err)
 	}
