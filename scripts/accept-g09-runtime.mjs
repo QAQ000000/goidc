@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The candidate runtime phase of G09. This does not execute or pass capacity.
-import { chmod, chown, copyFile, lstat, mkdir, readFile, readdir, readlink, rm, writeFile } from 'node:fs/promises';
+import { chmod, chown, copyFile, lstat, mkdir, open, readFile, readlink, rm, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import net from 'node:net';
@@ -11,6 +11,8 @@ import { verifyRuntimeCandidate, runtimeInventory } from './release-runtime-lib.
 import { freeSpace, pinnedJSON, validateBudget, guardReserve, controlledRuntimeEnvironment } from './release-runtime-builder-lib.mjs';
 import { assertAvailablePort, assertSocket, auditTraceFiles, jsonFile, pause, requireThat, verifyPages, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
 import { copyIndependent, launch, namespaceArgs, stop, verifyHostBaseline } from './accept-release-runtime.mjs';
+import { verifyG09ResidentTraces } from './g09-runtime-trace.mjs';
+import { recoverG09ControlHistory } from './g09-runtime-recovery.mjs';
 import { launchG09TracedChild } from './g09-runtime-process.mjs';
 import { createG09ProcessSampler } from './g09-process-sampler.mjs';
 import { g09RuntimeFiles, g09MigrationInputs, validateG09RuntimeDSN, validateG09Command, writeG09ControlJSON, readG09ControlJSON } from './g09-runtime-contract.mjs';
@@ -150,7 +152,7 @@ async function inner() {
     await mark('stop'); await stopResidents(); await closeBridge();
     for (const origin of [description.apiInternalURL, description.webOrigin]) await assertAvailablePort(Number(new URL(origin).port));
     await fixtureCall('/fixture', state, 'finish'); completed = true;
-    await writeJSON('/mutable/result.json', { ok: true, mode: 'candidate_runtime_bootstrap', candidateRuntimeVerified: true, capacityVerified: false, identities, processSamples, observations, migrations, pages, allOwnedExited: true, listenersGone: true, controlSequence: state.sequence });
+    await writeJSON('/mutable/result.json', { ok: true, mode: 'candidate_runtime_bootstrap', candidateRuntimeVerified: true, capacityVerified: false, workerReadinessVerified: false, identities, processSamples, observations, migrations, pages, allOwnedExited: true, listenersGone: true, controlSequence: state.sequence });
   } catch {
     await stopResidents().catch(() => {}); await closeBridge().catch(() => {});
     await writeJSON('/mutable/failure.json', { ok: false, phase, capacityVerified: false }).catch(() => {});
@@ -168,9 +170,9 @@ export async function acceptG09Runtime(options) {
   const runId = `g09_candidate_${randomBytes(12).toString('hex')}`;
   const release = path.join(runRoot, 'release'), control = path.join(runRoot, 'control');
   const fixture = path.join(runRoot, 'fixture'), mutable = path.join(runRoot, 'mutable');
-  let fixtureProcess, sandbox, timer, failure, checking = false;
+  let fixtureProcess, fixtureLog, fixtureDeadline, sandbox, timer, failure, checking = false;
   const report = { status: 'FAIL', mode: 'candidate_runtime_bootstrap', runId, sourceCommit: manifest.source.commit,
-    runnerCommit: options.runnerCommit, manifestSHA256: options.manifestSHA, capacityVerified: false };
+    runnerCommit: options.runnerCommit, manifestSHA256: options.manifestSHA, capacityVerified: false, workerReadinessVerified: false };
   const interrupted = () => { failure ??= new Error('g09_interrupted'); if (sandbox) stop(sandbox).catch(() => {}); };
   await mkdir(runRoot, { mode: 0o755 });
   process.once('SIGTERM', interrupted); process.once('SIGINT', interrupted);
@@ -191,10 +193,15 @@ export async function acceptG09Runtime(options) {
     const fixtureTemporary = path.join(runRoot, 'fixture-tmp'); await mkdir(fixtureTemporary, { mode: 0o700 }); await chown(fixtureTemporary, uid, gid);
     const socketDirectory = path.join(runRoot, 'socket'); await mkdir(socketDirectory, { mode: 0o755 });
     const fixtureBinary = path.join(runRoot, 'host-fixture.test');
-    const goEnv = { ...tools, HOME: '/root', TMPDIR: goTemporary, GOTMPDIR: goTemporary };
-    const compile = launch('/usr/local/btgo/bin/go', ['test', '-mod=readonly', '-c', '-o', fixtureBinary, './internal/store'], { cwd: options.source, env: goEnv });
-    try { await deadline(compile.done, 120000); requireThat(!compile.failed && compile.code === 0, 'g09_fixture_compile_failed'); }
-    finally { await stop(compile, 5); }
+    const goWrapper = path.join(options.source, 'scripts/go.sh');
+    const moduleCache = command(goWrapper, ['env', 'GOMODCACHE'], { ...tools, HOME: '/root' });
+    await noLinks(moduleCache);
+    const goCache = path.join(goTemporary, 'cache'); await mkdir(goCache, { mode: 0o700 });
+    const goEnv = { ...tools, HOME: '/root', TMPDIR: goTemporary, GOTMPDIR: goTemporary, GOCACHE: goCache, GOMODCACHE: moduleCache };
+    const compileLog = await open(path.join(runRoot, 'fixture-compile.log'), 'wx', 0o600);
+    const compile = launch(goWrapper, ['test', '-mod=readonly', '-c', '-o', fixtureBinary, './internal/store'], { cwd: options.source, env: goEnv, stdio: ['ignore', compileLog.fd, compileLog.fd] });
+    try { await deadline(compile.done, Math.min(pre.budget.maxBuildSeconds, 300) * 1000); requireThat(!compile.failed && compile.code === 0, 'g09_fixture_compile_failed'); }
+    finally { try { await stop(compile, 5); } finally { await compileLog.close(); } }
     await chmod(fixtureBinary, 0o555);
     const bootstrap = path.join(control, 'bootstrap.private.json');
     await writeG09ControlJSON(bootstrap, { runId, bridgeDirectory: socketDirectory, migrations: g09MigrationInputs(manifest) });
@@ -202,7 +209,11 @@ export async function acceptG09Runtime(options) {
     const fixtureEnv = { ...tools, TMPDIR: fixtureTemporary, ZJMFGO_G09_CANDIDATE_FIXTURE: '1',
       ZJMFGO_TEST_DATABASE_URL: pre.databaseURL, ZJMFGO_G09_CANDIDATE_FIXTURE_DIR: fixture,
       ZJMFGO_G09_CANDIDATE_BOOTSTRAP_CONFIG: bootstrap };
-    fixtureProcess = launch('/usr/bin/setpriv', ['--reuid', String(uid), '--regid', String(gid), '--clear-groups', '--', fixtureBinary, '-test.run=^TestG09CandidateFixture$', '-test.timeout=9m', '-test.v'], { cwd: fixtureTemporary, env: fixtureEnv });
+    // Includes the fixture's own 8-minute context and bounded deferred cleanup.
+    // Unknown control results must never cause an early TERM that skips that defer.
+    fixtureDeadline = Date.now() + (9 * 60 + 15) * 1000;
+    fixtureLog = await open(path.join(runRoot, 'host-fixture.log'), 'wx', 0o600);
+    fixtureProcess = launch('/usr/bin/setpriv', ['--reuid', String(uid), '--regid', String(gid), '--clear-groups', '--', fixtureBinary, '-test.run=^TestG09CandidateFixture$', '-test.timeout=9m', '-test.v'], { cwd: fixtureTemporary, env: fixtureEnv, stdio: ['ignore', fixtureLog.fd, fixtureLog.fd] });
     const ready = await available(fixtureProcess, async () => {
       const filename = path.join(fixture, 'schema-ready.json');
       return await lstat(filename).catch(() => null) ? readG09ControlJSON(filename, { uid }) : null;
@@ -228,23 +239,38 @@ export async function acceptG09Runtime(options) {
     const runtime = await jsonFile(path.join(mutable, 'result.json'));
     requireThat(runtime.ok && runtime.candidateRuntimeVerified && runtime.capacityVerified === false && runtime.allOwnedExited && runtime.listenersGone, 'g09_runtime_proof_incomplete');
     requireThat(same(await runtimeInventory(release), manifest.artifacts), 'g09_runtime_copy_changed');
+    const residentTrace = await verifyG09ResidentTraces({ traceRoot: path.join(mutable, 'logs'), identities: runtime.identities, manifest, description: pre.description });
     const audit = await auditTraceFiles(path.join(mutable, 'logs'), [`/release/${manifest.web.appRoot}/.next/cache`]);
     await deadline(fixtureProcess.done, 30000);
     requireThat(!fixtureProcess.failed && fixtureProcess.code === 0, 'g09_fixture_failed');
-    report.runtime = runtime; report.audit = audit; report.status = 'PASS';
+    report.runtime = runtime; report.residentTrace = residentTrace; report.audit = audit; report.status = 'PASS';
   } catch { failure ??= new Error('g09_acceptance_failed'); }
   finally {
     clearInterval(timer);
     process.removeListener('SIGTERM', interrupted); process.removeListener('SIGINT', interrupted);
     await stop(sandbox, 5).catch(error => { failure ??= error; });
-    if (fixtureProcess && !fixtureProcess.exited) {
-      const commands = (await readdir(fixture)).filter(name => /^command-\d+\.json$/.test(name));
-      const sequence = Math.max(0, ...commands.map(name => Number(name.match(/\d+/)[0])));
-      await fixtureCall(fixture, { runId, sequence }, 'abort', uid, gid).catch(() => {});
-      await deadline(fixtureProcess.done, 30000).catch(() => {});
-      await stop(fixtureProcess, 5).catch(error => { failure ??= error; });
+    if (fixtureProcess) {
+      // No command writer may remain when reconstructing the acknowledged history.
+      const history = sandbox && !sandbox.groupGone
+        ? { status: 'unknown', frozen: true }
+        : await recoverG09ControlHistory(fixture, runId, { uid });
+      report.controlRecovery = { status: history.status, frozen: history.frozen };
+      if (['unknown', 'failed'].includes(history.status)) failure ??= new Error('g09_control_history_unproven');
+      if (!fixtureProcess.exited && history.status === 'ready') {
+        await fixtureCall(fixture, { ...history.state }, 'abort', uid, gid).catch(() => {
+          failure ??= new Error('g09_abort_result_unknown');
+          report.controlRecovery = { status: 'unknown', frozen: true };
+        });
+      }
+      // Never kill a live fixture merely because a command result is unknown.
+      // Allow its own context timeout and deferred schema cleanup to complete.
+      await deadline(fixtureProcess.done, Math.max(1, fixtureDeadline - Date.now())).catch(() => {
+        failure ??= new Error('g09_fixture_exit_unproven');
+      });
+      if (!fixtureProcess.exited) await stop(fixtureProcess, 5).catch(error => { failure ??= error; });
     }
-    const done = await jsonFile(path.join(fixture, 'done.json')).catch(() => null);
+    await fixtureLog?.close();
+    const done = await readG09ControlJSON(path.join(fixture, 'done.json'), { uid }).catch(() => null);
     report.fixtureSchemaRemoved = done?.runId === runId && done.ok && done.schemaRemoved === true;
     if (fixtureProcess && !report.fixtureSchemaRemoved) failure ??= new Error('g09_schema_cleanup_unproven');
     try {

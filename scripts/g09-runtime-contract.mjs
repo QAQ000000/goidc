@@ -8,6 +8,7 @@ const integer = (n, min, max) => Number.isSafeInteger(n) && n >= min && n <= max
 export const g09RuntimeFiles = Object.freeze([
   'scripts/accept-g09-runtime.mjs', 'scripts/g09-runtime-contract.mjs',
   'scripts/g09-runtime-process.mjs', 'scripts/g09-process-sampler.mjs',
+  'scripts/g09-runtime-recovery.mjs', 'scripts/g09-runtime-trace.mjs',
   'scripts/accept-release-runtime.mjs', 'scripts/release-runtime-lib.mjs',
   'scripts/release-runtime-acceptance-lib.mjs', 'scripts/release-runtime-builder-lib.mjs',
   'scripts/release-runtime-trace-selection.mjs', 'scripts/release-candidate-lib.mjs',
