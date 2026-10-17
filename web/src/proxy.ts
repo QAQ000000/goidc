@@ -3,6 +3,11 @@ import type { SiteProfile, User } from "./lib/api";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  const authRedirect = (target: string) => {
+    const base = new URL(process.env.PUBLIC_ORIGIN ?? request.url);
+    if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || (process.env.PUBLIC_ORIGIN !== undefined && (base.pathname !== "/" || base.search || base.hash))) throw new Error("Invalid public redirect origin");
+    return NextResponse.redirect(new URL(target, base.origin), { status: 307, headers: { "Cache-Control": "no-store" } });
+  };
   // Next's configured rewrites match case-insensitively, including /API/.
   if (/^\/api(?:\/|$)/i.test(path)) {
     // NextRequest has no authoritative socket peer. Never vouch for an IP
@@ -19,7 +24,7 @@ export async function proxy(request: NextRequest) {
   if (adminRoute) {
     const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
     const cookie = request.cookies.get("zjmfgo_session");
-    if (!cookie) return NextResponse.redirect(new URL("/admin-login", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+    if (!cookie) return authRedirect("/admin-login");
     try {
       const response = await fetch(`${origin}/api/v1/me`, {
         headers: { Cookie: `zjmfgo_session=${cookie.value}` },
@@ -29,10 +34,10 @@ export async function proxy(request: NextRequest) {
       if (response.ok) {
         const user = (await response.json()).data as User;
         if (user?.role === "admin" || user?.role === "super_admin") return NextResponse.next();
-        return NextResponse.redirect(new URL("/", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+        return authRedirect("/");
       }
     } catch {}
-    return NextResponse.redirect(new URL("/admin-login", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+    return authRedirect("/admin-login");
   }
   if (["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
   const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
@@ -41,7 +46,26 @@ export async function proxy(request: NextRequest) {
     const response = await fetch(`${origin}/api/v1/site`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
     if (response.ok) site = (await response.json()).data as SiteProfile;
   } catch {}
-  if (site && !site.maintenance_enabled) return NextResponse.next();
+  if (site && !site.maintenance_enabled) {
+    if (path !== "/console" && !path.startsWith("/console/")) return NextResponse.next();
+    // A nested layout redirect can become a streamed 200 + client meta redirect.
+    // Resolve the console session before rendering to preserve the HTTP redirect.
+    const cookie = request.cookies.get("zjmfgo_session");
+    if (!cookie) return authRedirect("/login");
+    try {
+      const response = await fetch(`${origin}/api/v1/me`, {
+        headers: { Cookie: `zjmfgo_session=${cookie.value}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.status === 401) return authRedirect("/login");
+      if (response.ok) {
+        const user = (await response.json()).data as User;
+        if (user && Number.isSafeInteger(user.id) && user.id > 0) return NextResponse.next();
+      }
+    } catch {}
+    return new NextResponse("账户服务暂时不可用，请稍后再试。", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "60", "Content-Type": "text/plain; charset=utf-8" } });
+  }
   const cookie = request.cookies.get("zjmfgo_session");
   if (cookie) {
     try {
