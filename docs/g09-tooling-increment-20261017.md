@@ -18,7 +18,7 @@
 
 Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排空截止后的微任务、未知链冻结、独立客户预算、付款前金额及身份核验、版本请求、HTTP409、原请求保护和证据去敏。Go小包race只覆盖协议接收器/控制文件，不连接PG。执行日志与退出码另存[工具证据](evidence/g09-tooling-20261017/)。已有强制全量使用启动时的固定快照，后续工具修补专项单列，不能追认包含新增文件。
 
-后续增量的小包回归直接调用生产注册表中的SMTP/generic HTTP JSON provider连接loopback接收器，确认协议与证据hash匹配；它仍不运行worker、不claim真实outbox。Go→Node opt-in source API入口已在`2c73f7d`实现，当前仍等待唯一全量结束后的独立PG验收窗口；默认SKIP只证明可编译，不能登记SQL检查通过。额外报告器及provider回归证据在`report-guard-increment/`子目录，与前一轮33项Node记录分开保存。
+后续增量的小包回归直接调用生产注册表中的SMTP/generic HTTP JSON provider连接loopback接收器，确认协议与证据hash匹配；它仍不运行worker、不claim真实outbox。Go→Node opt-in source API入口在`2c73f7d`实现，现已于`f5d69d2`独占PG18实测通过（HTTP包2.255秒、17次真实HTTP、4条业务链及SQL不变量），没有SKIP；schema清理、常驻PID身份和API/Web健康核对通过，见`source-api-pg-smoke/`。该轮前置全量退出1已单列保留，不能拿此专项替代全量。额外报告器及provider回归证据在`report-guard-increment/`子目录，与前一轮33项Node记录分开保存。
 
 量化分位数为直方图保守上界；`null`表示没有样本，必须先用 `Number.isFinite`检查，不能利用JavaScript的`null <= limit`当通过。阶段SLO使用`phaseCategories`，同时检查计划数、接纳比例、failed/dropped/timeout/unfinished；负载库inflight drain不代表worker业务排空。
 
@@ -29,3 +29,5 @@ Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排�
 外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、两个真实worker、SQL资金/权益全量核对、周期背景/PG采样与进程采样调度，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
 
 后续先以opt-in真实Go HTTP→Node小链验证请求契约，再固定干净候选执行小规模试跑和预先冻结的27分钟profile。source API试跑也不能代替最终候选容量验收。
+
+真实`cmd/worker`双进程小闭环已在`46b759b`实现。首次PG试跑退出1（47.779秒）：SMTP可选用户名省略后解析为`<nil>`，造成邮件发送失败、有限来源未全部成功；见`source-worker-pg-smoke/`，不得按PASS登记。临时schema/worker均已回收、常驻服务健康不变；配置解析修复及新一轮验收单列，G09保持开放。

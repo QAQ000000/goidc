@@ -1,0 +1,32 @@
+{
+  "prior_full_exit_code": 1,
+  "started_at": "2026-10-17T04:46:24.229394+00:00",
+  "source_commit": "f5d69d2b038a8638fbc96c6d3a2354836d84946e",
+  "command": "ZJMFGO_G09_SOURCE_API_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test ./internal/httpapi -run '^TestG09SourceAPIScenarioSmoke$' -count=1 -timeout=5m -v",
+  "postgresql": [
+    "18.0"
+  ],
+  "candidate_verified": false,
+  "worker_verified": false,
+  "capacity_verified": false,
+  "health_before": {
+    "api": 200,
+    "web": 200
+  },
+  "exit_code": 0,
+  "actual_test_pass": true,
+  "skipped": false,
+  "schemas_restored": true,
+  "resident_processes_unchanged": true,
+  "health_after": {
+    "api": 200,
+    "web": 200
+  },
+  "finished_at": "2026-10-17T04:46:35.199604+00:00",
+  "pass": true,
+  "source_sha256": {
+    "internal/httpapi/g09_source_api_smoke_test.go": "2d9efabb622a059ae9441f01b76294f41218007a27c3c4f7b6aebd1b06f9c9c5",
+    "scripts/g09-source-api-smoke.mjs": "9f5704a2d3ecfa33ed36ad81312fabbf0d87453d10ec323e37abbb52505d3b34",
+    "scripts/g09-scenario-lib.mjs": "401783ee0af63c6e32252dacacd626cb48261c2fff48a365fd462a6dea15a955"
+  }
+}

@@ -1,0 +1,6 @@
+=== RUN   TestG09SourceWorkerLoopbackSmoke
+    g09_source_worker_smoke_test.go:298: bounded source worker cohort did not reach all success states
+--- FAIL: TestG09SourceWorkerLoopbackSmoke (47.77s)
+FAIL
+FAIL	github.com/codex/zjmfgo/internal/httpapi	47.779s
+FAIL
