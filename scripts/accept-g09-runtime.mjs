@@ -170,17 +170,17 @@ export async function acceptG09Runtime(options) {
   const runId = `g09_candidate_${randomBytes(12).toString('hex')}`;
   const release = path.join(runRoot, 'release'), control = path.join(runRoot, 'control');
   const fixture = path.join(runRoot, 'fixture'), mutable = path.join(runRoot, 'mutable');
-  let fixtureProcess, fixtureLog, fixtureDeadline, sandbox, timer, failure, checking = false;
+  let fixtureProcess, fixtureLog, fixtureDeadline, activeBuild, sandbox, timer, failure, checking = false;
   const report = { status: 'FAIL', mode: 'candidate_runtime_bootstrap', runId, sourceCommit: manifest.source.commit,
     runnerCommit: options.runnerCommit, manifestSHA256: options.manifestSHA, capacityVerified: false, workerReadinessVerified: false };
-  const interrupted = () => { failure ??= new Error('g09_interrupted'); if (sandbox) stop(sandbox).catch(() => {}); };
+  const interrupted = () => { failure ??= new Error('g09_interrupted'); if (activeBuild) stop(activeBuild).catch(() => {}); if (sandbox) stop(sandbox).catch(() => {}); };
   await mkdir(runRoot, { mode: 0o755 });
   process.once('SIGTERM', interrupted); process.once('SIGINT', interrupted);
   try {
     timer = setInterval(async () => {
       if (checking || failure) return; checking = true;
       try { await guardReserve(runRoot, pre.budget, pre.availableSpace.bytes); }
-      catch { failure ??= new Error('g09_resource_budget'); if (sandbox) await stop(sandbox).catch(() => {}); }
+      catch { failure ??= new Error('g09_resource_budget'); if (activeBuild) await stop(activeBuild, 5).catch(() => {}); if (sandbox) await stop(sandbox).catch(() => {}); }
       finally { checking = false; }
     }, 2000);
     await copyIndependent(options.sealed, release);
@@ -199,9 +199,14 @@ export async function acceptG09Runtime(options) {
     const goCache = path.join(goTemporary, 'cache'); await mkdir(goCache, { mode: 0o700 });
     const goEnv = { ...tools, HOME: '/root', TMPDIR: goTemporary, GOTMPDIR: goTemporary, GOCACHE: goCache, GOMODCACHE: moduleCache };
     const compileLog = await open(path.join(runRoot, 'fixture-compile.log'), 'wx', 0o600);
-    const compile = launch(goWrapper, ['test', '-mod=readonly', '-c', '-o', fixtureBinary, './internal/store'], { cwd: options.source, env: goEnv, stdio: ['ignore', compileLog.fd, compileLog.fd] });
+    await guardReserve(runRoot, pre.budget, pre.availableSpace.bytes);
+    // Compiler inputs, including shared module cache, are read-only. Only this
+    // exclusively owned run root is writable; compilation has no host network.
+    const compile = activeBuild = launch('/usr/bin/bwrap', ['--die-with-parent', '--unshare-net', '--ro-bind', '/', '/', '--bind', runRoot, runRoot, '--proc', '/proc', '--dev', '/dev', '--cap-drop', 'ALL', '--chdir', options.source, '--', goWrapper, 'test', '-mod=readonly', '-c', '-o', fixtureBinary, './internal/store'], { cwd: options.source, env: goEnv, stdio: ['ignore', compileLog.fd, compileLog.fd] });
     try { await deadline(compile.done, Math.min(pre.budget.maxBuildSeconds, 300) * 1000); requireThat(!compile.failed && compile.code === 0, 'g09_fixture_compile_failed'); }
-    finally { try { await stop(compile, 5); } finally { await compileLog.close(); } }
+    finally { try { await stop(compile, 5); } finally { activeBuild = null; await compileLog.close(); } }
+    await guardReserve(runRoot, pre.budget, pre.availableSpace.bytes);
+    requireThat(!failure, 'g09_reserve_crossed_during_compile');
     await chmod(fixtureBinary, 0o555);
     const bootstrap = path.join(control, 'bootstrap.private.json');
     await writeG09ControlJSON(bootstrap, { runId, bridgeDirectory: socketDirectory, migrations: g09MigrationInputs(manifest) });
