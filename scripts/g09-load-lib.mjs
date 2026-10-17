@@ -1,7 +1,8 @@
 import { performance } from 'node:perf_hooks';
 
 const defaultClock = { now: () => performance.now(), setTimeout, clearTimeout };
-const bounds = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000, 600000, Infinity];
+export const G09_HISTOGRAM_BOUNDS = Object.freeze([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000, 600000, Infinity]);
+const bounds = G09_HISTOGRAM_BOUNDS;
 const counters = () => ({ planned: 0, started: 0, dispatched: 0, completed: 0, accepted: 0, succeeded: 0, failed: 0, timeout: 0, dropped: 0, cancelled: 0, unfinished: 0 });
 const histogram = () => ({ count: 0, sum: 0, max: 0, buckets: bounds.map(() => 0) });
 function observe(h, value) { h.count++; h.sum += value; h.max = Math.max(h.max, value); h.buckets[bounds.findIndex(bound => value <= bound)]++; }
@@ -42,6 +43,15 @@ export function validateG09Profile(profile) {
   return { origin: target.origin, durationMs: offset, planned: total, streams };
 }
 
+// A detached, canonical copy binds reports to the actual admission/deadline
+// budgets as well as the phase plan. No credentials or arbitrary input fields.
+export function canonicalG09Profile(profile) {
+  validateG09Profile(profile);
+  const { origin, maxConcurrency, maxOperations, requestTimeoutMs, maxScheduleLagMs, drainTimeoutMs } = profile;
+  return { origin, maxConcurrency, maxOperations, requestTimeoutMs, maxScheduleLagMs, drainTimeoutMs,
+    phases: profile.phases.map(p => ({ name: p.name, durationMs: p.durationMs, streams: p.streams.map(s => ({ category: s.category, unit: s.unit, ratePerSecond: s.ratePerSecond })) })) };
+}
+
 // This helper enforces redirects and target policy. Injected performers are trusted
 // controller code and must enforce the same policy for every transaction request.
 export async function performG09Fetch({ origin, signal }) {
@@ -65,6 +75,7 @@ function validateG09Origin(origin) {
  * abortable I/O and own process teardown. This drain is not worker backlog drain.
  */
 export async function runG09Load({ profile, perform = performG09Fetch, record = () => {}, clock = defaultClock, signal } = {}) {
+  profile = canonicalG09Profile(profile);
   const plan = validateG09Profile(profile);
   if (typeof perform !== 'function' || typeof record !== 'function' || !clock || !['now', 'setTimeout', 'clearTimeout'].every(key => typeof clock[key] === 'function')) throw new Error('Invalid load callbacks');
   // Copy all configuration before yielding; caller mutations cannot change a run.
@@ -140,7 +151,7 @@ export async function runG09Load({ profile, perform = performG09Fetch, record = 
     const summarize = (g, duration) => { const { latency, admissionLag, scheduleLag, lastEndedAt, ...counts } = g; void lastEndedAt; return { ...counts, measurementDurationMs: duration, latency: metric(latency), admissionLag: metric(admissionLag), scheduleLag: metric(scheduleLag), successfulThroughputPerSecond: duration > 0 ? g.succeeded * 1000 / duration : 0 }; };
     const mapped = (obj, duration) => Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, summarize(value, duration(key))]));
     const phaseDuration = name => { const stream = plan.streams.find(stream => stream.phase === name); return Math.max(0, Math.max(Math.min(stopAt, startedAt + stream.offset + stream.duration), phases[name].lastEndedAt ?? 0) - (startedAt + stream.offset)); };
-    finish({ unit: 'work_unit', workloadPlanned: plan.planned, ok: !reason && total.failed === 0 && total.dropped === 0, reason, origin: plan.origin, startedAt, stoppedAt: stopAt, drainDeadlineAt: drainDeadline, endedAt, plannedDurationMs: plan.durationMs, elapsedMs: endedAt - startedAt, total: summarize(total, endedAt - startedAt), phases: mapped(phases, phaseDuration), categories: Object.fromEntries(Object.entries(categories).map(([key, value]) => [key, { unit: streams.find(stream => stream.category === key).unit, ...summarize(value, endedAt - startedAt) }])), phaseCategories: Object.fromEntries(Object.entries(phaseCategories).map(([key, value]) => [key, { unit: streams.find(stream => `${stream.phase}/${stream.category}` === key).unit, ...summarize(value, phaseDuration(key.split('/')[0])) }])), quantiles: 'bounded histogram upper estimates; startedAt aliases admittedAt; started counts admissions, dispatched counts actual performer calls; latency includes recorder/scheduler overhead and excludes unfinished operations; scheduleLag measures dispatch, or terminal observation for undispatched work; admissionLag measures admission; controller HTTP subrequests are separate; throughput uses actual observation windows; work units are not necessarily HTTP requests', recordsRetained: 0 });
+    finish({ unit: 'work_unit', profile, workloadPlanned: plan.planned, ok: !reason && total.failed === 0 && total.dropped === 0, reason, origin: plan.origin, startedAt, stoppedAt: stopAt, drainDeadlineAt: drainDeadline, endedAt, plannedDurationMs: plan.durationMs, elapsedMs: endedAt - startedAt, total: summarize(total, endedAt - startedAt), phases: mapped(phases, phaseDuration), categories: Object.fromEntries(Object.entries(categories).map(([key, value]) => [key, { unit: streams.find(stream => stream.category === key).unit, ...summarize(value, endedAt - startedAt) }])), phaseCategories: Object.fromEntries(Object.entries(phaseCategories).map(([key, value]) => [key, { unit: streams.find(stream => `${stream.phase}/${stream.category}` === key).unit, ...summarize(value, phaseDuration(key.split('/')[0])) }])), quantiles: 'bounded histogram upper estimates; startedAt aliases admittedAt; started counts admissions, dispatched counts actual performer calls; latency includes recorder/scheduler overhead and excludes unfinished operations; scheduleLag measures dispatch, or terminal observation for undispatched work; admissionLag measures admission; controller HTTP subrequests are separate; throughput uses actual observation windows; work units are not necessarily HTTP requests', recordsRetained: 0 });
   }
   function stop(why = null) {
     if (stopped) return;

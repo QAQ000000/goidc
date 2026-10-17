@@ -1,0 +1,46 @@
+{
+  "finished_at": "2026-10-17T04:29:37.230925+00:00",
+  "checks": [
+    {
+      "check": "node-tests",
+      "command": [
+        "node",
+        "--test",
+        "scripts/g09-load-lib.test.mjs",
+        "scripts/g09-scenario-lib.test.mjs",
+        "scripts/g09-workload-report.test.mjs"
+      ],
+      "exit_code": 0
+    },
+    {
+      "check": "go-protocol-race",
+      "command": [
+        "scripts/go.sh",
+        "test",
+        "-race",
+        "-count=1",
+        "./internal/g09fixture"
+      ],
+      "exit_code": 0
+    },
+    {
+      "check": "go-protocol-vet",
+      "command": [
+        "scripts/go.sh",
+        "vet",
+        "./internal/g09fixture"
+      ],
+      "exit_code": 0
+    },
+    {
+      "check": "node-syntax",
+      "command": [
+        "node",
+        "--check",
+        "scripts/g09-workload-report.mjs"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "scope": "unit/loopback production-adapter compatibility; no PG or candidate load"
+}

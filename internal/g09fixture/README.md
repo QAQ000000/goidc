@@ -58,3 +58,5 @@ process. No control HTTP endpoint is introduced.
 Focused validation: `go test -race ./internal/g09fixture -count=1`. Tests use only
 ephemeral loopback listeners and temporary files; no PostgreSQL, external
 channels, release build or production process is involved.
+The provider compatibility test resolves the actual compiled SMTP/SMS adapters
+and checks their durable sink records, without claiming an outbox or worker run.

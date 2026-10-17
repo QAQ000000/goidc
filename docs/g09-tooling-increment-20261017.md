@@ -11,10 +11,13 @@
 - 客户预算来自冻结的唯一身份列表，每客最多50条写事务、每笔最高1000分，预算预占不返还；原mutation在派发前由同步私有记录器保存原body/key，普通入口禁止重复派发同key。任一已尝试mutation的链失败即冻结资源，无普通解冻入口；`stop()`拒绝新链并abort在途请求。
 - HTTP目标只允许显式IPv4 loopback origin，禁止重定向；只支持白名单路径及数值分页参数，有界请求/响应/请求总数。公开记录只含meta/hash，不复制cookie、原body/key、远端错误和自由查询串。私有记录器必须同步持久化，controller仍须实际落实0600文件、fsync及私有目录。
 - `internal/g09fixture`：真实SMTP及generic HTTP JSON短信接收器，成功响应前持久化脱敏协议记录；固定接受预算、SMTP连接预算、持久化失败锁定；精确控制消息/序号校验、私有JSON独占创建和原子替换。生产二进制未导入本包。详见[包说明](../internal/g09fixture/README.md)。
+- `scripts/g09-workload-report.mjs`：绑定负载开始时冻结的完整预算及phase计划；校验接纳/真实派发/完成/失败守恒、阶段和总观察时窗、绝对排空预算及固定直方图，按真实拖尾窗口重算吞吐。缺样本、篡改桶边界、缩短子统计窗口或拿更宽松profile实测后套更严格profile都不能通过。只评估work-unit结果，始终返回`capacityVerified=false`，实际HTTP子请求及资金/worker/候选身份另验。
 
 ## 验证边界
 
 Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排空截止后的微任务、未知链冻结、独立客户预算、付款前金额及身份核验、版本请求、HTTP409、原请求保护和证据去敏。Go小包race只覆盖协议接收器/控制文件，不连接PG。执行日志与退出码另存[工具证据](evidence/g09-tooling-20261017/)。已有强制全量使用启动时的固定快照，后续工具修补专项单列，不能追认包含新增文件。
+
+后续增量的小包回归直接调用生产注册表中的SMTP/generic HTTP JSON provider连接loopback接收器，确认协议与证据hash匹配；它仍不运行worker、不claim真实outbox。Go→Node opt-in source API入口已在`2c73f7d`实现，当前仍等待唯一全量结束后的独立PG验收窗口；默认SKIP只证明可编译，不能登记SQL检查通过。额外报告器及provider回归证据在`report-guard-increment/`子目录，与前一轮33项Node记录分开保存。
 
 量化分位数为直方图保守上界；`null`表示没有样本，必须先用 `Number.isFinite`检查，不能利用JavaScript的`null <= limit`当通过。阶段SLO使用`phaseCategories`，同时检查计划数、接纳比例、failed/dropped/timeout/unfinished；负载库inflight drain不代表worker业务排空。
 
