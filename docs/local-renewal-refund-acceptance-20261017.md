@@ -24,7 +24,7 @@
 | HTTP专项 race | PASS 150.565秒；真实签名收款、登记/独立确认/驳回、并发、权限及8组实际数据库锁等待后撤权/范围撤销；见 `http-race.log`。默认 SKIP 的浏览器 opt-in 不计此项通过 |
 | 前端 | typecheck、lint、独立 webpack build 退出0；lint为0错误、7个既有warning。见 `web-typecheck.log` / `web-lint.log` / `web-build.log`；预览只代理隔离API28089 |
 | 独立最终复核 | [固定实现增量审查](local-renewal-refund-independent-review-20261017.md)未发现新增阻断；真实PG两个定向用例通过，静态UI结论与浏览器结论分列 |
-| 强制隔离PG18全量 | 两个重叠轮次均失败；已修夹具轮达到原45分钟上限。唯一串行轮退出1（HTTP2069.738秒、store272.985秒）：仅供应商并发续费 `auto_renew_disabled` 断言仍要求旧`pgx.ErrNoRows`，实际已正确拒绝为`auto_renewal_race`。`56d07ac`仅修测试并增强零账单/零审计/开关保持关闭断言，专项PG/race通过；快照`f6e8cb4`已启动下一唯一全量，仍用原45分钟上限，见`serial-fixed-full-suite.log`及完成结果，当前不宣称通过 |
+| 强制隔离PG18全量 | 两个重叠轮次均失败；已修夹具轮达到原45分钟上限。唯一串行轮退出1（HTTP2069.738秒、store272.985秒）：仅供应商并发续费 `auto_renew_disabled` 断言仍要求旧`pgx.ErrNoRows`，实际已正确拒绝为`auto_renewal_race`。`56d07ac`仅修测试并增强零账单/零审计/开关保持关闭断言，专项PG/race通过；快照`f6e8cb4`的下一唯一全量也退出1（HTTP1659.871秒、store229.621秒，未超时）：供应商断言通过，但`TestEpayPendingGuardsAndServiceSettlement/upgrade`并发回调出现一次500。见`serial-fixed-full-suite.log`及`serial-fixed-full-suite-result.json`；正在定位，不能将本批登记为最终全量通过 |
 
 恢复归档摘要以 `restore.log` 内实际记录为准；代表性隔离夹具不等同于正式业务快照或真实资金到账。
 
