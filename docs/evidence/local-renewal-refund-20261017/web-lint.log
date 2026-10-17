@@ -1,0 +1,24 @@
+
+> zjmfgo-web@0.1.0 lint
+> eslint .
+
+
+/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/src/components/admin-blacklist.tsx
+  25:37  warning  'filters' is defined but never used  @typescript-eslint/no-unused-vars
+
+/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/src/components/admin-login-form.tsx
+  146:11  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  216:27  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/src/components/admin-shell.tsx
+  44:5  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  89:9  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/src/components/auth-form.tsx
+  191:123  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/src/components/password-reset-form.tsx
+  71:939  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+✖ 7 problems (0 errors, 7 warnings)
+
