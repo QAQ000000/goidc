@@ -1,0 +1,32 @@
+=== RUN   TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease
+=== RUN   TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease/email
+=== RUN   TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease/sms
+--- PASS: TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease (5.40s)
+    --- PASS: TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease/email (2.09s)
+    --- PASS: TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease/sms (3.30s)
+=== RUN   TestOutboxRecoveryBackoffAndExpiredDeadLetterCleanup
+--- PASS: TestOutboxRecoveryBackoffAndExpiredDeadLetterCleanup (2.02s)
+=== RUN   TestExpiredOutboxLeasesAtAttemptLimitBecomeDeadLetters
+--- PASS: TestExpiredOutboxLeasesAtAttemptLimitBecomeDeadLetters (2.05s)
+=== RUN   TestAdminCanListAndRetrySMSDeadLetter
+--- PASS: TestAdminCanListAndRetrySMSDeadLetter (1.93s)
+=== RUN   TestSMSGatewayEvidenceEncryptionLeaseAndRetention
+--- PASS: TestSMSGatewayEvidenceEncryptionLeaseAndRetention (2.34s)
+=== RUN   TestSupplierReadOnlySyncCrashReleasesAccount
+--- PASS: TestSupplierReadOnlySyncCrashReleasesAccount (3.65s)
+=== RUN   TestSupplierDispatchedWriteCrashStillRequiresVerification
+=== RUN   TestSupplierDispatchedWriteCrashStillRequiresVerification/create
+=== RUN   TestSupplierDispatchedWriteCrashStillRequiresVerification/suspend
+=== RUN   TestSupplierDispatchedWriteCrashStillRequiresVerification/terminate
+=== RUN   TestSupplierDispatchedWriteCrashStillRequiresVerification/power_off
+--- PASS: TestSupplierDispatchedWriteCrashStillRequiresVerification (9.65s)
+    --- PASS: TestSupplierDispatchedWriteCrashStillRequiresVerification/create (2.13s)
+    --- PASS: TestSupplierDispatchedWriteCrashStillRequiresVerification/suspend (2.50s)
+    --- PASS: TestSupplierDispatchedWriteCrashStillRequiresVerification/terminate (2.89s)
+    --- PASS: TestSupplierDispatchedWriteCrashStillRequiresVerification/power_off (2.14s)
+=== RUN   TestSupplierMixedCrashRecoverySeparatesReadOnlyAndWriteJobs
+--- PASS: TestSupplierMixedCrashRecoverySeparatesReadOnlyAndWriteJobs (3.80s)
+=== RUN   TestSupplierCrashedReadOnlyJobExhaustedAttemptsFailsClosed
+--- PASS: TestSupplierCrashedReadOnlyJobExhaustedAttemptsFailsClosed (2.10s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/httpapi	33.979s

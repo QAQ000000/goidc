@@ -4,6 +4,8 @@
 
 后续准备首增量已完成[独立候选与当前schema代表性恢复验收](release-preparation-integration-acceptance-20261017.md)：固定源码构建器/摘要核验和同schema153夹具恢复通过。下表原始缺口作为基线保留；正式业务范围、完整runtime依赖、业务快照升级、真实目标及切流/切回/负载仍未验收，不据此关闭本契约。
 
+后续 G09 增量已完成[真实 worker SIGKILL 专项](worker-sigkill-acceptance-20261017.md)：供应商 sync/create 与 SMS 代表性网络回执丢失窗口、双 ready 进程恢复和终态重启通过，18 个子进程及4个schema清理已核验。仅 SQL 加速租约/退避，不证明实际五分钟恢复时间；其余提交故障点、SMTP、真实渠道、容量和 RTO/RPO 保持开放。本文后续表格与“可先准备”列表保留原计划口径，当前完成范围以专项及[当前差距](replacement-gap-audit-20261017.md)为准。
+
 ## 1. 当前证据能够证明什么
 
 | 材料 / 观察 | 已有范围 | 尚缺 |

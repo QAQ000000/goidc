@@ -1,0 +1,103 @@
+{
+  "sourceCommit": "d72156e030301b834ff80691ad8f0c058b7bff17",
+  "productionCodeUnchangedFrom": "7f7e671c2566cd98802c4dc4bfdcf332ca218a3b",
+  "sources": [
+    {
+      "file": "internal/store/notification_worker_sigkill_test.go",
+      "bytes": 8897,
+      "sha256": "dca09af0cbe3d0103ea6cfc94c50ea44ed9338f8d1435fd9d2359e4637484fb6"
+    },
+    {
+      "file": "internal/httpapi/supplier_worker_sigkill_test.go",
+      "bytes": 10170,
+      "sha256": "e1f5138365e3cda373d50bc1432abfa44bf88a9c3e4b6ffd9761ccf8d9fd91d4"
+    },
+    {
+      "file": "scripts/test-worker-recovery.sh",
+      "bytes": 1324,
+      "sha256": "14e0a28e1438b0742e688c72d8a1596b602651bebc91a5593a5db7dd11a69ebd"
+    }
+  ],
+  "evidence": [
+    {
+      "file": "integrated-race.log",
+      "bytes": 5680,
+      "sha256": "4fcbf19faeede9aa32c2459570fad147f2c9a528ad287c5f8668d5d365ad82d9"
+    },
+    {
+      "file": "contract-race.log",
+      "bytes": 2217,
+      "sha256": "305bf74df6d802dc1d42bb73c292dc333d080547b7d45fce758862fdb8b37133"
+    },
+    {
+      "file": "vet.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "file": "gate-no-dsn.log",
+      "bytes": 100,
+      "sha256": "a4d3d46cd3433c4b1ecbc590196f30d60ed5f715c225505de78b9efef072f226"
+    },
+    {
+      "file": "gate-no-matching-suites.log",
+      "bytes": 283,
+      "sha256": "8c2999bf083a48e92c8bcd420b3adc69a621a5892fc54e79af908510c2acd9cd"
+    },
+    {
+      "file": "cleanup.json",
+      "bytes": 1337,
+      "sha256": "3ced2e15ee29a784d2d1519bcad123a4631e64f35eb4c25100ffd6b56ff89596"
+    }
+  ],
+  "commands": [
+    {
+      "command": "ZJMFGO_TEST_DATABASE_URL=<isolated loopback PG18 _test URL> scripts/test-worker-recovery.sh",
+      "exitCode": 0,
+      "log": "integrated-race.log",
+      "topLevelSuitesPassed": 2,
+      "subtestsPassed": 4,
+      "realWorkerStarts": 18,
+      "sigkills": 4,
+      "note": "-race covers harness; child workers are normal builds; lease/backoff times accelerated in SQL"
+    },
+    {
+      "command": "REQUIRE_INTEGRATION=1 scripts/go.sh test -race -count=1 -v -timeout=10m ./internal/httpapi -run <9 selected recovery/lease/evidence tests>",
+      "exitCode": 0,
+      "log": "contract-race.log",
+      "topLevelTestsPassed": 9,
+      "note": "Existing durable-state fixtures; not additional process SIGKILL scenarios"
+    },
+    {
+      "command": "scripts/go.sh vet ./...",
+      "exitCode": 0,
+      "log": "vet.log"
+    },
+    {
+      "command": "env -u ZJMFGO_TEST_DATABASE_URL scripts/test-worker-recovery.sh",
+      "exitCode": 1,
+      "expected": "reject missing DSN before Go tests",
+      "log": "gate-no-dsn.log"
+    },
+    {
+      "command": "scripts/test-worker-recovery.sh before suites were integrated",
+      "exitCode": 1,
+      "expected": "reject Go exit 0 with no matching tests",
+      "log": "gate-no-matching-suites.log",
+      "sourceNote": "Same runner bytes as sources above, before cherry-picking suite commits; this is historical negative evidence."
+    }
+  ],
+  "independentReview": {
+    "model": "gpt-6.1-sol",
+    "result": "no blocking finding after readiness and queued-job evidence fixes",
+    "reranTests": false
+  },
+  "notVerified": [
+    "actual five-minute lease expiry or retry waiting duration",
+    "all crash points around claims, dispatches, database commits and outbox creation",
+    "SMTP delivery",
+    "real suppliers or real SMS delivery",
+    "gateway deduplication / exactly-once",
+    "production capacity, RTO/RPO or host failure"
+  ]
+}
