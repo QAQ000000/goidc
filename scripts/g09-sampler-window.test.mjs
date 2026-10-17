@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, chmod, readFile, stat, rm, readlink, realpath } from 'node:fs/promises';
+import { mkdtemp, chmod, readFile, stat, rm, readlink, realpath, rename, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { createG09SamplerWindow } from './g09-sampler-window.mjs';
@@ -124,4 +124,41 @@ test('journal failure after one durable sample cannot pass end-window conservati
   const records = (await readFile(f.options.journalPath, 'utf8')).trim().split('\n').map(JSON.parse);
   assert.equal(records.filter(r => r.kind === 'sample').length, 1);
   assert.ok(!records.some(r => r.kind === 'summary' && r.state === 'complete'));
+});
+
+
+test('initial invalid clock is rejected even if later values would recover', async t => {
+  const f = await fixture(t);
+  let reads = 0;
+  await assert.rejects(createG09SamplerWindow({ ...f.options, clock: { now: () => ++reads === 1 ? NaN : 0, sleep: async () => {} } }), /window_clock_invalid/);
+  await f.window.run();
+});
+
+test('parent permissions and symlink replacement are rechecked before journal writes', async t => {
+  const permission = await fixture(t);
+  await chmod(permission.dir, 0o755);
+  const denied = await permission.window.run();
+  assert.equal(denied.failureCode, 'window_private_directory_invalid');
+  assert.equal(denied.persisted, 0); assert.equal(permission.stopped.length, 1);
+  await chmod(permission.dir, 0o700);
+  const replaced = await fixture(t);
+  const moved = replaced.dir + '-moved';
+  await rename(replaced.dir, moved);
+  await symlink(moved, replaced.dir);
+  try {
+    const result = await replaced.window.run();
+    assert.equal(result.failureCode, 'window_private_directory_invalid');
+    assert.equal(result.persisted, 0); assert.equal(replaced.stopped.length, 1);
+  } finally { await rm(replaced.dir); await rename(moved, replaced.dir); }
+});
+
+test('rejected stop callback preserves original failure and closes journal', async t => {
+  const f = await fixture(t, { thresholds: { rssBytes: 1 } });
+  // Stop is captured when creating; use a second private journal with rejecting callback.
+  let stops = 0;
+  const window = await createG09SamplerWindow({ ...f.options, journalPath: f.dir + '/reject.jsonl', stop: async () => { stops++; throw new Error('private callback failure'); } });
+  const result = await window.run();
+  assert.equal(result.failureCode, 'window_resource_limit'); assert.equal(stops, 1);
+  assert.ok(!(await readFile(f.dir + '/reject.jsonl', 'utf8')).includes('private callback failure'));
+  await f.window.run();
 });

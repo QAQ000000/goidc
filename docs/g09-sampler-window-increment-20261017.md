@@ -14,8 +14,14 @@ journal父目录必须真实绝对路径、当前UID所有、0700；文件独占
 
 ## 验证
 
-`node --test scripts/g09-sampler-window.test.mjs scripts/g09-process-sampler.test.mjs`：16 PASS、0 FAIL、0 SKIP。真实owned Node子进程覆盖2秒壁钟窗口、null CPU、I/O可用性、CPU/RSS/FD、真实cwd身份变化及进程退出；确定性时钟覆盖冻结预算、防追赶、倒退和NaN；真实文件覆盖0600与权限破坏、已有文件/不安全目录拒绝；资源越线调用一次stop。进程均由用例自行TERM并wait清理。日志见本增量独立evidence目录。
+`node --test scripts/g09-sampler-window.test.mjs scripts/g09-process-sampler.test.mjs`：19 PASS、0 FAIL、0 SKIP。真实owned Node子进程覆盖2秒壁钟窗口、null CPU、I/O可用性、CPU/RSS/FD、真实cwd身份变化及进程退出；确定性时钟覆盖冻结预算、防追赶、倒退和NaN；真实文件覆盖0600与权限破坏、已有文件/不安全目录拒绝；资源越线调用一次stop。进程均由用例自行TERM并wait清理。日志见本增量独立evidence目录。
 
 初轮12项有1个断言FAIL：浮点单调时间的两个slot相减得到1999.9999999999998而非精确2000。改为小于1e-6ms的断言容差，调度实现仍是固定2000ms。随后扩大至15项通过，追加中途持久化失败后最终16项通过。没有用本专项替代主线强制全量或最终容量实测。
 
 后续真实时钟用例曾14/15 FAIL；进一步增加结果诊断后确认是注册/初始化fsync占用预留时间，导致首slot已超过冻结延迟预算。保留失败日志（路径已脱敏）。测试在运行前将首slot准备余量设为3秒、调度延迟预算1秒、最后slot余量1秒后重新执行；库仍拒绝任何执行中放宽预算或补追。
+
+## 独立式二次边界复核
+
+修复初始注入时钟NaN可绕过比较、后续恢复正常值的问题：创建时明确拒绝非有限初始值，运行单调校验从该初始值建立基线。每次写入额外重新核对父目录dev/inode、0700、UID及真实路径，拒绝目录权限破坏或搬走后symlink替换；journal本身继续核对inode。补充真实文件回归及stop拒绝回归，最终19项通过，前一版16项通过证据独立保留。
+
+注册/初始fsync超出start不会重设start，run按原首slot延迟预算拒绝。最后slot至end间没有额外采样，因此该间隙的退出或身份变化不在离散采样证明内；窗口complete只代表计划采样守恒，不证明进程连续存活或最终退出状态，完整controller应另做end/cleanup身份检查。stop回调拒绝保留原始FAIL并关闭journal；永不resolve的回调会阻塞run，必须由调用方实现有界回调，本库不在后台超时后假装完成清理。最终controller必须只用默认真实单调clock，注入clock仅用于测试。
