@@ -124,6 +124,14 @@ func TestSupplierWorkerSIGKILLRecovery(t *testing.T) {
 			start := func() *exec.Cmd {
 				c := exec.Command(binary)
 				c.Dir = t.TempDir()
+				logPath := filepath.Join(c.Dir, "worker.log")
+				logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = logFile.Close() })
+				c.Stdout = logFile
+				c.Stderr = logFile
 				c.Env = []string{"DATABASE_URL=" + scoped.String(), "PUBLIC_ORIGIN=http://127.0.0.1:3088", "PROVISION_ENCRYPTION_KEY=" + hex.EncodeToString(f.db.ProvisionEncryptionKey), "PAYMENT_MOCK_ENABLED=false", "SMTP_HOST=127.0.0.1", "SMTP_PORT=1", "SMTP_TLS_MODE=none"}
 				if err := c.Start(); err != nil {
 					t.Fatal(err)
@@ -135,7 +143,20 @@ func TestSupplierWorkerSIGKILLRecovery(t *testing.T) {
 						_ = c.Wait()
 					}
 				})
-				return c
+				deadline := time.Now().Add(20 * time.Second)
+				for time.Now().Before(deadline) {
+					body, err := os.ReadFile(logPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(string(body), "provision worker started") {
+						t.Logf("worker ready pid=%d log=%s", c.Process.Pid, logPath)
+						return c
+					}
+					time.Sleep(50 * time.Millisecond)
+				}
+				t.Fatalf("worker readiness timeout pid=%d log=%s", c.Process.Pid, logPath)
+				return nil
 			}
 			wait := func(label string, p func() bool) {
 				t.Helper()
