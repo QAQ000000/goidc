@@ -26,8 +26,8 @@ Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排�
 
 ## 继续实现
 
-外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、两个真实worker、SQL资金/权益全量核对、周期背景/PG采样与进程采样调度，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
+外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、完整负载的两个真实worker编排、SQL资金/权益全量核对、周期背景/PG采样与进程采样调度，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
 
 后续先以opt-in真实Go HTTP→Node小链验证请求契约，再固定干净候选执行小规模试跑和预先冻结的27分钟profile。source API试跑也不能代替最终候选容量验收。
 
-真实`cmd/worker`双进程小闭环已在`46b759b`实现。首次PG试跑退出1（47.779秒）：SMTP可选用户名省略后解析为`<nil>`，造成邮件发送失败、有限来源未全部成功；见`source-worker-pg-smoke/`，不得按PASS登记。临时schema/worker均已回收、常驻服务健康不变；配置解析修复及新一轮验收单列，G09保持开放。
+真实`cmd/worker`双进程小闭环已在`46b759b`实现。首次PG试跑退出1（47.779秒）：SMTP可选用户名省略后解析为`<nil>`，造成邮件发送失败、有限来源未全部成功；原FAIL保留于`source-worker-pg-smoke/`。`0792ffb`修正渠道缺省/null字符串并拒绝必填null，保持原SMTP安全校验；相同worker测试复验PASS（5.632秒），见`source-worker-fixed-pg-smoke/`：真实HTTP创建一个模拟开通任务和一组工单邮件/SMS，两个实际worker完成`succeeded/sent`，逐source/event/delivery/outbox的SQL事实、唯一余额/库存副作用及durable SMTP/SMS协议hash一致。TERM/Wait、schema回收和常驻PID/API/Web健康核对通过。不是600任务、正常minute tick稳定性、封存candidate或容量验收，G09保持开放。

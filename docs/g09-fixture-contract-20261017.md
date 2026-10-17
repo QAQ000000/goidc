@@ -2,6 +2,8 @@
 
 状态：设计，未实现、未执行、未验收。源码基线 `02706ad`；参考 `29e9d7c:docs/g09-capacity-drain-plan-20261017.md`，该计划文件不在本分支基线，不能声称已随基线存在。本轮只读源码及编写本文，不运行 PG、迁移、构建、负载或服务。本契约供后续实现独立 opt-in fixture 与 Node controller；下面新增动作名不是现存产品 API。
 
+后续实施：开环/业务场景/报告器、SMTP/SMS持久化协议sink、owned进程采样已落地；源码API→Node及两个真实cmd/worker的有限小闭环已通过，精确边界见[工具增量](g09-tooling-increment-20261017.md)。本契约的完整600任务fixture、候选controller和容量实测仍未完成。
+
 ## 固定首轮口径
 
 沿用原计划2分钟预热、10分钟稳态、3分钟峰值、最多10分钟burst排空，以及原读写速率/延迟门槛；在峰值结束与排空之间**新增独立最多2分钟cohort准备阶段**，最大计时长度27分钟，启动/seed另计，不能把准备流量藏入峰值2事务/s。负载库接口改用 `maxOperations`，不能把业务事务数写成 HTTP 请求数。首轮尚未实测，本节是执行前修订。
@@ -168,4 +170,4 @@ SMS实际送达关联查询`sms_delivery_evidence(outbox_id,attempts,locked_at,p
 
 公开输出profile/候选摘要/requests.jsonl/队列与资源采样/逐实体invariants/协议计数/summary/cleanup/index；SQL query正文、DSN、cookies、密钥、手机号/邮箱不进公开日志。每2秒采样API/worker/Web/代理逐PID RSS/CPU/FD/IO和PG连接/锁/deadlock/WAL（不收query正文）；不能声称已有pprof/Prometheus。硬停止条件沿原计划：资金错账、死锁、越界网络/进程/schema、资源预算越线即停新写保留FAIL；不能清unknown挽救指标。
 
-实测前尚缺：新opt-in600任务fixture、SMTP真实协议sink、冻结cohort manifest/快照协议、candidate普通用户namespace控制器、请求流分配器与协议实体关联、后台periodic cycle审计、固定全局背景阈值采样。现有API无批量建1000客户/改服务due/停止单类scheduler，seed和有限自动续费准备必须明确fixture-only；不是产品已有能力。本文件和负载库单测均不证明容量、真实通知收件、真实商户出款或正式HTTPS/生产SLO。
+实测前尚缺：新opt-in600任务fixture、冻结cohort manifest/快照协议、candidate普通用户namespace控制器、请求流分配器与协议实体关联、后台periodic cycle审计、固定全局背景阈值采样。现有API无批量建1000客户/改服务due/停止单类scheduler，seed和有限自动续费准备必须明确fixture-only；不是产品已有能力。本文件和负载库单测均不证明容量、真实通知收件、真实商户出款或正式HTTPS/生产SLO。
