@@ -119,6 +119,9 @@ func (s *Store) MergeManualInvoices(ctx context.Context, actorID int64, in Manua
 		if err = requireManualInvoiceValid(ctx, tx, source.InvoiceID); err != nil {
 			return out, err
 		}
+		if err = requireNoPaymentCloseAnomaly(ctx, tx, source.InvoiceID); err != nil {
+			return out, err
+		}
 		var pending bool
 		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired','succeeded'))", source.InvoiceID).Scan(&pending); err != nil {
 			return out, err
@@ -345,6 +348,9 @@ func requireManualInvoiceEditable(ctx context.Context, tx pgx.Tx, invoiceID int6
 		return conflict("stale_invoice", "账单已更新，请刷新后操作")
 	}
 	if err := requireManualInvoiceValid(ctx, tx, invoiceID); err != nil {
+		return err
+	}
+	if err := requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
 		return err
 	}
 	var pending bool

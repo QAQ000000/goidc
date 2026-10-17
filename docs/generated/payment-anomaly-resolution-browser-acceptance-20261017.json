@@ -1,0 +1,868 @@
+{
+  "date": "2026-10-17",
+  "status": "PASS",
+  "browser": "Chrome via Playwright single process",
+  "frontend_baseline": "7d0440a",
+  "backend_baseline": "c58563b+d5ebdfe",
+  "final_scope_fix": "38996fc (covered by isolated HTTP race; browser fixture retains original baseline)",
+  "real_external_actions": false,
+  "screenshots": [
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "25765513ec3103988070a152e214248d437e42dfffbc0f92cb4120bce2de6181",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/group-list-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "f6bde4633d849974735eeea130475ab8859d62b890b7cb3f8d1d109a9f51f880",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/group-list-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "9ed55aed085dff1d286d1ecc08260a7512232351bda6a69deb0e78a3d69b69ea",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/group-list-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "2c63747f30963988556f0341a71383f2b37514f4f6fc373df894c9423e0a11c2",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/group-list-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510,
+            "height": 748,
+            "top": 76
+          }
+        ]
+      },
+      "sha256": "f918ffec5d363d0c323d78337bcf7f05c7297b2f9482176389d371cef16b5026",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-modal-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510,
+            "height": 748,
+            "top": 76
+          }
+        ]
+      },
+      "sha256": "f05d10a029972685477898a091e3c11a973e3ac6e7b7b3c603b18d7f5cf4a6ba",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-modal-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": [
+          {
+            "left": 16,
+            "right": 374,
+            "scroll": 356,
+            "client": 356,
+            "height": 868,
+            "top": 16
+          }
+        ]
+      },
+      "sha256": "f2251b4b8e78145a37fd930c68e002dc900d465fd5a35df73c6f467d7a8b8f92",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-modal-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286,
+            "height": 868,
+            "top": 16
+          }
+        ]
+      },
+      "sha256": "f3d2842ff1be8fc676d6f24da1850ad8e80fc4b81e77da41477184144f5b7a6f",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-modal-320.png"
+    },
+    {
+      "width": 320,
+      "height": 480,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286,
+            "height": 448,
+            "top": 16
+          }
+        ]
+      },
+      "sha256": "01fafc69111e6bf1d455313e2666439c874dc8dc0524e351ef896716a89a684d",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-modal-320-short.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "51c80034a75d4aa4c5c0d41ea82e361cdf551bcc726d905798424ee0d6191142",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-lost-receipt-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "6bfb0c2700bc3ac1c5dcaef67922b72989e2a1c5830bb1253a0c97241d74737f",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-lost-receipt-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "3fe4273fa380596554e0d1021ce4c97510fe351bbd76f54a4e90ff88fda743c6",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-lost-receipt-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "0f40740addb368d4ddb1c81816060a6bf68448a0017c8d1fd7ca6bf2b9b01ee7",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-lost-receipt-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "1e2775b988c02aab3c15edeec07d778b3e8371d6cfa76383082cbc0bcc2faae7",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/reader-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "71c53e49eb74a8b9561000bec167eab046e8bc80052f4d6a60e49df692e04def",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/reader-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "f07099542f492ec6538792ad868f937c2b3ee54314c589d02422cbd7246e47d9",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/reader-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "124540902cbd02c1fd6cbbf8eef54c56fc6d2423df75c4427f1830f4d2fd256a",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/reader-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "86bf16da620119baa9887086af55c56b4770f1f9fda75c66ad484c484bd840af",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-recovered-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "0ec2b0e97b94c0eeaf3161c83b0e5004c07ef02f843552a6efc3576050630cd6",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-recovered-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "5c2bb6f423a11f25fd8b68f3d489ec6b093d0ac0c1a2213bdf6c261fc9cf05de",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-recovered-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "be93b527cab092cc7c569df444ef2f0121c9426b558be45e519da6d596ced727",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/registration-recovered-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510,
+            "height": 492,
+            "top": 204
+          }
+        ]
+      },
+      "sha256": "1433c3334a00ff613882519c6c1521b5750d1b312631dda5cd2b1e5ab4971a9a",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-modal-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510,
+            "height": 492,
+            "top": 204
+          }
+        ]
+      },
+      "sha256": "b3710687a5e366157f6acbb286a9d9d3ce18ce116b994665ea473231d792a36a",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-modal-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": [
+          {
+            "left": 16,
+            "right": 374,
+            "scroll": 356,
+            "client": 356,
+            "height": 632,
+            "top": 134
+          }
+        ]
+      },
+      "sha256": "7754451e56e8bf889f85cc58073d180eb19facc1c76dffbbd3ffa567f7f1f04b",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-modal-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286,
+            "height": 668,
+            "top": 116
+          }
+        ]
+      },
+      "sha256": "73b47a431c13784d0be24cdcf9765d8195a07230f2a10a8875403f14b0e16b05",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-modal-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "8ad8faa84999ad4b411428dc72b48c0001f9309a2d622689949e97008137ac78",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-conflict-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "f20a041f89cd57f56aac9594e01a64b6d5280fe279269fbb42efc566dfbbe1fd",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-conflict-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "d7057a917996bf277b3143019db182f9c54ef64d8789ab95a8f732ece54d26b2",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-conflict-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "77e4c0f20b3236ac7621abe9361605d3efae5d598eeca62545b07924d68fe1a7",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/review-conflict-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "20d88b03fe6c756ada03f9073ad47e525aec107f80fc1f8918cc21bae76b0fa8",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-money-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "4073284435d840d47b0e47025179cd12fe1e49cfc2f7d251bb6142b6f2079879",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-money-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "77db2ba364ba0df50ffe15ff5f6fa3846b3274d679c5f24b91f8686f35bd9446",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-money-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "a5046df0b7c6f2cfadb922ad486f014b163066056b80921d7b325963fadc04ae",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-money-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "2e96d1fdf620bdc6fece3a22e85d0bbce3f1f517ad559a09c9926ee57193a319",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "4f5112f0e91f24a5e522dee5960aeb5f9d5cb976e6b789942eb1c8a7f58f2c61",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "d552b7c5cd5cc862308dde4eac7ec3b0375826e08652c060219895d186eb94cb",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "816e506324fbd32c68968c2628f7bf94870d3ffb3ba91fb0bcb1dae8472ea823",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "7196d80873a7fb8c236f06644624ab1d1e4247fcce92fde24ea6f7226784d782",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/unverified-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "4c115beb0a014e20bfc1ce2f58181d4256893129271c27f780dce85337b11b0c",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/unverified-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "c83482e04acf62359171d4c5d0a054765ef3504d436afb4ab4fa224f539b9f06",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/unverified-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "d769890a6da20ed047ba4c0b7bcd80e62b033811f5b2e3a09ad2eb2452a7127c",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/unverified-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "113f2ebf91b52928c419b29421867ae4a0d23a7551b7514e05a47de8866bf6d9",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-history-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "3208922a84a132d45261915b813f8a457ab7e2229b968f1d5017cffbbab5adf3",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-history-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "f1dd562b248bbab13f8c6a09e956032036a6b22cdf581f26c29893d4cc6e4df9",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-history-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "1f753ade33c68d1199c0d0fcdcf240b3f42408c7f9104fd142d5ae561afc8d81",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/confirmed-history-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "0a7ef1b9c9559e12dda68708f086c1d745a5defb9d135d1db0b0ec965b1e8902",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-history-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "2e2937a6d3ff0e8c2638da9820f85474ad47f1727c68d365bc1d3bb368681a0b",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-history-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "673282bff8c33ec89f3d65c243bb40f45b7ed8880f40938e2eb31c1820f9bfbd",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-history-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "d627912b037ef939693e22bee2feaea1bd201763bb68956edf4218104f65aa3d",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/rejected-history-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "503e5f113ea34db9843c80e35e93d43c0a0d0b3273a15928c5d638f0102d9616",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/pagination-restored-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "b19ae3298035deb522348c7139daf6cd2cde7903b34febe52e0704243c615613",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/pagination-restored-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "e3fd4d9da6343f534a9ec7e19016366fba57666ffff42ec394c1fb5e323fa89a",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/pagination-restored-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "75315ca3610f9627b36444766d32c9b4eb6d4d46190496c3ac008fd93a848638",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/pagination-restored-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "c36d7e9b7aaba67953e7b8e53c27b1d3c3c98f4b3e153f82e791dac5d98d5343",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/empty-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "c3cf08e51123417351036dace4769906540ca78274c28c549ffb0d336412dfb1",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/empty-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "cf185ecad1cd8abbb03383b5e797f9dea538246002804ed1a5e81a4e29fc4240",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/empty-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "d512bb31a10ac7aa14ab345209a756ecbfadc830891e4e26560cce98c0be2bb5",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/empty-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "c36d7e9b7aaba67953e7b8e53c27b1d3c3c98f4b3e153f82e791dac5d98d5343",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/loading-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "c3cf08e51123417351036dace4769906540ca78274c28c549ffb0d336412dfb1",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/loading-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "cf185ecad1cd8abbb03383b5e797f9dea538246002804ed1a5e81a4e29fc4240",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/loading-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "d512bb31a10ac7aa14ab345209a756ecbfadc830891e4e26560cce98c0be2bb5",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/loading-320.png"
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialogs": []
+      },
+      "sha256": "95f3190080082f755a901eacd29caeb343cacc49d3479b40680dd48833fc7f6f",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/read-error-1440.png"
+    },
+    {
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialogs": []
+      },
+      "sha256": "dd392f958a2e7305202152ba61b6dc275566c2f416e76be50bc8fb4c51cc7fe9",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/read-error-1024.png"
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialogs": []
+      },
+      "sha256": "b20eb7c192e44c31f4179692f02db4061e09d39fd3a95a051e48f1c92b89499b",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/read-error-390.png"
+    },
+    {
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialogs": []
+      },
+      "sha256": "dd0ec4dc01edbb8778345f0b350c5463e326ea6e2151ef1fa6d5bc59827a8386",
+      "path": "output/playwright/payment-anomaly-resolution-20261017/read-error-320.png"
+    }
+  ],
+  "checks": [
+    "registration modal four widths+short screen; cancel sends zero POST",
+    "invalid fields zero POST; create committed lost receipt; refresh retained; identity failure no POST; actor isolation; exact key/body replay and self review forbidden",
+    "explicit isolated SQL appends immutable duplicate fact to cause genuine group-version conflict; no runtime debug API",
+    "real added event produces409; reread permits original pending review without rebuild; confirmation lost receipt refresh exact replay; independent money 3000/3000/0 and invoice unchanged",
+    "independent reject preserves unresolved liability and immutable history",
+    "12 real groups paginate10+2; URL and reload restore context",
+    "empty, visibly delayed loading, persistent read failure and explicit reload restore real API",
+    "read-only write403, out-of-scope404 and no-view403"
+  ],
+  "page_errors": [],
+  "expected_http_failures": [
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/18/payment-anomaly-groups/3/refunds",
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/21/payment-anomaly-refunds/1/confirm",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/21/payment-anomaly-refunds/1/confirm",
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/10/payment-anomaly-groups",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/18/payment-anomaly-groups/3/refunds",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/18/payment-anomaly-groups",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/18/payment-anomaly-summary",
+      "status": 403
+    }
+  ],
+  "excluded_attempts": [
+    "Initial short-screen layout assertion ran during viewport animation; no business POST occurred; rechecking after stable viewport",
+    "Initial create did commit201; recovery button was aria-hidden behind dialog, so script timed out; retained initial pending record, new scenario used for final run",
+    "Read-error check intercepted only one of concurrent refresh GETs; next real refresh succeeded. Continued with persistent injected outage, without repeating committed business actions.",
+    "Interrupted loading probe used unroute before paused request continued; corrected handler lifetime without repeating writes.",
+    "Read-error check intercepted only one of concurrent refresh GETs; next real refresh succeeded. Continued with persistent injected outage, without repeating committed business actions."
+  ],
+  "evidence_deduplication": "73 capture entries reduced to 65 unique final paths; only final existing SHA-256 values indexed, overwritten loading attempts excluded"
+}

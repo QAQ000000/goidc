@@ -105,13 +105,19 @@ func (s *Store) PaymentTransactionGatewayTx(ctx context.Context, tx pgx.Tx, prov
 	}
 	var cfg struct {
 		payment.EpayConfig
-		Unavailable bool `json:"unavailable"`
+		Unavailable    bool   `json:"unavailable"`
+		Implementation string `json:"implementation"`
+		MockSecret     string `json:"mock_secret"`
 	}
 	if json.Unmarshal(raw, &cfg) != nil {
 		return nil, false, fmt.Errorf("payment credentials unavailable")
 	}
 	if cfg.Unavailable {
 		return nil, false, nil
+	}
+	if provider == "mock" && cfg.Implementation == "mock" && cfg.MockSecret != "" {
+		gateway, ok := payment.For(provider, cfg.MockSecret)
+		return gateway, ok, nil
 	}
 	gateway, ok := payment.For(provider, fallback.MockSecret, cfg.EpayConfig)
 	return gateway, ok, nil
@@ -147,7 +153,7 @@ func (s *Store) preserveLegacyPaymentCredentials(ctx context.Context, tx pgx.Tx,
 		sealed, sealErr := s.snapshotPaymentCredentials(item.reference, previous, true)
 		if sealErr != nil {
 			var unavailable *Conflict
-			if (item.status != "succeeded" && item.status != "failed") || !errors.As(sealErr, &unavailable) || unavailable.Code != "payment_credentials_unavailable" {
+			if (item.status != "succeeded" && item.status != "failed" && item.status != "closed") || !errors.As(sealErr, &unavailable) || unavailable.Code != "payment_credentials_unavailable" {
 				return sealErr
 			}
 			// Lost credentials on historical terminal payments must never resolve

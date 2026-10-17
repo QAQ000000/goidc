@@ -1,0 +1,988 @@
+{
+  "date": "2026-10-16",
+  "scope": "客户在线充值与管理员追溯；隔离PG18+真实Go/Next+本地易支付协议网关，禁止将模拟收款作为真实商户证明",
+  "sourceBaseline": "3136f57",
+  "backendFixtureBaseline": "e532455",
+  "postFixtureBackendDelta": "eb2a602仅管理员加款统一锁序；3136f57仅缺账单时配置版本错误优先级，两者由PG18专项及最终全量回归验证；不把旧fixture当最终backend所有变化的浏览器证明",
+  "finalFrontendBaseline": "625aab8",
+  "results": {
+    "create": {
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/create-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/create-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/create-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/create-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": [
+        {
+          "status": 409,
+          "path": "/api/v1/balance/topups"
+        }
+      ],
+      "validation": true,
+      "real409PreservedDraft": true,
+      "url": "http://localhost:3089/console/invoices/2?from=topup"
+    },
+    "unknown": {
+      "originalInvoice": 3,
+      "replayedInvoice": 3,
+      "unknownRestored": true,
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-320.png"
+        }
+      ]
+    },
+    "dialog": {
+      "rows": [
+        {
+          "width": 1440,
+          "dialog": {
+            "x": 464,
+            "y": 328,
+            "width": 512,
+            "height": 244
+          },
+          "elements": [
+            {
+              "text": "支付宝 · 默认易支付",
+              "left": 489,
+              "right": 951
+            },
+            {
+              "text": "返回",
+              "left": 763,
+              "right": 825
+            },
+            {
+              "text": "创建支付单",
+              "left": 833,
+              "right": 951
+            },
+            {
+              "text": "Close",
+              "left": 943,
+              "right": 959
+            }
+          ],
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-1440.png"
+        },
+        {
+          "width": 1024,
+          "dialog": {
+            "x": 256,
+            "y": 328,
+            "width": 512,
+            "height": 244
+          },
+          "elements": [
+            {
+              "text": "支付宝 · 默认易支付",
+              "left": 281,
+              "right": 743
+            },
+            {
+              "text": "返回",
+              "left": 555,
+              "right": 617
+            },
+            {
+              "text": "创建支付单",
+              "left": 625,
+              "right": 743
+            },
+            {
+              "text": "Close",
+              "left": 735,
+              "right": 751
+            }
+          ],
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-1024.png"
+        },
+        {
+          "width": 390,
+          "dialog": {
+            "x": 16,
+            "y": 314,
+            "width": 358,
+            "height": 272
+          },
+          "elements": [
+            {
+              "text": "支付宝 · 默认易支付",
+              "left": 33,
+              "right": 357
+            },
+            {
+              "text": "返回",
+              "left": 33,
+              "right": 357
+            },
+            {
+              "text": "创建支付单",
+              "left": 33,
+              "right": 357
+            },
+            {
+              "text": "Close",
+              "left": 341,
+              "right": 357
+            }
+          ],
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-390.png"
+        },
+        {
+          "width": 320,
+          "dialog": {
+            "x": 16,
+            "y": 314,
+            "width": 288,
+            "height": 272
+          },
+          "elements": [
+            {
+              "text": "支付宝 · 默认易支付",
+              "left": 33,
+              "right": 287
+            },
+            {
+              "text": "返回",
+              "left": 33,
+              "right": 287
+            },
+            {
+              "text": "创建支付单",
+              "left": 33,
+              "right": 287
+            },
+            {
+              "text": "Close",
+              "left": 271,
+              "right": 287
+            }
+          ],
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-320.png"
+        }
+      ]
+    },
+    "intent": {
+      "provider": "epay_wxpay",
+      "rows": [
+        {
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/accepted-320.png"
+        }
+      ],
+      "accepted": true,
+      "cancelVisible": 0
+    },
+    "account": {
+      "balanceCents": 98634,
+      "screenshots": [
+        {
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/account-credited-1440.png"
+        },
+        {
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/account-credited-1024.png"
+        },
+        {
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/account-credited-390.png"
+        },
+        {
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/account-credited-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": []
+    },
+    "error": {
+      "errorVisible": true,
+      "recoveredRealOptions": true
+    },
+    "navigation": {
+      "emptyRestored": true,
+      "detailReturnRestored": true,
+      "url": "http://localhost:3089/console/invoices?q=T-"
+    },
+    "admin": {
+      "screenshots": [
+        {
+          "route": "/admin/invoices/3",
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-1440.png"
+        },
+        {
+          "route": "/admin/invoices/3",
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-1024.png"
+        },
+        {
+          "route": "/admin/invoices/3",
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-390.png"
+        },
+        {
+          "route": "/admin/invoices/3",
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-320.png"
+        },
+        {
+          "route": "/admin/transactions",
+          "width": 1440,
+          "layout": {
+            "viewport": 1440,
+            "document": 1440
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-cash-1440.png"
+        },
+        {
+          "route": "/admin/transactions",
+          "width": 1024,
+          "layout": {
+            "viewport": 1024,
+            "document": 1024
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-cash-1024.png"
+        },
+        {
+          "route": "/admin/transactions",
+          "width": 390,
+          "layout": {
+            "viewport": 390,
+            "document": 390
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-cash-390.png"
+        },
+        {
+          "route": "/admin/transactions",
+          "width": 320,
+          "layout": {
+            "viewport": 320,
+            "document": 320
+          },
+          "screenshot": "output/playwright/customer-topup-20261016/admin-cash-320.png"
+        }
+      ],
+      "errors": [],
+      "failures": []
+    }
+  },
+  "databaseAssertion": {
+    "invoiceId": 3,
+    "topupStatus": "credited",
+    "invoiceStatus": "paid",
+    "paymentStatus": "succeeded",
+    "provider": "epay_wxpay",
+    "balanceCents": 98634,
+    "settlements": 1,
+    "gatewayTopupLedgerEntries": 1
+  },
+  "limitations": [
+    "真实商户付款/查询/退款未验收",
+    "pending_liability故障/权限边界通过HTTP与PG18测试覆盖，未另行浏览器构造负债和受限管理员身份",
+    "完整付款脚本在成功回调并回余额页后，因request.get使用相对URL失败；随后绝对URL核对、数据库和账户页复验通过，不伪造原脚本聚合JSON",
+    "初次空态测试写错文案，第一次URL测试未等待hydration完成；修正等待并复验成功",
+    "初次测试用户名不符合客户当前登录策略；邮箱登录成功；额外直接HTTP诊断因缺CSRF头403，未放宽产品CSRF",
+    "未独立注入慢响应、未为客户账单制造超过20条用于浏览器分页；HTTP契约与已实现分页不等于本次分页UI验收"
+  ],
+  "pages": [
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1024,
+      "height": 900,
+      "scope": "accepted",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-1024.png",
+      "screenshotSha256": "302b75a3df81be6101abb62fb2647cd60e4f73842fade3bf33f582a7c2d3658d",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1440,
+      "height": 900,
+      "scope": "accepted",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-1440.png",
+      "screenshotSha256": "ecd7dd7ff2f3d1140b3dbfa6f32a5ac6b2bbe291716301e734ca29a2984c713b",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1193,
+      "scope": "accepted",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-320.png",
+      "screenshotSha256": "7cc9c98079cf013d4b4d28e148770ec2ececf2e62dba9d2238f5551eea1be696",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 390,
+      "height": 1153,
+      "scope": "accepted",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-390.png",
+      "screenshotSha256": "98b7b906faf33a23ca2839bddb01f874713a610e7adcac349e28b5b2f0ec707b",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1024,
+      "height": 900,
+      "scope": "accepted-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-1024.png",
+      "screenshotSha256": "a68b356d4499f4370dad22be9e5995446c2949bb8b42a32f84c6aa2543228afa",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1440,
+      "height": 900,
+      "scope": "accepted-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-1440.png",
+      "screenshotSha256": "42614e80c0add43a51f22eaa975707bd40e3d60d8ae489cedadd24e69cf930d5",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1063,
+      "scope": "accepted-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-320.png",
+      "screenshotSha256": "54d746fc5f819bfc829d81421d80576075190001db6de678b90e18c65251b9ea",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 390,
+      "height": 1023,
+      "scope": "accepted-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/accepted-payment-dialog-390.png",
+      "screenshotSha256": "6cd779dd917384206a157d8bfd5af604b0b3185eadfb535c50c49c8622437a57",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1024,
+      "height": 2166,
+      "scope": "account-credited",
+      "screenshot": "output/playwright/customer-topup-20261016/account-credited-1024.png",
+      "screenshotSha256": "b2adffadabba02e89c3bd11316aefe8e87bb612d15a859abdc0bbe730e907c8e",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1440,
+      "height": 2166,
+      "scope": "account-credited",
+      "screenshot": "output/playwright/customer-topup-20261016/account-credited-1440.png",
+      "screenshotSha256": "ba64ca8aad94fe418a15af7a06ab7d4dd2b3e16c47c0b906fbfe73ba768e9490",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 2737,
+      "scope": "account-credited",
+      "screenshot": "output/playwright/customer-topup-20261016/account-credited-320.png",
+      "screenshotSha256": "4123c454b6ad9e1fd7f78c6db7c09966039b4e23736f3d6b7fe164ab8479bbb2",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 390,
+      "height": 2653,
+      "scope": "account-credited",
+      "screenshot": "output/playwright/customer-topup-20261016/account-credited-390.png",
+      "screenshotSha256": "20f1062a528ab10c2374c9450658e7544991ba855cc44d89184e3155372a25db",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/transactions?limit=20",
+      "width": 1024,
+      "height": 900,
+      "scope": "admin-cash",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-cash-1024.png",
+      "screenshotSha256": "2149ae4233c414df149ecd887fb264262788ec5f129c0d0c9bd522b77a2d5b09",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/transactions?limit=20",
+      "width": 1440,
+      "height": 900,
+      "scope": "admin-cash",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-cash-1440.png",
+      "screenshotSha256": "569b716ae489800e40533a78930633efcfd170067ab6026f2a7bbc84d6634460",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/transactions?limit=20",
+      "width": 320,
+      "height": 1364,
+      "scope": "admin-cash",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-cash-320.png",
+      "screenshotSha256": "361ad25b6a146d1abca223cdd1ab5cefd1ff8d13a2b509d5884f108b14f900fd",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/transactions?limit=20",
+      "width": 390,
+      "height": 1273,
+      "scope": "admin-cash",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-cash-390.png",
+      "screenshotSha256": "a44357b780948970b779119d79acd3c1c7bd36e647f77b6595573ec4c2d5b9ce",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "width": 1024,
+      "height": 900,
+      "scope": "admin-invoice",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-1024.png",
+      "screenshotSha256": "bc301d942282962b1e634dbf68772aa002ad1ea7e6304bfa79d2533ec7063d43",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "width": 1440,
+      "height": 900,
+      "scope": "admin-invoice",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-1440.png",
+      "screenshotSha256": "5434d6c11f22db6cc2c865820a1299b495d877f521525bee95ee414351e5bcb4",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "width": 320,
+      "height": 1235,
+      "scope": "admin-invoice",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-320.png",
+      "screenshotSha256": "eeb522f7ef334794ae16a37b94bd0e265d8d6e2bf9c4fccf150bca7b6899b3b5",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/admin/invoices/3",
+      "width": 390,
+      "height": 1219,
+      "scope": "admin-invoice",
+      "screenshot": "output/playwright/customer-topup-20261016/admin-invoice-390.png",
+      "screenshotSha256": "6423f49b9dd34872818c10dae24d5ba76bce7343a5248f63d1f16a48332f6e41",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1023,
+      "scope": "cancelled",
+      "screenshot": "output/playwright/customer-topup-20261016/cancelled-320.png",
+      "screenshotSha256": "e55822201f33a3bbbadcbafd2eaa27d40edf3a7ed14aefea6c37f4ec3df1ba02",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "local httptest checkout",
+      "width": 1280,
+      "height": 720,
+      "scope": "checkout",
+      "screenshot": "output/playwright/customer-topup-20261016/checkout-320.png",
+      "screenshotSha256": "842954a2fc55a219fd69bded577a5355877b938a5a0a71527a731a4fd71d842f",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 2700,
+      "scope": "conflict",
+      "screenshot": "output/playwright/customer-topup-20261016/conflict-320.png",
+      "screenshotSha256": "f6a454238b2a655c2544b3f10fa320bea39f10a0dfe08439bd5fece0e25b2f35",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1024,
+      "height": 2073,
+      "scope": "create",
+      "screenshot": "output/playwright/customer-topup-20261016/create-1024.png",
+      "screenshotSha256": "e7e0f9652de3344ee5346553ddfe5675b3e1f2ad9caa961cedfe6c9fa13bd8ad",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 1440,
+      "height": 2073,
+      "scope": "create",
+      "screenshot": "output/playwright/customer-topup-20261016/create-1440.png",
+      "screenshotSha256": "8f187a116b9c06bacdb5c54f2171df6cdc70513f885b3ef56f69fc27017067d0",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 2644,
+      "scope": "create",
+      "screenshot": "output/playwright/customer-topup-20261016/create-320.png",
+      "screenshotSha256": "c036d9cf7ee92b33c304e01132e96b84c7a8b7c021576376a92eb560e1553186",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 390,
+      "height": 2560,
+      "scope": "create",
+      "screenshot": "output/playwright/customer-topup-20261016/create-390.png",
+      "screenshotSha256": "bda935c3606f930a518b40017d09e4b98f1abfa282620eb416c700584c3612da",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1024,
+      "height": 900,
+      "scope": "credited",
+      "screenshot": "output/playwright/customer-topup-20261016/credited-1024.png",
+      "screenshotSha256": "d7b32495941b8f056e5b23a5e3bedb130fed6fcf83bcfd259ea6f22b66bbfc16",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1440,
+      "height": 900,
+      "scope": "credited",
+      "screenshot": "output/playwright/customer-topup-20261016/credited-1440.png",
+      "screenshotSha256": "fd44c05e602bca6bbf2f53253fc26c5f4c313d4ad9b779d36113cef54ab830c8",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1062,
+      "scope": "credited",
+      "screenshot": "output/playwright/customer-topup-20261016/credited-320.png",
+      "screenshotSha256": "ce058a9ddd57f0dd2b6160507de366d60b00a2040416144ceacd85dd4d27089f",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 390,
+      "height": 1062,
+      "scope": "credited",
+      "screenshot": "output/playwright/customer-topup-20261016/credited-390.png",
+      "screenshotSha256": "f62fbc46989be13e3d0855d161ff0d2f9caa5f841547e59c0da5e02f118e0f8f",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 320,
+      "height": 900,
+      "scope": "empty",
+      "screenshot": "output/playwright/customer-topup-20261016/empty-320.png",
+      "screenshotSha256": "779d0f0822f7a3fd98a3bccb3ea60e3d971bb6b4529821038d4f1e078379fbbf",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 2586,
+      "scope": "error-recovery",
+      "screenshot": "output/playwright/customer-topup-20261016/error-recovery-320.png",
+      "screenshotSha256": "c96109c75eaab29973964f01019b825d5d36d579f9f42b8b064f4a0886fde80a",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1215,
+      "scope": "expired-original",
+      "screenshot": "output/playwright/customer-topup-20261016/expired-original-320.png",
+      "screenshotSha256": "c9ad1973c3bd37d46d3e4ba767034005542655c787404c142e67457eaeafa10d",
+      "frontendBaseline": "a514658",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 320,
+      "height": 900,
+      "scope": "final-empty-restored",
+      "screenshot": "output/playwright/customer-topup-20261016/final-empty-restored-320.png",
+      "screenshotSha256": "84c90b8e91b067ba0bf7dd9abadab07bd80d26e04f3579d7d2a166f01e57d6c9",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1024,
+      "height": 900,
+      "scope": "final-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/final-payment-dialog-1024.png",
+      "screenshotSha256": "a68b356d4499f4370dad22be9e5995446c2949bb8b42a32f84c6aa2543228afa",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1440,
+      "height": 900,
+      "scope": "final-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/final-payment-dialog-1440.png",
+      "screenshotSha256": "74aa098e57041d6ec3c35d28092f3a465b99d89b3e3f0743e293b19748b6856a",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1063,
+      "scope": "final-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/final-payment-dialog-320.png",
+      "screenshotSha256": "5302eedb1da33ec15f67de1d00be73a8dceb5730a3b9b84e0f3c0d0840a5210e",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 390,
+      "height": 1023,
+      "scope": "final-payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/final-payment-dialog-390.png",
+      "screenshotSha256": "07b46b30f346fe42cc7b261942e8cb31c9ad00fbd358c6692bfef01b2349dc12",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 1024,
+      "height": 900,
+      "scope": "list",
+      "screenshot": "output/playwright/customer-topup-20261016/list-1024.png",
+      "screenshotSha256": "1f35e79dc793d9d19382976f290f7d8c4896556f71937260a43392e2420145ac",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 1440,
+      "height": 900,
+      "scope": "list",
+      "screenshot": "output/playwright/customer-topup-20261016/list-1440.png",
+      "screenshotSha256": "c36495fd0c6614641d907784b0b510679d6ade27a9670a19c44559ba2fe19a58",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 320,
+      "height": 900,
+      "scope": "list",
+      "screenshot": "output/playwright/customer-topup-20261016/list-320.png",
+      "screenshotSha256": "0fdf05a51a8a73bc6c787b4953df4aa6e23b82f3b79edff992db61adebfab43a",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices?q=T-",
+      "width": 390,
+      "height": 900,
+      "scope": "list",
+      "screenshot": "output/playwright/customer-topup-20261016/list-390.png",
+      "screenshotSha256": "74224a3145758c00387309828ea21b341f72a92d25833c34b0566d49abc45be6",
+      "frontendBaseline": "625aab8",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1024,
+      "height": 900,
+      "scope": "payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-1024.png",
+      "screenshotSha256": "ed9add4c183485762e423301fbd7d9d184a156a0273e4d11a2d9689d81b3c48e",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 1440,
+      "height": 900,
+      "scope": "payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-1440.png",
+      "screenshotSha256": "46f188bcc6e3f998f1674431573f79a53bf81c3d7bdcd93bc0c0cfeb49b62c29",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 320,
+      "height": 1063,
+      "scope": "payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-320.png",
+      "screenshotSha256": "cb324706825d210d2bda51261ab3beb08d2c63e2144a60ae6e542db3a1da30ba",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/invoices/3?from=topup",
+      "width": 390,
+      "height": 1023,
+      "scope": "payment-dialog",
+      "screenshot": "output/playwright/customer-topup-20261016/payment-dialog-390.png",
+      "screenshotSha256": "4d5491f3c85bb68a8953b86ce48115c277f7ad40578e239563376da457c17389",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "FAIL_OR_TRANSIENT_CAPTURE",
+      "usableForLayoutAcceptance": false,
+      "note": "重复value/溢出修复前或transition未稳定的capture；只保留记录，不计通过；accepted-payment-dialog为修复后最终证据"
+    },
+    {
+      "newRoute": "/console/account",
+      "width": 320,
+      "height": 2644,
+      "scope": "unknown-restored",
+      "screenshot": "output/playwright/customer-topup-20261016/unknown-restored-320.png",
+      "screenshotSha256": "96d469ee12470725a88d91890ce47bbf3d5bf433f589e459ffa380c78078b18f",
+      "frontendBaseline": "e532455",
+      "acceptanceStatus": "PASS",
+      "usableForLayoutAcceptance": true,
+      "note": "隔离PG18真实API；本地易支付协议模拟，无真实付款"
+    }
+  ]
+}

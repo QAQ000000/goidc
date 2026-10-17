@@ -1,0 +1,29 @@
+{
+  "verified_at": "2026-10-17T11:12:21.372660+08:00",
+  "earlier_removed_bytes": 4783132672,
+  "this_turn_removed_bytes": 1407623168,
+  "cumulative_removed_bytes": 6190755840,
+  "current_free_bytes": 11586924544,
+  "this_turn_targets": [
+    {
+      "path": "/www/wwwroot/zjmfgo-worktrees/invoice-e-files/web/node_modules",
+      "allocated_bytes": 590503936
+    },
+    {
+      "path": "/www/wwwroot/zjmfgo/web/.next/cache/webpack",
+      "allocated_bytes": 381718528
+    },
+    {
+      "path": "/www/wwwroot/zjmfgo-local-renewal-refund-ui/web/.next",
+      "allocated_bytes": 435400704
+    }
+  ],
+  "preserved": "live API/worker/Web; shared test PG18; active test processes and Go build trees; source branches and user .mimosa; latest rollback and evidence",
+  "live_pids": {
+    "608393": true,
+    "608413": true,
+    "1647696": true
+  },
+  "api_status": 200,
+  "web_status": 200
+}

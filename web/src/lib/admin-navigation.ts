@@ -68,7 +68,7 @@ export const adminNavigation = [
   { href: "/admin/notifications", label: "通知模板与队列", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/sms", label: "短信日志", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/inbox", label: "站内信日志", icon: Mail, permission: "notifications.view", group: "system" },
-  { href: "/admin/logs/api", label: "API 日志", icon: History, permission: "notifications.view", group: "system" },
+  { href: "/admin/logs/api", label: "API 日志", icon: History, permission: "audit.view", group: "system" },
   { href: "/admin/logs/email", label: "邮件日志", icon: Mail, permission: "notifications.view", group: "system" },
   { href: "/admin/logs/admin-login", label: "管理员登录日志", icon: History, permission: "audit.view", group: "system" },
   { href: "/admin/logs/cleanup", label: "日志清理", icon: History, permission: "@super", group: "system" },

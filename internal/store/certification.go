@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type CertificationStore struct{}
@@ -319,13 +318,34 @@ func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, d
 	return tx.Commit(ctx)
 }
 
-// ReviewCertificationTx applies a review inside the caller's transaction so
-// the idempotency journal and the state transition commit atomically.
-//
-// The locking query also enforces the reviewing administrator's customer scope,
-// matching the detail and history paths: a reviewer whose scope excludes the
-// applicant cannot load the profile, so an out-of-scope decision is impossible
-// rather than merely hidden.
+// LockCertificationReview authorizes both a new decision and receipt replay.
+// Read scope in a separate statement after waiting for the profile lock: a
+// predicate in the locking SELECT would retain the statement's earlier snapshot.
+// Staff changes take 70108190 exclusively; sales assignment takes the customer
+// advisory lock exclusively. Hold both shared locks until the decision commits.
+func (s *Store) LockCertificationReview(ctx context.Context, tx pgx.Tx, reviewerID, id int64) error {
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		return err
+	}
+	var allowed bool
+	if err := tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND r.active AND 'certifications.manage'=ANY(r.permissions))),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, reviewerID).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return conflict("permission_denied", "没有审核认证的权限")
+	}
+	var customerID int64
+	if err := tx.QueryRow(ctx, "SELECT user_id FROM certification_profiles WHERE id=$1 FOR UPDATE", id).Scan(&customerID); err != nil {
+		return err
+	}
+	if err := LockAdminCustomer(ctx, tx, reviewerID, customerID); err != nil {
+		return err
+	}
+	return LockFileCredential(ctx, tx, reviewerID)
+}
+
+// ReviewCertificationTx applies a decision and its audit in the caller's
+// transaction. Store callers enforce the same authorization as HTTP callers.
 func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID, id int64, decision, note string, expected int64) error {
 	if decision != "approved" && decision != "rejected" {
 		return conflict("invalid_certification_review", "审核结果无效")
@@ -333,16 +353,16 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 	if len(note) > 2000 {
 		return conflict("invalid_certification_review", "审核备注过长")
 	}
+	if err := s.LockCertificationReview(ctx, tx, reviewerID, id); err != nil {
+		return err
+	}
 	var profileID, version int64
 	var submissionID *int64
 	var userID int64
 	var status string
-	// The scope predicate lives in the locking statement so the applicant is
-	// authorised at the same moment the row is locked; an out-of-scope reviewer
-	// gets no row and the review fails like a missing record.
 	var sealed []byte
 	var aad *string
-	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_encrypted FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_aad FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1 AND admin_customer_allowed($2,p.user_id) FOR UPDATE`, id, reviewerID).Scan(&profileID, &userID, &version, &status, &submissionID, &sealed, &aad)
+	err := tx.QueryRow(ctx, `SELECT p.id,p.user_id,p.version,p.status,(SELECT id FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_encrypted FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1),(SELECT payload_aad FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) FROM certification_profiles p WHERE p.id=$1`, id).Scan(&profileID, &userID, &version, &status, &submissionID, &sealed, &aad)
 	if err != nil {
 		return err
 	}
@@ -375,8 +395,8 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 }
 
 // applyCertifiedNameTx implements legacy `certifi_realname`/auto_update_name:
-// an approved review writes the certified name back to the account name
-// (legacy clients.username -> users.username). It runs inside the review
+// an approved review writes the certified customer name to display_name
+// (legacy clients.username -> users.display_name). It runs inside the review
 // transaction so the decision and the name change commit atomically.
 func (s *Store) applyCertifiedNameTx(ctx context.Context, tx pgx.Tx, reviewerID, userID, profileID int64, submissionID *int64, sealed []byte, aad *string) error {
 	var auto bool
@@ -397,37 +417,26 @@ func (s *Store) applyCertifiedNameTx(ctx context.Context, tx pgx.Tx, reviewerID,
 	}
 	name, _ := payload["name"].(string)
 	name = strings.TrimSpace(name)
-	if name == "" || len(name) > 240 {
-		return nil
+	if name == "" || len(name) > 120 {
+		return Audit(ctx, tx, reviewerID, "certification.name_update_skipped", "certification", profileID, map[string]any{"user_id": userID, "reason": "invalid_display_name"})
 	}
 	var current string
-	if err = tx.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, userID).Scan(&current); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&current); err != nil {
 		return err
 	}
 	if current == name {
 		return nil
 	}
-	// Wrap the write in a savepoint: a duplicate username (23505) aborts the
-	// whole transaction in PostgreSQL, and the approval itself must survive.
-	nested, err := tx.Begin(ctx)
-	if err != nil {
+	// Match customer management's users -> customer_profiles lock order and
+	// preserve contact-derived defaults for accounts without a profile yet.
+	if _, err = tx.Exec(ctx, "INSERT INTO customer_profiles(customer_id,company_name,phone) SELECT $1,COALESCE((SELECT company_name FROM customer_contacts WHERE customer_id=$1 AND company_name<>'' ORDER BY id LIMIT 1),''),COALESCE((SELECT phone_number FROM customer_contacts WHERE customer_id=$1 AND phone_number<>'' ORDER BY id LIMIT 1),'') ON CONFLICT DO NOTHING", userID); err != nil {
 		return err
 	}
-	if _, err = nested.Exec(ctx, "UPDATE users SET username=$2,updated_at=now() WHERE id=$1", userID, name); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			// Legacy clients.username had no unique constraint; Go usernames
-			// double as login identifiers. Keep the review result and record
-			// the skipped writeback instead of failing the whole decision.
-			if rbErr := nested.Rollback(ctx); rbErr != nil {
-				return rbErr
-			}
-			return Audit(ctx, tx, reviewerID, "certification.name_update_skipped", "certification", profileID, map[string]any{"user_id": userID, "reason": "username_taken"})
-		}
+	if _, err = tx.Exec(ctx, "UPDATE customer_profiles SET version=version+1,updated_at=now() WHERE customer_id=$1", userID); err != nil {
 		return err
 	}
-	if err = nested.Commit(ctx); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE users SET display_name=$2,updated_at=now() WHERE id=$1", userID, name); err != nil {
 		return err
 	}
-	return Audit(ctx, tx, reviewerID, "certification.name_updated", "certification", profileID, map[string]any{"user_id": userID, "username": name})
+	return Audit(ctx, tx, reviewerID, "certification.name_updated", "certification", profileID, map[string]any{"user_id": userID, "field": "display_name", "before": current, "display_name": name})
 }

@@ -67,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
 	mux.HandleFunc("GET /api/v1/auth/captcha", s.issueCaptcha)
 	mux.HandleFunc("POST /api/v1/auth/login/mfa", s.loginMFA)
+	mux.HandleFunc("GET /api/v1/auth/registration-fields", s.registrationFields)
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("GET /api/v1/auth/verification/channels", s.verificationChannels)
 	mux.HandleFunc("POST /api/v1/auth/verification/request", s.requestRegistrationVerification)
@@ -140,6 +141,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/order-settings", s.sessionAuth(s.updateOrderSettings, true))
 	mux.HandleFunc("GET /api/v1/admin/payment-settings", s.sessionAuth(s.paymentSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/payment-settings", s.sessionAuth(s.updatePaymentSettings, true))
+	mux.HandleFunc("GET /api/v1/credit/account", s.customerCreditAuth(s.customerCreditAccount))
+	mux.HandleFunc("GET /api/v1/credit/consumptions", s.customerCreditAuth(s.customerCreditConsumptions))
+	mux.HandleFunc("GET /api/v1/credit/repayments", s.customerCreditAuth(s.customerCreditRepayments))
+	mux.HandleFunc("GET /api/v1/invoices/{id}/credit", s.customerCreditAuth(s.customerInvoiceCredit))
 	mux.HandleFunc("GET /api/v1/admin/credit-settings", s.sessionAuth(s.creditSettings, true))
 	mux.HandleFunc("PUT /api/v1/admin/credit-settings", s.sessionAuth(s.updateCreditSettings, true))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/pay-credit", s.sessionAuth(s.payCreditInvoice, false))
@@ -168,6 +173,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/contracts/{id}/document", s.sessionAuth(s.contractRead, true))
 	mux.HandleFunc("POST /api/v1/admin/contracts", s.sessionAuth(s.contractWrite, true))
 	mux.HandleFunc("GET /api/v1/admin/contract-templates", s.sessionAuth(s.contractRead, true))
+	mux.HandleFunc("GET /api/v1/admin/contract-templates/{id}", s.sessionAuth(s.contractRead, true))
 	mux.HandleFunc("GET /api/v1/contracts", s.sessionAuth(s.contractRead, false))
 	mux.HandleFunc("GET /api/v1/contracts/eligible-services", s.sessionAuth(s.contractRead, false))
 	mux.HandleFunc("GET /api/v1/contracts/{id}", s.sessionAuth(s.contractRead, false))
@@ -309,9 +315,23 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/api-keys", s.sessionAuth(s.createAPIKey, false))
 	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", s.sessionAuth(s.revokeAPIKey, false))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/pay", s.auth(s.payInvoice, false))
+	mux.HandleFunc("POST /api/v1/balance/topups/{id}/cancel", s.sessionAuth(s.cancelOnlineTopup, false))
+	mux.HandleFunc("GET /api/v1/balance/topup-options", s.sessionAuth(s.topupOptions, false))
+	mux.HandleFunc("POST /api/v1/balance/topups", s.sessionAuth(s.createOnlineTopup, false))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/payments", s.auth(s.createPayment, false))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/payments/{payment_id}/reconcile", s.auth(s.reconcilePayment, false))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/reconcile", s.auth(s.reconcilePayment, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications", s.paymentCloseHTTP(s.closeVerificationList))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications", s.paymentCloseHTTP(s.closeVerificationWrite))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications/{verification_id}/{action}", s.paymentCloseHTTP(s.closeVerificationReview))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payments/{payment_id}/close", s.paymentCloseHTTP(s.paymentCloseStatus))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payment-anomaly-groups", s.paymentCloseHTTP(s.paymentAnomalyGroups))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payment-anomaly-summary", s.paymentCloseHTTP(s.paymentAnomalySummary))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/payment-anomaly-entries", s.paymentCloseHTTP(s.paymentAnomalyEntries))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payment-anomaly-groups/{anchor_id}/refunds", s.paymentCloseHTTP(s.createPaymentAnomalyRefund))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payment-anomaly-refunds/{refund_id}/confirm", s.paymentCloseHTTP(s.reviewPaymentAnomalyRefund))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payment-anomaly-refunds/{refund_id}/reject", s.paymentCloseHTTP(s.reviewPaymentAnomalyRefund))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close", s.paymentCloseHTTP(s.closePayment))
 	mux.HandleFunc("GET /api/v1/payment-providers", s.auth(s.paymentProviders, false))
 	mux.HandleFunc("POST /api/v1/payments/{provider}/webhook", s.paymentWebhook)
 	mux.HandleFunc("GET /api/v1/payments/{provider}/webhook", s.paymentWebhook)
@@ -321,6 +341,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/service-navigation/{id}", s.auth(s.setServiceNavigation, false))
 	mux.HandleFunc("GET /api/v1/services/{id}", s.auth(s.serviceDetail, false))
 	mux.HandleFunc("GET /api/v1/services/{id}/activity", s.auth(s.serviceActivity, false))
+	mux.HandleFunc("POST /api/v1/services/{id}/vnc", s.auth(s.serviceVNC, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/credentials", s.auth(s.serviceCredentials, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/reset-password", s.auth(s.resetServicePassword, false))
 	mux.HandleFunc("GET /api/v1/services/{id}/reinstall-templates", s.auth(s.reinstallTemplates, false))
@@ -350,6 +371,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/services/{id}/auto-renew", s.auth(s.setAutoRenew, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/cancellation", s.auth(s.requestCancellation, false))
 	mux.HandleFunc("DELETE /api/v1/services/{id}/cancellation", s.auth(s.withdrawCancellation, false))
+	mux.HandleFunc("GET /api/v1/me/ticket-notification-preferences", s.sessionAuth(s.ticketNotificationPreferences, false))
+	mux.HandleFunc("PATCH /api/v1/me/ticket-notification-preferences", s.sessionAuth(s.ticketNotificationPreferences, false))
+	mux.HandleFunc("GET /api/v1/tickets/{id}/notifications", s.auth(s.ticketNotifications, false))
 	mux.HandleFunc("GET /api/v1/tickets", s.auth(s.tickets, false))
 	mux.HandleFunc("GET /api/v1/ticket-departments", s.auth(s.ticketDepartments, false))
 	mux.HandleFunc("POST /api/v1/tickets", s.auth(s.createTicket, false))
@@ -481,6 +505,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}", s.auth(s.adminCustomer, true))
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}/affiliate", s.auth(s.adminCustomerAffiliate, true))
 	mux.HandleFunc("POST /api/v1/admin/customers/{id}/impersonate", s.auth(s.adminImpersonateCustomer, true))
+	mux.HandleFunc("GET /api/v1/admin/transactions/summary", s.auth(s.adminTransactionSummary, true))
 	mux.HandleFunc("GET /api/v1/admin/transactions/page", s.auth(s.adminTransactionEntries, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-transactions", s.auth(s.adminCustomerTransactions, true))
 	mux.HandleFunc("GET /api/v1/admin/sales-owners", s.sessionAuth(s.salesOwners, true))
@@ -515,6 +540,17 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/invoices/page", s.auth(s.invoices, true))
 	mux.HandleFunc("GET /api/v1/admin/invoices/{id}", s.auth(s.invoiceDetail, true))
 	mux.HandleFunc("GET /api/v1/admin/invoice-customers", s.auth(s.invoiceCustomers, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/topup-liability", s.topupLiabilityHTTP(s.topupLiability, false))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/topup-liability/resolve", s.topupLiabilityHTTP(s.resolveTopupLiability, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refund-order-context", s.sessionAuth(s.externalRefundOrderContext, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refund-renewal-context", s.sessionAuth(s.externalRefundRenewalContext, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.externalRefunds, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.createExternalRefund, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", s.sessionAuth(func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("action", "confirm")
+		s.reviewExternalRefund(w, r)
+	}, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/reject", s.sessionAuth(s.reviewExternalRefund, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices", s.auth(s.saveManualInvoice, true))
 	mux.HandleFunc("PUT /api/v1/admin/invoices/{id}", s.auth(s.saveManualInvoice, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/cancel", s.auth(s.cancelManualInvoice, true))
@@ -539,6 +575,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/v1/admin/customer-product-discounts", s.auth(s.saveCustomerProductDiscount, true))
 	mux.HandleFunc("PUT /api/v1/admin/customers/{id}/group", s.auth(s.assignCustomerGroup, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-field-definitions", s.auth(s.customerFieldDefinitions, true))
+	mux.HandleFunc("GET /api/v1/admin/customer-fields/{id}", s.auth(s.adminCustomerCustomField, true))
 	mux.HandleFunc("GET /api/v1/admin/customer-fields", s.auth(s.adminCustomerCustomFields, true))
 	mux.HandleFunc("POST /api/v1/admin/customer-fields", s.auth(s.createCustomerCustomField, true))
 	mux.HandleFunc("PATCH /api/v1/admin/customer-fields/{id}", s.auth(s.updateCustomerCustomField, true))
@@ -813,7 +850,7 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 			writeError(w, 401, c.Code, c.Message)
 			return
 		}
-		if c.Code == "permission_denied" {
+		if c.Code == "permission_denied" || c.Code == "external_refund_self_review" {
 			writeError(w, 403, c.Code, c.Message)
 			return
 		}
@@ -825,6 +862,10 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23514" && pg.Message == "renewal_refund_hold" {
+		writeError(w, 409, "renewal_refund_hold", "服务存在待复核续费退款，核实后再操作")
+		return
+	}
 	if errors.As(err, &pg) && (pg.Code == "23505" || pg.Code == "23503" || pg.Code == "23514") {
 		writeError(w, 409, "constraint_conflict", "记录重复或关联数据无效")
 		return

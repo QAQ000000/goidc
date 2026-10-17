@@ -334,7 +334,7 @@ func (s *Store) CreateInvoiceApplication(ctx context.Context, userID int64, in I
 	for _, id := range invoiceIDs {
 		var uid, amount int64
 		var no string
-		if err = tx.QueryRow(ctx, "SELECT user_id,invoice_no,amount_cents FROM invoices WHERE id=$1 AND user_id=$2 AND status='paid' AND amount_cents>0 AND NOT import_review_required AND legacy_source='' FOR UPDATE", id, userID).Scan(&uid, &no, &amount); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT user_id,invoice_no,amount_cents FROM invoices WHERE id=$1 AND user_id=$2 AND status='paid' AND invoice_kind<>'topup' AND amount_cents>0 AND NOT import_review_required AND legacy_source='' FOR UPDATE", id, userID).Scan(&uid, &no, &amount); err != nil {
 			return out, err
 		}
 		if uid != userID {

@@ -397,6 +397,7 @@ export function TemplateEditor({
               <Input
                 required
                 aria-label="模板类型"
+                list="ticket-template-kinds"
                 readOnly={template.id > 0}
                 maxLength={80}
                 pattern={"[a-z0-9_\\-]+"}
@@ -407,6 +408,8 @@ export function TemplateEditor({
               />
             </label>
           </div>
+          <datalist id="ticket-template-kinds"><option value="ticket_customer_created" /><option value="ticket_customer_replied" /><option value="ticket_staff_replied" /></datalist>
+          <p className="text-xs text-muted-foreground">工单事件类型：ticket_customer_created（客户创建）、ticket_customer_replied（客户回复）、ticket_staff_replied（客服回复）。ticket_created 保留为管理员代建通知。</p>
           {form.channel === "email" ? <label className="grid gap-2 text-sm">
             邮件主题
             <Input required aria-label="邮件主题" maxLength={240} value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} />

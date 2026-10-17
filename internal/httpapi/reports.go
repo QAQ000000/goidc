@@ -76,7 +76,7 @@ func (s *Server) incomeReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.db.Pool.Query(r.Context(), `
-WITH cash AS (SELECT i.id invoice_id,i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
+WITH cash AS (SELECT i.id invoice_id,i.user_id,i.amount_cents,i.paid_at received_at FROM invoices i WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id)
 UNION ALL SELECT r.invoice_id,r.user_id,r.amount_cents,r.received_at FROM credit_repayments r)
 SELECT to_char(date_trunc('month', received_at AT TIME ZONE 'Asia/Shanghai'), 'YYYY-MM'),
        coalesce(sum(amount_cents),0)::bigint, count(DISTINCT invoice_id)::bigint
@@ -226,14 +226,14 @@ WITH new_sales AS (
   SELECT oi.product_id, max(oi.product_name) AS name, sum(oi.total_cents)::bigint AS amount,
          count(DISTINCT o.id)::bigint AS order_count
   FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN invoices i ON i.order_id=o.id
-  WHERE i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
+  WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
   GROUP BY oi.product_id
 ), renewals AS (
   SELECT s.product_id, max(p.name) AS name, sum(ii.amount_cents)::bigint AS amount,
          count(DISTINCT i.id)::bigint AS order_count
   FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN services s ON s.id=ii.service_id
        JOIN products p ON p.id=s.product_id
-  WHERE ii.item_type='renew' AND i.status='paid' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
+  WHERE ii.item_type='renew' AND (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
   GROUP BY s.product_id
 )
  , credit_products AS (

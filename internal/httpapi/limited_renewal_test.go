@@ -1,12 +1,17 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/codex/zjmfgo/db/migrations"
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"io/fs"
 	"math"
-	"strings"
+	"sort"
 	"sync"
 	"testing"
 )
@@ -39,43 +44,63 @@ func TestLimitedRenewalMigrationPreservesSettledAndPendingHistory(t *testing.T) 
 	first := renewLimited(t, f, "limited-migration-paid", 1111)
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", first), map[string]any{}, f.customer, "limited-migration-pay"), 201)
 	pending := renewLimited(t, f, "limited-migration-pending", 1111)
-	// Restore the pre064 columns and original062 constraints in this test schema.
-	tx, err := f.db.Pool.Begin(t.Context())
+
+	// Model a genuine pre064 schema in a second disposable schema. Never remove
+	// historical columns from the latest schema: newer immutable-effect triggers
+	// correctly depend on them. Copy only columns that existed in schema063.
+	var source string
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&source); err != nil {
+		t.Fatal(err)
+	}
+	historical := source + "_pre064"
+	if _, err := f.db.Pool.Exec(t.Context(), "CREATE SCHEMA "+pgx.Identifier{historical}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	defer f.db.Pool.Exec(t.Context(), "DROP SCHEMA "+pgx.Identifier{historical}.Sanitize()+" CASCADE")
+	cfg := f.db.Pool.Config().Copy()
+	cfg.ConnConfig.RuntimeParams["search_path"] = historical
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	tx, err := pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(t.Context())
-	if _, err = tx.Exec(t.Context(), `DROP FUNCTION service_renewal_discount(bigint,integer,bigint,integer,bigint);
- ALTER TABLE promo_codes DROP COLUMN recurring_limit;
- ALTER TABLE order_items DROP COLUMN renewal_fixed_discount_cents,DROP COLUMN renewal_discount_limit;
- ALTER TABLE services DROP COLUMN renewal_fixed_discount_cents,DROP COLUMN renewal_discount_limit,DROP COLUMN renewal_discounts_used;
- ALTER TABLE invoice_items DROP COLUMN renewal_fixed_discount_cents,DROP COLUMN renewal_discount_limit,DROP COLUMN renewal_discount_ordinal;
- DELETE FROM schema_migrations WHERE version='064_limited_renewal_benefits.sql'`); err != nil {
-		t.Fatal(err)
-	}
-	original, err := migrations.Files.ReadFile("062_recurring_promotions.sql")
+	names, err := fs.Glob(migrations.Files, "*.sql")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, segment := range strings.Split(string(original), ";") {
-		if pos := strings.Index(segment, "ADD CONSTRAINT"); pos >= 0 {
-			var table string
-			for _, name := range []string{"order_items", "services", "invoice_items"} {
-				if strings.Contains(segment, "ALTER TABLE "+name) {
-					table = name
-				}
-			}
-			if table == "" {
-				t.Fatal("unknown constraint")
-			}
-			if _, err = tx.Exec(t.Context(), "ALTER TABLE "+table+" "+segment[pos:]); err != nil {
-				t.Fatal(err)
-			}
+	sort.Strings(names)
+	for _, name := range names {
+		if name > "063_product_purchase_fields.sql" {
+			break
+		}
+		content, e := migrations.Files.ReadFile(name)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = tx.Exec(t.Context(), string(content)); e != nil {
+			t.Fatalf("historical %s: %v", name, e)
+		}
+		sum := sha256.Sum256(content)
+		if _, e = tx.Exec(t.Context(), "INSERT INTO schema_migrations(version,checksum) VALUES($1,$2)", name, hex.EncodeToString(sum[:])); e != nil {
+			t.Fatal(e)
+		}
+	}
+	for _, table := range []string{"users", "products", "promo_codes", "orders", "order_items", "services", "invoices", "invoice_items"} {
+		target := pgx.Identifier{historical, table}.Sanitize()
+		src := pgx.Identifier{source, table}.Sanitize()
+		if _, err = tx.Exec(t.Context(), "INSERT INTO "+target+" OVERRIDING SYSTEM VALUE SELECT (jsonb_populate_record(NULL::"+target+",to_jsonb(r))).* FROM "+src+" r"); err != nil {
+			t.Fatalf("copy historical %s: %v", table, err)
 		}
 	}
 	if err = tx.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	f.db = &store.Store{Pool: pool}
 	if err = f.db.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +112,9 @@ func TestLimitedRenewalMigrationPreservesSettledAndPendingHistory(t *testing.T) 
 	if err = f.db.Pool.QueryRow(t.Context(), "SELECT renewal_discount_ordinal FROM invoice_items WHERE invoice_id=$1", pending).Scan(&ordinal); err != nil || ordinal != 2 {
 		t.Fatal("pending migration slot", ordinal, err)
 	}
-	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", pending), map[string]any{}, f.customer, "limited-migrated-pay"), 201)
+	if _, err = f.db.PayInvoice(t.Context(), f.uid, pending, "limited-migrated-pay"); err != nil {
+		t.Fatal(err)
+	}
 	limitedUsed(t, f, 2)
 }
 
@@ -198,8 +225,8 @@ func TestLimitedRenewalZeroRefundAndConcurrentPayment(t *testing.T) {
 			if data(t, refund)["amount_cents"] != float64(0) {
 				t.Fatal("gross refund", data(t, refund))
 			}
-			limitedUsed(t, f, 1)
-			renewLimited(t, f, "limited-after-refund", 1234)
+			limitedUsed(t, f, 0)
+			renewLimited(t, f, "limited-after-refund", 0)
 		})
 	}
 }

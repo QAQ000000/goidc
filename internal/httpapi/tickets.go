@@ -77,14 +77,20 @@ func (s *Server) ticketAssignees(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Subject      string `json:"subject"`
-		Body         string `json:"body"`
-		Priority     string `json:"priority"`
-		DepartmentID *int64 `json:"department_id"`
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
+		Subject        string `json:"subject"`
+		Body           string `json:"body"`
+		Priority       string `json:"priority"`
+		DepartmentID   *int64 `json:"department_id"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
+	key, ok := ticketPublicMutationKey(w, r, input.IdempotencyKey)
+	if !ok {
+		return
+	}
+	input.IdempotencyKey = ""
 	input.Subject = strings.TrimSpace(input.Subject)
 	input.Body = strings.TrimSpace(input.Body)
 	if input.Subject == "" || len(input.Subject) > 240 || input.Body == "" || len(input.Body) > 10000 || (input.Priority != "low" && input.Priority != "normal" && input.Priority != "high" && input.Priority != "urgent") {
@@ -97,6 +103,10 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
+	hash := settingMutationHash(input)
+	if s.ticketReplay(w, r, tx, key, "create", hash, 0) {
+		return
+	}
 	if input.DepartmentID != nil {
 		var active bool
 		if err = tx.QueryRow(r.Context(), "SELECT COALESCE((SELECT active FROM ticket_departments WHERE id=$1), false)", *input.DepartmentID).Scan(&active); err != nil {
@@ -124,6 +134,14 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.created", "ticket", id, map[string]string{}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = s.db.QueueTicketNotification(r.Context(), tx, id, 0, identityFrom(r).ID, "customer_created", s.cfg.PublicOrigin); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = saveTicketReceipt(r, tx, key, "create", hash, id, map[string]int64{"id": id}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -845,12 +863,18 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 		return
 	}
 	var input struct {
-		Version int64  `json:"version"`
-		Body    string `json:"body,omitempty"`
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
+		Version        int64  `json:"version"`
+		Body           string `json:"body,omitempty"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
+	key, ok := ticketPublicMutationKey(w, r, input.IdempotencyKey)
+	if !ok {
+		return
+	}
+	input.IdempotencyKey = ""
 	input.Body = strings.TrimSpace(input.Body)
 	if input.Version < 1 || (!close && (input.Body == "" || len(input.Body) > 10000)) {
 		writeError(w, 400, "invalid_reply", "回复内容或工单版本无效")
@@ -870,6 +894,12 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 		s.fail(w, r, err)
 		return
 	}
+	operation := fmt.Sprintf("reply:%d", id)
+	hash := settingMutationHash(input)
+	if !close && s.ticketReplay(w, r, tx, key, operation, hash, id) {
+		return
+	}
+	var replyID int64
 	if version != input.Version {
 		writeError(w, 409, "stale_ticket", "工单已更新，请刷新后操作")
 		return
@@ -887,7 +917,7 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 		if staffAccess {
 			newStatus = "pending"
 		}
-		if _, err = tx.Exec(r.Context(), "INSERT INTO ticket_replies(ticket_id,author_id,body) VALUES($1,$2,$3)", id, identityFrom(r).ID, input.Body); err != nil {
+		if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_replies(ticket_id,author_id,body) VALUES($1,$2,$3) RETURNING id", id, identityFrom(r).ID, input.Body).Scan(&replyID); err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -900,9 +930,27 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 		s.fail(w, r, err)
 		return
 	}
+	if !close {
+		kind := "customer_replied"
+		if staffAccess {
+			kind = "staff_replied"
+		}
+		if err = s.db.QueueTicketNotification(r.Context(), tx, id, replyID, identityFrom(r).ID, kind, s.cfg.PublicOrigin); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if err = saveTicketReceipt(r, tx, key, operation, hash, id, map[string]any{"version": version + 1, "status": newStatus, "reply_id": replyID}); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"version": version + 1, "status": newStatus})
+	result := map[string]any{"version": version + 1, "status": newStatus}
+	if !close {
+		result["reply_id"] = replyID
+	}
+	write(w, 200, result)
 }

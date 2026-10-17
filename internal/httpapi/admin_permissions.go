@@ -56,6 +56,17 @@ var adminRoutePermissions = func() map[string]string {
 	m["PUT /api/v1/admin/products/{id}/configuration-rules/{rule_id}"] = "products.manage"
 	m["DELETE /api/v1/admin/products/{id}/configuration-rules/{rule_id}"] = "products.manage"
 	m["POST /api/v1/admin/invoices/{id}/payments/{payment_id}/reconcile"] = "payments.reconcile"
+	m["GET /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications"] = "invoices.view"
+	m["POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications"] = "payments.close_verify"
+	m["POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close-verifications/{verification_id}/{action}"] = "payments.close_review"
+	m["GET /api/v1/admin/invoices/{id}/payments/{payment_id}/close"] = "invoices.view"
+	m["POST /api/v1/admin/invoices/{id}/payments/{payment_id}/close"] = "payments.close"
+	m["GET /api/v1/admin/invoices/{id}/payment-anomaly-groups"] = "payment_anomalies.view"
+	m["GET /api/v1/admin/invoices/{id}/payment-anomaly-summary"] = "payment_anomalies.view"
+	m["GET /api/v1/admin/invoices/{id}/payment-anomaly-entries"] = "payment_anomalies.view"
+	m["POST /api/v1/admin/invoices/{id}/payment-anomaly-groups/{anchor_id}/refunds"] = "payment_anomalies.create"
+	m["POST /api/v1/admin/invoices/{id}/payment-anomaly-refunds/{refund_id}/confirm"] = "payment_anomalies.review"
+	m["POST /api/v1/admin/invoices/{id}/payment-anomaly-refunds/{refund_id}/reject"] = "payment_anomalies.review"
 	m["GET /api/v1/admin/site-settings"] = "settings.view"
 	m["PUT /api/v1/admin/site-settings"] = "settings.manage"
 	m["GET /api/v1/admin/auth-settings"] = "settings.view"
@@ -176,6 +187,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/customers/page"] = "customers.view"
 	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
 	m["GET /api/v1/admin/contract-templates"] = "settings.view"
+	m["GET /api/v1/admin/contract-templates/{id}"] = "settings.view"
 	m["POST /api/v1/admin/contract-templates"] = "settings.manage"
 	m["PUT /api/v1/admin/contract-templates/{id}"] = "settings.manage"
 	m["GET /api/v1/admin/affiliate/accounts/page"] = "affiliates.view"
@@ -217,18 +229,22 @@ var adminRoutePermissions = func() map[string]string {
 		"content.view":                  {"GET /api/v1/admin/content", "GET /api/v1/admin/content/{id}", "GET /api/v1/admin/content-categories", "GET /api/v1/admin/content-tags"},
 		"content.manage":                {"POST /api/v1/admin/content", "PUT /api/v1/admin/content/{id}", "POST /api/v1/admin/content/{id}/images", "DELETE /api/v1/admin/content/{id}", "POST /api/v1/admin/content-categories", "PUT /api/v1/admin/content-categories/{id}", "DELETE /api/v1/admin/content-categories/{id}", "POST /api/v1/admin/content-tags", "PUT /api/v1/admin/content-tags/{id}", "DELETE /api/v1/admin/content-tags/{id}"},
 		"customers.view":                {"GET /api/v1/admin/customers", "GET /api/v1/admin/customers/{id}", "GET /api/v1/admin/customers/{id}/contacts", "GET /api/v1/admin/customers/{id}/affiliate"},
-		"customers.manage":              {"POST /api/v1/admin/customers", "POST /api/v1/admin/customers/{id}/password", "PATCH /api/v1/admin/customers/{id}", "POST /api/v1/admin/customers/{id}/impersonate", "POST /api/v1/admin/customers/{id}/contacts", "PATCH /api/v1/admin/customers/{id}/contacts/{contact_id}", "DELETE /api/v1/admin/customers/{id}/contacts/{contact_id}", "GET /api/v1/admin/customer-fields", "POST /api/v1/admin/customer-fields", "PATCH /api/v1/admin/customer-fields/{id}", "DELETE /api/v1/admin/customer-fields/{id}"},
+		"customers.manage":              {"POST /api/v1/admin/customers", "POST /api/v1/admin/customers/{id}/password", "PATCH /api/v1/admin/customers/{id}", "POST /api/v1/admin/customers/{id}/impersonate", "POST /api/v1/admin/customers/{id}/contacts", "PATCH /api/v1/admin/customers/{id}/contacts/{contact_id}", "DELETE /api/v1/admin/customers/{id}/contacts/{contact_id}", "GET /api/v1/admin/customer-fields", "GET /api/v1/admin/customer-fields/{id}", "POST /api/v1/admin/customer-fields", "PATCH /api/v1/admin/customer-fields/{id}", "DELETE /api/v1/admin/customer-fields/{id}"},
 		"customer_groups.view":          {"GET /api/v1/admin/customer-groups", "GET /api/v1/admin/customer-product-groups", "GET /api/v1/admin/customer-product-discounts"},
 		"customer_groups.manage":        {"POST /api/v1/admin/customer-groups", "PATCH /api/v1/admin/customer-groups/{id}", "DELETE /api/v1/admin/customer-groups/{id}", "PUT /api/v1/admin/customers/{id}/group", "POST /api/v1/admin/customer-product-groups", "PATCH /api/v1/admin/customer-product-groups/{id}", "DELETE /api/v1/admin/customer-product-groups/{id}", "PUT /api/v1/admin/customer-product-discounts"},
 		"customer_levels.view":          {"GET /api/v1/admin/customer-levels"},
 		"customer_levels.manage":        {"POST /api/v1/admin/customer-levels", "PATCH /api/v1/admin/customer-levels/{id}", "DELETE /api/v1/admin/customer-levels/{id}"},
 		"orders.view":                   {"GET /api/v1/admin/orders", "GET /api/v1/admin/orders/{id}", "GET /api/v1/admin/renewal-orders"},
 		"orders.manage":                 {"GET /api/v1/admin/orders/create-options", "POST /api/v1/admin/orders/quote", "POST /api/v1/admin/orders", "POST /api/v1/admin/orders/{id}/invoice", "DELETE /api/v1/admin/orders/{id}", "POST /api/v1/admin/orders/bulk-review", "POST /api/v1/admin/orders/bulk-delete", "POST /api/v1/admin/orders/{id}/cancel", "POST /api/v1/admin/orders/{id}/review", "POST /api/v1/admin/orders/{id}/notes", "POST /api/v1/admin/orders/bulk-cancel"},
-		"invoices.view":                 {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}", "GET /api/v1/admin/customer-transactions", "GET /api/v1/admin/transactions/page"},
+		"invoices.view":                 {"GET /api/v1/admin/invoices", "GET /api/v1/admin/invoices/page", "GET /api/v1/admin/invoices/{id}", "GET /api/v1/admin/invoices/{id}/topup-liability", "GET /api/v1/admin/customer-transactions", "GET /api/v1/admin/transactions/page", "GET /api/v1/admin/transactions/summary"},
+		"external_refunds.view":         {"GET /api/v1/admin/invoices/{id}/external-refunds", "GET /api/v1/admin/invoices/{id}/external-refund-order-context", "GET /api/v1/admin/invoices/{id}/external-refund-renewal-context"},
+		"external_refunds.create":       {"POST /api/v1/admin/invoices/{id}/external-refunds"},
+		"external_refunds.review":       {"POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", "POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/reject"},
 		"invoices.manage":               {"GET /api/v1/admin/invoice-customers", "POST /api/v1/admin/invoices", "PUT /api/v1/admin/invoices/{id}", "POST /api/v1/admin/invoices/{id}/cancel", "POST /api/v1/admin/invoices/merge"},
 		"invoices.refund":               {"POST /api/v1/admin/invoices/{id}/refund"},
 		"invoice_applications.manage":   {"POST /api/v1/admin/invoice-applications/{id}/review", "POST /api/v1/admin/invoice-applications/{id}/adjust", "POST /api/v1/admin/invoice-applications/{id}/document", "POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document"},
 		"invoice_applications.view":     {"GET /api/v1/admin/invoice-applications", "GET /api/v1/admin/invoice-applications/{id}", "GET /api/v1/admin/invoice-applications/{id}/documents/{document_id}/file"},
+		"balance.topup.resolve":         {"POST /api/v1/admin/invoices/{id}/topup-liability/resolve"},
 		"balance.manage":                {"POST /api/v1/admin/customers/{id}/balance"},
 		"promos.view":                   {"GET /api/v1/admin/promo-codes", "GET /api/v1/admin/promo-codes/page"},
 		"promos.manage":                 {"POST /api/v1/admin/promo-codes", "PATCH /api/v1/admin/promo-codes/{id}"},

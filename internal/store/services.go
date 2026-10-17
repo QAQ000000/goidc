@@ -103,6 +103,9 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
+	if !admin && mode == "supplier" && (action == "create" || action == "sync") {
+		return out, conflict("permission_denied", "该服务动作仅限管理员")
+	}
 	if !modeSupportsServiceAction(mode, action) {
 		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
 	}
@@ -569,9 +572,27 @@ VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingC
 // supplier adapter advertises create/sync/power/reset/rescue/reinstall but not
 // suspend, resume or terminate.
 func modeSupportsServiceAction(mode, action string) bool {
-	if mode != "supplier" {
-		return true
+	gate, restricted := serviceModeActionGates[mode]
+	return !restricted || gate(action)
+}
+
+// Keep the manual API and scheduler candidate filtering on the same capability
+// rules. Modes without a gate retain their existing unrestricted behavior.
+var serviceModeActionGates = map[string]func(string) bool{
+	"supplier": supplierSupportsServiceAction,
+}
+
+func unsupportedServiceActionModes(action string) []string {
+	modes := make([]string, 0, len(serviceModeActionGates))
+	for mode, gate := range serviceModeActionGates {
+		if !gate(action) {
+			modes = append(modes, mode)
+		}
 	}
+	return modes
+}
+
+func supplierSupportsServiceAction(action string) bool {
 	switch action {
 	case "create", "sync", "reset_password", "rescue_system", "exit_rescue_system", "reinstall":
 		return true

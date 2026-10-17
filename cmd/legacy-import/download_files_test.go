@@ -269,7 +269,11 @@ func TestImportedFilesThroughCustomerAPI(t *testing.T) {
 	}
 	login := func(name string) string {
 		t.Helper()
-		w := call("POST", "/auth/login", map[string]string{"username": name, "password": "file-api-fixture"}, "")
+		var email string
+		if err := db.Pool.QueryRow(t.Context(), "SELECT email FROM users WHERE username=$1", name).Scan(&email); err != nil {
+			t.Fatal(err)
+		}
+		w := call("POST", "/auth/login", map[string]string{"identifier": email, "password": "file-api-fixture"}, "")
 		if w.Code != 200 {
 			t.Fatal("login", w.Code)
 		}

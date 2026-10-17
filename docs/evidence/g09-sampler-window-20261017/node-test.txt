@@ -1,0 +1,27 @@
+✔ stat parser handles spaces and parentheses in comm without shifting identity or CPU fields (2.255278ms)
+✔ I/O parser preserves uint64 decimal strings and refuses missing or invalid counters (0.813788ms)
+✔ actual owned child samples CPU, RSS, descriptor count and I/O without publishing secrets (174.236906ms)
+✔ capture refuses current, non-child and mismatching UID/path/namespace identities (41.12218ms)
+✔ PID reuse, exec/path/UID/namespace change and exited children fail closed and latch (43.337276ms)
+✔ duplicate targets, invalid budgets and overlapping samples are refused (41.319324ms)
+✔ real fixed two-second slots persist real owned-child samples with conservation and private journal (6063.655442ms)
+✔ frozen profile cannot be relaxed by later caller mutation (43.558863ms)
+✔ late scheduler records failure once without catch-up sampling (41.134394ms)
+✔ exited owned process fails and invokes stop without signalling any process itself (50.666664ms)
+✔ journal permission change latches persistence failure before collecting (35.654701ms)
+✔ private directory, existing journal, invalid budget and non-child registration are refused (59.788414ms)
+✔ non-finite or backwards scheduling clock fails closed with one stop (95.859834ms)
+✔ unavailable IO remains null and an explicitly required IO budget fails closed (51.343441ms)
+✔ actual owned-child cwd change invalidates the registered identity and stops once (54.746289ms)
+✔ journal failure after one durable sample cannot pass end-window conservation (63.696044ms)
+✔ initial invalid clock is rejected even if later values would recover (66.370913ms)
+✔ parent permissions and symlink replacement are rechecked before journal writes (93.119702ms)
+✔ rejected stop callback preserves original failure and closes journal (75.56997ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6883.876427

@@ -216,7 +216,7 @@ INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-op
 		t.Fatalf("migration grants=%d err=%v", len(grants), err)
 	}
 	for _, p := range store.AdminPermissions {
-		if p.Code == "resources.view" || p.Code == "resources.manage" || p.Code == "credit.view" || p.Code == "credit.manage" || p.Code == "contracts.view" || p.Code == "contracts.manage" {
+		if p.Code == "balance.topup.resolve" || p.Code == "resources.view" || p.Code == "resources.manage" || p.Code == "credit.view" || p.Code == "credit.manage" || p.Code == "contracts.view" || p.Code == "contracts.manage" {
 			for _, grant := range grants {
 				if grant == p.Code {
 					t.Fatalf("later permission implicitly granted: %s", grant)
@@ -224,7 +224,7 @@ INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-op
 			}
 			continue
 		}
-		if p.Code == "jobs.view" || p.Code == "content.view" || p.Code == "downloads.view" || p.Code == "downloads.manage" || p.Code == "customer_files.view" || p.Code == "customer_files.manage" || p.Code == "customer_levels.view" || p.Code == "customer_levels.manage" || p.Code == "invoices.manage" || p.Code == "invoice_applications.view" || p.Code == "invoice_applications.manage" || p.Code == "payments.reconcile" || p.Code == "settings.view" || p.Code == "settings.manage" || p.Code == "certifications.view" || p.Code == "certifications.manage" || p.Code == "affiliates.view" || p.Code == "affiliates.manage" || p.Code == "affiliates.withdrawals.review" || p.Code == "affiliates.payout" || p.Code == "sales.view" || p.Code == "sales.manage" || p.Code == "security.view" || p.Code == "security.manage" { // Introduced after 031; never expand old roles implicitly.
+		if strings.HasPrefix(p.Code, "payment_anomalies.") || strings.HasPrefix(p.Code, "external_refunds.") || p.Code == "jobs.view" || p.Code == "content.view" || p.Code == "downloads.view" || p.Code == "downloads.manage" || p.Code == "customer_files.view" || p.Code == "customer_files.manage" || p.Code == "customer_levels.view" || p.Code == "customer_levels.manage" || p.Code == "invoices.manage" || p.Code == "invoice_applications.view" || p.Code == "invoice_applications.manage" || p.Code == "payments.reconcile" || p.Code == "payments.close" || p.Code == "payments.close_verify" || p.Code == "payments.close_review" || p.Code == "settings.view" || p.Code == "settings.manage" || p.Code == "certifications.view" || p.Code == "certifications.manage" || p.Code == "affiliates.view" || p.Code == "affiliates.manage" || p.Code == "affiliates.withdrawals.review" || p.Code == "affiliates.payout" || p.Code == "sales.view" || p.Code == "sales.manage" || p.Code == "security.view" || p.Code == "security.manage" { // Introduced after 031; never expand old roles implicitly.
 			for _, grant := range grants {
 				if grant == p.Code {
 					t.Fatalf("later permission implicitly granted: %s", grant)

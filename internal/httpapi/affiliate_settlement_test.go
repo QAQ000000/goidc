@@ -48,7 +48,7 @@ func settlementFixture(t *testing.T) affiliateSettlementFixture {
 }
 func login(t *testing.T, h http.Handler, username string) string {
 	t.Helper()
-	response := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": username, "password": "integration-password"}, "", "")
+	response := request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": username + "@example.test", "password": "integration-password"}, "", "")
 	expect(t, response, 200)
 	cookies := response.Result().Cookies()
 	return cookies[0].Name + "=" + cookies[0].Value

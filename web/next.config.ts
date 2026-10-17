@@ -1,5 +1,10 @@
 import type { NextConfig } from "next";
+import path from "node:path";
+// Only the isolated v2 builder sets this flag. Normal/v1 builds retain their
+// existing output; tracing never expands beyond this fixed checkout root.
+const runtimeBuild = process.env.ZJMFGO_RUNTIME_BUILD === "1";
 const config: NextConfig = {
+  ...(runtimeBuild ? { output: "standalone", outputFileTracingRoot: path.resolve(process.cwd(), "..") } : {}),
   experimental: { proxyClientMaxBodySize: 52 * 1024 * 1024 },
   async rewrites() {
     return [

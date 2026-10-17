@@ -59,7 +59,7 @@ func (s *Server) serviceVNC(w http.ResponseWriter, r *http.Request) {
 	if !s.authLimit(w, r, "service-vnc", 30) {
 		return
 	}
-	u, err := s.db.ServiceVNC(requestFileContext(r), identityFrom(r).ID, id, true)
+	u, err := s.db.ServiceVNC(requestFileContext(r), identityFrom(r).ID, id, adminRoute(r))
 	if err != nil {
 		s.fail(w, r, err)
 		return

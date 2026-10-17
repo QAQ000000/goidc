@@ -24,6 +24,8 @@ type Permission struct {
 
 // These are new API capabilities, not aliases for PHP auth_rule IDs.
 var AdminPermissions = []Permission{
+	{"payment_anomalies.view", "财务", "读取迟到收款责任及退回"}, {"payment_anomalies.create", "财务", "登记迟到收款实际退回证据"}, {"payment_anomalies.review", "财务", "独立复核迟到收款责任退回"},
+	{"external_refunds.renewal_reverse", "财务", "精确冲正未使用本地续费"}, {"external_refunds.order_reverse", "财务", "冻结并冲正未交付订单"}, {"external_refunds.view", "财务", "读取外部退款"}, {"external_refunds.create", "财务", "登记外部退款"}, {"external_refunds.review", "财务", "独立复核外部退款"},
 	{"settings.view", "站点设置", "读取站点设置"}, {"settings.manage", "站点设置", "修改站点设置"},
 	{"dashboard.view", "工作台", "读取运营汇总"},
 	{"customers.view", "客户", "读取客户和联系人"}, {"customers.manage", "客户", "修改客户、联系人和密码"},
@@ -37,9 +39,9 @@ var AdminPermissions = []Permission{
 	{"contracts.view", "合同管理", "读取授权客户合同"}, {"contracts.manage", "合同管理", "生成审核寄送与作废合同"},
 	{"customer_files.view", "客户文件", "读取授权客户文件与下载"}, {"customer_files.manage", "客户文件", "上传、编辑、转移和删除授权客户文件"},
 	{"orders.view", "订单", "读取订单"}, {"orders.manage", "订单", "审核、备注和取消订单"},
-	{"invoices.view", "财务", "读取账单"}, {"invoices.manage", "财务", "创建、编辑和作废人工账单"}, {"invoices.refund", "财务", "退款"}, {"balance.manage", "财务", "客户余额充值"},
+	{"invoices.view", "财务", "读取账单"}, {"invoices.manage", "财务", "创建、编辑和作废人工账单"}, {"invoices.refund", "财务", "退款"}, {"balance.manage", "财务", "客户余额充值"}, {"balance.topup.resolve", "财务", "在线充值待补账处理"},
 	{"credit.view", "信用额", "读取客户信用额"}, {"credit.manage", "信用额", "调整客户信用额"},
-	{"payments.reconcile", "财务", "查询在线支付并补结算"},
+	{"payments.close_verify", "财务", "只读核验未知关单"}, {"payments.close_review", "财务", "独立复核关单或可信收款"}, {"payments.reconcile", "财务", "查询在线支付并补结算"}, {"payments.close", "财务", "核验上游最终关闭并解除支付保护"},
 	{"invoice_applications.view", "发票", "读取授权客户的发票申请"}, {"invoice_applications.manage", "发票", "审核、登记开具及邮寄信息"},
 	{"services.view", "服务", "读取服务和取消申请"}, {"services.manage", "服务", "执行服务动作、交付和取消审核"},
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
@@ -154,10 +156,21 @@ func validateRole(in *AdminRoleInput) error {
 	if in.Permissions == nil {
 		in.Permissions = []string{}
 	}
+
+	for _, p := range in.Permissions {
+		if strings.HasPrefix(p, "payment_anomalies.") {
+			if !slices.Contains(in.Permissions, "invoices.view") || (p != "payment_anomalies.view" && !slices.Contains(in.Permissions, "payment_anomalies.view")) {
+				return conflict("missing_read_permission", "异常核验操作必须同时勾选账单及异常读取权限")
+			}
+		}
+	}
 	// A mutation grant always includes the corresponding read capability.
 	for _, p := range in.Permissions {
 		view := strings.TrimSuffix(p, ".manage") + ".view"
-		if p == "invoices.refund" || p == "payments.reconcile" {
+		if p == "external_refunds.order_reverse" || p == "external_refunds.renewal_reverse" {
+			view = "external_refunds.view"
+		}
+		if p == "invoices.refund" || p == "payments.reconcile" || p == "payments.close" || p == "payments.close_verify" || p == "payments.close_review" || p == "balance.topup.resolve" {
 			view = "invoices.view"
 		}
 		if valid[view] && view != p && !slices.Contains(in.Permissions, view) {

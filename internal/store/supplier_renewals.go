@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
@@ -15,6 +16,16 @@ type supplierRenewalSnapshot struct {
 	SupplierID     int64 `json:"supplier_id"`
 	AccountVersion int64 `json:"account_version"`
 	InvoiceID      int64 `json:"local_invoice_id"`
+}
+
+// supplierRenewalQuote carries a checked local snapshot across an upstream
+// read. It is never persisted until the snapshot is revalidated under locks.
+type supplierRenewalQuote struct {
+	adapter        supplier.RenewalAdapter
+	snapshot       supplierRenewalSnapshot
+	request        supplier.RenewalRequest
+	serviceVersion int64
+	due            *time.Time
 }
 
 func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID int64) (supplier.RenewalAdapter, supplierRenewalSnapshot, error) {
@@ -28,14 +39,22 @@ func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID
 	if json.Unmarshal(raw, &snap) != nil || snap.BindingID < 1 {
 		return nil, out, conflict("supplier_snapshot_invalid", "供应商交付快照无效")
 	}
-	b, err := s.supplierBinding(ctx, snap.BindingID, false)
+	// All reads must reuse the caller's transaction connection. Acquiring a
+	// second pool connection while holding the service lock can deadlock a
+	// full pool of concurrent renewals waiting on that same service.
+	b, err := s.supplierBindingWith(ctx, tx, snap.BindingID, false)
 	if err != nil {
 		return nil, out, err
 	}
 	if b.SupplierID != snap.SupplierID || b.Provider != snap.Provider || b.BillingCycle != cycle {
 		return nil, out, conflict("supplier_snapshot_invalid", "供应商交付绑定不匹配")
 	}
-	a, version, err := s.supplierAdapter(ctx, snap.SupplierID)
+	// Keep the account configuration stable through this short transaction.
+	// No upstream request may run while this lock is held.
+	if _, err = tx.Exec(ctx, "SELECT id FROM supplier_accounts WHERE id=$1 FOR SHARE", snap.SupplierID); err != nil {
+		return nil, out, err
+	}
+	a, version, err := s.supplierAdapterWith(ctx, tx, snap.SupplierID)
 	if err != nil {
 		return nil, out, err
 	}

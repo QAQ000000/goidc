@@ -1,0 +1,35 @@
+{
+  "sourceCommit": "78b4d1e15010d9281b16b61e5bf1add680a4dd46",
+  "runnerInvocationFinished": true,
+  "runnerReturned": true,
+  "runnerReportedPass": true,
+  "sourceUnchanged": true,
+  "manifestUnchanged": true,
+  "schemasUnchanged": true,
+  "residentIdentityUnchanged": true,
+  "health": {
+    "http://127.0.0.1:8088/healthz": 200,
+    "http://127.0.0.1:8088/readyz": 200,
+    "http://127.0.0.1:3088/admin-login": 200
+  },
+  "capacityVerified": false,
+  "runnerFinalSourceVerified": true,
+  "runnerAndSourceSameCheckout": true,
+  "schemaCount": 2,
+  "residents": [
+    {
+      "pid": "608393",
+      "unchanged": true
+    },
+    {
+      "pid": "608413",
+      "unchanged": true
+    },
+    {
+      "pid": "1647696",
+      "unchanged": true
+    }
+  ],
+  "healthUnchanged": true,
+  "ok": true
+}

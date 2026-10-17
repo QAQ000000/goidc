@@ -65,7 +65,7 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 			t.Errorf("saved %s=%v want %v", k, got[k], v)
 		}
 	}
-	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "MixedCase", "password": " password123 "}, "", ""), 200)
+	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "MixedCase@example.test", "password": " password123 "}, "", ""), 200)
 	expect(t, request(h, "POST", "/api/v1/admin/customers", base("MIXEDCASE"), root, "customer-profile-duplicate-key"), 409)
 	profile["expected_version"] = 1
 	profile["qq"] = "654321"

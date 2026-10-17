@@ -1,4 +1,4 @@
-import { PromoCodesView } from "@/components/data-pages";
+import { PromoCodesView } from "@/components/admin-promo-codes";
 
 export default function Page() {
   return <PromoCodesView />;

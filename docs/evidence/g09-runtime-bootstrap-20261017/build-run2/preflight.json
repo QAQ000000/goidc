@@ -1,0 +1,23 @@
+{
+  "commit": "183e7a13fcd532f634b15585b70b2c0e3697d6a5",
+  "tree": "a43d0aba4052485daa81d1da585e202f4fa4fa0f",
+  "dependencyInputTreeSHA256": "98adfd448eb575e1bda90f0f14c0b2a041197aaa5e8ef66afc220f037b543efd",
+  "nodeSHA256": "b2959781cc5a74c357ffa02367efa8a0330cbb1c9cb347732fdfaaaca381cbcd",
+  "budgetSHA256": "6fdabaf445638e89f2b206dbd7da8f30c7f491b56612018ee33d3e03895fa6ef",
+  "budgetEvidence": {
+    "available": {
+      "bytes": 9209823232,
+      "inodes": 4829847
+    },
+    "approvedPeakBytes": 3221225472,
+    "componentSumBytes": 2885681152
+  },
+  "target": {
+    "api": "http://127.0.0.1:19388",
+    "web": "http://127.0.0.1:19389",
+    "public": "http://127.0.0.1:19389"
+  },
+  "scope": "Preparation only; no deployment, services, database, or runtime acceptance",
+  "status": "PREFLIGHT_ONLY",
+  "fullBuildExecuted": false
+}

@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3088",
+    "dev": "next dev -H 127.0.0.1 -p 3088",
+    "prebuild": "node ../scripts/check-web-build-runtime.mjs",
     "build": "next build",
-    "start": "next start -H 0.0.0.0 -p 3088",
+    "start": "next start -H 127.0.0.1 -p 3088",
     "typecheck": "tsc --noEmit",
+    "test:proxy": "node --test ../scripts/proxy-headers.test.mjs",
     "lint": "eslint ."
   },
   "dependencies": {

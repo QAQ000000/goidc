@@ -1,0 +1,1404 @@
+{
+  "date": "2026-10-16",
+  "backendBaseline": "5f6d84e",
+  "testBaseline": "1bd44e0",
+  "frontendBaseline": "fd2a576",
+  "productionChanged": false,
+  "layoutWidths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "pages": [
+    {
+      "scenario": "schema-loading",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-loading-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "68fb49d9c168035fc2a95ba24a8da1b74f42b95c28e9852678b26c16b41133c3",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-loading",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-loading-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "9cb17d23702ac7de8c2dfdb19ea827e4b57e04d8687d268ddb982871d3875113",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-loading",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-loading-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "fe90e31b271680c8d976bb534ab9c03c2b923eb6249c96e0655d0c5a594d2a58",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-loading",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-loading-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "71979179d91a529e9b4c881914d780ecae46540e9dd0e2c9e55ec28714b64f67",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "public-six-fields",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/public-six-fields-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "e90f3abe99e5b9ffe151a3671f5da759f75e6ffaf0eada6f49505a7a137f8168",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "public-six-fields",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/public-six-fields-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "6228db65742b0d8b002b9c00c51d416ae374e9b36cb1b4f67c83b919cd400b3c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "public-six-fields",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/public-six-fields-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "1f5668a92aabfb7e8e45ffc8ec9ed2d594040ea227fda487cbdd1cb568c70d56",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "public-six-fields",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/public-six-fields-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "ad67fa87288f91ec99e3dce1d468cf4fac180a8c208ee82eae5883913c224b50",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-error",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-error-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "af5cf58c61024c6220eaab27e6942767af6a679de7a4453690194f0dc65d1095",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-error",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-error-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "c8a73bb093629330ed9922905fdce1b83e64689801d16a5dbc683af08223af15",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-error",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-error-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "a810386d1b2a3775493b14ecc8993741ef9876c5a3d2ab8d3d08567b79871b83",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-error",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-error-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "c731405bc8262bb08d70da8556295882442a474fe516821e6d4917bf1b9a1950",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "validation-error",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/validation-error-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "02f6ceaaf918235ff6d7929761dbac76defbbb16b8a9aa829b135ce04c211d18",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "validation-error",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/validation-error-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "f49b4b896ceb9459d99ddff0b454747403a58fc259877753dbda9173e06b42ea",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "validation-error",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/validation-error-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "e1f611d46ce9953f813f2a49ffacad1e14b99d8dbebf87931f8b8f636bd9cf12",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "validation-error",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/validation-error-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "596be759bf586e3f8a635c522ea018cc453c7ab0ac8288dd3eed8182eebdf5ed",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "valid-draft",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/valid-draft-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "3e9ed07ba54dcab751cee59e758a09a7ecb652b9df04630190eafa17460b4d21",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "valid-draft",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/valid-draft-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "7ddb0eff19820fb3f3032fbfb45c3957c6a906eaaf0107fe9af04c6abf00f8cb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "valid-draft",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/valid-draft-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "3d012760744fd5fc3d47a75c7dbc293f894bbda97a920813a0735c2ce88b4361",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "valid-draft",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/valid-draft-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "6183e1cda13bd442f1e4db1b91a13b32b281e2779493c85d22bb447ddf29df61",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-profile-values",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-profile-values-1440.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "92e5efc8fd2f2b8e1d310935d814024378bd6b6b81b2f052198f1f9be151d9d8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-profile-values",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-profile-values-1024.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "bb7f37a557ad55a53cd340cca7d2e66190e14a379b8806b00bbd41b2b49d5658",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-profile-values",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-profile-values-390.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "d8c92bdc9abc5e94e91925efb0399fd942897e02f719c3095514fbd33f35f2d7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-profile-values",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-profile-values-320.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "6c02b64598c73efb367907e84bb69d458ca7865f4aefb3683d8387e4681ffc93",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-list",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-list-1440.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "b6b43495294f4301a091c97ec3aa079c1ef88f4e877f0f5d24f9039e290b3063",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-list",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-list-1024.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "e2d5f593839788a5a5443cb6916a1c4664c045f6f1b2b54bb10a663eb28c4528",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-list",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-list-390.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "49ecf1d898bc2e92e9b25ecb4c9fb1803ed0e8a669dc2ae5809c553be932f400",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-list",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-list-320.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "4debe8a470ca40291bef1d785e741ed1e9eb5c8917bcaac02adb0e6d7d12b193",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-create-cancel",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-create-cancel-1440.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "eb6c2a2dca10a0024b715fe035447a5a5a4199244e09c2b69b692ec8b11ee817",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-create-cancel",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-create-cancel-1024.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "bd4b5d371e8e982f8eadc2a5cddffe0cba236c091c77f04b6f4ab6f97501eeaf",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-create-cancel",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-create-cancel-390.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "bf232447ea9653602061b8523155587414e16a289c48cdcc5014199a64163168",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-create-cancel",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-create-cancel-320.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "ccbda5be648aa5ff67797d8d8a727ec2637db6feaa6dcb4adec579dea495bb27",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "definition-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/definition-conflict-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "fadd9a582163d5024f43cdb50168ed37851df2081c2d9524c25a08c301e2d474",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "definition-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/definition-conflict-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "af62f5c2507cc98823370532bf8f2c5a0cd1887f57bf95fa9eed9b113a837da7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "definition-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/definition-conflict-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "f71e8eaf83a0d920d3c207a2fc2196c9bde1b75429cf271a3d9eb34c69ea49b8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "definition-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/definition-conflict-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "f9f5b42bf4d383194bc987b5117bf6841eb2ca4f00f3815bc0b16b10b06b2de2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-reloaded",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-reloaded-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "d1e9155d83ea5974176c89ca1767d20cc088cb855a2b4796c5806ac85a7371d0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-reloaded",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-reloaded-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "87635811f6269cf8881511454ccd86e1579b09aa83b4346e90066e7ec0dd19d4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-reloaded",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-reloaded-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "a6386d25642d0e273f1a5f1314344c535b3cf4bcf0e38ada545a4d9385561793",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-reloaded",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-reloaded-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "06bb51c508a56a4541db0fd9ed4142527f3c41839c65f328ffd6567a49bbb0ae",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "register-footer",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/registration-fields-20261016/register-footer-320x500.png",
+      "newRoute": "/register",
+      "screenshotSha256": "10c817e064a634e459434eb07be7c3131fa5485b281994e2046bb6690d8fcaa0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-field-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-field-conflict-1440.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "c1cbdeaa68b0ce785c3b5e4693056c2107760e9f1e12adc7fc4ab349af8f963c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-field-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-field-conflict-1024.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "f635545918d312f1ec11a0fbf59e36fdc39db569c707036643d18f6190770529",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-field-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-field-conflict-390.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "d0aab0cbfb2e4d9b470fe28ac0d32275caa297e14a18e8de09561263264e281f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-field-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-field-conflict-320.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "439a097608e8555b0ec7c8c0823af37c35e9fe5973734b7429a8e5e2be38ddb5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-empty",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-empty-1440.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "f2e5505be2e0502c3c5c84093f23a10f3dec79a5846c671e678288ab981a2ea1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-empty",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-empty-1024.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "87387a75bcf3f233a6b6b88285de3c7e37f7ed883b9ef358c9b7ab0b29dc666c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-empty",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-empty-390.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "82d29ab5342f788ccd4e640c5fc3a966b63ae38fba25a7994d5f70ed4cd99c3b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-fields-empty",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-fields-empty-320.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "865ac3113a9c98c11bfbe6275b5cd0c57c92ba50684a488a6e27f8695301f12e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "committed-response-loss",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/committed-response-loss-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "e99495cbcd3b120fbde37674c163dc43d67fd870d69a355fbad0d1b971268548",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "committed-response-loss",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/committed-response-loss-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "d669817ab4117e32334f77108ceb632ff83f069776e793e6f0f0260098139443",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "committed-response-loss",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/committed-response-loss-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "ce9ebaa4b3217a9db81b1ab800c20ca91539bfe0b1a4fcf39aadeae4fd971a51",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "committed-response-loss",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/committed-response-loss-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "14903b420dcd803d6b148e77f426b091aa6ae13566ddd9864b49b90d7d51add0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "timeout408",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/timeout408-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "e889a8bcaba8085852dceeb2a7e71807966de35c26c6740236a0cbd092551d8a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "timeout408",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/timeout408-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "d8485b5db66b66aff63406e1044d3c808292e49443d8b806cdde134ea99355b3",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "timeout408",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/timeout408-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "83860be4532f72ea1daf9af92b32e84fdea4bc58ff1ed48b856d10d3d8e179db",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "timeout408",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/timeout408-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "b62f4b106bfe47e8aff0608a5972bad603d6dec5a1ef4a9b658c051645e234e5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "malformed-success",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/malformed-success-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "d2e8c44e2e5e2c854f773a5c20d167ea9d8260c737c1a7f7d0d10905a67b6bec",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "malformed-success",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/malformed-success-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "50fc21b27fd279fde3c3fa8c6f488fe54cb5d4d6da2085adfea02b64168f9cdb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "malformed-success",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/malformed-success-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "6f4610692a7dba30e25bd4689ede51b1bff63420f8f01a2479dfd945991e735d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "malformed-success",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/malformed-success-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "4451518fd079f5cea89904f5a52bb8975aad3b5f6446d4fcfa0d2709d90c802e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "network-loss",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/network-loss-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "1469da45bc9fbf23b525197577563073bfe159e2649bb399ec515bf576ee50d8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "network-loss",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/network-loss-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "08f0bbcf64a285d70390c92b27f5ce631de28a5ef8e878b3262a04319063f5bb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "network-loss",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/network-loss-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "b60a8cb62b998f65975dd10efc8fc088116b8ae7938ff82c79f39db8a4d37370",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "network-loss",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/network-loss-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "d489afab0dc30bd1bda85ac42f25c0c12d556edcbacac8f887ff43f6f3db7d2e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-empty",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-empty-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "2038ff3b30a14e5a3b30bb9d9925bf0da6ed861760d63bb3b1a7ae55e23fa7c8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-empty",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-empty-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "f90293be6e083fb4f0b08fffef3bbb17706820daddc4401643b8f73717400d3a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-empty",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-empty-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "4bbaf25959bfb5f45a4e803be2b87f1c636c97a2a13b48c7ddc008d17af854f3",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "schema-empty",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/schema-empty-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "a5e1b4ee040876be26d0aaea0707a691783da35e1db37c42236b3be9b7806172",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "registration-disabled",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/registration-disabled-1440.png",
+      "newRoute": "/register",
+      "screenshotSha256": "220fa331fbad5fc77444f5891d1621e6034917a67d1911cc6060e2a9f2645533",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "registration-disabled",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/registration-disabled-1024.png",
+      "newRoute": "/register",
+      "screenshotSha256": "6014d07e9f014765e675091e02a1c87d9d9880111f58c4d1889f20f8eab95001",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "registration-disabled",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/registration-disabled-390.png",
+      "newRoute": "/register",
+      "screenshotSha256": "c460e33d94b20b89d609052d12b508030164e41f0ac7ea76ff57ea27ae7e0a78",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "registration-disabled",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/registration-disabled-320.png",
+      "newRoute": "/register",
+      "screenshotSha256": "5729840209c6d193583954b988e5dd9a4c7335491a4f9e7344a07985fb34aa87",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-reader-profile",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-reader-profile-1440.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "039f0a81c89e17f6cbcd68706c51637f4160204a559ff01a5a58c3ceffc8c4c2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-reader-profile",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-reader-profile-1024.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "47907035b7b6407d8c18836231dd5ed1fadf63bf8ef61f523a821161e69a3e47",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-reader-profile",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-reader-profile-390.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "0d44344b31e25da3c407d063a196c928057457cc79ea682f5ba8a2d48b7b1cb6",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-reader-profile",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/registration-fields-20261016/admin-reader-profile-320.png",
+      "newRoute": "/admin/customers/4?tab=profile",
+      "screenshotSha256": "96c4f324f100bb63c00f723283ea57662436224329b831f718326062571029ce",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-dialog-footer",
+      "width": 320,
+      "height": 500,
+      "screenshot": "output/playwright/registration-fields-20261016/admin-dialog-footer-320x500.png",
+      "newRoute": "/admin/customer-fields",
+      "screenshotSha256": "842f0356776b435e4aaef1dd13a929b0716c5940a51ccb010bfb0df78ba1fd88",
+      "usableForLayoutProof": true
+    }
+  ],
+  "scenarioResults": [
+    {
+      "checks": [
+        "schema loading disables submit",
+        "schema503 disables submit; manual retry loads real schema",
+        {
+          "registeredCustomerId": 4,
+          "email": "browser-fields-main@example.test",
+          "boolean": false,
+          "number": 0
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/auth/registration-fields"
+        },
+        {
+          "status": 400,
+          "path": "/api/v1/auth/register"
+        }
+      ],
+      "scenarioGroup": "public"
+    },
+    {
+      "checks": [
+        "real registered values read by admin; false/0 intact; exactly6 public keys",
+        "admin UI create and cancel real API",
+        {
+          "changedFields": [
+            {
+              "id": 1,
+              "key": "register_text"
+            },
+            {
+              "id": 7,
+              "key": "register_internal"
+            },
+            {
+              "id": 8,
+              "key": "register_hidden"
+            },
+            {
+              "id": 9,
+              "key": "register_disabled"
+            },
+            {
+              "id": 10,
+              "key": "browser_extra"
+            },
+            {
+              "id": 2,
+              "key": "register_textarea"
+            },
+            {
+              "id": 3,
+              "key": "register_number"
+            },
+            {
+              "id": 4,
+              "key": "register_date"
+            },
+            {
+              "id": 5,
+              "key": "register_select"
+            },
+            {
+              "id": 6,
+              "key": "register_boolean"
+            }
+          ]
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [],
+      "expectedFailures": [],
+      "scenarioGroup": "admin"
+    },
+    {
+      "checks": [
+        {
+          "registeredCustomerId": 5,
+          "email": "browser-fields-conflict@example.test",
+          "posts": 2,
+          "removedKeys": [
+            "register_textarea"
+          ],
+          "replacedValues": {
+            "register_number": "7",
+            "register_select": "B"
+          }
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/auth/register"
+        }
+      ],
+      "scenarioGroup": "conflict"
+    },
+    {
+      "checks": [
+        "admin409 retains draft, cancel no stale write",
+        {
+          "first": 201,
+          "second": 200,
+          "same": true,
+          "id": 11
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/admin/customer-fields/1"
+        }
+      ],
+      "scenarioGroup": "admin-recovery"
+    },
+    {
+      "checks": [
+        {
+          "mode": "committed-response-loss",
+          "posts": 1,
+          "registeredCustomerId": 6,
+          "backendStatus": 201,
+          "email": "browser-fields-committed-response-loss@example.test",
+          "noPersistentBody": true
+        },
+        {
+          "mode": "timeout408",
+          "posts": 1,
+          "registeredCustomerId": null,
+          "backendStatus": null,
+          "email": "browser-fields-timeout408@example.test",
+          "noPersistentBody": true
+        },
+        {
+          "mode": "malformed-success",
+          "posts": 1,
+          "registeredCustomerId": null,
+          "backendStatus": null,
+          "email": "browser-fields-malformed-success@example.test",
+          "noPersistentBody": true
+        },
+        {
+          "mode": "network-loss",
+          "posts": 1,
+          "registeredCustomerId": null,
+          "backendStatus": null,
+          "email": "browser-fields-network-loss@example.test",
+          "noPersistentBody": true
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        "Failed to load resource: the server responded with a status of 408 (Request Timeout)",
+        "Failed to load resource: net::ERR_FAILED"
+      ],
+      "expectedFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/auth/register"
+        },
+        {
+          "status": 408,
+          "path": "/api/v1/auth/register"
+        }
+      ],
+      "scenarioGroup": "unknown"
+    },
+    {
+      "checks": [
+        "real empty public set permits registration; internal required excluded"
+      ],
+      "errors": [],
+      "consoleErrors": [],
+      "expectedFailures": [],
+      "scenarioGroup": "empty"
+    },
+    {
+      "checks": [
+        "already loaded form denied403; schema denied403; fresh reload closed"
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 403,
+          "path": "/api/v1/auth/register"
+        },
+        {
+          "status": 403,
+          "path": "/api/v1/auth/registration-fields"
+        }
+      ],
+      "scenarioGroup": "disabled-final"
+    },
+    {
+      "checks": [
+        "field config route requires customers.manage and redirects reader",
+        {
+          "read": 403,
+          "write": 403
+        },
+        "customer profile readers see real disabled typed inputs"
+      ],
+      "errors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 403,
+          "path": "/api/v1/admin/customer-fields"
+        },
+        {
+          "status": 403,
+          "path": "/api/v1/admin/customer-fields"
+        }
+      ],
+      "scenarioGroup": "reader-final"
+    },
+    {
+      "checks": [
+        "admin reopened registration; fresh form loads six real fields",
+        {
+          "customerLogin": {
+            "id": 4,
+            "email": "browser-fields-main@example.test",
+            "role": "customer"
+          }
+        },
+        {
+          "customerLogin": {
+            "id": 6,
+            "email": "browser-fields-committed-response-loss@example.test",
+            "role": "customer"
+          }
+        }
+      ],
+      "errors": [],
+      "consoleErrors": [],
+      "expectedFailures": [],
+      "scenarioGroup": "logins"
+    },
+    {
+      "checks": [
+        "short500px dialog footer reachable and cancel; admin logged out"
+      ],
+      "errors": [],
+      "consoleErrors": [],
+      "expectedFailures": [],
+      "scenarioGroup": "short"
+    }
+  ],
+  "databaseProof": {
+    "checked_at_utc": "2026-10-16T10:52:51.742441+00:00",
+    "read_only": true,
+    "isolated_test_database": true,
+    "schema": "zjmfgo_test_ca49ea596b67e946",
+    "accounts": [
+      {
+        "id": 4,
+        "email": "browser-fields-main@example.test",
+        "users_count": 1,
+        "profile_count": 1,
+        "cart_count": 1,
+        "registration_audits": 1,
+        "audit_payloads_empty": true,
+        "forbidden_keys_absent": true,
+        "stored_keys": [
+          "register_boolean",
+          "register_date",
+          "register_number",
+          "register_select",
+          "register_text",
+          "register_textarea"
+        ],
+        "number_zero_is_numeric": true,
+        "boolean_false_preserved": true,
+        "six_fields": true
+      },
+      {
+        "id": 5,
+        "email": "browser-fields-conflict@example.test",
+        "users_count": 1,
+        "profile_count": 1,
+        "cart_count": 1,
+        "registration_audits": 1,
+        "audit_payloads_empty": true,
+        "forbidden_keys_absent": true,
+        "stored_keys": [
+          "browser_extra",
+          "register_boolean",
+          "register_date",
+          "register_number",
+          "register_select",
+          "register_text"
+        ],
+        "number_text_7": true,
+        "select_B": true,
+        "removed_textarea_absent": true,
+        "extra_present": true
+      },
+      {
+        "id": 6,
+        "email": "browser-fields-committed-response-loss@example.test",
+        "users_count": 1,
+        "profile_count": 1,
+        "cart_count": 1,
+        "registration_audits": 1,
+        "audit_payloads_empty": true,
+        "forbidden_keys_absent": true,
+        "stored_keys": [
+          "register_boolean",
+          "register_date",
+          "register_number",
+          "register_select",
+          "register_text",
+          "register_textarea"
+        ],
+        "number_zero_is_numeric": true,
+        "boolean_false_preserved": true,
+        "six_fields": true
+      }
+    ],
+    "no_account_created": {
+      "timeout408": 0,
+      "malformed-success": 0,
+      "network-loss": 0
+    },
+    "browser_cancel_field_count": 0,
+    "browser_replay_field_count": 1,
+    "browser_replay_creation_audit_count": 1,
+    "result": "PASS",
+    "final_restoration": {
+      "disabled_registration_account_count": 0,
+      "reader_injection_field_count": 0,
+      "registration_reopened": true,
+      "public_field_keys": [
+        "register_boolean",
+        "register_date",
+        "register_number",
+        "register_select",
+        "register_text",
+        "register_textarea"
+      ],
+      "six_public_fields_restored": true,
+      "checked_at_utc": "2026-10-16T10:59:18.448384+00:00"
+    }
+  },
+  "scopeNotes": [
+    "No real notification delivery; captcha/email verification disabled only in isolated fixture.",
+    "Registration unknown results stop resubmission; no general anonymous idempotency replay was added.",
+    "Closed-form scenario replays a prior real enabled GET /site response during admin toggle, then removes the replay and verifies fresh disabled state.",
+    "Field configuration requires customers.manage for both page and GET; reader is denied configuration and can read disabled customer profile fields."
+  ],
+  "cleanup": {
+    "fixtureTest": "PASS",
+    "schemaCountAfterCleanup": 0,
+    "previewStopped": true,
+    "previewBuildRemoved": true,
+    "realBusinessDatabaseWritten": false
+  }
+}

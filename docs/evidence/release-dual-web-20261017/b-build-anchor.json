@@ -1,0 +1,11 @@
+{
+  "format": "zjmfgo-dual-runtime-build-anchor-v1",
+  "label": "B",
+  "root": "/dev/shm/zjmfgo-runtime-dualB-20261017",
+  "manifestSHA256": "110359e25cfffdcae777f330ed91870ea8ae6a8aaf4518040c6d914bd266d772",
+  "sourceCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+  "buildID": "9yoVtH5AluIgtPNYW7YuS",
+  "artifacts": 3059,
+  "buildResultLogSHA256": "9f315d1281450b677f18804f22f070620b4c13da4850370d7c650a610d05f521",
+  "status": "SEALED_NOT_RUNTIME_ACCEPTED"
+}

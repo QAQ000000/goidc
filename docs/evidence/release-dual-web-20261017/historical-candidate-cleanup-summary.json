@@ -1,0 +1,124 @@
+{
+  "projection": true,
+  "rawCleanupReport": {
+    "path": "/tmp/zjmfgo-cleanup-evidence-20261017/cleanup-report.json",
+    "bytes": 6907,
+    "sha256": "53a54f70830fca712bccc17df1949747c80cf041a1f531b12b35c9aaf005c28b"
+  },
+  "scope": "only inactive fixed allowlist build artifacts; preserve live files, newest rollback, databases, dependencies, screenshots and reports",
+  "servicesUnchanged": true,
+  "allTargetsRemoved": true,
+  "candidateTargets": [
+    {
+      "path": "/dev/shm/zjmfgo-runtime-candidate2-20261017",
+      "allocatedBytes": 268451840,
+      "files": 3059,
+      "existsNow": false,
+      "preserved": [
+        {
+          "name": "manifest.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-candidate2-20261017-manifest.json",
+          "sha256": "c691d84bb79ccfb148a8668763d173f934973d9d0f3c5b2b25b546da39cac27a",
+          "bytes": 8049458,
+          "bytesReverified": true
+        },
+        {
+          "name": "launch/description.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-candidate2-20261017-launch_description.json",
+          "sha256": "1a892dee08e90f8c85fc67aaec59f837e4faebe1a39c180f2a187194a56f2b76",
+          "bytes": 5435,
+          "bytesReverified": true
+        }
+      ]
+    },
+    {
+      "path": "/dev/shm/zjmfgo-runtime-candidate3-20261017",
+      "allocatedBytes": 268455936,
+      "files": 3059,
+      "existsNow": false,
+      "preserved": [
+        {
+          "name": "manifest.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-candidate3-20261017-manifest.json",
+          "sha256": "5a4228c5223d01fe0bd7c0c951c106b70276055b78fa6ab6b0b6fb2b2415745a",
+          "bytes": 8050661,
+          "bytesReverified": true
+        },
+        {
+          "name": "launch/description.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-candidate3-20261017-launch_description.json",
+          "sha256": "f70e855afb757b3c5dac1022be4603731613f80dd04c4e4eab9d2ccd9dcc6496",
+          "bytes": 5487,
+          "bytesReverified": true
+        }
+      ]
+    },
+    {
+      "path": "/dev/shm/zjmfgo-runtime-dualA-20261017",
+      "allocatedBytes": 268464128,
+      "files": 3060,
+      "existsNow": false,
+      "preserved": [
+        {
+          "name": "manifest.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualA-20261017-manifest.json",
+          "sha256": "e238e03e701bb08cbfa3ba2c88f0d508d192bd771c03a2bb6ef688c25e78c0a9",
+          "bytes": 8055008,
+          "bytesReverified": true
+        },
+        {
+          "name": "launch/description.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualA-20261017-launch_description.json",
+          "sha256": "8b5a6405f0bd5c39ee3f7eb92f6cbc2678bb24f7cdf7d99634ba18ea85828ccf",
+          "bytes": 5531,
+          "bytesReverified": true
+        }
+      ]
+    },
+    {
+      "path": "/dev/shm/zjmfgo-runtime-dualB-20261017",
+      "allocatedBytes": 268464128,
+      "files": 3060,
+      "existsNow": false,
+      "preserved": [
+        {
+          "name": "manifest.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualB-20261017-manifest.json",
+          "sha256": "110359e25cfffdcae777f330ed91870ea8ae6a8aaf4518040c6d914bd266d772",
+          "bytes": 8055009,
+          "bytesReverified": true
+        },
+        {
+          "name": "launch/description.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualB-20261017-launch_description.json",
+          "sha256": "0912fe2845d192311f601f8627c4c04deb6de51e3ac676876187d7dedb121dab",
+          "bytes": 5531,
+          "bytesReverified": true
+        }
+      ]
+    },
+    {
+      "path": "/dev/shm/zjmfgo-runtime-dualA-20261017-v2",
+      "allocatedBytes": 268517376,
+      "files": 3060,
+      "existsNow": false,
+      "preserved": [
+        {
+          "name": "manifest.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualA-20261017-v2-manifest.json",
+          "sha256": "b7322623106c115ae33e4a776fc07a48d27e2d928e92e9da8c5e9d78da453c46",
+          "bytes": 8056086,
+          "bytesReverified": true
+        },
+        {
+          "name": "launch/description.json",
+          "local": "/tmp/zjmfgo-cleanup-evidence-20261017/zjmfgo-runtime-dualA-20261017-v2-launch_description.json",
+          "sha256": "eea965970ef71d1fdd93f9b6dfd6766e33ce608beb903d2319a6837f413789a0",
+          "bytes": 5531,
+          "bytesReverified": true
+        }
+      ]
+    }
+  ],
+  "scopeBoundary": "Documents previously authorized inactive-candidate cleanup; this documentation pass did not delete files or touch services/databases; old manifests remain local, raw run1-5 reports retain original FAIL."
+}

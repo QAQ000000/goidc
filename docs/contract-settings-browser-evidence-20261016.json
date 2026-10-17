@@ -1,0 +1,767 @@
+{
+  "date": "2026-10-16",
+  "backendBaseline": "52ab808",
+  "frontendBaseline": "a69bc3b",
+  "productionChanged": false,
+  "layoutWidths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "pages": [
+    {
+      "scenario": "system",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/system-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "fdb258a5a4092fa5f4c257791bf2c71c85280d9c369f3d2b5ee6ad585788320c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "system",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/system-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "e5acee2cec71bcefda4be330bbf1dfdc84f88458d6bae74d2c9d70d25c699833",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "system",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/system-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "4ed0899b143be44ae6f796c72be102f0fef9ad61299ef9db772d0abf5a8783a7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "system",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/system-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "3127c51ce0f8d3df4f5d1e00c9156983e6ec74b5083eaa1730dad93706a96dfa",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "templates",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/templates-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "9e7be13fb3c6421c46f4ed5ee46ee82cc15a05c2ecf1a6511e84b2efb360e697",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "templates",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/templates-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "8490668154410ba723fce9c6a5fd7e95d21ba06f4eaaee85bf811830574c066f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "templates",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/templates-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "b8c1f950bb5f8b45edf198d1a06505ab994d4339cb70069c0b74f734952a9d45",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "templates",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/templates-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "7accad89d8d7fd6a6a7d4c95ce4fc7ab5684407f905b880f544d4ecb74b67e03",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "empty",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/empty-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "9fb92c5279b137307a3ad396aa9ee279b8bf354d8ae3e3164d8fcb9e24139478",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "empty",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/empty-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "7b560a0d25ecf9d850f19c3a5c46952836a27b50d1d5d8a50bf2fb9dee7a2e05",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "empty",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/empty-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "3064a345aa6d8c0af108a7ea34de9713953e8e4d5c968b1978033dd385519f7f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "empty",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/empty-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "26291e113d0d8d13a440fb9b82841a056767129048afcc69480b20258ab09514",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "create-dialog",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/create-dialog-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "8dd03d71f7cb069eb93463164d4dd1b7b46c223cafd2b48235baa8da0d7319ce",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "create-dialog",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/create-dialog-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "94879cdf75a02460ea9294b58a5b57e0cb721e898880a3690f9f0b5f6294eef2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "create-dialog",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/create-dialog-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "c9ae99c3d81184e454e8981de339e7a7bb1f5d3134123384e1592d4d26da859e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "create-dialog",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/create-dialog-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "e49232646cee2ff6f3adc34f858762f3d4bbeb552d741a5e38a69cd52e67db82",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "settings-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/settings-conflict-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "8070885570df80ab7d8936beabff5b734629de90a1f309ad1ba394862e116485",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "settings-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/settings-conflict-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "120242f01d1fb444a2fa02c295984076accde7b12a7c4778bd0cadce7ce60704",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "settings-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/settings-conflict-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "a05ee58fbb07cba6281c470dc1a0567a39ddde6fa6bb8174511341b23ef4bd18",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "settings-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/settings-conflict-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "90c24efd608783e273f0970cb593b16913687ba680eae9998359a18cba020b5d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "template-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/template-conflict-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "dcada614408748eaa1ce1ed5f54495322af7478e939c32f82709c7ad6136ca6a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "template-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/template-conflict-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "08f623876a7ec64e181cc0104f071116aee31ce316319916682d6f1011baf30e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "template-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/template-conflict-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "1178f1ed149186961bc4f72b2e5e3ce6f6a55a23081cd73efe292f518eed3878",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "template-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/template-conflict-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "6034e33d2839c1126e55702504a0b3aad1b0a130dfb644ba24d6cd881167f811",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-dialog",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-dialog-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "62111db36f8350b979a5e66cee13a9f88df74c0e3a44d2b13b12919547d0647b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-dialog",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-dialog-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "eccb4e973cb625776f7fd25888618cf24abfdca55bedb40fcd3140dcf23d5bdd",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-dialog",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-dialog-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "21cb9d2aef8d0255086fc49b16823a52a567ae1183b0b7b0ea34bf77a69b2374",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-dialog",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-dialog-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "54548628699a75498d36e849fa3fbf0d55cf702660eac5e16984b561ad2a621a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-restored-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "65941b3be30f891f3253af74ccf94788143b0ea4d6ad3d47a7e8d5fec1a28e99",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-restored-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "3e8ee3b87c4061432554ed1a6f7ef6572b5ad05c845ff4cf7a55244486889bb5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-restored-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "c0bc21a66ad49515d788bebb74a6e68cf30aa089fdeb39e65bb273ebb6e18c08",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "unknown-restored",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/unknown-restored-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "6087a10f7d83f3e362688c1e3f8c590ff02d36496d2be86640091d7789eaad9a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "legacy-two-pending",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/legacy-two-pending-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "a1daaeca9b6242ff676a61aa91d3ba93d9c7a2979108472679380673dbfd0166",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "legacy-two-pending",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/legacy-two-pending-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "6c0bfbf23b5cfa945f588aa97caacf975bed7b479aed4d154dbfffbda2fbec5d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "legacy-two-pending",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/legacy-two-pending-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "c6dcc3613060bf2361abd444a2467495f9185bca5c8630d4d1819b511050686a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "legacy-two-pending",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/legacy-two-pending-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "fff8983dc9b93ac64ccce8a264b1303c973415db2ddc47fe45c3e9fd8a748ea0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "loading",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/loading-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "811e733f3bce3be2fb8d3ab86bf113021f3a9027b9dbe38b2ac243f1c1562df5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "loading",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/loading-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "2c14450939ac5944908299c8ba88eca047789baaf83711e612c9037cb49bf2bf",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "loading",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/loading-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "62e4c5745104b08f9ff62cc50eb6f89992db5724e5ff826310d6216b8740abbe",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "loading",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/loading-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "cfbc90635f5da21f29b8403d050b0b35e8cba4cfb6c172affef5ae3cc4c3819b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "list-error",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/list-error-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "884193fe61a489d5901f25f0bc1cf7bffcb692e18673fdbb0ba6b944dc6ddbf0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "list-error",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/list-error-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "aad90fed5a00119bfa160f908c9d62c781f6dc447d8f0db46b071e041e6ce026",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "list-error",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/list-error-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "20c9ca0041f56f8b23235ebd880e6a41853901e569da58c5ec17117cc4b76147",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "list-error",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/list-error-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "875146cfa3057fecb025ca3b295f09f23b1c1d35ac9eb4d4afd5af3b8c40b70b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "short-dialog",
+      "width": 320,
+      "height": 568,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/short-dialog-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "b0302310c7e6da3e26151318e51c69a7dc79a6f928d4d652e763867adb50e314",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "readonly",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/readonly-1440.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "f42cae0ba3fa1b2f28d9c486536a3ca32aa04c0d2d737f5797efb198010a8b9c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "readonly",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/readonly-1024.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "36e57bd863a182ad7f81cce9e829059ff8e17aca2b4578aa7159478cebb014bf",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "readonly",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/readonly-390.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "9a481e92b185be7b8680599889748a77a46b0d18e8f41b7f1476f3c655088b60",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "readonly",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/contract-settings-20261016/readonly-320.png",
+      "newRoute": "/admin/contract-settings",
+      "screenshotSha256": "c5fe597890f9accca7bf8f1dc2f89b4bb42e3811ac172632623c874891865959",
+      "usableForLayoutProof": true
+    }
+  ],
+  "scenarioResults": [
+    {
+      "scenarioGroup": "basic-final",
+      "checks": [
+        "真实第二页与URL重载均断言12行（当时37条、每页25条）",
+        "name/content search, all/enabled/disabled, 25/50/100, URL recovery",
+        "empty and out-of-range recovery preserves total",
+        "cancel no write, create real200, successful/canceled draft removed after reload"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenarioGroup": "conflicts-result",
+      "checks": [
+        "real settings409 preserves draft; explicit latest and successful save clear draft",
+        "real template409 retains own draft and GET latest replaces fields/version without implicit write"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": [
+        {
+          "path": "/api/v1/admin/contract-settings",
+          "status": 409
+        },
+        {
+          "path": "/api/v1/admin/contract-templates/3",
+          "status": 409
+        }
+      ]
+    },
+    {
+      "scenarioGroup": "replay-result",
+      "checks": [
+        "real200 browser503, frozen draft, reload no write, explicit byte-identical body/key replay, no stale draft",
+        "new and old different pending retained, no automatic write, independent exact replay, success clears only corresponding source",
+        "identical legacy/new pending deduplicated only after successful original replay"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": [
+        {
+          "path": "/api/v1/admin/contract-templates",
+          "status": 503
+        }
+      ]
+    },
+    {
+      "scenarioGroup": "states-final",
+      "checks": [
+        "loading real API gate released to real empty",
+        "503 explicit retry returns real list",
+        "320x568 modal scroll reaches save; escape-discard dismissal keeps form"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": [
+        {
+          "path": "/api/v1/admin/contract-templates",
+          "status": 503
+        }
+      ]
+    },
+    {
+      "scenarioGroup": "permissions-result",
+      "checks": [
+        "stale write and same-key replay refused403; readonly reload has no write/recovery and retains original stored responsibility",
+        "regrant loads exact pending without write; explicit original replay200 clears settled draft",
+        "same actor revoke/regrant retains unsubmitted draft before explicit restore",
+        "same-context account switch isolates manager draft; reader view disabled, write/recovery absent, direct API403"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": [
+        {
+          "path": "/api/v1/admin/contract-templates",
+          "status": 403
+        },
+        {
+          "path": "/api/v1/admin/contract-templates",
+          "status": 403
+        },
+        {
+          "path": "/api/v1/admin/contract-templates",
+          "status": 403
+        }
+      ]
+    },
+    {
+      "scenarioGroup": "legacy-final",
+      "checks": [
+        "old/new settings pending with historical expected_versions replay through original receipts independently; reload does not write",
+        "old settings draft explicit restore, cancel no write and clears old storage",
+        "old template unsubmitted draft explicit restore and cancel clears new/old storage without write"
+      ],
+      "pageErrors": [],
+      "unexpectedConsoleErrors": [],
+      "expectedFailures": []
+    }
+  ],
+  "databaseProof": {
+    "unknownCreates": "REPLAY and REPLAY2 each 1 row/version1/1 audit",
+    "legacyQueue": "each original template 1 row/version1/1 audit despite replay",
+    "revokedManager": "1 row/version1/1 audit after regrant; two prior403 do not write",
+    "canceledForbiddenDrafts": 0,
+    "settingsVersion": 6,
+    "settingsAuditCount": 5
+  },
+  "limitations": [
+    "只证明合同设置与模板范围；强制签订、商品绑定、PDF/签章与邮费仍待独立实施",
+    "初期浏览器脚本取Fetch.status和错误me路径导致中断，不计通过；修正后有完整独立结果",
+    "首次原生confirm使CLI提前返回，最终通过显式取回页面结果核验完成",
+    "早期浏览器打开旧预览导致连接拒绝、一次favicon404；最终各场景监听pageerror与console.error均无非预期错误",
+    "退出验收后先停fixture，仍打开登录页的site轮询出现一次503/代理连接拒绝；随后停止preview并关闭浏览器，未计入运行场景PASS"
+  ]
+}

@@ -1,0 +1,1248 @@
+{
+  "baseline": "7764302",
+  "frontend": "a199abf",
+  "real_external_actions": false,
+  "checks": [
+    "cancel unsubmitted close sends zero POST",
+    "committed close receipt lost; refresh; identity failure zero POST; original key/body replay; one operation",
+    "account switch isolates close recovery, original account restores",
+    "real version advance produces 409; original version retained; explicit reread required to finish rejected request",
+    "unknown and late anomaly expose history without executable close; epay has no trusted close action",
+    "reader no write control and POST403; limited GET404; no-view GET403",
+    "closed accepted topup customer cancel returns real cancelled fact",
+    "closed accepted topup creates new real API intent; Epay capability remains unsupported",
+    "customer unknown/late anomaly freezes payment and checkout link",
+    "customer intent committed with lost receipt; reload original request; close original; replay receives closed receipt; subsequent intent uses new key",
+    "close facts 503 explicit retry recovers real API; controlled pending GET displays loading; 500px dialog submit reachable at four widths without submission"
+  ],
+  "screenshots": [
+    {
+      "file": "close-dialog-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "5dd81e5424c9e18f96f9d239f87ee669323e6a7a61108084c0a12baf551014d2",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-dialog-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "4aa1879c4e1018f49417b4444d860cad4e07ca336a9b58a09bdfc8008e7a85cb",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-dialog-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "5140974f76a22330a051b430d05fb0c6813ab75432413ff32afa57d0ba82f26b",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 12.9609375,
+            "right": 377.0390625,
+            "scroll": 362,
+            "client": 362
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-dialog-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "35e404684040c7c89779e417c7d2cad927110410c122bf1a86d471d4f8c8f3b0",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-unknown-receipt-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "41333ae6423f838c2286eb4edbc0915fd38d9ff3508b120e782b6425d516bdce",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 456.6171875,
+            "right": 983.3828125,
+            "scroll": 525,
+            "client": 525
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-unknown-receipt-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "011b4119ade3cace9cfc1983ef0a7b0d2abefc37435e66d4c4d5885056821ab2",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-unknown-receipt-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "8445d5971778b9430a8369a1ae683b5ff984097b4d87d337bc02e204dd1497db",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 14.734375,
+            "right": 375.265625,
+            "scroll": 359,
+            "client": 359
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-unknown-receipt-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "ecbf70e012c19584e97dbf0c5a33674f8376e093a38901c4ad932cb3caf613e6",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-restored-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "b658b8784df48c00de8346977778d06a57d8bd15a80c5fc8bce0df6b287d87b2",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "close-restored-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "37bf4f9126f0c550e0c8258f68174e35411a6ac4140dfea31fbd13480aafefd1",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "close-restored-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "a4175728ce5ac3d106e8dcf3fdf18845fda4acfa337ac542c13644276f4ecae1",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "close-restored-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "125e9e2fe72c1afd74d5da9f846a868f90a0f3b5ee846320e49dd0f83d7bf721",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "close-conflict-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "6a2b45d1f4f11f2c57c5f3acd80a3d47e993c2a4a6fe312e1c555a9041d4a1c2",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-conflict-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "9cb6fd69e6cb890ee6dc93eaab9fdaf578da7105e3e371f9df3a4e2e62b1aab6",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-conflict-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "aa5f11030bf5c824b79faa11bfa5641ca3ae7935df0b8855c01faf2a9e33c3f2",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 14.734375,
+            "right": 375.265625,
+            "scroll": 359,
+            "client": 359
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-conflict-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "134ad73bff4f7bd9cda2c806eb9eb4908c1b496db367240da622bd019fc47ed3",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "unknown-frozen-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "bf8ab40b63f51c3eabe0febb5c9bd317a23fe456bb19c9a86fe3e122db8cd906",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 456.5859375,
+            "right": 983.4140625,
+            "scroll": 525,
+            "client": 525
+          }
+        ]
+      }
+    },
+    {
+      "file": "unknown-frozen-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "ee427964e09ced6af2a94b9dfc6493d91eebdc1f10ff75c38f6ceec55bfa20de",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "unknown-frozen-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "1c20064e3aa18cb09f0aee191a352ba8d150f04cd361c3bb8848a5076082fec2",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 12.9609375,
+            "right": 377.0390625,
+            "scroll": 362,
+            "client": 362
+          }
+        ]
+      }
+    },
+    {
+      "file": "unknown-frozen-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "6ef501236e4d4b4e093b75ab019196fc010b783eb982bf96a821e4e6964b621c",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "late-anomaly-frozen-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "91097b4277b9f172d77cb6e1787f3c0cf841dea37e9390b47ed1f15e2d551773",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 456.5859375,
+            "right": 983.4140625,
+            "scroll": 525,
+            "client": 525
+          }
+        ]
+      }
+    },
+    {
+      "file": "late-anomaly-frozen-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "0a4120bdad6bee3a5b9fb2a06e665325a3611440dcb1fee5261f4a62518be243",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "late-anomaly-frozen-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "aa2b72987b617259f5ac50a992797b36931824e947e3ea50abf318bfb616a5a3",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 14.734375,
+            "right": 375.265625,
+            "scroll": 359,
+            "client": 359
+          }
+        ]
+      }
+    },
+    {
+      "file": "late-anomaly-frozen-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "1d51fea232a1987c81767d83e946d2c9a42876b4ed5427a57390701732263645",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "epay-unsupported-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "4e792e96b44fc87b0415d51b7a5524e44ee8e1d46ba427506ef0651eac7f42fc",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "epay-unsupported-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "73ba2f10963f194d118a52e0c53480c1acb00805cabcde14297399e2f142f334",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "epay-unsupported-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "5cc69b7271ad336ad9dab782aac845b2cf95d5703812d32c32f5ee819fedf09c",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "epay-unsupported-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "03bb2053f1ae3603685787ea23435a07faa843ac6d8d32d2aade308e547a3fac",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "reader-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "46cdebaef8f540b69dc0c7d17f6f083d81f94f8593e3316074c583e6f3ece080",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "reader-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "c5eda19038c3b21238f69f15fbf6f37527903bc2e503849a7f80c2e9a16463a0",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "reader-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "cfa5140ec32ad2573d39a44b2e2daaae74ed400f81148ad0c6081c3af9d00e8b",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "reader-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "a0eb5a16ad77bc2ebc57abe761408aedc08faebf4b2c1547de9044e28e26e256",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "closed-topup-cancel-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "97c4fdc1eb2448a131304a48a3fe6d456856a97d1822d6cfb450e7a197c92690",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "closed-topup-cancel-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "670a129db35ea8985816cf41eeeac3f2f40a4b767da74ca3798003b69f968cbe",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "closed-topup-cancel-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "b8ca6af62e5bf1b70537bb2e5973ad07ef6ffe4f491db9085194739ef5969ec7",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "closed-topup-cancel-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "823b4593bf15f2e65b7914404fa3459a88f5ad1d66dd947c90d8fb139eb0405d",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "closed-topup-retry-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "3e861576a320b14bc03d3423f5c0960ef0a75fae9cac8693f9866ee81b611fb9",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "closed-topup-retry-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "a5ae9caf26d1bcee4bc30e43050d6aa4f29bc5ba4d48196f370edf058450a2a4",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "closed-topup-retry-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "b94e4eb1ecc09412173899990b6b0c39f10d022aa79faeafac344988619ab490",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 3.453125,
+            "right": 386.546875,
+            "scroll": 381,
+            "client": 381
+          }
+        ]
+      }
+    },
+    {
+      "file": "closed-topup-retry-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "e78b23ef6213f0cc24897a121c18585f69e8810430cd92ed9a9cf01773e288c2",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 13.140625,
+            "right": 306.859375,
+            "scroll": 292,
+            "client": 292
+          }
+        ]
+      }
+    },
+    {
+      "file": "customer-frozen-17-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "14c6689b98fbab445a9fbab88cf9256bb03cfd30c58c55e2a869d47651b80eba",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-17-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "f768be6961a4fb0a1e4d728722ada984535e51f0c25184bd98ffcf7ffde84806",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-17-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "491caec4bd8a8140e35092bba062d4a333b28e5874d5188d2a126a8887988a93",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-17-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "9b57f2a86c2ba4066e39a262d2d12d285cc88adb8e988708cb4637590f477f5c",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-18-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "29016a2599e9306a3a40acb50c02b4d366e487cf477401914933442ef9f66e30",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-18-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "8747ad90522eab5de8055eb96582f60b21c927c9c81d79d5b30c2eb4078e0f26",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-18-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "55d9a84eb07d4c2bb8210bd4679e421bd2e55a518ea8c8e33da655f6e9c7e1d0",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-frozen-18-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "573b82cdc641fffa5a697cd955d940ffa187cd0c49885e5f696e681bf2d40020",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-new-payment-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "a03f56e6805425ef72f1cd03083e7c96b02689277461666a1f9afa08eb72d7ec",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 475.8398742675781,
+            "right": 964.16015625,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "customer-new-payment-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "fdcddad8103a070bb14bf0eb589f6d8170cca7f3e4c584c1be85905bf1aedcfd",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-new-payment-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "cacca556935e93147a18ba19d9a1bf38a99200634824b6258f3da17c1936c0d2",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": []
+      }
+    },
+    {
+      "file": "customer-new-payment-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "680109cfeeed90cc42421729633ec2411cb9eabeaac195625d68592d8055601f",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": []
+      }
+    },
+    {
+      "file": "close-read-error-1440.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "9d8b5d158b35369320250cd48f57cdfa7c42ea93425276a460d31d90e08c7860",
+      "layout": {
+        "width": 1440,
+        "scroll": 1440,
+        "dialog": [
+          {
+            "left": 464,
+            "right": 976,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-read-error-1024.png",
+      "width": 1024,
+      "height": 900,
+      "sha256": "6c229e7928f5d1a53dc110bac076ae0d7342bb4687c91e2e2b3150d32081cd4f",
+      "layout": {
+        "width": 1024,
+        "scroll": 1024,
+        "dialog": [
+          {
+            "left": 256,
+            "right": 768,
+            "scroll": 510,
+            "client": 510
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-read-error-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "041a9b7131dbb228a9760239e0a7d52a13afe0410d1efb1ec4654a4abd5480ad",
+      "layout": {
+        "width": 390,
+        "scroll": 390,
+        "dialog": [
+          {
+            "left": 12.9609375,
+            "right": 377.0390625,
+            "scroll": 362,
+            "client": 362
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-read-error-320.png",
+      "width": 320,
+      "height": 900,
+      "sha256": "0cd6b9b311ce8de39429f55f026bb94959ea921098d2a4da11bd0550eb05b9b1",
+      "layout": {
+        "width": 320,
+        "scroll": 320,
+        "dialog": [
+          {
+            "left": 16,
+            "right": 304,
+            "scroll": 286,
+            "client": 286
+          }
+        ]
+      }
+    },
+    {
+      "file": "close-short-1440.png",
+      "width": 1440,
+      "height": 500,
+      "sha256": "5466577504d99e07c602919e5adfe4879181039aafb6b69ce71947c921040e0d",
+      "button_box": {
+        "x": 793,
+        "y": 351,
+        "width": 158,
+        "height": 36
+      }
+    },
+    {
+      "file": "close-short-1024.png",
+      "width": 1024,
+      "height": 500,
+      "sha256": "6e51179312b062da8eb1f2c6ae0cf890e8f359e72487e33ea10ea5cf398dd7c0",
+      "button_box": {
+        "x": 585,
+        "y": 351,
+        "width": 158,
+        "height": 36
+      }
+    },
+    {
+      "file": "close-short-390.png",
+      "width": 390,
+      "height": 500,
+      "sha256": "8896de503b81e006e169b4389a2ce835690722bd417afad3123d43beb8bc679d",
+      "button_box": {
+        "x": 41,
+        "y": 305,
+        "width": 308,
+        "height": 44
+      }
+    },
+    {
+      "file": "close-short-320.png",
+      "width": 320,
+      "height": 500,
+      "sha256": "4cc51c13690899ff128662c71d5d02ac8995ab4ea2bdc1affe87fccb5e3c78f3",
+      "button_box": {
+        "x": 41,
+        "y": 355,
+        "width": 238,
+        "height": 44
+      }
+    },
+    {
+      "file": "close-loading-390.png",
+      "width": 390,
+      "height": 900,
+      "sha256": "cc4723b8f3926d405f333cb0a67e94cb99d4c9eb5f5813d7ded09b348a598b88"
+    }
+  ],
+  "page_errors": [],
+  "api_errors": [
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/14/payments/13/close",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/10/payments/9/close",
+      "status": 503
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/15/payments/14/close",
+      "status": 409
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "status": 403
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/invoices/16/payments",
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me",
+      "status": 401
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/invoices/11/payments",
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/credit/account",
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/invoices/12/payments/11/close",
+      "status": 503
+    }
+  ],
+  "excluded_attempts": [
+    "Initial receipt-loss attempts excluded: async assertion raced with response; unroute inside handler caused already-handled error. New isolated fixture and times:1 handler used for final run",
+    "CLI element reference typo before business write",
+    "CLI daemon terminated between commands; switched to single-process Playwright",
+    "Continuation after harness selected background recovery control while modal was open; closed modal before controls, no business replay lost. Earlier successful scenarios retained.",
+    "Final continuation: payment recovery control was behind open payment dialog in prior attempt. Close dialog before restoring; completed earlier scenarios retained.",
+    "Final continuation: payment recovery control was behind open payment dialog in prior attempt. Close dialog before restoring; completed earlier scenarios retained.",
+    "Initial loading screenshot caught opening animation; recaptured same real pending GET after animation settled, no POST"
+  ],
+  "status": "PASS",
+  "artifact_directory": "output/playwright/payment-close-20261016",
+  "screenshot_count": 61,
+  "requests": [
+    {
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "key_sha256": "182510b67bd09e1cb2780996888b45c30156b34635beec4aac1f9484e7e779a6",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "key_sha256": "182510b67bd09e1cb2780996888b45c30156b34635beec4aac1f9484e7e779a6",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/14/payments/13/close",
+      "key_sha256": "e4801ce04e23fe1fdc46cfde81195f2dc64f80ac53cc5059cfb5b5fc6fb45fe1",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/10/payments/9/close",
+      "key_sha256": "d047e6a338b3d62eb055f20a5414e5dc2f21d12141a815e8746fb3e19ae3207d",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/10/payments/9/close",
+      "key_sha256": "d047e6a338b3d62eb055f20a5414e5dc2f21d12141a815e8746fb3e19ae3207d",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/15/payments/14/close",
+      "key_sha256": "cf7c338c9f09138d21485200ce23a12a940ec6661200f1d7e5458802500f8564",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/15/payments/14/close",
+      "key_sha256": "f937cf86e4821a90987c775a682e97cefccb5de264fc89235210e422af5efbd6",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/admin/invoices/13/payments/12/close",
+      "key_sha256": "edcd26390d923b5276fe903e7958b7bcc1769990dc7490ba4a0bbcf23ae0495b",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/balance/topups/20/cancel",
+      "key_sha256": "7794fcbfacf8042a9f849922b5d6cd94835f26d04aaa82012b22a0430e55f361",
+      "body_sha256": "2b86ec14997ebb075a1c69d58b0bc47522f58d40801e92c449c39a71c63e98f4"
+    },
+    {
+      "path": "/api/v1/invoices/21/payments",
+      "key_sha256": "69f2b91eefcf450d85ce7c877098fd4812a584309bca8f757c57ecf9f7be4962",
+      "body_sha256": "ea9b4bca8cf43d9d21a8842eab639d41b378d8568ac2955fb6af47ce75b144ed"
+    },
+    {
+      "path": "/api/v1/invoices/16/payments",
+      "key_sha256": "8b3e484c7c3a415d0391fe53d93b0f9d75f870c3cab004b53537513265f07563",
+      "body_sha256": "19e634fede50a7e4b96aa3e5e4f559a1ed095c7729eff99ad113289437b97bc3"
+    },
+    {
+      "path": "/api/v1/admin/invoices/11/payments/10/close",
+      "key_sha256": "b7b7bfb59430b18c8291cab631f4a72815966e927d486e56d104da3958eaa8d9",
+      "body_sha256": "454bef1ab5efbd4c6b3b6928fbef1f9d214f6cd84cb44a940478399dd2f9a1db"
+    },
+    {
+      "path": "/api/v1/invoices/11/payments",
+      "key_sha256": "1bced3cf33a7bb65dd68d64d0bca32ce3a93d88e952f1ca0896159b966dc8c33",
+      "body_sha256": "19e634fede50a7e4b96aa3e5e4f559a1ed095c7729eff99ad113289437b97bc3"
+    },
+    {
+      "path": "/api/v1/admin/invoices/11/payments/23/close",
+      "key_sha256": "9c43175bcf47b25a8649afe4c7b63c810f3209e85db84a300a9d493dbb153ac1",
+      "body_sha256": "698e7e76dc0a33a06b7e973fe423c651701311b863b290bded7ae05f8714825e"
+    },
+    {
+      "path": "/api/v1/invoices/11/payments",
+      "key_sha256": "1bced3cf33a7bb65dd68d64d0bca32ce3a93d88e952f1ca0896159b966dc8c33",
+      "body_sha256": "19e634fede50a7e4b96aa3e5e4f559a1ed095c7729eff99ad113289437b97bc3"
+    },
+    {
+      "path": "/api/v1/invoices/11/payments",
+      "key_sha256": "6fd0d5c5e3ba7681bfcb3886d00f233558933cf97ace7a8c54b0b1cca097005c",
+      "body_sha256": "9d4185ca7122e11e846646f3935772f8c746c9a12fb79043901c87b400363798"
+    }
+  ],
+  "database_facts": {
+    "topups": [
+      {
+        "status": "cancelled",
+        "accepted": true,
+        "invoice_id": 20,
+        "amount_cents": 1234
+      },
+      {
+        "status": "accepted",
+        "accepted": true,
+        "invoice_id": 21,
+        "amount_cents": 1234
+      }
+    ],
+    "payments": [
+      {
+        "id": 9,
+        "status": "closed",
+        "invoice_id": 10
+      },
+      {
+        "id": 10,
+        "status": "closed",
+        "invoice_id": 11
+      },
+      {
+        "id": 23,
+        "status": "closed",
+        "invoice_id": 11
+      },
+      {
+        "id": 24,
+        "status": "pending",
+        "invoice_id": 11
+      },
+      {
+        "id": 11,
+        "status": "pending",
+        "invoice_id": 12
+      },
+      {
+        "id": 12,
+        "status": "closed",
+        "invoice_id": 13
+      },
+      {
+        "id": 13,
+        "status": "closed",
+        "invoice_id": 14
+      },
+      {
+        "id": 14,
+        "status": "closed",
+        "invoice_id": 15
+      },
+      {
+        "id": 15,
+        "status": "closed",
+        "invoice_id": 16
+      },
+      {
+        "id": 22,
+        "status": "pending",
+        "invoice_id": 16
+      },
+      {
+        "id": 16,
+        "status": "pending",
+        "invoice_id": 17
+      },
+      {
+        "id": 17,
+        "status": "closed",
+        "invoice_id": 18
+      },
+      {
+        "id": 18,
+        "status": "pending",
+        "invoice_id": 19
+      },
+      {
+        "id": 19,
+        "status": "closed",
+        "invoice_id": 20
+      },
+      {
+        "id": 20,
+        "status": "closed",
+        "invoice_id": 21
+      },
+      {
+        "id": 21,
+        "status": "pending",
+        "invoice_id": 21
+      }
+    ],
+    "anomalies": 1,
+    "operations": [
+      {
+        "status": "closed",
+        "invoice_id": 10,
+        "payment_id": 9,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 11,
+        "payment_id": 10,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 11,
+        "payment_id": 23,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 13,
+        "payment_id": 12,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 14,
+        "payment_id": 13,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 15,
+        "payment_id": 14,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 16,
+        "payment_id": 15,
+        "result_code": "closed"
+      },
+      {
+        "status": "unknown",
+        "invoice_id": 17,
+        "payment_id": 16,
+        "result_code": "unknown"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 18,
+        "payment_id": 17,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 20,
+        "payment_id": 19,
+        "result_code": "closed"
+      },
+      {
+        "status": "closed",
+        "invoice_id": 21,
+        "payment_id": 20,
+        "result_code": "closed"
+      }
+    ],
+    "pg_version": "180000"
+  },
+  "api_failure_classification": {
+    "401": "read requests during explicit logout/login account switching; not reported as zero API failures",
+    "403": "reader write and no-view read denied",
+    "404": "customer-scope restriction",
+    "409": "actual version conflict",
+    "503": "explicit receipt/read/identity fault injection; known harness attempts included"
+  },
+  "console_boundary": "No application pageerror; pre-existing favicon.ico 404 is outside business API checks",
+  "evidence_integrity": {
+    "verified": 61,
+    "mismatches": 0
+  },
+  "visual_review": [
+    "320 close dialog",
+    "390 customer accepted topup cancellation",
+    "320 new payment",
+    "320 short dialog",
+    "390 pending read"
+  ],
+  "cleanup": {
+    "fixture": "PASS",
+    "schema_remaining": 0,
+    "ready_manifest_finish_removed": true,
+    "dedicated_preview_stopped": true
+  }
+}

@@ -32,6 +32,7 @@ func (s *Store) ClaimAutomaticPaymentCheck(ctx context.Context, providers []stri
 	if err = tx.QueryRow(ctx, `SELECT p.id,p.invoice_id,p.user_id,p.provider,p.provider_payment_id,p.amount_cents,p.auto_reconcile_attempts
  FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id AND i.user_id=p.user_id
  WHERE p.status IN ('pending','expired') AND i.status='unpaid' AND p.provider LIKE 'epay_%' AND p.provider=ANY($1::text[])
+ AND NOT EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=p.id AND c.status='checking' AND c.lease_until>clock_timestamp())
  AND p.next_reconcile_at<=clock_timestamp() AND p.auto_reconcile_attempts<32
  AND NOT EXISTS(SELECT 1 FROM payment_reconciliation_checks c WHERE c.payment_id=p.id
    AND (c.status='checking' OR c.started_at>clock_timestamp()-interval '30 seconds'))

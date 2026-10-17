@@ -1,0 +1,901 @@
+{
+  "generated_at": "2026-10-17T11:09:16.382550+08:00",
+  "product_commit": "5179259",
+  "browser": "Playwright CLI / Chrome headless, isolated API28089 + Web3089",
+  "external_money_moved": false,
+  "private_credentials_included": false,
+  "viewport_widths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "short_viewport": {
+    "width": 320,
+    "height": 568
+  },
+  "screenshot_count": 75,
+  "files": [
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/applied-1024.png",
+      "bytes": 389723,
+      "sha256": "3a5a062d8ccf0cdfe402349e1d384e869baa140bbe3939a676f8b30f3fdaac20"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/applied-1440.png",
+      "bytes": 407741,
+      "sha256": "aecdb51251d0e02db737df69dbe002223ba7471474d0a72988f244f7832350dd"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/applied-320.png",
+      "bytes": 365446,
+      "sha256": "46b481bcebd38c1c857454d5cbf253ad4c3c83429b5b9847bd6fa3921b49f54d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/applied-390.png",
+      "bytes": 364940,
+      "sha256": "b436b1785c473a840dd83f7670824e3256cf46a9b4ed0ab3ea6e973c95598e2a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/applied-widths.log",
+      "bytes": 668,
+      "sha256": "27b4845ba2cb329f687490cdc439ec5ebe86039a4ca82bc93a3ad4c447a30afd"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/back-to-list.log",
+      "bytes": 3867,
+      "sha256": "b6d72434a22facbf5bd3b5c857bd1694d145647a71385016646d26ceb30432f6"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-1024.png",
+      "bytes": 298759,
+      "sha256": "0c6432886f426334182c651c941e6c049c91b0c94a1204f732f7a020bc26b857"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-1440.png",
+      "bytes": 326327,
+      "sha256": "5abb96f5abc861023e6b65f4be2d09f15ef95779a90dbd497c91b04132f9b7f3"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-320.png",
+      "bytes": 244773,
+      "sha256": "93b19d74eb080ece68e0f434be0f7e8f18994de37722ede01c0ce71933ca6055"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-390.png",
+      "bytes": 142602,
+      "sha256": "b6cdc5625b6ae1a16704f8ff181a4d3e0249e155fb6ede91776882cbf204e3dc"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-draft.log",
+      "bytes": 8944,
+      "sha256": "df966d1620567a38d651d4bd1d8d7bbed334b54c7354c77036ab217464da178e"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-ended.log",
+      "bytes": 7613,
+      "sha256": "c7040e36906589a659a820a6db738f931454848b9a7eb2ca5652fc1d74eea20d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-kept.log",
+      "bytes": 8297,
+      "sha256": "95bda1672bfef7e69bcf17e294102e89818af29e817c34d1059328b9d0000695"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-latest-facts.log",
+      "bytes": 8245,
+      "sha256": "3ee9a5312ca0ba10002b5167757ac639dd7671aab582e91ea5c30a7005686521"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-result.log",
+      "bytes": 10027,
+      "sha256": "4d3259f08f8c3c7dc575fcb224bffaa196831ad383225e0a6b41d96a7ba5737c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/conflict-widths.log",
+      "bytes": 548,
+      "sha256": "8b50ead446a33fb6c97d27e6046c462443153e4110b41ddb9b9dc5d1a832f8c3"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/console-2026-10-17T02-32-03-917Z.log",
+      "bytes": 129,
+      "sha256": "7f30d3c26a3a0d2341a0d7079ea9c984b138a4f3fa7c7d890c50fb64dd502c9c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/console-2026-10-17T02-44-36-125Z.log",
+      "bytes": 166,
+      "sha256": "edd2a6517f67e0379901f0f101446ea30606fae14bdb7be9e9b05cdd09c95cf6"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/console-2026-10-17T02-55-18-057Z.log",
+      "bytes": 342,
+      "sha256": "6d3933ad232e54ed741474de7fc0ea0601cada87165b1205e259b84a0f19e4f9"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-dialog-1024.png",
+      "bytes": 262219,
+      "sha256": "9f482d4ceafe30fefcfc1daedaaed14bd5a91de4757f12cd13ff46d8653431d2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-dialog-1440.png",
+      "bytes": 288962,
+      "sha256": "08e2c7bd52b3fa1203d339bc3d18ae14e70dd3476e47137fc861572e9efc8aeb"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-dialog-320.png",
+      "bytes": 225798,
+      "sha256": "0d7a9e992ffeee780b76ab3e18a4b464f3b116c74f7b6bd58dce4442541ed671"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-dialog-390.png",
+      "bytes": 224701,
+      "sha256": "a99be50960fc47cf648470d865ee9b6d863e2edf04a6ab656288b23dcf6ba92d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-dialog-widths.log",
+      "bytes": 1276,
+      "sha256": "adbca83d2df5486a15b272a83f09f583fe9c77f5ef8dc19779f2e96f33b54f08"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-bottom-1024.png",
+      "bytes": 188344,
+      "sha256": "492d88b57a756e8df4c799a7d11bfee13a2f397b6dbc4100b06492597fb4fd51"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-bottom-1440.png",
+      "bytes": 207071,
+      "sha256": "d81e23bd6ee336c1efd8ef3902ede4495276818694df1eab7e3e28efdac2e2e2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-bottom-320.png",
+      "bytes": 74173,
+      "sha256": "3e695a7fa18bf938ae3d32653df1c7207fb2f0d5ceb7deb7c97387f87197cc91"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-bottom-390.png",
+      "bytes": 84287,
+      "sha256": "8374a55c16cb1f135d60fb066636a503e3d14a14e4b7e020ce6bfa3cc7d88334"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-top-1024.png",
+      "bytes": 197744,
+      "sha256": "a01ef4f1eb2abc6d8b92e128f525887e03ca782374c83507fb26df460399456e"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-top-1440.png",
+      "bytes": 219452,
+      "sha256": "e8cd50daf0dcc7f70cad64566b2a7a27c4898e22b06ef442275082ee10e02d72"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-top-320.png",
+      "bytes": 90016,
+      "sha256": "1c6c7d06906559fe76335813c789dcb58ed3a57c532d8dc0b4ce57f176bc962b"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-filled-top-390.png",
+      "bytes": 99102,
+      "sha256": "055c99e688c273e2d154df4b5aca4b6552a2cf11d8abb1448c9b3ba01c5344e2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-bottom-1024-900.png",
+      "bytes": 160461,
+      "sha256": "0ec2c43dcb65aa12be5916985884fe3025d655484f3540be794224b67791207f"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-bottom-1440-900.png",
+      "bytes": 193732,
+      "sha256": "95a430e6d2450696042ba95d07bde00191e94a6eacc01090b979984011bada1a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-bottom-320-568.png",
+      "bytes": 34772,
+      "sha256": "47a8dd9ccaeec4f28201edcdc595cb8c72a0c3247ffbda232482712983820078"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-bottom-320-900.png",
+      "bytes": 67508,
+      "sha256": "e2741d215be9a64cebefc89dbf3564f5e646ef548a6251cb51172355d7e1e758"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-bottom-390-900.png",
+      "bytes": 70838,
+      "sha256": "f3d496fd90a493647a1efb22e6fea21493233e6b7f92ecd724bea7aa52d24372"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-geometry.log",
+      "bytes": 2099,
+      "sha256": "db259b7c268efad4a0da6ecbf727cf1e32e77c57dcfdb59a6851b9366a0a9757"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-top-1024-900.png",
+      "bytes": 175465,
+      "sha256": "9fad83362dfef78f9373371d0847a8b9ff5ee0cd125a818d602a50c20d51bfff"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-top-1440-900.png",
+      "bytes": 143881,
+      "sha256": "c3324bb8e6a7c57977b38b3d4bfed98cd10a3213f235c7ef886dc82c815f08d5"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-top-320-568.png",
+      "bytes": 66415,
+      "sha256": "099b24fb692283e2de306b7993dc176386e142ae6d90c2ca460621873463a582"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-top-320-900.png",
+      "bytes": 90574,
+      "sha256": "1bd2282cb95ff62215882a054df6eba0783d138be25b7bf662f06a6149739d79"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-stable-top-390-900.png",
+      "bytes": 91711,
+      "sha256": "103b28287febedd8a470f1fc0c97d4305522a0a6d195056f8e9b6f7d9566f858"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-unknown.log",
+      "bytes": 9707,
+      "sha256": "2c9405c966c8df4de4c7d8c35221c7b4def6ceb31a19a918ee10fe1a6b333f5d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/create-validation.log",
+      "bytes": 9098,
+      "sha256": "8400addbc10c2ba28d6feab627d5b2f988640ee10c2d315fe7dad926ccc91d9a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/db-after-confirm.json",
+      "bytes": 2026,
+      "sha256": "da3bf1bbb49f8bbc3de8d0c9e13f3c41f3b9038d194ffb88be18e6f58aab7f54"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/db-after-reject.json",
+      "bytes": 7789,
+      "sha256": "d251ddced51b9765c693785f3e4033cf6bb0cc18bb642b5f764050a0825d768c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/db-before-confirm.json",
+      "bytes": 756,
+      "sha256": "0e0d3a56b5554fc1ed461e3a61b22598c78bf1a86c42ed9b10e92a9303ab7206"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/eligible-1024.png",
+      "bytes": 240229,
+      "sha256": "b151d02c5f66aa817a8fd3e9bdb64733341239132bc1da1f23206bf699fc4610"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/eligible-1440.png",
+      "bytes": 253056,
+      "sha256": "26682d9c126182fa9108993fa0078baa772e156098323b863924384f15f921bb"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/eligible-320.png",
+      "bytes": 222098,
+      "sha256": "a92ea1b175f1ecbc50b6ca76301caf7bb9c7cf55422c8f43aec17b1722ab5046"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/eligible-390.png",
+      "bytes": 224223,
+      "sha256": "427390b8af856ccd180a8362aca339fe5f3dab4c2bd651b1a35ed402d4e1d48a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/eligible-widths.log",
+      "bytes": 646,
+      "sha256": "30fac0423683c56c565f9bd428f5ad88464e1951c7caeda8d8cf9959c43a9826"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error-debug-snapshot.log",
+      "bytes": 29741,
+      "sha256": "4d1aceca00758dd81963e2bc9dc0855ce2834f404be8127b90294c7e6391bbfb"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error-recovered.log",
+      "bytes": 29773,
+      "sha256": "8f3570f5e80da001691a52c7ab336a95617c7c6e86f9beb98b31da938f7280dc"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error-snapshot.log",
+      "bytes": 28493,
+      "sha256": "fc44e2aa627b0bbb168c61869652f248c1fb23abe55436a1e728d8b7095ddeee"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error-verified.log",
+      "bytes": 1130,
+      "sha256": "a8cdb37c309ff9e85ce634a668236b28af12c0ce549f78686c30634504640c7d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error.log",
+      "bytes": 176,
+      "sha256": "8a8cc5b3957bb9a1204df2e6148920c18090cdc86d32f6aea0c1b758cfb7eaed"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/error.png",
+      "bytes": 1206184,
+      "sha256": "93bfbcf9df62e917d4311887e6b8862eefe4adb53e4bd36cef0cdd8a2400d27a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/loading-verified.log",
+      "bytes": 654,
+      "sha256": "8f9e810856a753670b97839e0c5a3ec6572c71778c22d25224dddfaaf1f72a4d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/loading.log",
+      "bytes": 148,
+      "sha256": "99df2d33368cafd03e06683052cf6948cfd44b7a8df803feb7b97128b720e1a4"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/loading.png",
+      "bytes": 32101,
+      "sha256": "726c11cb7524db71f942af9d31f945ef0106323d0b44e8caa85c9dfe9cf2e03a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/network-interim.log",
+      "bytes": 7492,
+      "sha256": "4ddc02a05688fe21ec46b5f3cc508b3cf6f2036d8070c16ef3c56aba8a0232fc"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/new-version-draft.log",
+      "bytes": 8976,
+      "sha256": "795c81a69af10a31e4c0e8f8c33fd9c2cb5ca3e0a1b623d7e584cb3bb7c5c36a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/new-version-pending.log",
+      "bytes": 10596,
+      "sha256": "b2d2936162d5925571029ba2092eed79d62a450c8458e1013cc3349f086c0274"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-1024.png",
+      "bytes": 256836,
+      "sha256": "acc383e0a10d05eb53c7698b460fe5ae5bf38f54bbc70032adb6982191a90e57"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-1440.png",
+      "bytes": 270734,
+      "sha256": "2057730447358ff372701b254916bc25b7b6dbddba5383e5c5b307f76b5e0c17"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-320.png",
+      "bytes": 238727,
+      "sha256": "63f9efb94070c173e65a344c2edea97013c53aff223f2a6ec3dee1e8fe56481e"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-390.png",
+      "bytes": 240262,
+      "sha256": "69994bfa2548f47d7007603712640202ef1efb0fe28eac027aeb4e7149b741d5"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-api-403.log",
+      "bytes": 825,
+      "sha256": "51811286499715aa511b0000a0a8069becaa57fb9f83fd5e3a72f7679856fee1"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-permission.log",
+      "bytes": 7835,
+      "sha256": "6f534f91fc80280134b6d8eb4294e5b8260dd8c5c8bd493f7c2f9dc261b88991"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/no-reverse-widths.log",
+      "bytes": 720,
+      "sha256": "5385d6c0b1d15a5051c583f2f8bae1290ac4da7c8e88d84b2bde7dc4b1ada709"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-29-36-844Z.yml",
+      "bytes": 635,
+      "sha256": "12f7d651ea1da38fbce023e71a419b6c96937497ae9163f14e0a5be64d568fcf"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-32-04-473Z.yml",
+      "bytes": 2101,
+      "sha256": "1dc271a2630e804a830af59aa56d8ccbd751bbb13978de35f678167b3dcd1a1d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-32-44-275Z.yml",
+      "bytes": 9698,
+      "sha256": "9c1155e90bf9d2b941650d1f8c1c4aca1477d060b97aa35b23c9766cac66a5ce"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-33-27-207Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-34-55-235Z.yml",
+      "bytes": 8829,
+      "sha256": "1a863f2949487cdc88a50c29e3f8f299ddc78836142a9933902056220d08cb55"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-36-05-181Z.yml",
+      "bytes": 8985,
+      "sha256": "33cb177956a3bd02acef4193700336850785996580a662ec8d1cd962efb8a18a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-36-09-592Z.yml",
+      "bytes": 8869,
+      "sha256": "98f8c5a077dcc1889deed1aa274d92b9968c638426c2cb51ca0ab0c8eb39e175"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-36-28-560Z.yml",
+      "bytes": 9210,
+      "sha256": "02e58dab70780f8cce00310e702297609caba4aecff3db6a394bd5afcce1da46"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-36-53-791Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-37-41-814Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-38-29-726Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-40-00-028Z.yml",
+      "bytes": 10426,
+      "sha256": "b633ad9fcb5349ca84556b0fae4e291788598cbe4ee339fed7a60b2c2ee131e3"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-40-05-552Z.yml",
+      "bytes": 635,
+      "sha256": "12f7d651ea1da38fbce023e71a419b6c96937497ae9163f14e0a5be64d568fcf"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-40-09-722Z.yml",
+      "bytes": 85,
+      "sha256": "f44784968e44689e43262bec38211e995ea2f81468555424f193cebb06057550"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-40-55-346Z.yml",
+      "bytes": 11706,
+      "sha256": "7d69e7532a588d80b2d81721bfa6e2739db42e29fce02d12d4cd632ed2adf93f"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-42-39-365Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-43-15-602Z.yml",
+      "bytes": 1026,
+      "sha256": "f972710c1e6f932742e7e561a18e9aeea74b57346d84cea3731553b588746693"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-44-06-930Z.yml",
+      "bytes": 85,
+      "sha256": "396786fbb05ac51b0dada2a21c4e05232ecbf7c5b370c525020d76ed540d2018"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-44-36-450Z.yml",
+      "bytes": 85,
+      "sha256": "bb5325fa8f6c1742a0ee99c69e9c07816b693e2c05a85bd99ff2004ac4adff31"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-45-31-034Z.yml",
+      "bytes": 8831,
+      "sha256": "d94b5f5182239e80cafc6186c9b14f33b0ccf03f36a93416936646e38c3add1f"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-49-33-936Z.yml",
+      "bytes": 8871,
+      "sha256": "45eb8bbaf39fdccc180cc50e39a60f1dbe39307b4a18f065eecf142cf75bdbba"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-49-47-841Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-50-29-854Z.yml",
+      "bytes": 8152,
+      "sha256": "237c56a7c5e38046d8efbafeffb228d22912c3fde5625f3c3872d19feaccbfbe"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-51-02-084Z.yml",
+      "bytes": 8100,
+      "sha256": "ef6472c3bb86ed75dbab8634656c2110f4a70e53e2d953ebee8b6d592914399b"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-52-04-507Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-53-42-506Z.yml",
+      "bytes": 8831,
+      "sha256": "d1c3489770f630b40f0b9f2dd771e88434ece4213b5f10faa59cce10eb7e1cfe"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-54-58-109Z.yml",
+      "bytes": 8871,
+      "sha256": "a11b6f97e362d0aab421485148b2068a43464f956beed445bfa78307907c43c2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-55-11-003Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-55-18-795Z.yml",
+      "bytes": 1026,
+      "sha256": "a5987cc09bb69ac2014348e342eb8666150a04398bf9abb267216b11baf0e097"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-56-09-291Z.yml",
+      "bytes": 10838,
+      "sha256": "4e8b6c525db1c1f1f5c31b1daa27b31aedbf578503928ed65c86c7ce4d0a891d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T02-56-42-932Z.yml",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-01-32-406Z.yml",
+      "bytes": 29628,
+      "sha256": "3a6c478f14d9f5e3ac7360dc0744f9826a7ba1f5c0dc4b3a37aa4d52eec1f10e"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-02-01-496Z.yml",
+      "bytes": 13384,
+      "sha256": "a49b7da924f5c2c7d409ff21f00b7de6325558a48249b637fdd1d8ee97838c74"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-02-06-677Z.yml",
+      "bytes": 2101,
+      "sha256": "24ba7839b30ae71023db5ec071e33b71a2f4ad9be1e2cffa1b0c230a42d434f4"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-03-01-908Z.yml",
+      "bytes": 13025,
+      "sha256": "af4b6a1c3196333cd961f05474e7825e0c140aa1132f17949063af1f96ab38cb"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-04-16-641Z.yml",
+      "bytes": 12278,
+      "sha256": "e7eae5971ecdddb5515d3212bb0788f0ae25458f806cdd4c12fcf77c22e88248"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page-2026-10-17T03-04-54-935Z.yml",
+      "bytes": 3756,
+      "sha256": "cd42f031de98bde1fea89fc91a1ed2564b2e3706120bc54d80040d1cc4456c94"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-1024.png",
+      "bytes": 466852,
+      "sha256": "c92de91f24602166555aaf130ef720dc865285328ff45e2136408b45c05bf7ff"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-1440.png",
+      "bytes": 486937,
+      "sha256": "3108dfea9d0aef31ea9f1657950482fac2a0ae9ae9f23759dd855caeff29b1d8"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-320.png",
+      "bytes": 435672,
+      "sha256": "972b8c5f80ddcc445deea5ed7d8a90ca7837ae8adee0ac957da08ab99c8d23a0"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-390.png",
+      "bytes": 432022,
+      "sha256": "7ac0bb56aef3ee352846f312667696d322db69674f70a49dde534a26b294d329"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-after-cancel.log",
+      "bytes": 12408,
+      "sha256": "dcd7a87445637b36940a3390b234d478cef55d55198e4ce2ea7d67ac66a2e524"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-reloaded.log",
+      "bytes": 13482,
+      "sha256": "c1715f1ccbe2366b3239efdcb19ed8668170d6e89708fa58b7f3717f49081f31"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2-widths.log",
+      "bytes": 819,
+      "sha256": "9dd7505424997d2df4e7cbef212a77f377ec724a398e3304f9077daac2641ed6"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/page2.log",
+      "bytes": 13546,
+      "sha256": "4e10621f11a1462825f93ff48531ea14757e4ffe3e2d087da2b04142130e8bda"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/pagination-seed.json",
+      "bytes": 7717,
+      "sha256": "cb145dfd6be7fbb989ace92e2a482b30ddafae58f59a74d6593a344dbfc884e0"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-1024.png",
+      "bytes": 384315,
+      "sha256": "38868af5a9cfbc202955f0bed48ab5235420618c21b7e47fe6ed1d1382318d46"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-1440.png",
+      "bytes": 402131,
+      "sha256": "c05e05e48d401939e65f7f219bac9067530512be7468652c1b2d6a386d1d193a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-320.png",
+      "bytes": 359867,
+      "sha256": "026915e138bcba26377d59b749e8480c527775ec2fd630b6644e20a19b6215be"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-390.png",
+      "bytes": 359136,
+      "sha256": "dcaabc13e46827d3a8b08edb630a3e149fcf2eb5aebc7161c9ed3a53d580e534"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-applied.log",
+      "bytes": 10444,
+      "sha256": "aa7a86f00527236f1ce1ce463ba3b5dd31983d5836effd49e6a088444d53f22f"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/readonly-widths.log",
+      "bytes": 790,
+      "sha256": "7a94728900ced6c5bb1cc6ce38ff81e38412beb5165e8631e8f8273c9c7dec32"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-bottom-1024.png",
+      "bytes": 404630,
+      "sha256": "cb26498fd8420a8da5182d9f67716d0e3f82bbe1baa04b694543ab1299b2c56c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-bottom-1440.png",
+      "bytes": 444462,
+      "sha256": "fb6d28c4a612425b44263fc09e91845f9208c9ba60c1b66d35b2e1f6979e3404"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-bottom-320.png",
+      "bytes": 348785,
+      "sha256": "aac13be7c402738e6aa8973bb61f7bd9e7f0d90a49b64b087cdef3db1616709a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-bottom-390.png",
+      "bytes": 356664,
+      "sha256": "a344303568176d9d87f4f80867bb29d8363384bd971d5420780c95b0d9f04a92"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-dialog.log",
+      "bytes": 10951,
+      "sha256": "2a294f0fb735c6e8459006fb7734f9838519940cb45edf3bd34ee053574c29d9"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-filled.log",
+      "bytes": 11038,
+      "sha256": "8c9b857c1509bfce4fff4882a7b3eec7c568fe00e140cb1eba9b180bfc23bcb7"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-short-320.png",
+      "bytes": 279462,
+      "sha256": "23736e91f992e65f83572f18afdf51503110e68aced552e79a931256bc4ec754"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-top-1024.png",
+      "bytes": 404630,
+      "sha256": "cb26498fd8420a8da5182d9f67716d0e3f82bbe1baa04b694543ab1299b2c56c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-top-1440.png",
+      "bytes": 368184,
+      "sha256": "a1ac0f2942eb4b6dfb2e6338de74a30fdda8245df75c93b96960d29b82c270e2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-top-320.png",
+      "bytes": 357837,
+      "sha256": "a81925bdc2caa3e2fc5da7352e7de8abf5d8a6ae8d87832efc217b13ffbead4c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-top-390.png",
+      "bytes": 365772,
+      "sha256": "e37629b5f1ac32d1cf242ea1c7cfa0d4e5a1db13d2d0d719ec953ba7ef92a070"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reject-widths.log",
+      "bytes": 1037,
+      "sha256": "e7ab0ef61eb22bbc9eba227f338322a3353a24d7aa5735c03080d5e5463e53d0"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/rejected.log",
+      "bytes": 10352,
+      "sha256": "409a6f461459afd00e92e1b690c04808892c9552c66d41d15449868b8458a64d"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/released-1024.png",
+      "bytes": 380133,
+      "sha256": "6d2ea7b5f402462b471e10fc5fc8971fbb079d84b4fa30ee47067b3296e1c45a"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/released-1440.png",
+      "bytes": 397773,
+      "sha256": "13376f463f2e29d744ca81fdf87cf7eb0a9ec6feba38bf52d0cb1fc2eeb15e30"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/released-320.png",
+      "bytes": 353002,
+      "sha256": "916cdc3542a4d5a564b560b7b7b9db4d8d600cd67fdacb4eeb330c42266927d5"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/released-390.png",
+      "bytes": 352442,
+      "sha256": "6e5f7be9dc97fbaa16d1f2dad1e1894b8232ad9c7f50593947495cc12a89326b"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/released-widths.log",
+      "bytes": 548,
+      "sha256": "857f657acd1855f1acc6fe3245c5baa47222fb8870d3951fab84d2acd19dee96"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/requester-console-final.log",
+      "bytes": 208,
+      "sha256": "a4c48e8323db4b45f9cc8e8a075b69659e2cdbd52167b1036d0ce1577dbb6fe2"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/requester-console.log",
+      "bytes": 55,
+      "sha256": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/requester-requests.log",
+      "bytes": 5099,
+      "sha256": "f90328b6eb465fde06f5efb9ba1e0af170940832519634c113aa1a515df6a62e"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-applied.log",
+      "bytes": 10609,
+      "sha256": "6e07f4dfceb0369c028db0240b604839bd37c03ccb03a56312673da65bcc9556"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-bottom-1024.png",
+      "bytes": 187990,
+      "sha256": "1a22218ad7d4fcbddefabb3ac55f9e0eac2dbf13b0ece919fe138374021fe7ad"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-bottom-1440.png",
+      "bytes": 215438,
+      "sha256": "91349fff323b03fc2b257d41fdb14eb4e9223023f17a197a85c77727bd3f67c1"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-bottom-320.png",
+      "bytes": 80407,
+      "sha256": "efa71212f6405624018713994696c1bee71fee963e67b55b4ea38b76f509ecfe"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-bottom-390.png",
+      "bytes": 98446,
+      "sha256": "f990ab2cf9c5b1fbd966168fbd54834b7bcd021ed93255868ee744317e73ca99"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-dialog.log",
+      "bytes": 11819,
+      "sha256": "cf896681bc2314ca8f06f83e2aa493de28fdbb19ae2f3308426a9dc1bd0bea79"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-filled.log",
+      "bytes": 11035,
+      "sha256": "b28782523d06b6155a9ef9a5a892e794e11cfa518920b1738462c661d99d6e15"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-top-1024.png",
+      "bytes": 187990,
+      "sha256": "1a22218ad7d4fcbddefabb3ac55f9e0eac2dbf13b0ece919fe138374021fe7ad"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-top-1440.png",
+      "bytes": 216414,
+      "sha256": "cab286d74b4f4309952a8f46a76be8b4679ba6c533099f6d28df4b467f42d2e3"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-top-320.png",
+      "bytes": 97690,
+      "sha256": "5533d22a5cc84e1720d24dffc56d512e8665fa78bdb9500d4449ceb760ae3973"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-top-390.png",
+      "bytes": 101759,
+      "sha256": "1dfae0f295e1842870f015af00526d37913e2177d6f9d4c2b4a00682034dea7c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/review-widths.log",
+      "bytes": 1054,
+      "sha256": "9d9ec24ba19be106cc1349c1bc5238e0404741b876736b71ba7449240a45c156"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reviewer-console-final.log",
+      "bytes": 55,
+      "sha256": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reviewer-console-pre.log",
+      "bytes": 55,
+      "sha256": "d0e5634bb0c1271965327ad2ac18107af18fa7da6d2c9ce13e03eeda6cb603db"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reviewer-pending.log",
+      "bytes": 11577,
+      "sha256": "ae9abe02d47864b52c3a3d4d09c72d30a429d1f2783dca4c5a7748953f199d22"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/reviewer-requests.log",
+      "bytes": 12546,
+      "sha256": "4285a8c6eaee05a9650f369f200c20fcbc84b59f2f7bc6266a28937c1b8911d8"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/second-eligible.log",
+      "bytes": 7581,
+      "sha256": "6691935cb07024599e162ab27c4b0ff99398857acc9bae7f45df4171f15db7b6"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/second-reviewer-pending.log",
+      "bytes": 10470,
+      "sha256": "e35a4f9319def0257e98db85a1cd49b73959f98d844652d75c62142b04a2368f"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/short-create-bottom-viewport.png",
+      "bytes": 30168,
+      "sha256": "b6b5be9ae8bb361d6a23ef1cf4956779065429778af05ecf2f7eef3d63c898d8"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/short-create-dialog.log",
+      "bytes": 13155,
+      "sha256": "9fc51875c2dd52e384ff7f8b5c528697dff59ba1ecb84d1d5183ee1749ae0a76"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/short-create-top-viewport.png",
+      "bytes": 52020,
+      "sha256": "3886af52928f10426b910816b3e980a74be8a7da8b39519d673858d17c575a27"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/short-dialog-geometry.log",
+      "bytes": 1001,
+      "sha256": "268fab610e9b3805837869584e0eaea4a56aa1a15aae617cea854e1f9ebb4309"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-original-request-after.log",
+      "bytes": 620,
+      "sha256": "0ea315c5c387661ed98346758707bac2e1f1f42eedb2d7fcf0f93a28a2acdd8c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-original-request-before.log",
+      "bytes": 688,
+      "sha256": "396fd3dfcb608c90db5289b9f5242700daa9cd54501f7fea5f869b03d77249d7"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-reload.log",
+      "bytes": 10776,
+      "sha256": "1029d9153f276bd0761dbe2d330a9bff0820cdb4576d126545c336a5d1f8e538"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-reloaded-1024.png",
+      "bytes": 400535,
+      "sha256": "02056751f1a4c132d3b478c25e67ec926da082ccddea7e5c5a3f1998a1cc8304"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-reloaded-1440.png",
+      "bytes": 419305,
+      "sha256": "f3d196f04ee711452666ca3291acabfafae800e6c9ecb583f2823f3add272013"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-reloaded-320.png",
+      "bytes": 378282,
+      "sha256": "120b3c4d26016f8efa2016185999a0fdbb36b48c49a276cd140ca35150544d0c"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-reloaded-390.png",
+      "bytes": 376671,
+      "sha256": "52d3fc3f38709d0ae05122e18b3cc43538e1bc43fa0ab5ddc82229a0a091c3be"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-replay-confirmed.log",
+      "bytes": 10539,
+      "sha256": "ff5f4d547cbe8e774afdabc77ec01169e927624f509dee465b1186f7198cfcec"
+    },
+    {
+      "path": "output/playwright/local-renewal-refund-20261017/unknown-widths.log",
+      "bytes": 558,
+      "sha256": "c04682d87421f048ea750e7c96b0609108e12b56dcb3696e701a796a4bb8bd51"
+    }
+  ],
+  "boundary": "Synthetic loopback PG18/API facts; no real merchant refund, upstream write or production deployment. Early CLI/resize attempts are raw evidence, not passing assertions. See acceptance document."
+}

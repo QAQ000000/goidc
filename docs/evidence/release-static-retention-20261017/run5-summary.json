@@ -1,0 +1,993 @@
+{
+  "status": "PASS",
+  "scope": "static retention preparation only",
+  "oldInputScope": "external anchor, frozen source and complete sealed bytes only; historical launch contract not accepted",
+  "runnerCommit": "500842708cb6424c75d48a98e3c152684425fede",
+  "oldCommit": "5118eac4d9d298574a6523af8f574381c5603ff2",
+  "nextCommit": "949ffe367f0bfac0567609d924386dfd17329871",
+  "counts": {
+    "old": 220,
+    "next": 220,
+    "shared": 58,
+    "union": 382
+  },
+  "nginxSHA256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+  "tooling": {
+    "nginxVersion": "nginx version: nginx/1.30.4\nbuilt by gcc 11.4.0 (Ubuntu 11.4.0-1ubuntu1~22.04.3) \nbuilt with OpenSSL 3.5.4 30 Sep 2025\nTLS SNI support enabled\nconfigure arguments: --user=www --group=www --prefix=/www/server/nginx --add-module=/www/server/nginx/src/ngx_devel_kit --add-module=/www/server/nginx/src/lua_nginx_module --add-module=/www/server/nginx/src/ngx_cache_purge --add-module=/www/server/nginx/src/nginx-sticky-module-ng-1.3.0 --with-openssl=/www/server/nginx/src/openssl --with-pcre=pcre-8.43 --with-http_v2_module --with-stream --with-stream_ssl_module --with-stream_ssl_preread_module --with-http_stub_status_module --with-http_ssl_module --with-http_image_filter_module --with-http_gzip_static_module --with-http_gunzip_module --with-ipv6 --with-http_sub_module --with-http_flv_module --with-http_addition_module --with-http_realip_module --with-http_mp4_module --with-http_auth_request_module --add-module=/www/server/nginx/src/ngx_http_substitutions_filter_module-master --with-ld-opt=-Wl,-E --with-cc-opt=-Wno-error --with-ld-opt=-ljemalloc --with-http_dav_module --add-module=/www/server/nginx/src/nginx-dav-ext-module --with-http_v3_module",
+    "needed": [
+      "libc.so.6",
+      "libcrypt.so.1",
+      "libgd.so.3",
+      "libjemalloc.so.2",
+      "libluajit-5.1.so.2",
+      "libxml2.so.2",
+      "libz.so.1"
+    ],
+    "loaderCacheSHA256": "2245b2ba10f5c1558866a963f93f32d30e9562c175d5f04d0574df46495f9777",
+    "luaFiles": [
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/balancer.lua",
+        "bytes": 6151,
+        "sha256": "fa590a06ef5e5b7e76300405cd58bc0c0e90c1edcf3f81604c4c122ac6de71dd"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/base64.lua",
+        "bytes": 1718,
+        "sha256": "24710259c4361c7e12244402e3d9e614565fd8a88ae23c84bf843ffb3111e56b"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/errlog.lua",
+        "bytes": 4410,
+        "sha256": "8d89d81a3087dd3c8f414b5a300a8468f38da3fd89c502bfb22923046f536bf6"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/ocsp.lua",
+        "bytes": 3734,
+        "sha256": "1ebb8c44723047e66bb13549b06fb3bf7665a56f790c063d882a40725cdc0264"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/pipe.lua",
+        "bytes": 19599,
+        "sha256": "1bd0cf15cb81318f35d75d201cdd21d8c4b5f2c0544f865b0e70eae5044b31c0"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/process.lua",
+        "bytes": 3016,
+        "sha256": "69961cc1647ac39d572af8aff21e988cf28b0093800bb126777b4f2fc864ef22"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/re.lua",
+        "bytes": 7729,
+        "sha256": "1e65606b49f8ac4f7eeca8978cb3acbb5a1fda578c73c6be04b9598d583cc41a"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/req.lua",
+        "bytes": 340,
+        "sha256": "99a9d746151c572c8234ebb601ea3e883daae400ac9b19ba6dc2f3f9b174fe35"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/resp.lua",
+        "bytes": 365,
+        "sha256": "9a45bb703b85d3cd256082aa46eb06b759b8bd843dad7417de13624df3e63f8f"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/semaphore.lua",
+        "bytes": 5102,
+        "sha256": "f437b40bbb10b75447c335d6d18faa12d931f2505a00ec078ba772b5fae27714"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/ssl/clienthello.lua",
+        "bytes": 6016,
+        "sha256": "2a5df501b82fa52998452c073fcc67c31480ff251fb5b9f58f3bf48ba9c56511"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/ssl/session.lua",
+        "bytes": 2414,
+        "sha256": "c869da1e344e3a730dfa62a288d458d73b978717129445766cc807b01b73499e"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/ngx/ssl.lua",
+        "bytes": 13099,
+        "sha256": "ea1c42ab1e05fb631163a89a60cf3d18bd92e09afa21a8469b5b07c288f76d38"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/base.lua",
+        "bytes": 5508,
+        "sha256": "ae5189ae949f0041ab6a4dafb35da86b713fbf9c0c248d2a92cef46e7e95eade"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/base64.lua",
+        "bytes": 3130,
+        "sha256": "76ee75a2bbb63dff17f15c95f478335d2f1aae04b24b5f8ce4210ce76016c2ae"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/coroutine.lua",
+        "bytes": 769,
+        "sha256": "31ab0734eb5aac653dfe3c8269dc50ee1fa30240a84aa7a2872a442585adf527"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/ctx.lua",
+        "bytes": 3796,
+        "sha256": "0596818af6d46409c10f6b4d9ff5da82c5386e16fde0a005e9cafe5a06c2f195"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/exit.lua",
+        "bytes": 1445,
+        "sha256": "c4e6c5dbd815e85efcb24a4b306c249d858e1ff1039bea7cd981e68373b62975"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/hash.lua",
+        "bytes": 4009,
+        "sha256": "2c57a3896bfe9fa0b2b4bfbec26bccf712bbae6877c274e04a851bffd7167c3c"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/misc.lua",
+        "bytes": 5841,
+        "sha256": "42f375b17207ecc247cd6a17c79f998beba4bbc0edc289759c5077fac457f137"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/ndk.lua",
+        "bytes": 2179,
+        "sha256": "c80dda9a61a1493c41fe4eb6f8dcaafe26b7f7591f7cb0715be46b4abe5baa8f"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/param.lua",
+        "bytes": 2402,
+        "sha256": "caf54fc07ad86dbb946080b7c466ebbfd2df57fe8cdaac0b9395e09d45193375"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/phase.lua",
+        "bytes": 1513,
+        "sha256": "8b4e9433a50c01452b681f8ba9cee97445f945712c2dc28bb39834d5387cf108"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/regex.lua",
+        "bytes": 34473,
+        "sha256": "16074df9b8d904843b3373c8ed3618eb04d5e9f397cc77975878c09e8e49697f"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/request.lua",
+        "bytes": 11406,
+        "sha256": "0fd0cfc55c08a33306f78d4016bc2d8ce84253c5c68d0dc987b4123dd8d6ce41"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/response.lua",
+        "bytes": 6361,
+        "sha256": "c1d807d842a3856c60957832672c519fbd1d9041f2b65acf026d4da810d923d7"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/shdict.lua",
+        "bytes": 27200,
+        "sha256": "c97d065f75a5c6dc3f20bc336a3f040fd0820de35363ec2e0f9fe24889ab338f"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/socket.lua",
+        "bytes": 7394,
+        "sha256": "a4fb407e93a7f498d01cf38375e0b75f6f0ea344f003d16817164adac75aee27"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/time.lua",
+        "bytes": 4686,
+        "sha256": "32d81046e77606c49cf01463f6daf21fb699c5c9727fb4dc163eec483ea718fe"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/uri.lua",
+        "bytes": 3098,
+        "sha256": "d831ec3b33d70d889f08f29a3f8aed000f6dd069309a556c614708a4a27fcae9"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/utils.lua",
+        "bytes": 972,
+        "sha256": "6dc18e8056a9d927bf3658a90d9516df9780e3ffb472202bfd40c9837bb98e80"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/var.lua",
+        "bytes": 3909,
+        "sha256": "eeeed995d25f8935423945468ad07a136999433378de3ca12672cc603423db87"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core/worker.lua",
+        "bytes": 3236,
+        "sha256": "2bddf14f78e4892871907796e0be7d2e5ba2b827858888dd1f74261be7aa76c6"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/core.lua",
+        "bytes": 710,
+        "sha256": "a5d3b4d07fa4377d75fdc3311a63b3a44579c004be8a8cba02306614bc8cfba2"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/lrucache/pureffi.lua",
+        "bytes": 18607,
+        "sha256": "767a1721eb631295a651175955e8a6ed83c80809a3d60e4f6749bd83084f9e7e"
+      },
+      {
+        "path": "/www/server/nginx/lib/lua/resty/lrucache.lua",
+        "bytes": 7117,
+        "sha256": "5e4d223fa941bcfad714c9e68b53f20723c5b35d075c6d822bc2762a4153e096"
+      }
+    ],
+    "luajitSHA256": "b79449ad410ad5571767b1354349d019b526e57a30027ede6088f564d76a0a7c",
+    "jemallocSHA256": "84b74934f1baad310af9057afda34f828450a9d2d297ac6e65744c734eadb955"
+  },
+  "budget": {
+    "maxOutputBytes": 33554432,
+    "minimumFreeBytes": 536870912,
+    "maximumOutputFiles": 4096
+  },
+  "sourceProof": {
+    "commit": "500842708cb6424c75d48a98e3c152684425fede",
+    "tree": "de60e8b6a5fc07edfbf014daba6ed132f4370684"
+  },
+  "mappingSHA256": "03cd639ac35e6ce379a05f8b7745fa251a1fe2f609f06770513f39a791924021",
+  "hostBefore": {
+    "mountNamespace": "mnt:[4026532210]",
+    "netNamespace": "net:[4026531833]",
+    "resident": [
+      {
+        "pid": 1335,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "812"
+      },
+      {
+        "pid": 327539,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327540,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327541,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327542,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327543,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327544,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327545,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327546,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310772"
+      },
+      {
+        "pid": 327547,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310773"
+      },
+      {
+        "pid": 608393,
+        "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+        "startTicks": "6845798"
+      },
+      {
+        "pid": 608413,
+        "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+        "startTicks": "6845905"
+      },
+      {
+        "pid": 1647696,
+        "exe": "/www/server/nodejs/v24.16.0/bin/node",
+        "startTicks": "12716699"
+      }
+    ]
+  },
+  "oldManifestSHA256": "c691d84bb79ccfb148a8668763d173f934973d9d0f3c5b2b25b546da39cac27a",
+  "nextManifestSHA256": "5a4228c5223d01fe0bd7c0c951c106b70276055b78fa6ab6b0b6fb2b2415745a",
+  "configHashes": {
+    "old": "9fbc71724412284beb3d18ac48560009e765e472217613f82c2ce983323cfff5",
+    "union": "21ecfb2b4568dcaf7650d1597a2fd18cf2fc45f7cf1055b471a7597e27f8437e",
+    "restored": "0975d87de0ef6595018f7de90e127b8334d78e357ebc422faf3fcba9f2287b6b"
+  },
+  "runtime": {
+    "status": "PASS",
+    "scope": "static only; no Web/API/database or production switch",
+    "phases": [
+      {
+        "phase": "old",
+        "entries": 220
+      },
+      {
+        "phase": "union",
+        "entries": 382
+      },
+      {
+        "phase": "restored",
+        "entries": 382
+      }
+    ],
+    "negative": [
+      {
+        "path": "/.env",
+        "status": 404
+      },
+      {
+        "path": "/manifest.json",
+        "status": 404
+      },
+      {
+        "path": "/server.js",
+        "status": 404
+      },
+      {
+        "path": "/api/v1/site",
+        "status": 404
+      },
+      {
+        "path": "/",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/missing.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/.env",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/manifest.json",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/../server.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%2e%2e/server.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%252e%252e/server.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/./chunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%2fchunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%5cchunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static//chunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%2E%2E/chunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/%252fchunks/1250-bb39b1e867e36057.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/chunks/1250-bb39b1e867e36057.js%00",
+        "status": 400
+      },
+      {
+        "path": "/_next/static/chunks/1250-bb39b1e867e36057.js/extra",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/chunks/1250-bb39b1e867e36057.js/",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/chunks/1250-bb39b1e867e36057.js?x=%0a",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/chunks/1250-bb39b1e867e36057.js%",
+        "status": 400
+      },
+      {
+        "path": "/_next/static/chunks/app/admin/access/staff/%5Bid%5D/page-895682b0fcaa00b4.js",
+        "status": 404
+      },
+      {
+        "path": "/_next/static/chunks/app/admin/access/staff/%255Bid%255D/page-895682b0fcaa00b4.js",
+        "status": 404
+      },
+      {
+        "rawControl": 0,
+        "status": 400
+      },
+      {
+        "rawControl": 1,
+        "status": 400
+      },
+      {
+        "method": "POST",
+        "status": 405
+      },
+      {
+        "method": "PUT",
+        "status": 405
+      },
+      {
+        "method": "DELETE",
+        "status": 405
+      },
+      {
+        "method": "OPTIONS",
+        "status": 405
+      }
+    ],
+    "isolation": {
+      "uid": 1000,
+      "gid": 1000,
+      "namespace": "net:[4026532307]",
+      "mountNamespace": "mnt:[4026532302]",
+      "devices": [
+        "lo"
+      ],
+      "sourceHidden": true
+    },
+    "step": "complete",
+    "syntax": [
+      {
+        "phase": "old",
+        "status": 0,
+        "diagnostic": "nginx: the configuration file /mutable/nginx.next.conf syntax is ok\nnginx: configuration file /mutable/nginx.next.conf test is successful\n"
+      },
+      {
+        "phase": "union",
+        "status": 0,
+        "diagnostic": "nginx: the configuration file /mutable/nginx.next.conf syntax is ok\nnginx: configuration file /mutable/nginx.next.conf test is successful\n"
+      },
+      {
+        "phase": "restored",
+        "status": 0,
+        "diagnostic": "nginx: the configuration file /mutable/nginx.next.conf syntax is ok\nnginx: configuration file /mutable/nginx.next.conf test is successful\n"
+      }
+    ],
+    "fileFixtures": [
+      {
+        "case": "same-byte-merge",
+        "passed": true
+      },
+      {
+        "case": "missing-file",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      },
+      {
+        "case": "tampered-file",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      },
+      {
+        "case": "symbolic-link",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      },
+      {
+        "case": "special-file",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      },
+      {
+        "case": "same-url-conflict",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      },
+      {
+        "case": "configuration-injection",
+        "rejected": true,
+        "oldStatus": 200,
+        "oldSHA256": "91e3a341b92596b0212e48c3dafd9bcd008ada625f0b9a63e7fa73b557ed8106",
+        "generation": "old"
+      }
+    ],
+    "safeQuery": true,
+    "conditionals": {
+      "notModified": 304,
+      "stale": 200
+    },
+    "continuousSummary": {
+      "intervalAfterResponseMs": 10,
+      "samples": 131,
+      "errors": 0,
+      "digestMismatches": 0,
+      "startedAt": "2026-10-16T23:17:36.620Z",
+      "finishedAt": "2026-10-16T23:17:38.087Z"
+    },
+    "identities": [
+      {
+        "phase": "old",
+        "startedAt": "2026-10-16T23:17:36.140Z",
+        "readyAt": "2026-10-16T23:17:36.316Z",
+        "master": {
+          "pid": 15,
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "uid": 1000,
+          "gid": 1000,
+          "ppid": 2,
+          "processGroup": 0,
+          "startTicks": "14632798",
+          "mountNamespace": "mnt:[4026532302]",
+          "netNamespace": "net:[4026532307]",
+          "cmdline": [
+            "nginx: master process /tools/nginx -p /mutable/ -c /mutable/nginx.conf -e /mutable/bootstrap.log"
+          ]
+        },
+        "workers": [
+          {
+            "pid": 16,
+            "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+            "uid": 1000,
+            "gid": 1000,
+            "ppid": 15,
+            "processGroup": 0,
+            "startTicks": "14632802",
+            "mountNamespace": "mnt:[4026532302]",
+            "netNamespace": "net:[4026532307]",
+            "cmdline": [
+              "nginx: worker process"
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "union",
+        "startedAt": "2026-10-16T23:17:36.661Z",
+        "readyAt": "2026-10-16T23:17:36.922Z",
+        "master": {
+          "pid": 15,
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "uid": 1000,
+          "gid": 1000,
+          "ppid": 2,
+          "processGroup": 0,
+          "startTicks": "14632798",
+          "mountNamespace": "mnt:[4026532302]",
+          "netNamespace": "net:[4026532307]",
+          "cmdline": [
+            "nginx: master process /tools/nginx -p /mutable/ -c /mutable/nginx.conf -e /mutable/bootstrap.log"
+          ]
+        },
+        "workers": [
+          {
+            "pid": 16,
+            "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+            "uid": 1000,
+            "gid": 1000,
+            "ppid": 15,
+            "processGroup": 0,
+            "startTicks": "14632802",
+            "mountNamespace": "mnt:[4026532302]",
+            "netNamespace": "net:[4026532307]",
+            "cmdline": [
+              "nginx: worker process"
+            ]
+          },
+          {
+            "pid": 18,
+            "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+            "uid": 1000,
+            "gid": 1000,
+            "ppid": 15,
+            "processGroup": 0,
+            "startTicks": "14632862",
+            "mountNamespace": "mnt:[4026532302]",
+            "netNamespace": "net:[4026532307]",
+            "cmdline": [
+              "nginx: worker process"
+            ]
+          }
+        ]
+      },
+      {
+        "phase": "restored",
+        "startedAt": "2026-10-16T23:17:37.359Z",
+        "readyAt": "2026-10-16T23:17:37.677Z",
+        "master": {
+          "pid": 15,
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "uid": 1000,
+          "gid": 1000,
+          "ppid": 2,
+          "processGroup": 0,
+          "startTicks": "14632798",
+          "mountNamespace": "mnt:[4026532302]",
+          "netNamespace": "net:[4026532307]",
+          "cmdline": [
+            "nginx: master process /tools/nginx -p /mutable/ -c /mutable/nginx.conf -e /mutable/bootstrap.log"
+          ]
+        },
+        "workers": [
+          {
+            "pid": 18,
+            "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+            "uid": 1000,
+            "gid": 1000,
+            "ppid": 15,
+            "processGroup": 0,
+            "startTicks": "14632862",
+            "mountNamespace": "mnt:[4026532302]",
+            "netNamespace": "net:[4026532307]",
+            "cmdline": [
+              "nginx: worker process"
+            ]
+          },
+          {
+            "pid": 20,
+            "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+            "uid": 1000,
+            "gid": 1000,
+            "ppid": 15,
+            "processGroup": 0,
+            "startTicks": "14632936",
+            "mountNamespace": "mnt:[4026532302]",
+            "netNamespace": "net:[4026532307]",
+            "cmdline": [
+              "nginx: worker process"
+            ]
+          }
+        ]
+      }
+    ],
+    "master": {
+      "pid": 15,
+      "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6"
+    },
+    "anonymousDeviceMappings": [
+      "/dev/zero (deleted)"
+    ],
+    "toolingMaps": [
+      {
+        "path": "/tools/nginx",
+        "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libxcb.so.1.1.0",
+        "sha256": "aabc489094abd96c876d1c989a2da8a8aa6d28f5a676c4a84dd6d0a0c34aec5d"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libbrotlicommon.so.1.0.9",
+        "sha256": "abf86ae9362dbb413c740a55b194c74adb09a7bd92d8fbd96a293c797a4a6d08"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libdeflate.so.0",
+        "sha256": "dce39e00c986632f7d83199f2e5f2b89d7e11c8f311c6e9f204595f899785fa6"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libX11.so.6.4.0",
+        "sha256": "e23ed094eaf0a74a822a6d9d14eee628ab9f7ec08aecbf20ffd803f019ff6e98"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libicudata.so.70.1",
+        "sha256": "c1404396288e178c8db2f30203cb8150e4d2c14cacee9a2883e0092f45399cc8"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libbsd.so.0.11.5",
+        "sha256": "e4ad21c203d8e8b9b7f49071311339af6b438026e1ad236403e3b379b022f23d"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libzstd.so.1.4.8",
+        "sha256": "5df4f4df42d76270bb6981fabc7c1fdccd8ad28a23d84d67f73203fb3f537667"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libwebp.so.7.1.3",
+        "sha256": "2cff2529eb932c3b81ef6a344b99a5412c893d3f672a7d28f986a8d08c8b2ccb"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libtiff.so.5.7.0",
+        "sha256": "005ba73d8ce3ebec60a985df14d00fc7d57719f3000f142ef80efb2c7011bb1d"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libicuuc.so.70.1",
+        "sha256": "4683f3623dc47a92e862dc3c8770caff81c9f4c7e116bb672fc439737b06d88a"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libstdc++.so.6.0.30",
+        "sha256": "ff0825e113603c3866680d5d52216bc6d8eedf3a59f52a0aef67ff01994db128"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libmd.so.0.0.5",
+        "sha256": "bb376813876bb214535bbbdac70f2c0c4b00baecb81557dab78a79518248df06"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libXdmcp.so.6.0.0",
+        "sha256": "1dc3ff1269a5ede69ef9a8ec2436d73fccbcd10531055b359292e0bde4e29b46"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libXau.so.6.0.0",
+        "sha256": "98343a8324ea62ed75a13c923ed5dea96b7a8ad41aeba9f18126c4cbf7178064"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libjbig.so.0",
+        "sha256": "32ed19ff3065742c392e018840ed59a0b2a17817adf94ba409708f16d8cf234b"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libbrotlidec.so.1.0.9",
+        "sha256": "db9dbda709a46c3ae124433f47c4db71167db8aaba4eafdfd99c8a3a14584463"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libjpeg.so.8.2.2",
+        "sha256": "2cfbcf67051b3efd1bf634af7d0b65a47dda98ff61ba793a87415ed554731344"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libfreetype.so.6.18.1",
+        "sha256": "c338538f8d90eb85217e8525ab363e68e79b46d3c8acc0b6824190e032687e5f"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libfontconfig.so.1.12.0",
+        "sha256": "7d688909aab1c566b60832045fef012ea118ff7ee189df87608fbff999d3bd0d"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libc.so.6",
+        "sha256": "b2cf6c33b74d2f22543b7a469a75b538911e690f769d0b238843a49465b83793"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libuuid.so.1.3.0",
+        "sha256": "4472cf91dbc01395761fb45d0f4b25f6241406fe54cbf540c13755a3706a7b17"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libexpat.so.1.8.7",
+        "sha256": "683e2e41db14581194bf1f6616e95a8f02cd4ab599f0fba807e46325ec01d21f"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libpng16.so.16.37.0",
+        "sha256": "0c55d5776d3382cb7859ff48fcf813e0c3b27f33c46f9364633748830246c723"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/liblzma.so.5.2.5",
+        "sha256": "7fa51c1500cb9fcc4c7d69b7fe0a6d7203cfe6af64373f6c411c5445ef1b402c"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libm.so.6",
+        "sha256": "3dd5511ae94785c9f921429b0f2b2f7aabb461b6f0e6de6dfdbef15f24bdfee6"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libgd.so.3.0.8",
+        "sha256": "131bc49003c6e739d2167cbb1b9e3e930073ed2bc0338e1ff142a3be15e9d642"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libxml2.so.2.9.13",
+        "sha256": "8c2a993fe42a16e94f9054f1b9cbeccea50b6ed377359e9d3da04cbb2470f225"
+      },
+      {
+        "path": "/usr/local/lib/libjemalloc.so.2",
+        "sha256": "84b74934f1baad310af9057afda34f828450a9d2d297ac6e65744c734eadb955"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libXpm.so.4.11.0",
+        "sha256": "d8214453f351baa91c49cf983768b5a66b5c27c08d9cef90509e8e315848b52b"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libgcc_s.so.1",
+        "sha256": "fc9d43b2f6c20e53b009238f767c5b949d202389e20de9e202ea684b4ba3729a"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libz.so.1.2.11",
+        "sha256": "64c206f0146cc58bbddc4f22054436f4ff278f5a554aa3ce6921ddf7e9133370"
+      },
+      {
+        "path": "/usr/local/lib/libluajit-5.1.so.2",
+        "sha256": "b79449ad410ad5571767b1354349d019b526e57a30027ede6088f564d76a0a7c"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/libcrypt.so.1.1.0",
+        "sha256": "d8b34ade1d95c6243a48e90f2873d65399dfb0cd3fa4ee2af45afc9e6cb8642b"
+      },
+      {
+        "path": "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        "sha256": "41daf7836f7fce21a40ca63a00c5caf21b05a35a76ccc075d86f1716212cdf01"
+      }
+    ],
+    "allOwnedExited": true,
+    "listenerGone": true
+  },
+  "hostOrdinaryIdentity": {
+    "pid": 2099928,
+    "uid": 1000,
+    "gid": 1000,
+    "uidEvidence": "real and effective UID/GID from outer host /proc after setpriv",
+    "mountNamespace": "mnt:[4026532300]"
+  },
+  "hostAfter": {
+    "mountNamespace": "mnt:[4026532210]",
+    "netNamespace": "net:[4026531833]",
+    "resident": [
+      {
+        "pid": 1335,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "812"
+      },
+      {
+        "pid": 327539,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327540,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327541,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327542,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327543,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327544,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327545,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310771"
+      },
+      {
+        "pid": 327546,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310772"
+      },
+      {
+        "pid": 327547,
+        "exe": "/www/server/nginx/sbin/nginx",
+        "startTicks": "2310773"
+      },
+      {
+        "pid": 608393,
+        "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+        "startTicks": "6845798"
+      },
+      {
+        "pid": 608413,
+        "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+        "startTicks": "6845905"
+      },
+      {
+        "pid": 1647696,
+        "exe": "/www/server/nodejs/v24.16.0/bin/node",
+        "startTicks": "12716699"
+      }
+    ]
+  },
+  "sealedUnchanged": true,
+  "wrapperExited": true,
+  "format": "zjmfgo-static-retention-report-projection-v1",
+  "sourceReport": {
+    "path": "/tmp/zjmfgo-static-retention-run5-20261017/report.json",
+    "bytes": 825626,
+    "sha256": "0841efdac8c5b80b35b6c8a647a5d29f10ef34f3c26f3f727cb01c013e07fb55",
+    "scope": "projection; omitted arrays remain in original local report, not a byte-for-byte copy"
+  },
+  "omittedArrays": {
+    "mapping": {
+      "sha256": "03cd639ac35e6ce379a05f8b7745fa251a1fe2f609f06770513f39a791924021",
+      "encoding": "UTF-8 compact JSON with ensure_ascii=False, insertion order, no trailing newline",
+      "type": "object",
+      "entries": 382,
+      "oldEntries": 220
+    },
+    "runtime.checked": {
+      "items": 984,
+      "sha256": "dcabea6b7099921a8e0d3b5171cd0a3e4a5637ecd6c0387be36b685c60ac4362",
+      "encoding": "UTF-8 compact JSON with ensure_ascii=False, insertion order, no trailing newline"
+    },
+    "runtime.continuous": {
+      "items": 131,
+      "sha256": "05549668fdb2f89d8c6646f5297331ce033459cc6a84df52b012baf184abd7e5",
+      "encoding": "UTF-8 compact JSON with ensure_ascii=False, insertion order, no trailing newline"
+    }
+  },
+  "requestSummary": {
+    "verifiedGETAndHEADPairs": 984,
+    "continuousGenerations": {
+      "old": 19,
+      "union": 67,
+      "restored": 45
+    },
+    "oldSourceFiles": 220,
+    "newSourceFiles": 220,
+    "sharedWithBothSources": 58
+  },
+  "localEvidenceFiles": [
+    {
+      "path": "control/old.conf",
+      "bytes": 132511,
+      "sha256": "9fbc71724412284beb3d18ac48560009e765e472217613f82c2ce983323cfff5"
+    },
+    {
+      "path": "control/union.conf",
+      "bytes": 232617,
+      "sha256": "21ecfb2b4568dcaf7650d1597a2fd18cf2fc45f7cf1055b471a7597e27f8437e"
+    },
+    {
+      "path": "control/restored.conf",
+      "bytes": 233766,
+      "sha256": "0975d87de0ef6595018f7de90e127b8334d78e357ebc422faf3fcba9f2287b6b"
+    },
+    {
+      "path": "mutable/nginx.conf",
+      "bytes": 233766,
+      "sha256": "0975d87de0ef6595018f7de90e127b8334d78e357ebc422faf3fcba9f2287b6b"
+    },
+    {
+      "path": "mutable/access.log",
+      "bytes": 292420,
+      "sha256": "da1e8f2d098af3dde898f4e3cc147d2bf51357121b33cda27787873ff8a1a261"
+    },
+    {
+      "path": "mutable/error.log",
+      "bytes": 2153,
+      "sha256": "2bde64bbc0d2e3d82524fdedc430f60f4527b06b60984c4297d1becd510ad2ed"
+    },
+    {
+      "path": "mutable/bootstrap.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "mutable/result.json",
+      "bytes": 335280,
+      "sha256": "b49115bf8f231e0348a60d561e681aa6f9cdae269c9b604e8e5981e728a35d1b"
+    },
+    {
+      "path": "mutable/host-identity.json",
+      "bytes": 174,
+      "sha256": "a04a2776367a7f3b9c26699b18838e34ff9a985d228a8d86161a18b6e41810d9"
+    }
+  ],
+  "nginxAccessLogSummary": {
+    "lines": 2152,
+    "statuses": {
+      "200": 2119,
+      "304": 1,
+      "400": 4,
+      "404": 24,
+      "405": 4
+    }
+  }
+}

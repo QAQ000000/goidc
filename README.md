@@ -124,6 +124,8 @@ NOKVM 服务详情支持 CPU、网络和系统盘/数据盘 I/O 监控，提供 
 
 前端默认 `http://localhost:3088`，Go API `127.0.0.1:8088`，`/healthz` 活性、`/readyz` 数据库就绪。Next.js 代理 `/api/*`，前端不直接跨域连接 Go。
 
+Next.js 的开发、生产启动命令及 systemd 模板默认只监听 `127.0.0.1`。本地 `/api/*` 转发会移除 `X-Forwarded-For`、`X-Real-IP`、`Forwarded`，Go 使用连接对端作为限流与审计地址。生产环境需要按 [切换模板](docs/cutover-runbook.md#2-标准生产-nginx-反代模板) 将 `/api/` 直接反代到 Go，由受控 Nginx 设置客户端地址，并配置 `TRUSTED_PROXY_CIDRS`。不要将生产 API 经 Next 转发，否则所有客户会共用本机 IP 限流桶。
+
 ## 验证
 
 商品目录支持两级购买分组、说明/标题/标语、排序和隐藏，后台 `/admin/products` 提供商品维护及账期价格编辑，`/admin/catalog-groups` 管理分组。版本与库存快照避免覆盖并发变更，默认展示价格和结算价格同步；完整 API、权限和待迁移范围见 [商品目录与维护](docs/catalog-management.md)。
@@ -139,11 +141,34 @@ NOKVM 服务详情支持 CPU、网络和系统盘/数据盘 I/O 监控，提供 
 cd web
 npm run lint
 npm run typecheck
+npm run test:proxy
+# 仅在没有 Next 服务使用的独立 checkout / worktree 中构建
 npm run build
 ```
 
+`npm run build` 的 `prebuild` 会在 Linux 扫描 `/proc`，发现同一真实 Web 目录正在运行 `next-server` 或 `next start/dev` 时拒绝构建；目录软链接不能绕过。无法读取进程信息时停止构建，非 Linux 或没有挂载 `/proc` 时明确提示无法自动保护。此检查不扫描环境变量，不会停止服务；它是构建前快照，不能防止检查后又启动服务，也不能保护直接调用 `next build`、`npm --ignore-scripts` 或共享/软链接 `.next` 的情况。不要绕过检查。
+
+常驻实例保持原目录和 `.next` 不动，在独立 worktree 构建。例如以下命令只准备候选，不发布、不重启服务：
+
+```bash
+# 在仓库根目录执行；选择全新的绝对路径及已经审核的提交
+build_dir=/tmp/zjmfgo-web-candidate-20261017
+reviewed_commit='<已审核提交>'
+git worktree add --detach "$build_dir" "$reviewed_commit"
+# 依赖锁定且共享目录不会被修改时可复用；不要复制 node_modules
+ln -s /www/wwwroot/zjmfgo/web/node_modules "$build_dir/web/node_modules"
+API_INTERNAL_URL=http://127.0.0.1:8088 npm --prefix "$build_dir/web" run build -- --webpack
+node --test scripts/check-web-build-runtime.test.mjs
+```
+
+上例显式使用webpack，以支持worktree外的共享依赖软链接；本项目已观察到默认Turbopack拒绝该链接，不能把失败构建算作通过。候选 `.next` 必须独立，不能软链接回运行目录；依赖需要变更时在独立目录安装，不能对常驻进程共享的 `node_modules` 执行 `npm ci`。Next rewrite 会绑定构建时 API 地址，临时 API 预览产物不能直接晋升正式发布。发布需要成套产物及静态资源、schema兼容和切回验收，见[发布验收契约](docs/release-readiness-next-contract-20261017.md)。
+
+已提交干净源码可使用[本地候选构建器与清单核验](docs/release-candidate-builder-20261017.md)准备同一提交的 API/worker/migrate、SQL checksum 和 Web 生产产物：构建器自行创建独立 checkout、显式使用 webpack，并输出需独立保存的 manifest SHA256；不接收任意已有 `.next` 作为同源证明，不含共享运行依赖，不部署或切流。此增量仅候选准备，G04/G09仍未关闭。
+
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
 
-`scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=30m`。PG18 的 httpapi 套件实测约 13 分钟，超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
+`scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=45m`。PG18 的 httpapi 套件随测试增长已超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
+
+真实 worker 强杀恢复另用 `scripts/test-worker-recovery.sh`：先设置同一个隔离测试 DSN，要求回环地址、PG18 和 `_test` 库名。入口强制开启 `ZJMFGO_WORKER_CRASH_ACCEPTANCE=1`、集成测试和 harness race，必须看到供应商及通知两套测试实际 PASS；不接受无匹配或跳过。子进程只访问各自随机 schema 与本地协议夹具，测试会加速过期租约/退避时间，不证明真实五分钟恢复时间、生产容量或真实渠道投递。子 worker 使用正常构建，race 检查范围为测试进程。
 
 仓库内 Go 命令优先使用 `scripts/go.sh`，先运行 `scripts/check-go-toolchain.sh` 检查实际版本、`GOROOT` 和 `GOTOOLDIR`，避免用户级 Go 与 `/usr/local/btgo` 混用。

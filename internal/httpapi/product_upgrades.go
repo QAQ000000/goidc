@@ -17,7 +17,7 @@ func (s *Server) productUpgradeTargets(w http.ResponseWriter, r *http.Request) {
 		if !decode(w, r, &in) {
 			return
 		}
-		if err := s.db.SaveProductUpgradeTargets(r.Context(), identityFrom(r).ID, id, in); err != nil {
+		if err := s.db.SaveProductUpgradeTargets(requestFileContext(r), identityFrom(r).ID, id, in, r.Header.Get("Idempotency-Key")); err != nil {
 			s.fail(w, r, err)
 			return
 		}

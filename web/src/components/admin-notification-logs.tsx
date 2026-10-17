@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useResource } from "@/hooks/use-resource";
 import { date } from "@/lib/api";
-import { Workspace } from "./workspace";
+import { adminNavigationItem, can } from "@/lib/admin-navigation";
+import { Workspace, useAdminIdentity } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
 import { Failure, Loading } from "./common";
 import { Button } from "./ui/button";
@@ -37,6 +38,7 @@ function status(valueText: string) {
 }
 
 export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" | "email" }) {
+  const user = useAdminIdentity();
   const [params, setParams] = useState<URLSearchParams | null>(null);
   useEffect(() => {
     const restore = () => setParams(new URLSearchParams(window.location.search));
@@ -46,8 +48,10 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
   }, []);
 
   const path = `/admin/logs/${kind}`;
+  const permission = adminNavigationItem(path)?.permission;
+  const allowed = !!permission && can(user, permission);
   const query = params?.toString();
-  const logs = useResource<LogResult>(params ? `${path}?${query}` : null, false);
+  const logs = useResource<LogResult>(allowed && params ? `${path}?${query}` : null, false);
   const limit = Number(params?.get("limit")) || 25;
   const page = Math.floor((Number(params?.get("offset")) || 0) / limit);
   const title = kind === "sms" ? "短信日志" : kind === "inbox" ? "站内信日志" : kind === "api" ? "API 日志" : "邮件日志";
@@ -72,12 +76,14 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
     setParams(new URLSearchParams());
   }
 
+  if (!allowed) return <Workspace admin title={title}><p role="alert">没有查看此日志的权限</p></Workspace>;
+
   return <Workspace admin title={title}>
     <div className="min-w-0 max-w-full space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="page-title">{title}</h1>
         <div className="flex flex-wrap gap-1" aria-label="日志类型">
-          {tabs.map(([href, label]) => <Button key={href} asChild size="sm" variant={href === path ? "default" : "outline"}><Link href={href}>{label}</Link></Button>)}
+          {tabs.filter(([href]) => { const item = adminNavigationItem(href); return !!item && can(user, item.permission); }).map(([href, label]) => <Button key={href} asChild size="sm" variant={href === path ? "default" : "outline"}><Link href={href}>{label}</Link></Button>)}
         </div>
       </div>
       <div className="flex flex-wrap items-end gap-3 rounded border bg-card p-4">

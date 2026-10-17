@@ -1,0 +1,1048 @@
+{
+  "projection": true,
+  "rawReport": {
+    "path": "/tmp/zjmfgo-dual-web-run6-20261017/report.json",
+    "bytes": 1495485,
+    "sha256": "e636bd14952582e5b744b5b36f72d8307059081d220e89bd3dafe5e7153793c3"
+  },
+  "scope": "isolated same-source dual Web preparation only; no production switch or schema upgrade",
+  "status": "PASS",
+  "runnerCommit": "6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3",
+  "commit": "6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3",
+  "oldManifestSHA256": "73cb22adf7d7b8590c07c5b3700a54a8becdbdce26a8a63703968d1c2ebbdf46",
+  "nextManifestSHA256": "1b21bcfb71b46a282cb95c4cfe3fe7287f83040862bc45c03da5f2507554a63f",
+  "planSHA256": "3535ead77c31edd183ae1a8829ea42c35bedbce3fc5bbc62ebe3bd3d5fef51bf",
+  "configHashes": {
+    "old": "4adfed04b46f180fe6b6467e56e2d2a90b356e6c6ac55f49c8a4820f5a146908",
+    "next": "80133b5af8277f22ca74b20f9962fd36d8f08b7b6936e02236fd458f8ee7a38d",
+    "restored": "bfd0d4794be019dd4bc7503b794beb00fa879960f77ed66804fbc5ca8737f6e8"
+  },
+  "observedGoPeakBytes": 319614790,
+  "observedMutablePeak": {
+    "bytes": 4642661,
+    "files": 114
+  },
+  "sandboxStop": {
+    "groupGone": true,
+    "forced": false
+  },
+  "privatePIDNamespaceGone": true,
+  "fixtureStop": {
+    "groupGone": true,
+    "forced": false
+  },
+  "fixtureCleanup": {
+    "ok": true,
+    "phase": "cleaned",
+    "schemaRemoved": true
+  },
+  "fixtureSchemaRemoved": true,
+  "sealedUnchanged": {
+    "old": true,
+    "next": true
+  },
+  "copiesUnchanged": {
+    "old": true,
+    "next": true
+  },
+  "toolingUnchanged": true,
+  "databaseStorageUnchanged": true,
+  "hostUnchanged": true,
+  "plan": {
+    "publicOrigin": "http://127.0.0.1:53188",
+    "old": {
+      "api": "http://127.0.0.1:58088",
+      "web": "http://127.0.0.1:53088",
+      "publicOrigin": "http://127.0.0.1:53188",
+      "buildID": "gVh6-Rk5BjGrBgTCjeQ7r",
+      "manifestSHA256": "73cb22adf7d7b8590c07c5b3700a54a8becdbdce26a8a63703968d1c2ebbdf46",
+      "commit": "6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3"
+    },
+    "next": {
+      "api": "http://127.0.0.1:58089",
+      "web": "http://127.0.0.1:53089",
+      "publicOrigin": "http://127.0.0.1:53188",
+      "buildID": "HxIiLKYNudHdPZVX0nl9m",
+      "manifestSHA256": "1b21bcfb71b46a282cb95c4cfe3fe7287f83040862bc45c03da5f2507554a63f",
+      "commit": "6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3"
+    },
+    "retentionCounts": {
+      "old": 220,
+      "next": 220,
+      "shared": 58,
+      "union": 382
+    }
+  },
+  "runtime": {
+    "ok": true,
+    "allOwnedExited": true,
+    "listenersGone": true,
+    "fixtureCleaned": true,
+    "fixtureSchemaRemoved": true,
+    "continuous": {
+      "requests": 450,
+      "errors": 0,
+      "boundedMaximum": 4000,
+      "observerStoppedBeforeLogout": true,
+      "bothReloadsCovered": true
+    },
+    "counts": {
+      "checks": 1449,
+      "fixture": 11,
+      "migrations": 4,
+      "identities": 4,
+      "loadedMaps": 8,
+      "reloads": 2,
+      "observations": 450,
+      "metadataCheckRecords": 8
+    },
+    "purposeCounts": {
+      "metadata": 8,
+      "internal-html": 6,
+      "internal-page-asset": 42,
+      "internal-site-direct": 2,
+      "internal-site-proxy": 2,
+      "internal-ssr-marker": 2,
+      "internal-dynamic-no-store": 6,
+      "customer-single-login": 1,
+      "admin-single-login": 1,
+      "session-identity": 28,
+      "customer-permission": 3,
+      "customer-protected-ssr": 3,
+      "admin-permission": 3,
+      "admin-protected-ssr": 3,
+      "customer-admin-rejected": 3,
+      "anonymous-invalid-api": 6,
+      "anonymous-invalid-ssr": 12,
+      "rejected-origin-or-requested-with": 18,
+      "spoofed-forwarding-session": 6,
+      "spoofed-forwarding-permission": 6,
+      "spoofed-forwarding-ssr": 6,
+      "spoofed-forwarding-home": 3,
+      "spoofed-forwarding-redirect": 3,
+      "retained-union": 1146,
+      "static-head": 6,
+      "static-query": 6,
+      "static-304": 6,
+      "public-html": 9,
+      "raw-negative": 72,
+      "unsafe-method": 18,
+      "bad-host": 3,
+      "customer-single-logout": 1,
+      "admin-single-logout": 1,
+      "logged-out-direct-web": 8
+    },
+    "arrays": {
+      "checks": {
+        "count": 1449,
+        "sha256": "ea7476803dd6ec4988e283ba907975bb81082c5fe9a964ee70dfb057377235de",
+        "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+      },
+      "observations": {
+        "count": 450,
+        "sha256": "26e40310214efc5241fb19d24f41c0eee5397aec6160fcf2993903a4afcc8c54",
+        "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+      },
+      "loadedMaps": {
+        "count": 8,
+        "sha256": "6734bf216a63154bd71c2788bc7a98a9f243d5adaa540fdb058aa28fadd040a9",
+        "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+      },
+      "identities": {
+        "count": 4,
+        "sha256": "9e863b7748c255472e1dbccfe648a7ce448fd0ceb095166b5fe2c180c4e204ae",
+        "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+      }
+    },
+    "migrations": [
+      {
+        "key": "old",
+        "number": 1,
+        "exit": 0,
+        "migrationChecks": 1,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e"
+      },
+      {
+        "key": "old",
+        "number": 2,
+        "exit": 0,
+        "migrationChecks": 2,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e"
+      },
+      {
+        "key": "next",
+        "number": 1,
+        "exit": 0,
+        "migrationChecks": 3,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e"
+      },
+      {
+        "key": "next",
+        "number": 2,
+        "exit": 0,
+        "migrationChecks": 4,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e"
+      }
+    ],
+    "fixture": [
+      {
+        "operation": "verify-migrations",
+        "ok": true,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e",
+        "migrationChecks": 1
+      },
+      {
+        "operation": "verify-migrations",
+        "ok": true,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e",
+        "migrationChecks": 2
+      },
+      {
+        "operation": "verify-migrations",
+        "ok": true,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e",
+        "migrationChecks": 3
+      },
+      {
+        "operation": "verify-migrations",
+        "ok": true,
+        "migrationSchemaSHA256": "f35c5c704b5587134e772120ec80889ff24d52b3fafa10226ae76b78ab4b2f9e",
+        "migrationChecks": 4
+      },
+      {
+        "operation": "prepare",
+        "ok": true,
+        "safeInputs": true,
+        "externalChannelsDisabled": true
+      },
+      {
+        "operation": "verify-session-continuity",
+        "ok": true,
+        "continuityChecks": 1,
+        "activeSessions": 2,
+        "successfulLogins": 2,
+        "sessionIdentityStable": true,
+        "businessUnchanged": true
+      },
+      {
+        "operation": "verify-session-continuity",
+        "ok": true,
+        "continuityChecks": 2,
+        "activeSessions": 2,
+        "successfulLogins": 2,
+        "sessionIdentityStable": true,
+        "businessUnchanged": true
+      },
+      {
+        "operation": "verify-session-continuity",
+        "ok": true,
+        "continuityChecks": 3,
+        "activeSessions": 2,
+        "successfulLogins": 2,
+        "sessionIdentityStable": true,
+        "businessUnchanged": true
+      },
+      {
+        "operation": "verify-final",
+        "ok": true,
+        "activeSessions": 2,
+        "sessionIdentityStable": true,
+        "businessUnchanged": true
+      },
+      {
+        "operation": "verify-logout",
+        "ok": true,
+        "activeSessions": 0,
+        "successfulLogins": 2,
+        "businessUnchanged": true
+      },
+      {
+        "operation": "cleanup",
+        "ok": true
+      }
+    ],
+    "reloads": [
+      {
+        "to": "next",
+        "masterAuthenticatedBeforeHUP": true,
+        "oldWorkerAliveWithInflightRequestAfterNewGeneration": true,
+        "originalBodySHA256": "681042d4c04bf77761d46941b63a87176e206b11490adbc717dc79e7380aa998",
+        "oldWorkerExitedNaturally": true,
+        "masterStayed": true,
+        "oldWorker": {
+          "pid": 143,
+          "ppid": 142,
+          "group": 142,
+          "startTicks": "15392170",
+          "uid": 1000,
+          "gid": 1000,
+          "exe": "/tools/nginx",
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "mountNamespace": "mnt:[4026532303]",
+          "netNamespace": "net:[4026532308]"
+        },
+        "newWorker": {
+          "pid": 146,
+          "ppid": 142,
+          "group": 142,
+          "startTicks": "15392724",
+          "uid": 1000,
+          "gid": 1000,
+          "exe": "/tools/nginx",
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "mountNamespace": "mnt:[4026532303]",
+          "netNamespace": "net:[4026532308]"
+        },
+        "timeline": {
+          "requestStarted": 1792200254849,
+          "hupAt": 1792200255159,
+          "newGenerationAt": 1792200257041,
+          "originalResponseEnded": 1792200258860,
+          "oldWorkerExitedAt": 1792200259016
+        },
+        "originalResponse": {
+          "phase": "old",
+          "route": "/_next/static/chunks/24-49949a38eb067b8b.js",
+          "purpose": "private-inflight-drain",
+          "method": "GET",
+          "status": 200,
+          "generation": "old",
+          "started": 1792200254849,
+          "ended": 1792200258860,
+          "durationMS": 4011,
+          "bytes": 72632,
+          "sha256": "681042d4c04bf77761d46941b63a87176e206b11490adbc717dc79e7380aa998"
+        }
+      },
+      {
+        "to": "restored",
+        "masterAuthenticatedBeforeHUP": true,
+        "oldWorkerAliveWithInflightRequestAfterNewGeneration": true,
+        "originalBodySHA256": "681042d4c04bf77761d46941b63a87176e206b11490adbc717dc79e7380aa998",
+        "oldWorkerExitedNaturally": true,
+        "masterStayed": true,
+        "oldWorker": {
+          "pid": 146,
+          "ppid": 142,
+          "group": 142,
+          "startTicks": "15392724",
+          "uid": 1000,
+          "gid": 1000,
+          "exe": "/tools/nginx",
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "mountNamespace": "mnt:[4026532303]",
+          "netNamespace": "net:[4026532308]"
+        },
+        "newWorker": {
+          "pid": 149,
+          "ppid": 142,
+          "group": 142,
+          "startTicks": "15393499",
+          "uid": 1000,
+          "gid": 1000,
+          "exe": "/tools/nginx",
+          "sha256": "5898eee290e64f5f5d3f38d424d2548326799baa11d6267c5f74ddba22796ae6",
+          "mountNamespace": "mnt:[4026532303]",
+          "netNamespace": "net:[4026532308]"
+        },
+        "timeline": {
+          "requestStarted": 1792200262484,
+          "hupAt": 1792200262823,
+          "newGenerationAt": 1792200264774,
+          "originalResponseEnded": 1792200266489,
+          "oldWorkerExitedAt": 1792200266617
+        },
+        "originalResponse": {
+          "phase": "next",
+          "route": "/_next/static/chunks/24-49949a38eb067b8b.js",
+          "purpose": "private-inflight-drain",
+          "method": "GET",
+          "status": 200,
+          "generation": "next",
+          "started": 1792200262484,
+          "ended": 1792200266489,
+          "durationMS": 4005,
+          "bytes": 72632,
+          "sha256": "681042d4c04bf77761d46941b63a87176e206b11490adbc717dc79e7380aa998"
+        }
+      }
+    ],
+    "phaseChecks": [
+      {
+        "phase": "old",
+        "configSHA256": "4adfed04b46f180fe6b6467e56e2d2a90b356e6c6ac55f49c8a4820f5a146908",
+        "realNginxSyntax": true
+      },
+      {
+        "phase": "old",
+        "actualPublicAPIUpstream": "127.0.0.1:58088",
+        "actualPublicWebUpstream": "127.0.0.1:53088",
+        "authenticatedSSR": true,
+        "permissionNegatives": true,
+        "actualSSRAPITrace": {
+          "pid": 101,
+          "destination": "http://127.0.0.1:58088",
+          "connected": true
+        }
+      },
+      {
+        "phase": "next",
+        "configSHA256": "80133b5af8277f22ca74b20f9962fd36d8f08b7b6936e02236fd458f8ee7a38d",
+        "realNginxSyntax": true
+      },
+      {
+        "phase": "next",
+        "actualPublicAPIUpstream": "127.0.0.1:58089",
+        "actualPublicWebUpstream": "127.0.0.1:53089",
+        "authenticatedSSR": true,
+        "permissionNegatives": true,
+        "actualSSRAPITrace": {
+          "pid": 129,
+          "destination": "http://127.0.0.1:58089",
+          "connected": true
+        }
+      },
+      {
+        "phase": "restored",
+        "configSHA256": "bfd0d4794be019dd4bc7503b794beb00fa879960f77ed66804fbc5ca8737f6e8",
+        "realNginxSyntax": true
+      },
+      {
+        "phase": "restored",
+        "actualPublicAPIUpstream": "127.0.0.1:58088",
+        "actualPublicWebUpstream": "127.0.0.1:53088",
+        "authenticatedSSR": true,
+        "permissionNegatives": true,
+        "actualSSRAPITrace": {
+          "pid": 101,
+          "destination": "http://127.0.0.1:58088",
+          "connected": true
+        }
+      }
+    ],
+    "permissionChecks": [
+      {
+        "phase": "old",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "customer-permission",
+        "method": "GET",
+        "status": 403,
+        "generation": "old",
+        "started": 1792200251648,
+        "ended": 1792200251655,
+        "durationMS": 7,
+        "bytes": 65,
+        "sha256": "54ad2a6b6b299e70907dd97a1a6a7eb3ca1ae333efe0a9874e00e09aeeaa7e3b"
+      },
+      {
+        "phase": "old",
+        "route": "/console/contracts",
+        "purpose": "customer-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792200251655,
+        "ended": 1792200251747,
+        "durationMS": 92,
+        "bytes": 32965,
+        "sha256": "9c8be4f884eeffe354018c3870d3b7aa8cc33e3cec4c663c95bb8bb9e5a9df07"
+      },
+      {
+        "phase": "old",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "admin-permission",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792200251766,
+        "ended": 1792200251781,
+        "durationMS": 15,
+        "bytes": 838,
+        "sha256": "2999e16ab292be628b97229ea52c7d0627cb837310952bb9d39c99b06af0f33f"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "admin-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792200251781,
+        "ended": 1792200251988,
+        "durationMS": 207,
+        "bytes": 26604,
+        "sha256": "3fdb2650a3d26f66a0c5d7f9d1b7d2969f0e72cccb89f1f8493ebce996d7cf42"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "customer-admin-rejected",
+        "method": "GET",
+        "status": 307,
+        "generation": "old",
+        "started": 1792200251988,
+        "ended": 1792200252005,
+        "durationMS": 17,
+        "bytes": 23,
+        "sha256": "a1e1728be9cfb008a4ade966f0427d82f95a97323a7f65c7496e2562a8598e16"
+      },
+      {
+        "phase": "old",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "old",
+        "started": 1792200252005,
+        "ended": 1792200252011,
+        "durationMS": 6,
+        "bytes": 59,
+        "sha256": "1fd6ba74acc09bac924a50b4fd7a3b2344f39fe18071639349819c1a6e374204"
+      },
+      {
+        "phase": "old",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "old",
+        "started": 1792200252011,
+        "ended": 1792200252022,
+        "durationMS": 11,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "old",
+        "started": 1792200252022,
+        "ended": 1792200252028,
+        "durationMS": 6,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "old",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "old",
+        "started": 1792200252028,
+        "ended": 1792200252034,
+        "durationMS": 6,
+        "bytes": 62,
+        "sha256": "a263309e984a697080c3cb6a9974bdcf59474e0e8837fbe32347af0db9fde5e6"
+      },
+      {
+        "phase": "old",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "old",
+        "started": 1792200252034,
+        "ended": 1792200252048,
+        "durationMS": 14,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "old",
+        "started": 1792200252048,
+        "ended": 1792200252059,
+        "durationMS": 11,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "next",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "customer-permission",
+        "method": "GET",
+        "status": 403,
+        "generation": "next",
+        "started": 1792200259080,
+        "ended": 1792200259094,
+        "durationMS": 14,
+        "bytes": 65,
+        "sha256": "54ad2a6b6b299e70907dd97a1a6a7eb3ca1ae333efe0a9874e00e09aeeaa7e3b"
+      },
+      {
+        "phase": "next",
+        "route": "/console/contracts",
+        "purpose": "customer-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "next",
+        "started": 1792200259094,
+        "ended": 1792200259205,
+        "durationMS": 111,
+        "bytes": 32922,
+        "sha256": "e97119bb5efd262b672a19ef892898e7646c982c4a686749a870b69830bc7939"
+      },
+      {
+        "phase": "next",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "admin-permission",
+        "method": "GET",
+        "status": 200,
+        "generation": "next",
+        "started": 1792200259221,
+        "ended": 1792200259233,
+        "durationMS": 12,
+        "bytes": 838,
+        "sha256": "2999e16ab292be628b97229ea52c7d0627cb837310952bb9d39c99b06af0f33f"
+      },
+      {
+        "phase": "next",
+        "route": "/admin",
+        "purpose": "admin-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "next",
+        "started": 1792200259234,
+        "ended": 1792200259359,
+        "durationMS": 125,
+        "bytes": 28372,
+        "sha256": "acdde9dbee5d81ba8a7af4f795fcaaf5869e3933cdcfc16b5bcfd42e352f10c3"
+      },
+      {
+        "phase": "next",
+        "route": "/admin",
+        "purpose": "customer-admin-rejected",
+        "method": "GET",
+        "status": 307,
+        "generation": "next",
+        "started": 1792200259360,
+        "ended": 1792200259381,
+        "durationMS": 21,
+        "bytes": 23,
+        "sha256": "a1e1728be9cfb008a4ade966f0427d82f95a97323a7f65c7496e2562a8598e16"
+      },
+      {
+        "phase": "next",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "next",
+        "started": 1792200259381,
+        "ended": 1792200259385,
+        "durationMS": 4,
+        "bytes": 59,
+        "sha256": "1fd6ba74acc09bac924a50b4fd7a3b2344f39fe18071639349819c1a6e374204"
+      },
+      {
+        "phase": "next",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "next",
+        "started": 1792200259385,
+        "ended": 1792200259396,
+        "durationMS": 11,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "next",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "next",
+        "started": 1792200259396,
+        "ended": 1792200259403,
+        "durationMS": 7,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "next",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "next",
+        "started": 1792200259403,
+        "ended": 1792200259410,
+        "durationMS": 7,
+        "bytes": 62,
+        "sha256": "a263309e984a697080c3cb6a9974bdcf59474e0e8837fbe32347af0db9fde5e6"
+      },
+      {
+        "phase": "next",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "next",
+        "started": 1792200259410,
+        "ended": 1792200259424,
+        "durationMS": 14,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "next",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "next",
+        "started": 1792200259424,
+        "ended": 1792200259433,
+        "durationMS": 9,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "restored",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "customer-permission",
+        "method": "GET",
+        "status": 403,
+        "generation": "restored",
+        "started": 1792200266664,
+        "ended": 1792200266669,
+        "durationMS": 5,
+        "bytes": 65,
+        "sha256": "54ad2a6b6b299e70907dd97a1a6a7eb3ca1ae333efe0a9874e00e09aeeaa7e3b"
+      },
+      {
+        "phase": "restored",
+        "route": "/console/contracts",
+        "purpose": "customer-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "restored",
+        "started": 1792200266669,
+        "ended": 1792200266704,
+        "durationMS": 35,
+        "bytes": 32965,
+        "sha256": "9c8be4f884eeffe354018c3870d3b7aa8cc33e3cec4c663c95bb8bb9e5a9df07"
+      },
+      {
+        "phase": "restored",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "admin-permission",
+        "method": "GET",
+        "status": 200,
+        "generation": "restored",
+        "started": 1792200266713,
+        "ended": 1792200266721,
+        "durationMS": 8,
+        "bytes": 838,
+        "sha256": "2999e16ab292be628b97229ea52c7d0627cb837310952bb9d39c99b06af0f33f"
+      },
+      {
+        "phase": "restored",
+        "route": "/admin",
+        "purpose": "admin-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "restored",
+        "started": 1792200266721,
+        "ended": 1792200266786,
+        "durationMS": 65,
+        "bytes": 26604,
+        "sha256": "3fdb2650a3d26f66a0c5d7f9d1b7d2969f0e72cccb89f1f8493ebce996d7cf42"
+      },
+      {
+        "phase": "restored",
+        "route": "/admin",
+        "purpose": "customer-admin-rejected",
+        "method": "GET",
+        "status": 307,
+        "generation": "restored",
+        "started": 1792200266786,
+        "ended": 1792200266816,
+        "durationMS": 30,
+        "bytes": 23,
+        "sha256": "a1e1728be9cfb008a4ade966f0427d82f95a97323a7f65c7496e2562a8598e16"
+      },
+      {
+        "phase": "restored",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "restored",
+        "started": 1792200266817,
+        "ended": 1792200266822,
+        "durationMS": 5,
+        "bytes": 59,
+        "sha256": "1fd6ba74acc09bac924a50b4fd7a3b2344f39fe18071639349819c1a6e374204"
+      },
+      {
+        "phase": "restored",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "restored",
+        "started": 1792200266822,
+        "ended": 1792200266830,
+        "durationMS": 8,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "restored",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "restored",
+        "started": 1792200266831,
+        "ended": 1792200266836,
+        "durationMS": 5,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "restored",
+        "route": "/api/v1/me",
+        "purpose": "anonymous-invalid-api",
+        "method": "GET",
+        "status": 401,
+        "generation": "restored",
+        "started": 1792200266836,
+        "ended": 1792200266841,
+        "durationMS": 5,
+        "bytes": 62,
+        "sha256": "a263309e984a697080c3cb6a9974bdcf59474e0e8837fbe32347af0db9fde5e6"
+      },
+      {
+        "phase": "restored",
+        "route": "/console/contracts",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "restored",
+        "started": 1792200266841,
+        "ended": 1792200266854,
+        "durationMS": 13,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "restored",
+        "route": "/admin",
+        "purpose": "anonymous-invalid-ssr",
+        "method": "GET",
+        "status": 307,
+        "generation": "restored",
+        "started": 1792200266854,
+        "ended": 1792200266862,
+        "durationMS": 8,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "final",
+        "route": "/api/v1/auth/logout",
+        "purpose": "customer-single-logout",
+        "method": "POST",
+        "status": 200,
+        "generation": "restored",
+        "started": 1792200268939,
+        "ended": 1792200268957,
+        "durationMS": 18,
+        "bytes": 29,
+        "sha256": "a7e3d8a08e9470b6147d8c8a1e34a548bb94e449687a97171822fe8f4e90ffe6"
+      },
+      {
+        "phase": "final",
+        "route": "/api/v1/auth/logout",
+        "purpose": "admin-single-logout",
+        "method": "POST",
+        "status": 200,
+        "generation": "restored",
+        "started": 1792200268958,
+        "ended": 1792200268977,
+        "durationMS": 19,
+        "bytes": 29,
+        "sha256": "a7e3d8a08e9470b6147d8c8a1e34a548bb94e449687a97171822fe8f4e90ffe6"
+      },
+      {
+        "phase": "final",
+        "route": "/console/contracts",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200268984,
+        "ended": 1792200268998,
+        "durationMS": 14,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "final",
+        "route": "/admin",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200268998,
+        "ended": 1792200269009,
+        "durationMS": 11,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "final",
+        "route": "/console/contracts",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269015,
+        "ended": 1792200269028,
+        "durationMS": 13,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "final",
+        "route": "/admin",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269029,
+        "ended": 1792200269037,
+        "durationMS": 8,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "final",
+        "route": "/console/contracts",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269045,
+        "ended": 1792200269082,
+        "durationMS": 37,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "final",
+        "route": "/admin",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269082,
+        "ended": 1792200269092,
+        "durationMS": 10,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      },
+      {
+        "phase": "final",
+        "route": "/console/contracts",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269098,
+        "ended": 1792200269111,
+        "durationMS": 13,
+        "bytes": 28,
+        "sha256": "4563a304816ba4eee03bf6cfc67734e435d02dbcf654b935ddef457164f0c635"
+      },
+      {
+        "phase": "final",
+        "route": "/admin",
+        "purpose": "logged-out-direct-web",
+        "method": "GET",
+        "status": 307,
+        "generation": null,
+        "started": 1792200269111,
+        "ended": 1792200269120,
+        "durationMS": 9,
+        "bytes": 34,
+        "sha256": "01347e4e145638b89e4bd755578ada458ae12b5ac002af68ac8ed2d3c2f0d0fd"
+      }
+    ],
+    "isolation": {
+      "uid": 1000,
+      "gid": 1000,
+      "netNamespace": "net:[4026532308]",
+      "mountNamespace": "mnt:[4026532303]",
+      "pidNamespace": "pid:[4026532306]",
+      "loopbackOnly": true,
+      "sourceHidden": true,
+      "toolchainHidden": true,
+      "readOnlyReleases": true
+    },
+    "observationGenerations": {
+      "old": 45,
+      "next": 236,
+      "restored": 169
+    }
+  },
+  "audit": {
+    "mutationCalls": 2,
+    "networkCalls": 41,
+    "migrationExecutions": [
+      "next-migrate-1",
+      "next-migrate-2",
+      "old-migrate-1",
+      "old-migrate-2"
+    ],
+    "auditedUndeclaredFileMutationAttempts": 0,
+    "nonLoopbackAttempts": 0,
+    "coverage": "file/network syscall metadata only; no write payload buffers; both API/Web and four migrations",
+    "fileCount": 99,
+    "files": {
+      "count": 99,
+      "sha256": "e498f60ce39d8ddd5645257f5248ad10301a92758a3a160d2e02e0a3de833eb4",
+      "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+    }
+  },
+  "mutable": {
+    "count": 114,
+    "sha256": "02cc684ecaa4f0ba4b73c1af582f481149e1db37442c21e1187dc8b389e3bf08",
+    "serialization": "UTF-8 compact JSON preserving source key order; ensure_ascii=false"
+  },
+  "hostOrdinaryIdentity": {
+    "uid": 1000,
+    "gid": 1000,
+    "groupsCleared": true
+  },
+  "projectionBoundary": "Omitted raw request/response headers, contents, cookies, credentials, config values, and build artifacts. Full source arrays remain in the hashed local original report.",
+  "documentationVerification": {
+    "readOnly": true,
+    "rawReportSHA256Recomputed": true,
+    "bothManifestAnchorsMatched": true,
+    "eachCandidateDeclaredArtifactsRehashed": 3059,
+    "traceFilesBytesAndSHA256Matched": 99,
+    "mutableEvidenceFilesBytesAndSHA256Matched": 114,
+    "originalRun1To5ResultsChanged": false,
+    "noDatabaseOrServiceOperations": true
+  },
+  "evidenceLimitations": [
+    "1449 check records include 8 metadata records; not 1449 HTTP requests",
+    "450 discrete probes with zero recorded errors do not prove all traffic zero downtime",
+    "authenticatedSSR records minimum status/title assertions, not complete protected business component rendering",
+    "Cumulative Web-to-API syscall connects may also be proxy/site/readiness; use as combined evidence, not per-protected-SSR attribution",
+    "Report excludes raw response body/headers; title/cache/origin assertions rely on fixed executing source and recorded summaries and cannot be independently reconstructed from hashes"
+  ]
+}

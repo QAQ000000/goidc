@@ -72,7 +72,7 @@ func TestMFAEnrollmentLoginAndDisable(t *testing.T) {
 	if data(t, status)["enabled"] != true {
 		t.Fatal("MFA was not enabled")
 	}
-	login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "mfa-customer", "password": "integration-password"}, "", "")
+	login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": "mfa-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, login, http.StatusUnauthorized)
 	loginError := errorData(t, login)
 	if loginError["code"] != "mfa_required" || loginError["challenge"] == nil {
@@ -86,7 +86,7 @@ func TestMFAEnrollmentLoginAndDisable(t *testing.T) {
 	if len(completed.Result().Cookies()) != 1 {
 		t.Fatal("MFA login did not issue a session")
 	}
-	recoveryLogin := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "mfa-customer", "password": "integration-password"}, "", "")
+	recoveryLogin := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": "mfa-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, recoveryLogin, http.StatusUnauthorized)
 	recoveryChallenge := errorData(t, recoveryLogin)["challenge"].(string)
 	recoveryValue := recoveryCodes[0].(string)
@@ -96,13 +96,13 @@ func TestMFAEnrollmentLoginAndDisable(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "SELECT used_at FROM mfa_recovery_codes WHERE user_id=$1 AND code_hash=$2", userID, tokenHash(recoveryValue)).Scan(&usedAt); err != nil || usedAt == nil {
 		t.Fatalf("recovery code was not consumed: err=%v used_at=%v", err, usedAt)
 	}
-	reusedLogin := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "mfa-customer", "password": "integration-password"}, "", "")
+	reusedLogin := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": "mfa-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, reusedLogin, http.StatusUnauthorized)
 	reusedChallenge := errorData(t, reusedLogin)["challenge"].(string)
 	reused := request(h, http.MethodPost, "/api/v1/auth/login/mfa", map[string]string{"challenge": reusedChallenge, "code": recoveryValue}, "", "")
 	expect(t, reused, http.StatusUnauthorized)
 	disable := request(h, http.MethodPost, "/api/v1/account/mfa/disable", map[string]string{"password": "integration-password", "code": testTOTP(secret, time.Now())}, cookie, "")
 	expect(t, disable, 200)
-	ordinary := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "mfa-customer", "password": "integration-password"}, "", "")
+	ordinary := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": "mfa-customer@example.test", "password": "integration-password"}, "", "")
 	expect(t, ordinary, 200)
 }

@@ -100,7 +100,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
 		return
 	}
-	if method == "" || (role == "customer" && !methodEnabled) {
+	if method == "" || (role == "customer" && (method == "username" || !methodEnabled)) {
 		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放，请重新登录")
 		return
 	}

@@ -1,0 +1,30 @@
+=== RUN   TestEpayUpgradeCallbackWaitsForConcurrentCancellation
+--- PASS: TestEpayUpgradeCallbackWaitsForConcurrentCancellation (2.36s)
+=== RUN   TestG09SourceAPIScenarioSmoke
+    g09_source_api_smoke_test.go:195: PASS: source HTTP-to-Node manual balance payment, renewal, purchase, ticket and SQL facts; worker/candidate/capacity unverified
+--- PASS: TestG09SourceAPIScenarioSmoke (3.30s)
+=== RUN   TestG09SourceWorkerLoopbackSmoke
+    g09_source_worker_smoke_test.go:395: PASS: source HTTP purchase/ticket -> real cmd/worker x2 -> simulation job 1 succeeded + email 1/SMS 1 sent; SQL source mapping and durable protocol hashes agree; TERM/Wait complete; candidate/600-task/capacity/minute-tick stability unverified
+--- PASS: TestG09SourceWorkerLoopbackSmoke (7.15s)
+=== RUN   TestSMTPInstanceOptionalFieldsReachRealTransport
+=== RUN   TestSMTPInstanceOptionalFieldsReachRealTransport/omitted
+=== RUN   TestSMTPInstanceOptionalFieldsReachRealTransport/null
+=== RUN   TestSMTPInstanceOptionalFieldsReachRealTransport/empty
+--- PASS: TestSMTPInstanceOptionalFieldsReachRealTransport (1.69s)
+    --- PASS: TestSMTPInstanceOptionalFieldsReachRealTransport/omitted (0.03s)
+    --- PASS: TestSMTPInstanceOptionalFieldsReachRealTransport/null (0.01s)
+    --- PASS: TestSMTPInstanceOptionalFieldsReachRealTransport/empty (0.03s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/httpapi	15.543s
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice
+--- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold (1.60s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice (0.00s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/store	2.637s

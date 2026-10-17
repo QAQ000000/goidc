@@ -10,7 +10,7 @@ WorkingDirectory=/www/wwwroot/zjmfgo/web
 Environment=NODE_ENV=production
 Environment=API_INTERNAL_URL=http://127.0.0.1:8088
 Environment=WEB_INTERNAL_URL=http://127.0.0.1:3088
-ExecStart=/www/server/nodejs/v24.16.0/bin/node /www/wwwroot/zjmfgo/web/node_modules/next/dist/bin/next start -H 0.0.0.0 -p 3088
+ExecStart=/www/server/nodejs/v24.16.0/bin/node /www/wwwroot/zjmfgo/web/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3088
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

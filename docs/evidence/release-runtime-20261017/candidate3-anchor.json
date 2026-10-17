@@ -1,0 +1,24 @@
+{
+  "commit": "949ffe367f0bfac0567609d924386dfd17329871",
+  "tree": "b6026fca2f685f93a38e59699ddc5ece298e8da5",
+  "dependencyInputTreeSHA256": "98adfd448eb575e1bda90f0f14c0b2a041197aaa5e8ef66afc220f037b543efd",
+  "nodeSHA256": "b2959781cc5a74c357ffa02367efa8a0330cbb1c9cb347732fdfaaaca381cbcd",
+  "budgetSHA256": "6fdabaf445638e89f2b206dbd7da8f30c7f491b56612018ee33d3e03895fa6ef",
+  "budgetEvidence": {
+    "available": {
+      "bytes": 3885318144,
+      "inodes": 1012906
+    },
+    "approvedPeakBytes": 3221225472,
+    "componentSumBytes": 2885681152
+  },
+  "target": {
+    "api": "http://127.0.0.1:58088",
+    "web": "http://127.0.0.1:53088"
+  },
+  "scope": "Preparation only; no deployment, services, database, or runtime acceptance",
+  "status": "SEALED_NOT_RUNTIME_ACCEPTED",
+  "root": "/tmp/zjmfgo-runtime-memory-20261017/zjmfgo-runtime-candidate3-20261017",
+  "manifestSHA256": "5a4228c5223d01fe0bd7c0c951c106b70276055b78fa6ab6b0b6fb2b2415745a",
+  "relocatedRoot": "/dev/shm/zjmfgo-runtime-candidate3-20261017"
+}

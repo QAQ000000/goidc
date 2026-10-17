@@ -1,0 +1,21 @@
+{
+  "format": "zjmfgo-runtime-budget-v1",
+  "approvedBy": "Codex isolated G09 candidate bootstrap: private Go build cache and temporary directories; no dependency install",
+  "maxPeakBytes": 2147483648,
+  "minReserveBytes": 536870912,
+  "minReserveInodes": 10000,
+  "maxBuildSeconds": 900,
+  "components": {
+    "checkout": 67108864,
+    "buildTemporary": 805306368,
+    "standalone": 67108864,
+    "sealed": 67108864,
+    "runCopy": 402653184,
+    "testDatabaseAndLogs": 134217728
+  },
+  "measurementNotes": {
+    "purpose": "Candidate runtime bootstrap only; separate 3GiB candidate compilation budget. Private fixture GOCACHE/GOTMPDIR/TMPDIR, one independent runtime copy, private logs and bounded dedicated PG schema.",
+    "constraints": "No global Go cache writes or module download; all private compiler allocations removed on controller completion; shared PG18 and resident services preserved.",
+    "capacityVerified": false
+  }
+}

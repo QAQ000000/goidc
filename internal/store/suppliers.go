@@ -117,11 +117,15 @@ func (s *Store) SaveSupplier(ctx context.Context, actor, id int64, in SupplierIn
 }
 
 func (s *Store) supplierAdapter(ctx context.Context, id int64) (supplier.Adapter, int64, error) {
+	return s.supplierAdapterWith(ctx, s.Pool, id)
+}
+
+func (s *Store) supplierAdapterWith(ctx context.Context, q sqlQueryer, id int64) (supplier.Adapter, int64, error) {
 	var a supplier.Account
 	var sealed []byte
 	var version int64
 	var active bool
-	err := s.Pool.QueryRow(ctx, `SELECT id,provider,base_url,username,credentials_encrypted,version,active FROM supplier_accounts WHERE id=$1`, id).Scan(&a.ID, &a.Provider, &a.BaseURL, &a.Username, &sealed, &version, &active)
+	err := q.QueryRow(ctx, `SELECT id,provider,base_url,username,credentials_encrypted,version,active FROM supplier_accounts WHERE id=$1`, id).Scan(&a.ID, &a.Provider, &a.BaseURL, &a.Username, &sealed, &version, &active)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -238,13 +242,17 @@ func (s *Store) ImportSupplierProduct(ctx context.Context, actor, supplierID int
 }
 
 func (s *Store) supplierBinding(ctx context.Context, id int64, byProduct bool) (SupplierBinding, error) {
+	return s.supplierBindingWith(ctx, s.Pool, id, byProduct)
+}
+
+func (s *Store) supplierBindingWith(ctx context.Context, q sqlQueryer, id int64, byProduct bool) (SupplierBinding, error) {
 	var b SupplierBinding
 	var raw []byte
 	where := "id"
 	if byProduct {
 		where = "product_id"
 	}
-	err := s.Pool.QueryRow(ctx, `SELECT id,product_id,supplier_id,provider,upstream_product_id,upstream_revision,billing_cycle,currency,maximum_cost_cents,config_options,custom_fields_encrypted FROM supplier_product_bindings WHERE `+where+`=$1`, id).Scan(&b.ID, &b.ProductID, &b.SupplierID, &b.Provider, &b.UpstreamProductID, &b.UpstreamRevision, &b.BillingCycle, &b.Currency, &b.MaximumCostCents, &raw, &b.sealed)
+	err := q.QueryRow(ctx, `SELECT id,product_id,supplier_id,provider,upstream_product_id,upstream_revision,billing_cycle,currency,maximum_cost_cents,config_options,custom_fields_encrypted FROM supplier_product_bindings WHERE `+where+`=$1`, id).Scan(&b.ID, &b.ProductID, &b.SupplierID, &b.Provider, &b.UpstreamProductID, &b.UpstreamRevision, &b.BillingCycle, &b.Currency, &b.MaximumCostCents, &raw, &b.sealed)
 	if err != nil {
 		return b, err
 	}

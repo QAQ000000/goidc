@@ -1,0 +1,13 @@
+{
+  "root": "/dev/shm/zjmfgo-runtime-dualA-20261017-v3",
+  "sourceCommit": "6b951025eb5ad9887b0c9a46dc18dbaaef5f6be3",
+  "manifestSHA256": "73cb22adf7d7b8590c07c5b3700a54a8becdbdce26a8a63703968d1c2ebbdf46",
+  "buildID": "gVh6-Rk5BjGrBgTCjeQ7r",
+  "artifactCount": 3059,
+  "externalAnchor": {
+    "path": "/tmp/zjmfgo-dual-runtime-A-anchor-20261017-v3.json",
+    "bytes": 271,
+    "sha256": "58f532ece71ee3167487960b6833b5637d28a39fd9a5e70d7645b7deeb1ce4c0"
+  },
+  "allDeclaredArtifactBytesReverified": true
+}

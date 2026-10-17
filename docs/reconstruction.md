@@ -1,4 +1,13 @@
 # PHP 到 Go / Next.js 重构
+
+2026-10-17 worker 执行中强杀恢复：两个 gpt-6.1-sol 独立分支实现并提交、第三个同模型只读审查；集成 d72156e 后统一 PG18 隔离 race 通过。18 个真实 worker、4 次 SIGKILL，供应商只读恢复/写未知冻结及短信退避重试/死信通过，ready 时序与第二任务实际阻断证据已补齐；18 PID、4 schema及临时目录均已清理，常驻三服务身份不变。9项相关状态机race和最终vet通过，原始日志与摘要入Git。仅加速时间的网络窗口专项，不关闭G09容量/其余故障点/RTO及真实渠道；未部署、推送、改生产路径或重跑全量/前端验收，45完成/60部分不变。见[专项验收](worker-sigkill-acceptance-20261017.md)。
+
+2026-10-17 隔离双 Web 准备：同一干净6b95102正常双构建的v3候选完成真实Nginx A→B→A、API/SSR同会话、两代独有资源与382份静态并集、受控在途排空和内外层清理，run6 PASS；1449条检查、两次HUP、450次持续观察错误0，221项Node回归通过，原run1–5 FAIL保留。报告SHA与双候选外锚已绑定，见[验收](release-dual-web-acceptance-20261017.md)。G04隔离双Web子项关闭；真实目标HTTPS/维护/回调、正式静态保留窗口、历史代码/schema和业务快照升级、生产切流切回及G09容量/强杀恢复仍开放。用户授权清理已移除旧candidate2/3、旧dualA/B和中间A v2，仅保留历史manifest/启动描述及原报告；不抹去历史验收。未部署/推送或重启常驻服务、写业务库，45完成/60部分不变。
+
+2026-10-17 真实Nginx静态保留准备：固定runner5008427，在普通用户私有mount/net/pid空间以真实目标Nginx执行旧220→并集382→恢复382，两次HUP、984组GET/HEAD、131次持续旧URL、31协议反例及7文件夹具通过；独立gpt-6.1-sol复核来源/摘要/日志与退出。candidate2仅作历史静态源，未启动Web或修改封存输入；失败1–4保留，小报告投影和摘要入Git。本批未部署、未推送、未连接业务数据库或重启常驻服务；45页完成/60部分不变。完整双Web/公网切流切回、正式静态保留窗口、业务快照升级、容量与强杀恢复仍待验收，G04/G09保持开放，见[本批验收](release-static-retention-acceptance-20261017.md)。
+
+2026-10-17 完整运行包隔离验收：使用经核验的官方Node和锁定来源依赖，从固定干净949ffe3构建API/worker/migrate、Next standalone并包含156个迁移文件，3058个artifact与独立外锚封存。独立分支修复ELF包内依赖解析、SSR API地址与精确mapped loopback审计后，runner ce19107对同一个candidate3完成双迁移、三服务同包、三页面及21份真实HTTP资源、worker模拟resume一次及TERM重启、66份trace隔离审计、退出/schema清理；主代理及gpt-6.1-sol独立重算通过。原run3审计FAIL保留，小报告与摘要入Git，凭据/依赖/二进制不入Git。强制隔离PG18全量、vet、typecheck/lint和真实webpack构建已通过。本批未部署、未推送、未写业务库，常驻服务未重启；45页完成/60部分不变。G04/G09仍缺公网/旧chunk/切流切回、业务快照升级、容量积压及执行中强杀恢复，详见[真实构建与隔离验收](release-runtime-real-build-acceptance-20261017.md)。
+
 2026-10-11 新建订单优惠码目录：新增`GET /api/v1/admin/promo-codes/page`真实搜索/状态/分页接口，保留旧数组接口兼容；`promos.view`控制目录读取，订单筛选隐藏升级专用码。新建订单新增目录选择与创建弹窗，`promos.manage`控制创建；新码自动选中，订单数据齐全时自动重报价，全部适用性仍由Go报价验证。隔离PG18专项和全量Go回归（httpapi 650.057s）、全量vet、Next typecheck/lint/build通过；开发数据库已应用迁移124/125，API/web active且ready。随后使用隔离管理员会话完成两个弹窗的 1440/1024/390/320 浏览器验收，并修复 Chrome 新正则语法兼容问题；证据见[订单验收](admin-batch-admin-orders-acceptance-20261011.md)。
 
 2026-10-11 新建工单页面：第100页接入真实客户/部门/服务/处理人选项分页和`POST /api/v1/admin/tickets`事务创建，加入权限/客户范围/部门归属校验、幂等回执、审计、邮件 outbox 状态、草稿恢复、取消确认和创建后附件上传。隔离PG18专项、全量Go回归、vet、前端typecheck通过；Playwright 在 1440/1024/390/320 验证列表与新建页无横向溢出并成功创建后跳详情。证据见[新建工单验收](admin-batch-admin-tickets-acceptance-20261011.md)。附件管理、旧版完整字段和通知日志仍待补齐。
@@ -272,3 +281,17 @@ schema059 已部署，实现 Go 原生抬头/地址维护、申请快照、本�
 2026-10-11 客户/订单 API 断点续作：订单列表和详情分开返回客户资料备注与订单内部备注；新增只读 `POST /api/v1/admin/orders/commission`，按已付金额、客户销售归属、当前提成组和本月阶梯规则计算实时预估，受 `orders.view` + `sales.view` 与客户范围保护，不写结算或资金。`/admin` 布局新增共享管理员权限上下文，修复订单页在 Workspace 外读取权限导致提成列不显示的问题。隔离 PG18 专项覆盖计算、客户范围与权限；最终隔离生产构建以 1440/1024/390/320 Playwright 验收，`document.scrollWidth` 均等于视口，320px 可滚动到提成和操作列，控制台错误0，订单列表与提成接口均为200。截图见 `output/playwright/admin-order-commission-20261011/`，完整结果见[订单验收](admin-batch-admin-orders-acceptance-20261011.md)。第8/99页仍部分完成：优惠码目录已补齐，本轮新弹窗尚未取得管理员会话做浏览器验收；真实邮件投递和复杂多级商品验收待补；105页其余缺口继续按台账推进。
 
 2026-10-12 全局配置/订购设置批次：独立worktree提交并主审查合入130/131迁移、全局组持续投影/复制/分配、商品级手机实名规则、后台报价与客户结账真实准入。保留既有成功订单幂等重放和历史配置快照；未知保存响应可刷新原请求重试。最终隔离PG18串行全量、专项race、vet、TypeScript和独立Next生产webpack构建通过；两页及配置编辑四尺寸、真实创建/复制/同步、只读403、客户准入409、错误/冲突恢复有证据。实际浏览器发现创建严格解码400及空阶梯字段JS异常，修复后复测。74/75仍部分完成，多级全局联动与完整状态矩阵待补；台账47完成/54部分/4待实现。运行站点及运行库未升级，未推送。详见[本批验收](admin-options-order-acceptance-20261012.md)。
+
+2026-10-17 本地未消费续费退款增量：迁移155与Go/真实API界面已集成；不可变effect、独立外部退款冻结和精确逆操作，原收款和库存保留，成功关闭自动续费并递增generation。专项race、真实schema154升级、PG dump/restore以及1440/1024/390/320和320短屏浏览器已验证，包含丢响应原请求恢复、真实409、403、独立确认/驳回、分页与错误恢复。当时最终全量待终态，最新通过结果见下方追加，旧快照全量失败保留，不计通过；见[本批验收](local-renewal-refund-acceptance-20261017.md)。临时fixture/Web/浏览器已回收；另释放闲置重复依赖及webpack缓存，本批运行构建验后移除。未部署、推送、重启常驻服务或写业务库，G03与总体目标继续开放。
+
+2026-10-17 续费退款最终回归追加：快照`f6e8cb4`的唯一强制隔离PG18全量自然结束并退出1，HTTP1659.871秒、store229.621秒；此前供应商陈旧断言修复通过，新失败为商品升级与取消并发下的一次支付回调500，当时转独立分支定位；后续修复与通过结果见下。未修改原45分钟上限，未把已通过专项或Node工具回归替代全量结果；见[本批验收](local-renewal-refund-acceptance-20261017.md)。G03及总体目标保持未关闭。
+
+2026-10-17 并发回调修复最终验收：`c6d2314`将既有invoice锁前移至回调首次payment更新前，普通取消锁竞争不再被154关联trigger误判为退款hold；154/155及真实冻结SQL保护保持不变。固定快照唯一强制隔离PG18全量退出0（HTTP1653.256秒、store237.273秒），五项组合race实际PASS无SKIP、Go build/vet/diff通过；旧失败证据保留，见[回调修复与集成证据](evidence/epay-upgrade-callback-20261017/README.md)。各轮schema恢复、常驻三进程身份未变，API/Web前后200。未部署、推送、重启常驻服务或写业务库；本地续费退款本增量通过，G03复杂业务/真实到账、G09容量和总体目标仍未关闭，台账仍45完成/60部分。
+
+2026-10-17 G09工具合并：2秒owned进程采样时窗、真实编译魔方适配器的durable协议sink、精确schema只读PG18观察器已审查合入。固定 `f9e7b96` 联合62项Node、16个Go小包顶层race（明确PG opt-in）全部PASS且无SKIP，build/vet/diff退出0，schema恢复及常驻服务身份/健康通过；见[工具增量](g09-tooling-increment-20261017.md)。WAL明确整个cluster、不可用IO/首CPU为null，协议接纳不冒充真实VM/容量；当时尚缺600来源；后续run4已通过有限600来源/双worker/正常周期，完整候选controller及27分钟profile仍未完成，G09和总体目标继续开放。
+2026-10-17 G09容量前置：独立 `codex/g09-capacity-profile-validator-20261017` 分支合入 `550f334`，冻结五阶段27分钟profile、速率/事务比例、1000客户/2000服务/10000账单、双worker和600任务排空门槛；新增候选清单、源码/二进制身份、loopback端口、预算和独立run-root前置校验。95项相关Node测试90 PASS、5项既有运行时opt-in明确跳过；`--execute` 当前明确拒绝，未启动服务、数据库或负载，容量与worker业务ready仍未验证。
+2026-10-17 G09离线容量fixture：独立 `codex/g09-capacity-fixture-20261017` 分支合入 `1aac142`，新增450来源登记/封存、600实体任务映射、逐ID drain投影状态机和严格私有协议校验。主线 opt-in 专项race通过，Go build/vet通过。fixture自身无数据库、API、worker或清理副作用；它证明的是协议拒绝伪造与状态迁移规则，不证明任何实际任务排空。candidate seed、双worker控制、只读PG来源投影和完整容量controller仍待实现，见[专项验收](g09-capacity-fixture-protocol-increment-20261017.md)。
+
+2026-10-17 G09供应商来源小链：按要求使用gpt-6.1-sol独立分支提交，审查后合入`1fc49a5`。真实API供应商建账/catalog/import/publish及客户订单付款形成任务，实际worker完成create、管理员API独立sync；主线`6a7f727`四项race无SKIP通过（HTTP13.243秒）及vet通过，余额/库存/服务身份/任务/审计和9条durable协议hash核对通过。测试owned进程TERM/Wait、schema清理与常驻身份/健康均通过，见[专项](g09-supplier-worker-smoke-20261017.md)。无真实上游/业务库/部署/推送/重启，G09容量、G03及整体接管仍开放。
+
+2026-10-17 G09 600任务前置验收：gpt-6.1-sol独立分支与主线桥接后，在固定 `2f32106` 的run4完成隔离PG18强制race，243.64秒、无SKIP。150客户真实API生成270本地/30魔方开通及150邮件/150短信，来源24.672秒、双实际worker首次排空77.514秒，逐600三个边界PENDING/PASS/PASS、两个真实minute周期、SQL资金/库存与durable协议核对、wrong-owner只读FAIL latch通过。run1–3验收SQL失败保留，窄修JOIN与参数类型、提前只读Prepare；未改生产状态机，2条23514保护ERROR如实记录。72项Node、21小包race、7HTTPrace及build/vet/diff通过，schema恢复、两worker正常TERM/Wait、常驻身份/健康不变，见[本批验收](g09-cohort-acceptance-20261017.md)。易支付双渠道/重复合成通知实际PG小链亦通过，merchant请求0。未部署/推送/重启常驻/写业务库，45完成/60部分不变；完整封存候选controller、历史基数、27分钟容量、真实外部及总体接管仍开放。

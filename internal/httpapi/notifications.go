@@ -293,6 +293,8 @@ func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {
 		args = append(args, status)
 		where += " AND status=$1"
 	}
+	args = append(args, identityFrom(r).ID)
+	where += " AND " + ticketNotificationOutboxSQL("email", "email_outbox.id", "$"+strconv.Itoa(len(args)), "tickets.view")
 	args = append(args, limit, offset)
 	query := "SELECT id,recipient,subject,kind,status,attempts,max_attempts,dead_letter_at,last_error,available_at,sent_at,created_at FROM email_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
@@ -323,7 +325,7 @@ func (s *Server) retryEmail(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT status FROM email_outbox WHERE id=$1 FOR UPDATE", id).Scan(&status); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT status FROM email_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("email", "email_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -371,6 +373,8 @@ func (s *Server) smsOutbox(w http.ResponseWriter, r *http.Request) {
 		args = append(args, status)
 		where += " AND status=$1"
 	}
+	args = append(args, identityFrom(r).ID)
+	where += " AND " + ticketNotificationOutboxSQL("sms", "sms_outbox.id", "$"+strconv.Itoa(len(args)), "tickets.view")
 	args = append(args, limit, offset)
 	query := "SELECT id,recipient,kind,status,attempts,max_attempts,dead_letter_at,last_error,available_at,sent_at,created_at FROM sms_outbox WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
 	rows, err := s.db.Pool.Query(r.Context(), query, args...)
@@ -401,7 +405,7 @@ func (s *Server) retrySMS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT status FROM sms_outbox WHERE id=$1 FOR UPDATE", id).Scan(&status); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT status FROM sms_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("sms", "sms_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
 		s.fail(w, r, err)
 		return
 	}

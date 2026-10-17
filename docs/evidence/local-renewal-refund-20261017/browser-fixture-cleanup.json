@@ -1,0 +1,40 @@
+{
+  "verified_at": "2026-10-17T03:07:38.368583+00:00",
+  "fixture": "local_renewal_external_refund",
+  "api_origin": "http://127.0.0.1:28089",
+  "test_database": "zjmfgo_release_runtime_20261017_test",
+  "schema": "zjmfgo_test_44d40dc40635d835",
+  "shutdown": "finish-file graceful shutdown",
+  "fixture_session_exit_code": 0,
+  "schema_exists": false,
+  "port_28089_listening": false,
+  "private_state_preserved": true,
+  "private_state_mode": "0600",
+  "final_state": {
+    "invoice_statuses": [
+      {
+        "id": 1,
+        "status": "paid"
+      },
+      {
+        "id": 2,
+        "status": "refunded"
+      },
+      {
+        "id": 3,
+        "status": "paid"
+      }
+    ],
+    "hold_status_counts": {
+      "applied": 1,
+      "released": 12
+    },
+    "refund_status_counts": {
+      "rejected": 12,
+      "confirmed": 1
+    }
+  },
+  "shared_postgresql_stopped": false,
+  "web_3089_stopped": false,
+  "production_services_touched": false
+}

@@ -1,0 +1,170 @@
+go: writing stat cache: open /root/go/pkg/mod/cache/download/github.com/codex/zjmfgo/@v/v0.0.0-20261017065136-183e7a13fcd5.info996893235.tmp: read-only file system
+go: writing stat cache: open /root/go/pkg/mod/cache/download/github.com/codex/zjmfgo/@v/v0.0.0-20261017065136-183e7a13fcd5.info654503065.tmp: read-only file system
+go: writing stat cache: open /root/go/pkg/mod/cache/download/github.com/codex/zjmfgo/@v/v0.0.0-20261017065136-183e7a13fcd5.info904852863.tmp: read-only file system
+▲ Next.js 16.3.8 (webpack)
+✓ Running next.config.ts took 48ms
+- Experiments (use with caution):
+  · proxyClientMaxBodySize: 54525952
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 52s
+  Running TypeScript ...
+  Finished TypeScript in 22.5s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/1) ...
+✓ Generating static pages using 7 workers (1/1) in 1691ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ƒ /
+├ ƒ /_not-found
+├ ƒ /admin
+├ ƒ /admin-login
+├ ƒ /admin/access
+├ ƒ /admin/access/staff/[id]
+├ ƒ /admin/affiliate
+├ ƒ /admin/affiliate/settings
+├ ƒ /admin/apps
+├ ƒ /admin/apps/store
+├ ƒ /admin/audit
+├ ƒ /admin/auth-settings
+├ ƒ /admin/blacklist
+├ ƒ /admin/cancellations
+├ ƒ /admin/catalog-groups
+├ ƒ /admin/catalog-groups/new
+├ ƒ /admin/certification-settings
+├ ƒ /admin/certifications
+├ ƒ /admin/channels
+├ ƒ /admin/configurable-options
+├ ƒ /admin/content
+├ ƒ /admin/contract-settings
+├ ƒ /admin/contracts
+├ ƒ /admin/credit
+├ ƒ /admin/credit-settings
+├ ƒ /admin/currencies
+├ ƒ /admin/customer-fields
+├ ƒ /admin/customer-files
+├ ƒ /admin/customer-groups
+├ ƒ /admin/customer-levels
+├ ƒ /admin/customer-resources
+├ ƒ /admin/customers
+├ ƒ /admin/customers/[id]
+├ ƒ /admin/customers/[id]/files
+├ ƒ /admin/customers/new
+├ ƒ /admin/downloads
+├ ƒ /admin/file-groups
+├ ƒ /admin/finance-settings
+├ ƒ /admin/friendly-links
+├ ƒ /admin/invoice-applications
+├ ƒ /admin/invoice-applications/[id]
+├ ƒ /admin/invoice-settings
+├ ƒ /admin/invoices
+├ ƒ /admin/invoices/[id]
+├ ƒ /admin/invoices/[id]/edit
+├ ƒ /admin/invoices/new
+├ ƒ /admin/job-settings
+├ ƒ /admin/jobs
+├ ƒ /admin/jobs/queue
+├ ƒ /admin/logs/[kind]
+├ ƒ /admin/logs/admin-login
+├ ƒ /admin/logs/api
+├ ƒ /admin/logs/cleanup
+├ ƒ /admin/logs/email
+├ ƒ /admin/logs/inbox
+├ ƒ /admin/logs/jobs
+├ ƒ /admin/logs/sms
+├ ƒ /admin/marketing
+├ ƒ /admin/migrations
+├ ƒ /admin/navigation
+├ ƒ /admin/notifications
+├ ƒ /admin/notifications/new
+├ ƒ /admin/order-settings
+├ ƒ /admin/orders
+├ ƒ /admin/orders/[id]
+├ ƒ /admin/orders/new
+├ ƒ /admin/payment-settings
+├ ƒ /admin/products
+├ ƒ /admin/products/[id]
+├ ƒ /admin/products/new
+├ ƒ /admin/promo-codes
+├ ƒ /admin/reports
+├ ƒ /admin/resources
+├ ƒ /admin/sales-settings
+├ ƒ /admin/sales-settlements
+├ ƒ /admin/security/mfa
+├ ƒ /admin/service-groups
+├ ƒ /admin/services
+├ ƒ /admin/services/[id]
+├ ƒ /admin/settings
+├ ƒ /admin/site-fields
+├ ƒ /admin/site-settings
+├ ƒ /admin/sms-settings
+├ ƒ /admin/smtp-settings
+├ ƒ /admin/suppliers
+├ ƒ /admin/suppliers/api-settings
+├ ƒ /admin/suppliers/catalog
+├ ƒ /admin/suppliers/jobs
+├ ƒ /admin/suppliers/orders
+├ ƒ /admin/suppliers/renewals
+├ ƒ /admin/suppliers/tasks
+├ ƒ /admin/system/about
+├ ƒ /admin/system/database
+├ ƒ /admin/system/runtime
+├ ƒ /admin/system/upgrade
+├ ƒ /admin/theme-settings
+├ ƒ /admin/ticket-departments
+├ ƒ /admin/ticket-presets
+├ ƒ /admin/ticket-rules
+├ ƒ /admin/ticket-statuses
+├ ƒ /admin/tickets
+├ ƒ /admin/tickets/[id]
+├ ƒ /admin/tickets/new
+├ ƒ /admin/traffic-orders
+├ ƒ /admin/traffic-orders/[id]
+├ ƒ /admin/traffic-products
+├ ƒ /admin/transactions
+├ ƒ /cart
+├ ƒ /console/account
+├ ƒ /console/affiliate
+├ ƒ /console/certification
+├ ƒ /console/contracts
+├ ƒ /console/credit
+├ ƒ /console/files
+├ ƒ /console/invoice-applications
+├ ƒ /console/invoice-applications/[id]
+├ ƒ /console/invoice-applications/new
+├ ƒ /console/invoice-information
+├ ƒ /console/invoices
+├ ƒ /console/invoices/[id]
+├ ƒ /console/orders
+├ ƒ /console/orders/[id]
+├ ƒ /console/services
+├ ƒ /console/services/[id]
+├ ƒ /console/services/[id]/traffic
+├ ƒ /console/services/group/[id]
+├ ƒ /console/tickets
+├ ƒ /console/tickets/[id]
+├ ƒ /console/tickets/new
+├ ƒ /downloads
+├ ƒ /forgot-password
+├ ƒ /knowledgebase
+├ ƒ /knowledgebase/[id]
+├ ƒ /login
+├ ƒ /maintenance
+├ ƒ /news
+├ ƒ /news/[id]
+├ ƒ /products/[id]
+├ ƒ /r/[code]
+├ ƒ /register
+├ ƒ /reset-password
+├ ƒ /robots.txt
+├ ƒ /sitemap.xml
+└ ƒ /sitemaps/[chunk]
+
+
+ƒ Proxy (Middleware)
+
+ƒ  (Dynamic)  server-rendered on demand
+
+G09_SEALED_NOT_RUNTIME_ACCEPTED

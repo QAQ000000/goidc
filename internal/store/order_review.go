@@ -29,6 +29,9 @@ func (s *Store) ReviewOrder(ctx context.Context, actorID, orderID int64, decisio
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	if err = LockAdminResourceCustomer(ctx, tx, actorID, "order", orderID); err != nil {
+		return out, err
+	}
 	if err = requireAdminOrdersManager(ctx, tx, actorID); err != nil {
 		return out, err
 	}
@@ -50,6 +53,13 @@ func (s *Store) ReviewOrder(ctx context.Context, actorID, orderID int64, decisio
 	err = tx.QueryRow(ctx, "SELECT status FROM invoices WHERE order_id=$1 FOR UPDATE", orderID).Scan(&invoiceStatus)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
+	}
+	var held bool
+	if err = tx.QueryRow(ctx, `SELECT external_refund_order_blocked($1)`, orderID).Scan(&held); err != nil {
+		return out, err
+	}
+	if held {
+		return out, orderRefundConflict("external_refund_order_hold")
 	}
 	var deleted bool
 	if err = tx.QueryRow(ctx, "SELECT review_status,status,version,deleted_at IS NOT NULL FROM orders WHERE id=$1 FOR UPDATE", orderID).Scan(&currentReview, &orderStatus, &out.Version, &deleted); err != nil {

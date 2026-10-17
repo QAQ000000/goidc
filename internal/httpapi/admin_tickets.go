@@ -317,7 +317,7 @@ RETURNING id,ticket_no,version`, in.CustomerID, in.DepartmentID, in.AssigneeID, 
 	}
 	ticket.EmailStatus = "not_requested"
 	if in.SendEmail {
-		ticket.EmailStatus, err = queueAdminTicketEmail(r, tx, customerEmail, customerEmailVerified, in.CC, ticket.TicketNo, in.Subject, in.Body)
+		ticket.EmailStatus, err = queueAdminTicketEmail(r, tx, ticket.ID, customerEmail, customerEmailVerified, in.CC, ticket.TicketNo, in.Subject, in.Body)
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -434,7 +434,7 @@ func normalizeAdminTicketCreateInput(in *adminTicketCreateInput) error {
 	return nil
 }
 
-func queueAdminTicketEmail(r *http.Request, tx pgx.Tx, customerEmail string, customerVerified bool, cc []string, ticketNo, subject, body string) (string, error) {
+func queueAdminTicketEmail(r *http.Request, tx pgx.Tx, ticketID int64, customerEmail string, customerVerified bool, cc []string, ticketNo, subject, body string) (string, error) {
 	if !customerVerified || strings.TrimSpace(customerEmail) == "" {
 		return "skipped_unverified", nil
 	}
@@ -469,7 +469,7 @@ func queueAdminTicketEmail(r *http.Request, tx pgx.Tx, customerEmail string, cus
 		recipients = append(recipients, address)
 	}
 	for _, recipient := range recipients {
-		if _, err = tx.Exec(r.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,$2,$3,'ticket_created',$4)`, recipient, messageSubject, messageBody, instance); err != nil {
+		if _, err = tx.Exec(r.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id,ticket_id) VALUES($1,$2,$3,'ticket_created',$4,$5)`, recipient, messageSubject, messageBody, instance, ticketID); err != nil {
 			return "", err
 		}
 	}

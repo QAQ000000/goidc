@@ -111,6 +111,26 @@ func main() {
 		}
 	}()
 	defer notificationWorker.Wait()
+	// A full renewal pass can outlast the provisioning poll interval. Run it
+	// independently so one day's renewal work does not delay delivery or mail.
+	var renewalWorker sync.WaitGroup
+	renewalWorker.Add(1)
+	go func() {
+		defer renewalWorker.Done()
+		timer := time.NewTicker(time.Minute)
+		defer timer.Stop()
+		for {
+			if _, renewErr := db.RunDailyAutoRenewals(ctx, log); renewErr != nil && ctx.Err() == nil {
+				log.Error("auto renewal processing failed", "error", renewErr)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+			}
+		}
+	}()
+	defer renewalWorker.Wait()
 	log.Info("provision worker started")
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -195,9 +215,6 @@ func main() {
 				if sendErr != nil {
 					log.Error("email delivery failed", "job_id", job.ID, "attempts", job.Attempts, "error", sendErr)
 				}
-			}
-			if _, err = db.RunScheduled(ctx, log, "automatic_renewals", func(c context.Context) (int, error) { return db.ProcessAutoRenewals(c, 20) }); err != nil {
-				log.Error("auto renewal processing failed", "error", err)
 			}
 			if err = db.RecoverStaleProvisionJobs(ctx); err != nil {
 				log.Error("stale job recovery failed", "error", err)

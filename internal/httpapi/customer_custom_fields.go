@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -86,39 +88,117 @@ func (s *Server) customerCustomFieldFailure(w http.ResponseWriter, r *http.Reque
 	s.fail(w, r, err)
 }
 
+// Keep configuration reads explicit: schema additions must not expand this API.
+type customerCustomFieldDTO struct {
+	ID                int64     `json:"id"`
+	FieldKey          string    `json:"field_key"`
+	Label             string    `json:"label"`
+	FieldType         string    `json:"field_type"`
+	Description       string    `json:"description"`
+	ValidationPattern string    `json:"validation_pattern"`
+	Choices           []string  `json:"choices"`
+	SortOrder         int       `json:"sort_order"`
+	AdminOnly         bool      `json:"admin_only"`
+	Required          bool      `json:"required"`
+	ShowOnRegister    bool      `json:"show_on_register"`
+	Active            bool      `json:"active"`
+	Version           int64     `json:"version"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+}
+
+const customerCustomFieldColumns = `id,field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active,version,created_at,updated_at`
+
+func scanCustomerCustomField(row pgx.Row) (customerCustomFieldDTO, error) {
+	var out customerCustomFieldDTO
+	err := row.Scan(&out.ID, &out.FieldKey, &out.Label, &out.FieldType, &out.Description, &out.ValidationPattern, &out.Choices, &out.SortOrder, &out.AdminOnly, &out.Required, &out.ShowOnRegister, &out.Active, &out.Version, &out.CreatedAt, &out.UpdatedAt)
+	if out.Choices == nil {
+		out.Choices = []string{}
+	}
+	return out, err
+}
+func (s *Server) adminCustomerCustomField(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	out, err := scanCustomerCustomField(s.db.Pool.QueryRow(r.Context(), "SELECT "+customerCustomFieldColumns+" FROM customer_custom_fields WHERE id=$1", id))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, out)
+}
 func (s *Server) adminCustomerCustomFields(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	query := r.URL.Query()
+	for key, values := range query {
+		if (key != "q" && key != "field_type" && key != "active" && key != "limit" && key != "offset") || len(values) != 1 {
+			writeError(w, 400, "invalid_customer_custom_field_query", "字段查询参数无效")
+			return
+		}
+	}
 	limit, offset := pagination(r)
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	fieldType := strings.TrimSpace(r.URL.Query().Get("field_type"))
+	q := strings.TrimSpace(query.Get("q"))
+	if !utf8.ValidString(q) || utf8.RuneCountInString(q) > 100 || strings.ContainsRune(q, 0) {
+		writeError(w, 400, "invalid_customer_custom_field_query", "搜索内容无效或超过100字符")
+		return
+	}
+	fieldType := query.Get("field_type")
 	if fieldType != "" && fieldType != "text" && fieldType != "textarea" && fieldType != "number" && fieldType != "date" && fieldType != "select" && fieldType != "boolean" {
-		writeError(w, http.StatusBadRequest, "invalid_field_type", "字段类型无效")
+		writeError(w, 400, "invalid_field_type", "字段类型无效")
 		return
 	}
-	active := r.URL.Query().Get("active")
+	active := query.Get("active")
 	if active != "" && active != "true" && active != "false" {
-		writeError(w, http.StatusBadRequest, "invalid_active", "启用状态无效")
+		writeError(w, 400, "invalid_active", "启用状态无效")
 		return
 	}
-	where := ` FROM customer_custom_fields WHERE ($1='' OR field_key ILIKE '%'||$1||'%' OR label ILIKE '%'||$1||'%' OR description ILIKE '%'||$1||'%') AND ($2='' OR field_type=$2) AND ($3='' OR active=($3='true'))`
+	pattern := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(q) + "%"
+	where := ` FROM customer_custom_fields WHERE (field_key ILIKE $1 OR label ILIKE $1 OR description ILIKE $1) AND ($2='' OR field_type=$2) AND ($3='' OR active=($3='true'))`
+	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
 	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, q, fieldType, active).Scan(&total); err != nil {
+	if err = tx.QueryRow(r.Context(), "SELECT count(*)"+where, pattern, fieldType, active).Scan(&total); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active,version,created_at,updated_at`+where+` ORDER BY sort_order,id LIMIT $4 OFFSET $5`, q, fieldType, active, limit, offset)
+	rows, err := tx.Query(r.Context(), "SELECT "+customerCustomFieldColumns+where+" ORDER BY sort_order,id LIMIT $4 OFFSET $5", pattern, fieldType, active, limit, offset)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	items := []customerCustomFieldDTO{}
+	for rows.Next() {
+		out, e := scanCustomerCustomField(rows)
+		if e != nil {
+			rows.Close()
+			s.fail(w, r, e)
+			return
+		}
+		items = append(items, out)
+	}
+	err = rows.Err()
+	rows.Close()
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if items == nil {
-		items = []map[string]any{}
+	if err = tx.Commit(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
 	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, http.StatusOK, struct {
+		Items  []customerCustomFieldDTO `json:"items"`
+		Total  int64                    `json:"total"`
+		Limit  int                      `json:"limit"`
+		Offset int                      `json:"offset"`
+	}{items, total, limit, offset})
 }
 
 func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +235,10 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, e)
 		return
 	} else if replayed {
-		_ = tx.Commit(r.Context())
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		write(w, http.StatusOK, replay)
 		return
 	}
@@ -222,17 +305,25 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, e)
 		return
 	} else if replayed {
-		_ = tx.Commit(r.Context())
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		write(w, http.StatusOK, replay)
 		return
 	}
 	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+	var fieldKey string
+	if err = tx.QueryRow(r.Context(), "SELECT version,field_key FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version, &fieldKey); err != nil {
 		if err == pgx.ErrNoRows {
 			writeError(w, http.StatusNotFound, "not_found", "客户自定义字段不存在")
 			return
 		}
 		s.fail(w, r, err)
+		return
+	}
+	if fieldKey != in.FieldKey {
+		writeError(w, http.StatusConflict, "field_key_immutable", "字段标识创建后不可修改")
 		return
 	}
 	if version != in.ExpectedVersion {
@@ -302,7 +393,10 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, e)
 		return
 	} else if replayed {
-		_ = tx.Commit(r.Context())
+		if err = tx.Commit(r.Context()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		write(w, http.StatusOK, replay)
 		return
 	}

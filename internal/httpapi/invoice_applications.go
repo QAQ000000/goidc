@@ -126,7 +126,7 @@ func (s *Server) invoiceAddresses(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) invoiceableInvoices(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	s.transactionPage(w, r, "i.id,i.invoice_no,i.amount_cents,i.paid_at,i.invoice_kind", ` FROM invoices i WHERE i.user_id=$1 AND i.status='paid' AND i.amount_cents>0 AND NOT i.import_review_required AND i.legacy_source='' AND NOT EXISTS(SELECT 1 FROM invoice_application_items x JOIN invoice_applications a ON a.id=x.application_id WHERE x.source_invoice_id=i.id AND a.status IN ('pending','issued'))`, "i.id", []any{identityFrom(r).ID}, limit, offset)
+	s.transactionPage(w, r, "i.id,i.invoice_no,i.amount_cents,i.paid_at,i.invoice_kind", ` FROM invoices i WHERE i.user_id=$1 AND i.status='paid' AND i.invoice_kind<>'topup' AND i.amount_cents>0 AND NOT i.import_review_required AND i.legacy_source='' AND NOT EXISTS(SELECT 1 FROM invoice_application_items x JOIN invoice_applications a ON a.id=x.application_id WHERE x.source_invoice_id=i.id AND a.status IN ('pending','issued'))`, "i.id", []any{identityFrom(r).ID}, limit, offset)
 }
 
 func (s *Server) invoiceApplicationDetail(w http.ResponseWriter, r *http.Request) {

@@ -347,7 +347,7 @@ func TestAffiliatePaymentSettlementChains(t *testing.T) {
 			cfg := epayTestConfig()
 			cfg.EpayAPIURL = merchant.URL
 			h = New(db, cfg, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
-			login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "affiliate-referred", "password": "integration-password"}, "", "")
+			login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": "affiliate-referred@example.test", "password": "integration-password"}, "", "")
 			expect(t, login, http.StatusOK)
 			customer := "zjmfgo_session=" + affiliateCookieValue(login.Result(), "zjmfgo_session")
 			pid := product(t, db, 10)
@@ -509,7 +509,7 @@ func TestAffiliateConcurrentAttributionAndSettlementRollback(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "SELECT username FROM users WHERE id=$1", actualUser).Scan(&name); err != nil {
 		t.Fatal(err)
 	}
-	login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": name, "password": "integration-password"}, "", "")
+	login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"identifier": name + "@example.test", "password": "integration-password"}, "", "")
 	expect(t, login, http.StatusOK)
 	customer := "zjmfgo_session=" + affiliateCookieValue(login.Result(), "zjmfgo_session")
 	pid := product(t, db, 10)

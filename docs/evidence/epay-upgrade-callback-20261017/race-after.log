@@ -1,0 +1,40 @@
+=== RUN   TestEpayUpgradeCallbackWaitsForConcurrentCancellation
+--- PASS: TestEpayUpgradeCallbackWaitsForConcurrentCancellation (2.35s)
+=== RUN   TestEpayUpgradeCallbackWaitsForConcurrentCancellation
+--- PASS: TestEpayUpgradeCallbackWaitsForConcurrentCancellation (2.10s)
+=== RUN   TestEpayUpgradeCallbackWaitsForConcurrentCancellation
+--- PASS: TestEpayUpgradeCallbackWaitsForConcurrentCancellation (2.10s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/httpapi	7.581s
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice
+--- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold (1.61s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice (0.00s)
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice
+--- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold (1.65s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice (0.00s)
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice
+--- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold (1.69s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice (0.00s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/store	5.983s

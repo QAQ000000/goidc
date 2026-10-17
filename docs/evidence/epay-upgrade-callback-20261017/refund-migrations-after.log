@@ -1,0 +1,53 @@
+=== RUN   TestLocalRenewalUpgradeFrom154DoesNotInventEffects
+--- PASS: TestLocalRenewalUpgradeFrom154DoesNotInventEffects (1.71s)
+=== RUN   TestOrderExternalRefundUpgradeFrom153DoesNotAdoptHistoricalOrders
+    order_external_refund_upgrade_test.go:283: actual embedded 001..153 -> 154 upgrade and second Migrate preserved original paid/pending order, payment/callback/paid_at and finite stock; historical order refused, genuinely new two-unit checkout eligible with actual stock 10 -> 8
+--- PASS: TestOrderExternalRefundUpgradeFrom153DoesNotAdoptHistoricalOrders (1.72s)
+=== RUN   TestOrderExternalRefundLifecycle
+=== RUN   TestOrderExternalRefundLifecycle/false
+=== RUN   TestOrderExternalRefundLifecycle/true
+--- PASS: TestOrderExternalRefundLifecycle (3.46s)
+    --- PASS: TestOrderExternalRefundLifecycle/false (1.64s)
+    --- PASS: TestOrderExternalRefundLifecycle/true (1.82s)
+=== RUN   TestOrderExternalRefundDeliveryAndItemWaits
+=== RUN   TestOrderExternalRefundDeliveryAndItemWaits/service
+=== RUN   TestOrderExternalRefundDeliveryAndItemWaits/job
+=== RUN   TestOrderExternalRefundDeliveryAndItemWaits/item
+--- PASS: TestOrderExternalRefundDeliveryAndItemWaits (5.14s)
+    --- PASS: TestOrderExternalRefundDeliveryAndItemWaits/service (1.63s)
+    --- PASS: TestOrderExternalRefundDeliveryAndItemWaits/job (1.68s)
+    --- PASS: TestOrderExternalRefundDeliveryAndItemWaits/item (1.83s)
+=== RUN   TestOrderExternalRefundHoldWinsDeliveryWait
+=== RUN   TestOrderExternalRefundHoldWinsDeliveryWait/service
+=== RUN   TestOrderExternalRefundHoldWinsDeliveryWait/job
+=== RUN   TestOrderExternalRefundHoldWinsDeliveryWait/item
+--- PASS: TestOrderExternalRefundHoldWinsDeliveryWait (5.93s)
+    --- PASS: TestOrderExternalRefundHoldWinsDeliveryWait/service (1.82s)
+    --- PASS: TestOrderExternalRefundHoldWinsDeliveryWait/job (2.20s)
+    --- PASS: TestOrderExternalRefundHoldWinsDeliveryWait/item (1.91s)
+=== RUN   TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting
+=== RUN   TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/reservation-parent
+=== RUN   TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/snapshot-service
+=== RUN   TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/snapshot-hold
+--- PASS: TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting (2.02s)
+    --- PASS: TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/reservation-parent (0.01s)
+    --- PASS: TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/snapshot-service (0.00s)
+    --- PASS: TestOrderExternalRefundReverseLockGuardsFailWithoutWaiting/snapshot-hold (0.00s)
+=== RUN   TestOrderExternalRefundServiceMovesCheckBothOrders
+=== RUN   TestOrderExternalRefundServiceMovesCheckBothOrders/false
+=== RUN   TestOrderExternalRefundServiceMovesCheckBothOrders/true
+--- PASS: TestOrderExternalRefundServiceMovesCheckBothOrders (4.01s)
+    --- PASS: TestOrderExternalRefundServiceMovesCheckBothOrders/false (2.04s)
+    --- PASS: TestOrderExternalRefundServiceMovesCheckBothOrders/true (1.96s)
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice
+=== RUN   TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice
+--- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold (1.87s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/transaction_metadata (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/settlement_status (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_from_held_invoice (0.00s)
+    --- PASS: TestPaymentCallbackInvoicePrelockPreservesOrderRefundHold/move_into_held_invoice (0.00s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/store	25.869s

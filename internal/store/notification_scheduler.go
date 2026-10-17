@@ -470,6 +470,10 @@ func (s *Store) EnqueueOverdueServiceSuspensions(ctx context.Context, limit int)
 	defer tx.Rollback(ctx)
 	// Keep the batch atomic. Lock every invoice before any service, matching
 	// payment settlement and avoiding invoice/service lock inversions.
+	// A recorded unsupported check is completed work for the current mode, so
+	// exclude it before LIMIT to let later services advance on the next scan.
+	// Derive restricted modes from the live capability rules: changing a mode
+	// or adding suspend support must make old audit evidence non-blocking.
 	rows, err := tx.Query(ctx, `
 SELECT s.id,i.id FROM services s
 JOIN invoices i ON i.status='unpaid' AND NOT i.import_review_required
@@ -482,7 +486,12 @@ WHERE s.status='active' AND NOT s.import_review_required
                   AND j.status IN ('pending','running','waiting_manual','waiting_verification'))
   AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.idempotency_key=
       'overdue-suspend-service-'||s.id::text||'-invoice-'||i.id::text)
-ORDER BY i.id,s.id LIMIT $1`, limit)
+  AND NOT (s.provision_mode=ANY($2::text[]) AND EXISTS (
+      SELECT 1 FROM audit_events a
+      WHERE a.action='service.overdue_suspension.unsupported' AND a.entity_type='service'
+        AND a.entity_id=s.id::text AND a.payload->>'invoice_id'=i.id::text
+        AND a.payload->>'provision_mode'=s.provision_mode))
+ORDER BY i.id,s.id LIMIT $1`, limit, unsupportedServiceActionModes("suspend"))
 	if err != nil {
 		return 0, err
 	}
@@ -552,13 +561,13 @@ func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, 
 	// fail: the job would exhaust its attempts while the service stayed active
 	// and unpaid, and an operator would never learn about it. Record durable
 	// evidence instead so the missed suspension is discoverable, then leave the
-	// service untouched. Evidence is deduplicated per service/invoice so the
+	// service untouched. Evidence is deduplicated per service/invoice/mode so the
 	// minute-level scheduler does not pile up identical rows.
 	if !modeSupportsServiceAction(mode, "suspend") {
 		var recorded bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM audit_events
  WHERE action='service.overdue_suspension.unsupported' AND entity_type='service' AND entity_id=$1
-   AND payload->>'invoice_id'=$2)`, fmt.Sprint(serviceID), fmt.Sprint(invoiceID)).Scan(&recorded); err != nil {
+   AND payload->>'invoice_id'=$2 AND payload->>'provision_mode'=$3)`, fmt.Sprint(serviceID), fmt.Sprint(invoiceID), mode).Scan(&recorded); err != nil {
 			return false, err
 		}
 		if recorded {

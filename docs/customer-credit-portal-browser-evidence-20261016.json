@@ -1,0 +1,2419 @@
+{
+  "date": "2026-10-16",
+  "backendBaseline": "2609f69",
+  "frontendBaseline": "a1b904c",
+  "productionChanged": false,
+  "layoutWidths": [
+    1440,
+    1024,
+    390,
+    320
+  ],
+  "pages": [
+    {
+      "scenario": "admin-credit-customers",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-customers-1440-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "618cbbed0ddff33a18680263a1a8be5bc1791b1a2b6f237c37f19c7bd9693440",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-customers",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-customers-1024-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "8de72b055dc035147b70c1119bc3fe2b32dd5de40befc06964140fb6bcdcf34d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-customers",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-customers-390-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "01c76db936cfdb9b9516d73fc3cf8296f8047b3e71b3af1b380f267cb347487f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-customers",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-customers-320-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "2d7742f7cb419cb4cf52a365511b9b7cd7be688293b6cf2fcba899bd29943b4a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-1440-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "7658c0e45a3f518427cbf49f1b32d3c4b309b8df30109ee38a9dc4823f69508b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-1024-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "702e01a3fad49be985b4919f46cc366301c1045f4febd7a3d04c15e72050c280",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-390-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "080812c68b2d4db79c617033c92bdf16615c161a78f953dc41b99066aef7d8af",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-320-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "18444bbf1c57c7528980d07577fa3bfa341dc6d27de1ab892b7158145b41e4d3",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-display-draft",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-display-draft-1440-900.png",
+      "newRoute": "/admin/site-settings",
+      "screenshotSha256": "b8f7c87f701f06b4b7536cf4c32a41554dfc1dfd985ae27c24913e36081b3c10",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-display-draft",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-display-draft-1024-900.png",
+      "newRoute": "/admin/site-settings",
+      "screenshotSha256": "bebd4a3e5f74053e359673cb3ccafdf65c4f17f73fb0b1a7e31f5f56ac941f84",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-display-draft",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-display-draft-390-900.png",
+      "newRoute": "/admin/site-settings",
+      "screenshotSha256": "e467e48448347dbcd5b9c25ad3f9fe1975f1574ab2b6e0ad8d28cc8c69718fda",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-display-draft",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-display-draft-320-900.png",
+      "newRoute": "/admin/site-settings",
+      "screenshotSha256": "94ce6123488e7c11c91282ba1629e43b6e4755efda6ab557658c4aaafbbe2c65",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-overview",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-overview-1440-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "94cdb165727658a04d4975420307ba8a85dfc1fe597c04a0ba853736837af796",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-overview",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-overview-1024-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "0dd0f004a996389d9e46e695ee2165b12b910bb8e6a72e56ef7895b75a1ae2b4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-overview",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-overview-390-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "076daba942d2123b7a2fa91c009ccff05b8c089b6c219a8ddc44662d1e62f357",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-overview",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-overview-320-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "763395da27b6bf39ad250b4ea52c6a760cf478cc16812a7ff8af2a0b9585aeb6",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-consumptions",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-consumptions-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "e2666046e297488ea708a6ceea288dca1744cbb7917a5ae2971eff5fe9a8b020",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-consumptions",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-consumptions-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "1dccf59089c4761370ae8b04033728ec5a1188dee7f8cf62913f0d27e609799f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-consumptions",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-consumptions-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "397c6a99a0838178e9d1612b8254dbe8e797b48d20bd577d4d0fe2c5a394949d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-consumptions",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-consumptions-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "82eb8be66b791d7da2c2911ef0c2c9ca2d947b1bae91b49c86ec2fb7379cb1d4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-repayments",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-repayments-1440-900.png",
+      "newRoute": "/console/credit?tab=repayments",
+      "screenshotSha256": "66e9285f624527005d9c645d69c8c12d3f79958ebd56a7f112049893915f0300",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-repayments",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-repayments-1024-900.png",
+      "newRoute": "/console/credit?tab=repayments",
+      "screenshotSha256": "358095a274cc62a48557dd1b9d03d7491ef119affad0f7a1961aa6b0e632fa9f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-repayments",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-repayments-390-900.png",
+      "newRoute": "/console/credit?tab=repayments",
+      "screenshotSha256": "ca2ab9b4034a487447213ad4db3e196cafd3f67ee17c227fd2eea4c852479490",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-repayments",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-repayments-320-900.png",
+      "newRoute": "/console/credit?tab=repayments",
+      "screenshotSha256": "6ea7a7e317101fa79f89dfe7c8e0b80ce808dc19a6f7ecbe03a8f825b6df1ef6",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-partial-invoice",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-partial-invoice-1440-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "b5f5846372ee7459e5eb175ae3e90b5d3f4db493a46519e989fbb215645da3c1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-partial-invoice",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-partial-invoice-1024-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "dd8d26002a2b63b1f3e96ae115b26cf529c6bc69b4211dd77da9c67964dfde81",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-partial-invoice",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-partial-invoice-390-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "856365ec49cece0479fac1bb3ee35d610e1e7b4dc581cd004e400fc439b80b9f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-partial-invoice",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-partial-invoice-320-900.png",
+      "newRoute": "/console/invoices/2",
+      "screenshotSha256": "d7d79f4516a5168f97482103e3c4c61b4d5af81a588f891c9de5d0bc221de7e8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refunded-invoice",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refunded-invoice-1440-900.png",
+      "newRoute": "/console/invoices/4",
+      "screenshotSha256": "143076002f964a24415a6510f3029cfe8548f65407ddcb3080cc997168dcb2e0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refunded-invoice",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refunded-invoice-1024-900.png",
+      "newRoute": "/console/invoices/4",
+      "screenshotSha256": "2acaadbce47c3fb0201d2880a7fd5adaee09beb5c73f18404efbfde2b82b5b9a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refunded-invoice",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refunded-invoice-390-900.png",
+      "newRoute": "/console/invoices/4",
+      "screenshotSha256": "48f01604eed502b84a40c6101c15964d4610709c995e57dc0b5eadc74821f618",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refunded-invoice",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refunded-invoice-320-900.png",
+      "newRoute": "/console/invoices/4",
+      "screenshotSha256": "a0094412f77a1995963d46bb39fb3be63cc6e79a86d435ff8f943fbace0e4255",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-draft",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-draft-1440-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "9dccb4464289254dc0a7e9b1a45d80084052822d66fe1935cac7b18a3450686a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-draft",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-draft-1024-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "52e70e6ed73dd1bd5dd6f13ff65cf81e66bfa8f7fd9fdfc2ca1bbd547e48ccf2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-draft",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-draft-390-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "535f457fa6d47aee545921439bcf11eea4f04173bb43fd5ffaf10442a269504e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-draft",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-draft-320-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "3267c26e1acba1183dd6919964d9c382abb18a6d02e7dcb4f2855281647c9447",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-short",
+      "width": 390,
+      "height": 500,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-short-390-500.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "ed8a92356af50cca3fdcbf0a9a49e79cc3bc26fdf8438f30f1e719c62ae83211",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-final-repayment-short",
+      "width": 320,
+      "height": 500,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-final-repayment-short-320-500.png",
+      "newRoute": "/admin/credit?limit=20&tab=consumptions&customer_id=3",
+      "screenshotSha256": "986cde32a003592c68276309a14ea40ad6ae18637cb4f54a600d3445de7b0f6a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refreshed-partial",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refreshed-partial-1440-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "a46a052a02dcd7f8353bb44f4b3d1b302e046a5f1b8dd30ef2efb111d7a1b11c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refreshed-partial",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refreshed-partial-1024-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "4fbaf91d9553a6d8a535250aceca3160ef95eb0e575d178c7bb35b205f673d12",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refreshed-partial",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refreshed-partial-390-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "ce2a6e153ca3291bd3239202909e9a05a490b1359c0f8908074e9d69f5fb6543",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-refreshed-partial",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-refreshed-partial-320-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "0557f17ce91459f556e03c95feff66c85a21aaff69a034884caa5064ea47ccf2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-new-credit-payment",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-new-credit-payment-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "7228adbc3872a189b1d315e269d4919b441a7dd74dff58b8589556ea1591aa1e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-new-credit-payment",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-new-credit-payment-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "2d38e2a5a7c302b4cb612ad6a1371d9b9b9e07c90694710a67d74f9e2054646f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-new-credit-payment",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-new-credit-payment-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "9ba21a0fbf9afdcf8e0311a460da0a6f4968d51e9ca6e1883ce074ca46d53e79",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-new-credit-payment",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-new-credit-payment-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "dcdda2ecea9ce14eed6ce98d6e17e7586548f371ecd875e624a8e0f0da1f7390",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-unknown",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-unknown-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "75e276f4ee8a3b78e54a1ae38a3b74470d5f21d46e999c788b89bada551f95dd",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-unknown",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-unknown-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "44e266d6190a4c0a035cfd37fc9be200c0cd0fcb417292c1b1bdf68eb9557a1a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-unknown",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-unknown-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "045866e8f4909452535e41f757610890d13da11054af96d6f3406949ba70d04d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-credit-unknown",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-credit-unknown-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "6ca1884c757dc1b03e89ded86542994c89e77e0c3f761b3750280f7f0615fb14",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-recovery-identity-loading",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-recovery-identity-loading-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "7c11041622fd46a0c341f008b28d3d783b46dbe86ad9a9fc1374cb2094469738",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-recovery-identity-loading",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-recovery-identity-loading-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "c772bf4c9cf79437d9db8b695358ebbb73427d7c4699f876d6efcc4170fe7e41",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-recovery-identity-loading",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-recovery-identity-loading-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "06b694304e415d34bbe5e587eb65adedd476aeb96f0ec3af094f53d77b601ee1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-recovery-identity-loading",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-recovery-identity-loading-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "a07ef0860eab6ad2696e5bf48e1d707e0b9a07de039d9567ee13ca4cc16e7ecb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-disabled-frozen-recovery",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-disabled-frozen-recovery-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "08dd69e507676ef29cdf51a3a263bdc2d7bc5a05818d798b135e21a33011caa7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-disabled-frozen-recovery",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-disabled-frozen-recovery-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "efd6ab5eb7641e1e285184ae5449bbf832dbb304d8d234015c1d95ee0f3cc853",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-disabled-frozen-recovery",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-disabled-frozen-recovery-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "a33f2e6f2f836eee8bfbde8fb053aa66e01daf15352bb29d3c0e5a17178d8c49",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-disabled-frozen-recovery",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-disabled-frozen-recovery-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "4911a14d6ae33f78416efacd4b14b55b94f3656fc39c0a0d34034500335cc308",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-identity-failure",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-identity-failure-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "971eb500b659c3ff5dd29ec38e57c4db4abf906901571577972f8b052581c177",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-identity-failure",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-identity-failure-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "c926acd22d4f964c05991eae16ca1393ada4dc15acf505869a9105bff6b9b78a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-identity-failure",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-identity-failure-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "a4519306c7fe2e0a75efe44e53b64550e9023b6950fee835860779390048f178",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-identity-failure",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-identity-failure-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "2723ed17d270a73c14519b733b0ef6d1264769924d1fecdd17f114c6e4be16fe",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-switched-identity",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-switched-identity-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "6f0f0799dc3c7e0cb86a4f1b036e128b4e5ac2a07b1373432fcfc5f29a4f47ff",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-switched-identity",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-switched-identity-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "701e48976b549b6f1cfa4b10661cb8d2c1c512e0ff5314751af1846570d53197",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-switched-identity",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-switched-identity-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "7c1ac91b581493b8c5a8859ba386cbd7821466518a93667b8a562f1893e2eaa7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-switched-identity",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-switched-identity-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "bfac4897a578d029583d688b0505f9e5cf583d61f05917f4a3b2ce50295f3449",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-original-receipt-recovered",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-original-receipt-recovered-1440-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "284b42477a6f6779a6f9a7bcfb964d1256c0adb68c37a341dc4e7627c52716c1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-original-receipt-recovered",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-original-receipt-recovered-1024-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "02a6aee29aed12215a5c266553bc619df23b2592eab8937c3a3fac78e4dbf9f9",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-original-receipt-recovered",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-original-receipt-recovered-390-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "fac74e38f8da9ada8fda60bbc128690fae236d6e001b744bdf02f6ded539d659",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-original-receipt-recovered",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-original-receipt-recovered-320-900.png",
+      "newRoute": "/console/invoices/5",
+      "screenshotSha256": "fac5bc4604a5665c1c107a33184570cdc55c017f956f639bf6300849eebc7a5e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-fully-repaid",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-fully-repaid-1440-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "9f4544e588ff36cdcdb61c49e33e0bd55c8033ee5eaadf4dce6dbf957fdf8377",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-fully-repaid",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-fully-repaid-1024-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "47cd8bcf6b67f8ffd21b690978bb13df52264beaa76ac46d918584b82076716c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-fully-repaid",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-fully-repaid-390-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "0c88ce62d8784c2afa7fb110c0af17425ef61121612008e314baf01b1a0f7a65",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-fully-repaid",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-fully-repaid-320-900.png",
+      "newRoute": "/console/invoices/1",
+      "screenshotSha256": "9c5889a33a417c615fd448eba843b12144a14fada992d136011d0604f0926b84",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-display-disabled",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-display-disabled-1440-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "024707d83ba843624f2ad95ecca77b357fc3c792bf9565c7f831e475b2fc343b",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-display-disabled",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-display-disabled-1024-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "5863a36f21af44fe60a58f4adde788d71fd1adfb53b7209d3000b5cd95b150d0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-display-disabled",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-display-disabled-390-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "8cc27d94c8e9ea1e60c1258e4663de4e6b76c8eefe38e4c39d7c783c8e36e150",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-display-disabled",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-display-disabled-320-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "74d64c17c40b1e0ad08c936ad2288a48b3492075651f676948fe6f7e88ed8feb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-loading",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-loading-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "a2f3666fca9de112ad7676388af9fde71910cab2becd008a156bbde0bff0e9d4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-loading",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-loading-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "2538d4ebaab16ef9b5e068ad821dd46baed4d16c787946d803ab144e3e646486",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-loading",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-loading-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "b8248a4ea3b2298acaffc03ca7a827139c1d719af8fe07077ce6dbf726750207",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-loading",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-loading-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "165b38d47fbe6a3eaffdee358a03054a1c7bc627bf9222a745b3732740c1ab48",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-error",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-error-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "3b2cdff7a534e31fc61ce45e00914cb1597dd318c24960c61e28cc4df4812e82",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-error",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-error-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "c21943ba35fb37a938945a5ba6af46a7740ae124821d6a9900b3d24a9eff4726",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-error",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-error-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "58b75710f90f0ab050e6bad13fde0c14fdfe6490e46d990454ec24f4b80e9ab5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-error",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-error-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "8554e32568a46589c4143f75e8032b180265bf7b0761a75317e1f81a085a2487",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-repaid",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-repaid-1440-900.png",
+      "newRoute": "/console/credit?status=repaid",
+      "screenshotSha256": "19601bdbed537a5a1ddd62ecb8382190c4f9cec271fde84a8cf9ac9e1f5fb071",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-repaid",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-repaid-1024-900.png",
+      "newRoute": "/console/credit?status=repaid",
+      "screenshotSha256": "5141331ce58ae54851d0bf2ed852a968eab6b8e11842c02339b3a8969b7937f8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-repaid",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-repaid-390-900.png",
+      "newRoute": "/console/credit?status=repaid",
+      "screenshotSha256": "17456e4c5ae14d3d3b230269ab0428267518c5440daf9a2e3b8b028e7d8d7cff",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-repaid",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-repaid-320-900.png",
+      "newRoute": "/console/credit?status=repaid",
+      "screenshotSha256": "e0c8873abb3ab367270c11e6464628ff802da96697532306114f4430f786819f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-empty",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-empty-1440-900.png",
+      "newRoute": "/console/credit?q=%25_",
+      "screenshotSha256": "7025d8e0abd3b913071ecf3864f492b3e90e50634bb691bf0a4b8ae30e1147ca",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-empty",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-empty-1024-900.png",
+      "newRoute": "/console/credit?q=%25_",
+      "screenshotSha256": "8d224b735d56dc5c891e6d69afea6becf575bc6272e7c4e2f4ba4d5ce4d5f1f0",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-empty",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-empty-390-900.png",
+      "newRoute": "/console/credit?q=%25_",
+      "screenshotSha256": "72d5930d98c1ea359bddbac990b6d73d6a04a65cf681a1844db7ef2b42d91a16",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-filter-empty",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-filter-empty-320-900.png",
+      "newRoute": "/console/credit?q=%25_",
+      "screenshotSha256": "3ae5c85d81279821ee77ace424b7109c274da7ee20d58e16c64e6279a0236468",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-page-out-of-range",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-page-out-of-range-1440-900.png",
+      "newRoute": "/console/credit?page=99",
+      "screenshotSha256": "91095e09bcbca3114142403e2ffbfa98efac727e322a8bda3322680df8ae62b1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-page-out-of-range",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-page-out-of-range-1024-900.png",
+      "newRoute": "/console/credit?page=99",
+      "screenshotSha256": "04186e8c4371c4dbcdd1eb29f5310b97be46c78694151dbfb0adaac455785c47",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-page-out-of-range",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-page-out-of-range-390-900.png",
+      "newRoute": "/console/credit?page=99",
+      "screenshotSha256": "398573384ddb5611373f4335843f896fc2182d4f7bc1c1f3c11a253b6347c3b9",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-page-out-of-range",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-page-out-of-range-320-900.png",
+      "newRoute": "/console/credit?page=99",
+      "screenshotSha256": "ca85ff7201b16098c9f47d7256fbb7645ee141bbd52bb2c1ab3fdb9ad61f6a4a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-conflict",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-conflict-1440-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "d84c1eb5a9f916ed819eb1137fdb51e0b5ef567ee5771a1f94f887895307e81f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-conflict",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-conflict-1024-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "ea55565cd43c2942604e8cbc2a6037595f1e2d0126747cefeeba9e3f078f140f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-conflict",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-conflict-390-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "a1619505767281c4b64dd0541a994bde23e301d63b7368cc49f57ca9f94fe444",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-conflict",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-conflict-320-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "1eff0a145cf6388b4aa41f56d79d5009e89d28a6959eb6be82dc801106bdb866",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-saved",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-saved-1440-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "716ef26cab245be9ab882b52cf9aa600d85bdbcb343c77a22ac80784164f6df1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-saved",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-saved-1024-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "77327a34b18debea2a02d3598f9fb64e8f1af1a8f3b166a9174f4a22c18619a1",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-saved",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-saved-390-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "3acf2f83154b5bfc986d36e2a663c799c4f333abc9ed89f3cc01f3e9aec3e162",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-saved",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-saved-320-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "5137b81713b493f5f585c778aac0e3927b9e46f7aba14409e584a2146a222024",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-one",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-one-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "9af19b36c2664775fa4d69b812daafde7ea882ee2d2e8a657d9cf35419657da8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-one",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-one-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "318e6787984cff9ab101e31546ab04c7ba8e05fb78f748e61abeb93a9581e766",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-one",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-one-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "5bb9d03214a6f6b6186b343500157ac5afd1c9d593791bf696e5facedfb3ea80",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-one",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-one-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "eafa40c9220f5715ad1bcb051ef7543993b2ef345d90e7c6200acd1953cb39a3",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-two",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-two-1440-900.png",
+      "newRoute": "/console/credit?page=2",
+      "screenshotSha256": "e9cff5729137a3782b9c61ca26c510b909974740014e93db99ff13120f765beb",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-two",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-two-1024-900.png",
+      "newRoute": "/console/credit?page=2",
+      "screenshotSha256": "ff1caf596c17bc07a0a3c2f8d43ace6d1918ad96b1947b30fe397a428a9d63a2",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-two",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-two-390-900.png",
+      "newRoute": "/console/credit?page=2",
+      "screenshotSha256": "9f11d6e02bc6dff9ca3756f4615d70a7492b17c0e70a46fa3a870e681b0f7c4d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-two",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-two-320-900.png",
+      "newRoute": "/console/credit?page=2",
+      "screenshotSha256": "5729e88595a6c3d81439236e7ed79941793aef2f2a0bed1bb0f2a7d5815bfe6f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-size50",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-size50-1440-900.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "79c0775d0a43f5909136145b35bbbb7793adfc51df8deed7d05ce6cfd072ffa4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-size50",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-size50-1024-900.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "dc063d0b37ecda3cdaa1651ef6db8b8caae12d8935fb30bb27a19301eea6e65f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-size50",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-size50-390-900.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "44cdf680f36a285b7997ebdb3642addafb9d61f15fbdfe4ed56a9b06c81b0bdd",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-real-page-size50",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-real-page-size50-320-900.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "8c0f241af0b00b6bf84e2fd76531c0f6eb56f2a942c37c96a38c6ce0b7b114ee",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-short",
+      "width": 390,
+      "height": 500,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-short-390-500.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "d00b0acc89ad59dbd07665ee6307ce511d7a72b7917025ca9f90c853beda6911",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-records-short",
+      "width": 320,
+      "height": 500,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-records-short-320-500.png",
+      "newRoute": "/console/credit?limit=50",
+      "screenshotSha256": "710b636d477c37ad7d031f744c03777ca11bbeaee6beafab834c9012bf64788c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-reader",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-reader-1440-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "b06f0dd75f7b5b7e59386f3443e37f5b5d8d2e5fbe3d992dd33cfc9465cfabe5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-reader",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-reader-1024-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "aa43378e247117277cb1ad94d345ec6d4096111124b9257d558404922d65c9d8",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-reader",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-reader-390-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "0470294996f7a751387034b221aec50f98c30abbc0b206c9081544344fd56f3f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-reader",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-reader-320-900.png",
+      "newRoute": "/admin/credit?limit=20&tab=customers",
+      "screenshotSha256": "2d7742f7cb419cb4cf52a365511b9b7cd7be688293b6cf2fcba899bd29943b4a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-reader",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-reader-1440-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "a42620062de2ad2d0784320b0e3fc7272fbb22ce6219b1f7f32e4dd075b05b5d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-reader",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-reader-1024-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "61c1d2a65f5a26e20e495bf9d21764a6bc9bf4188e841a41f7f66ee66656a34d",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-reader",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-reader-390-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "73d0146d164dc7107d70d31a55d071670c993a1ab54bf99b134b24ff2a64093c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "admin-credit-settings-reader",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/admin-credit-settings-reader-320-900.png",
+      "newRoute": "/admin/credit-settings",
+      "screenshotSha256": "67ffa7e1b557350946480d68c22e64e2d28bcb523ba80527f11ad477996a985f",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-b-isolated",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-b-isolated-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "adb38abe8167113f5bf11e066478335225cac7c3734c0306017fddda1641bcdd",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-b-isolated",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-b-isolated-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "fcea6f8df6531ef567b4104f58b483fb5a052f8ae0fb6f483c7c492e000a177c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-b-isolated",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-b-isolated-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "94629f4c74f0e975663b6b83bd8c3360649067e116159fb4e7c88517e54fc652",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-b-isolated",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-b-isolated-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "310974eec26beb0c57620fb40d76b89898aa422290f9e486974d8cae8e535349",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-empty-account-records",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-empty-account-records-1440-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "cf295c153c68f2ac3aad5310390d8e039d82903c52d4f9468c91e1f4d1b5ee89",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-empty-account-records",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-empty-account-records-1024-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "745080d37a69b0f855e1cd68c4549ff1a97ede2c806c8f48a24fd77c740f20f4",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-empty-account-records",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-empty-account-records-390-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "74a6306cd96127a2a50a7ee1017cf56f18bedfc57c50a442253c664e15297f2a",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-empty-account-records",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-empty-account-records-320-900.png",
+      "newRoute": "/console/credit",
+      "screenshotSha256": "ab2564d4ac62b0f0c24bf6ce8ab5292d654e8333d8dc215cbc322ec1af3f0aa5",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-overview",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-overview-1440-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "3fad4635e3d3d390997f0ed9b8965004805e3bd16130326c5511f3d1d4ee9bc9",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-overview",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-overview-1024-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "d816931a34691b1f5b1b59d4fdbccc01d64ed637ab4f253b43351ad6656da5b7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-overview",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-overview-390-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "80f1a76bddab584ae6048552d8c3d640a0086fa2bae88aa7e6bcea32bfaafcdf",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-overview",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-overview-320-900.png",
+      "newRoute": "/console/account",
+      "screenshotSha256": "f86e0fe0e4a9d09759e4f91c488b22d001e21d64f39cd38d0f96d34dbe261244",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-invoice",
+      "width": 1440,
+      "height": 900,
+      "layout": {
+        "width": 1440,
+        "document": 1440
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-invoice-1440-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "f9f35046e16e4acb844c818d15914174ea4fcdd0c4b19afb9ecc67ba461f5d15",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-invoice",
+      "width": 1024,
+      "height": 900,
+      "layout": {
+        "width": 1024,
+        "document": 1024
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-invoice-1024-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "4f98046a0d53e797665ca15b9f3fbc5503af27c71cc0c636ff868176d502935c",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-invoice",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-invoice-390-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "047e3c3cc6a9f7deb87a6ea4149000e5ebe8c329f185689764fb2bc28d4044db",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-zero-credit-invoice",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-zero-credit-invoice-320-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "9188440da9f7cabfe241e452819e381bc8fa4bd934984dcb16c411aa688af64e",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-malformed-recovery",
+      "width": 390,
+      "height": 900,
+      "layout": {
+        "width": 390,
+        "document": 390
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-malformed-recovery-390-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "f57f2ac8f89102650dbd4ded1ab0434f37e5b94198cb22f33299d034b74222e7",
+      "usableForLayoutProof": true
+    },
+    {
+      "scenario": "customer-malformed-recovery",
+      "width": 320,
+      "height": 900,
+      "layout": {
+        "width": 320,
+        "document": 320
+      },
+      "screenshot": "output/playwright/customer-credit-20261016/customer-malformed-recovery-320-900.png",
+      "newRoute": "/console/invoices/29",
+      "screenshotSha256": "dd44a6a67bc1434fa897501336fa22639a6a4b94e7bfae3a4bf561bcf5fd5d0a",
+      "usableForLayoutProof": true
+    }
+  ],
+  "scenarios": [
+    {
+      "scenario": "admin-initial",
+      "checks": [
+        "credit settings cancel discards actual draft",
+        "display setting enabled using real admin form",
+        {
+          "globalSettings": {
+            "auto_recharge": false,
+            "enabled": true,
+            "id": 1,
+            "limit_cents": 0,
+            "updated_at": "2026-10-16T19:23:44.555524+08:00",
+            "version": 1
+          }
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "customer-initial",
+      "checks": [
+        {
+          "account": {
+            "display_enabled": true,
+            "payment_enabled": true,
+            "limit_cents": 200000,
+            "used_cents": 5000,
+            "available_cents": 195000,
+            "frozen": false,
+            "version": 8,
+            "updated_at": "2026-10-16T19:23:48.347771+08:00"
+          }
+        },
+        "refund shows debt cancellation and actual repaid zero"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "admin-full-draft",
+      "checks": [
+        "remaining2000 loaded into actual admin repayment draft"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "customer-partial",
+      "checks": [
+        {
+          "partialAfterManualRefresh": {
+            "invoice_id": 1,
+            "invoice_no": "M-5c51a7ed7881495d923887db144f79a7",
+            "amount_cents": 3000,
+            "remaining_cents": 2000,
+            "status": "outstanding",
+            "version": 2,
+            "created_at": "2026-10-16T19:23:48.229704+08:00",
+            "refunded_at": null,
+            "repaid_cents": 1000
+          }
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "payment-prepare",
+      "checks": [
+        "interceptor ready: real upstream write followed by lost response"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "payment-unknown",
+      "checks": [
+        {
+          "realWriteStatus": 201,
+          "originalPersistedBeforeWrite": true,
+          "alternatePaymentBlocked": true
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "recovery-resume",
+      "checks": [
+        "all alternative payments blocked while identity GET held during reload",
+        "pending original request restored with display/global off and frozen"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "recovery-final",
+      "checks": [
+        "identity read503 blocks POST and retains pending",
+        "same-page cookie switched to B: zero credit POST, original A request retained",
+        {
+          "originalRecovery": [
+            {
+              "status": 200,
+              "sameKey": true,
+              "sameBody": true
+            }
+          ],
+          "zeroDuplicatePosts": true
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/me"
+        }
+      ]
+    },
+    {
+      "scenario": "readonly-states",
+      "checks": [
+        "full3000 actual repayment reflected while invoice version unchanged",
+        "display disabled + global enabled + frozen hide ordinary summary, record entry retained",
+        "loading/error clears stale table; manual retry restores actual records",
+        "invoice return and browser history preserve filter URL",
+        "repayment date uses received date in Shanghai; wildcard literal empty; out-of-range recovery",
+        {
+          "customerBoundary": [
+            {
+              "path": "/credit/consumptions?customer_id=4",
+              "status": 400,
+              "cache": "no-store"
+            },
+            {
+              "path": "/credit/repayments?q=a&q=b",
+              "status": 400,
+              "cache": "no-store"
+            },
+            {
+              "path": "/invoices/6/credit",
+              "status": 404,
+              "cache": "no-store"
+            }
+          ]
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+        "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+        "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 503,
+          "path": "/api/v1/credit/consumptions"
+        },
+        {
+          "status": 400,
+          "path": "/api/v1/credit/consumptions"
+        },
+        {
+          "status": 400,
+          "path": "/api/v1/credit/repayments"
+        },
+        {
+          "status": 404,
+          "path": "/api/v1/invoices/6/credit"
+        }
+      ]
+    },
+    {
+      "scenario": "settings-save-only",
+      "checks": [
+        "real UI409, explicit reload, real save200 with no read-only id",
+        {
+          "currentCreditSettings": {
+            "auto_recharge": false,
+            "enabled": true,
+            "id": 1,
+            "limit_cents": 0,
+            "updated_at": "2026-10-16T19:39:56.447904+08:00",
+            "version": 7
+          }
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/admin/credit-settings"
+        }
+      ]
+    },
+    {
+      "scenario": "settings-and-page-seed",
+      "checks": [
+        "display form cancel and save real API",
+        "account unfreeze using actual confirmed admin form",
+        {
+          "pagingInvoiceIds": [
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28
+          ]
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 403,
+          "path": "/api/v1/credit/account"
+        }
+      ]
+    },
+    {
+      "scenario": "pagination",
+      "checks": [
+        {
+          "realPagination": {
+            "total": 27,
+            "firstPage": 25,
+            "secondPage": 2,
+            "pageSize50": 27,
+            "noOverlap": true
+          }
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [],
+      "expectedFailures": []
+    },
+    {
+      "scenario": "reader",
+      "checks": [
+        "reader real list permitted, controls absent/disabled, both direct writes403"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+        "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 403,
+          "path": "/api/v1/admin/credit/5/limit"
+        },
+        {
+          "status": 403,
+          "path": "/api/v1/admin/credit/consumptions/1/repay"
+        }
+      ]
+    },
+    {
+      "scenario": "identities-empty",
+      "checks": [
+        "B only own record; empty actual zero account; zero-credit UI blocked and API409",
+        "injected malformed recovery blocks alternatives; explicit recheck restores after removing test corruption",
+        "actual logout revokes four financial APIs401, browser redirects login"
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Failed to load resource: the server responded with a status of 409 (Conflict)",
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+        "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 404,
+          "path": "/api/v1/invoices/1/credit"
+        },
+        {
+          "status": 409,
+          "path": "/api/v1/invoices/29/pay-credit"
+        },
+        {
+          "status": 401,
+          "path": "/api/v1/credit/account"
+        },
+        {
+          "status": 401,
+          "path": "/api/v1/credit/consumptions"
+        },
+        {
+          "status": 401,
+          "path": "/api/v1/credit/repayments"
+        },
+        {
+          "status": 401,
+          "path": "/api/v1/invoices/29/credit"
+        }
+      ]
+    },
+    {
+      "scenario": "root-final",
+      "checks": [
+        "final root session: stale repayment409, repaid refund409 without mutation",
+        {
+          "finalActualAccount": {
+            "used_cents": 5022,
+            "limit_cents": 200000
+          }
+        }
+      ],
+      "javascriptErrors": [],
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 409 (Conflict)",
+        "Failed to load resource: the server responded with a status of 409 (Conflict)"
+      ],
+      "expectedFailures": [
+        {
+          "status": 409,
+          "path": "/api/v1/admin/credit/consumptions/1/repay"
+        },
+        {
+          "status": 409,
+          "path": "/api/v1/admin/invoices/1/refund"
+        }
+      ]
+    }
+  ],
+  "databaseProof": {
+    "accounts": [
+      {
+        "frozen": false,
+        "user_id": 3,
+        "used_cents": 5022,
+        "limit_cents": 200000,
+        "balance_cents": 1234
+      },
+      {
+        "frozen": false,
+        "user_id": 4,
+        "used_cents": 3000,
+        "limit_cents": 200000,
+        "balance_cents": 1234
+      },
+      {
+        "frozen": false,
+        "user_id": 5,
+        "used_cents": 0,
+        "limit_cents": 0,
+        "balance_cents": 1234
+      }
+    ],
+    "key_invoices": [
+      {
+        "invoice_id": 1,
+        "amount_cents": 3000,
+        "credit_status": "repaid",
+        "credit_version": 3,
+        "invoice_status": "paid",
+        "invoice_version": 2,
+        "remaining_cents": 0,
+        "repayment_count": 2,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 3000,
+        "repayment_audit_count": 2
+      },
+      {
+        "invoice_id": 2,
+        "amount_cents": 3000,
+        "credit_status": "outstanding",
+        "credit_version": 2,
+        "invoice_status": "paid",
+        "invoice_version": 2,
+        "remaining_cents": 2000,
+        "repayment_count": 1,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 1000,
+        "repayment_audit_count": 1
+      },
+      {
+        "invoice_id": 3,
+        "amount_cents": 3000,
+        "credit_status": "repaid",
+        "credit_version": 2,
+        "invoice_status": "paid",
+        "invoice_version": 2,
+        "remaining_cents": 0,
+        "repayment_count": 1,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 3000,
+        "repayment_audit_count": 1
+      },
+      {
+        "invoice_id": 4,
+        "amount_cents": 3000,
+        "credit_status": "refunded",
+        "credit_version": 2,
+        "invoice_status": "refunded",
+        "invoice_version": 3,
+        "remaining_cents": 0,
+        "repayment_count": 0,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 0,
+        "repayment_audit_count": 0
+      },
+      {
+        "invoice_id": 5,
+        "amount_cents": 3000,
+        "credit_status": "outstanding",
+        "credit_version": 1,
+        "invoice_status": "paid",
+        "invoice_version": 2,
+        "remaining_cents": 3000,
+        "repayment_count": 0,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 0,
+        "repayment_audit_count": 0
+      },
+      {
+        "invoice_id": 6,
+        "amount_cents": 3000,
+        "credit_status": "outstanding",
+        "credit_version": 1,
+        "invoice_status": "paid",
+        "invoice_version": 2,
+        "remaining_cents": 3000,
+        "repayment_count": 0,
+        "paid_audit_count": 1,
+        "actual_repaid_cents": 0,
+        "repayment_audit_count": 0
+      },
+      {
+        "invoice_id": 29,
+        "amount_cents": null,
+        "credit_status": null,
+        "credit_version": null,
+        "invoice_status": "unpaid",
+        "invoice_version": 1,
+        "remaining_cents": null,
+        "repayment_count": 0,
+        "paid_audit_count": 0,
+        "actual_repaid_cents": 0,
+        "repayment_audit_count": 0
+      }
+    ],
+    "a_consumption_count": 27,
+    "reader_write_audits": 0,
+    "a_credit_total_cents": 15022,
+    "payment5_paid_audits": 1,
+    "a_repayment_total_cents": 7000,
+    "account_debt_mismatches": 0,
+    "payment5_credit_receipts": 1,
+    "a_credit_refund_total_cents": 3000,
+    "customer_balance_ledger_rows": 0
+  },
+  "scopeNotes": [
+    "Only isolated PG18 fixture and real local API requests; no external payment, notification, worker, or resource writes.",
+    "128 core layout screenshots precede the final recovery wording-only patch; affected malformed-recovery state rerun against a1b904c.",
+    "Read failure and committed201/lost503 are explicit browser fault injection; failed harness attempts and preview rebuild interruptions are excluded, successful reruns only.",
+    "Root account native repayment confirmation was accepted through CLI; fixture seeded refund via actual API, browser reads cancelled debt and confirms actual repayments remain zero.",
+    "Screenshot integrity confirms recorded bytes, and does not close other 105-page states or production acceptance."
+  ],
+  "cleanup": {
+    "fixtureTest": "PASS",
+    "fixtureSeconds": 1566.219,
+    "schemaCountAfterCleanup": 0,
+    "abortedAttemptSchemasRemoved": 3,
+    "previewStopped": true,
+    "previewBuildRemoved": true,
+    "browserSessionsLoggedOutAndClosed": true,
+    "realBusinessDatabaseWritten": false
+  }
+}

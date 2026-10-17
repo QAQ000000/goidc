@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const serviceColumns = `s.installed_os,s.resource_info,s.id,s.user_id,s.order_id,s.order_item_id,s.product_id,s.name,s.domain,s.billing_cycle,
+const serviceColumns = `external_refund_order_hold_json(s.order_id) AS external_refund_order_hold,s.installed_os,s.resource_info,s.id,s.user_id,s.order_id,s.order_item_id,s.product_id,s.name,s.domain,s.billing_cycle,
 s.status,s.next_due_at,s.auto_renew,s.auto_renew_error,s.username,s.upstream_id,s.last_error,s.provision_mode,s.unit_number,s.inventory_released,s.version,s.created_at,s.updated_at,
 COALESCE((SELECT jsonb_agg(jsonb_build_object('id',sos.id,'group_id',sos.group_id,'group_name',pog.name,'option_id',sos.option_id,'label',po.label,'value',po.value,'quantity',sos.quantity) ORDER BY pog.sort_order,pog.id) FROM service_option_selections sos JOIN product_option_groups pog ON pog.id=sos.group_id LEFT JOIN product_options po ON po.id=sos.option_id WHERE sos.service_id=s.id),'[]'::jsonb) AS config_options`
 
@@ -106,6 +106,14 @@ WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NO
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if service["provision_mode"] == "supplier" {
+		caps, capErr := s.db.ServiceSupplierCapabilitiesTx(r.Context(), tx, id, adminRoute(r))
+		if capErr != nil {
+			s.fail(w, r, capErr)
+			return
+		}
+		service["supplier_capabilities"] = caps
 	}
 	if adminRoute(r) {
 		metadata, queryErr := tx.Query(r.Context(), `SELECT p.name AS product_name,

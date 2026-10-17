@@ -1,0 +1,198 @@
+{
+  "format": 1,
+  "projection": true,
+  "verification": "Read-only SHA-256 and explicit metadata comparison against locally retained original reports; does not rerun acceptance or change original FAIL results",
+  "scope": "Run1-5 from candidate source 16cc54e only; later patched candidate is not covered",
+  "runs": [
+    {
+      "run": 1,
+      "summary": "run1-summary.json",
+      "summarySHA256": "c1ca82100eac68b621fe52d849ce4e947b6d9881bcc45fdf151516e901a44a3f",
+      "rawReport": "/dev/shm/zjmfgo-dual-web-run1-20261017/report.json",
+      "rawReportBytes": 553437,
+      "rawReportSHA256": "ff6d47415d2652bc468ede51685f140efd13d224775219f0466628836a18b2c1",
+      "status": "FAIL",
+      "runnerCommit": "43c308540e3a4eab95ec497e24a0106cdd83bddd",
+      "candidateCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+      "runtimePhase": null,
+      "checkCount": 0,
+      "migrationCount": 0,
+      "loadedMapGroups": 0,
+      "reloadCount": 0,
+      "observationCount": 0,
+      "sandboxStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "fixtureStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "privatePIDNamespaceGone": false,
+      "fixtureSchemaRemoved": true,
+      "sealedUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "copiesUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "toolingUnchanged": true,
+      "databaseStorageUnchanged": true,
+      "hostUnchanged": true
+    },
+    {
+      "run": 2,
+      "summary": "run2-summary.json",
+      "summarySHA256": "5b12f2d998a6c36261af415e1be24f0a30fede456051704dafb51b0d36bd3101",
+      "rawReport": "/dev/shm/zjmfgo-dual-web-run2-20261017/report.json",
+      "rawReportBytes": 554298,
+      "rawReportSHA256": "a150a60f7a572ed0ca1c05ab902090745b62dcad1453fc8f227a2e26de182cb7",
+      "status": "FAIL",
+      "runnerCommit": "4e2434bb7ab02a42a8b89ae26898aa6907c084e4",
+      "candidateCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+      "runtimePhase": "old-web-ready",
+      "checkCount": 0,
+      "migrationCount": 0,
+      "loadedMapGroups": 0,
+      "reloadCount": 0,
+      "observationCount": 0,
+      "sandboxStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "fixtureStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "privatePIDNamespaceGone": true,
+      "fixtureSchemaRemoved": true,
+      "sealedUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "copiesUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "toolingUnchanged": true,
+      "databaseStorageUnchanged": true,
+      "hostUnchanged": true
+    },
+    {
+      "run": 3,
+      "summary": "run3-summary.json",
+      "summarySHA256": "dd3b50da80455cfaee4ed32c5737d2a3e3edf514c5103a77677c3629fc3782fb",
+      "rawReport": "/dev/shm/zjmfgo-dual-web-run3-20261017/report.json",
+      "rawReportBytes": 587602,
+      "rawReportSHA256": "c88f632562a9a0ddc84b486f535aa39eb293a7896db7e3b39385778ad3377d81",
+      "status": "FAIL",
+      "runnerCommit": "002879d966c86b9642c127cced56d75f04344017",
+      "candidateCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+      "runtimePhase": "old-web-loaded-maps",
+      "checkCount": 32,
+      "migrationCount": 4,
+      "loadedMapGroups": 0,
+      "reloadCount": 0,
+      "observationCount": 0,
+      "sandboxStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "fixtureStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "privatePIDNamespaceGone": true,
+      "fixtureSchemaRemoved": true,
+      "sealedUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "copiesUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "toolingUnchanged": true,
+      "databaseStorageUnchanged": true,
+      "hostUnchanged": true
+    },
+    {
+      "run": 4,
+      "summary": "run4-summary.json",
+      "summarySHA256": "bf278f4866f3978c2ded9264a15ab37e3bc633eb105de9aab7d1e768d31cb0a8",
+      "rawReport": "/dev/shm/zjmfgo-dual-web-run4-20261017/report.json",
+      "rawReportBytes": 587573,
+      "rawReportSHA256": "809a82df08e8cd65f5c4cb4204672e06e8139fdb0b618c3e00eeacbe60330650",
+      "status": "FAIL",
+      "runnerCommit": "3b5a9c6de7f27f142798e9cb089b0fb61331078b",
+      "candidateCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+      "runtimePhase": "old-web-loaded-maps",
+      "checkCount": 32,
+      "migrationCount": 4,
+      "loadedMapGroups": 0,
+      "reloadCount": 0,
+      "observationCount": 0,
+      "sandboxStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "fixtureStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "privatePIDNamespaceGone": true,
+      "fixtureSchemaRemoved": true,
+      "sealedUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "copiesUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "toolingUnchanged": true,
+      "databaseStorageUnchanged": true,
+      "hostUnchanged": true
+    },
+    {
+      "run": 5,
+      "summary": "run5-summary.json",
+      "summarySHA256": "160df6b90f4b766d3bb402e837273156b92e998152fd082e74d780b3a8cc8fde",
+      "rawReport": "/dev/shm/zjmfgo-dual-web-run5-20261017/report.json",
+      "rawReportBytes": 650072,
+      "rawReportSHA256": "a56f6f732c7e682b075cec4c2819f9854a6e2f758f9b72f443a05c4af162ee72",
+      "status": "FAIL",
+      "runnerCommit": "bfe9f5d520c2fe62404ef30aba9d1336ca612aa8",
+      "candidateCommit": "16cc54ee52f8039a36265302d13191caeedb1457",
+      "runtimePhase": "old",
+      "checkCount": 72,
+      "migrationCount": 4,
+      "loadedMapGroups": 5,
+      "reloadCount": 0,
+      "observationCount": 0,
+      "sandboxStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "fixtureStop": {
+        "groupGone": true,
+        "forced": false
+      },
+      "privatePIDNamespaceGone": true,
+      "fixtureSchemaRemoved": true,
+      "sealedUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "copiesUnchanged": {
+        "old": true,
+        "next": true
+      },
+      "toolingUnchanged": true,
+      "databaseStorageUnchanged": true,
+      "hostUnchanged": true
+    }
+  ]
+}

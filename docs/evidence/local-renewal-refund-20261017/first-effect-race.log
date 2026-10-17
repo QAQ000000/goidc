@@ -1,0 +1,6 @@
+2026-10-17T11:03:03+08:00
+7f4a23c28a6540442152504fde697ea1c1b07ae1
+=== RUN   TestLocalRenewalFirstEffectCannotOvertakeUncommittedDependency
+--- PASS: TestLocalRenewalFirstEffectCannotOvertakeUncommittedDependency (3.05s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/store	4.092s

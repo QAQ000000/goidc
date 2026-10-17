@@ -82,6 +82,13 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 	if err = tx.QueryRow(ctx, "SELECT status FROM payment_transactions WHERE id=$1 FOR UPDATE", paymentID).Scan(&state); err != nil {
 		return check, err
 	}
+	var closing bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_operations WHERE payment_id=$1 AND status='checking' AND lease_until>clock_timestamp())`, paymentID).Scan(&closing); err != nil {
+		return check, err
+	}
+	if closing {
+		return check, conflict("payment_close_in_progress", "支付单正在核验关单，请稍后重试")
+	}
 	if (state != "pending" && state != "expired") || !strings.HasPrefix(check.Provider, "epay_") {
 		return check, conflict("payment_not_queryable", "只有待处理的在线支付可以查询")
 	}
@@ -108,8 +115,15 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 }
 
 func finishPaymentCheck(ctx context.Context, tx pgx.Tx, check *PaymentCheck, status string) error {
+	if err := finishPaymentCheckInTx(ctx, tx, check, status); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func finishPaymentCheckInTx(ctx context.Context, tx pgx.Tx, check *PaymentCheck, status string) error {
 	if check == nil {
-		return tx.Commit(ctx)
+		return nil
 	}
 	// A replay may reach this point without having locked the payment yet.
 	// Keep payment-before-check ordering consistent with reservations.
@@ -132,7 +146,7 @@ func finishPaymentCheck(ctx context.Context, tx pgx.Tx, check *PaymentCheck, sta
 	if err = Audit(ctx, tx, check.ActorID, "payment.reconciliation.completed", "invoice", check.InvoiceID, map[string]any{"payment_id": check.PaymentID, "check_id": check.ID, "status": status, "source": check.source()}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (s *Store) CompletePaymentCheck(ctx context.Context, check PaymentCheck, result payment.QueryResult) (WebhookResult, error) {

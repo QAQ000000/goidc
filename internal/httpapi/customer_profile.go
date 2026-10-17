@@ -35,6 +35,12 @@ type customerProfileInput struct {
 	CustomFieldsVersion int64          `json:"custom_fields_version"`
 }
 
+type customDef struct {
+	typ, pattern string
+	choices      []string
+	required     bool
+}
+
 // Nil means retain existing values, but never bypass active required fields.
 // Catalogue row locks prevent definition changes until the profile commits.
 func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values, previous map[string]any, expected int64) (map[string]any, error) {
@@ -45,11 +51,6 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values, previo
 	rows, err := tx.Query(ctx, `SELECT field_key,field_type,validation_pattern,choices,required FROM customer_custom_fields WHERE active ORDER BY id`)
 	if err != nil {
 		return nil, err
-	}
-	type customDef struct {
-		typ, pattern string
-		choices      []string
-		required     bool
 	}
 	allowed := map[string]customDef{}
 	for rows.Next() {
@@ -69,6 +70,11 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values, previo
 	if (values != nil || len(allowed) > 0 || expected > 0) && expected != version {
 		return nil, &store.Conflict{Code: "stale_customer_fields", Message: "客户字段定义已变化，请刷新后重试"}
 	}
+	return validateCustomFieldValues(allowed, values, previous)
+}
+
+// Shared value semantics; callers choose which definitions may be submitted.
+func validateCustomFieldValues(allowed map[string]customDef, values, previous map[string]any) (map[string]any, error) {
 	out := map[string]any{}
 	// Retain values for definitions that have been disabled or deleted.
 	for key, value := range previous {
@@ -147,7 +153,7 @@ func validateCustomerCustomFields(ctx context.Context, tx pgx.Tx, values, previo
 			}
 		}
 		if len(retained) > 0 {
-			return validateCustomerCustomFields(ctx, tx, retained, previous, expected)
+			return validateCustomFieldValues(allowed, retained, previous)
 		}
 	}
 	for key, def := range allowed {

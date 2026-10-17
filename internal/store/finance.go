@@ -110,6 +110,9 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	if err != nil {
 		return out, err
 	}
+	if kind == "topup" {
+		return out, conflict("topup_external_payment_required", "充值只能使用在线支付渠道，不能使用余额或信用")
+	}
 	if ownerID != userID {
 		return out, pgx.ErrNoRows
 	}
@@ -181,6 +184,13 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	} else {
 		if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE", userID).Scan(&balance); err != nil {
 			return out, err
+		}
+		var reserved int64
+		if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM external_refund_reversal_reservations WHERE user_id=$1 AND status='pending'", userID).Scan(&reserved); err != nil {
+			return out, err
+		}
+		if reserved > 0 && (reserved > balance || out.AmountCents > balance-reserved) {
+			return out, conflict("balance_reserved", "账户有待复核外部退款冻结金额，可用余额不足")
 		}
 		if balance < out.AmountCents {
 			return out, conflict("insufficient_balance", "账户余额不足")
@@ -259,6 +269,11 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	if err = LockAdminCustomer(ctx, tx, actorID, userID); err != nil {
 		return 0, false, err
 	}
+	// Match online admission: customer funds before finance settings. Waiting
+	// settings writers must not create a settings -> customer reverse edge.
+	if err = LockFinancialCustomer(ctx, tx, userID); err != nil {
+		return 0, false, err
+	}
 	if err = tx.QueryRow(ctx, `SELECT delta_cents,balance_after FROM balance_ledger WHERE user_id=$1 AND entry_type='topup' AND idempotency_key=$2`, userID, key).Scan(&previousTopUp, &balance); err == nil {
 		// A replay of an already-committed top-up returns the recorded result
 		// even if the financial settings have changed since: the balance was
@@ -304,7 +319,7 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 			return 0, false, conflict("topup_active_order_required", "充值前必须存在已支付或已激活订单")
 		}
 	}
-	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 AND role='customer' FOR UPDATE", userID).Scan(&balance); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT balance_cents FROM users WHERE id=$1 AND role='customer'", userID).Scan(&balance); err != nil {
 		return 0, false, err
 	}
 	if amount > 9223372036854775807-balance {
@@ -312,7 +327,11 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	}
 	// max_balance_cents=0 keeps the migration/legacy default meaning of "no
 	// configured ceiling" so default installations continue to allow top-ups.
-	if maxBalance > 0 && balance+amount > maxBalance {
+	var reserved int64
+	if err = tx.QueryRow(ctx, "SELECT coalesce(sum(amount_cents),0)::bigint FROM balance_topups WHERE user_id=$1 AND status IN ('accepted','pending_liability')", userID).Scan(&reserved); err != nil {
+		return 0, false, err
+	}
+	if maxBalance > 0 && amount > topupCapacity(maxBalance, balance, reserved) {
 		return 0, false, conflict("topup_balance_limit", fmt.Sprintf("充值后余额将超过上限 %d 分", maxBalance))
 	}
 	balance += amount
@@ -329,8 +348,8 @@ VALUES($1,'topup',$2,$3,'admin_topup',$4,$5)`, userID, amount, balance, key, not
 	return balance, false, tx.Commit(ctx)
 }
 
-func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key string) (PaymentResult, error) {
-	var out PaymentResult
+func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key string) (out PaymentResult, err error) {
+	defer func() { err = externalRefundDBError(err) }()
 	if actorID < 1 || invoiceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_refund", "账单或幂等键无效")
 	}
@@ -368,7 +387,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 		return out, err
 	}
 	var keyInvoice int64
-	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
+	err = tx.QueryRow(ctx, "SELECT invoice_id FROM credit_invoice_payments WHERE refund_key=$1 UNION ALL SELECT reference_id FROM balance_ledger WHERE entry_type='refund' AND delta_cents>=0 AND reference_type='invoice' AND idempotency_key=$1 LIMIT 1", key).Scan(&keyInvoice)
 	if err == nil && keyInvoice != invoiceID {
 		return out, conflict("idempotency_conflict", "退款幂等键对应其他账单")
 	}
@@ -388,7 +407,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 	}
 	err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
 FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id
-WHERE l.entry_type='refund' AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
+WHERE l.entry_type='refund' AND l.delta_cents>=0 AND l.reference_type='invoice' AND l.idempotency_key=$1`, key).
 		Scan(&replayInvoiceID, &out.InvoiceNo, &delta, &out.Status)
 	if err == nil {
 		if replayInvoiceID != invoiceID {
@@ -412,6 +431,9 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		Scan(&out.InvoiceID, &userID, &orderID, &out.InvoiceNo, &out.AmountCents, &out.Status, &kind)
 	if err != nil {
 		return out, err
+	}
+	if kind == "topup" {
+		return out, conflict("topup_refund_not_supported", "充值退款尚未开放，请联系财务核对")
 	}
 	var creditRemaining int64
 	var creditRefunded bool
@@ -516,6 +538,11 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 		} else if err = requireNoConfigurationChange(ctx, tx, renewalServiceID); err != nil {
 			return out, err
 		}
+		if upgradeID == 0 && !supplierRenewalRefund {
+			if err = requireLocalRenewalRefund(ctx, tx, invoiceID, 0, false); err != nil {
+				return out, err
+			}
+		}
 	}
 	if creditPayment {
 		if _, err = tx.Exec(ctx, "UPDATE customer_credit_accounts SET used_cents=used_cents-$2,version=version+1,updated_at=now() WHERE user_id=$1 AND used_cents>=$2", userID, creditRemaining); err != nil {
@@ -538,15 +565,6 @@ FROM invoices i WHERE i.id=$1 FOR UPDATE`, invoiceID).
 	}
 	if orderID > 0 {
 		if _, err = tx.Exec(ctx, "UPDATE orders SET status='refunded',updated_at=now() WHERE id=$1", orderID); err != nil {
-			return out, err
-		}
-	}
-	if orderID == 0 && upgradeID == 0 && kind != "manual" && !traffic && !supplierRenewalRefund {
-		var cycle string
-		if err = tx.QueryRow(ctx, "SELECT billing_cycle FROM services WHERE id=$1 FOR UPDATE", renewalServiceID).Scan(&cycle); err != nil {
-			return out, err
-		}
-		if _, err = tx.Exec(ctx, fmt.Sprintf("UPDATE services SET next_due_at=GREATEST(now(),next_due_at-interval '%s'),version=version+1,updated_at=now() WHERE id=$1", renewalInterval(cycle)), renewalServiceID); err != nil {
 			return out, err
 		}
 	}

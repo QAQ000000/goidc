@@ -87,7 +87,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 		expect(t, request(h, "GET", path, nil, "", ""), 200)
 	}
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 200)
-	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "maintenance-customer", "password": "integration-password"}, "", ""), 200)
+	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "maintenance-customer@example.test", "password": "integration-password"}, "", ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]any{"identifier": "maintenance-super"}, "", ""), 202)
 	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
@@ -168,4 +168,30 @@ func TestMaintenancePaymentWebhookAndMFALogin(t *testing.T) {
 	cookie := verified.Result().Cookies()[0].String()
 	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, cookie, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 200)
+}
+
+func TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "maintenance-missing-root", "super_admin")
+	_, customer := user(t, db, h, "maintenance-missing-customer", "customer")
+	if _, err := db.Pool.Exec(t.Context(), "DELETE FROM site_settings WHERE id=1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/credit/account", "/api/v1/account", "/api/v1/invoices/999999999/credit"} {
+		w := request(h, "GET", path, nil, customer, "")
+		expect(t, w, 503)
+		if errorData(t, w)["code"] != "site_configuration_unavailable" || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Retry-After") != "60" {
+			t.Fatal("missing configuration must fail closed without caching", path, w.Body.String(), w.Header())
+		}
+	}
+	// Exempt management and identity routes remain reachable; their own resource
+	// semantics are unchanged, including a genuinely missing settings resource.
+	expect(t, request(h, "GET", "/api/v1/admin/credit-settings", nil, root, ""), 200)
+	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, root, ""), 404)
+	expect(t, request(h, "GET", "/api/v1/me", nil, root, ""), 200)
+	// Restore the singleton to prove real missing invoice resources still use 404.
+	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO site_settings(id) VALUES(1)"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "GET", "/api/v1/invoices/999999999/credit", nil, customer, ""), 404)
 }

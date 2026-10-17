@@ -18,6 +18,9 @@ const commands=[{action:"power_on",label:"开机",icon:Power},{action:"power_off
 
 export function SupplierServiceDelivery({service,admin,refresh}:{service:Service;admin:boolean;refresh:()=>void}) {
   const manage=useAdminPermission("services.manage");
+  const authorized=!admin||manage;
+  const capabilities=service.supplier_capabilities;
+  const base=`${admin?"/admin":""}/services/${service.id}`;
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
   const [confirmation,setConfirmation]=useState<string|null>(null);
@@ -36,12 +39,12 @@ export function SupplierServiceDelivery({service,admin,refresh}:{service:Service
   const forced=confirmation==="force_off"||confirmation==="force_reboot";
   const confirmLabel=commands.find(command=>command.action===confirmation)?.label;
   async function vnc() {
-    if (busy||inProgress) return;
+    if (!authorized||!capabilities?.vnc||busy||inProgress) return;
     const popup=window.open("about:blank","_blank");
     if (popup) popup.opener=null;
     setBusy(true);setError("");
     try {
-      const result=await api<{url:string}>(`/admin/services/${service.id}/vnc`,{method:"POST",body:"{}"});
+      const result=await api<{url:string}>(`${base}/vnc`,{method:"POST",body:"{}"});
       const url=new URL(result.url);
       if (!["http:","https:"].includes(url.protocol)) throw new Error("供应商返回的控制台地址无效");
       if (!popup) throw new Error("浏览器阻止弹出控制台窗口，请允许弹出窗口后重试");
@@ -49,14 +52,17 @@ export function SupplierServiceDelivery({service,admin,refresh}:{service:Service
     } catch (e) {popup?.close();setError((e as Error).message);} finally {setBusy(false);}
   }
   async function action(value:string,payload:Record<string,unknown>={}):Promise<boolean> {
-    if (!admin||!manage||busy||inProgress||accountBlocked) return false;
+    if (!authorized||busy||inProgress||accountBlocked) return false;
+    if (["create","sync"].includes(value)&&!admin) return false;
+    const supported=value==="create"?capabilities?.create:value==="sync"?capabilities?.sync:["rescue_system","exit_rescue_system"].includes(value)?capabilities?.rescue:capabilities?.power;
+    if (!supported) return false;
     setBusy(true);setError("");
     const requestBody=JSON.stringify({action:value,...payload});
     if (!keys.current[value]||keys.current[value].payload!==requestBody) keys.current[value]={key:crypto.randomUUID(),payload:requestBody};
     try {
-      await api(`/admin/services/${service.id}/actions`,{method:"POST",headers:{"Idempotency-Key":`web-supplier-${value}-${service.id}-${keys.current[value].key}`},body:requestBody});
+      await api(`${base}/actions`,{method:"POST",headers:{"Idempotency-Key":`web-supplier-${value}-${service.id}-${keys.current[value].key}`},body:requestBody});
       delete keys.current[value];refresh();return true;
-    } catch (e) {setError((e as Error).message);return false;} finally {setBusy(false);}
+    } catch (e) {setError((e as Error).message);refresh();return false;} finally {setBusy(false);}
   }
   async function submitRescue(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,22 +80,24 @@ export function SupplierServiceDelivery({service,admin,refresh}:{service:Service
     <div className="service-section-heading"><h2 className="text-sm font-medium">接口命令</h2><span className="text-xs text-muted-foreground">{service.upstream_id?`上游资源 #${service.upstream_id}`:"等待上游资源开通"}</span></div>
     <div className="p-5 sm:p-6 space-y-4">
     <p className="text-sm text-muted-foreground">本站支持自动向上游续费，付款后核验上游账单及新到期时间。取消和升级仍需联系管理员在上游处理并核验结果。</p>
+    {inProgress&&!verification&&!accountBlocked&&<p role="status" className="text-sm text-muted-foreground">运维任务处理中，完成前暂停其他操作。请刷新查看结果。</p>}
     {verification&&<p role="status" className="text-sm text-amber-800">任务 #{verification.id} 的上游结果待核验，相关操作暂停。</p>}
-    {accountBlocked&&service.supplier_blocking_service_id!==service.id&&<p role="status" className="text-sm text-amber-800">供应商账户被任务 #{service.supplier_running_job_id} 占用。<Link className="underline underline-offset-4 ml-1" href={`/admin/services/${service.supplier_blocking_service_id}`}>查看服务 #{service.supplier_blocking_service_id} 并核验</Link></p>}
-    {admin&&manage&&<div className="flex flex-wrap gap-2">
-      <Button variant="outline" disabled={!canCreate||busy||!!inProgress} onClick={()=>void action("create")}><Play size={16}/>{service.status==="failed"?"重试开通":"开通"}</Button>
-      {commands.filter(command=>command.action!=="exit_rescue_system").map(({action:command,label,icon:Icon})=><Button key={command} variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>command==="power_on"?void action(command):requestPower(command)}><Icon size={16}/>{label}</Button>)}
-      <NOKVMReinstall service={service} admin disabled={!canOperate||busy||!!inProgress} refresh={refresh}/>
-      <NOKVMPasswordReset service={service} admin disabled={!canOperate||busy||!!inProgress} refresh={refresh}/>
-      <Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>{setError("");setRescueOpen(true);}}><LifeBuoy size={16}/>救援系统</Button>
-      <Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>requestPower("exit_rescue_system")}><LogOut size={16}/>退出救援系统</Button>
-      <Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>void vnc()}><Monitor size={16}/>VNC</Button>
-      <Button variant="outline" disabled={!canSync||busy||!!inProgress} onClick={()=>void action("sync")}><RefreshCw size={16}/>拉取信息</Button>
+    {accountBlocked&&service.supplier_blocking_service_id!==service.id&&<p role="status" className="text-sm text-amber-800">供应商账户被任务 #{service.supplier_running_job_id} 占用。{admin?<Link className="underline underline-offset-4 ml-1" href={`/admin/services/${service.supplier_blocking_service_id}`}>查看服务 #{service.supplier_blocking_service_id} 并核验</Link>:"请联系管理员核验后继续。"}</p>}
+    {authorized&&<div className="flex flex-wrap gap-2">
+      {admin&&capabilities?.create&&<Button variant="outline" disabled={!canCreate||busy||!!inProgress} onClick={()=>void action("create")}><Play size={16}/>{service.status==="failed"?"重试开通":"开通"}</Button>}
+      {capabilities?.power&&commands.filter(command=>command.action!=="exit_rescue_system").map(({action:command,label,icon:Icon})=><Button key={command} variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>command==="power_on"?void action(command):requestPower(command)}><Icon size={16}/>{label}</Button>)}
+      {capabilities?.reinstall&&<NOKVMReinstall service={service} admin={admin} disabled={!canOperate||busy||!!inProgress} refresh={refresh}/>}
+      {capabilities?.reset_password&&<NOKVMPasswordReset service={service} admin={admin} disabled={!canOperate||busy||!!inProgress} refresh={refresh}/>}
+      {capabilities?.rescue&&<Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>{setError("");setRescueOpen(true);}}><LifeBuoy size={16}/>救援系统</Button>}
+      {capabilities?.rescue&&<Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>requestPower("exit_rescue_system")}><LogOut size={16}/>退出救援系统</Button>}
+      {capabilities?.vnc&&<Button variant="outline" disabled={!canOperate||busy||!!inProgress} onClick={()=>void vnc()}><Monitor size={16}/>VNC</Button>}
+      {admin&&capabilities?.sync&&<Button variant="outline" disabled={!canSync||busy||!!inProgress} onClick={()=>void action("sync")}><RefreshCw size={16}/>拉取信息</Button>}
     </div>}
     {admin&&manage&&verification&&<SupplierVerification key={`${verification.id}:${verification.attempts}`} service={service} job={verification} refresh={refresh}/>}
+    {!capabilities&&<p role="status" className="text-sm text-muted-foreground">运维能力暂不可用，请刷新服务信息后重试。</p>}
     {error&&<p role="alert" className="text-sm text-destructive break-all">{error}</p>}
     <Dialog open={!!confirmation} onOpenChange={open=>{if(!open&&!busy)setConfirmation(null);}}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>确认{confirmLabel}</DialogTitle><DialogDescription>{forced?"强制操作会立即中断运行，可能导致未保存数据丢失或文件系统损坏。":"此操作会中断当前连接及服务运行。"}</DialogDescription></DialogHeader><p className="text-sm break-all">{service.name} · #{service.id}</p>{forced&&<label className="flex items-start gap-3 text-sm"><Checkbox aria-label="确认强制操作风险" disabled={busy} checked={acknowledged} onCheckedChange={value=>setAcknowledged(value===true)}/><span>已确认数据风险，继续执行强制操作</span></label>}{error&&<p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setConfirmation(null)}>取消</Button><Button variant="destructive" disabled={busy||inProgress||(forced&&!acknowledged)} onClick={()=>void confirmPower()}>{busy?"提交中":"确认执行"}</Button></DialogFooter></DialogContent></Dialog>
-    <Dialog open={rescueOpen} onOpenChange={open=>{if(!busy&&!open){setRescueOpen(false);setSystem("");setTempPassword("");setPasswordConfirmation("");setError("");}}}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>切换救援系统</DialogTitle><DialogDescription>供应商接受后会重启至救援环境。系统类型及临时密码将加密保存至待处理任务。</DialogDescription></DialogHeader><p className="text-sm break-all">{service.name} · #{service.id}</p><form id="supplier-rescue-form" onSubmit={submitRescue} className="space-y-4"><fieldset disabled={busy} className="space-y-4"><label className="grid gap-2 text-sm">救援系统<select required aria-label="救援系统" className={catalogSelectStyle} value={system} onChange={event=>setSystem(event.target.value)}><option value="">选择救援系统</option><option value="1">Linux</option><option value="2">Windows</option></select></label><label className="grid gap-2 text-sm">临时密码<Input aria-label="临时密码" type="password" autoComplete="new-password" required minLength={12} maxLength={128} pattern="[!-~]{12,128}" value={tempPassword} onChange={event=>setTempPassword(event.target.value)}/></label><label className="grid gap-2 text-sm">确认临时密码<Input aria-label="确认临时密码" type="password" autoComplete="new-password" required minLength={12} maxLength={128} pattern="[!-~]{12,128}" value={passwordConfirmation} onChange={event=>setPasswordConfirmation(event.target.value)}/></label></fieldset>{error&&<p role="alert" className="text-sm text-destructive break-all">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={()=>setRescueOpen(false)}>取消</Button><Button type="submit" form="supplier-rescue-form" disabled={busy||inProgress||!system||!tempPassword||tempPassword!==passwordConfirmation}>{busy?"提交中":"提交救援请求"}</Button></DialogFooter></form></DialogContent></Dialog>
+    <Dialog open={rescueOpen} onOpenChange={open=>{if(!busy&&!open){setRescueOpen(false);setSystem("");setTempPassword("");setPasswordConfirmation("");setError("");}}}><DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>切换救援系统</DialogTitle><DialogDescription>供应商接受后会重启至救援环境。请先保存工作并确认允许重启。</DialogDescription></DialogHeader><p className="text-sm break-all">{service.name} · #{service.id}</p><form id="supplier-rescue-form" onSubmit={submitRescue} className="space-y-4"><fieldset disabled={busy} className="space-y-4"><label className="grid gap-2 text-sm">救援系统<select required aria-label="救援系统" className={catalogSelectStyle} value={system} onChange={event=>setSystem(event.target.value)}><option value="">选择救援系统</option><option value="1">Linux</option><option value="2">Windows</option></select></label><label className="grid gap-2 text-sm">临时密码<Input aria-label="临时密码" type="password" autoComplete="new-password" required minLength={12} maxLength={128} pattern="[!-~]{12,128}" value={tempPassword} onChange={event=>setTempPassword(event.target.value)}/></label><label className="grid gap-2 text-sm">确认临时密码<Input aria-label="确认临时密码" type="password" autoComplete="new-password" required minLength={12} maxLength={128} pattern="[!-~]{12,128}" value={passwordConfirmation} onChange={event=>setPasswordConfirmation(event.target.value)}/></label></fieldset>{error&&<p role="alert" className="text-sm text-destructive break-all">{error}</p>}<DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={()=>{setRescueOpen(false);setSystem("");setTempPassword("");setPasswordConfirmation("");}}>取消</Button><Button type="submit" form="supplier-rescue-form" disabled={busy||inProgress||!system||!tempPassword||tempPassword!==passwordConfirmation}>{busy?"提交中":"提交救援请求"}</Button></DialogFooter></form></DialogContent></Dialog>
     </div>
   </section>;
 }

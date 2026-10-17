@@ -1,0 +1,92 @@
+{
+  "mode": "full",
+  "source_commit": "c6d2314f25941941a01613172bef810262ddac0c",
+  "started_at": "2026-10-17T05:00:36.974870+00:00",
+  "commands": [
+    [
+      "scripts/test-all.sh"
+    ]
+  ],
+  "postgresql": [
+    "18.0"
+  ],
+  "health_before": {
+    "api": 200,
+    "web": 200
+  },
+  "resident_before": {
+    "608393": {
+      "start_ticks": "6845798",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "608413": {
+      "start_ticks": "6845905",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "1647696": {
+      "start_ticks": "12716699",
+      "exe": "/www/server/nodejs/v24.16.0/bin/node",
+      "cwd": "/www/wwwroot/zjmfgo/web"
+    }
+  },
+  "schemas_before": [
+    "information_schema",
+    "pg_catalog",
+    "pg_toast",
+    "public",
+    "zjmfgo_test_68923040c22a2af1",
+    "zjmfgo_test_d68c631a65c4da8a"
+  ],
+  "candidate_verified": false,
+  "capacity_verified": false,
+  "exit_codes": [
+    0
+  ],
+  "exit_code": 0,
+  "required_tests_passed": {},
+  "skipped": false,
+  "schemas_after": [
+    "information_schema",
+    "pg_catalog",
+    "pg_toast",
+    "public",
+    "zjmfgo_test_68923040c22a2af1",
+    "zjmfgo_test_d68c631a65c4da8a"
+  ],
+  "schemas_restored": true,
+  "resident_after": {
+    "608393": {
+      "start_ticks": "6845798",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "608413": {
+      "start_ticks": "6845905",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "1647696": {
+      "start_ticks": "12716699",
+      "exe": "/www/server/nodejs/v24.16.0/bin/node",
+      "cwd": "/www/wwwroot/zjmfgo/web"
+    }
+  },
+  "resident_processes_unchanged": true,
+  "health_after": {
+    "api": 200,
+    "web": 200
+  },
+  "finished_at": "2026-10-17T05:28:23.024692+00:00",
+  "source_unchanged": true,
+  "pass": true,
+  "source_sha256": {
+    "internal/store/payments.go": "175a77457df9aa97ea7f1b66815f69f8ceb3f77d5d79fc44a967f001bfadf536",
+    "internal/store/channel_instances.go": "50e1b89e8af63757498b7e0d153af83542277263f8f92f34f6fd8d0e3b02ae77",
+    "internal/httpapi/epay_callback_lock_test.go": "87be992f59dbe3f50747d218c3fd5baa6387f1dd674809c15683c2d649e93ecc",
+    "internal/store/payment_callback_hold_test.go": "6b5a9a4f2a8aa4b19208e347123f06f1f166ff54fb8d3e8d72a1ee1d41f40e59",
+    "internal/httpapi/smtp_optional_config_test.go": "d67a46e920e113aab64942ce76d8d346b3434e8aef136a2124d4df8882d85bd0",
+    "scripts/test-all.sh": "85b3dbec715a48f20907b4faa7a825d08920d5068032ef67207aee4069ece45a"
+  }
+}

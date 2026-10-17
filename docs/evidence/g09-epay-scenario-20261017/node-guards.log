@@ -1,0 +1,18 @@
+✔ checkout validates exact signed loopback payment identities for both channels (3.169708ms)
+✔ signed wrong owner/amount/target/type and duplicate parameters never pass checkout admission (5.734738ms)
+✔ both signed notifications reuse one persisted original and only public hashes are recorded (31.272317ms)
+✔ identity and invoice admission fail before any intent or callback (1.718172ms)
+✔ bad checkout after intent freezes customer before any callback and preserves reserved budget (1.008485ms)
+✔ original private persistence fails closed and async recorder cannot dispatch notification (1.641787ms)
+✔ unknown first notification does not retry or submit the deliberate duplicate (1.352888ms)
+✔ bounded callback reply rejects oversized, redirect, wrong success and invalid status without replay (5.982809ms)
+✔ whole-flow deadline includes callback wait and freezes unknown intent result (21.609671ms)
+✔ shared customer cannot overlap, cancellation stops new flows and no public capacity claim is set (1.125807ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 159.748501

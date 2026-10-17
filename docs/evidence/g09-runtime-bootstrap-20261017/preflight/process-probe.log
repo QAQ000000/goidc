@@ -1,0 +1,16 @@
+✔ invalid inputs refuse before spawn without reflecting private values (2.010669ms)
+✔ private trace directory required (8.737753ms)
+✔ real daemon tracer preserves direct child, sampler, exec audit and TERM cleanup (69.399302ms)
+✔ failed exec is bounded and sanitized (26.978598ms)
+✔ existing trace output is refused without truncation (3.631708ms)
+✔ TERM refusal forces owned cleanup and reports deadline failure (1145.66758ms)
+✔ natural app exit still permits complete tracer cleanup (219.769805ms)
+✔ leader loss with surviving descendants refuses stale group signals (1693.502866ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3253.684716

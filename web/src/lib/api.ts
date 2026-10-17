@@ -238,6 +238,8 @@ export type CustomerProductDiscount = {
   version: number;
 };
 export type PromoCode = {
+  version: number;
+  status?: "active" | "expired" | "disabled" | "scheduled" | "exhausted";
   id: number;
   code: string;
   discount_type: "percent" | "fixed" | "free";
@@ -507,7 +509,9 @@ export type NOKVMNATItem={id:string;name:string;type:string;domain:string;exteri
 export type NOKVMNATListing={kind:"acl"|"web";limit:number;items:NOKVMNATItem[];fetched_at:string};
 export type NOKVMCDROMImage={id:string;name:string;description:string};
 export type NOKVMCDROMListing={items:NOKVMCDROMImage[];mounted_id:string;fetched_at:string};
+export type OrderRefundReversal = { order_id: number; status: "pending" | "released" | "applied"; invoice_version: number; order_version: number; service_count: number; stock_units_released: number; created_at: string; applied_at: string | null; released_at: string | null };
 export type Service = {
+  external_refund_order_hold?: OrderRefundReversal | null;
   product_name?:string;
   order_no?:string;
   first_price_cents?:number;
@@ -518,6 +522,7 @@ export type Service = {
   paid_at?:string|null;
   supplier_name?:string|null;
   supplier_provider?:string|null;
+  supplier_capabilities?:SupplierProvider["capabilities"];
   upstream_product_id?:number|null;
   supplier_running_job_id?:number|null;
   supplier_blocking_service_id?:number|null;

@@ -23,7 +23,7 @@ VALUES('legacy-login','legacy-login@example.test',$1,'Legacy Login',true) RETURN
 		t.Fatal(err)
 	}
 	h := New(db, config.Config{PublicOrigin: "http://localhost:3088", LegacyCMFAuthCode: "auth-code"}, slog.Default()).Handler()
-	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "legacy-login", "password": "legacy-login-password"}, "", "")
+	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"identifier": "legacy-login@example.test", "password": "legacy-login-password"}, "", "")
 	expect(t, login, 200)
 	var hash string
 	var reset bool

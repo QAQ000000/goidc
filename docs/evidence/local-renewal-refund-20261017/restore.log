@@ -1,0 +1,7 @@
+=== RUN   TestLocalRenewalRefundBackupRestore
+    local_renewal_refund_recovery_test.go:136: preflight PostgreSQL 180000 loopback _test database verified
+    local_renewal_refund_recovery_test.go:137: preflight PostgreSQL 180000 loopback _test database verified
+    local_renewal_refund_recovery_test.go:216: loopback PG18 synthetic local renewal restore: archive_sha256=e4e4c5e71910f36db6199fe8fe7667bea0d73eef7207dcec1b302c7c58633b26 archive_bytes=1124075 source_db=zjmfgo_release_runtime_20261017_test restore_db=zjmfgo_order_refund_restore_target_20261017_test; pending hold, exact reversal, independent review and original replay PASS; not production recovery/RTO evidence
+--- PASS: TestLocalRenewalRefundBackupRestore (11.08s)
+PASS
+ok  	github.com/codex/zjmfgo/internal/store	12.136s

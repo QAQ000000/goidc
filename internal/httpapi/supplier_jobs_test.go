@@ -12,13 +12,8 @@ func TestSupplierJobsScopeSecretsAndSafeRetry(t *testing.T) {
 	f.publish(t, f.pid, "supplier-jobs-test")
 	serviceID, _ := f.purchase(t, f.pid, "supplier-jobs-purchase")
 	var jobID int64
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM provision_jobs WHERE service_id=$1", serviceID).Scan(&jobID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE provision_jobs SET action='sync',status='failed',last_error='private-error',result='{"token":"private-result"}' WHERE id=$1`, jobID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET status='active',upstream_id='42' WHERE id=$1", serviceID); err != nil {
+	jobID = f.queueFailedSync(t, serviceID, "supplier-jobs-sync-fixture")
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE provision_jobs SET status='failed',last_error='private-error',result='{"token":"private-result"}' WHERE id=$1 AND action='sync'`, jobID); err != nil {
 		t.Fatal(err)
 	}
 	jobs := request(f.h, "GET", "/api/v1/admin/supplier-jobs?status=failed&supplier_id="+fmt.Sprint(f.supplierID), nil, f.reader, "")
@@ -81,13 +76,8 @@ func TestSupplierJobRetrySameKeyAcrossServices(t *testing.T) {
 	jobs := make([]candidate, 0, 2)
 	for _, serviceID := range []int64{serviceA, serviceB} {
 		var id int64
-		if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM provision_jobs WHERE service_id=$1", serviceID).Scan(&id); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET action='sync',status='failed' WHERE id=$1", id); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET status='active',upstream_id=$2 WHERE id=$1", serviceID, fmt.Sprint(40+serviceID)); err != nil {
+		id = f.queueFailedSync(t, serviceID, fmt.Sprintf("supplier-retry-sync-%d", serviceID))
+		if _, err := f.db.Pool.Exec(t.Context(), "UPDATE provision_jobs SET status='failed' WHERE id=$1 AND action='sync'", id); err != nil {
 			t.Fatal(err)
 		}
 		var attempts int

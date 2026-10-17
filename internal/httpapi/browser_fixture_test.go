@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -97,6 +98,10 @@ func TestCompiledAppsBrowserFixture(t *testing.T) {
 }
 
 func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store, http.Handler)) {
+	adminBrowserFixtureStore(t, username, nil, setup)
+}
+
+func adminBrowserFixtureStore(t *testing.T, username string, db *store.Store, setup func(*store.Store, http.Handler)) {
 	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
 	if ready == "" || finish == "" {
 		t.Skip("opt-in browser fixture")
@@ -108,8 +113,15 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 			t.Fatal(err)
 		}
 	}
-	db, h := testServer(t)
-	setup(db, h)
+	var h http.Handler
+	if db == nil {
+		db, h = testServer(t)
+	} else {
+		h = New(db, config.Config{PublicOrigin: "http://localhost:3088", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", ProvisionEncryptionKey: []byte("01234567890123456789012345678901")}, slog.Default()).Handler()
+	}
+	if setup != nil {
+		setup(db, h)
+	}
 	user(t, db, h, username, "super_admin")
 	origin := os.Getenv("ZJMFGO_BROWSER_ORIGIN")
 	if origin == "" {
@@ -123,7 +135,20 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 		fixtureConfig.EpayKey = "integration-epay-secret"
 		fixtureConfig.EpayTypes = []string{"alipay", "wxpay"}
 	}
-	server := httptest.NewServer(New(db, fixtureConfig, slog.Default()).Handler())
+	server := httptest.NewUnstartedServer(New(db, fixtureConfig, slog.Default()).Handler())
+	if address := os.Getenv("ZJMFGO_BROWSER_LISTEN_ADDR"); address != "" {
+		host, _, err := net.SplitHostPort(address)
+		if err != nil || host != "127.0.0.1" {
+			t.Fatal("browser fixture listen address must use 127.0.0.1")
+		}
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.Listener.Close()
+		server.Listener = listener
+	}
+	server.Start()
 	defer server.Close()
 	var schema string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
