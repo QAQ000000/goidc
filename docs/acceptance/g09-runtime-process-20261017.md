@@ -21,7 +21,7 @@ not service readiness. Per-PID file/network filters, raw network syscall argumen
 and trace length match the existing runtime audit. The tracer PID comes only from
 that owned child's `TracerPid`, with group/session verified. There is no global
 process discovery or signaling; only the explicitly spawned application group
-and captured tracer group are signaled. Arguments, environment and driver error
+and captured tracer group are eligible for signaling after fresh identity checks. Arguments, environment and driver error
 text are not included in public helper errors. Trace paths and handle identities
 are private controller information; do not publish the raw traces or handle.
 
@@ -35,7 +35,8 @@ prove tracer cleanup. Always await idempotent `stop()`, even after natural exit.
 Stop sends TERM to the owned application group, waits the configured 1–30 seconds,
 and checks group disappearance and direct-child reap. A deadline triggers KILL
 and rejects `runtime_term_deadline` even after successful forced cleanup. The
-captured tracer is checked against its recorded start time, then TERM/KILL with
+captured tracer is checked against its recorded start time, UID, executable,
+PGID and SID before each TERM or KILL, with
 fixed bounds if still live. Missing or zombie tracer means no running tracer;
 namespace init owns orphan reaping. A daemonized tracer cannot be reaped by the
 controller via Node's direct-child `done` promise.
@@ -54,7 +55,12 @@ Verification:
 * Host opt-in probe: all 7 tests passed, including actual strace successful exec,
   strict sampler, TERM, natural exit, forced KILL with deadline rejection,
   failed exec, and trace collision preservation.
-* The same 7 tests passed as UID/GID 65534, no capabilities, with private PID,
+* An eighth containment guard test also passed: an application exits while its
+  sleep descendant remains in the original group. Stop refuses the stale group
+  (`runtime_ownership_lost`), proves the descendant remains live, and still stops
+  the independently anchored tracer. The descendant expires naturally; the
+  disposable outer PID namespace is the final containment owner.
+* All 8 tests passed as UID/GID 65534, no capabilities, with private PID,
   mount and network namespaces. Invocation (runtime path is host-specific):
 
 ```sh
@@ -65,7 +71,7 @@ bwrap --unshare-all --die-with-parent \
   --ro-bind /tmp/zjmfgo-g09-runtime-process/scripts /control \
   --proc /proc --dev /dev --tmpfs /tmp \
   --uid 65534 --gid 65534 --cap-drop ALL --chdir /control \
-  --setenv G09_RUNTIME_PROCESS_TEST 1 \
+  --setenv G09_RUNTIME_PROCESS_TEST 1 --setenv G09_RUNTIME_CONTAINMENT_TEST 1 \
   /node --test /control/g09-runtime-process.test.mjs
 ```
 
@@ -73,3 +79,21 @@ Only disposable `/tmp/g09-*` fixtures and private namespace storage were used;
 no PG, external network, application data or shared API/worker/Web process was
 accessed. The failed-exec test deliberately attempts the nonexecutable regular
 file `/etc/hostname`; raw driver stderr is discarded.
+
+## Ownership follow-up
+
+The application group anchor is recorded immediately after spawn, before sampler
+registration. Every application signal rechecks PID start ticks, direct PPID,
+PGID/SID and all UID fields; every tracer signal rechecks start ticks, PGID/SID,
+all UID fields and `/usr/bin/strace` executable. The group signal is refused if
+its live leader cannot prove ownership. A vanished leader plus a still-existing
+group is **not** accepted as owned, even when descendants are likely ours. An
+absent group requires no signal. A replaced PID or unknown identity yields
+`runtime_ownership_lost`; no stale group is signaled and no complete cleanup is
+claimed. The helper still attempts independently verified tracer cleanup after
+an application ownership refusal. The outer disposable namespace must then end.
+
+These are immediate `/proc` identity checks before each group signal, not an
+atomic kernel pidfd/group operation; namespace isolation and trusted candidates
+remain required. PID reuse is not forced in tests. The actual leader-loss probe
+covers the meaningful refusal path without signaling unrelated processes.

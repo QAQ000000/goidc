@@ -76,3 +76,21 @@ test('natural app exit still permits complete tracer cleanup', { skip: process.e
     assert.ok(tracer === null || /\) [ZX] /.test(tracer));
   } finally { await handle?.stop().catch(() => {}); await rm(dir, { recursive: true, force: true }); }
 });
+
+test('leader loss with surviving descendants refuses stale group signals', { skip: process.env.G09_RUNTIME_CONTAINMENT_TEST !== '1' }, async () => {
+  // Run only inside disposable PID namespace: the outer namespace owns final
+  // containment. No signal is sent to an unanchored surviving group.
+  const dir = await mkdtemp(`${os.tmpdir()}/g09-leader-loss-`);
+  let handle;
+  try {
+    handle = await launchG09TracedChild({ executable: process.execPath, args: ['-e', 'const c=require("child_process").spawn("/usr/bin/sleep",["1.2"],{stdio:"ignore"});require("fs").writeFileSync(process.argv[1],String(c.pid));setTimeout(()=>process.exit(0),200)', `${dir}/descendant`], cwd: '/tmp', env: {}, tracePrefix: `${dir}/candidate`, stopSeconds: 1 });
+    await handle.done;
+    const descendant = Number(await readFile(`${dir}/descendant`, 'utf8'));
+    await assert.rejects(handle.stop(), { message: 'runtime_ownership_lost' });
+    const raw = await readFile(`/proc/${descendant}/stat`, 'utf8');
+    assert.ok(!/\) [ZX] /.test(raw), 'unanchored descendant was not signaled');
+    const tracer = await readFile(`/proc/${handle.tracerPID}/stat`, 'utf8').catch(() => null);
+    assert.ok(tracer === null || /\) [ZX] /.test(tracer), 'owned tracer was still cleaned');
+    await new Promise(resolve => setTimeout(resolve, 1300));
+  } finally { await handle?.stop().catch(() => {}); await rm(dir, { recursive: true, force: true }); }
+});
