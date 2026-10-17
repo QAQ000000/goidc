@@ -167,6 +167,8 @@ node --test scripts/check-web-build-runtime.test.mjs
 
 集成测试要求单独的 `ZJMFGO_TEST_DATABASE_URL`，数据库名必须以 `_test` 结尾；每个测试创建并清理独立随机 schema，不允许使用开发库。设置 `REQUIRE_INTEGRATION=1` 可使缺少隔离数据库配置时直接失败。Go/TypeScript阶梯预览对照测试另需 Node.js 和 `web` 的 TypeScript 依赖；`ZJMFGO_REQUIRE_WEB_TESTS=1 go test ./internal/store -run TestOptionPricePreviewMatchesGo -v` 可强制执行，缺依赖时失败。真实旧库演练另需 `ZJMFGO_LEGACY_TEST_MYSQL_DSN` 和 `REQUIRE_LEGACY_REHEARSAL=1`，源库只读。测试脚本/浏览器证据放 `output/playwright/`，不进入版本库。静态源路由重新扫描：`node scripts/inventory.mjs`。旧路由与当前 Go 路由的证据索引：`node scripts/route-coverage.mjs`，结果写入 `docs/generated/route-coverage.json`；该文件不代表兼容完成，见 [替换准备度与路线图](docs/rewrite-readiness.md)。
 
-`scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=30m`。PG18 的 httpapi 套件实测约 13 分钟，超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
+`scripts/test-all.sh` 是全量 Go 测试入口：缺少数据库配置时直接退出，强制设置 `REQUIRE_INTEGRATION=1`，使用 `-count=1` 禁用结果缓存，并将每个包的超时固定为 `-timeout=45m`。PG18 的 httpapi 套件随测试增长已超过 Go 默认的 10 分钟超时；裸跑 `go test ./...` 也可能因未设置测试库而跳过数据库测试，不能作为全量集成验收。浏览器及真实旧库等另需配置的测试仍可能跳过。
+
+真实 worker 强杀恢复另用 `scripts/test-worker-recovery.sh`：先设置同一个隔离测试 DSN，要求回环地址、PG18 和 `_test` 库名。入口强制开启 `ZJMFGO_WORKER_CRASH_ACCEPTANCE=1`、集成测试和 harness race，必须看到供应商及通知两套测试实际 PASS；不接受无匹配或跳过。子进程只访问各自随机 schema 与本地协议夹具，测试会加速过期租约/退避时间，不证明真实五分钟恢复时间、生产容量或真实渠道投递。子 worker 使用正常构建，race 检查范围为测试进程。
 
 仓库内 Go 命令优先使用 `scripts/go.sh`，先运行 `scripts/check-go-toolchain.sh` 检查实际版本、`GOROOT` 和 `GOTOOLDIR`，避免用户级 Go 与 `/usr/local/btgo` 混用。
