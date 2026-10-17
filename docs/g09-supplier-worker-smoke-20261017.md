@@ -1,10 +1,10 @@
 # G09 供应商源码 API 与真实 worker 小链
 
-状态：独立 opt-in 测试及无 DSN 协议校验已实现。开发 worktree 尚未连接 PostgreSQL；本测试的真实 API→worker→SupplierSink、资金/库存、schema 清理仍为**未验证**，不得把默认 SKIP 或协议 guard 当作 PG 闭环 PASS。主代理应在唯一数据库测试槽空闲后独占运行。
+状态：独立 opt-in 测试、无 DSN 协议校验及主代理独占 PG18 真实小链均已通过。实际证明范围为源码 API→1个真实 worker→loopback SupplierSink 的1服务/create+API sync 两任务，包含资金/库存不变量、协议落盘 hash、TERM/Wait 和 schema 清理。默认 SKIP 与协议 guard 的历史证据单独保留，不替代真实 PG 结果；容量和发布候选边界仍未关闭。
 
 入口：`internal/httpapi/g09_supplier_worker_smoke_test.go:TestG09SupplierWorkerLoopbackSmoke`，唯一开关为 `ZJMFGO_G09_SUPPLIER_WORKER_SMOKE=1`。不改变现有 source worker opt-in 开关、生产业务、迁移或时序常量；现有 worker helper 保留默认 PUBLIC_ORIGIN，增加一个供本测试显式传 IPv4 loopback origin 的测试 helper。
 
-## 计划验证的真实来源
+## 验证的真实来源
 
 1. 只读 PG18 preflight 后，沿用 `testServer` 创建随机独占 schema。fixture 只创建初始客户/管理员身份，禁用初始 mail/SMS 通知渠道和模板；不插入订单、付款、已完成任务或已开通服务充当业务来源。初始 10000 分额度通过管理员余额 API 入账。
 2. 真实 loopback HTTP 调用 supplier 创建、catalog、商品 preview、import、publish、binding 查询。导入价格 1000 分、库存 10、成本上限 100 分；publish 携带真实 revision 和 expected_stock。账户密码由生产 API 加密保存。
@@ -35,4 +35,13 @@ ZJMFGO_G09_SUPPLIER_WORKER_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test \
   -count=1 -timeout=10m -v
 ```
 
-本开发分支实际执行且未访问 PostgreSQL：HTTP 测试包编译；新 smoke 默认明确 SKIP；`TestG09SupplierWorkerProtocolGuards` 普通和 race PASS。guard 通过真实 compiled supplier adapter 的 socket Product/Create/Sync 验证新 durable hash oracle 和一次性冻结切换，另证未冻结 settle 被拒绝并锁定。race 同时包含既有 `TestG09SourceWorkerGuards`，PASS。另实际编译 `cmd/worker` 成功并清理临时输出，没有启动进程；开启新 opt-in 但清空 DSN 的负向执行按预期失败于 pool 构造之前。归一化执行摘要见 [no-PG evidence](evidence/g09-supplier-worker-smoke-20261017/no-pg-validation.json)，其明确标识非原始 subprocess 日志。上述证据不涉及真实 worker/资金/库存/业务 source API。PG 运行仍等待主代理单独验收。
+本开发分支实际执行且未访问 PostgreSQL：HTTP 测试包编译；新 smoke 默认明确 SKIP；`TestG09SupplierWorkerProtocolGuards` 普通和 race PASS。guard 通过真实 compiled supplier adapter 的 socket Product/Create/Sync 验证新 durable hash oracle 和一次性冻结切换，另证未冻结 settle 被拒绝并锁定。race 同时包含既有 `TestG09SourceWorkerGuards`，PASS。另实际编译 `cmd/worker` 成功并清理临时输出，没有启动进程；开启新 opt-in 但清空 DSN 的负向执行按预期失败于 pool 构造之前。归一化执行摘要见 [no-PG evidence](evidence/g09-supplier-worker-smoke-20261017/no-pg-validation.json)，其明确标识非原始 subprocess 日志。上述证据不涉及真实 worker/资金/库存/业务 source API。这是开发阶段未连 PG 的历史记录；后续主代理真实 PG 验收另见下文。
+
+
+## 主代理独占 PG18 实际验收
+
+主代理于 2026-10-17 05:35:39–05:36:09 UTC，在固定源码提交 `c67bfb2351684e0d58abeeba63d9031d5fe7f13d` 上独占隔离 PostgreSQL 18.0 执行四项顶层测试 `-race` 和 `scripts/go.sh vet ./internal/httpapi`，两条命令均退出0。四项全部实际 PASS，无 SKIP：旧 `TestG09SourceWorkerLoopbackSmoke` 4.74秒（两个真实 worker），旧 source guards 0.01秒，新 supplier smoke 6.67秒，新 supplier protocol guards 0.09秒，HTTP 包12.553秒。
+
+本次 supplier smoke 在 worker 启动前记录6次 durable metadata 接受、零准备阶段资源，真实服务/create ID 均为1；随后实际 create 和管理员 API sync 完成，SQL 来源映射、余额/账本/库存、上游资源/账单 ID、逐实体 durable 协议 hash 及 worker TERM/Wait 均通过测试内断言。有限背景预算断言通过。主代理外部核对 `source_unchanged=true`、随机 schema 集合前后恢复、原有 API/worker/Web 三个常驻进程 PID/start ticks/exe/cwd 不变，API/Web 前后均200。
+
+原始专项测试日志与带命令、版本、源码 hash 和清理/健康核对的结果分别为 [test.log](evidence/g09-supplier-worker-smoke-20261017/real-pg/test.log) 与 [result.json](evidence/g09-supplier-worker-smoke-20261017/real-pg/result.json)。证据无 DSN、密码、token 或业务请求/响应正文。此验收没有改已测代码，也没有部署或推送；仍只证明上述有限源码/loopback 小链，不代表封存 candidate、600任务、容量或真实供应商验收。
