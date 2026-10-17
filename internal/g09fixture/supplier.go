@@ -22,13 +22,13 @@ type SupplierResource struct {
 }
 
 type SupplierConfig struct {
-	Username        string `json:"-"`
-	Password        string `json:"-"`
-	Token           string `json:"-"`
-	DownstreamURL   string `json:"-"`
-	DownstreamToken string `json:"-"`
-	Resources       []SupplierResource
-	RequestBudget   int
+	Username         string           `json:"-"`
+	Password         string           `json:"-"`
+	Token            string           `json:"-"`
+	DownstreamURL    string           `json:"-"`
+	DownstreamTokens map[int64]string `json:"-"`
+	Resources        []SupplierResource
+	RequestBudget    int
 }
 
 type supplierState struct {
@@ -54,7 +54,7 @@ type SupplierSink struct {
 }
 
 func NewSupplierSink(journal *Journal, config SupplierConfig) (*SupplierSink, error) {
-	if journal == nil || config.Username == "" || config.Password == "" || config.Token == "" || len(config.DownstreamToken) != 32 || config.RequestBudget < 1 || config.RequestBudget > maxAcceptances || len(config.Resources) < 1 || len(config.Resources) > 512 {
+	if journal == nil || config.Username == "" || config.Password == "" || config.Token == "" || len(config.DownstreamTokens) != len(config.Resources) || config.RequestBudget < 1 || config.RequestBudget > maxAcceptances || len(config.Resources) < 1 || len(config.Resources) > 512 {
 		return nil, errors.New("invalid supplier fixture configuration")
 	}
 	u, err := url.Parse(config.DownstreamURL)
@@ -62,12 +62,14 @@ func NewSupplierSink(journal *Journal, config SupplierConfig) (*SupplierSink, er
 		return nil, errors.New("supplier fixture requires an explicit IPv4 loopback downstream origin")
 	}
 	s := &SupplierSink{journal: journal, config: config, resources: make(map[int64]*supplierState)}
+	s.config.DownstreamTokens = make(map[int64]string, len(config.DownstreamTokens))
 	hosts, invoices := map[int64]bool{}, map[int64]bool{}
 	for _, resource := range config.Resources {
-		if resource.LocalID <= 0 || resource.HostID <= 0 || resource.InvoiceID <= 0 || s.resources[resource.LocalID] != nil || hosts[resource.HostID] || invoices[resource.InvoiceID] {
+		if resource.LocalID <= 0 || resource.HostID <= 0 || resource.InvoiceID <= 0 || s.resources[resource.LocalID] != nil || hosts[resource.HostID] || invoices[resource.InvoiceID] || len(config.DownstreamTokens[resource.LocalID]) != 32 {
 			return nil, errors.New("supplier fixture resource identity is not unique")
 		}
 		s.resources[resource.LocalID] = &supplierState{SupplierResource: resource}
+		s.config.DownstreamTokens[resource.LocalID] = config.DownstreamTokens[resource.LocalID]
 		hosts[resource.HostID], invoices[resource.InvoiceID] = true, true
 	}
 	// Do not retain mutable caller-owned slices.
@@ -114,12 +116,12 @@ func exactForm(got, want url.Values) bool {
 }
 
 func (s *SupplierSink) common(state *supplierState) url.Values {
-	return url.Values{"downstream_id": {strconv.FormatInt(state.LocalID, 10)}, "downstream_url": {s.config.DownstreamURL}, "downstream_token": {s.config.DownstreamToken}}
+	return url.Values{"downstream_id": {strconv.FormatInt(state.LocalID, 10)}, "downstream_url": {s.config.DownstreamURL}, "downstream_token": {s.config.DownstreamTokens[state.LocalID]}}
 }
 
 func (s *SupplierSink) cart(state *supplierState) url.Values {
 	values := s.common(state)
-	for key, value := range map[string]string{"pid": "7", "billingcycle": "monthly", "currencyid": "1", "qty": "1", "supplier_version": "1", "host": "", "password": ""} {
+	for key, value := range map[string]string{"pid": "7", "billingcycle": "monthly", "currencyid": "1", "qty": "1", "supplier_version": "1", "host": fmt.Sprintf("svc-%d", state.LocalID), "password": ""} {
 		values.Set(key, value)
 	}
 	return values

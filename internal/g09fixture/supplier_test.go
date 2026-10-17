@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,10 +32,15 @@ func supplierFixture(t *testing.T, budget int) (*SupplierSink, *Journal, *httpte
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { j.Close() })
-	s, err := NewSupplierSink(j, SupplierConfig{Username: "g09-synthetic-user", Password: "g09-private-synthetic-password", Token: "g09-private-synthetic-bearer", DownstreamURL: "http://127.0.0.1:29000", DownstreamToken: strings.Repeat("x", 32), Resources: []SupplierResource{{LocalID: 99, HostID: 42, InvoiceID: 90}, {LocalID: 100, HostID: 43, InvoiceID: 91}}, RequestBudget: budget})
+	tokens := map[int64]string{99: strings.Repeat("x", 32), 100: strings.Repeat("y", 32)}
+	resources := []SupplierResource{{LocalID: 99, HostID: 42, InvoiceID: 90}, {LocalID: 100, HostID: 43, InvoiceID: 91}}
+	s, err := NewSupplierSink(j, SupplierConfig{Username: "g09-synthetic-user", Password: "g09-private-synthetic-password", Token: "g09-private-synthetic-bearer", DownstreamURL: "http://127.0.0.1:29000", DownstreamTokens: tokens, Resources: resources, RequestBudget: budget})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Caller-owned maps/slices cannot change the frozen service binding.
+	tokens[99] = strings.Repeat("z", 32)
+	resources[0].LocalID = 999
 	server := httptest.NewServer(s)
 	t.Cleanup(server.Close)
 	return s, j, server, path
@@ -70,7 +76,7 @@ func TestSupplierSinkLostAcknowledgmentKeepsFrozenIdentity(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request := supplier.CreateRequest{ProductID: 7, Cycle: "monthly", Revision: p.Revision, LocalServiceID: 99, DownstreamURL: "http://127.0.0.1:29000", DownstreamToken: strings.Repeat("x", 32), MaximumCostCents: 100, Currency: "CNY"}
+			request := supplier.CreateRequest{ProductID: 7, Cycle: "monthly", Revision: p.Revision, LocalServiceID: 99, Host: "svc-99", DownstreamURL: "http://127.0.0.1:29000", DownstreamToken: strings.Repeat("x", 32), MaximumCostCents: 100, Currency: "CNY"}
 			out, err := a.Create(t.Context(), request)
 			if lostPath == "/cart/settle" {
 				var upstream *supplier.Error
@@ -114,7 +120,7 @@ func fixturePurchase(t *testing.T, a supplier.Adapter, local int64) supplier.Cre
 	if err != nil || !p.Supported {
 		t.Fatal("compiled product contract failed", err)
 	}
-	out, err := a.Create(t.Context(), supplier.CreateRequest{ProductID: 7, Cycle: "monthly", Revision: p.Revision, LocalServiceID: local, DownstreamURL: "http://127.0.0.1:29000", DownstreamToken: strings.Repeat("x", 32), MaximumCostCents: 100, Currency: "CNY"})
+	out, err := a.Create(t.Context(), supplier.CreateRequest{ProductID: 7, Cycle: "monthly", Revision: p.Revision, LocalServiceID: local, Host: fmt.Sprintf("svc-%d", local), DownstreamURL: "http://127.0.0.1:29000", DownstreamToken: map[int64]string{99: strings.Repeat("x", 32), 100: strings.Repeat("y", 32)}[local], MaximumCostCents: 100, Currency: "CNY"})
 	if err != nil {
 		t.Fatal("compiled create contract failed", err)
 	}
@@ -245,6 +251,11 @@ func TestSupplierSinkConcurrentDuplicateSettlementHasOneResource(t *testing.T) {
 	}
 	if len(j.Snapshot()) != 9 || len(s.Snapshot()) != 1 {
 		t.Fatal("invalid request changed successful facts")
+	}
+	wrongSource := s.common(state)
+	wrongSource.Set("downstream_token", strings.Repeat("y", 32)) // Valid token for the other frozen source.
+	if code := supplierRequest(t, server, "/cart/clear", wrongSource, "g09-private-synthetic-bearer"); code != 400 || len(j.Snapshot()) != 9 {
+		t.Fatal("cross-service token accepted")
 	}
 }
 
