@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
@@ -368,4 +370,84 @@ func TestLocalRenewalExternalRefundHTTPMonthEndExactInverse(t *testing.T) {
 	refund := f.create(t, "renewal-month-end-create")
 	expect(t, request(f.h, "POST", f.reviewPath(refund, "confirm"), map[string]any{"expected_version": 1, "note": "independent exact month-end inverse"}, f.reviewer, "renewal-month-end-confirm"), 201)
 	f.assertBusiness(t, true)
+}
+
+func TestLocalRenewalExternalRefundHTTPRevocationAfterActualLockWait(t *testing.T) {
+	for _, operation := range []string{"context", "create", "confirm", "replay"} {
+		for _, revoke := range []string{"scope", "permission"} {
+			t.Run(operation+"_"+revoke, func(t *testing.T) {
+				f := newLocalRenewalRefundHTTPFixture(t)
+				snapshotter := orderExternalRefundHTTPFixture{db: f.db}
+				staffID, staff := externalRefundActor(t, f.db, f.h, "local-renewal-lock-staff", []string{"external_refunds.view", "external_refunds.create", "external_refunds.review", "external_refunds.renewal_reverse"})
+				input := f.input(t, "local-renewal-lock-proof")
+				path := orderExternalRefundPath(f.invoice)
+				method := "POST"
+				if operation == "confirm" {
+					created := request(f.h, "POST", path, input, f.root, "local-renewal-lock-create")
+					expect(t, created, 201)
+					path = fmt.Sprintf("%s/%.0f/confirm", path, data(t, created)["refund"].(map[string]any)["id"])
+					input = map[string]any{"expected_version": 1, "note": "independent locked review"}
+				} else if operation == "replay" {
+					expect(t, request(f.h, "POST", path, input, staff, "local-renewal-lock-write"), 201)
+				} else if operation == "context" {
+					method = "GET"
+					path = localRenewalRefundContextPath(f.invoice)
+					input = nil
+				}
+				before := snapshotter.snapshot(t)
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+				defer cancel()
+				tx, err := f.db.Pool.Begin(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback(context.Background())
+				var blocker int
+				if err = tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
+					t.Fatal(err)
+				}
+				statement := `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
+				expected := 404
+				if revoke == "permission" {
+					statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+					expected = 403
+					if operation == "context" {
+						statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+					}
+				}
+				if _, err = tx.Exec(ctx, statement, staffID); err != nil {
+					t.Fatal(err)
+				}
+				result := make(chan *httptest.ResponseRecorder, 1)
+				go func() { result <- request(f.h, method, path, input, staff, "local-renewal-lock-write") }()
+				for {
+					var waiting bool
+					if err = f.db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))`, blocker).Scan(&waiting); err != nil {
+						t.Fatal(err)
+					}
+					if waiting {
+						t.Log("observed pg_blocking_pids dependency before revocation committed")
+						break
+					}
+					select {
+					case w := <-result:
+						t.Fatalf("request did not wait: status=%d", w.Code)
+					case <-ctx.Done():
+						t.Fatal("no actual lock wait")
+					case <-time.After(10 * time.Millisecond):
+					}
+				}
+				if err = tx.Commit(ctx); err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case w := <-result:
+					expect(t, w, expected)
+				case <-ctx.Done():
+					t.Fatal("request stuck after revocation commit")
+				}
+				orderExternalRefundUnchanged(t, before, snapshotter.snapshot(t))
+			})
+		}
+	}
 }
