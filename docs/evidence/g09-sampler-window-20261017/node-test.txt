@@ -1,0 +1,44 @@
+✔ stat parser handles spaces and parentheses in comm without shifting identity or CPU fields (3.022549ms)
+✔ I/O parser preserves uint64 decimal strings and refuses missing or invalid counters (1.209136ms)
+✔ actual owned child samples CPU, RSS, descriptor count and I/O without publishing secrets (180.791189ms)
+✔ capture refuses current, non-child and mismatching UID/path/namespace identities (45.021001ms)
+✔ PID reuse, exec/path/UID/namespace change and exited children fail closed and latch (50.670247ms)
+✔ duplicate targets, invalid budgets and overlapping samples are refused (41.954086ms)
+✖ real fixed two-second slots persist real owned-child samples with conservation and private journal (2399.062664ms)
+✔ frozen profile cannot be relaxed by later caller mutation (160.681499ms)
+✔ late scheduler records failure once without catch-up sampling (146.503615ms)
+✔ exited owned process fails and invokes stop without signalling any process itself (122.741233ms)
+✔ journal permission change latches persistence failure before collecting (91.477366ms)
+✔ private directory, existing journal, invalid budget and non-child registration are refused (303.041707ms)
+✔ non-finite or backwards scheduling clock fails closed with one stop (243.335445ms)
+✔ unavailable IO remains null and an explicitly required IO budget fails closed (80.810317ms)
+✔ actual owned-child cwd change invalidates the registered identity and stops once (68.46778ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 14
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3714.670784
+
+✖ failing tests:
+
+test at scripts/g09-sampler-window.test.mjs:28:1
+✖ real fixed two-second slots persist real owned-child samples with conservation and private journal (2399.062664ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'failed'
+  - 'complete'
+  
+      at TestContext.<anonymous> (file:///www/wwwroot/zjmfgo-g09-sampler-window/scripts/g09-sampler-window.test.mjs:31:10)
+      at async Test.run (node:internal/test_runner/test:1313:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'failed',
+    expected: 'complete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
