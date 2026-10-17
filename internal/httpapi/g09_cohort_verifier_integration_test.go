@@ -30,7 +30,7 @@ func g09CohortAssertSQL(t *testing.T, db *store.Store, query string, args ...any
 			ids[i+1] = arg
 		}
 	}
-	t.Fatalf("G09 cohort SQL invariant failed query_sha256=%s numeric_args=%v unavailable=%t", g09SourceHash(query), ids, err != nil)
+	t.Fatalf("G09 cohort SQL invariant failed query_sha256=%s numeric_args=%v unavailable=%t sqlstate=%s", g09SourceHash(query), ids, err != nil, g09CohortErrorCode(err))
 }
 
 func (e *g09CohortEnv) logFailureState(t *testing.T, workers []*g09SourceWorkerChild) {

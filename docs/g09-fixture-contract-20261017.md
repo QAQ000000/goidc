@@ -62,7 +62,7 @@
 
 峰值前三分钟结束后停止正常业务写、TERM并wait两worker，controller在独立最多120秒cohort准备窗口创建300笔quantity1采购：270 simulation，30 supplier（10账户各3）；真实API余额支付生成300个create job，记录invoice/order/service/job ID；准备窗口预算120秒，超时就FAIL；普通读探针保持10/s，cohort准备用单独计数和延迟，不并入三分钟峰值或steady门槛。恢复worker后才计cohort drain开始；所有已接纳来源的最后commit时刻也记录，报告同时列准备耗时/恢复耗时。
 
-另150个客户各对唯一部门建1张ticket。为保证每事件恰好1mail+1SMS，各部门只有对应staff具有该部门 `tickets.manage`，员工自己的email/phone已验证且开启双渠道偏好；150个staff使用150不同合法E.164合成手机号、150不同`.test`邮箱，不把150条消息发同一staff/phone。bootstrap super_admin及其他员工必须无有效订阅/未验证地址，且确认无额外合法已验证recipient；不能假定部门范围排除super_admin。contacts为空。只启用ticket_customer_created对应双渠道模板，模板正文带runId及`{{ticket_no}}`，SMTP subject也带ticket_no，短信正文≤4096。channel_instances各只1个enabled、路由顺序固定；每通知TTL为7天（`ticket_notifications.go:204`），不使用SMS test endpoint（5分钟TTL）或SMTP test endpoint替代；后者QueueSMTPTest未显式expires_at，不能误称同为5分钟TTL。
+另150个客户各对唯一部门建1张ticket。为保证每事件恰好1mail+1SMS，各部门只有对应staff具有该部门 `tickets.manage`，员工自己的email/phone已验证且开启双渠道偏好；150个staff使用150不同合法E.164合成手机号、150不同`.test`邮箱，不把150条消息发同一staff/phone。bootstrap在管理准备完成后必须转为无工单权限的fixture admin角色；super_admin会绕过部门限制，单纯关闭偏好或使用未验证地址仍可能生成额外skipped决策，不能据此当作不存在。须查询该票全部delivery，不能只筛选两个合法收件记录。contacts为空。只启用ticket_customer_created对应双渠道模板，模板正文带runId及`{{ticket_no}}`，SMTP subject也带ticket_no，短信正文≤4096。channel_instances各只1个enabled、路由顺序固定；每通知TTL为7天（`ticket_notifications.go:204`），不使用SMS test endpoint（5分钟TTL）或SMTP test endpoint替代；后者QueueSMTPTest未显式expires_at，不能误称同为5分钟TTL。
 
 seed/pilot必须先实际创建1ticket，通过生产SQL核对2个queued delivery、对应1mail/1SMS及不同身份，然后新schema正式run。pilot不足/多出则不得称150API消息入队成立。可选择另一个明确profile：fixture调用现生产 `QueueSMSWithID` + 事务写入email_outbox的现有生产入队链，记录返回ID和来源，标为worker-only cohort；API票据吞吐分母不得纳入这部分。不存在通用公开“批量发150通知”API，也没有已实现通用QueueEmail公开方法；不得发明。首轮优先真实ticket链。
 
@@ -171,3 +171,16 @@ SMS实际送达关联查询`sms_delivery_evidence(outbox_id,attempts,locked_at,p
 公开输出profile/候选摘要/requests.jsonl/队列与资源采样/逐实体invariants/协议计数/summary/cleanup/index；SQL query正文、DSN、cookies、密钥、手机号/邮箱不进公开日志。每2秒采样API/worker/Web/代理逐PID RSS/CPU/FD/IO和PG连接/锁/deadlock/WAL（不收query正文）；不能声称已有pprof/Prometheus。硬停止条件沿原计划：资金错账、死锁、越界网络/进程/schema、资源预算越线即停新写保留FAIL；不能清unknown挽救指标。
 
 实测前尚缺：新opt-in600任务fixture、冻结cohort manifest/快照协议、candidate普通用户namespace控制器、请求流分配器与协议实体关联、后台periodic cycle审计、固定全局背景阈值采样。现有API无批量建1000客户/改服务due/停止单类scheduler，seed和有限自动续费准备必须明确fixture-only；不是产品已有能力。本文件和负载库单测均不证明容量、真实通知收件、真实商户出款或正式HTTPS/生产SLO。
+
+## 候选 controller 接入前的实际边界
+
+以下为独立同模型只读核对后的接入约束，属于后续实现要求，不是已经存在的容量入口：
+
+- 既有 runtime namespace 的 PG 通道是 namespace TCP loopback→宿主PG Unix socket。PG实际会话的 `inet_server_addr()` 为NULL；不能通过放宽已验收 PGObserver/CohortVerifier 的127.0.0.1身份规则来接入。SQL fixture/observer保留宿主授权TCP直连，namespace内仅运行候选和协议进程，通过私有顺序控制文件交换允许的实体ID/快照。
+- runtime 的 `release_runtime_*` schema规则及12分钟fixture/15分钟Go超时不满足G09。使用独立G09 validator、随机 `zjmfgo_test_*`、准备预算和最多27分钟测量阶段，不全局放宽原发布验收器。
+- 现有业务 executor 的HTTP路径及方法白名单、单笔1000分和quantity1不适合seed：每客100000分充值、quantity2/2000分采购及9000张人工账单必须使用独立严格seed客户端。正常测量executor不因seed扩大权限或资金边界。
+- 现有runtime使用strace包装进程，而G09采样器只接受controller直接子进程。后续明确选择并验证实际应用的父子身份与namespace；不能把strace包装器的CPU/RSS冒充API或worker。
+- 固定SupplierSink只能一次冻结已知资源。`checkout_lines.go`在订单未付时已经创建pending_payment服务，`finance.go`只在pay时生成create任务，因此完整controller可在checkout receipt后、付款前，经宿主只读SQL确认实际order/invoice/customer/product/service对应关系，先持久登记协议资源，再允许付款。不得预测service ID、收钱后才盲目重置sink，或为接入每笔采购反复暂停worker。可增加有限的supplier专用付款前fixture hook，仍受整条链deadline和未知结果冻结规则约束，不暴露产品API。
+- 本批CohortVerifier只允许baseline后新增冻结cohort付款。正常混合负载完全停写、在途结束后，600来源开始前重新采集完整baseline；不能把最初10000账单seed的baseline直接贯穿整轮。历史/测量期真实事实仍须单独全量对账，不能因为新baseline而不校验。
+
+建议职责保持为外层candidate/namespace预检与清理、内层阶段编排与真实HTTP、独立seed客户端、宿主只读SQL fixture、同namespace协议进程；最终验收必须把这些模块绑定同一干净源码/候选和固定profile，而不是以单个helper通过替代整体运行。

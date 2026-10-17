@@ -84,3 +84,10 @@ DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库
 诊断 `run2` 固定 `5a2db1a` 退出1，用例143.03秒。SQL hash `0426390b…` 精确对应通用purchase关联断言，service/create ID271已有正常sync行；失败快照实际是300 create succeeded +150 mail sent +150 SMS sent（各attempt1），另29个正常sync succeeded。断言的`j.id=$9`写在SELECT布尔表达式、JOIN却仅service_id，QueryRow可能取到sync行。独立分支窄修将冻结create ID同时放进JOIN，保留全部原谓词及计数，不改生产代码或周期背景。
 
 run2两个worker均正常TERM/Wait、PID消失，32个数据库样本deadlocks均0，schema和常驻核对通过，FAIL原证据不覆盖。另记录1次job claim的`23514`：错误hash与已知`renewal_refund_hold`守卫字符串完全匹配，任务领取事务回滚后由正常轮询继续；不把该事件抹成无错误日志，也不调整154/155保护。后续成功/失败结果均保留脱敏worker错误数量/hash/SQLSTATE，可用性不明不当0；不声称零worker ERROR。
+
+
+## 第三轮 FAIL 与 SQL 提前预检
+
+`run3` 固定 `f7dd58a`，强制PG18 race退出1，用例141.68秒；pilot通过，正式600任务封存后全部排空，但供应商附加断言解析失败，不记整轮PASS。SQL hash `8eb497ca…` 对应同一参数先 `$3::text`、后与bigint比较，PostgreSQL推断text后拒绝bigint=text；独立只做会话PREPARE的复现同样失败。将首处改为 `$3::bigint::text` 后PREPARE通过，保留全部业务谓词。失败快照为300 create succeeded、150邮件sent、150短信sent，全部attempt1，另27条合法sync succeeded。两个worker正常TERM/Wait后PID消失，schema恢复、常驻身份不变、API/Web200；保留一条23514保护日志，不称零ERROR。
+
+原始结果、日志、边界及参数推断复现留在 `evidence/g09-cohort-20261017/run3/`，不覆盖先前FAIL。新增 `g09_cohort_oracles_test.go` 将实际使用的10条附加验收SQL提取为共享常量，在每个schema迁移后、身份/来源/worker启动前，用5秒预算的只读事务Prepare同一SQL；不执行终态写、不改数据库事实。解析错误输出query SHA256和SQLSTATE，屏蔽driver原文与字符串参数。实际验收仍执行同一完整断言，预检不能替代最终逐实体对账。

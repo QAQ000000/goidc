@@ -1,0 +1,14 @@
+{
+  "test.log": {
+    "bytes": 263386,
+    "sha256": "6b3ce393a719b2b0d79622b6e40084ea10a10b1004beca13407d970e33439878"
+  },
+  "boundaries.json": {
+    "bytes": 282095,
+    "sha256": "b9769b5c90b2d1dac226726100586c3d5ffebc295784353bdcde3ac25cb2ae0e"
+  },
+  "result.json": {
+    "bytes": 144656,
+    "sha256": "8ac873aa09eec8607adb7d71d08cc908177a2589385e59c0f7c32dddfe25c8eb"
+  }
+}
