@@ -1,8 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect } from './release-dual-web-scenario.mjs';
+import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect, safeErrorFrames } from './release-dual-web-scenario.mjs';
 
 const origin = 'http://127.0.0.1:53188';
+
+test('failure frames retain fixed script locations and discard messages, names and arbitrary paths', () => {
+  const error = { stack: 'Error: SECRET Cookie password environment\n    at SECRET (file:///control/release-dual-web-scenario.mjs:251:9)\n    at SECRET (file:///tmp/project/scripts/release-runtime-acceptance-lib.mjs:26:5)\n    at SECRET (/fixture/config.json:1:2)\n    at SECRET (/control/secret.mjs:3:4)\n    at SECRET (node:internal/modules:1:2)' };
+  const frames = safeErrorFrames(error);
+  assert.deepEqual(frames, [{ script: 'release-dual-web-scenario.mjs', line: 251, column: 9 }, { script: 'release-runtime-acceptance-lib.mjs', line: 26, column: 5 }]);
+  assert.doesNotMatch(JSON.stringify(frames), /SECRET|Cookie|password|environment|fixture|config/);
+  assert.deepEqual(safeErrorFrames({}), []);
+  assert.equal(safeErrorFrames({ stack: 'error\n' + '    at /control/release-dual-web-scenario.mjs:1:2\n'.repeat(40) }).length, 12);
+});
 
 test('evidence copies only status, timing and body digest, excluding response headers and contents', () => {
   const result = responseEvidence({ method: 'POST', status: 200, started: 100, ended: 137,

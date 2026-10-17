@@ -11,13 +11,23 @@ import { launch, stop, liveProcessGroup, sharpLoaderProbeCode } from './accept-r
 import { controlledRuntimeEnvironment, makeLaunchDescription, resolveLaunchStep } from './release-runtime-builder-lib.mjs';
 import { runtimeInventory } from './release-runtime-lib.mjs';
 import { buildDualWebPlan } from './release-dual-web-lib.mjs';
-import { assertAvailablePort, auditProcesses, jsonFile, pageAssets, assetArtifact, pause, requireThat as check, validateTestDSN, verifyPages, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
+import { assertAvailablePort, auditProcesses, jsonFile, pageAssets, assetArtifact, pause, requireThat as check, validateTestDSN, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
 
 const roots = { old: '/releases/old', next: '/releases/new' };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const MAX_BODY = 32 * 1024 * 1024;
 const MAX_OBSERVATIONS = 4000;
 const TRACE = ['-ff', '-yy', '-qq', '-s', '256', '-e', 'trace=%file,%network,fchmod,fchown,ftruncate,fallocate', '-e', 'raw=sendto,sendmsg,sendmmsg,recvfrom,recvmsg,recvmmsg'];
+const diagnosticScripts = new Set(['release-dual-web-scenario.mjs', 'release-runtime-acceptance-lib.mjs', 'release-candidate-lib.mjs', 'release-runtime-builder-lib.mjs', 'release-runtime-lib.mjs', 'release-dual-web-lib.mjs', 'release-static-retention-lib.mjs', 'accept-release-runtime.mjs']);
+export function safeErrorFrames(error) {
+  if (typeof error?.stack !== 'string') return [];
+  // Drop the message and all function names. Only fixed controller file names
+  // and numeric source locations survive; no arbitrary path or stack text does.
+  return error.stack.split('\n').slice(1).flatMap(line => {
+    const match = line.match(/(?:\/control\/|\/scripts\/)([A-Za-z0-9-]+\.mjs):(\d+):(\d+)\)?$/);
+    return match && diagnosticScripts.has(match[1]) ? [{ script: match[1], line: Number(match[2]), column: Number(match[3]) }] : [];
+  }).slice(0, 12);
+}
 
 export function responseEvidence(response, { phase, route, purpose } = {}) {
   return { phase, route, purpose, method: response.method, status: response.status, generation: response.headers['x-release-generation'] ?? null,
@@ -240,25 +250,59 @@ export async function runInner() {
     const credentialInfo = await lstat(request.fixturePaths.credentials);
     check(credentialInfo.isFile() && (credentialInfo.mode & 0o777) === 0o600 && credentialInfo.uid === request.uid, 'Private credential file required');
     let credentials = await jsonFile(request.fixturePaths.credentials);
-    const internal = {};
+    const internal = {}; evidence.internal = internal;
+    async function internalPages(key) {
+      const row = releases[key], origin = plan[key].web, pages = [], assets = new Map();
+      const result = { pages, assets: [], proxy: null }; internal[key] = result;
+      for (const route of ['/', '/login', '/admin-login']) {
+        const routeName = route === '/' ? 'home' : route.slice(1);
+        mark(`${key}-page-${routeName}-html`);
+        const response = await requestHTTP(origin, route);
+        evidence.checks.push(responseEvidence(response, { phase, route, purpose: 'internal-html' }));
+        check(response.status === 200, 'Internal page HTTP status differs');
+        const referenced = pageAssets(response.body.toString('utf8'), origin);
+        pages.push({ route, status: response.status, sha256: sha256(response.body), assets: referenced });
+        for (const resource of referenced) {
+          if (assets.has(resource)) continue;
+          mark(`${key}-page-${routeName}-asset`);
+          const artifact = assetArtifact(resource, row.manifest.web.appRoot), record = row.manifest.artifacts.find(item => item.path === artifact);
+          check(record && !record.link && record.bytes > 0, 'Referenced asset absent from candidate inventory');
+          const data = await requestHTTP(origin, resource);
+          evidence.checks.push(responseEvidence(data, { phase, route: resource, purpose: 'internal-page-asset' }));
+          check(data.status === 200 && data.body.length === record.bytes && sha256(data.body) === record.sha256 && await fileHash(`${row.root}/${artifact}`) === record.sha256, 'Internal HTTP asset differs from candidate');
+          const item = { resource, artifact, bytes: data.body.length, sha256: sha256(data.body) }; assets.set(resource, item); result.assets.push(item);
+        }
+      }
+      mark(`${key}-site-proxy`);
+      const route = '/api/v1/site', direct = await requestHTTP(plan[key].api, route), proxy = await requestHTTP(origin, route);
+      for (const [purpose, response] of [['internal-site-direct', direct], ['internal-site-proxy', proxy]]) evidence.checks.push(responseEvidence(response, { phase, route, purpose }));
+      check(direct.status === 200 && proxy.status === 200 && direct.body.equals(proxy.body), 'Web site proxy differs from direct API');
+      result.proxy = { route, sha256: sha256(direct.body), equal: true }; return result;
+    }
     for (const key of ['old', 'next']) {
       const row = releases[key]; mark(`${key}-api-ready`); row.apiHandle = service(key, 'api', row.steps.api);
       await waitFor(async () => { check(!row.apiHandle.exited && !interrupted, 'API exited'); return requestHTTP(plan[key].api, '/readyz', { timeoutMS: 500 }).then(r => r.status === 200).catch(() => false); }, row.description.timeouts.readySeconds, 'API ready');
       mark(`${key}-web-ready`); row.webHandle = service(key, 'web', row.steps.web);
       await waitFor(async () => { check(!row.webHandle.exited && !interrupted, 'Web exited'); return requestHTTP(plan[key].web, '/', { timeoutMS: 1000 }).then(r => r.status === 200).catch(() => false); }, row.description.timeouts.readySeconds, 'Web ready');
-      internal[key] = await verifyPages(row.manifest, row.root, plan[key].web);
-      const html = await requestHTTP(plan[key].web, '/'); check(html.status === 200 && noStore(html.headers) && html.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'SSR used fallback site metadata or allows storage');
+      mark(`${key}-verify-pages`); await internalPages(key);
+      mark(`${key}-ssr-marker`); const html = await requestHTTP(plan[key].web, '/');
+      evidence.checks.push(responseEvidence(html, { phase, route: '/', purpose: 'internal-ssr-marker' }));
+      check(html.status === 200 && noStore(html.headers) && html.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'SSR used fallback site metadata or allows storage');
       for (const route of ['/login', '/admin-login', '/api/v1/site']) {
+        mark(`${key}-cache-${route.slice(1).replaceAll('/', '-')}`);
         const response = await requestHTTP(plan[key].web, route);
+        evidence.checks.push(responseEvidence(response, { phase, route, purpose: 'internal-dynamic-no-store' }));
         check(response.status === 200 && noStore(response.headers), 'Internal Web dynamic cache policy differs');
-        evidence.checks.push(responseEvidence(response, { phase: `${key}-internal`, route, purpose: 'internal-dynamic-no-store' }));
       }
+      mark(`${key}-process-identities`);
       const ids = await auditProcesses(row.root, ['api', 'web'].map(name => ({ ...row.steps[name], name: `${key}-${name}`, traceName: `${key}-${name}` })), '/mutable/logs');
       check(ids.length === 2 && ['api', 'web'].every(name => ids.some(item => item.name === `${key}-${name}`)), 'Actual package service identities absent');
       for (const id of ids) {
+        mark(`${id.name}-process-identity`);
         const actual = await processIdentity(id.pid); check(actual.uid === request.uid && actual.gid === request.gid && actual.netNamespace === netNamespace && actual.mountNamespace === mountNamespace, 'Service process escaped identity/namespace');
         check(id.sha256 === row.manifest.artifacts.find(item => item.path === id.executable)?.sha256, 'Service executable inventory differs');
-        evidence.identities.push({ ...id, identity: actual }); evidence.loadedMaps.push(await loadedMaps(id.pid, { root: row.root, manifest: row.manifest, baseline: request.hostBaseline[key], tooling }));
+        evidence.identities.push({ ...id, identity: actual }); mark(`${id.name}-loaded-maps`);
+        evidence.loadedMaps.push(await loadedMaps(id.pid, { root: row.root, manifest: row.manifest, baseline: request.hostBaseline[key], tooling }));
       }
     }
     evidence.internal = internal;
@@ -490,14 +534,15 @@ export async function runInner() {
     mark('fixture-cleanup'); await call('cleanup');
     const done = await waitFor(() => jsonFile('/fixture/done.json').catch(() => null), 20, 'fixture final cleanup'); check(done.ok && done.schemaRemoved, 'Fixture schema removal not proven');
     await writeJSON('/mutable/result.json', { ok: true, allOwnedExited: true, listenersGone: true, fixtureCleaned: true, fixtureSchemaRemoved: true, ...evidence });
-  } catch {
+  } catch (error) {
+    const frames = safeErrorFrames(error);
     if (observer) observer.running = false;
     await observerPromise?.catch(() => {});
     let allOwnedExited = false; try { await stopOwned(); allOwnedExited = true; } catch {}
     await closeBridge().catch(() => {});
     // The outer controller is the sole abort writer after it has stopped the
     // namespace, avoiding command sequence races on asynchronous termination.
-    const failure = { ok: false, phase, reason: interrupted ? 'Scenario interrupted' : 'Controlled acceptance boundary failed', allOwnedExited, listenersGone: false, fixtureCleaned: false };
+    const failure = { ok: false, phase, reason: interrupted ? 'Scenario interrupted' : 'Controlled acceptance boundary failed', frames, allOwnedExited, listenersGone: false, fixtureCleaned: false, ...evidence };
     await writeJSON('/mutable/failure.json', failure).catch(() => {}); await writeJSON('/mutable/result.json', failure).catch(() => {});
     throw new Error('Controlled dual Web scenario failed');
   } finally { process.removeListener('SIGTERM', signal); process.removeListener('SIGINT', signal); }
