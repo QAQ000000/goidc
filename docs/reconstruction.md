@@ -289,3 +289,5 @@ schema059 已部署，实现 Go 原生抬头/地址维护、申请快照、本�
 2026-10-17 并发回调修复最终验收：`c6d2314`将既有invoice锁前移至回调首次payment更新前，普通取消锁竞争不再被154关联trigger误判为退款hold；154/155及真实冻结SQL保护保持不变。固定快照唯一强制隔离PG18全量退出0（HTTP1653.256秒、store237.273秒），五项组合race实际PASS无SKIP、Go build/vet/diff通过；旧失败证据保留，见[回调修复与集成证据](evidence/epay-upgrade-callback-20261017/README.md)。各轮schema恢复、常驻三进程身份未变，API/Web前后200。未部署、推送、重启常驻服务或写业务库；本地续费退款本增量通过，G03复杂业务/真实到账、G09容量和总体目标仍未关闭，台账仍45完成/60部分。
 
 2026-10-17 G09工具合并：2秒owned进程采样时窗、真实编译魔方适配器的durable协议sink、精确schema只读PG18观察器已审查合入。固定 `f9e7b96` 联合62项Node、16个Go小包顶层race（明确PG opt-in）全部PASS且无SKIP，build/vet/diff退出0，schema恢复及常驻服务身份/健康通过；见[工具增量](g09-tooling-increment-20261017.md)。WAL明确整个cluster、不可用IO/首CPU为null，协议接纳不冒充真实VM/容量；尚缺600来源及完整候选controller/正常周期/27分钟profile，G09和总体目标继续开放。
+
+2026-10-17 G09供应商来源小链：按要求使用gpt-6.1-sol独立分支提交，审查后合入`1fc49a5`。真实API供应商建账/catalog/import/publish及客户订单付款形成任务，实际worker完成create、管理员API独立sync；主线`6a7f727`四项race无SKIP通过（HTTP13.243秒）及vet通过，余额/库存/服务身份/任务/审计和9条durable协议hash核对通过。测试owned进程TERM/Wait、schema清理与常驻身份/健康均通过，见[专项](g09-supplier-worker-smoke-20261017.md)。无真实上游/业务库/部署/推送/重启，G09容量、G03及整体接管仍开放。

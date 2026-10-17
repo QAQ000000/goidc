@@ -45,3 +45,7 @@ ZJMFGO_G09_SUPPLIER_WORKER_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test \
 本次 supplier smoke 在 worker 启动前记录6次 durable metadata 接受、零准备阶段资源，真实服务/create ID 均为1；随后实际 create 和管理员 API sync 完成，SQL 来源映射、余额/账本/库存、上游资源/账单 ID、逐实体 durable 协议 hash 及 worker TERM/Wait 均通过测试内断言。有限背景预算断言通过。主代理外部核对 `source_unchanged=true`、随机 schema 集合前后恢复、原有 API/worker/Web 三个常驻进程 PID/start ticks/exe/cwd 不变，API/Web 前后均200。
 
 原始专项测试日志与带命令、版本、源码 hash 和清理/健康核对的结果分别为 [test.log](evidence/g09-supplier-worker-smoke-20261017/real-pg/test.log) 与 [result.json](evidence/g09-supplier-worker-smoke-20261017/real-pg/result.json)。证据无 DSN、密码、token 或业务请求/响应正文。此验收没有改已测代码，也没有部署或推送；仍只证明上述有限源码/loopback 小链，不代表封存 candidate、600任务、容量或真实供应商验收。
+
+## 主线合并复验
+
+集成实现为 `1fc49a5`，固定主线 `6a7f727` 再次独占PG18执行相同四项race及HTTP包vet：全部实际PASS、无SKIP，旧双worker5.33秒、新supplier小链6.76秒、包13.243秒，命令退出0/0。证据在 `evidence/g09-supplier-worker-smoke-20261017/main-integration/`；两轮测试代码与SupplierSink SHA256完全一致。schema集合恢复、常驻三进程身份未变、API/Web前后200；本次仍只运行隔离源码小链。
