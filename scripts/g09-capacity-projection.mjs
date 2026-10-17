@@ -3,7 +3,7 @@ const topKeys = ['customers', 'services', 'invoices', 'supplierAccounts', 'unkno
 const rowKeys = Object.freeze({
   customers: ['id', 'balanceCents'],
   services: ['id', 'customerId'],
-  invoices: ['id', 'customerId'],
+  invoices: ['id', 'customerId', 'amountCents'],
   supplierAccounts: ['id'],
   unknownSupplierAccount: ['id'],
 });
@@ -66,11 +66,14 @@ export function parseG09CapacityProjection(input) {
   const customerIDs = new Set(customers.map(row => row.id));
   for (const row of customers) if (!Number.isSafeInteger(row.balanceCents) || row.balanceCents < 0) fail('g09_projection_customer_amount');
   for (const row of services) if (!customerIDs.has(row.customerId)) fail('g09_projection_service_owner');
-  for (const row of invoices) if (!customerIDs.has(row.customerId)) fail('g09_projection_invoice_owner');
+  for (const row of invoices) {
+    if (!customerIDs.has(row.customerId)) fail('g09_projection_invoice_owner');
+    if (!Number.isSafeInteger(row.amountCents) || row.amountCents < 0) fail('g09_projection_invoice_amount');
+  }
   return Object.freeze({
     customers: Object.freeze(customers.map(row => Object.freeze({ id: row.id, balanceCents: row.balanceCents }))),
     services: Object.freeze(services.map(row => Object.freeze({ id: row.id, customerId: row.customerId }))),
-    invoices: Object.freeze(invoices.map(row => Object.freeze({ id: row.id, customerId: row.customerId }))),
+    invoices: Object.freeze(invoices.map(row => Object.freeze({ id: row.id, customerId: row.customerId, amountCents: row.amountCents }))),
     supplierAccounts: Object.freeze(supplierAccounts.map(row => Object.freeze({ id: row.id }))),
     unknownSupplierAccount: Object.freeze({ id: value.unknownSupplierAccount.id }),
   });

@@ -45,33 +45,33 @@ type TxBeginner interface {
 
 // Customer is the only customer data admitted to the capacity allocator.
 type Customer struct {
-	ID           int64
-	BalanceCents int64
+	ID           int64 `json:"id"`
+	BalanceCents int64 `json:"balanceCents"`
 }
 
 type Service struct {
-	ID         int64
-	CustomerID int64
+	ID         int64 `json:"id"`
+	CustomerID int64 `json:"customerId"`
 }
 
 type Invoice struct {
-	ID          int64
-	CustomerID  int64
-	AmountCents int64
+	ID          int64 `json:"id"`
+	CustomerID  int64 `json:"customerId"`
+	AmountCents int64 `json:"amountCents"`
 }
 
 type SupplierAccount struct {
-	ID int64
+	ID int64 `json:"id"`
 }
 
 // Projection is detached from database rows. UnknownSupplierAccount is a
 // synthetic, isolated identity and is never loaded from supplier_accounts.
 type Projection struct {
-	Customers              []Customer
-	Services               []Service
-	Invoices               []Invoice
-	SupplierAccounts       []SupplierAccount
-	UnknownSupplierAccount SupplierAccount
+	Customers              []Customer        `json:"customers"`
+	Services               []Service         `json:"services"`
+	Invoices               []Invoice         `json:"invoices"`
+	SupplierAccounts       []SupplierAccount `json:"supplierAccounts"`
+	UnknownSupplierAccount SupplierAccount   `json:"unknownSupplierAccount"`
 }
 
 // Loader validates the synthetic unknown supplier ID once and executes only

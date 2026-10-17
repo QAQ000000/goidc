@@ -8,7 +8,7 @@ const profile = { ...G09_CAPACITY_PROFILE_FIXED, origin: 'http://127.0.0.1:58088
 const resources = () => ({
   customers: Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, balanceCents: 98000 })),
   services: Array.from({ length: 2000 }, (_, i) => ({ id: i + 1, customerId: Math.floor(i / 2) + 1 })),
-  invoices: Array.from({ length: 10000 }, (_, i) => ({ id: i + 1, customerId: Math.floor(i / 10) + 1 })),
+  invoices: Array.from({ length: 10000 }, (_, i) => ({ id: i + 1, customerId: Math.floor(i / 10) + 1, amountCents: 1000 })),
   supplierAccounts: Array.from({ length: 10 }, (_, i) => ({ id: i + 1 })),
   unknownSupplierAccount: { id: 99 },
 });
@@ -65,6 +65,7 @@ test('projection rejects status claims, credentials/database fields, malformed r
   assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, services: source.services.map((row, i) => i === 0 ? { ...row, customerId: 999999 } : row) })), /g09_projection_service_owner/);
   assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, customers: source.customers.map((row, i) => i === 0 ? { ...row, balanceCents: -1 } : row) })), /g09_projection_customer_amount/);
   assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, invoices: source.invoices.map((row, i) => i === 0 ? { ...row, extra: 1 } : row) })), /g09_projection_invoices_fields/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, invoices: source.invoices.map((row, i) => i === 0 ? { ...row, amountCents: -1 } : row) })), /g09_projection_invoice_amount/);
 });
 
 test('explicit run composes start, existing load runner, observation, drain and stop', async () => {
