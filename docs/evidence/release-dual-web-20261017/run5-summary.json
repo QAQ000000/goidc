@@ -1,0 +1,181 @@
+{
+  "projection": true,
+  "rawReport": "/dev/shm/zjmfgo-dual-web-run5-20261017/report.json",
+  "rawReportSHA256": "a56f6f732c7e682b075cec4c2819f9854a6e2f758f9b72f443a05c4af162ee72",
+  "rawReportBytes": 650072,
+  "status": "FAIL",
+  "scope": "isolated same-source dual Web preparation only; no production switch or schema upgrade",
+  "runnerCommit": "bfe9f5d520c2fe62404ef30aba9d1336ca612aa8",
+  "commit": "16cc54ee52f8039a36265302d13191caeedb1457",
+  "oldManifestSHA256": "e238e03e701bb08cbfa3ba2c88f0d508d192bd771c03a2bb6ef688c25e78c0a9",
+  "nextManifestSHA256": "110359e25cfffdcae777f330ed91870ea8ae6a8aaf4518040c6d914bd266d772",
+  "planSHA256": "5417562a86017feb1941500d84f2c6cfdb6963d11d92c14a8aecf7714ea8fb13",
+  "configHashes": {
+    "old": "4737707ec2aab057dc7d499ec2535154bfc3b3f87c24b8dd522ddfdb23eb8cfd",
+    "next": "eef8671438df97da9507251a4759811ef9c7019c2e46fea9395ca5b2929dfbc5",
+    "restored": "1670614de7f3b9f82fab66c89d2cdef9d7ec9fae7a7900b5663c140979b2775c"
+  },
+  "observedGoPeakBytes": 319633080,
+  "observedMutablePeak": {
+    "bytes": 3517697,
+    "files": 115
+  },
+  "sandboxStop": {
+    "groupGone": true,
+    "forced": false
+  },
+  "privatePIDNamespaceGone": true,
+  "fixtureStop": {
+    "groupGone": true,
+    "forced": false
+  },
+  "fixtureCleanup": {
+    "ok": true,
+    "phase": "cleaned",
+    "schemaRemoved": true
+  },
+  "fixtureSchemaRemoved": true,
+  "sealedUnchanged": {
+    "old": true,
+    "next": true
+  },
+  "copiesUnchanged": {
+    "old": true,
+    "next": true
+  },
+  "toolingUnchanged": true,
+  "databaseStorageUnchanged": true,
+  "hostUnchanged": true,
+  "reason": "Controlled precondition, execution or cleanup failed; inspect sanitized evidence",
+  "runtime": {
+    "ok": false,
+    "phase": "old",
+    "reason": "Controlled acceptance boundary failed",
+    "frames": [
+      {
+        "script": "release-runtime-acceptance-lib.mjs",
+        "line": 10,
+        "column": 73
+      },
+      {
+        "script": "release-dual-web-scenario.mjs",
+        "line": 451,
+        "column": 7
+      },
+      {
+        "script": "release-dual-web-scenario.mjs",
+        "line": 493,
+        "column": 5
+      },
+      {
+        "script": "release-dual-web-scenario.mjs",
+        "line": 581,
+        "column": 116
+      }
+    ],
+    "allOwnedExited": true,
+    "listenersGone": false,
+    "fixtureCleaned": false,
+    "migrations": [
+      {
+        "key": "old",
+        "number": 1,
+        "exit": 0,
+        "migrationChecks": 1,
+        "migrationSchemaSHA256": "9616a98bf70ef4abf9fc3606271f576a5a42b3c9770071c5ab636c55679d41f3"
+      },
+      {
+        "key": "old",
+        "number": 2,
+        "exit": 0,
+        "migrationChecks": 2,
+        "migrationSchemaSHA256": "9616a98bf70ef4abf9fc3606271f576a5a42b3c9770071c5ab636c55679d41f3"
+      },
+      {
+        "key": "next",
+        "number": 1,
+        "exit": 0,
+        "migrationChecks": 3,
+        "migrationSchemaSHA256": "9616a98bf70ef4abf9fc3606271f576a5a42b3c9770071c5ab636c55679d41f3"
+      },
+      {
+        "key": "next",
+        "number": 2,
+        "exit": 0,
+        "migrationChecks": 4,
+        "migrationSchemaSHA256": "9616a98bf70ef4abf9fc3606271f576a5a42b3c9770071c5ab636c55679d41f3"
+      }
+    ],
+    "checkCount": 72,
+    "reloadCount": 0,
+    "observationCount": 0,
+    "permissionChecks": [
+      {
+        "phase": "old",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "customer-permission",
+        "method": "GET",
+        "status": 403,
+        "generation": "old",
+        "started": 1792197785391,
+        "ended": 1792197785397,
+        "durationMS": 6,
+        "bytes": 65,
+        "sha256": "54ad2a6b6b299e70907dd97a1a6a7eb3ca1ae333efe0a9874e00e09aeeaa7e3b"
+      },
+      {
+        "phase": "old",
+        "route": "/console/contracts",
+        "purpose": "customer-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792197785397,
+        "ended": 1792197785501,
+        "durationMS": 104,
+        "bytes": 32963,
+        "sha256": "94f96b01098fcdcebb9c43574ba8196ab5a2d5c6e08156b23871fad96b72daf5"
+      },
+      {
+        "phase": "old",
+        "route": "/api/v1/admin/site-settings",
+        "purpose": "admin-permission",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792197785515,
+        "ended": 1792197785527,
+        "durationMS": 12,
+        "bytes": 838,
+        "sha256": "8ba9ea36e07b2cbac7286d2151366e57b561451b96086a1c4b6387255e9daa7d"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "admin-protected-ssr",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792197785527,
+        "ended": 1792197785714,
+        "durationMS": 187,
+        "bytes": 26604,
+        "sha256": "9f12550363c59b3619fa5661e2ef5cf2d17445e168b9ba635c549b6a905ebbdc"
+      },
+      {
+        "phase": "old",
+        "route": "/admin",
+        "purpose": "customer-admin-rejected",
+        "method": "GET",
+        "status": 200,
+        "generation": "old",
+        "started": 1792197785714,
+        "ended": 1792197785744,
+        "durationMS": 30,
+        "bytes": 14755,
+        "sha256": "b12e63fbe05d519eaa1cb991fd809ee740d35040562e6ce7acd49d873c50ef1a"
+      }
+    ]
+  },
+  "failureBoundary": "Customer session /admin returned HTTP 200, expected redirect to /. API permission remained 403. Streamed redirect semantics require pre-render protection; run5 remains FAIL."
+}

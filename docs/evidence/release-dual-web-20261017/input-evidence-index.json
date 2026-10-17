@@ -1,0 +1,59 @@
+{
+  "evidenceRetention": "Local /tmp and /dev/shm are volatile; this index authenticates retained evidence but is not an offsite archive",
+  "items": [
+    {
+      "name": "nodeRegression",
+      "path": "/tmp/zjmfgo-dual-final-node-20261017.log",
+      "bytes": 16833,
+      "sha256": "23886be88dd7bc9b5d4aa2185fbbeba89d833f42e224ca768764992f2662ede5"
+    },
+    {
+      "name": "fixtureRace",
+      "path": "/tmp/zjmfgo-dual-fixture-final-race-20261017.log",
+      "bytes": 552,
+      "sha256": "43ea6110b34568ed9dabde887aa6414c286279e7bc2c027e0f74599fdb53611d"
+    },
+    {
+      "name": "buildBudget",
+      "path": "/tmp/zjmfgo-dual-runtime-build-budget-20261017.json",
+      "bytes": 1160,
+      "sha256": "19a7d03c28f4f2630a76a60cefa785a7b000e0f9262985f5b5ea0b03fb89750a"
+    },
+    {
+      "name": "runtimeBudget",
+      "path": "/tmp/zjmfgo-dual-web-runtime-budget-20261017.json",
+      "bytes": 1056,
+      "sha256": "ed59e22352018b9ee2db3e297f114290167c081c193b2cfa7637579519bdb4a2"
+    },
+    {
+      "name": "buildA",
+      "path": "/tmp/zjmfgo-dual-build-A2-execute-20261017.log",
+      "bytes": 5918,
+      "sha256": "8c8f384f8be10e517857a3e224bb24fc0b0ab0a0dc3d27eb655c3bf5af46d2c8"
+    },
+    {
+      "name": "buildB",
+      "path": "/tmp/zjmfgo-dual-build-B1-execute-20261017.log",
+      "bytes": 5918,
+      "sha256": "9f315d1281450b677f18804f22f070620b4c13da4850370d7c650a610d05f521"
+    },
+    {
+      "name": "failedBuildA",
+      "path": "/tmp/zjmfgo-dual-build-A-20261017.log",
+      "bytes": 60,
+      "sha256": "16caf7ee17364e8d1186a723be29a814c1ce5176706cef6a0b1477ee2a4c482a"
+    },
+    {
+      "name": "preflight1",
+      "path": "/tmp/zjmfgo-dual-web-run1-preflight-20261017.log",
+      "bytes": 550384,
+      "sha256": "480273fc7fff6f99d6f2c5395f797edc951405841418f3002deb771fd7e4c1ca"
+    },
+    {
+      "name": "execute1",
+      "path": "/tmp/zjmfgo-dual-web-run1-execute-20261017.log",
+      "bytes": 104,
+      "sha256": "92ffa558e43fe9a113759e02c8f0ef77538e8d50e0c5bd36a734766055ab2967"
+    }
+  ]
+}

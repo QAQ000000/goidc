@@ -1,0 +1,11 @@
+{
+  "projection": true,
+  "rawPath": "/tmp/zjmfgo-dual-build-B1-execute-resources-20261017.json",
+  "rawSHA256": "347ce55fc44c5eb8c765a892d44a5a3b019a1983a482f2a32d96fd7d44d54392",
+  "code": 0,
+  "samples": 175,
+  "minObservedRootFreeBytes": 787812352,
+  "minObservedTmpfsFreeBytes": 2435788800,
+  "minObservedMemoryAvailableBytes": 3779293184,
+  "scope": "Observed samples only, not instantaneous peak guarantee"
+}
