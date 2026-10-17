@@ -15,7 +15,26 @@ export async function proxy(request: NextRequest) {
     headers.delete("forwarded");
     return NextResponse.next({ request: { headers } });
   }
-  if (path === "/admin" || path.startsWith("/admin/") || ["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
+  const adminRoute = path === "/admin" || path.startsWith("/admin/");
+  if (adminRoute) {
+    const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
+    const cookie = request.cookies.get("zjmfgo_session");
+    if (!cookie) return NextResponse.redirect(new URL("/admin-login", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+    try {
+      const response = await fetch(`${origin}/api/v1/me`, {
+        headers: { Cookie: `zjmfgo_session=${cookie.value}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (response.ok) {
+        const user = (await response.json()).data as User;
+        if (user?.role === "admin" || user?.role === "super_admin") return NextResponse.next();
+        return NextResponse.redirect(new URL("/", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+      }
+    } catch {}
+    return NextResponse.redirect(new URL("/admin-login", request.url), { status: 307, headers: { "Cache-Control": "no-store" } });
+  }
+  if (["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
   const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
   let site: SiteProfile | null = null;
   try {
