@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect, safeErrorFrames, safeMappingEvidence } from './release-dual-web-scenario.mjs';
+import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect, safeErrorFrames, safeMappingEvidence, anchoredBasenameMatch } from './release-dual-web-scenario.mjs';
 
 const origin = 'http://127.0.0.1:53188';
 
@@ -18,6 +18,14 @@ test('loaded-map failure evidence keeps only a reviewed class and basename', () 
   assert.deepEqual(safeMappingEvidence('/releases/old/artifact/runtime/node', 'bundled'), { class: 'bundled', basename: 'node' });
   assert.deepEqual(safeMappingEvidence('/tmp/secret Cookie\nbody', 'unreviewed'), { class: 'unknown', basename: 'redacted' });
   assert.doesNotMatch(JSON.stringify(safeMappingEvidence('/tmp/secret Cookie\nbody', 'unreviewed')), /secret|Cookie|body|tmp/);
+});
+
+test('basename fallback still requires an anchored host/tooling digest', () => {
+  const byBasename = new Map([['libc.so.6', { digests: new Set(['a'.repeat(64)]), kinds: new Set(['host']) }], ['libjemalloc.so.2', { digests: new Set(['b'.repeat(64)]), kinds: new Set(['tooling']) }]]);
+  assert.equal(anchoredBasenameMatch('/lib/x86_64-linux-gnu/libc.so.6', 'a'.repeat(64), byBasename), 'host');
+  assert.equal(anchoredBasenameMatch('/usr/local/lib/libjemalloc.so.2', 'b'.repeat(64), byBasename), 'tooling');
+  assert.equal(anchoredBasenameMatch('/tmp/libc.so.6', 'c'.repeat(64), byBasename), null);
+  assert.equal(anchoredBasenameMatch('/tmp/unknown.so', 'a'.repeat(64), byBasename), null);
 });
 
 test('evidence copies only status, timing and body digest, excluding response headers and contents', () => {

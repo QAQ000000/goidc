@@ -32,6 +32,11 @@ export function safeMappingEvidence(filename, kind = 'unknown') {
   const basename = path.posix.basename(String(filename));
   return { class: ['bundled', 'host', 'tooling', 'nginx', 'lua', 'unknown'].includes(kind) ? kind : 'unknown', basename: /^[A-Za-z0-9._+@-]{1,128}$/.test(basename) ? basename : 'redacted' };
 }
+export function anchoredBasenameMatch(filename, digest, byBasename) {
+  const row = byBasename.get(path.posix.basename(String(filename)));
+  if (!row || !row.digests.has(digest)) return null;
+  return row.kinds.has('host') ? 'host' : 'tooling';
+}
 
 export function responseEvidence(response, { phase, route, purpose } = {}) {
   return { phase, route, purpose, method: response.method, status: response.status, generation: response.headers['x-release-generation'] ?? null,
@@ -148,9 +153,14 @@ async function workers(master) {
 async function loadedMaps(pid, { root, manifest, baseline, tooling }) {
   const allowed = new Map();
   const kindByPath = new Map();
+  const allowedByBasename = new Map();
   const allow = async (filename, digest, kind) => {
     if (typeof filename !== 'string' || !/^[a-f0-9]{64}$/.test(digest ?? '')) return;
     allowed.set(filename, digest); kindByPath.set(filename, kind);
+    if (kind === 'host' || kind === 'tooling') {
+      const basename = path.posix.basename(filename), row = allowedByBasename.get(basename) ?? { digests: new Set(), kinds: new Set() };
+      row.digests.add(digest); row.kinds.add(kind); allowedByBasename.set(basename, row);
+    }
     const canonical = await realpath(filename).catch(() => null);
     if (canonical) { allowed.set(canonical, digest); kindByPath.set(canonical, kind); }
   };
@@ -164,7 +174,11 @@ async function loadedMaps(pid, { root, manifest, baseline, tooling }) {
   for (const filename of mappings) {
     if (filename === '/dev/zero (deleted)') continue;
     check(!filename.endsWith(' (deleted)'), 'Deleted loaded mapping');
-    const actual = await realpath(filename), expected = allowed.get(filename) ?? allowed.get(actual), kind = kindByPath.get(filename) ?? kindByPath.get(actual) ?? 'unknown';
+    const actual = await realpath(filename); let expected = allowed.get(filename) ?? allowed.get(actual), kind = kindByPath.get(filename) ?? kindByPath.get(actual) ?? 'unknown';
+    if (!expected) {
+      const digest = await fileHash(filename), basenameKind = anchoredBasenameMatch(filename, digest, allowedByBasename);
+      if (basenameKind) { expected = digest; kind = basenameKind; }
+    }
     if (!expected) { const error = new Error('Unanchored loaded object'); error.safeEvidence = safeMappingEvidence(filename, kind); throw error; }
     if (await fileHash(filename) !== expected) { const error = new Error('Modified loaded object'); error.safeEvidence = safeMappingEvidence(filename, kind); throw error; }
     result.push({ path: filename, sha256: expected });
