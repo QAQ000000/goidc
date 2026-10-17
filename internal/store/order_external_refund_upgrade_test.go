@@ -162,7 +162,7 @@ func createSyntheticSchema153Checkout(t *testing.T, db *Store, actor, user, prod
 const schema153OrderSnapshot = `SELECT jsonb_build_object(
  'order',(SELECT to_jsonb(o) FROM orders o WHERE id=$1),
  'items',(SELECT jsonb_agg(to_jsonb(oi) ORDER BY id) FROM order_items oi WHERE order_id=$1),
- 'services',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM services s WHERE order_id=$1),
+ 'services',(SELECT jsonb_agg(to_jsonb(s)-'renewal_generation' ORDER BY id) FROM services s WHERE order_id=$1),
  'invoice',(SELECT to_jsonb(i) FROM invoices i WHERE order_id=$1),
  'payments',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM payment_transactions p WHERE invoice_id=(SELECT id FROM invoices WHERE order_id=$1)),
  'callback',(SELECT to_jsonb(e) FROM payment_webhook_events e WHERE provider='mock' AND event_id='synthetic-schema153-paid-event'),
@@ -220,6 +220,11 @@ func TestOrderExternalRefundUpgradeFrom153DoesNotAdoptHistoricalOrders(t *testin
 		if afterOrder != beforeOrder || afterProduct != beforeProduct {
 			t.Fatalf("Migrate pass %d rewrote original business facts", attempt)
 		}
+	}
+	// The additive generation column must not rewrite imported business state.
+	var legacyGenerations int
+	if err = db.Pool.QueryRow(ctx, `SELECT count(*) FROM services WHERE order_id=$1 AND renewal_generation<>0`, old.OrderID).Scan(&legacyGenerations); err != nil || legacyGenerations != 0 {
+		t.Fatal("upgrade changed legacy renewal generation", legacyGenerations, err)
 	}
 	var births, reservations int
 	if err = db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM external_refund_order_births WHERE order_id=$1)+(SELECT count(*) FROM external_refund_service_births WHERE order_id=$1),(SELECT count(*) FROM external_refund_order_stock_reservations WHERE order_id=$1)`, old.OrderID).Scan(&births, &reservations); err != nil || births != 0 || reservations != 0 {

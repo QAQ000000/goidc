@@ -46,8 +46,10 @@ func TestOrderExternalRefundJobIdentityCannotMoveIntoOrOutOfOrder(t *testing.T) 
 			if e := f.db.Pool.QueryRow(ctx, `SELECT service_id,(SELECT count(*) FROM external_refund_delivery_history WHERE order_id=$2) FROM provision_jobs WHERE id=$1`, job, f.order).Scan(&owner, &hist); e != nil || owner != otherService || hist != 0 {
 				t.Fatal(owner, hist, e)
 			}
-			// State/attempt changes remain legal even while an unrelated target service
-			// is locked. No new job -> service parent wait is introduced by the guard.
+			// failed -> pending introduces a live operation. Renewal admission must
+			// serialize it even before the service has its first effect; otherwise an
+			// uncommitted old writer could appear after a new refund hold. Child-first
+			// callers fail promptly under the parent lock and may retry after release.
 			blocker, e := f.db.Pool.Begin(ctx)
 			if e != nil {
 				t.Fatal(e)
@@ -63,15 +65,19 @@ func TestOrderExternalRefundJobIdentityCannotMoveIntoOrOutOfOrder(t *testing.T) 
 			}()
 			select {
 			case e = <-done:
-				if e != nil {
-					t.Fatal(e)
+				var pgerr *pgconn.PgError
+				if !isPGErrorCode(e, "23514", &pgerr) || pgerr.Message != "renewal_refund_hold" {
+					t.Fatalf("live-job retry must fail promptly on locked service: %v", e)
 				}
 			case <-time.After(2 * time.Second):
 				_ = blocker.Rollback(ctx)
-				t.Fatal("job status update acquired service lock")
+				t.Fatal("job status retry waited on service lock")
 			}
 			if e = blocker.Rollback(ctx); e != nil {
 				t.Fatal(e)
+			}
+			if _, e = f.db.Pool.Exec(ctx, `UPDATE provision_jobs SET status='pending',attempts=attempts+1,locked_at=NULL WHERE id=$1`, job); e != nil {
+				t.Fatal("live-job retry after parent released", e)
 			}
 			if hold {
 				if _, e = f.review(t, pending, true, "job-identity-hold-confirm"); e != nil {
