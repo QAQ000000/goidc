@@ -15,7 +15,7 @@ import { verifyG09ResidentTraces } from './g09-runtime-trace.mjs';
 import { recoverG09ControlHistory } from './g09-runtime-recovery.mjs';
 import { launchG09TracedChild } from './g09-runtime-process.mjs';
 import { createG09ProcessSampler } from './g09-process-sampler.mjs';
-import { g09RuntimeFiles, g09MigrationInputs, validateG09RuntimeDSN, validateG09Command, writeG09ControlJSON, readG09ControlJSON } from './g09-runtime-contract.mjs';
+import { g09RuntimeFiles, g09MigrationInputs, validateG09RuntimeDSN, validateG09Command, writeG09ControlJSON, readG09ControlJSON, prepareG09CacheMountpoint } from './g09-runtime-contract.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const tools = { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', GOTOOLCHAIN: 'local', GOENV: 'off', GOPROXY: 'off', GOSUMDB: 'off' };
@@ -171,6 +171,7 @@ export async function acceptG09Runtime(options) {
   const release = path.join(runRoot, 'release'), control = path.join(runRoot, 'control');
   const fixture = path.join(runRoot, 'fixture'), mutable = path.join(runRoot, 'mutable');
   let fixtureProcess, fixtureLog, fixtureDeadline, activeBuild, sandbox, timer, failure, checking = false;
+  let phase = 'copy';
   const report = { status: 'FAIL', mode: 'candidate_runtime_bootstrap', runId, sourceCommit: manifest.source.commit,
     runnerCommit: options.runnerCommit, manifestSHA256: options.manifestSHA, capacityVerified: false, workerReadinessVerified: false };
   const interrupted = () => { failure ??= new Error('g09_interrupted'); if (activeBuild) stop(activeBuild).catch(() => {}); if (sandbox) stop(sandbox).catch(() => {}); };
@@ -189,6 +190,7 @@ export async function acceptG09Runtime(options) {
     for (const file of g09RuntimeFiles) { const target = path.join(control, path.basename(file)); await copyFile(path.join(here, '..', file), target); await chmod(target, 0o444); }
     for (const directory of [fixture, mutable]) { await mkdir(directory, { mode: 0o700 }); await chown(directory, uid, gid); }
     for (const name of ['logs', 'cache', 'home', 'tmp']) { const directory = path.join(mutable, name); await mkdir(directory, { mode: 0o700 }); await chown(directory, uid, gid); }
+    phase = 'fixture-compile';
     const goTemporary = path.join(runRoot, 'go-tmp'); await mkdir(goTemporary, { mode: 0o700 });
     const fixtureTemporary = path.join(runRoot, 'fixture-tmp'); await mkdir(fixtureTemporary, { mode: 0o700 }); await chown(fixtureTemporary, uid, gid);
     const socketDirectory = path.join(runRoot, 'socket'); await mkdir(socketDirectory, { mode: 0o755 });
@@ -209,6 +211,7 @@ export async function acceptG09Runtime(options) {
     await guardReserve(runRoot, pre.budget, pre.availableSpace.bytes);
     requireThat(!failure, 'g09_reserve_crossed_during_compile');
     await chmod(fixtureBinary, 0o555);
+    phase = 'fixture-start';
     const bootstrap = path.join(control, 'bootstrap.private.json');
     await writeG09ControlJSON(bootstrap, { runId, bridgeDirectory: socketDirectory, migrations: g09MigrationInputs(manifest) });
     await chown(bootstrap, uid, gid);
@@ -236,6 +239,8 @@ export async function acceptG09Runtime(options) {
       clockTicksPerSecond: Number(command('/usr/bin/getconf', ['CLK_TCK'])), hostBaseline: pre.hostBaseline });
     await chmod(path.join(control, 'request.json'), 0o444);
     const stagedSocket = path.join(socketDirectory, path.basename(options.pgSocket)); await writeFile(stagedSocket, '', { flag: 'wx', mode: 0o644 });
+    phase = 'namespace-start';
+    await prepareG09CacheMountpoint(release, manifest.web.appRoot);
     const args = namespaceArgs({ release, control, fixture, mutable, pgSocket: stagedSocket, uid, gid, appRoot: manifest.web.appRoot });
     await writeJSON(path.join(control, 'mount-request.json'), { parentPID: process.pid, parentMountNamespace: await readlink('/proc/self/ns/mnt'),
       originalSocket: options.pgSocket, stagedSocket, uid, gid,
@@ -243,6 +248,7 @@ export async function acceptG09Runtime(options) {
     sandbox = launch('/usr/bin/unshare', ['--mount', '--propagation', 'private', path.join(release, manifest.runtime.node.path), path.join(control, 'accept-g09-runtime.mjs'), '--mount-worker', path.join(control, 'mount-request.json')]);
     await deadline(sandbox.done, 6 * 60 * 1000);
     requireThat(!failure && !sandbox.failed && sandbox.code === 0, 'g09_namespace_failed');
+    phase = 'post-runtime-audit';
     const runtime = await jsonFile(path.join(mutable, 'result.json'));
     requireThat(runtime.ok && runtime.candidateRuntimeVerified && runtime.capacityVerified === false && runtime.allOwnedExited && runtime.listenersGone, 'g09_runtime_proof_incomplete');
     requireThat(same(await runtimeInventory(release), manifest.artifacts), 'g09_runtime_copy_changed');
@@ -251,7 +257,7 @@ export async function acceptG09Runtime(options) {
     await deadline(fixtureProcess.done, 30000);
     requireThat(!fixtureProcess.failed && fixtureProcess.code === 0, 'g09_fixture_failed');
     report.runtime = runtime; report.residentTrace = residentTrace; report.audit = audit; report.status = 'PASS';
-  } catch { failure ??= new Error('g09_acceptance_failed'); }
+  } catch { failure ??= new Error('g09_acceptance_failed'); report.failedPhase = phase; }
   finally {
     clearInterval(timer);
     process.removeListener('SIGTERM', interrupted); process.removeListener('SIGINT', interrupted);
@@ -284,6 +290,11 @@ export async function acceptG09Runtime(options) {
       requireThat(same(await runtimeInventory(options.sealed), manifest.artifacts) && await fileHash(path.join(options.sealed, 'manifest.json')) === options.manifestSHA, 'g09_sealed_changed');
       report.sealedUnchanged = true;
     } catch { failure ??= new Error('g09_sealed_changed'); report.sealedUnchanged = false; }
+    try {
+      for (const root of new Set([options.source, path.join(here, '..')]))
+        requireThat(git(root, 'rev-parse', 'HEAD') === options.runnerCommit && same(await sourceProof(root, options.runnerCommit), manifest.source), 'g09_final_source_changed');
+      report.sourceUnchanged = true;
+    } catch { failure ??= new Error('g09_final_source_changed'); report.sourceUnchanged = false; }
     if (failure) { report.status = 'FAIL'; report.failureCode = 'g09_boundary_or_acceptance_failed'; }
     await writeJSON(path.join(runRoot, 'report.json'), report);
     await rm(path.join(fixture, 'config.json'), { force: true });
@@ -303,9 +314,12 @@ async function mountWorker(filename) {
     await readlink(`/proc/${process.ppid}/ns/mnt`) === request.parentMountNamespace, 'g09_private_mount_required');
   command('/usr/bin/mount', ['--bind', request.originalSocket, request.stagedSocket]);
   try {
-    const child = spawn('/usr/bin/setpriv', ['--reuid', String(request.uid), '--regid', String(request.gid), '--clear-groups', '--pdeathsig', 'KILL', '--', '/usr/bin/bwrap', ...request.argv], { env: tools, stdio: 'ignore' });
-    const code = await new Promise(resolve => { child.once('error', () => resolve(1)); child.once('close', resolve); });
-    requireThat(code === 0, 'g09_private_runtime_failed');
+    const log = await open(path.join(path.dirname(filename), '..', 'namespace.log'), 'wx', 0o600);
+    try {
+      const child = spawn('/usr/bin/setpriv', ['--reuid', String(request.uid), '--regid', String(request.gid), '--clear-groups', '--pdeathsig', 'KILL', '--', '/usr/bin/bwrap', ...request.argv], { env: tools, stdio: ['ignore', log.fd, log.fd] });
+      const code = await new Promise(resolve => { child.once('error', () => resolve(1)); child.once('close', resolve); });
+      requireThat(code === 0, 'g09_private_runtime_failed');
+    } finally { await log.close(); }
   } finally { command('/usr/bin/umount', [request.stagedSocket]); }
 }
 export function parseG09RuntimeOptions(args) {

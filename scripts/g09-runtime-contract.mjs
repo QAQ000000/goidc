@@ -1,7 +1,7 @@
-import { link, lstat, open, readFile, rm } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { noLinks } from './release-candidate-lib.mjs';
+import { noLinks, safeRelative } from './release-candidate-lib.mjs';
 
 const requireThat = (ok, code) => { if (!ok) throw new Error(code); };
 const integer = (n, min, max) => Number.isSafeInteger(n) && n >= min && n <= max;
@@ -80,4 +80,17 @@ export async function readG09ControlJSON(filename, { uid = process.getuid() } = 
     requireThat(info.isFile() && info.uid === uid && (info.mode & 0o777) === 0o600 && info.size <= 1048576, 'g09_control_file_invalid');
     return JSON.parse(await readFile(filename, 'utf8'));
   } catch { throw new Error('g09_control_read_failed'); }
+}
+
+// The sealed tree omits empty directories. Create the writable-cache mount
+// target only in the independent run copy before that tree becomes read-only.
+export async function prepareG09CacheMountpoint(release, appRoot) {
+  safeRelative(appRoot);
+  requireThat(appRoot.startsWith('artifact/web/'), 'g09_cache_root_invalid');
+  const parent = await noLinks(path.join(release, appRoot, '.next'));
+  const target = path.join(parent, 'cache');
+  await mkdir(target, { mode: 0o755, recursive: true });
+  await noLinks(target);
+  requireThat((await lstat(target)).isDirectory(), 'g09_cache_mountpoint_invalid');
+  return target;
 }

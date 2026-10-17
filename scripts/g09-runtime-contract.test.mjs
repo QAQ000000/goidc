@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, lstat, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { chmod, lstat, mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { g09RuntimeFiles, g09MigrationInputs, validateG09RuntimeDSN, validateG09Command, writeG09ControlJSON, readG09ControlJSON } from './g09-runtime-contract.mjs';
+import { g09RuntimeFiles, g09MigrationInputs, validateG09RuntimeDSN, validateG09Command, writeG09ControlJSON, readG09ControlJSON, prepareG09CacheMountpoint } from './g09-runtime-contract.mjs';
+import { runtimeInventory } from './release-runtime-lib.mjs';
 import { parseG09RuntimeOptions } from './accept-g09-runtime.mjs';
 
 const schema = 'zjmfgo_test_0123456789abcdef';
@@ -51,4 +52,21 @@ test('CLI rejects duplicate options and does not accept implicit execution',()=>
   const args=['--sealed','/tmp/sealed','--manifest-sha256','a'.repeat(64),'--source','/tmp/source','--runner-commit','b'.repeat(40),'--run-root','/tmp/new-run','--pg-socket','/tmp/.s.PGSQL.55439','--budget','/tmp/budget.json','--budget-sha256','c'.repeat(64)];
   assert.equal(parseG09RuntimeOptions(args).execute,undefined);assert.equal(parseG09RuntimeOptions([...args,'--execute']).execute,true);
   for (const bad of [args.slice(1),[...args,'--execute','ignored'],[...args,'--source','/other'],[...args,'--command','anything']]) assert.throws(()=>parseG09RuntimeOptions(bad));
+});
+
+test('cache mountpoint exists before read-only bind without changing file inventory', async () => {
+  const root=await mkdtemp(path.join(os.tmpdir(),'g09-cache-mount-'));
+  try {
+    const appRoot='artifact/web/web';
+    await mkdir(path.join(root,appRoot,'.next'),{recursive:true});
+    const before=await runtimeInventory(root);
+    const target=await prepareG09CacheMountpoint(root,appRoot);
+    assert.ok((await lstat(target)).isDirectory());
+    assert.deepEqual(await runtimeInventory(root),before);
+    await prepareG09CacheMountpoint(root,appRoot);
+    await assert.rejects(prepareG09CacheMountpoint(root,'../outside'));
+    await assert.rejects(prepareG09CacheMountpoint(root,'other/app'));
+    await rm(target,{recursive:true}); await symlink(os.tmpdir(),target);
+    await assert.rejects(prepareG09CacheMountpoint(root,appRoot));
+  } finally { await rm(root,{recursive:true,force:true}); }
 });
