@@ -87,8 +87,8 @@ export function AdminAccessView() {
       selected.delete(code);
       if (code.endsWith(".view")) {
         selected.delete(code.replace(/\.view$/, ".manage"));
-        if (code === "invoices.view") { selected.delete("invoices.refund"); selected.delete("external_refunds.view"); selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); }
-        if (code === "external_refunds.view") { selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); }
+        if (code === "invoices.view") { selected.delete("invoices.refund"); selected.delete("external_refunds.view"); selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); selected.delete("external_refunds.renewal_reverse"); }
+        if (code === "external_refunds.view") { selected.delete("external_refunds.create"); selected.delete("external_refunds.review"); selected.delete("external_refunds.renewal_reverse"); }
       }
     }
     setRoleForm({ ...roleForm, permissions: [...selected] });
