@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { G09_CAPACITY_PROFILE_FIXED } from './g09-capacity-contract.mjs';
-import { createG09CapacityController } from './g09-capacity-controller.mjs';
+import { createG09CapacityController, createG09CapacityControllerFromProjection } from './g09-capacity-controller.mjs';
+import { parseG09CapacityProjection } from './g09-capacity-projection.mjs';
 
 const profile = { ...G09_CAPACITY_PROFILE_FIXED, origin: 'http://127.0.0.1:58088' };
 const resources = () => ({
@@ -41,6 +42,29 @@ test('preflight projects only fixed resources and refuses execution by default',
   assert.equal(preflight.businessSuccessGenerated, false);
   await assert.rejects(controller.run({ runRoot: '/tmp/g09-controller-test' }), /g09_capacity_execution_disabled/);
   assert.deepEqual(calls, []);
+});
+
+test('Go projection JSON crosses the strict boundary before reaching the controller', () => {
+  const source = resources();
+  const parsed = parseG09CapacityProjection(JSON.stringify(source));
+  assert.equal(Object.isFrozen(parsed), true);
+  assert.deepEqual(parsed.customers[0], source.customers[0]);
+  const { controller } = fixture({});
+  const fromProjection = createG09CapacityControllerFromProjection({
+    profile, projection: JSON.stringify(source), lifecycle: controller ? { start: async () => {}, drain: async () => {}, stop: async () => {} } : undefined,
+    observer: { start: async () => {}, snapshot: async () => ({}), stop: async () => {} }, runner: async () => ({ ok: true }), perform: () => ({ status: 200 }),
+  });
+  assert.equal(fromProjection.preflight().resourceProjection.customers, 1000);
+});
+
+test('projection rejects status claims, credentials/database fields, malformed rows, IDs, ownership and amounts', () => {
+  const source = resources();
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, capacityVerified: true })), /g09_projection_status_true/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, database: 'postgres://secret' })), /g09_projection_sensitive_field/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, customers: source.customers.map((row, i) => i === 1 ? { ...row, id: 1 } : row) })), /g09_projection_customers_duplicate/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, services: source.services.map((row, i) => i === 0 ? { ...row, customerId: 999999 } : row) })), /g09_projection_service_owner/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, customers: source.customers.map((row, i) => i === 0 ? { ...row, balanceCents: -1 } : row) })), /g09_projection_customer_amount/);
+  assert.throws(() => parseG09CapacityProjection(JSON.stringify({ ...source, invoices: source.invoices.map((row, i) => i === 0 ? { ...row, extra: 1 } : row) })), /g09_projection_invoices_fields/);
 });
 
 test('explicit run composes start, existing load runner, observation, drain and stop', async () => {

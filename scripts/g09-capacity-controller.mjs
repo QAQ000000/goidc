@@ -2,25 +2,11 @@ import path from 'node:path';
 import { createG09CapacityAllocator } from './g09-capacity-allocator.mjs';
 import { validateG09CapacityProfile, g09CapacityLoadProfile } from './g09-capacity-contract.mjs';
 import { runG09Load, validateG09Profile } from './g09-load-lib.mjs';
+import { parseG09CapacityProjection } from './g09-capacity-projection.mjs';
 
 const fail = code => { throw new Error(code); };
-const ownKeys = value => Object.keys(value).sort();
-const requiredProjectionKeys = ['customers', 'invoices', 'services', 'supplierAccounts', 'unknownSupplierAccount'];
-
 function validateProjection(resources) {
-  if (!resources || typeof resources !== 'object' || Array.isArray(resources)) fail('g09_controller_projection_invalid');
-  if (ownKeys(resources).sort().join(',') !== requiredProjectionKeys.join(',')) fail('g09_controller_projection_shape_invalid');
-  if (!['customers', 'invoices', 'services', 'supplierAccounts'].every(key => Array.isArray(resources[key])) ||
-      !resources.unknownSupplierAccount || typeof resources.unknownSupplierAccount !== 'object' || Array.isArray(resources.unknownSupplierAccount)) fail('g09_controller_projection_invalid');
-  // The projection is the only resource boundary. It is copied by the allocator
-  // and never interpreted as a database handle or query source.
-  return Object.freeze({
-    customers: Object.freeze(resources.customers.map(row => Object.freeze({ ...row }))),
-    invoices: Object.freeze(resources.invoices.map(row => Object.freeze({ ...row }))),
-    services: Object.freeze(resources.services.map(row => Object.freeze({ ...row }))),
-    supplierAccounts: Object.freeze(resources.supplierAccounts.map(row => Object.freeze({ ...row }))),
-    unknownSupplierAccount: Object.freeze({ ...resources.unknownSupplierAccount }),
-  });
+  return parseG09CapacityProjection(resources);
 }
 
 function validateRunRoot(runRoot) {
@@ -49,11 +35,12 @@ function safeError(error) {
  * injected fixture lifecycle and observation adapters. This module owns no
  * database connection, process, listener, or resident service.
  */
-export function createG09CapacityController({ profile: profileInput, resources: resourcesInput, lifecycle, observer, runner = runG09Load, perform, record = () => {} } = {}) {
+export function createG09CapacityController({ profile: profileInput, resources: resourcesInput, projection, lifecycle, observer, runner = runG09Load, perform, record = () => {} } = {}) {
   const profile = validateG09CapacityProfile(profileInput);
   const loadProfile = g09CapacityLoadProfile(profile);
   validateG09Profile(loadProfile);
-  const resources = validateProjection(resourcesInput);
+  if (resourcesInput !== undefined && projection !== undefined) fail('g09_controller_projection_ambiguous');
+  const resources = validateProjection(projection ?? resourcesInput);
   const allocator = createG09CapacityAllocator({ profile, resources });
   if (typeof runner !== 'function') fail('g09_controller_runner_invalid');
   if (typeof record !== 'function') fail('g09_controller_record_invalid');
@@ -128,5 +115,9 @@ export function createG09CapacityController({ profile: profileInput, resources: 
   }
 
   return Object.freeze({ preflight, run, allocator });
+}
+
+export function createG09CapacityControllerFromProjection(options = {}) {
+  return createG09CapacityController({ ...options, projection: options.projection });
 }
 
