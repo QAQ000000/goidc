@@ -194,3 +194,41 @@ SMS实际送达关联查询`sms_delivery_evidence(outbox_id,attempts,locked_at,p
 4. 独立seed HTTP客户端完成大额准备和历史账单，保留测量executor现有白名单/金额/quantity限制；仅增加有界supplier pre-pay协调。最终联合候选、进程、HTTP、全量资金权益、600 drain和cleanup门槛，并明确全局背景与不可用资源指标。
 
 这四步是后续实现与分批验收顺序，当前仅第零步600来源前置实测通过，不把源码位置分析或本文规划计作运行证明。
+
+### G09 candidate bootstrap fixture 文件协议（仅接入实现，尚未实测）
+
+独立测试 `internal/store/g09_candidate_fixture_test.go::TestG09CandidateFixture` 不改旧
+release runtime fixture；只创建空的 `zjmfgo_test_<16hex>` schema，不迁移、不准备业务。
+显式环境为 `ZJMFGO_G09_CANDIDATE_FIXTURE=1`、
+`ZJMFGO_G09_CANDIDATE_FIXTURE_DIR`（绝对、无符号链接、当前fixture UID所有的空0700目录）、
+`ZJMFGO_TEST_DATABASE_URL`（127.0.0.1显式端口、专用`_test`库、无query override/options；仅允许sslmode disable/prefer）及
+`ZJMFGO_G09_CANDIDATE_BOOTSTRAP_CONFIG`（绝对0600私有文件、同UID）。bootstrap配置与控制目录分开，内容固定：
+
+```json
+{"runId":"g09-run-unique","bridgeDirectory":"/absolute/explicit/bridge","migrations":[{"version":"001_init.sql","checksum":"64 lowercase hex"}]}
+```
+
+migrations须是已封存候选manifest的完整有序迁移basename/sha256清单，不读当前源码迁移；
+bridgeDirectory只显式验证真实无链接目录，不改写连接URL。候选DATABASE_URL保留127.0.0.1和原端口，
+namespace控制器负责该TCP端口到宿主PG Unix socket的桥。宿主fixture及observer始终TCP直连，PG18实际身份必须为127.0.0.1。
+
+所有输出均0600，同fixture UID；临时0600文件写入、fsync、原子exclusive link发布、目录fsync，不覆盖已存在文件。
+`config.json`为`{version:"zjmfgo-runtime-config-v1",values:{DATABASE_URL,MFA_ENCRYPTION_KEY,PURCHASE_FIELD_ENCRYPTION_KEY,PROVISION_ENCRYPTION_KEY}}`，后三项本轮随机生成。
+它不加载`.env`，不提供额外环境继承权限；控制器仍用既有窄环境白名单。
+`schema-ready.json`为`{runId,ok:true,schema,database,pgVersion,applicationName}`，发出后候选自行执行bundled migrate。
+
+控制器原子发布0600同UID `command-N.json`，从1连续编号，内容严格为
+`{runId,sequence:N,action}`，拒绝重复/未知字段、错误runId/sequence、SQL、路径、URL和额外数据。
+白名单及次序：`ready`（只一次）、`verify-migrations`（ready后；可以重复验证）、`snapshot`（验证后只读）、
+`finish`（至少两次成功迁移验证后）或`abort`（随时）。`verify-migrations`逐项比较实际schema_migrations历史与冻结清单，
+固定清单JSON摘要，并通过严格PGObserver采样确认实际schema/search_path/PG18/TCP身份；重复检查保留observer的schema OID基线。
+bootstrap只有固定8分钟总预算，后续27分钟负载须另行独立实现，不能延长此入口冒充全量fixture。
+
+`result-N.json`为`{runId,sequence,action,ok,errorCode?}`；错误仅固定短码，不返回SQL/DSN/数据库原始错误。
+verify成功另有`migrationSHA256`（有序`[{version,checksum}]`紧凑JSON的SHA256）、`migrationCount`；
+snapshot成功另有`snapshot`（原PGObservation结构；只读，不修改业务）。任一错误结束bootstrap并进入清理。
+finish/abort必须先由控制器停止候选进程；fixture不杀进程、不扫描或终止共享连接。
+正常/异常退出均仅DROP本轮自己成功CREATE的精确schema，以新的独立宿主连接确认schema不存在后，才发布
+`done.json:{runId,schemaRemoved,ok}`；私有config随后移除。清理失败明确false并使测试失败，不能宣称清理完成。
+
+当前仅编译及不连接数据库的协议拒绝测试通过；此实现不证明候选迁移、namespace、PG联合运行或容量。
