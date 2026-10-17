@@ -32,10 +32,12 @@ Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排�
 
 ## 继续实现
 
-外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、完整负载的两个真实worker编排、SQL资金/权益全量核对、周期背景及PG/进程采样helper的联合接入，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
+易支付签名/重复回调事务已在源码API→Node小链通过，600来源、双真实worker、独立SQL/协议核对及两个正常minute周期亦已通过本批限定验收。仍缺Web/静态资源请求分配、完整1000/2000/10000历史基数、完整负载编排及其SQL资金/权益全量核对、整轮周期背景与PG/进程采样联合门槛，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器。单个scenario仍返回 `deliveryVerified=false` 和 `accountingVerified=false`，必须另接实际verifier，HTTP链成功不能自动变成开通、投递或对账证明。
 
 opt-in真实Go HTTP→Node小链已验证请求契约；后续先补完整fixture/controller，再固定干净候选执行小规模试跑和预先冻结的27分钟profile。source API试跑也不能代替最终候选容量验收。
 
 真实`cmd/worker`双进程小闭环已在`46b759b`实现。首次PG试跑退出1（47.779秒）：SMTP可选用户名省略后解析为`<nil>`，造成邮件发送失败、有限来源未全部成功；原FAIL保留于`source-worker-pg-smoke/`。`0792ffb`修正渠道缺省/null字符串并拒绝必填null，保持原SMTP安全校验；相同worker测试复验PASS（5.632秒），见`source-worker-fixed-pg-smoke/`：真实HTTP创建一个模拟开通任务和一组工单邮件/SMS，两个实际worker完成`succeeded/sent`，逐source/event/delivery/outbox的SQL事实、唯一余额/库存副作用及durable SMTP/SMS协议hash一致。TERM/Wait、schema回收和常驻PID/API/Web健康核对通过。不是600任务、正常minute tick稳定性、封存candidate或容量验收，G09保持开放。
 
 供应商source API→实际worker小链已在`1fc49a5`合入：后台真实创建账户/catalog/preview/import/publish、客户cart/checkout/pay产生create；worker完成后由管理员API产生独立sync，由同一实际worker完成。主线固定`6a7f727`四项race（含旧双worker通知小链）实际PASS无SKIP，HTTP13.243秒、vet退出0；供应商小链6.76秒，余额/库存/资源身份、两任务/审计、9条逐实体durable协议hash及TERM/Wait/schema均核对通过，见[供应商小链验收](g09-supplier-worker-smoke-20261017.md)。只证明1服务/2任务、loopback和源码Handler，不证明真实VM/双worker供应商并发/600任务/容量。
+
+当前组合截点 `2f32106`：72项Node、21个Go小包顶层race（PG opt-in明确启用）和7个HTTP顶层race（4来源小链+3组guard）全部PASS无SKIP；build/vet/diff退出0。易支付实际PG前证据固定82b99fe，两渠道/4签名通知/merchant请求0；600 run4用例243.64秒、来源24.672秒、双worker首次排空77.514秒及三边界/正常minute周期通过。此前600 run1–3 FAIL保留，2条23514保护ERROR未抹除；见[本批验收](g09-cohort-acceptance-20261017.md)。不是完整候选或容量证明，G09不关闭。

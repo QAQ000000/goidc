@@ -1,6 +1,6 @@
 # G09 逐来源 cohort sealer / verifier 增量
 
-状态：已实现独立 fixture-only Go 接口及纯 guard 测试；本增量未连接 PostgreSQL、运行 worker、迁移、部署或负载测试。完整600任务实PG证明由 source600 opt-in fixture 在独占授权槽中调用本接口完成，本文不把编译/纯测试称为数据库或容量验收。
+状态：独立fixture-only接口、纯guard及实际PG18桥接已通过。主线固定 `2f32106` 的source600入口在独占槽运行双真实worker，三个逐600边界及wrong-owner真实只读SQL负例通过；本接口使用RR+ReadOnly核对，未改业务状态。结果、原始投影与组合race见[600验收](g09-cohort-acceptance-20261017.md)。没有部署或完整候选/容量验收；初期独立分支只做纯测试的历史范围不扩大。
 
 `internal/g09fixture/cohort*.go` 提供：
 

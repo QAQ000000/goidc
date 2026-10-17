@@ -2,7 +2,7 @@
 
 本增量新增显式 `ZJMFGO_G09_COHORT_SMOKE=1` 的 `TestG09CohortSourceWorkerSmoke`。它是 source Handler + loopback 协议 fixture + 两个新构建 `cmd/worker` 的有限集成入口。它不代表 release candidate、普通用户 namespace、27 分钟混合负载或生产容量已通过，也不补造 1000 客户、2000 服务、10000 账单的完整 seed。
 
-本次开发验证仅执行无 DSN compile、纯来源守卫和本地 socket supplier 协议守卫；**未连接 PostgreSQL，也未运行 600-source PG 集成入口**。下列 PG 行为是测试实现的验收条件，仍须由主代理在独占 PostgreSQL 18 `_test` 槽执行后才能记为实测 PASS。
+当前状态：主代理固定 `2f32106` 的 `run4` 已在独占隔离 PG18 通过完整600来源、双真实worker、三边界独立对账及两个真实minute周期验收；用例243.64秒，未SKIP。此前run1–3失败均保留。结果与组合回归见[本批验收](g09-cohort-acceptance-20261017.md)。最初独立开发阶段只做无DSN守卫；以下条件已由本次实际入口验证，但不扩大为候选或容量证明。
 
 ## 来源与准备边界
 
@@ -58,22 +58,22 @@ scripts/go.sh test ./internal/httpapi \
 
 其中重型测试应明确 SKIP；guard 检查精确混合、缺漏/重复 ID、跨渠道 delivery ID、单账户预算、客户关联、accepted time，并经真实 compiled supplier adapter 对三资源完成 create/pay + 多次合法 sync，验证一账户三资源 oracle，完全不需要 PG。
 
-独占授权 PG 槽执行命令（本次开发**未执行**）：
+独占授权 PG 槽执行命令（主线run4已加 `-race` 实测）：
 
 ```sh
-ZJMFGO_G09_COHORT_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test ./internal/httpapi \
+ZJMFGO_G09_COHORT_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test -race ./internal/httpapi \
   -run '^TestG09CohortSourceWorkerSmoke$' -count=1 -timeout=20m -v
 ```
 
 DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库，不允许 options；worker 使用唯一精确 search_path。
 
-## 主线独立对账桥接（执行前）
+## 主线独立对账桥接
 
 已接入独立 `internal/g09fixture` immutable sealer/verifier 与只读 PGObserver：启动 worker 前必须逐600任务 pending、attempt0；首轮排空和跨两个真实 minute tick 并正常停 worker 后都须逐实体 PASS。排空期间每次采样结束后至少间隔2秒，记录实际 ObservedAt 与耗时，不能称严格固定频率采样。事务只读，不推进任务时间或生产调度。
 
 三个边界的600任务观察投影保留在测试日志；FlowID 原本关联 mutation key，公开时逐条 SHA256，其他公开字段仅实体ID、状态、时间与计数，无原始请求/凭据/地址。中间样本保留队列和明确可用性/null语义。最终只读负例仅改 manifest 的 invoice owner，必须在真实 purchase SQL 核验失败并永久 latch；不修改数据库事实。worker 的10分钟总预算同时检查循环起点、成功时和正常停机后，避免在超时边界靠先break而误过。
 
-上述桥接已经纯编译与守卫检查，独立同模型只读审查无阻断；600真实PG入口仍待主代理实测，不能据此记为数据库或容量通过。
+上述桥接在run4实际PG18执行中通过：sealed_pending/first_drained/final分别逐600任务PENDING/PASS/PASS，wrong-owner只读负例拒绝且FAIL latch。预检及结果经独立同模型复核；容量和候选仍未验证，见[最终验收](g09-cohort-acceptance-20261017.md)。
 
 ## 首轮实际 PG18 FAIL（保留）
 

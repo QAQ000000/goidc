@@ -1,8 +1,8 @@
 # G09 真实 API、真实 worker 容量夹具实施契约
 
-状态：完整600任务及候选controller仍为设计，未实现、未执行、未验收；已有小链及工具的实际进展另列下段。源码基线 `02706ad`；参考 `29e9d7c:docs/g09-capacity-drain-plan-20261017.md`，该计划文件不在本分支基线，不能声称已随基线存在。本轮只读源码及编写本文，不运行 PG、迁移、构建、负载或服务。本契约供后续实现独立 opt-in fixture 与 Node controller；下面新增动作名不是现存产品 API。
+当前状态：600任务独立opt-in来源、双真实worker、独立只读逐实体对账及正常两个minute周期已在固定 `2f32106` 的run4实际PG18通过，见[本批验收](g09-cohort-acceptance-20261017.md)。完整候选controller、历史基数与27分钟容量profile仍待实现执行。本契约最初是基线 `02706ad` 的只读设计，参考 `29e9d7c:docs/g09-capacity-drain-plan-20261017.md`；不能将后续实现追认为原设计时已存在。下面新增控制动作名仍不是产品API。
 
-后续实施：开环/业务场景/报告器、SMTP/SMS及魔方持久化协议sink、owned进程采样和2秒时窗、只读PG观察器已落地并通过组合专项；源码API→Node、两个真实cmd/worker通知/模拟开通小链及单worker魔方协议采购/同步小链已通过，精确边界见[工具增量](g09-tooling-increment-20261017.md)。本契约的完整600任务fixture、候选controller和容量实测仍未完成。
+后续实施：开环/业务场景/报告器、SMTP/SMS及魔方持久化协议sink、owned进程采样和2秒时窗、只读PG观察器已落地并通过组合专项；源码API→Node、两个真实cmd/worker通知/模拟开通小链及单worker魔方协议采购/同步小链已通过，精确边界见[工具增量](g09-tooling-increment-20261017.md)。600任务fixture已完成本轮限定验收，candidate/controller和容量实测仍未完成；易支付双渠道签名/重复通知小链亦已通过实际PG18，见[易支付专项](g09-epay-scenario-increment-20261017.md)，不访问商户checkout。
 
 ## 固定首轮口径
 
@@ -83,7 +83,7 @@ supplier `EnqueuePeriodicSupplierSyncs` 无独立enabled API：活跃服务每5�
 ```json
 {
  "schemaVersion":1,"runId":"...","sourceCommit":"...","apiOrigin":"http://127.0.0.1:PORT","publicOrigin":"http://localhost:WEBPORT",
- "database":{"schema":"g09_RANDOM","privateDsnRef":"db.env"},
+ "database":{"schema":"zjmfgo_test_<16hex>","privateDsnRef":"db.env"},
  "candidate":{"manifestPath":"ABS","sha256":"...","apiBinarySha256":"...","workerBinarySha256":"..."},
  "accounts":[{"id":1,"role":"customer","cookie":"PRIVATE","cohort":"normal","budgetCents":98000}],
  "resources":{"productIds":[],"supplierAccountIds":[],"serviceIds":[],"historyInvoiceIds":[],"payableInvoiceIds":[],"departments":[]},
@@ -170,7 +170,7 @@ SMS实际送达关联查询`sms_delivery_evidence(outbox_id,attempts,locked_at,p
 
 公开输出profile/候选摘要/requests.jsonl/队列与资源采样/逐实体invariants/协议计数/summary/cleanup/index；SQL query正文、DSN、cookies、密钥、手机号/邮箱不进公开日志。每2秒采样API/worker/Web/代理逐PID RSS/CPU/FD/IO和PG连接/锁/deadlock/WAL（不收query正文）；不能声称已有pprof/Prometheus。硬停止条件沿原计划：资金错账、死锁、越界网络/进程/schema、资源预算越线即停新写保留FAIL；不能清unknown挽救指标。
 
-实测前尚缺：新opt-in600任务fixture、冻结cohort manifest/快照协议、candidate普通用户namespace控制器、请求流分配器与协议实体关联、后台periodic cycle审计、固定全局背景阈值采样。现有API无批量建1000客户/改服务due/停止单类scheduler，seed和有限自动续费准备必须明确fixture-only；不是产品已有能力。本文件和负载库单测均不证明容量、真实通知收件、真实商户出款或正式HTTPS/生产SLO。
+完整profile前尚缺：candidate普通用户namespace控制器、完整seed和请求流分配、supplier动态登记与协议实体关联、整轮periodic cycle/固定全局背景门槛及PG/进程联合采样。600来源、冻结manifest/基线、双worker排空、跨两个真实minute tick及独立SQL/协议核对已通过run4，但尚未接入封存candidate。现有API无批量建1000客户/改服务due/停止单类scheduler，seed和有限自动续费准备必须明确fixture-only；不是产品已有能力。本文件和负载库单测均不证明容量、真实通知收件、真实商户出款或正式HTTPS/生产SLO。
 
 ## 候选 controller 接入前的实际边界
 
@@ -184,3 +184,13 @@ SMS实际送达关联查询`sms_delivery_evidence(outbox_id,attempts,locked_at,p
 - 本批CohortVerifier只允许baseline后新增冻结cohort付款。正常混合负载完全停写、在途结束后，600来源开始前重新采集完整baseline；不能把最初10000账单seed的baseline直接贯穿整轮。历史/测量期真实事实仍须单独全量对账，不能因为新baseline而不校验。
 
 建议职责保持为外层candidate/namespace预检与清理、内层阶段编排与真实HTTP、独立seed客户端、宿主只读SQL fixture、同namespace协议进程；最终验收必须把这些模块绑定同一干净源码/候选和固定profile，而不是以单个helper通过替代整体运行。
+
+
+### 下一增量的最小接入顺序（未实现）
+
+1. 独立 `accept-g09-capacity.mjs` 外层复用 `verifyRuntimeCandidate`、独立副本/宿主基线/namespace/预算清理工具，固定新的controller及fixture/helper完整import闭包摘要；不直接调用硬编码旧fixture/schema的runtime preflight。
+2. 独立内层沿用已验收namespace和受控候选环境，按manifest启动migrate/API/Web/Nginx/双worker。先以小批证明同候选迁移、健康、trace及有界退出，再接容量阶段。先验证strace daemon模式能同时保持被采应用直接PPID、trace审计和完整owned生命周期；不放宽sampler身份，也不把wrapper指标当应用。
+3. 宿主G09 SQL fixture经授权TCP维护精确 `zjmfgo_test_*` schema、baseline/observer/verifier；固定摘要的test-only helper在namespace内承载协议sink。控制文件只允许runId/严格sequence/typed有限action，不接SQL/任意路径/URL/信号。供应商checkout后、pay前实际ID核对及持久登记必须有ack，未知结果停止该链。
+4. 独立seed HTTP客户端完成大额准备和历史账单，保留测量executor现有白名单/金额/quantity限制；仅增加有界supplier pre-pay协调。最终联合候选、进程、HTTP、全量资金权益、600 drain和cleanup门槛，并明确全局背景与不可用资源指标。
+
+这四步是后续实现与分批验收顺序，当前仅第零步600来源前置实测通过，不把源码位置分析或本文规划计作运行证明。
