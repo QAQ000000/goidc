@@ -428,7 +428,7 @@ func (s *Server) contractWrite(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err == nil {
-				_, err = tx.Exec(r.Context(), "UPDATE contract_templates SET name=$2,content=$3,enabled=$4,version=version+1,updated_at=now() WHERE id=$1", id, in.Name, in.Content, *in.Enabled)
+				_, err = store.UpdateVersioned(r.Context(), tx, "contract_templates", `name=$1,content=$2,enabled=$3`, id, in.ExpectedVersion, in.Name, in.Content, *in.Enabled)
 			}
 		}
 		if err != nil {

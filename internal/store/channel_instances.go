@@ -315,11 +315,8 @@ func (s *Store) DeleteChannelInstance(ctx context.Context, actor int64, sessionH
 		return err
 	}
 	var version int64
-	if err = tx.QueryRow(ctx, "SELECT version FROM channel_instances WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+	if version, err = LockVersion(ctx, tx, "channel_instances", id, expected, "渠道配置已变更，请重新加载"); err != nil {
 		return err
-	}
-	if version != expected {
-		return conflict("version_conflict", "渠道配置已变更，请重新加载")
 	}
 	var referenced bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM email_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM sms_outbox WHERE channel_instance_id=$1)`, id).Scan(&referenced); err != nil {

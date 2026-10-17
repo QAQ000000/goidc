@@ -1,109 +1,36 @@
 "use client";
 
 import { CustomerCreditAccount, InvoiceCreditStatus, useCustomerCreditResource } from "./customer-credit";
-import { RenewalBenefitDetails,renewalBenefitLabel } from "./renewal-benefit";
-
+import { renewalBenefitLabel } from "./renewal-benefit";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Ban,
-  GitMerge,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  Wallet,
-} from "lucide-react";
-import { api, ApiError,date, money, type OptionSnapshot, type User } from "@/lib/api";
+import { ArrowLeft, GitMerge, RefreshCw, RotateCcw, Search, Wallet } from "lucide-react";
+import { api, ApiError, money, type User } from "@/lib/api";
 import { can } from "@/lib/admin-navigation";
 import { transactionReturnHref } from "@/lib/transaction-return";
 import { useResource } from "@/hooks/use-resource";
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
+import { ResourceTable, ResourcePagination, DetailFields } from "./resource-table";
+import { MutationDialog } from "./mutation-dialog";
 import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "./ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import { Failure, Loading, Status, cycles } from "./common";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Failure, Loading, Status } from "./common";
 import { Workspace, useAdminPermission } from "./workspace";
-import {
-  InvoiceCreateLink,
-  ManualInvoiceTools,
-  type ManualInvoiceRecord,
-} from "./manual-invoices";
-import {
-  OnlinePayment,
-  paymentLabels,
-  type PaymentRecord,
-} from "./online-payment";
+import { InvoiceCreateLink, ManualInvoiceTools, type ManualInvoiceRecord } from "./manual-invoices";
+import { OnlinePayment, paymentLabels, type PaymentRecord } from "./online-payment";
 import { TopupInvoiceActions, type TopupState } from "./topup-invoice-actions";
 import { ExternalRefunds } from "./external-refunds";
 import { PaymentClose } from "./payment-close";
 import { PaymentExceptionPanel } from "./payment-exception-panel";
 import { PaymentReconciliation } from "./payment-reconciliation";
-import { PurchaseFieldDetails } from "./purchase-fields";
 import { AdminStatusTabs } from "./admin-status-tabs";
-import type { PurchaseFieldSnapshot } from "@/lib/api";
+import { type OrderItem, type OrderRow, OrderItems, OrderCancel } from "./transaction-orders";
+import { time, OrderLink, ServiceLink } from "./transaction-links";
 
-type OrderItem = {
-  purchase_fields?: PurchaseFieldSnapshot[];
-  id: number;
-  product_name: string;
-  billing_cycle: string;
-  quantity: number;
-  price_cents: number;
-  setup_fee_cents: number;
-  total_cents: number;
-  config_options: number[];
-  config_snapshot: OptionSnapshot[];
-  renewal_discount_percent: number;
-  renewal_fixed_discount_cents: number;
-  renewal_discount_limit: number;
-  renewal_promo_code: string;
-};
-type Order = {
-  id: number;
-  order_no: string;
-  status: string;
-  review_status: string;
-  total_cents: number;
-  created_at: string;
-  invoice_id: number | null;
-  invoice_no?: string;
-  invoice_status: string | null;
-  discount_cents: number;
-  promo_code: string;
-  items: OrderItem[];
-  services: {
-    id: number;
-    name: string;
-    domain: string;
-    status: string;
-    next_due_at: string | null;
-  }[];
-};
 type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   topup?: TopupState;
   id: number;
@@ -154,16 +81,14 @@ type Invoice = Omit<ManualInvoiceRecord, "items"> & {
     created_at: string;
   }[];
 };
+
 type TransactionPage<T> = {
   items: T[];
   total: number;
   limit: number;
   offset: number;
 };
-type OrderRow = Pick<
-  Order,
-  "id" | "order_no" | "status" | "total_cents" | "created_at"
->;
+
 type InvoiceActionRow = Pick<
   Invoice,
   | "id"
@@ -179,6 +104,7 @@ type InvoiceActionRow = Pick<
  | "credit_payment"
   | "version"
 > & { payments?: PaymentRecord[]; invoice_kind?: string; topup?: TopupState; topup_status?: string; topup_pending_liability_cents?: number };
+
 type InvoiceRow = InvoiceActionRow &
   Pick<
     Invoice,
@@ -189,6 +115,7 @@ type InvoiceRow = InvoiceActionRow &
     | "customer_name"
     | "due_at"
   >;
+
 type MergeSelection = {
   invoice_id: number;
   expected_version: number;
@@ -197,6 +124,7 @@ type MergeSelection = {
   user_id: number;
   customer_name?: string;
 };
+
 const orderStates = {
   pending: "待支付",
   paid: "已支付",
@@ -204,21 +132,22 @@ const orderStates = {
   cancelled: "已取消",
   refunded: "已退款",
 };
+
 const invoiceStates = {
   unpaid: "待支付",
   paid: "已支付",
   cancelled: "已取消",
   refunded: "已退款",
 };
+
 const orderStatusValues = Object.keys(orderStates);
+
 const invoiceStatusValues = Object.keys(invoiceStates);
-function time(value: string | null | undefined) {
-  return value ? date(value) : "-";
-}
 
 export function CustomerOrdersView() {
   return <TransactionList kind="orders" />;
 }
+
 export function InvoiceListView({ admin = false }: { admin?: boolean }) {
   return <TransactionList kind="invoices" admin={admin} />;
 }
@@ -427,538 +356,175 @@ function TransactionList({
         <Loading />
       ) : (
         <>
-          <div className={`${admin ? "admin-list-surface data-surface" : "border rounded-md"} overflow-auto`}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {kind === "invoices" && admin && mergePermission && (
-                    <TableHead>
-                      <Checkbox
-                        aria-label="选择当前页可合并账单"
-                        checked={
-                          allPageSelected
-                            ? true
-                            : pageSelected.length > 0
-                              ? "indeterminate"
-                              : false
-                        }
-                        onCheckedChange={(value) => togglePage(value === true)}
-                      />
-                    </TableHead>
-                  )}
-                  <TableHead>
-                    {kind === "orders" ? "订单号" : "账单号"}
-                  </TableHead>
-                  {admin && <TableHead>客户</TableHead>}
-                  {kind === "invoices" && <TableHead>关联订单</TableHead>}
-                  <TableHead>金额</TableHead>
-                  <TableHead>
-                    {kind === "orders" ? "创建时间" : "到期时间"}
-                  </TableHead>
-                  <TableHead>状态</TableHead>
-                  <TableHead>操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.items.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={
-                        (admin ? 7 : kind === "invoices" ? 6 : 5) +
-                        (kind === "invoices" && admin && mergePermission
-                          ? 1
-                          : 0)
-                      }
-                      className="h-28 text-center text-muted-foreground"
-                    >
-                      暂无记录
-                    </TableCell>
-                  </TableRow>
-                )}
-                {data.items.map((row) =>
-                  "invoice_no" in row ? (
-                    <TableRow key={row.id}>
-                      {admin && mergePermission && (
-                        <TableCell>
-                          {row.invoice_kind === "manual" &&
-                            row.status === "unpaid" && (
-                              <Checkbox
-                                aria-label={`选择账单 ${row.invoice_no}`}
-                                checked={!!selected[row.id]}
-                                onCheckedChange={(value) =>
-                                  toggleInvoice(row, value === true)
-                                }
-                              />
-                            )}
-                        </TableCell>
+          <ResourceTable<OrderRow | InvoiceRow>
+            items={data.items}
+            rowKey={(row) => row.id}
+            className={`${admin ? "admin-list-surface data-surface" : "border rounded-md"} overflow-auto`}
+            headers={[
+              ...(kind === "invoices" && admin && mergePermission
+                ? [
+                    <Checkbox
+                      key="select"
+                      aria-label="选择当前页可合并账单"
+                      checked={allPageSelected ? true : pageSelected.length > 0 ? "indeterminate" : false}
+                      onCheckedChange={(value) => togglePage(value === true)}
+                    />,
+                  ]
+                : []),
+              kind === "orders" ? "订单号" : "账单号",
+              ...(admin ? ["客户"] : []),
+              ...(kind === "invoices" ? ["关联订单"] : []),
+              "金额",
+              kind === "orders" ? "创建时间" : "到期时间",
+              "状态",
+              "操作",
+            ]}
+            renderRow={(row) =>
+              "invoice_no" in row ? (
+                <>
+                  {admin && mergePermission && (
+                    <TableCell>
+                      {row.invoice_kind === "manual" && row.status === "unpaid" && (
+                        <Checkbox
+                          aria-label={`选择账单 ${row.invoice_no}`}
+                          checked={!!selected[row.id]}
+                          onCheckedChange={(value) => toggleInvoice(row, value === true)}
+                        />
                       )}
-                      <TableCell>
-                        <Link
-                          className="font-mono text-xs text-primary hover:underline break-all whitespace-normal"
-                          href={`${base}/invoices/${row.id}${suffix}`}
-                        >
-                          {row.invoice_no}
-                        </Link>
-                      </TableCell>
-                      {admin && <TableCell>{row.customer_name}</TableCell>}
-                      <TableCell>
-                        {row.order_id ? (
-                          <OrderLink
-                            admin={admin}
-                            id={row.order_id}
-                            label={row.order_no ?? `#${row.order_id}`}
-                          />
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
-                      <TableCell className="money">
-                        {money(row.amount_cents)}
-                      </TableCell>
-                      <TableCell>{time(row.due_at)}</TableCell>
-                      <TableCell>
-                        <Status value={row.status} />
-                      </TableCell>
-                      <TableCell>
-                        <InvoiceActions
-                          key={`${row.id}:${row.status}`}
-                          listSuffix={suffix}
-                          invoice={row}
-                          admin={admin}
-                          refresh={refresh}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    <TableRow key={row.id}>
-                      <TableCell>
-                        <Link
-                          className="font-mono text-xs text-primary hover:underline break-all whitespace-normal"
-                          href={`/console/orders/${row.id}`}
-                        >
-                          {row.order_no}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="money">
-                        {money(row.total_cents)}
-                      </TableCell>
-                      <TableCell>{time(row.created_at)}</TableCell>
-                      <TableCell>
-                        <Status value={row.status} />
-                      </TableCell>
-                      <TableCell>
-                        <OrderCancel
-                          key={`${row.id}:${row.status}`}
-                          order={row}
-                          refresh={refresh}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ),
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <Dialog
-            open={mergeOpen}
-            onOpenChange={(value) => {
-              if (!mergeBusy) setMergeOpen(value);
-            }}
-          >
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>合并人工账单</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground">
-                将生成一张新账单，原账单会作废并保留历史记录。
-              </p>
-              <div className="max-h-56 overflow-auto border rounded-md divide-y">
-                {selections.map((item) => (
-                  <div
-                    key={item.invoice_id}
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                  >
-                    <span className="font-mono break-all">
-                      {item.invoice_no}
-                    </span>
-                    <span className="money shrink-0">
-                      {money(item.amount_cents)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {!sameCustomer && (
-                <p role="alert" className="text-sm text-destructive">
-                  只能合并同一客户的账单。
-                </p>
-              )}
-              {selections.length > 20 && (
-                <p role="alert" className="text-sm text-destructive">
-                  最多合并 20 张账单。
-                </p>
-              )}
-              {mergeError && (
-                <p
-                  role="alert"
-                  className="text-sm text-destructive break-words"
-                >
-                  {mergeError}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  disabled={mergeBusy}
-                  onClick={() => setMergeOpen(false)}
-                >
-                  返回
-                </Button>
-                <Button
-                  disabled={mergeBusy || !mergeReady}
-                  onClick={() => void mergeInvoices()}
-                >
-                  <GitMerge />
-                  {mergeBusy ? "合并中" : "确认合并"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <div className="flex flex-wrap items-center justify-between gap-3 mt-5 text-sm">
-            {admin && <div className="flex flex-wrap items-center gap-3">{mergePermission && <Button variant="outline" size="sm" disabled={!mergeReady} onClick={() => { setMergeError(""); setMergeOpen(true); }}><GitMerge />合并账单{selections.length ? ` (${selections.length})` : ""}</Button>}<span className="text-xs text-muted-foreground">本页金额 <span className="money">{money(data.items.reduce((sum, item) => sum + ("amount_cents" in item ? item.amount_cents : item.total_cents), 0))}</span></span></div>}
-            <span>
-              {data.total} 个{kind === "orders" ? "订单" : "账单"}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setPage((v) => Math.max(0, v - 1))}
-              >
-                <ArrowLeft />
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                disabled={offset + 20 >= data.total}
-                onClick={() => setPage((v) => v + 1)}
-              >
-                下一页
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
-        </>
-      )}
-    </Workspace>
-  );
-}
-
-function useOrderLink(admin: boolean) {
-  const allowed = useAdminPermission("orders.view");
-  return !admin || allowed;
-}
-function OrderLink({
-  admin,
-  id,
-  label,
-}: {
-  admin: boolean;
-  id: number;
-  label: string;
-}) {
-  const allowed = useOrderLink(admin);
-  return allowed ? (
-    <Link
-      className="text-primary hover:underline break-all"
-      href={`${admin ? "/admin" : "/console"}/orders/${id}`}
-    >
-      {label}
-    </Link>
-  ) : (
-    <span className="break-all">{label}</span>
-  );
-}
-function ServiceLink({
-  admin,
-  id,
-  label,
-}: {
-  admin: boolean;
-  id: number;
-  label: string;
-}) {
-  const allowed = useAdminPermission("services.view");
-  return !admin || allowed ? (
-    <Link
-      className="text-primary hover:underline break-all"
-      href={`${admin ? "/admin" : "/console"}/services/${id}`}
-    >
-      {label}
-    </Link>
-  ) : (
-    <span>{label}</span>
-  );
-}
-
-function OrderItems({ items }: { items: OrderItem[] }) {
-  return (
-    <div className="overflow-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>产品与配置</TableHead>
-            <TableHead>周期价</TableHead>
-            <TableHead>初装费</TableHead>
-            <TableHead>数量</TableHead>
-            <TableHead>小计</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.length === 0 && (
-            <TableRow>
-              <TableCell
-                colSpan={5}
-                className="h-24 text-center text-muted-foreground"
-              >
-                暂无项目
-              </TableCell>
-            </TableRow>
-          )}
-          {items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell className="min-w-52 whitespace-normal">
-                <p className="font-medium break-all">{item.product_name}</p>
-                <PurchaseFieldDetails fields={item.purchase_fields}/>
-                <RenewalBenefitDetails terms={item}/>
-                <div className="text-xs text-muted-foreground space-y-1 mt-2">
-                  {(item.config_snapshot ?? []).map((choice) => (
-                    <p key={choice.id} className="break-all">
-                      {choice.group_name}：{choice.label}
-                      {(choice.quantity ?? 1) > 1
-                        ? ` × ${choice.quantity}`
-                        : ""}
-                    </p>
-                  ))}
-                  {!item.config_snapshot?.length &&
-                    item.config_options?.length > 0 && (
-                      <p>历史配置 #{item.config_options.join("、")}</p>
-                    )}
-                </div>
-              </TableCell>
-              <TableCell className="money">
-                {money(item.price_cents)} /{" "}
-                {cycles[item.billing_cycle] ?? item.billing_cycle}
-              </TableCell>
-              <TableCell className="money">
-                {money(item.setup_fee_cents)}
-              </TableCell>
-              <TableCell>{item.quantity}</TableCell>
-              <TableCell className="money">{money(item.total_cents)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function OrderCancel({
-  order,
-  refresh,
-}: {
-  order: Pick<Order, "id" | "order_no" | "status">;
-  refresh: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const key = useRef("");
-  if (order.status !== "pending") return null;
-  async function cancel() {
-    setBusy(true);
-    setError("");
-    if (!key.current)
-      key.current = `web-order-cancel-${order.id}-${crypto.randomUUID()}`;
-    try {
-      await api(`/orders/${order.id}/cancel`, {
-        method: "POST",
-        body: "{}",
-        headers: { "Idempotency-Key": key.current },
-      });
-      setOpen(false);
-      refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Ban />
-        取消订单
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(value) => {
-          if (!busy) setOpen(value);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>取消订单</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm break-all">{order.order_no}</p>
-          <p className="text-sm text-muted-foreground">
-            此订单的未付款账单将一并取消。
-          </p>
-          {error && (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setOpen(false)}
-            >
-              返回
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void cancel()}
-            >
-              <Ban />
-              确认取消
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
-export function CustomerOrderDetailView({ id }: { id: number }) {
-  const { data, error, refresh } = useResource<Order>(`/orders/${id}`, false);
-  return (
-    <Workspace title="订单详情">
-      <Button variant="ghost" className="mb-5" asChild>
-        <Link href="/console/orders">
-          <ArrowLeft />
-          返回订单列表
-        </Link>
-      </Button>
-      {error ? (
-        <Failure error={error} retry={refresh} />
-      ) : !data ? (
-        <Loading />
-      ) : (
-        <>
-          <div className="flex flex-wrap justify-between items-start gap-4 border-b pb-5">
-            <div className="min-w-0">
-              <h1 className="font-mono text-sm sm:text-xl font-semibold break-all">
-                {data.order_no}
-              </h1>
-              <p className="text-xs text-muted-foreground mt-2">
-                {time(data.created_at)}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              <Status
-                value={data.status === "pending" ? "unpaid" : data.status}
-              />
-              <Status value={data.review_status} />
-              <OrderCancel
-                key={`${data.id}:${data.status}`}
-                order={data}
-                refresh={refresh}
-              />
-            </div>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-6 py-6">
-            <div>
-              <p className="text-sm text-muted-foreground">订单金额</p>
-              <p className="text-2xl font-semibold mt-2 money">
-                {money(data.total_cents)}
-              </p>
-              {data.discount_cents > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  优惠 {money(data.discount_cents)}
-                  {data.promo_code ? ` · ${data.promo_code}` : ""}
-                </p>
-              )}
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">账单</p>
-              {data.invoice_id ? (
-                <div className="mt-2 space-y-2">
-                  <Link
-                    className="text-primary font-mono text-sm break-all hover:underline"
-                    href={`/console/invoices/${data.invoice_id}`}
-                  >
-                    {data.invoice_no}
-                  </Link>
-                  <div>
-                    <Status value={data.invoice_status ?? "unpaid"} />
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-2">-</p>
-              )}
-            </div>
-          </div>
-          <section className="border-y py-5">
-            <h2 className="font-semibold mb-3">订单项目</h2>
-            <OrderItems items={data.items} />
-          </section>
-          <section className="py-5">
-            <h2 className="font-semibold mb-3">关联服务</h2>
-            <div className="overflow-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>服务</TableHead>
-                    <TableHead>标识</TableHead>
-                    <TableHead>到期时间</TableHead>
-                    <TableHead>状态</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.services.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="h-24 text-center text-muted-foreground"
-                      >
-                        暂无服务
-                      </TableCell>
-                    </TableRow>
+                    </TableCell>
                   )}
-                  {data.services.map((service) => (
-                    <TableRow key={service.id}>
-                      <TableCell>
-                        <ServiceLink
-                          admin={false}
-                          id={service.id}
-                          label={service.name}
-                        />
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {service.domain}
-                      </TableCell>
-                      <TableCell>{time(service.next_due_at)}</TableCell>
-                      <TableCell>
-                        <Status value={service.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  <TableCell>
+                    <Link
+                      className="font-mono text-xs text-primary hover:underline break-all whitespace-normal"
+                      href={`${base}/invoices/${row.id}${suffix}`}
+                    >
+                      {row.invoice_no}
+                    </Link>
+                  </TableCell>
+                  {admin && <TableCell>{row.customer_name}</TableCell>}
+                  <TableCell>
+                    {row.order_id ? (
+                      <OrderLink admin={admin} id={row.order_id} label={row.order_no ?? `#${row.order_id}`} />
+                    ) : (
+                      "-"
+                    )}
+                  </TableCell>
+                  <TableCell className="money">{money(row.amount_cents)}</TableCell>
+                  <TableCell>{time(row.due_at)}</TableCell>
+                  <TableCell>
+                    <Status value={row.status} />
+                  </TableCell>
+                  <TableCell>
+                    <InvoiceActions
+                      key={`${row.id}:${row.status}`}
+                      listSuffix={suffix}
+                      invoice={row}
+                      admin={admin}
+                      refresh={refresh}
+                    />
+                  </TableCell>
+                </>
+              ) : (
+                <>
+                  <TableCell>
+                    <Link
+                      className="font-mono text-xs text-primary hover:underline break-all whitespace-normal"
+                      href={`/console/orders/${row.id}`}
+                    >
+                      {row.order_no}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="money">{money(row.total_cents)}</TableCell>
+                  <TableCell>{time(row.created_at)}</TableCell>
+                  <TableCell>
+                    <Status value={row.status} />
+                  </TableCell>
+                  <TableCell>
+                    <OrderCancel key={`${row.id}:${row.status}`} order={row} refresh={refresh} />
+                  </TableCell>
+                </>
+              )
+            }
+          />
+          <MutationDialog
+            open={mergeOpen}
+            busy={mergeBusy}
+            onClose={() => setMergeOpen(false)}
+            title={<>合并人工账单</>}
+            confirm={
+              <>
+                <GitMerge />
+                {mergeBusy ? "合并中" : "确认合并"}
+              </>
+            }
+            onConfirm={() => void mergeInvoices()}
+            confirmDisabled={mergeBusy || !mergeReady}
+          >
+            <p className="text-sm text-muted-foreground">将生成一张新账单，原账单会作废并保留历史记录。</p>
+            <div className="max-h-56 overflow-auto border rounded-md divide-y">
+              {selections.map((item) => (
+                <div
+                  key={item.invoice_id}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="font-mono break-all">{item.invoice_no}</span>
+                  <span className="money shrink-0">{money(item.amount_cents)}</span>
+                </div>
+              ))}
             </div>
-          </section>
+            {!sameCustomer && (
+              <p role="alert" className="text-sm text-destructive">
+                只能合并同一客户的账单。
+              </p>
+            )}
+            {selections.length > 20 && (
+              <p role="alert" className="text-sm text-destructive">
+                最多合并 20 张账单。
+              </p>
+            )}
+            {mergeError && (
+              <p role="alert" className="text-sm text-destructive break-words">
+                {mergeError}
+              </p>
+            )}
+          </MutationDialog>
+          <ResourcePagination
+            total={data.total}
+            offset={offset}
+            limit={20}
+            unit={kind === "orders" ? "订单" : "账单"}
+            onOffsetChange={(value) => setPage(value / 20)}
+          >
+            {admin && (
+              <div className="flex flex-wrap items-center gap-3">
+                {mergePermission && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!mergeReady}
+                    onClick={() => {
+                      setMergeError("");
+                      setMergeOpen(true);
+                    }}
+                  >
+                    <GitMerge />
+                    合并账单{selections.length ? ` (${selections.length})` : ""}
+                  </Button>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  本页金额{" "}
+                  <span className="money">
+                    {money(
+                      data.items.reduce(
+                        (sum, item) => sum + ("amount_cents" in item ? item.amount_cents : item.total_cents),
+                        0,
+                      ),
+                    )}
+                  </span>
+                </span>
+              </div>
+            )}
+          </ResourcePagination>
         </>
       )}
     </Workspace>
@@ -1092,39 +658,29 @@ function InvoiceActions({
               <RotateCcw />
               {invoice.credit_payment?"撤销信用债务":"退款至余额"}
             </Button>
-            <Dialog
+            <MutationDialog
               open={confirm}
-              onOpenChange={(value) => {
-                if (!busy) setConfirm(value);
-              }}
+              busy={busy}
+              onClose={() => setConfirm(false)}
+              title={<>{invoice.credit_payment ? "撤销信用债务（不增加余额）" : "退款至账户余额"}</>}
+              confirm={
+                <>
+                  <RotateCcw />
+                  确认退款
+                </>
+              }
+              onConfirm={() => void act("refund")}
+              confirmDisabled={busy}
             >
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{invoice.credit_payment?"撤销信用债务（不增加余额）":"退款至账户余额"}</DialogTitle>
-                </DialogHeader>
-                <p className="text-sm break-all">
-                  {invoice.invoice_no} · {money(invoice.amount_cents)}
+              <p className="text-sm break-all">
+                {invoice.invoice_no} · {money(invoice.amount_cents)}
+              </p>
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
                 </p>
-                {error && (
-                  <p role="alert" className="text-sm text-destructive">
-                    {error}
-                  </p>
-                )}
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => setConfirm(false)}
-                  >
-                    返回
-                  </Button>
-                  <Button disabled={busy} onClick={() => void act("refund")}>
-                    <RotateCcw />
-                    确认退款
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              )}
+            </MutationDialog>
           </>
         ) : (
           <>
@@ -1239,28 +795,18 @@ export function InvoiceDetailView({
                 </p>
               )}
             </div>
-            <div>
-              <p className="text-sm text-muted-foreground">到期时间</p>
-              <p className="mt-2 text-sm">{time(data.due_at)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">付款时间</p>
-              <p className="mt-2 text-sm">{time(data.paid_at)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">关联订单</p>
-              <div className="mt-2 text-sm">
-                {data.order_id ? (
-                  <OrderLink
-                    admin={admin}
-                    id={data.order_id}
-                    label={data.order_no ?? `#${data.order_id}`}
-                  />
+            <DetailFields
+              className="contents"
+              fields={{
+                到期时间: time(data.due_at),
+                付款时间: time(data.paid_at),
+                关联订单: data.order_id ? (
+                  <OrderLink admin={admin} id={data.order_id} label={data.order_no ?? `#${data.order_id}`} />
                 ) : (
                   "-"
-                )}
-              </div>
-            </div>
+                ),
+              }}
+            />
           </div>
           {admin && (
             <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "topup" ? "在线充值账单" : data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
@@ -1407,3 +953,5 @@ export function InvoiceDetailView({
     </Workspace>
   );
 }
+
+export { CustomerOrderDetailView } from "./transaction-orders";

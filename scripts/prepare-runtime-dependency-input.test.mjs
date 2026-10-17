@@ -26,7 +26,9 @@ async function fixture(t, behavior = 'ok') {
   const files = await inventory(npmRoot, { dependencies: true });
   await writeFile(nodeProvenance, JSON.stringify(n));
   await writeFile(npmProvenance, JSON.stringify({ format: 'zjmfgo-runtime-npm-provenance-v1', platform: 'linux/x64', nodeVersion: n.version, version: '11.13.0', source: 'unit fixture, not production provenance', inputTreeSHA256: sha256(JSON.stringify(files)), files }));
-  return { root, lock, source, revision: git('rev-parse', 'HEAD'), output: path.join(root, 'output'), node, nodeLicense, nodeProvenance, nodeProvenanceSHA256: await fileHash(nodeProvenance), npmRoot, npmCLI, npmProvenance, npmProvenanceSHA256: await fileHash(npmProvenance), registryURL: 'https://registry.npmjs.org', budget: { cacheBytes: 1024, outputBytes: 1024, reserveBytes: 1, maxPeakBytes: 1024 * 1024, maxSeconds: 5 } };
+  // Filesystem-wide reserve sampling also sees other parallel test fixtures.
+  // Keep the simulator budget above their transient writes; production guards stay unchanged.
+  return { root, lock, source, revision: git('rev-parse', 'HEAD'), output: path.join(root, 'output'), node, nodeLicense, nodeProvenance, nodeProvenanceSHA256: await fileHash(nodeProvenance), npmRoot, npmCLI, npmProvenance, npmProvenanceSHA256: await fileHash(npmProvenance), registryURL: 'https://registry.npmjs.org', budget: { cacheBytes: 1024, outputBytes: 1024, reserveBytes: 1, maxPeakBytes: GiB, maxSeconds: 5 } };
 }
 
 test('install budget and registry fail closed without echoing credential-bearing input', () => {

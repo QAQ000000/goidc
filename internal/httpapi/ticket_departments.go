@@ -91,13 +91,10 @@ func (s *Server) updateTicketDepartment(w http.ResponseWriter, r *http.Request) 
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
 		var err error
 		var version int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+		if version, err = store.LockVersion(r.Context(), tx, "ticket_departments", id, in.ExpectedVersion, "部门已变更，请重新加载"); err != nil {
 			return txResponse{}, err
 		}
-		if version != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "version_conflict", "部门已变更，请重新加载"}
-		}
-		if _, err = tx.Exec(r.Context(), "UPDATE ticket_departments SET name=$2,active=$3,sort_order=$4,customer_visible=coalesce($5,customer_visible),version=version+1,updated_at=now() WHERE id=$1", id, in.Name, *in.Active, in.SortOrder, in.CustomerVisible); err != nil {
+		if _, err = store.UpdateVersioned(r.Context(), tx, "ticket_departments", `name=$1,active=$2,sort_order=$3,customer_visible=coalesce($4,customer_visible)`, id, in.ExpectedVersion, in.Name, *in.Active, in.SortOrder, in.CustomerVisible); err != nil {
 			return txResponse{}, err
 		}
 		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.department.updated", "ticket_department", id, in); err != nil {
@@ -121,12 +118,8 @@ func (s *Server) deleteTicketDepartment(w http.ResponseWriter, r *http.Request) 
 	}
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
 		var err error
-		var version int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+		if _, err = store.LockVersion(r.Context(), tx, "ticket_departments", id, in.ExpectedVersion, "部门已变更，请重新加载"); err != nil {
 			return txResponse{}, err
-		}
-		if version != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "version_conflict", "部门已变更，请重新加载"}
 		}
 		var used bool
 		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM tickets WHERE department_id=$1) OR EXISTS(SELECT 1 FROM admin_ticket_departments WHERE department_id=$1)

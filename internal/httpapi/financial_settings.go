@@ -13,15 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func settingMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(key) < 8 || len(key) > 128 {
-		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "请提供长度为 8 到 128 的幂等键")
-		return "", false
-	}
-	return key, true
-}
-
 func settingMutationHash(v any) string {
 	raw, _ := json.Marshal(v)
 	sum := sha256.Sum256(raw)
@@ -87,7 +78,7 @@ func (s *Server) saveCurrency(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -150,7 +141,7 @@ func (s *Server) setCurrencyDefault(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_currency", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -204,7 +195,7 @@ func (s *Server) deleteCurrency(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_currency", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -362,7 +353,7 @@ func (s *Server) saveInvoiceShippingMethod(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -421,7 +412,7 @@ func (s *Server) deleteInvoiceShippingMethod(w http.ResponseWriter, r *http.Requ
 		writeError(w, 400, "invalid_shipping_method", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -438,12 +429,8 @@ func (s *Server) deleteInvoiceShippingMethod(w http.ResponseWriter, r *http.Requ
 
 			return txResponse{200, replay}, nil
 		}
-		var version int64
-		if err = tx.QueryRow(r.Context(), `SELECT version FROM invoice_shipping_methods WHERE id=$1 FOR UPDATE`, id).Scan(&version); err != nil {
+		if _, err = store.LockVersion(r.Context(), tx, "invoice_shipping_methods", id, in.ExpectedVersion, "快递方式已变更，请重新加载"); err != nil {
 			return txResponse{}, err
-		}
-		if version != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "version_conflict", "快递方式已变更，请重新加载"}
 		}
 		if _, err = tx.Exec(r.Context(), `DELETE FROM invoice_shipping_methods WHERE id=$1`, id); err != nil {
 			return txResponse{}, err

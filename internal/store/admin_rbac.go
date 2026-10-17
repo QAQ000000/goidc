@@ -213,14 +213,10 @@ func (s *Store) SaveAdminRole(ctx context.Context, actorID, id int64, in AdminRo
 		err = tx.QueryRow(ctx, "INSERT INTO admin_roles(name,description,active,permissions) VALUES($1,$2,$3,$4) RETURNING id", in.Name, in.Description, in.Active, in.Permissions).Scan(&id)
 	} else {
 		action = "admin_role.updated"
-		var version int64
-		if err = tx.QueryRow(ctx, "SELECT version FROM admin_roles WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+		if _, err = LockVersion(ctx, tx, "admin_roles", id, in.ExpectedVersion, "角色已变更，请重新加载"); err != nil {
 			return 0, err
 		}
-		if version != in.ExpectedVersion {
-			return 0, conflict("version_conflict", "角色已变更，请重新加载")
-		}
-		_, err = tx.Exec(ctx, "UPDATE admin_roles SET name=$2,description=$3,active=$4,permissions=$5,version=version+1,updated_at=now() WHERE id=$1", id, in.Name, in.Description, in.Active, in.Permissions)
+		_, err = UpdateVersioned(ctx, tx, "admin_roles", `name=$1,description=$2,active=$3,permissions=$4`, id, in.ExpectedVersion, in.Name, in.Description, in.Active, in.Permissions)
 	}
 	if err != nil {
 		return 0, err
@@ -237,12 +233,8 @@ func (s *Store) DeleteAdminRole(ctx context.Context, actorID, id, version int64)
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var current int64
-	if err = tx.QueryRow(ctx, "SELECT version FROM admin_roles WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+	if _, err = LockVersion(ctx, tx, "admin_roles", id, version, "角色已变更，请重新加载"); err != nil {
 		return err
-	}
-	if current != version {
-		return conflict("version_conflict", "角色已变更，请重新加载")
 	}
 	var assigned bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE admin_role_id=$1)", id).Scan(&assigned); err != nil {

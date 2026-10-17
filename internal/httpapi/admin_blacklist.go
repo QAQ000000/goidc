@@ -87,7 +87,7 @@ func (s *Server) saveBlacklist(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -158,7 +158,7 @@ func (s *Server) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_blacklist", "黑名单版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

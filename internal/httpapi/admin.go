@@ -224,7 +224,7 @@ func (s *Server) adminUpdateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "customer_version_required", "请提交当前客户资料版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -423,7 +423,7 @@ func (s *Server) adminCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_profile", "客户资料格式或长度无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

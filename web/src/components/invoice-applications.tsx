@@ -1,69 +1,27 @@
 "use client";
-import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 
+import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Ban,
-  FileCheck,
-  FileUp,
-  Pencil,
-  Plus,
-  Receipt,
-  Save,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, FileCheck, FileUp, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, date, money, upload } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
+import { ResourceTable, ResourcePagination, DetailFields } from "./resource-table";
+import { TableCell } from "./ui/table";
+import { MutationDialog } from "./mutation-dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Checkbox } from "./ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Failure, Loading } from "./common";
 import { Badge } from "./ui/badge";
 import { Workspace, useAdminPermission } from "./workspace";
+import { type Profile, type Address, clean, ProfileEditor, AddressEditor } from "./invoice-information-editors";
 
-type Profile = {
-  id: number;
-  profile_type: "individual" | "company";
-  title: string;
-  tax_number: string;
-  bank_name: string;
-  bank_account: string;
-  company_address: string;
-  phone: string;
-  version: number;
-};
-type Address = {
-  id: number;
-  recipient: string;
-  phone: string;
-  province: string;
-  city: string;
-  region: string;
-  address: string;
-  postcode: string;
-  is_default: boolean;
-  version: number;
-};
 type SourceInvoice = {
   id: number;
   invoice_no: string;
@@ -71,6 +29,7 @@ type SourceInvoice = {
   paid_at: string;
   invoice_kind: string;
 };
+
 type Application = {
   id: number;
   user_id: number;
@@ -115,12 +74,13 @@ type Application = {
     created_at: string;
   }[];
 };
+
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
+
 const statusLabel = { pending: "待审核", rejected: "已驳回", issued: "已开具" };
+
 const applicationStates = ["pending", "rejected", "issued"] as const;
-function clean(value: string) {
-  return value.trim();
-}
+
 function ApplicationStatus({ status }: { status: Application["status"] }) {
   return <Badge variant="outline">{statusLabel[status]}</Badge>;
 }
@@ -136,6 +96,7 @@ export function InvoiceApplicationListView({
     </Workspace>
   );
 }
+
 function ApplicationList({ admin }: { admin: boolean }) {
   const { status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(admin, applicationStates);
   const offset = page * 20;
@@ -195,368 +156,46 @@ function ApplicationList({ admin }: { admin: boolean }) {
         <Loading />
       ) : (
         <>
-          <div className="admin-list-surface data-surface overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="p-3">申请时间</th>
-                  {admin && <th className="p-3">客户</th>}
-                  <th className="p-3">抬头</th>
-                  <th className="p-3">金额</th>
-                  <th className="p-3">状态</th>
-                  <th className="p-3">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.items.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={admin ? 6 : 5}
-                      className="h-28 text-center text-muted-foreground"
-                    >
-                      暂无发票申请
-                    </td>
-                  </tr>
+          <ResourceTable
+            items={data.items}
+            rowKey={(item) => item.id}
+            empty="暂无发票申请"
+            headers={["申请时间", ...(admin ? ["客户"] : []), "抬头", "金额", "状态", "操作"]}
+            renderRow={(item) => (
+              <>
+                <TableCell className="p-3 whitespace-nowrap">{date(item.created_at)}</TableCell>
+                {admin && (
+                  <TableCell className="p-3">
+                    {item.customer_name}
+                    <br />
+                    <span className="text-xs text-muted-foreground">{item.customer_email}</span>
+                  </TableCell>
                 )}
-                {data.items.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="p-3 whitespace-nowrap">
-                      {date(item.created_at)}
-                    </td>
-                    {admin && (
-                      <td className="p-3">
-                        {item.customer_name}
-                        <br />
-                        <span className="text-xs text-muted-foreground">
-                          {item.customer_email}
-                        </span>
-                      </td>
-                    )}
-                    <td className="p-3">{item.title || "-"}</td>
-                    <td className="p-3 money">{money(item.amount_cents)}</td>
-                    <td className="p-3">
-                      <ApplicationStatus status={item.status} />
-                    </td>
-                    <td className="p-3">
-                      <Button variant="link" size="sm" asChild>
-                        <Link
-                          href={`${admin ? "/admin" : "/console"}/invoice-applications/${item.id}${suffix}`}
-                        >
-                          查看
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-4 flex flex-wrap justify-between gap-3 text-sm">
-            <span>{data.total} 个申请</span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={offset === 0}
-                onClick={() => setOffset(offset - 20)}
-              >
-                <ArrowLeft />
-                上一页
-              </Button>
-              <Button
-                variant="outline"
-                disabled={offset + 20 >= data.total}
-                onClick={() => setOffset(offset + 20)}
-              >
-                下一页
-                <ArrowRight />
-              </Button>
-            </div>
-          </div>
+                <TableCell className="p-3">{item.title || "-"}</TableCell>
+                <TableCell className="p-3 money">{money(item.amount_cents)}</TableCell>
+                <TableCell className="p-3">
+                  <ApplicationStatus status={item.status} />
+                </TableCell>
+                <TableCell className="p-3">
+                  <Button variant="link" size="sm" asChild>
+                    <Link href={`${admin ? "/admin" : "/console"}/invoice-applications/${item.id}${suffix}`}>
+                      查看
+                    </Link>
+                  </Button>
+                </TableCell>
+              </>
+            )}
+          />
+          <ResourcePagination
+            total={data.total}
+            offset={offset}
+            limit={20}
+            onOffsetChange={setOffset}
+            unit="申请"
+          />
         </>
       )}
     </>
-  );
-}
-
-function ProfileEditor({
-  profile,
-  onDone,
-}: {
-  profile?: Profile;
-  onDone: () => void;
-}) {
-  const [type, setType] = useState(profile?.profile_type ?? "individual");
-  const [title, setTitle] = useState(profile?.title ?? "");
-  const [tax, setTax] = useState(profile?.tax_number ?? "");
-  const [phone, setPhone] = useState(profile?.phone ?? "");
-  const [bankName, setBankName] = useState(profile?.bank_name ?? "");
-  const [bankAccount, setBankAccount] = useState(profile?.bank_account ?? "");
-  const [companyAddress, setCompanyAddress] = useState(
-    profile?.company_address ?? "",
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function save() {
-    setBusy(true);
-    setError("");
-    try {
-      await api(`/invoice-profiles${profile ? `/${profile.id}` : ""}`, {
-        method: profile ? "PUT" : "POST",
-        body: JSON.stringify({
-          profile_type: type,
-          title: clean(title),
-          tax_number: clean(tax),
-          phone: clean(phone),
-          bank_name: clean(bankName),
-          bank_account: clean(bankAccount),
-          company_address: clean(companyAddress),
-          expected_version: profile?.version ?? 0,
-        }),
-      });
-      onDone();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="grid sm:grid-cols-2 gap-3 border-b pb-5">
-      <div>
-        <Label>抬头类型</Label>
-        <Select
-          value={type}
-          onValueChange={(value) => setType(value as "individual" | "company")}
-          disabled={busy}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="individual">个人</SelectItem>
-            <SelectItem value="company">公司</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <Label htmlFor="invoice-title">发票抬头</Label>
-        <Input
-          id="invoice-title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      {type === "company" && (
-        <div>
-          <Label htmlFor="invoice-tax">税号</Label>
-          <Input
-            id="invoice-tax"
-            value={tax}
-            onChange={(e) => setTax(e.target.value)}
-            disabled={busy}
-          />
-        </div>
-      )}
-      <div>
-        <Label htmlFor="invoice-phone">联系电话</Label>
-        <Input
-          id="invoice-phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      {type === "company" && (
-        <>
-          <div>
-            <Label htmlFor="invoice-bank">开户行</Label>
-            <Input
-              id="invoice-bank"
-              maxLength={160}
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              disabled={busy}
-            />
-          </div>
-          <div>
-            <Label htmlFor="invoice-bank-account">银行账号</Label>
-            <Input
-              id="invoice-bank-account"
-              maxLength={120}
-              value={bankAccount}
-              onChange={(e) => setBankAccount(e.target.value)}
-              disabled={busy}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label htmlFor="invoice-company-address">公司地址</Label>
-            <Input
-              id="invoice-company-address"
-              maxLength={300}
-              value={companyAddress}
-              onChange={(e) => setCompanyAddress(e.target.value)}
-              disabled={busy}
-            />
-          </div>
-        </>
-      )}
-      <div className="sm:col-span-2 flex flex-wrap gap-2">
-        <Button
-          disabled={
-            busy || !clean(title) || (type === "company" && !clean(tax))
-          }
-          onClick={() => void save()}
-        >
-          <Save />
-          保存抬头
-        </Button>
-        {error && (
-          <p role="alert" className="text-sm text-destructive self-center">
-            {error}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AddressEditor({
-  address,
-  onDone,
-}: {
-  address?: Address;
-  onDone: () => void;
-}) {
-  const [recipient, setRecipient] = useState(address?.recipient ?? "");
-  const [phone, setPhone] = useState(address?.phone ?? "");
-  const [value, setValue] = useState(address?.address ?? "");
-  const [province, setProvince] = useState(address?.province ?? "");
-  const [city, setCity] = useState(address?.city ?? "");
-  const [region, setRegion] = useState(address?.region ?? "");
-  const [postcode, setPostcode] = useState(address?.postcode ?? "");
-  const [defaultValue, setDefaultValue] = useState(
-    address?.is_default ?? false,
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function save() {
-    setBusy(true);
-    setError("");
-    try {
-      await api(`/invoice-addresses${address ? `/${address.id}` : ""}`, {
-        method: address ? "PUT" : "POST",
-        body: JSON.stringify({
-          recipient: clean(recipient),
-          phone: clean(phone),
-          province: clean(province),
-          city: clean(city),
-          region: clean(region),
-          address: clean(value),
-          postcode: clean(postcode),
-          is_default: defaultValue,
-          expected_version: address?.version ?? 0,
-        }),
-      });
-      onDone();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="grid sm:grid-cols-2 gap-3">
-      <div>
-        <Label htmlFor="invoice-recipient">收件人</Label>
-        <Input
-          id="invoice-recipient"
-          value={recipient}
-          onChange={(e) => setRecipient(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div>
-        <Label htmlFor="invoice-address-phone">电话</Label>
-        <Input
-          id="invoice-address-phone"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div>
-        <Label htmlFor="invoice-province">省份</Label>
-        <Input
-          id="invoice-province"
-          maxLength={80}
-          value={province}
-          onChange={(e) => setProvince(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div>
-        <Label htmlFor="invoice-city">城市</Label>
-        <Input
-          id="invoice-city"
-          maxLength={80}
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div>
-        <Label htmlFor="invoice-region">区县</Label>
-        <Input
-          id="invoice-region"
-          maxLength={80}
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div>
-        <Label htmlFor="invoice-postcode">邮编</Label>
-        <Input
-          id="invoice-postcode"
-          maxLength={30}
-          value={postcode}
-          onChange={(e) => setPostcode(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <div className="sm:col-span-2">
-        <Label htmlFor="invoice-address">收货地址</Label>
-        <Textarea
-          id="invoice-address"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          disabled={busy}
-        />
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <Checkbox
-          checked={defaultValue}
-          onCheckedChange={(v) => setDefaultValue(v === true)}
-          disabled={busy}
-        />
-        设为默认地址
-      </label>
-      <div className="flex gap-2">
-        <Button
-          disabled={busy || !clean(recipient) || !clean(phone) || !clean(value)}
-          onClick={() => void save()}
-        >
-          <Save />
-          保存地址
-        </Button>
-        {error && (
-          <p role="alert" className="text-sm text-destructive self-center">
-            {error}
-          </p>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -776,43 +415,34 @@ export function InvoiceApplicationCreateView() {
             提交申请
           </Button>
         </div>
-        <Dialog
+        <MutationDialog
           open={confirm}
-          onOpenChange={(value) => {
-            if (!busy) setConfirm(value);
-          }}
+          busy={busy}
+          onClose={() => setConfirm(false)}
+          title={<>确认发票申请</>}
+          confirm={
+            <>
+              <FileCheck />
+              {busy ? "提交中" : "确认提交"}
+            </>
+          }
+          onConfirm={() => void submit()}
+          confirmDisabled={busy || !valid}
+          showCloseButton={!busy}
         >
-          <DialogContent showCloseButton={!busy}>
-            <DialogHeader>
-              <DialogTitle>确认发票申请</DialogTitle>
-            </DialogHeader>
-            <p className="text-sm break-all">
-              {profiles.data?.find((p) => String(p.id) === profileID)?.title}
+          <p className="text-sm break-all">
+            {profiles.data?.find((p) => String(p.id) === profileID)?.title}
+          </p>
+          <p className="text-sm break-all">
+            {addresses.data?.find((a) => String(a.id) === addressID)?.address}
+          </p>
+          <p className="text-lg font-semibold money">{money(total)}</p>
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
             </p>
-            <p className="text-sm break-all">
-              {addresses.data?.find((a) => String(a.id) === addressID)?.address}
-            </p>
-            <p className="text-lg font-semibold money">{money(total)}</p>
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <DialogFooter>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setConfirm(false)}
-              >
-                返回
-              </Button>
-              <Button disabled={busy || !valid} onClick={() => void submit()}>
-                <FileCheck />
-                {busy ? "提交中" : "确认提交"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          )}
+        </MutationDialog>
       </div>
     </Workspace>
   );
@@ -1032,41 +662,29 @@ export function InvoiceInformationView() {
               />
             </DialogContent>
           </Dialog>
-          <Dialog
+          <MutationDialog
             open={!!deleteRecord}
-            onOpenChange={(value) => {
-              if (!value && !deleting) setDeleteRecord(undefined);
-            }}
+            busy={deleting}
+            onClose={() => setDeleteRecord(undefined)}
+            title={<>删除开票资料</>}
+            confirm={
+              <>
+                <Trash2 />
+                确认删除
+              </>
+            }
+            onConfirm={() => void remove()}
+            confirmDisabled={deleting}
+            confirmVariant="destructive"
+            showCloseButton={!deleting}
           >
-            <DialogContent showCloseButton={!deleting}>
-              <DialogHeader>
-                <DialogTitle>删除开票资料</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm break-all">{deleteRecord?.label}</p>
-              {deleteError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {deleteError}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  disabled={deleting}
-                  onClick={() => setDeleteRecord(undefined)}
-                >
-                  返回
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={deleting}
-                  onClick={() => void remove()}
-                >
-                  <Trash2 />
-                  确认删除
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            <p className="text-sm break-all">{deleteRecord?.label}</p>
+            {deleteError && (
+              <p role="alert" className="text-sm text-destructive">
+                {deleteError}
+              </p>
+            )}
+          </MutationDialog>
         </div>
       )}
     </Workspace>
@@ -1086,6 +704,7 @@ export function InvoiceApplicationDetailView({
     </Workspace>
   );
 }
+
 function ApplicationDetailContent({
   id,
   admin = false,
@@ -1195,27 +814,17 @@ function ApplicationDetailContent({
           )}
           <section className="border-y py-4">
             <h2 className="font-semibold mb-3">发票抬头</h2>
-            <dl className="grid sm:grid-cols-2 gap-3 text-sm mb-6">
-              {Object.entries({
-                性质:
-                  data.profile_snapshot?.profile_type === "company"
-                    ? "公司"
-                    : "个人",
+            <DetailFields
+              className="grid sm:grid-cols-2 gap-3 text-sm mb-6"
+              fields={{
+                性质: data.profile_snapshot?.profile_type === "company" ? "公司" : "个人",
                 税号: data.profile_snapshot?.tax_number,
                 开户行: data.profile_snapshot?.bank_name,
                 银行账号: data.profile_snapshot?.bank_account,
                 公司地址: data.profile_snapshot?.company_address,
                 联系电话: data.profile_snapshot?.phone,
-              }).map(
-                ([label, value]) =>
-                  value && (
-                    <div className="min-w-0" key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="break-all">{value}</dd>
-                    </div>
-                  ),
-              )}
-            </dl>
+              }}
+            />
             <h2 className="font-semibold mb-3">收货信息</h2>
             <p className="text-sm break-all">
               {data.recipient || data.address_snapshot?.recipient} ·{" "}
@@ -1311,92 +920,107 @@ function ApplicationDetailContent({
               )}
             </section>
           )}
-          <Dialog
+          <MutationDialog
             open={!!reviewStatus}
-            onOpenChange={(value) => {
-              if (!value && !busy) setReviewStatus(null);
+            busy={busy}
+            onClose={() => setReviewStatus(null)}
+            title={<>{reviewStatus === "issued" ? "登记发票开具" : "驳回申请"}</>}
+            confirm={
+              <>
+                <FileCheck />
+                确认
+              </>
+            }
+            onConfirm={() => {
+              if (reviewStatus) void review(reviewStatus);
             }}
+            confirmDisabled={
+              busy ||
+              (!clean(document) && reviewStatus === "issued") ||
+              (!clean(note) && reviewStatus === "rejected")
+            }
+            showCloseButton={!busy}
           >
-            <DialogContent showCloseButton={!busy}>
-              <DialogHeader>
-                <DialogTitle>
-                  {reviewStatus === "issued" ? "登记发票开具" : "驳回申请"}
-                </DialogTitle>
-              </DialogHeader>
-              {reviewStatus === "issued" && (
-                <>
-                  <Label htmlFor="application-document">发票编号</Label>
-                  <Input
-                    id="application-document"
-                    maxLength={120}
-                    value={document}
-                    onChange={(e) => setDocument(e.target.value)}
-                    disabled={busy}
-                  />
-                  <Label htmlFor="application-carrier">快递公司</Label>
-                  <Input
-                    id="application-carrier"
-                    maxLength={120}
-                    value={carrier}
-                    onChange={(e) => setCarrier(e.target.value)}
-                    disabled={busy}
-                  />
-                  <Label htmlFor="application-tracking">快递单号</Label>
-                  <Input
-                    id="application-tracking"
-                    maxLength={160}
-                    value={tracking}
-                    onChange={(e) => setTracking(e.target.value)}
-                    disabled={busy}
-                  />
-                </>
-              )}
-              <Label htmlFor="application-note">
-                {reviewStatus === "rejected" ? "驳回原因" : "审核备注"}
-              </Label>
-              <Textarea
-                id="application-note"
-                maxLength={500}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={busy}
-              />
-              {reviewError && (
-                <p role="alert" className="text-sm text-destructive">
-                  {reviewError}
-                </p>
-              )}
-              <DialogFooter>
-                <Button
-                  variant="outline"
+            {reviewStatus === "issued" && (
+              <>
+                <Label htmlFor="application-document">发票编号</Label>
+                <Input
+                  id="application-document"
+                  maxLength={120}
+                  value={document}
+                  onChange={(e) => setDocument(e.target.value)}
                   disabled={busy}
-                  onClick={() => setReviewStatus(null)}
-                >
-                  返回
-                </Button>
-                <Button
-                  disabled={
-                    busy ||
-                    (!clean(document) && reviewStatus === "issued") ||
-                    (!clean(note) && reviewStatus === "rejected")
-                  }
-                  onClick={() => {
-                    if (reviewStatus) void review(reviewStatus);
-                  }}
-                >
-                  <FileCheck />
-                  确认
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={!!adjustmentAction} onOpenChange={(value) => { if (!value && !busy) setAdjustmentAction(null); }}>
-            <DialogContent showCloseButton={!busy}><DialogHeader><DialogTitle>{adjustmentAction === "void" ? "登记作废" : "登记红冲"}</DialogTitle></DialogHeader>
-              {adjustmentAction === "red" && <><Label htmlFor="adjustment-document">红字发票编号</Label><Input id="adjustment-document" maxLength={120} value={adjustmentDocument} onChange={(e) => setAdjustmentDocument(e.target.value)} disabled={busy} /></>}
-              <Label htmlFor="adjustment-note">登记原因</Label><Textarea id="adjustment-note" maxLength={500} value={adjustmentNote} onChange={(e) => setAdjustmentNote(e.target.value)} disabled={busy} />
-              <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setAdjustmentAction(null)}>返回</Button><Button disabled={busy || !clean(adjustmentNote) || (adjustmentAction === "red" && !clean(adjustmentDocument))} onClick={() => void adjust()}><FileCheck />确认</Button></DialogFooter>
-            </DialogContent>
-          </Dialog>
+                />
+                <Label htmlFor="application-carrier">快递公司</Label>
+                <Input
+                  id="application-carrier"
+                  maxLength={120}
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                  disabled={busy}
+                />
+                <Label htmlFor="application-tracking">快递单号</Label>
+                <Input
+                  id="application-tracking"
+                  maxLength={160}
+                  value={tracking}
+                  onChange={(e) => setTracking(e.target.value)}
+                  disabled={busy}
+                />
+              </>
+            )}
+            <Label htmlFor="application-note">{reviewStatus === "rejected" ? "驳回原因" : "审核备注"}</Label>
+            <Textarea
+              id="application-note"
+              maxLength={500}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              disabled={busy}
+            />
+            {reviewError && (
+              <p role="alert" className="text-sm text-destructive">
+                {reviewError}
+              </p>
+            )}
+          </MutationDialog>
+          <MutationDialog
+            open={!!adjustmentAction}
+            busy={busy}
+            onClose={() => setAdjustmentAction(null)}
+            title={<>{adjustmentAction === "void" ? "登记作废" : "登记红冲"}</>}
+            confirm={
+              <>
+                <FileCheck />
+                确认
+              </>
+            }
+            onConfirm={() => void adjust()}
+            confirmDisabled={
+              busy || !clean(adjustmentNote) || (adjustmentAction === "red" && !clean(adjustmentDocument))
+            }
+            showCloseButton={!busy}
+          >
+            {adjustmentAction === "red" && (
+              <>
+                <Label htmlFor="adjustment-document">红字发票编号</Label>
+                <Input
+                  id="adjustment-document"
+                  maxLength={120}
+                  value={adjustmentDocument}
+                  onChange={(e) => setAdjustmentDocument(e.target.value)}
+                  disabled={busy}
+                />
+              </>
+            )}
+            <Label htmlFor="adjustment-note">登记原因</Label>
+            <Textarea
+              id="adjustment-note"
+              maxLength={500}
+              value={adjustmentNote}
+              onChange={(e) => setAdjustmentNote(e.target.value)}
+              disabled={busy}
+            />
+          </MutationDialog>
           {reviewError && (
             <p role="alert" className="text-sm text-destructive">
               {reviewError}

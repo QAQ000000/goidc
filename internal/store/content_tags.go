@@ -42,7 +42,7 @@ func (s *Store) SaveContentTag(ctx context.Context, actorID, id int64, in Conten
 			return 0, conflict("content_type_immutable", "标签类型不能改变")
 		}
 		action = "content_tag.updated"
-		_, err = tx.Exec(ctx, "UPDATE content_tags SET name=$2,slug=$3,sort_order=$4,active=$5,version=version+1,updated_at=now() WHERE id=$1", id, in.Name, in.Slug, in.SortOrder, in.Active)
+		_, err = UpdateVersioned(ctx, tx, "content_tags", `name=$1,slug=$2,sort_order=$3,active=$4`, id, in.ExpectedVersion, in.Name, in.Slug, in.SortOrder, in.Active)
 	}
 	if err != nil {
 		return 0, err

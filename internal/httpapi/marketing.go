@@ -167,15 +167,6 @@ func marketingAudienceQuery(actor int64, a marketingAudience) (string, []any, er
 	return query, args, nil
 }
 
-func marketingIdempotencyKey(w http.ResponseWriter, r *http.Request) (string, bool) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(key) < 8 || len(key) > 128 {
-		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "请提供有效的幂等键")
-		return "", false
-	}
-	return key, true
-}
-
 func marketingHash(v any) (string, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -293,7 +284,7 @@ FROM marketing_campaigns c JOIN users u ON u.id=c.created_by WHERE c.id=$1`, id)
 }
 
 func (s *Server) createMarketingCampaign(w http.ResponseWriter, r *http.Request) {
-	key, ok := marketingIdempotencyKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -340,7 +331,7 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	key, ok := marketingIdempotencyKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -387,7 +378,7 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 			return txResponse{}, &txHTTPError{409, "version_conflict", "营销活动已被其他管理员修改，请刷新后重试"}
 		}
 		audience, _ := json.Marshal(in.Audience)
-		if _, err = tx.Exec(r.Context(), `UPDATE marketing_campaigns SET title=$2,mode=$3,channel=$4,subject=$5,body=$6,audience=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience); err != nil {
+		if _, err = store.UpdateVersioned(r.Context(), tx, "marketing_campaigns", `title=$1,mode=$2,channel=$3,subject=$4,body=$5,audience=$6`, id, in.ExpectedVersion, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience); err != nil {
 			return txResponse{}, err
 		}
 		result := map[string]any{"id": id, "status": "draft", "version": current + 1}
@@ -420,7 +411,7 @@ func (s *Server) sendMarketingCampaign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	key, ok := marketingIdempotencyKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

@@ -362,7 +362,7 @@ func (s *Server) createCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_customer_group", "客户分组字段无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -432,7 +432,7 @@ func (s *Server) updateCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "expected_version_required", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -495,7 +495,7 @@ func (s *Server) deleteCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "expected_version_required", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

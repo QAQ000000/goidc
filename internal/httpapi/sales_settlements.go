@@ -145,7 +145,7 @@ func (s *Server) salesSettlementWrite(w http.ResponseWriter, r *http.Request, cr
 	key := ""
 	if create {
 		var ok bool
-		key, ok = settingMutationKey(w, r)
+		key, ok = mutationKey(w, r, "", true)
 		if !ok {
 			return
 		}

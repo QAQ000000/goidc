@@ -24,13 +24,9 @@ func (s *Store) SaveServiceGroup(ctx context.Context, actor, id int64, in Servic
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
-	var version int64
 	if id != 0 {
-		if err = tx.QueryRow(ctx, "SELECT version FROM service_navigation_groups WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+		if _, err = LockVersion(ctx, tx, "service_navigation_groups", id, in.ExpectedVersion, "服务分组已变更，请重新加载"); err != nil {
 			return 0, err
-		}
-		if version != in.ExpectedVersion {
-			return 0, conflict("version_conflict", "服务分组已变更，请重新加载")
 		}
 	}
 	action := "service_group.created"
@@ -45,7 +41,7 @@ func (s *Store) SaveServiceGroup(ctx context.Context, actor, id int64, in Servic
 		err = tx.QueryRow(ctx, "INSERT INTO service_navigation_groups(name,icon,sort_order) VALUES($1,$2,$3) RETURNING id", in.Name, in.Icon, in.SortOrder).Scan(&id)
 	} else {
 		action = "service_group.updated"
-		_, err = tx.Exec(ctx, "UPDATE service_navigation_groups SET name=$2,icon=$3,sort_order=$4,version=version+1,updated_at=now() WHERE id=$1", id, in.Name, in.Icon, in.SortOrder)
+		_, err = UpdateVersioned(ctx, tx, "service_navigation_groups", `name=$1,icon=$2,sort_order=$3`, id, in.ExpectedVersion, in.Name, in.Icon, in.SortOrder)
 	}
 	if err != nil {
 		return 0, err
@@ -96,12 +92,8 @@ func (s *Store) DeleteServiceGroup(ctx context.Context, actor, id, version int64
 		return err
 	}
 	defer tx.Rollback(ctx)
-	var current int64
-	if err = tx.QueryRow(ctx, "SELECT version FROM service_navigation_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+	if _, err = LockVersion(ctx, tx, "service_navigation_groups", id, version, "服务分组已变更，请重新加载"); err != nil {
 		return err
-	}
-	if current != version {
-		return conflict("version_conflict", "服务分组已变更，请重新加载")
 	}
 	if target != nil {
 		var found int64

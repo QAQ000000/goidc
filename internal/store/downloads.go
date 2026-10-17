@@ -212,11 +212,8 @@ func (s *Store) SaveDownloadCategory(ctx context.Context, actorID, id int64, in 
 	if id == 0 {
 		err = tx.QueryRow(ctx, "INSERT INTO download_categories(name,description,sort_order,active,parent_id) VALUES($1,$2,$3,$4,$5) RETURNING id", in.Name, in.Description, in.SortOrder, in.Active, in.ParentID).Scan(&id)
 	} else {
-		if err = tx.QueryRow(ctx, "SELECT version FROM download_categories WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+		if current, err = LockVersion(ctx, tx, "download_categories", id, in.ExpectedVersion, "分类已变更，请重新加载"); err != nil {
 			return 0, err
-		}
-		if current != in.ExpectedVersion {
-			return 0, conflict("version_conflict", "分类已变更，请重新加载")
 		}
 		_, err = tx.Exec(ctx, "UPDATE download_categories SET name=$2,description=$3,sort_order=$4,active=$5,parent_id=$6,version=version+1,updated_at=now() WHERE id=$1", id, in.Name, in.Description, in.SortOrder, in.Active, in.ParentID)
 	}

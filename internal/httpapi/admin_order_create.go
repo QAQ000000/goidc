@@ -27,7 +27,7 @@ func (s *Server) createAdminOrder(w http.ResponseWriter, r *http.Request) {
 	if !decodeLimit(w, r, &in, 256<<10) {
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) createDeferredOrderInvoice(w http.ResponseWriter, r *http.Reque
 	if !decode(w, r, &in) {
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

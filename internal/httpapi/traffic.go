@@ -65,7 +65,7 @@ func (s *Server) trafficProducts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_traffic_product", "流量包名称、容量、价格、库存或版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -148,7 +148,7 @@ func (s *Server) trafficProducts(w http.ResponseWriter, r *http.Request) {
 		if err = ensureTrafficProductLinks(r, tx, in.ApplicableProductIDs); err != nil {
 			return txResponse{}, err
 		}
-		if _, err = tx.Exec(r.Context(), `UPDATE traffic_products SET name=$2,capacity_gb=$3,price_cents=$4,active=$5,stock=$6,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock); err != nil {
+		if _, err = store.UpdateVersioned(r.Context(), tx, "traffic_products", `name=$1,capacity_gb=$2,price_cents=$3,active=$4,stock=$5`, id, in.ExpectedVersion, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock); err != nil {
 			return txResponse{}, err
 		}
 		if err = replaceTrafficProductLinks(r, tx, id, in.ApplicableProductIDs); err != nil {
@@ -290,7 +290,7 @@ func (s *Server) cancelTrafficOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_traffic_order", "版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

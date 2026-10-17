@@ -5,29 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 )
-
-// Keys are optional for older clients; only keyed requests promise response-loss replay.
-func ticketPublicMutationKey(w http.ResponseWriter, r *http.Request, body string) (string, bool) {
-	header := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	body = strings.TrimSpace(body)
-	if header != "" && body != "" && header != body {
-		writeError(w, 400, "invalid_idempotency_key", "请求键不一致")
-		return "", false
-	}
-	if header != "" {
-		body = header
-	}
-	if body != "" && (len(body) < 8 || len(body) > 128) {
-		writeError(w, 400, "invalid_idempotency_key", "请求键长度必须为 8 到 128")
-		return "", false
-	}
-	return body, true
-}
 
 // true means the request has been answered (including database errors).
 func (s *Server) ticketReplay(w http.ResponseWriter, r *http.Request, tx pgx.Tx, key, operation, hash string, ticketID int64) bool {

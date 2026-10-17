@@ -63,7 +63,7 @@ func (s *Server) mutateGlobalConfiguration(w http.ResponseWriter, r *http.Reques
 	if !decodeLimit(w, r, &in, 1<<20) {
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

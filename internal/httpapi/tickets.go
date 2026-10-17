@@ -86,7 +86,7 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	key, ok := ticketPublicMutationKey(w, r, input.IdempotencyKey)
+	key, ok := mutationKey(w, r, input.IdempotencyKey, false)
 	if !ok {
 		return
 	}
@@ -798,7 +798,7 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 	if !decode(w, r, &input) {
 		return
 	}
-	key, ok := ticketPublicMutationKey(w, r, input.IdempotencyKey)
+	key, ok := mutationKey(w, r, input.IdempotencyKey, false)
 	if !ok {
 		return
 	}

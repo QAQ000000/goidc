@@ -42,7 +42,7 @@ func (s *Server) buyTrafficProduct(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_traffic_purchase", "流量包或版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -136,7 +136,7 @@ func (s *Server) verifyTrafficDelivery(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_traffic_delivery", "请确认已在资源端真实交付，并填写至少5字核验说明")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

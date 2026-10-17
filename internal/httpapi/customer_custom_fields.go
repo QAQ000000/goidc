@@ -186,7 +186,7 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.customerCustomFieldFailure(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -237,7 +237,7 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		s.customerCustomFieldFailure(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -275,7 +275,7 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		if version != in.ExpectedVersion {
 			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户自定义字段已变更，请刷新后重试"}
 		}
-		if _, err = tx.Exec(r.Context(), `UPDATE customer_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,validation_pattern=$6,choices=$7,sort_order=$8,admin_only=$9,required=$10,show_on_register=$11,active=$12,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active); err != nil {
+		if _, err = store.UpdateVersioned(r.Context(), tx, "customer_custom_fields", `field_key=$1,label=$2,field_type=$3,description=$4,validation_pattern=$5,choices=$6,sort_order=$7,admin_only=$8,required=$9,show_on_register=$10,active=$11`, id, in.ExpectedVersion, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active); err != nil {
 			return txResponse{}, err
 		}
 		result := map[string]any{"id": id, "version": version + 1}
@@ -305,7 +305,7 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid_customer_custom_field", "版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

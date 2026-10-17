@@ -18,7 +18,7 @@ type settingsUpdate struct {
 }
 
 func (s *Server) updateSingletonSettings(w http.ResponseWriter, r *http.Request, update settingsUpdate) {
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -73,14 +73,7 @@ func (s *Server) updateSingletonSettings(w http.ResponseWriter, r *http.Request,
 }
 
 func lockSettingsVersion(r *http.Request, tx pgx.Tx, entity string, expected int64, message string) (int64, error) {
-	var current int64
-	if err := tx.QueryRow(r.Context(), "SELECT version FROM "+pgx.Identifier{entity}.Sanitize()+" WHERE id=1 FOR UPDATE").Scan(&current); err != nil {
-		return 0, err
-	}
-	if current != expected {
-		return 0, &store.Conflict{Code: "version_conflict", Message: message}
-	}
-	return current, nil
+	return store.LockVersion(r.Context(), tx, entity, 1, expected, message)
 }
 
 func updateSettingsVersion(r *http.Request, tx pgx.Tx, entity string, expected int64, message, query string, args ...any) (int64, error) {

@@ -64,7 +64,7 @@ func (s *Server) createCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 		s.fail(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -110,7 +110,7 @@ func (s *Server) updateCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 		s.fail(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -138,7 +138,7 @@ func (s *Server) updateCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 		if current != in.ExpectedVersion {
 			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "商品分组已变更，请刷新后重试"}
 		}
-		if _, err = tx.Exec(r.Context(), "UPDATE customer_product_groups SET name=$2,version=version+1,updated_at=now() WHERE id=$1", id, in.Name); err != nil {
+		if _, err = store.UpdateVersioned(r.Context(), tx, "customer_product_groups", `name=$1`, id, in.ExpectedVersion, in.Name); err != nil {
 			return txResponse{}, err
 		}
 		if err = replaceCustomerProductGroupProducts(r, tx, id, in.ProductIDs); err != nil {
@@ -171,7 +171,7 @@ func (s *Server) deleteCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "expected_version_required", "请提供有效版本")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -301,7 +301,7 @@ func (s *Server) saveCustomerProductDiscount(w http.ResponseWriter, r *http.Requ
 		s.fail(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

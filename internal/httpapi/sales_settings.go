@@ -119,7 +119,7 @@ func (s *Server) saveSalesCommissionGroup(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -192,7 +192,7 @@ func (s *Server) deleteSalesCommissionGroup(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "invalid_sales_commission_group", "提成组版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -274,7 +274,7 @@ func (s *Server) saveSalesCommissionTier(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -345,7 +345,7 @@ func (s *Server) deleteSalesCommissionTier(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid_sales_commission_tier", "阶梯规则版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -415,7 +415,7 @@ func (s *Server) updateSalesStaff(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_sales_staff", "销售人员设置无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

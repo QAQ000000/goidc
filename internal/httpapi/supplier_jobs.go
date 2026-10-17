@@ -132,7 +132,7 @@ func (s *Server) retrySupplierJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_retry", "任务版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

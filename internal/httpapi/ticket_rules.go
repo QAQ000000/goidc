@@ -38,15 +38,6 @@ func saveTicketMutation(ctx context.Context, tx pgx.Tx, actor int64, key, hash s
 	return store.SaveOperation(ctx, tx, actor, "ticket", key, hash, result)
 }
 
-func ticketMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {
-	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
-	if len(key) < 8 || len(key) > 128 {
-		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "幂等键长度必须在 8 到 128 之间")
-		return "", false
-	}
-	return key, true
-}
-
 func (s *Server) ticketStatuses(w http.ResponseWriter, r *http.Request) {
 	limit, offset, ok := serviceActivityPagination(r)
 	if !ok {
@@ -66,7 +57,7 @@ func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -105,7 +96,7 @@ func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 			if builtin && in.Title != currentTitle {
 				return txResponse{}, &txHTTPError{409, "builtin_status", "默认状态不可重命名"}
 			}
-			_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
+			_, e = store.UpdateVersioned(r.Context(), tx, "ticket_statuses", `title=$1,sort_order=$2,active=coalesce($3,active)`, id, in.ExpectedVersion, in.Title, in.SortOrder, in.Active)
 			version++
 		}
 		if e != nil {
@@ -146,7 +137,7 @@ func (s *Server) saveTicketRule(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -211,7 +202,7 @@ func (s *Server) updateTicketStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_ticket_status", "状态资料或版本无效")
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -240,7 +231,7 @@ func (s *Server) updateTicketStatus(w http.ResponseWriter, r *http.Request) {
 		if builtin && in.Title != currentTitle {
 			return txResponse{}, &txHTTPError{http.StatusConflict, "builtin_status", "默认状态不可重命名"}
 		}
-		_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
+		_, e = store.UpdateVersioned(r.Context(), tx, "ticket_statuses", `title=$1,sort_order=$2,active=coalesce($3,active)`, id, in.ExpectedVersion, in.Title, in.SortOrder, in.Active)
 		if e != nil {
 			return txResponse{}, e
 		}
@@ -267,7 +258,7 @@ func (s *Server) deleteTicketStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_ticket_status", "版本无效")
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -326,7 +317,7 @@ func (s *Server) updateTicketRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_ticket_rule", "规则资料或版本无效")
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -383,7 +374,7 @@ func (s *Server) updateTicketRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "version_conflict", "规则已变更，请重新加载")
 		return
 	}
-	_, e = tx.Exec(r.Context(), `UPDATE ticket_delivery_rules SET department_id=$2,product_id=$3,blocked_keywords=$4,auto_reply=$5,active=coalesce($6,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.DepartmentID, in.ProductID, in.BlockedKeywords, in.AutoReply, in.Active)
+	_, e = store.UpdateVersioned(r.Context(), tx, "ticket_delivery_rules", `department_id=$1,product_id=$2,blocked_keywords=$3,auto_reply=$4,active=coalesce($5,active)`, id, in.ExpectedVersion, in.DepartmentID, in.ProductID, in.BlockedKeywords, in.AutoReply, in.Active)
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -415,7 +406,7 @@ func (s *Server) deleteTicketRule(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_ticket_rule", "版本无效")
 		return
 	}
-	key, ok := ticketMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -432,12 +423,8 @@ func (s *Server) deleteTicketRule(w http.ResponseWriter, r *http.Request) {
 
 			return txResponse{http.StatusOK, result}, nil
 		}
-		var v int64
-		if e = tx.QueryRow(r.Context(), `SELECT version FROM ticket_delivery_rules WHERE id=$1 FOR UPDATE`, id).Scan(&v); e != nil {
+		if _, e = store.LockVersion(r.Context(), tx, "ticket_delivery_rules", id, in.ExpectedVersion, "规则已变更，请重新加载"); e != nil {
 			return txResponse{}, e
-		}
-		if v != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "version_conflict", "规则已变更，请重新加载"}
 		}
 		if _, e = tx.Exec(r.Context(), `DELETE FROM ticket_delivery_rules WHERE id=$1`, id); e != nil {
 			return txResponse{}, e

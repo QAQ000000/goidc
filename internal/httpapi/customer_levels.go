@@ -85,7 +85,7 @@ func (s *Server) createCustomerLevel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer_level", "客户等级规则无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -129,7 +129,7 @@ func (s *Server) updateCustomerLevel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer_level", "客户等级规则或版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -157,7 +157,7 @@ func (s *Server) updateCustomerLevel(w http.ResponseWriter, r *http.Request) {
 		if version != in.ExpectedVersion {
 			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户等级已变更，请刷新后重试"}
 		}
-		_, err = tx.Exec(r.Context(), `UPDATE customer_levels SET name=$2,min_income_cents=$3,min_purchase_count=$4,min_login_count=$5,min_recent_login_count=$6,min_renewal_count=$7,min_recent_renewal_count=$8,sort_order=$9,active=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active)
+		_, err = store.UpdateVersioned(r.Context(), tx, "customer_levels", `name=$1,min_income_cents=$2,min_purchase_count=$3,min_login_count=$4,min_recent_login_count=$5,min_renewal_count=$6,min_recent_renewal_count=$7,sort_order=$8,active=$9`, id, in.ExpectedVersion, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active)
 		if err != nil {
 			return txResponse{}, err
 		}
@@ -188,7 +188,7 @@ func (s *Server) deleteCustomerLevel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_customer_level", "版本无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}

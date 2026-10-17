@@ -34,3 +34,11 @@
 普通两次查询的分页共用 `internal/httpapi/list_page.go`：调用方保留计数/列表 SQL、投影、筛选和排序，助手绑定分页参数并统一空数组及分页信封。调用方继续选择连接池或已有事务及隔离级别；已有单条 CTE/JSON 列表保持原查询。`TestListPageFiltersBindingEmptyPagesAndErrors` 覆盖筛选、参数绑定、越界页总数、空数组、类型化结果和查询失败。
 
 普通事务共用 `store.WithTx`（基于 `pgx.BeginFunc`），有返回值的 store 操作使用类型化封装；HTTP 的 `Server.withTx` 在提交成功后才发送成功响应，校验失败保持原状态码和错误码并回滚。提交后 Cookie、MFA 失败计数、流式响应及外部调用的分阶段事务继续显式管理。独立 PG18 用例 `TestWithTxCommitRollbackPanicAndDeferredFailure`、`TestHTTPWithTxWaitsForCommitAndPreservesValidationStatus` 验证回调错误、panic、取消及延迟约束导致的提交失败不会遗留写入或误报成功；完整回归使用 `REQUIRE_INTEGRATION=1 ./scripts/go.sh test -race ./... -count=1 -timeout 45m`，同时配置隔离测试 DSN。
+
+请求幂等键统一由 `mutationKey` 解析，必填接口继续要求 8–128 字节；公开工单保留可选请求体键，头/体冲突返回 400。`TestMutationKeyCompatibilityAndBounds` 覆盖旧客户端、空键、修剪及字节边界。
+
+客户端版本写入可用 `store.LockVersion` 保留原行锁与领域冲突提示，再调用 `store.UpdateVersioned` 执行原子 id/version 比较更新。表名和 SET 片段只能来自代码常量，值使用绑定参数；助手不承担权限、审计或回执。worker、批量状态推进和需要额外业务谓词的 SQL 保持显式。`TestVersionedCASConcurrencyBindingAndRollback` 验证并发仅一次成功、过期/缺失版本冲突、参数隔离和事务回滚。
+
+前端共用 `resource-table.tsx` 的表格、分页、详情字段及 `mutation-dialog.tsx` 的确认框；页面继续管理筛选 URL、授权、请求版本和重试键。`data-pages.tsx` 保留原导出入口，业务分别位于报表、订单、服务、账户和通用列表模块；订单展示及开票资料编辑也各自独立。`node --test scripts/resource-components.test.mjs` 验证实际组件的渲染和事件边界，不代表浏览器端到端验收。
+
+G09 来源 HTTP/易支付脚本共用 `g09-source-controller.mjs`，保留旧 CLI、证据文件名、结果字段、精确请求计数及未验证标记；私有清单统一拒绝符号链接、多硬链接和宽松权限。`node --test scripts/g09-source-controller.test.mjs` 验证文件边界，显式 `ZJMFGO_G09_SOURCE_API_SMOKE=1 ZJMFGO_G09_EPAY_SOURCE_SMOKE=1` 的 Go 回归验证真实来源处理链路。运行时验收仍由 `accept-g09-runtime.mjs` 控制、`g09-workload-report.mjs` 汇总；来源冒烟不能证明真实商户、worker 或生产容量。

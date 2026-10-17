@@ -38,7 +38,7 @@ func (s *Server) themeSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_theme_settings", "主题配置无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -53,11 +53,8 @@ func (s *Server) themeSettings(w http.ResponseWriter, r *http.Request) {
 			return txResponse{200, replay}, nil
 		}
 		var version int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM site_theme_settings WHERE id=1 FOR UPDATE").Scan(&version); err != nil {
+		if version, err = store.LockVersion(r.Context(), tx, "site_theme_settings", 1, in.ExpectedVersion, "主题配置已变更，请刷新后重试"); err != nil {
 			return txResponse{}, err
-		}
-		if version != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "version_conflict", "主题配置已变更，请刷新后重试"}
 		}
 		var out map[string]any
 		row, err := tx.Query(r.Context(), `UPDATE site_theme_settings SET template=$1,primary_color=$2,logo_variant=$3,footer_text=$4,version=version+1,updated_at=now() WHERE id=1 RETURNING template,primary_color,logo_variant,footer_text,version,updated_at`, in.Template, in.PrimaryColor, in.LogoVariant, in.FooterText)
@@ -114,7 +111,7 @@ func (s *Server) siteFields(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_site_field", "官网字段无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -159,7 +156,7 @@ func (s *Server) siteFields(w http.ResponseWriter, r *http.Request) {
 			err = tx.QueryRow(r.Context(), `INSERT INTO site_custom_fields(field_key,label,field_type,description,required,active,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder).Scan(&id)
 			result = map[string]any{"id": id, "version": 1}
 		} else {
-			_, err = tx.Exec(r.Context(), `UPDATE site_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,required=$6,active=$7,sort_order=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder)
+			_, err = store.UpdateVersioned(r.Context(), tx, "site_custom_fields", `field_key=$1,label=$2,field_type=$3,description=$4,required=$5,active=$6,sort_order=$7`, id, in.ExpectedVersion, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder)
 			result = map[string]any{"id": id, "version": version + 1}
 		}
 		if err != nil {
@@ -225,7 +222,7 @@ func (s *Server) siteNavigation(w http.ResponseWriter, r *http.Request) {
 	s.siteNavigationMutation(w, r, id, in)
 }
 func (s *Server) siteNavigationMutation(w http.ResponseWriter, r *http.Request, id int64, in siteNavWrite) {
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -270,7 +267,7 @@ func (s *Server) siteNavigationMutation(w http.ResponseWriter, r *http.Request, 
 			result["id"] = id
 			result["version"] = 1
 		} else {
-			_, err = tx.Exec(r.Context(), `UPDATE site_navigation_items SET parent_id=$2,label=$3,href=$4,icon=$5,sort_order=$6,open_new_tab=$7,active=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active)
+			_, err = store.UpdateVersioned(r.Context(), tx, "site_navigation_items", `parent_id=$1,label=$2,href=$3,icon=$4,sort_order=$5,open_new_tab=$6,active=$7`, id, in.ExpectedVersion, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active)
 			result["version"] = version + 1
 		}
 		if err != nil {
@@ -342,7 +339,7 @@ func (s *Server) friendlyLinks(w http.ResponseWriter, r *http.Request) {
 	s.friendlyLinkMutation(w, r, id, in)
 }
 func (s *Server) friendlyLinkMutation(w http.ResponseWriter, r *http.Request, id int64, in friendlyLinkWrite) {
-	key, ok := settingMutationKey(w, r)
+	key, ok := mutationKey(w, r, "", true)
 	if !ok {
 		return
 	}
@@ -387,7 +384,7 @@ func (s *Server) friendlyLinkMutation(w http.ResponseWriter, r *http.Request, id
 			result["id"] = id
 			result["version"] = 1
 		} else {
-			_, err = tx.Exec(r.Context(), `UPDATE friendly_links SET name=$2,url=$3,logo_url=$4,description=$5,sort_order=$6,active=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active)
+			_, err = store.UpdateVersioned(r.Context(), tx, "friendly_links", `name=$1,url=$2,logo_url=$3,description=$4,sort_order=$5,active=$6`, id, in.ExpectedVersion, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active)
 			result["version"] = version + 1
 		}
 		if err != nil {
