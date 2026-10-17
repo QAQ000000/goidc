@@ -3,7 +3,7 @@
 将旧 PHP IDC 财务系统重构为 Go API、Next.js/React/shadcn/ui 和 PostgreSQL 18。
 当前仍在开发及验收，不能直接替换旧 PHP 生产站点。
 
-[项目状态与导航](docs/reconstruction.md) · [当前差距](docs/replacement-gap-audit-20261017.md) · [测试说明](docs/testing.md) · [历史审计](docs/archive/README.md)
+[文档总入口](docs/INDEX.md) · [工程治理](docs/architecture/engineering-governance.md) · [项目状态](docs/reconstruction.md) · [当前差距](docs/replacement-gap-audit.md) · [测试说明](docs/testing.md) · [历史审计](docs/archive/README.md)
 
 ## 结构
 
@@ -66,14 +66,14 @@ npm --prefix web run test:proxy
 
 禁止在正在运行的 Web 目录构建：`prebuild` 会检查同目录 Next 进程，不得绕过。
 候选应在独立 checkout/worktree 使用独立 `.next` 构建；不要对运行实例共享的依赖执行 `npm ci`。
-[候选构建器](docs/release-candidate-builder-20261017.md)支持同提交的 API/worker/migrate、SQL 摘要和 Web 产物封存；构建不等于部署。
+[候选构建器](docs/release-candidate-builder.md)支持同提交的 API/worker/migrate、SQL 摘要和 Web 产物封存；构建不等于部署。
 
 ## 领域契约
 
 - 商品与交易：[目录](docs/catalog-management.md)、[配置](docs/product-configuration.md)、[购买资料](docs/product-purchase-fields.md)、[订单账单](docs/transactions.md)。
 - 资金与服务：[支付](docs/payments.md)、[支付操作手册](docs/payment-operations-runbook.md)、[配置变更](docs/service-configuration-changes.md)、[商品变更](docs/service-product-changes.md)。
 - 集成与权限：[模块扩展](docs/compiled-module-architecture.md)、[供应商协议](docs/supplier-protocol.md)、[NOKVM](docs/nokvm-delivery.md)、[RBAC](docs/admin-rbac.md)。
-- 数据与发布：[旧数据迁移](docs/legacy-migration.md)、[正式发布边界](docs/release-readiness-next-contract-20261017.md)、[封存索引及恢复方法](docs/archive/README.md)。
+- 数据与发布：[旧数据迁移](docs/legacy-migration.md)、[正式发布边界](docs/release-readiness-next-contract.md)、[封存索引及恢复方法](docs/archive/README.md)。
 
 旧 MySQL 盘点使用 `cmd/legacy-audit`；`cmd/legacy-import` 默认只读预检，明确 `--mode apply` 才写目标库。
 旧接口能力覆盖不等于旧 URL/payload 兼容。运行产物写入忽略的 `output/`，活动文档维护当前契约，历史批次日志和原始证据集中封存。

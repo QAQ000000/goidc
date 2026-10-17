@@ -1,21 +1,14 @@
 # 历史审计与未接通工具封存
 
-封存基线：`65af830`，2026-10-17。此包保存精简前全部 docs 原始字节，以及下列未接通的 G09 准备代码；不是新的验收结论。活动文档和测试以 [项目入口](../reconstruction.md)、[测试说明](../testing.md)及[容量验证](../capacity.md)为准。
+封存基线：`65af830`，2026-10-17。此索引承接精简前的 docs 路径和未接通的 G09 准备代码；它不是新的验收结论。活动文档和测试以 [项目入口](../reconstruction.md)、[测试说明](../testing.md)及[容量验证](../capacity.md)为准。
 
-原始路径、逐文件 SHA-256 见 [MEMBERS.sha256](MEMBERS.sha256)。压缩包校验：
+历史压缩包和逐文件校验清单已从工作树移出，避免把二进制与机器转储注入活动知识库。需要恢复原始内容时，优先使用 Git 提交 `65af830`：
 
 ```bash
-# 在仓库根目录执行
-sha256sum -c docs/archive/SHA256SUMS
-# 查看某份原文，不写工作目录
-tar -xOzf docs/archive/maintenance-20261017.tar.gz docs/reconstruction.md
-# 在独立目录恢复全部原始文件，再核验逐文件摘要
-restore_dir="$(mktemp -d /tmp/goidc-audit-restore.XXXXXXXX)"
-tar -xzf docs/archive/maintenance-20261017.tar.gz -C "$restore_dir"
-(cd "$restore_dir" && sha256sum -c /www/wwwroot/goidc/docs/archive/MEMBERS.sha256)
+git archive 65af830 -- docs internal/g09fixture scripts/g09-* > /tmp/goidc-archive.tar
 ```
 
-历史文档的相对链接、截图和外部日志引用保持原样；解包不保证仓库外证据仍存在，也不把历史 PASS 当成当前通过。需要恢复某项开发时，在独立目录提取对应成员并重新核对当前接口和迁移。不要直接覆盖当前源码。
+本机旧压缩包若仍存在于 `output/docs-archive/`，只作为未跟踪恢复材料，不是发布输入。历史文档的相对链接、截图和外部日志引用保持原样；恢复不保证仓库外证据仍存在，也不把历史 PASS 当成当前通过。需要恢复某项开发时，在独立目录提取对应成员并重新核对当前接口和迁移。不要直接覆盖当前源码。
 
 以下索引承接原活动文档中的历史链接。原来的章节片段保留在包内原文。
 

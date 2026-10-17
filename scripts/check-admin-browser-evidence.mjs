@@ -52,7 +52,7 @@ export async function checkEvidence({ manifest, root = process.cwd() }) {
 }
 
 async function main(args) {
-  let manifestPath = 'docs/admin-restore-browser-evidence.json';
+  let manifestPath = process.env.GOIDC_BROWSER_EVIDENCE ?? 'output/audit-inputs/admin-restore-browser-evidence.json';
   let root = process.cwd();
   let strict = false;
   let strictUnacknowledged = false;

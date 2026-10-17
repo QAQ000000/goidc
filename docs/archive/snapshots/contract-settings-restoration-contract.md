@@ -1,12 +1,12 @@
 # 合同设置下一批契约
 
-状态：本批实现与隔离验收已完成，见[验收](contract-settings-restoration-acceptance-20261016.md)；旧合同域差异仍待补齐。起点 `826878e`。本契约仅涉及旧规范 #38 的合同设置及模板管理；现有合同生命周期保留。
+状态：本批实现与隔离验收已完成，见[验收](contract-settings-restoration-acceptance.md)；旧合同域差异仍待补齐。起点 `826878e`。本契约仅涉及旧规范 #38 的合同设置及模板管理；现有合同生命周期保留。
 
 ## 已有能力与实际缺口
 
 旧规范 `/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md:806` 明确总开关、系统/模板页签和保存取消。当前 `web/src/components/financial-settings.tsx` 已有这些控件及URL恢复；开关接口在 `internal/httpapi/financial_settings.go` 已具备版本、幂等、事务权限和审计。`contracts.tsx` 已有模板创建、编辑、启停、固定25条分页、纯文本及有限变量，不应重复重写。
 
-`132_contract_lifecycle.sql` 和 `internal/httpapi/contracts.go` 已有合同实体、冻结正文与提供方/客户/服务快照、生成/签署等生命周期。不能沿用早期“没有合同领域表/接口”的断言。现有验收见[历史记录](admin-contract-lifecycle-acceptance-20261012.md)，未覆盖全部设置组合、模板弹窗和真实多页操作。
+`132_contract_lifecycle.sql` 和 `internal/httpapi/contracts.go` 已有合同实体、冻结正文与提供方/客户/服务快照、生成/签署等生命周期。不能沿用早期“没有合同领域表/接口”的断言。现有验收见[历史记录](../../admin-contract-lifecycle-acceptance.md)，未覆盖全部设置组合、模板弹窗和真实多页操作。
 
 本批缺口：模板分支没有关键词/启停过滤和页大小；列表items/total需要一致快照；设置/模板409只有重新加载提示，没有原位保留草稿并明确替换最新；未知结果恢复必须核对原body/path/key；存储键含身份但内存draft/dirty/pending没有按身份重挂载，需补隔离和撤权行为。
 

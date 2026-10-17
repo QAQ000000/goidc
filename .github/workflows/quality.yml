@@ -1,0 +1,64 @@
+name: quality
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  static-quality:
+    name: Static quality and contract gates
+    runs-on: ubuntu-latest
+    env:
+      DOC_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'HEAD^' }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Check changed files
+        run: git diff --check "$DOC_BASE...$GITHUB_SHA"
+
+      - name: Check documentation governance and links
+        run: |
+          node scripts/check-doc-governance.mjs --diff-base "$DOC_BASE"
+          node scripts/check-doc-links.mjs
+
+      - name: Check contract gate manifest
+        run: node scripts/check-contract-gates.mjs
+
+      - name: Run governance tool tests
+        run: node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
+
+      - name: Run Node regression
+        run: node --test scripts/*.test.mjs
+
+      - name: Check Go toolchain and compile tests
+        run: |
+          ./scripts/check-go-toolchain.sh
+          ./scripts/go.sh test ./... -run '^$'
+
+      - name: Install web dependencies
+        run: npm ci --prefix web
+
+      - name: Check web
+        run: |
+          npm --prefix web run lint
+          npm --prefix web run typecheck
+          npm --prefix web run test:proxy

@@ -26,7 +26,7 @@
 
 使用 Playwright 技能CLI和系统Chrome，独立Next3099代理隔离真实Go API，没有worker或外部供应商/支付/通知调用。最终操作通过：模板创建及多行正文、后台生成、客户确认提交及独立申请、后台审核通过、邮寄信息登记、批量作废。模板正文含script字样按文字显示，HTTP专项另断言下载HTML转义。
 
-后台列表、系统设置、模板页签各1440/1024/390/320加载检查PASS，未发现页面横向溢出、pageerror、console error或API失败；客户页四尺寸无溢出。邮寄弹窗四尺寸可滚动到确认操作，抽查320截图可读。后台加载证据及SHA256已写 `admin-restore-browser-evidence.json`，日志/截图在gitignored `output/playwright/admin-contracts-20261012/`。
+后台列表、系统设置、模板页签各1440/1024/390/320加载检查PASS，未发现页面横向溢出、pageerror、console error或API失败；客户页四尺寸无溢出。邮寄弹窗四尺寸可滚动到确认操作，抽查320截图可读。后台加载证据及SHA256已写 `output/audit-inputs/admin-restore-browser-evidence.json`，日志/截图在gitignored `output/playwright/admin-contracts-20261012/`。
 
 模板并发修改后保存真实409，保留输入。无结果筛选真实空态，刷新恢复URL。列表503注入后刷新恢复。第二合同作废先真实写入再返回502，输入与取消禁用；刷新后以完全相同请求体和幂等键重放，两行均作废。第一合同SQL核实1条作废回执/1条审计；第二合同原请求和重放一致的证据在unknown-start/unknown-retry日志。HTTP专项验证批量幂等与审计数量。
 

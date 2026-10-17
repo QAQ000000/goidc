@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "contracts": [
+    {
+      "id": "payments",
+      "contract": "docs/payments.md",
+      "implementation": ["internal/payment", "internal/store"],
+      "tests": ["./scripts/go.sh test ./... -run 'Payment|MutationOperation'"],
+      "evaluation": [],
+      "review": {"required": true, "owners": ["payment", "store"]},
+      "releaseEvidence": {"required": true, "kind": "isolated-pg-and-external-channel"}
+    },
+    {
+      "id": "transactions",
+      "contract": "docs/transactions.md",
+      "implementation": ["internal/store", "internal/httpapi"],
+      "tests": ["./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'"],
+      "evaluation": [],
+      "review": {"required": true, "owners": ["store", "httpapi"]},
+      "releaseEvidence": {"required": true, "kind": "isolated-pg"}
+    },
+    {
+      "id": "admin-rbac",
+      "contract": "docs/admin-rbac.md",
+      "implementation": ["internal/httpapi", "internal/store", "web/src/app/admin"],
+      "tests": ["./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'", "node scripts/admin-page-contracts.mjs"],
+      "evaluation": ["browser acceptance with an isolated test account"],
+      "review": {"required": true, "owners": ["httpapi", "web"]},
+      "releaseEvidence": {"required": true, "kind": "api-and-browser"}
+    },
+    {
+      "id": "provider-nokvm",
+      "contract": "docs/nokvm-delivery.md",
+      "implementation": ["internal/provision", "internal/supplier"],
+      "tests": ["./scripts/go.sh test ./... -run 'NOKVM|Supplier|Provision'"],
+      "evaluation": ["controlled external provider verification"],
+      "review": {"required": true, "owners": ["provision", "supplier"]},
+      "releaseEvidence": {"required": true, "kind": "isolated-and-external-provider"}
+    },
+    {
+      "id": "migration-cutover",
+      "contract": "docs/legacy-migration.md",
+      "implementation": ["db/migrations", "cmd/migrate", "docs/cutover-runbook.md"],
+      "tests": ["./scripts/go.sh test ./... -run 'Migration|Checksum'"],
+      "evaluation": ["isolated PostgreSQL migration and rollback rehearsal"],
+      "review": {"required": true, "owners": ["migration", "release"]},
+      "releaseEvidence": {"required": true, "kind": "candidate-and-rollback"}
+    }
+  ]
+}

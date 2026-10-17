@@ -86,8 +86,8 @@ async function controllerEvidence(root, controller) {
 }
 
 export async function generate({ cwd = process.cwd(), strict = false } = {}) {
-  const inventoryPath = 'docs/generated/legacy-inventory.json';
-  const reviewPath = 'docs/audit/route-reviews.json';
+  const inventoryPath = process.env.GOIDC_LEGACY_INVENTORY ?? 'output/audit-inputs/legacy-inventory.json';
+  const reviewPath = process.env.GOIDC_ROUTE_REVIEWS ?? 'output/audit-inputs/route-reviews.json';
   const serverPath = 'internal/httpapi/server.go';
   const outputPath = 'output/audit/route-coverage.json';
   const inventory = JSON.parse(await readFile(path.join(cwd, inventoryPath), 'utf8'));

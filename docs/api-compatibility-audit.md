@@ -1,9 +1,9 @@
 # 旧接口兼容性与路由审计白皮书
 
-审计基线为 `docs/generated/legacy-inventory.json`，参考源码目录为
+审计基线为 `output/audit-inputs/legacy-inventory.json`，参考源码目录为
 `/www/wwwroot/zjmf-manger-decoded-副本`。审计只读旧目录，没有修改旧 PHP
 文件。每一条清单记录以 `file:line:method` 和旧表达式指纹固定，结果保存在
-`docs/audit/route-reviews.json`，由 `scripts/route-coverage.mjs` 生成索引。
+`output/audit-inputs/route-reviews.json`，由 `scripts/route-coverage.mjs` 生成索引。
 
 ## 口径
 

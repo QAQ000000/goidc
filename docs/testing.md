@@ -1,5 +1,7 @@
 # 测试入口
 
+完整的开发生命周期、证据等级和领域到测试的对应关系见[工程治理契约](architecture/engineering-governance.md)及[领域验收矩阵](architecture/contract-verification-matrix.md)。本文只维护具体测试入口、前置条件和不应过度解释的边界。
+
 测试按行为和业务域保留，不以测试/生产行数比例作为删除标准。资金、权限、并发、幂等及故障恢复断言是必需的回归保护。
 
 | 范围 | 入口 | 前置条件 |
@@ -19,7 +21,7 @@
 
 前端检查仍使用 `npm --prefix web run lint`、`typecheck`、`test:proxy`。构建使用独立目录，禁止绕过运行目录保护；此文档不启动或重启项目服务。
 
-静态审查生成器 `node scripts/route-coverage.mjs` 和 `node scripts/admin-page-contracts.mjs` 将新结果写入忽略的 `output/audit/`。前者仍读取版本化的 `docs/generated/legacy-inventory.json` 与 `docs/audit/route-reviews.json`；生成器所需旧源码及旧页面规范须另行提供。历史生成快照保存在封存包。
+静态审查生成器 `node scripts/route-coverage.mjs` 和 `node scripts/admin-page-contracts.mjs` 将新结果写入忽略的 `output/audit/`。前者读取被忽略的 `output/audit-inputs/legacy-inventory.json` 与 `output/audit-inputs/route-reviews.json`，也可用 `GOIDC_LEGACY_INVENTORY`、`GOIDC_ROUTE_REVIEWS` 指向受控输入；生成器所需旧源码及旧页面规范须另行提供。机器输入与活动文档分离，历史生成快照保存在封存索引或外部构建产物中。
 
 幂等回执由 `mutation_operations(actor_id, scope, idempotency_key)` 统一保存。迁移 156 原样搬运旧请求 hash/JSON 结果及已有时间戳，信用冻结从原字段生成等价 hash；原充值操作表没有时间戳，使用迁移时间。13 张回执/批量请求绑定表被移除，关单操作、关单核验请求、服务取消申请继续保存业务状态与外键。
 

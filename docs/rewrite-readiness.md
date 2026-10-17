@@ -6,7 +6,7 @@
 
 ## 当前基线
 
-- 旧系统静态清单：`docs/generated/legacy-inventory.json`，1352 条路由调用、184 张表。
+- 旧系统静态清单：`output/audit-inputs/legacy-inventory.json`，1352 条路由调用、184 张表。
 - 当前 Go 路由：由 `scripts/route-coverage.mjs` 从 `internal/httpapi/server.go` 生成覆盖索引；方法和路径完全相同时只记为候选，不代表行为兼容。
 - 覆盖索引：运行 `node scripts/route-coverage.mjs` 生成到 `output/audit/route-coverage.json`（不跟踪）；封存基线见 [历史审计](archive/README.md)。每条记录仍需核对处理器行为、认证/权限、状态机和 Next 页面契约。
 - 验收边界：隔离 PG18、浏览器和 worker 回归只证明对应批次；真实支付、真实上游和正式切换仍需独立证据。

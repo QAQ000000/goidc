@@ -57,15 +57,15 @@ test('verdicts require valid targets, evidence, follow-up and wire tests', () =>
 test('strict generation rejects incomplete evidence without replacing output and reports source drift', async () => {
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'route-coverage-test-'));
   try {
-    for (const dir of ['output/audit', 'docs/generated', 'docs/audit', 'internal/httpapi', 'web/src/app/console/services', 'legacy/data/route', 'legacy/app/api/controller']) await mkdir(path.join(cwd, dir), { recursive: true });
+    for (const dir of ['output/audit', 'output/audit-inputs', 'internal/httpapi', 'web/src/app/console/services', 'legacy/data/route', 'legacy/app/api/controller']) await mkdir(path.join(cwd, dir), { recursive: true });
     const declaration = 'Route::post("api/host/sync", "api/Host/syncInfo");';
     const route = parseLegacyCalls(declaration, 'data/route/api.php')[0];
     await writeFile(path.join(cwd, 'legacy/data/route/api.php'), '\n' + declaration + '\nRoute::get("extra", "api/Host/extra");');
     await writeFile(path.join(cwd, 'legacy/app/api/controller/HostController.php'), '<?php\npublic function syncInfo() {}');
-    await writeFile(path.join(cwd, 'docs/generated/legacy-inventory.json'), JSON.stringify({ source: path.join(cwd, 'legacy'), routes: [route] }));
+    await writeFile(path.join(cwd, 'output/audit-inputs/legacy-inventory.json'), JSON.stringify({ source: path.join(cwd, 'legacy'), routes: [route] }));
     await writeFile(path.join(cwd, 'internal/httpapi/server.go'), 'mux.HandleFunc("POST /api/host/sync", s.sync)');
     await writeFile(path.join(cwd, 'web/src/app/console/services/page.tsx'), '');
-    const manifestPath = path.join(cwd, 'docs/audit/route-reviews.json');
+    const manifestPath = path.join(cwd, 'output/audit-inputs/route-reviews.json');
     await writeFile(manifestPath, '{"reviews":{}}');
     const outputPath = path.join(cwd, 'output/audit/route-coverage.json');
     await writeFile(outputPath, 'previous artifact');

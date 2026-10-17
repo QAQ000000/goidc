@@ -1,0 +1,12 @@
+# 架构与验证
+
+- [工程治理契约](engineering-governance.md)：项目生命周期、Agent 上下文、证据等级和发布安全边界。
+- [领域验收矩阵](contract-verification-matrix.md)：契约到测试、审计入口和证据边界。
+- [项目状态与开发入口](../reconstruction.md)：当前实现、边界和入口。
+- [编译期模块架构](../compiled-module-architecture.md)：适配器和模块注册约束。
+- [测试说明](../testing.md)：Go、前端、数据库、浏览器和外部依赖的验证边界。
+- [容量验证](../capacity.md)：只读负载、worker 和资源预算。
+- [重构准备度](../rewrite-readiness.md)：旧系统静态基线与替换限制。
+- [构建产物保留](../build-artifact-retention.md)：运行产物和清理规则。
+
+发布契约和运行候选入口集中在 [发布与切换](../migration/README.md)；历史批次证据位于归档快照，不是通用架构规则。

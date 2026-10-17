@@ -16,11 +16,11 @@
 | 用途 | 入口 |
 | --- | --- |
 | 本地运行、技术结构 | [README](../README.md) |
-| 当前替代差距与外部条件 | [最新差距审计](replacement-gap-audit-20261017.md) |
+| 当前替代差距与外部条件 | [最新差距审计](replacement-gap-audit.md) |
 | 后台逐项状态与 API/权限 | [105 项台账](admin-full-ui-restore-ledger.md)、[页面契约](admin-page-contracts.md) |
 | 测试入口和范围 | [测试说明](testing.md) |
 | 实际可执行的负载与 worker 验证 | [容量验证](capacity.md) |
-| 发布和回退 | [切换手册](cutover-runbook.md)、[发布契约](release-readiness-next-contract-20261017.md) |
+| 发布和回退 | [切换手册](cutover-runbook.md)、[发布契约](release-readiness-next-contract.md) |
 | 历史记录与原始证据 | [封存索引](archive/README.md) |
 
 ## 开发约束

@@ -50,4 +50,4 @@ manifest不是签名。verify必须由操作者提供从构建结果另行保管
 
 `node --test scripts/release-candidate.test.mjs`使用真实临时Git仓库和文件：干净提交、源码dirty/未跟踪拒绝、受保护文件/源码软链、构建前拒绝且不创建候选、实际产物篡改/缺件/多文件、外部清单hash、重封fixture后的必要文件/SQL checksum/BUILD_ID/rewrite/模板/lock/二进制metadata错误、路径穿越/软链根与祖先/依赖逃逸、origin凭据拒绝。fixture二进制只是数据，不声称执行真实Go或Web构建。
 
-真实候选构建、主线正式产物审查另记录commit、清单SHA、BUILD_ID、rewrite、磁盘占用和退出状态。旧chunk保留、真实代理HTTPS、三服务同包运行、PG18升级恢复、供应商/支付外部边界、切流切回、容量/崩溃恢复仍按[正式接管验收契约](release-readiness-next-contract-20261017.md)独立验收；本批没有关闭这些项目。
+真实候选构建、主线正式产物审查另记录commit、清单SHA、BUILD_ID、rewrite、磁盘占用和退出状态。旧chunk保留、真实代理HTTPS、三服务同包运行、PG18升级恢复、供应商/支付外部边界、切流切回、容量/崩溃恢复仍按[正式接管验收契约](release-readiness-next-contract.md)独立验收；本批没有关闭这些项目。

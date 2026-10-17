@@ -2,7 +2,7 @@
 
 **契约基线原为待执行；后续 run5 已通过静态保留准备验收，见[独立验收记录](archive/README.md#f-a39702ab1391)。本文定义范围，不单独作为通过证据。** 文档基线为 `ce19107a37f2781c850dcc6342d8253acf5067cc`。本轮只准备并验收两个已封存构建的静态资源映射，以及真实目标 Nginx 的自有配置激活、恢复和退出。**不启动 candidate2/3 Web，不启动 API、worker、迁移或数据库，不请求常驻业务服务，不构建或安装依赖，不进行生产切流。** 不使用 SSR fallback 页面代替真实新旧页面验收，不称为完整 Web 切换或回滚，不据此关闭 G04/G09。
 
-上层范围见[下一批正式接管契约](release-readiness-next-contract-20261017.md)。完整 runtime 的既有证据与本轮静态保留证据分开记录，见[真实构建及 runtime 验收记录](archive/README.md#f-75ad468702e2)。
+上层范围见[下一批正式接管契约](release-readiness-next-contract.md)。完整 runtime 的既有证据与本轮静态保留证据分开记录，见[真实构建及 runtime 验收记录](archive/README.md#f-75ad468702e2)。
 
 ## 1. 输入来源与可复用事实
 

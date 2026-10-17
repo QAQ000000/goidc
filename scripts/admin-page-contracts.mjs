@@ -7,7 +7,7 @@ const ledgerPath = process.argv[2] ?? 'docs/admin-full-ui-restore-ledger.md';
 const specPath = process.argv[3] ?? '/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md';
 const ledger = await readFile(ledgerPath, 'utf8');
 const spec = await readFile(specPath, 'utf8');
-const browserEvidencePath = process.argv[4] ?? 'docs/admin-restore-browser-evidence.json';
+const browserEvidencePath = process.argv[4] ?? process.env.GOIDC_BROWSER_EVIDENCE ?? 'output/audit-inputs/admin-restore-browser-evidence.json';
 let browserEvidence = {pages:[]};
 try { browserEvidence = JSON.parse(await readFile(browserEvidencePath,'utf8')); }
 catch(error) { if(error.code !== 'ENOENT') throw error; }
@@ -92,7 +92,7 @@ if(contracts.length!==105||new Set(contracts.map(p=>p.oldHash)).size!==105)throw
 const output={schemaVersion:1,source:{ledger:ledgerPath,ledgerSha256:createHash('sha256').update(ledger).digest('hex'),specification:specPath,specificationSha256:createHash('sha256').update(spec).digest('hex'),browserEvidence:browserEvidencePath,browserEvidenceIntegrityReview:browserEvidence.integrityReview??null},notes:['无时间戳；同一源码和输入可复现。','台账声称的 API 与源码注册 API 分开；权限登记不等于强制执行。','源码存在仅作为静态路由证据，编译和实现完整性未验证；验收宽度为1440/1024/390/320。','storage/migrations 为保守静态候选，缺少确切调用链时未验证。','result/checks/PASS仅为历史检查记录；screenshotSha256保留原值，screenshotIntegrity保留失配或摘要未建立声明。生成器不读取截图，当前完整性须另运行只读校验器。'],count:contracts.length,pages:contracts};
 await mkdir('output/audit',{recursive:true});
 await writeFile('output/audit/admin-page-contracts.json',JSON.stringify(output,null,2)+'\n');
-const lines=['# 后台 105 页页面契约索引','','运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可复现生成 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。','','[完整机器可读契约](./admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `docs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。','','| # | 模块 / 页面 | 旧 hash | 新路由 | 代码状态 | 浏览器 |','|---:|---|---|---|---|---|'];
+const lines=['# 后台 105 页页面契约索引','','运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可复现 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。','','[完整机器可读契约](./admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `output/audit-inputs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。','','| # | 模块 / 页面 | 旧 hash | 新路由 | 代码状态 | 浏览器 |','|---:|---|---|---|---|---|'];
 lines.splice(6,0,'浏览器列和 JSON 的 result/checks 保留历史验收范围；截图失配或摘要未建立单独标注，不能据此证明本次完整性。生成器不读取截图，运行 `node scripts/check-admin-browser-evidence.mjs --root 截图所在项目根目录 --strict` 只读复核当前文件和摘要。','');
 for(const p of contracts)lines.push(`| ${p.index} | [${p.module} / ${p.title}](#page-${p.index}) | ${p.oldHash} | ${p.newRoute} | ${p.pageStatus.code} | ${p.pageStatus.browserAcceptance} |`);
 for(const p of contracts)lines.push('',`<a id="page-${p.index}"></a>`,`## ${p.index}. ${p.title}`,'',`旧规范：[源文档](${p.evidence.specification})；台账：[记录](../../${p.evidence.ledger})${p.evidence.component?`；页面：[源码](../../${p.evidence.component})`:''}。JSON 中按唯一旧 hash ${p.oldHash} 检索。`);

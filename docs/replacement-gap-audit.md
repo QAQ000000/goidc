@@ -6,8 +6,8 @@
 
 ## 证据截点
 
-- 封存的 `docs/generated/route-coverage.json` 在 2026-10-15 生成（新扫描输出 `output/audit/route-coverage.json`）：旧 PHP 1,352 条 route 声明、Go 544 条唯一注册、精确方法/路径候选仅 1 条；审查状态为 189 `covered`、40 `frontend_replaced`、52 `superseded`、46 `deprecated`、1,025 `missing_candidate`。该索引明确说明统计含重复/失效声明，能力覆盖不代表旧 URL 或 payload 兼容，不能将 1,025 条直接当待开发接口。
-- 封存的 `docs/generated/admin-page-contracts.json` 登记 105 个后台页；当前台账仍为 45 完成 / 60 部分。历史浏览器索引 157 条中 143 条摘要匹配、6 条失配、8 条未有摘要；这些结果只能证明指定证据范围，不能证明每页保存、权限、冲突和危险动作完整。
+- 2026-10-15 的历史 route-coverage 生成快照已随提交 `65af830` 移出工作树；新扫描输出 `output/audit/route-coverage.json`：旧 PHP 1,352 条 route 声明、Go 544 条唯一注册、精确方法/路径候选仅 1 条；审查状态为 189 `covered`、40 `frontend_replaced`、52 `superseded`、46 `deprecated`、1,025 `missing_candidate`。该索引明确说明统计含重复/失效声明，能力覆盖不代表旧 URL 或 payload 兼容，不能将 1,025 条直接当待开发接口。
+- 105 页后台契约的历史生成快照已随提交 `65af830` 移出工作树；当前台账仍为 45 完成 / 60 部分。历史浏览器索引 157 条中 143 条摘要匹配、6 条失配、8 条未有摘要；这些结果只能证明指定证据范围，不能证明每页保存、权限、冲突和危险动作完整。
 - G04 运行包验收 `release-runtime-real-build-acceptance-20261017.md` 已通过 candidate3 同包双迁移、API/Web/worker 启停、21 份资源、TERM 重启及隔离清理；静态保留验收已通过 220→382→382、984 组 GET/HEAD 和 131 次旧 URL 持续请求。
 - [双 Web run6](archive/README.md#f-6f17db737d20) 已通过真实隔离运行：同一干净 `6b95102` 正常双构建，1449 条检查、两次 Nginx HUP、450 次持续请求错误 0；同会话 API/SSR 最小断言、两代独有资源、切换/切回、有界在途排空和内外层清理通过。1449是含8条metadata的检查记录，450是离散探针；受保护SSR的200/title与累计连接trace是组合证据，不证明业务组件完整渲染或所有请求零停机。原报告 SHA256 `e636bd14952582e5b744b5b36f72d8307059081d220e89bd3dafe5e7153793c3` 与两候选外锚绑定，原 run1–5 FAIL 保留。它关闭隔离双 Web 准备子项，不关闭 G04/G09 的正式接管。221/221 Node 回归是附加代码证据，不能扩大本次运行范围。
 

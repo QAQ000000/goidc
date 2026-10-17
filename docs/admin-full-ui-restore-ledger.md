@@ -27,7 +27,7 @@
 | 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit` + `PUT /admin/credit/{id}/limit` + `GET /admin/credit/consumptions` + `GET /admin/credit/repayments` + `POST /admin/credit/consumptions/{id}/repay` + `PUT /admin/credit/{id}/freeze` + `POST /invoices/{id}/pay-credit` + `GET /credit/account` + `GET /credit/consumptions` + `GET /credit/repayments` + `GET /invoices/{id}/credit` | `credit.view/manage`、客户会话本人归属 / 独立账户、信用消费/真实线下还款/冻结、客户/日期/债务状态分页、余额隔离、权限/范围/版本/幂等/审计；三标签四尺寸与未知结果恢复；客户门户4API、实际额度/消费/还款/债务、显示开关和原请求恢复已通过[146张四尺寸/短屏及资金验收](archive/README.md#f-d383850d251d)；线上还款、账期合账、已还款现金退付、授信审批仍待补；[既有后台验收](archive/README.md#f-de61a3567672) |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
-| 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 部分完成 | `GET/POST /admin/contracts` + `GET /admin/contracts/{id}` + `POST /admin/contracts/{id}/review` + `PUT /admin/contracts/{id}/shipping` + `POST /admin/contracts/bulk-void` | `contracts.view/manage` / 真实服务合同快照、客户确认→审核→邮寄→作废、分页筛选、权限范围、版本幂等和审计；列表及邮寄弹窗四尺寸通过；PDF/第三方电子签章、取消邮寄、模板强制签订策略仍待补；[验收](admin-contract-lifecycle-acceptance-20261012.md) |
+| 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 部分完成 | `GET/POST /admin/contracts` + `GET /admin/contracts/{id}` + `POST /admin/contracts/{id}/review` + `PUT /admin/contracts/{id}/shipping` + `POST /admin/contracts/bulk-void` | `contracts.view/manage` / 真实服务合同快照、客户确认→审核→邮寄→作废、分页筛选、权限范围、版本幂等和审计；列表及邮寄弹窗四尺寸通过；PDF/第三方电子签章、取消邮寄、模板强制签订策略仍待补；[验收](admin-contract-lifecycle-acceptance.md) |
 | 19 | 工单列表 `#/support-ticket` | `/admin/tickets` | 已完成 | `GET /admin/tickets` | `tickets.view/manage` / 部门范围 |
 | 20 | 工单统计 `#/support-statistics` | `/admin/reports?tab=tickets` | 已完成 | `GET /admin/reports/tickets?year=&month=` | `reports.view` / 上海日期、部门范围、真实空态；四尺寸已验收 |
 | 21 | 年度收入统计 `#/annual-statistics` | `/admin/reports?tab=annual` | 部分完成 | `GET /admin/reports/income` | `reports.view` / 年份切换 |
@@ -47,7 +47,7 @@
 | 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET /admin/promo-codes/page`、`POST/PATCH /admin/promo-codes` | `promos.view/manage` / 原九列及状态、标签/六状态筛选、搜索分页/URL恢复、新增取消、日期编辑清空；147版本/日期约束、幂等/冲突/审计；原请求恢复与账号隔离；隔离PG18全量/race及四尺寸37张最终截图通过；旧客户端仍兼容无键/版本；[验收](archive/README.md#f-11554f6d96b2) |
 | 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
-| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 部分完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `GET/PUT /admin/contract-templates/{id}` | `settings.view/manage`；模板名称/正文检索、启停筛选、真实分页/页大小及URL恢复；设置/模板409保留草稿、显式最新，身份/撤权隔离、旧新待确认请求逐项原样重放，版本/幂等/审计；本批隔离全量/race及四尺寸49张截图通过；强制签订/商品绑定/PDF签章及旧完整字段仍未实现；[本批验收](contract-settings-restoration-acceptance-20261016.md)、[历史](admin-contract-lifecycle-acceptance-20261012.md) |
+| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 部分完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `GET/PUT /admin/contract-templates/{id}` | `settings.view/manage`；模板名称/正文检索、启停筛选、真实分页/页大小及URL恢复；设置/模板409保留草稿、显式最新，身份/撤权隔离、旧新待确认请求逐项原样重放，版本/幂等/审计；本批隔离全量/race及四尺寸49张截图通过；强制签订/商品绑定/PDF签章及旧完整字段仍未实现；[当前契约](domain/contract-settings.md)、[历史批次](archive/snapshots/contract-settings-restoration-acceptance.md) |
 | 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
 | 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、创建编辑删除确认、幂等、版本冲突、审计；四尺寸浏览器验收 |
@@ -120,12 +120,12 @@
 
 | 批次 | 范围 | 状态 | 证据 |
 |---|---|---|---|
-| 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面四尺寸验收见 `docs/admin-batch-settings-marketing-acceptance-20261011.md`；渠道和通知深度仍在补齐 |
+| 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面的历史验收已收进封存索引；渠道和通知深度仍在补齐 |
 | 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、业绩与等级已交付；营销、返佣和注册字段联动继续补齐 |
 | 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除、客户资料备注、订单提成只读预估已交付；自动流量交付待补；[订单验收](archive/README.md#f-bf9b577744e3)、[流量包验收](archive/README.md#f-774baca14c7d) |
 | 第四批 | 财务与合同 | 进行中 | 独立授信、信用消费、线下还款和冻结已补；线上还款/已还款退付、授信审批继续补齐；合同基础生命周期已补，PDF/电子签章和高级模板策略待补 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](archive/README.md#f-43a541711de8) |
-| 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面在 1440/1024/390/320 完成无横向溢出验收，证据见 `docs/admin-batch-reports-operations-acceptance-20261011.md`；统一重试、投递结果和更多运维报表待补 |
+| 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面的历史四尺寸证据已收进封存索引；统一重试、投递结果和更多运维报表待补 |
 | 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置、商品/阶梯规则和销售结算已补并完成隔离 PG18、四尺寸及冲突/未知结果验收；完整权限页面与真实浏览器退款展示仍待补；[本批验收](archive/README.md#f-ed88b40abed4) |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
 | 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立资源CRUD、上游续费/复杂配置和应用目录待补 |
@@ -137,7 +137,7 @@
 
 2026-10-12 全局配置/订购批次：74/75新增真实配置、跨商品持续投影、复制/分配、商品级和全局验证要求、报价/结账准入、审计及版本幂等。两页和配置编辑弹窗有四尺寸证据；完整状态矩阵、多级全局联动和全部弹窗四尺寸仍未收口，因此登记部分完成。台账现为47完成、54部分、4待实现。[本批验收](archive/README.md#f-eb02c5090779)。
 
-2026-10-12 合同批次：第18页从待实现改为部分完成，38页补合同模板页签。真实客户确认、审核、邮寄和作废通过；HTML打印不作为PDF或电子签章验收。现为47完成、55部分、3待实现；[验收](admin-contract-lifecycle-acceptance-20261012.md)。
+2026-10-12 合同批次：第18页从待实现改为部分完成，38页补合同模板页签。真实客户确认、审核、邮寄和作废通过；HTML打印不作为PDF或电子签章验收。现为47完成、55部分、3待实现；[验收](admin-contract-lifecycle-acceptance.md)。
 
 2026-10-12 编译期模块基础批次：公共渠道目录增加类型化工厂解析；支付、短信、SMTP、实名认证和供应商注册迁移到编译进二进制的注册契约，保留 `channel_instances`/`supplier_accounts` 的配置与密钥边界。供应商 API 设置、我的应用和应用商店随后按独立批次接入。设计与扩展约束见 [编译期模块与渠道扩展契约](compiled-module-architecture.md)。
 

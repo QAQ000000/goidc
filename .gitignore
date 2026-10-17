@@ -10,8 +10,13 @@ output/
 *.log
 # Historical run artifacts are archived; fresh generator outputs belong in output/.
 /docs/evidence/
-/docs/generated/*.json
-!/docs/generated/legacy-inventory.json
+/docs/generated/
+/docs/**/*.json
+/docs/**/*.jsonl
+/docs/**/*.ndjson
+/docs/**/*.tar
+/docs/**/*.tar.gz
+/docs/**/*.zip
 
 # mimosa scanner state
 .mimosa/

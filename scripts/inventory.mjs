@@ -14,6 +14,7 @@ for(const name of (await readdir(path.join(root,"data/route"))).filter(n=>n.ends
 const sql=await readFile(path.join(root,"public/install/thinkcmf.sql"),"utf8");
 const tables=[...sql.matchAll(/CREATE TABLE\s+`([^`]+)`/g)].map(m=>m[1]);
 const grouped=Object.fromEntries([...new Set(routes.map(r=>r.file))].map(file=>[file,routes.filter(r=>r.file===file).length]));
-await mkdir("docs/generated",{recursive:true});
-await writeFile("docs/generated/legacy-inventory.json",JSON.stringify({source:root,sourceVersion:(await readFile(path.join(root,"version"),"utf8")).trim(),generatedAt:new Date().toISOString(),notes:"Static source calls only; group prefixes and runtime middleware must be traced before parity claims. Status pending is not implemented parity.",routeCallCount:routes.length,grouped,tableCount:tables.length,tables,routes},null,2)+"\n");
+const outputPath = process.env.GOIDC_LEGACY_INVENTORY ?? "output/audit-inputs/legacy-inventory.json";
+await mkdir(path.dirname(outputPath),{recursive:true});
+await writeFile(outputPath,JSON.stringify({source:root,sourceVersion:(await readFile(path.join(root,"version"),"utf8")).trim(),generatedAt:new Date().toISOString(),notes:"Static source calls only; group prefixes and runtime middleware must be traced before parity claims. Status pending is not implemented parity.",routeCallCount:routes.length,grouped,tableCount:tables.length,tables,routes},null,2)+"\n");
 console.log(JSON.stringify({routeCallCount:routes.length,grouped,tableCount:tables.length}));

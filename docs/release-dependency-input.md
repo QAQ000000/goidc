@@ -22,7 +22,7 @@ node scripts/prepare-runtime-dependency-input.mjs \
 
 所有参数显式提供。`--execute` 才新建0700独占目录，并在私有空 install 子目录复制选定 Git 原始 package.json/package-lock.json，不复制工作树中的 ignored .npmrc/.env/node_modules；源 HEAD 必须等于完整提交且干净。npm 锁必须是v3，每个非根条目要求官方 HTTPS registry、无用户名/密码/query/fragment、SHA512 integrity；local/git/link依赖不接纳。当前锁553项通过只读检查。
 
-Node证明沿用 [runtime builder](release-runtime-builder-20261017.md) 格式。npm证明必须由调用方基于独立可信官方输入建立，不能将未知安装的自述JSON当作来源证明：
+Node证明沿用 [runtime builder](release-runtime-builder.md) 格式。npm证明必须由调用方基于独立可信官方输入建立，不能将未知安装的自述JSON当作来源证明：
 
 ```js
 {
