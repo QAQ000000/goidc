@@ -224,6 +224,7 @@ func TestG09CandidateFixture(t *testing.T) {
 	if base.QueryRow(ctx, `SELECT current_database(),host(inet_server_addr()),current_setting('server_version_num')::int`).Scan(&db, &addr, &version) != nil || db != cfg.ConnConfig.Database || addr != "127.0.0.1" || version < 180000 || version >= 190000 {
 		t.Fatal("g09_identity")
 	}
+	var ownedOID uint32
 	owned := false
 	cleaned := false
 	verified := false
@@ -249,6 +250,16 @@ func TestG09CandidateFixture(t *testing.T) {
 			return errors.New("g09_cleanup_connection")
 		}
 		defer conn.Close(c)
+		var actualDB, actualAddr string
+		var actualVersion int
+		var actualOID uint32
+		var runtimeConnections int
+		if conn.QueryRow(c, `SELECT current_database(),host(inet_server_addr()),current_setting('server_version_num')::int,n.oid,(SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name=$2) FROM pg_namespace n WHERE n.nspname=$1`, schema, app).Scan(&actualDB, &actualAddr, &actualVersion, &actualOID, &runtimeConnections) != nil {
+			return errors.New("g09_cleanup_identity")
+		}
+		if e := g09CleanupIdentity(db, actualDB, actualAddr, actualVersion, ownedOID, actualOID, runtimeConnections); e != nil {
+			return e
+		}
 		if _, e = conn.Exec(c, `SET lock_timeout='3s'`); e != nil {
 			return errors.New("g09_cleanup")
 		}
@@ -281,8 +292,19 @@ func TestG09CandidateFixture(t *testing.T) {
 			}
 		}
 	}()
-	if _, e = base.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); e != nil {
+	createTx, e := base.Begin(ctx)
+	if e != nil {
 		t.Fatal("g09_create_schema")
+	}
+	defer createTx.Rollback(context.Background())
+	if _, e = createTx.Exec(ctx, "CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); e != nil {
+		t.Fatal("g09_create_schema")
+	}
+	if createTx.QueryRow(ctx, `SELECT oid FROM pg_namespace WHERE nspname=$1`, schema).Scan(&ownedOID) != nil || ownedOID == 0 {
+		t.Fatal("g09_create_schema_identity")
+	}
+	if createTx.Commit(ctx) != nil {
+		t.Fatal("g09_create_schema_commit")
 	}
 	owned = true
 	host := cfg.Copy()
@@ -473,5 +495,39 @@ func TestG09CandidateFixtureBootstrapGuards(t *testing.T) {
 	st, e := os.Stat(filepath.Join(dir, "proof.json"))
 	if e != nil || st.Mode().Perm() != 0600 {
 		t.Fatal("private evidence mode")
+	}
+}
+
+// Fail closed before destructive cleanup, including on deferred abort/timeout.
+func g09CleanupIdentity(expectedDB, actualDB, addr string, version int, ownedOID, actualOID uint32, runtimeConnections int) error {
+	if actualDB != expectedDB || addr != "127.0.0.1" || version < 180000 || version >= 190000 || ownedOID == 0 || actualOID != ownedOID {
+		return errors.New("g09_cleanup_identity")
+	}
+	if runtimeConnections != 0 {
+		return errors.New("g09_cleanup_runtime_connections")
+	}
+	return nil
+}
+func TestG09CandidateFixtureCleanupGuards(t *testing.T) {
+	if e := g09CleanupIdentity("fixture_test", "fixture_test", "127.0.0.1", 180001, 42, 42, 0); e != nil {
+		t.Fatal(e)
+	}
+	for _, c := range []struct {
+		db, addr      string
+		version       int
+		owned, actual uint32
+		connections   int
+	}{
+		{"other_test", "127.0.0.1", 180001, 42, 42, 0},
+		{"fixture_test", "", 180001, 42, 42, 0},
+		{"fixture_test", "127.0.0.1", 170001, 42, 42, 0},
+		{"fixture_test", "127.0.0.1", 190001, 42, 42, 0},
+		{"fixture_test", "127.0.0.1", 180001, 0, 0, 0},
+		{"fixture_test", "127.0.0.1", 180001, 42, 43, 0},
+		{"fixture_test", "127.0.0.1", 180001, 42, 42, 1},
+	} {
+		if g09CleanupIdentity("fixture_test", c.db, c.addr, c.version, c.owned, c.actual, c.connections) == nil {
+			t.Fatalf("unsafe cleanup accepted: %+v", c)
+		}
 	}
 }

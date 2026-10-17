@@ -228,7 +228,7 @@ bootstrap只有固定8分钟总预算，后续27分钟负载须另行独立实�
 verify成功另有`migrationSHA256`（有序`[{version,checksum}]`紧凑JSON的SHA256）、`migrationCount`；
 snapshot成功另有`snapshot`（原PGObservation结构；只读，不修改业务）。任一错误结束bootstrap并进入清理。
 finish/abort必须先由控制器停止候选进程；fixture不杀进程、不扫描或终止共享连接。
-正常/异常退出均仅DROP本轮自己成功CREATE的精确schema，以新的独立宿主连接确认schema不存在后，才发布
+正常/异常退出清理前均以宿主连接重新核PG18/database/127.0.0.1、创建事务内记录的schema OID，且精确本轮candidate application_name在当前database的pg_stat_activity连接数必须为0；有连接或OID替换时拒绝DROP，不终止任何会话，done明确false，由外层先停止namespace再处理。仅DROP本轮自己成功CREATE的精确schema，以新的独立宿主连接确认schema不存在后，才发布
 `done.json:{runId,schemaRemoved,ok}`；私有config随后移除。清理失败明确false并使测试失败，不能宣称清理完成。
 
 当前仅编译及不连接数据库的协议拒绝测试通过；此实现不证明候选迁移、namespace、PG联合运行或容量。
