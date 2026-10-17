@@ -1,0 +1,16 @@
+{
+  "started_at": "2026-10-17T04:36:49.736741+00:00",
+  "source_parent": "cc0163dcbc903159619dd7acd5797c663cb51eda",
+  "command": "node --test scripts/g09-load-lib.test.mjs scripts/g09-scenario-lib.test.mjs scripts/g09-workload-report.test.mjs scripts/g09-process-sampler.test.mjs",
+  "node_version": "v24.16.0",
+  "clock_ticks_per_second": 100,
+  "host_proc_io_available": false,
+  "candidate_verified": false,
+  "capacity_verified": false,
+  "exit_code": 0,
+  "finished_at": "2026-10-17T04:36:50.251625+00:00",
+  "source_sha256": {
+    "scripts/g09-process-sampler.mjs": "0b2877a4cb13211c9a0ac44cadc8f8ff187340ca8f161ad8f8adec690ff80ab7",
+    "scripts/g09-process-sampler.test.mjs": "dee5b3c9a6945b9672369bb046255564871064d8b465cffdf322fc3bf180ac3a"
+  }
+}
