@@ -57,7 +57,7 @@ func TestG09CohortSourceWorkerSmoke(t *testing.T) {
 		p := g09CohortPrepare(t, 150, false)
 		r := p.ticket(t, 0)
 		p.verifyTicket(t, r, true)
-		g09AssertSQL(t, p.db, `SELECT (SELECT count(*) FROM email_outbox)=1 AND (SELECT count(*) FROM sms_outbox)=1 AND (SELECT count(*) FROM provision_jobs)=0`)
+		g09CohortAssertSQL(t, p.db, `SELECT (SELECT count(*) FROM email_outbox)=1 AND (SELECT count(*) FROM sms_outbox)=1 AND (SELECT count(*) FROM provision_jobs)=0`)
 	}) {
 		t.Fatal("ticket pilot failed; formal source run forbidden")
 	}
@@ -84,7 +84,7 @@ func TestG09CohortSourceWorkerSmoke(t *testing.T) {
 			}
 		}
 	}
-	g09AssertSQL(t, e.db, `SELECT count(*)=301 AND bool_and(expires_at>now()+interval '15 minutes') FROM sessions`)
+	g09CohortAssertSQL(t, e.db, `SELECT count(*)=301 AND bool_and(expires_at>now()+interval '15 minutes') FROM sessions`)
 	// Sequential source is deliberately bounded (one HTTP request at a time).
 	started := time.Now().UTC()
 	sourceCtx, sourceCancel := context.WithDeadline(t.Context(), started.Add(120*time.Second))
@@ -322,7 +322,7 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 			e.suppliers = append(e.suppliers, e.prepareSupplier(t, i))
 		}
 	}
-	g09AssertSQL(t, db, `SELECT (SELECT count(*) FROM provision_jobs)=0 AND (SELECT count(*) FROM email_outbox)=0 AND (SELECT count(*) FROM sms_outbox)=0 AND (SELECT count(*) FROM customer_contacts)=0 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category='mail')=1 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category='sms')=1 AND (SELECT count(*) FROM notification_templates WHERE active)=2`)
+	g09CohortAssertSQL(t, db, `SELECT (SELECT count(*) FROM provision_jobs)=0 AND (SELECT count(*) FROM email_outbox)=0 AND (SELECT count(*) FROM sms_outbox)=0 AND (SELECT count(*) FROM customer_contacts)=0 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category='mail')=1 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category='sms')=1 AND (SELECT count(*) FROM notification_templates WHERE active)=2`)
 	var disabledRole int64
 	if db.Pool.QueryRow(t.Context(), `INSERT INTO admin_roles(name,permissions) VALUES('g09-bootstrap-no-ticket','{}') RETURNING id`).Scan(&disabledRole) != nil {
 		t.Fatal("bootstrap role seed failed")
@@ -330,7 +330,7 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 	if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET role='admin',admin_role_id=$2 WHERE id=$1`, rootID, disabledRole); err != nil {
 		t.Fatal("bootstrap notification exclusion failed")
 	}
-	g09AssertSQL(t, db, `SELECT count(*)=$1 AND bool_and(expires_at>now()+interval '15 minutes') FROM sessions`, 2*n+1)
+	g09CohortAssertSQL(t, db, `SELECT count(*)=$1 AND bool_and(expires_at>now()+interval '15 minutes') FROM sessions`, 2*n+1)
 	if withPurchases {
 		e.captureBaseline(t)
 	}
@@ -548,7 +548,7 @@ func (e *g09CohortEnv) verifyTicket(t *testing.T, r g09CohortSource, pending boo
 		}
 	}
 	if pending {
-		g09AssertSQL(t, e.db, `SELECT bool_and(d.outcome='queued' AND d.preference_enabled AND d.address_verified) AND count(*)=2 AND (SELECT count(*) FROM email_outbox WHERE id=$2 AND status='pending' AND attempts=0)=1 AND (SELECT count(*) FROM sms_outbox WHERE id=$3 AND status='pending' AND attempts=0)=1 FROM ticket_notification_deliveries d WHERE d.event_id=$1`, r.EventID, r.EmailOutboxID, r.SMSOutboxID)
+		g09CohortAssertSQL(t, e.db, `SELECT bool_and(d.outcome='queued' AND d.preference_enabled AND d.address_verified) AND count(*)=2 AND (SELECT count(*) FROM email_outbox WHERE id=$2 AND status='pending' AND attempts=0)=1 AND (SELECT count(*) FROM sms_outbox WHERE id=$3 AND status='pending' AND attempts=0)=1 FROM ticket_notification_deliveries d WHERE d.event_id=$1`, r.EventID, r.EmailOutboxID, r.SMSOutboxID)
 	}
 }
 
@@ -626,8 +626,8 @@ func (e *g09CohortEnv) seal(t *testing.T, records []g09CohortSource, start, end 
 		t.Fatal("source window exceeded 120 seconds")
 	}
 	e.verifySources(t, records, true)
-	g09AssertSQL(t, e.db, `SELECT count(*)=300 AND bool_and(status='pending' AND attempts=0 AND locked_at IS NULL AND external_started_at IS NULL AND completed_at IS NULL) FROM provision_jobs`)
-	g09AssertSQL(t, e.db, `SELECT (SELECT count(*) FROM email_outbox WHERE status='pending' AND attempts=0 AND locked_at IS NULL)=150 AND (SELECT count(*) FROM sms_outbox WHERE status='pending' AND attempts=0 AND locked_at IS NULL AND octet_length(body_encrypted)>0)=150 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category IN ('mail','sms') AND octet_length(secret_ciphertext)>0)=2`)
+	g09CohortAssertSQL(t, e.db, `SELECT count(*)=300 AND bool_and(status='pending' AND attempts=0 AND locked_at IS NULL AND external_started_at IS NULL AND completed_at IS NULL) FROM provision_jobs`)
+	g09CohortAssertSQL(t, e.db, `SELECT (SELECT count(*) FROM email_outbox WHERE status='pending' AND attempts=0 AND locked_at IS NULL)=150 AND (SELECT count(*) FROM sms_outbox WHERE status='pending' AND attempts=0 AND locked_at IS NULL AND octet_length(body_encrypted)>0)=150 AND (SELECT count(*) FROM channel_instances WHERE enabled AND category IN ('mail','sms') AND octet_length(secret_ciphertext)>0)=2`)
 	// One immutable manifest is written before workers can claim a pending row.
 	manifest := map[string]any{"schemaVersion": 1, "mode": "g09_600_source_prerequisite", "capacityVerified": false, "candidateVerified": false, "sourceWindowSeconds": end.Sub(start).Seconds(), "flows": records, "counts": map[string]int{"simulation": sim, "supplier": sup, "tickets": tickets, "provisionTasks": 300, "emailTasks": 150, "smsTasks": 150, "totalTasks": 600}, "serviceIds": serviceIDs, "jobIds": jobIDs, "invoiceIds": invoiceIDs, "ticketIds": ticketIDs}
 	if err := g09fixture.WritePrivateJSON(filepath.Join(e.private, "delivery-oracles.private.json"), e.oracles); err != nil {
@@ -729,8 +729,8 @@ func (e *g09CohortEnv) verifySources(t *testing.T, records []g09CohortSource, pe
 	}
 	for _, r := range records {
 		if r.Kind == "ticket" {
-			g09AssertSQL(t, e.db, `SELECT t.user_id=$2 AND t.department_id=$3 AND (SELECT count(*) FROM ticket_mutation_receipts WHERE ticket_id=t.id AND actor_id=$2 AND operation='create')=1 AND (SELECT count(*) FROM ticket_notification_events WHERE ticket_id=t.id AND actor_id=$2 AND kind='customer_created')=1 FROM tickets t WHERE t.id=$1`, r.TicketID, r.CustomerID, r.DepartmentID)
-			g09AssertSQL(t, e.db, `SELECT count(*)=2 AND bool_and(d.recipient_id=$2 AND d.outcome='queued' AND d.reason='' AND d.address_verified AND d.preference_enabled AND d.event_id=$3) FROM ticket_notification_events e JOIN ticket_notification_deliveries d ON d.event_id=e.id WHERE e.ticket_id=$1`, r.TicketID, r.StaffID, r.EventID)
+			g09CohortAssertSQL(t, e.db, `SELECT t.user_id=$2 AND t.department_id=$3 AND (SELECT count(*) FROM ticket_mutation_receipts WHERE ticket_id=t.id AND actor_id=$2 AND operation='create')=1 AND (SELECT count(*) FROM ticket_notification_events WHERE ticket_id=t.id AND actor_id=$2 AND kind='customer_created')=1 FROM tickets t WHERE t.id=$1`, r.TicketID, r.CustomerID, r.DepartmentID)
+			g09CohortAssertSQL(t, e.db, `SELECT count(*)=2 AND bool_and(d.recipient_id=$2 AND d.outcome='queued' AND d.reason='' AND d.address_verified AND d.preference_enabled AND d.event_id=$3) FROM ticket_notification_events e JOIN ticket_notification_deliveries d ON d.event_id=e.id WHERE e.ticket_id=$1`, r.TicketID, r.StaffID, r.EventID)
 			ds := e.oracles[r.TicketID]
 			var ticketNo string
 			if e.db.Pool.QueryRow(t.Context(), `SELECT ticket_no FROM tickets WHERE id=$1`, r.TicketID).Scan(&ticketNo) != nil {
@@ -741,28 +741,28 @@ func (e *g09CohortEnv) verifySources(t *testing.T, records []g09CohortSource, pe
 					t.Fatal("frozen notification body incomplete")
 				}
 			}
-			g09AssertSQL(t, e.db, `SELECT m.status=$3 AND m.attempts=$4 AND m.locked_at IS NULL AND m.kind='ticket_customer_created' AND m.channel_instance_id=$5 AND m.recipient=$6 AND m.subject=$7 AND m.body=$8 AND m.expires_at>now()+interval '6 days' AND s.status=$3 AND s.attempts=$4 AND s.locked_at IS NULL AND s.kind='ticket_customer_created' AND s.channel_instance_id=$9 AND s.recipient=$10 AND s.expires_at>now()+interval '6 days' FROM email_outbox m CROSS JOIN sms_outbox s WHERE m.id=$1 AND s.id=$2`, r.EmailOutboxID, r.SMSOutboxID, outboxState, attempts, g09CohortMail, ds[0].Recipient, ds[0].Subject, ds[0].Body, g09CohortSMS, ds[1].Recipient)
+			g09CohortAssertSQL(t, e.db, `SELECT m.status=$3 AND m.attempts=$4 AND m.locked_at IS NULL AND m.kind='ticket_customer_created' AND m.channel_instance_id=$5 AND m.recipient=$6 AND m.subject=$7 AND m.body=$8 AND m.expires_at>now()+interval '6 days' AND s.status=$3 AND s.attempts=$4 AND s.locked_at IS NULL AND s.kind='ticket_customer_created' AND s.channel_instance_id=$9 AND s.recipient=$10 AND s.expires_at>now()+interval '6 days' FROM email_outbox m CROSS JOIN sms_outbox s WHERE m.id=$1 AND s.id=$2`, r.EmailOutboxID, r.SMSOutboxID, outboxState, attempts, g09CohortMail, ds[0].Recipient, ds[0].Subject, ds[0].Body, g09CohortSMS, ds[1].Recipient)
 			if !pending {
-				g09AssertSQL(t, e.db, `SELECT s.sent_at IS NOT NULL AND s.last_error='' AND octet_length(s.body_encrypted)=0 AND (SELECT count(*) FROM sms_delivery_evidence d WHERE d.outbox_id=s.id AND d.attempts=1 AND d.provider='generic_http_json' AND d.outcome='accepted' AND d.http_status=200 AND NOT d.response_truncated AND octet_length(d.response_encrypted)>0 AND d.locked_at IS NOT NULL)=1 AND (SELECT sent_at IS NOT NULL AND last_error='' FROM email_outbox WHERE id=$2) FROM sms_outbox s WHERE s.id=$1`, r.SMSOutboxID, r.EmailOutboxID)
+				g09CohortAssertSQL(t, e.db, `SELECT s.sent_at IS NOT NULL AND s.last_error='' AND octet_length(s.body_encrypted)=0 AND (SELECT count(*) FROM sms_delivery_evidence d WHERE d.outbox_id=s.id AND d.attempts=1 AND d.provider='generic_http_json' AND d.outcome='accepted' AND d.http_status=200 AND NOT d.response_truncated AND octet_length(d.response_encrypted)>0 AND d.locked_at IS NOT NULL)=1 AND (SELECT sent_at IS NOT NULL AND last_error='' FROM email_outbox WHERE id=$2) FROM sms_outbox s WHERE s.id=$1`, r.SMSOutboxID, r.EmailOutboxID)
 			}
 			continue
 		}
-		g09AssertSQL(t, e.db, `SELECT i.status='paid' AND i.user_id=$2 AND i.amount_cents=1000 AND i.paid_at IS NOT NULL AND i.order_id=$3 AND o.status='paid' AND o.review_status='approved' AND o.total_cents=1000 AND oi.id=$4 AND oi.product_id=$5 AND oi.quantity=1 AND s.id=$6 AND s.user_id=$2 AND s.product_id=$5 AND s.unit_number=1 AND s.provision_mode=$7 AND s.status=$8 AND NOT s.auto_renew AND NOT s.inventory_released AND j.id=$9 AND j.action='create' AND j.status=$10 AND j.attempts=$11 AND j.locked_at IS NULL AND (SELECT count(*) FROM balance_ledger l WHERE l.user_id=$2 AND l.reference_type='invoice' AND l.reference_id=i.id AND l.entry_type='payment' AND l.delta_cents=-1000)=1 AND (SELECT count(*) FROM order_items WHERE order_id=$3)=1 AND (SELECT count(*) FROM services WHERE order_item_id=$4)=1 AND (SELECT count(*) FROM provision_jobs WHERE service_id=$6 AND action='create')=1 FROM invoices i JOIN orders o ON o.id=i.order_id JOIN order_items oi ON oi.order_id=o.id JOIN services s ON s.order_item_id=oi.id JOIN provision_jobs j ON j.service_id=s.id WHERE i.id=$1`, r.InvoiceID, r.CustomerID, r.OrderID, r.OrderItemID, r.ProductID, r.ServiceID, r.Kind, serviceState, r.ProvisionJobID, jobState, attempts)
+		g09CohortAssertSQL(t, e.db, `SELECT i.status='paid' AND i.user_id=$2 AND i.amount_cents=1000 AND i.paid_at IS NOT NULL AND i.order_id=$3 AND o.status='paid' AND o.review_status='approved' AND o.total_cents=1000 AND oi.id=$4 AND oi.product_id=$5 AND oi.quantity=1 AND s.id=$6 AND s.user_id=$2 AND s.product_id=$5 AND s.unit_number=1 AND s.provision_mode=$7 AND s.status=$8 AND NOT s.auto_renew AND NOT s.inventory_released AND j.id=$9 AND j.action='create' AND j.status=$10 AND j.attempts=$11 AND j.locked_at IS NULL AND (SELECT count(*) FROM balance_ledger l WHERE l.user_id=$2 AND l.reference_type='invoice' AND l.reference_id=i.id AND l.entry_type='payment' AND l.delta_cents=-1000)=1 AND (SELECT count(*) FROM order_items WHERE order_id=$3)=1 AND (SELECT count(*) FROM services WHERE order_item_id=$4)=1 AND (SELECT count(*) FROM provision_jobs WHERE service_id=$6 AND action='create')=1 FROM invoices i JOIN orders o ON o.id=i.order_id JOIN order_items oi ON oi.order_id=o.id JOIN services s ON s.order_item_id=oi.id JOIN provision_jobs j ON j.service_id=s.id WHERE i.id=$1`, r.InvoiceID, r.CustomerID, r.OrderID, r.OrderItemID, r.ProductID, r.ServiceID, r.Kind, serviceState, r.ProvisionJobID, jobState, attempts)
 		if r.Kind == "supplier" {
-			g09AssertSQL(t, e.db, `SELECT (delivery_snapshot->>'supplier_id')::bigint=$2 AND (delivery_snapshot->>'binding_id')::bigint=$3 FROM services WHERE id=$1`, r.ServiceID, r.SupplierAccountID, r.BindingID)
+			g09CohortAssertSQL(t, e.db, `SELECT (delivery_snapshot->>'supplier_id')::bigint=$2 AND (delivery_snapshot->>'binding_id')::bigint=$3 FROM services WHERE id=$1`, r.ServiceID, r.SupplierAccountID, r.BindingID)
 		}
 		if !pending {
 			if r.Kind == "simulation" {
-				g09AssertSQL(t, e.db, `SELECT s.upstream_id='local-'||s.id::text AND s.next_due_at>now() AND j.completed_at IS NOT NULL AND j.last_error='' AND j.result->>'mode'='simulation' AND (SELECT count(*) FROM audit_events WHERE entity_type='service' AND entity_id=s.id::text AND action='service.simulation.completed' AND (payload->>'job_id')::bigint=j.id)=1 FROM services s JOIN provision_jobs j ON j.service_id=s.id WHERE s.id=$1 AND j.id=$2`, r.ServiceID, r.ProvisionJobID)
+				g09CohortAssertSQL(t, e.db, `SELECT s.upstream_id='local-'||s.id::text AND s.next_due_at>now() AND j.completed_at IS NOT NULL AND j.last_error='' AND j.result->>'mode'='simulation' AND (SELECT count(*) FROM audit_events WHERE entity_type='service' AND entity_id=s.id::text AND action='service.simulation.completed' AND (payload->>'job_id')::bigint=j.id)=1 FROM services s JOIN provision_jobs j ON j.service_id=s.id WHERE s.id=$1 AND j.id=$2`, r.ServiceID, r.ProvisionJobID)
 			} else {
-				g09AssertSQL(t, e.db, `SELECT s.upstream_id=$3::text AND s.domain=$4 AND s.next_due_at=to_timestamp(1795000000) AND j.completed_at IS NOT NULL AND j.external_started_at IS NOT NULL AND j.last_error='' AND (j.result->>'upstream_id')::bigint=$3 AND (j.result->>'invoice_id')::bigint=$5 AND (j.result->>'cost_cents')::bigint=100 AND j.result->>'currency'='CNY' AND (SELECT count(*) FROM audit_events WHERE entity_type='service' AND entity_id=s.id::text AND action='supplier.delivery.succeeded' AND (payload->>'job_id')::bigint=j.id)=1 FROM services s JOIN provision_jobs j ON j.service_id=s.id WHERE s.id=$1 AND j.id=$2`, r.ServiceID, r.ProvisionJobID, 420000+r.ServiceID, fmt.Sprintf("g09-%d.test", r.ServiceID), 900000+r.ServiceID)
+				g09CohortAssertSQL(t, e.db, `SELECT s.upstream_id=$3::text AND s.domain=$4 AND s.next_due_at=to_timestamp(1795000000) AND j.completed_at IS NOT NULL AND j.external_started_at IS NOT NULL AND j.last_error='' AND (j.result->>'upstream_id')::bigint=$3 AND (j.result->>'invoice_id')::bigint=$5 AND (j.result->>'cost_cents')::bigint=100 AND j.result->>'currency'='CNY' AND (SELECT count(*) FROM audit_events WHERE entity_type='service' AND entity_id=s.id::text AND action='supplier.delivery.succeeded' AND (payload->>'job_id')::bigint=j.id)=1 FROM services s JOIN provision_jobs j ON j.service_id=s.id WHERE s.id=$1 AND j.id=$2`, r.ServiceID, r.ProvisionJobID, 420000+r.ServiceID, fmt.Sprintf("g09-%d.test", r.ServiceID), 900000+r.ServiceID)
 			}
 		}
 	}
 	for _, u := range e.identities {
-		g09AssertSQL(t, e.db, `SELECT u.balance_cents=8000 AND u.balance_cents=(SELECT sum(delta_cents) FROM balance_ledger WHERE user_id=u.id) AND (SELECT count(*) FROM balance_ledger WHERE user_id=u.id)=3 AND NOT EXISTS(SELECT 1 FROM customer_credit_accounts WHERE user_id=u.id AND used_cents<>0) AND NOT EXISTS(SELECT 1 FROM payment_transactions WHERE user_id=u.id) FROM users u WHERE id=$1`, u.customerID)
+		g09CohortAssertSQL(t, e.db, `SELECT u.balance_cents=8000 AND u.balance_cents=(SELECT sum(delta_cents) FROM balance_ledger WHERE user_id=u.id) AND (SELECT count(*) FROM balance_ledger WHERE user_id=u.id)=3 AND NOT EXISTS(SELECT 1 FROM customer_credit_accounts WHERE user_id=u.id AND used_cents<>0) AND NOT EXISTS(SELECT 1 FROM payment_transactions WHERE user_id=u.id) FROM users u WHERE id=$1`, u.customerID)
 	}
-	g09AssertSQL(t, e.db, `SELECT (SELECT count(*) FROM services)=300 AND (SELECT count(*) FROM orders)=300 AND (SELECT count(*) FROM invoices)=300 AND (SELECT count(*) FROM email_outbox)=150 AND (SELECT count(*) FROM sms_outbox)=150 AND (SELECT count(*) FROM tickets)=150 AND (SELECT count(*) FROM ticket_notification_events)=150 AND (SELECT count(*) FROM ticket_notification_deliveries)=300 AND NOT EXISTS(SELECT 1 FROM products WHERE stock<>0)`)
+	g09CohortAssertSQL(t, e.db, `SELECT (SELECT count(*) FROM services)=300 AND (SELECT count(*) FROM orders)=300 AND (SELECT count(*) FROM invoices)=300 AND (SELECT count(*) FROM email_outbox)=150 AND (SELECT count(*) FROM sms_outbox)=150 AND (SELECT count(*) FROM tickets)=150 AND (SELECT count(*) FROM ticket_notification_events)=150 AND (SELECT count(*) FROM ticket_notification_deliveries)=300 AND NOT EXISTS(SELECT 1 FROM products WHERE stock<>0)`)
 }
 
 func g09CohortTaskIDs(records []g09CohortSource) (jobs, mail, sms, services, invoices, customers []int64) {
@@ -870,6 +870,14 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 	workerStarted := time.Now().UTC()
 	deadline := workerStarted.Add(10 * time.Minute)
 	workers := []*g09SourceWorkerChild{g09StartSourceWorkerOrigin(t, binary, e.private, dsn, e.db.ProvisionEncryptionKey, 0, e.origin), g09StartSourceWorkerOrigin(t, binary, e.private, dsn, e.db.ProvisionEncryptionKey, 1, e.origin)}
+	defer func() {
+		if t.Failed() {
+			for _, w := range workers {
+				w.stop(t)
+			}
+			e.logFailureState(t, workers)
+		}
+	}()
 	for _, w := range workers {
 		w.waitReady(t)
 	}

@@ -74,3 +74,9 @@ DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库
 三个边界的600任务观察投影保留在测试日志；FlowID 原本关联 mutation key，公开时逐条 SHA256，其他公开字段仅实体ID、状态、时间与计数，无原始请求/凭据/地址。中间样本保留队列和明确可用性/null语义。最终只读负例仅改 manifest 的 invoice owner，必须在真实 purchase SQL 核验失败并永久 latch；不修改数据库事实。worker 的10分钟总预算同时检查循环起点、成功时和正常停机后，避免在超时边界靠先break而误过。
 
 上述桥接已经纯编译与守卫检查，独立同模型只读审查无阻断；600真实PG入口仍待主代理实测，不能据此记为数据库或容量通过。
+
+## 首轮实际 PG18 FAIL（保留）
+
+固定 `8962873`，独占授权PG18强制 opt-in race 退出1，用例140.58秒；pilot PASS，正式600来源完成封存，独立只读样本逐600任务全部pending/attempt0、不变量通过。排空后原 `verifySources(false)` 的某附加SQL布尔断言失败，旧helper只输出nil错误，无法定位具体谓词，不记为600成功或容量通过。原始日志、sealed边界与失败结果留在 `evidence/g09-cohort-20261017/run1/`，schema集合恢复、常驻三服务身份未变、API/Web前后200；父代理随后确认两个owned worker PID均不存在，未追认缺失的正常退出证据。
+
+复跑前仅增加脱敏query SHA256/数值实体参数、失败队列/采样投影及owned TERM/Wait记录；不公开SQL、正文、地址或driver错误。新增数据库deadlock计数变化/不可用/重置即FAIL守卫。原来源120秒和worker总10分钟门槛不变，不降低逐实体检查或修改生产实现。

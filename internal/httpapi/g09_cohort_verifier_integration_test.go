@@ -1,14 +1,80 @@
 package httpapi
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/g09fixture"
+	"github.com/codex/zjmfgo/internal/store"
 )
+
+// Report a stable source-query hash and numeric entity IDs, never raw SQL,
+// driver errors, addresses or the string arguments containing rendered content.
+func g09CohortAssertSQL(t *testing.T, db *store.Store, query string, args ...any) {
+	t.Helper()
+	var valid bool
+	err := db.Pool.QueryRow(t.Context(), query, args...).Scan(&valid)
+	if err == nil && valid {
+		return
+	}
+	ids := map[int]any{}
+	for i, arg := range args {
+		switch arg.(type) {
+		case int, int64:
+			ids[i+1] = arg
+		}
+	}
+	t.Fatalf("G09 cohort SQL invariant failed query_sha256=%s numeric_args=%v unavailable=%t", g09SourceHash(query), ids, err != nil)
+}
+
+func (e *g09CohortEnv) logFailureState(t *testing.T, workers []*g09SourceWorkerChild) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	var raw []byte
+	err := e.db.Pool.QueryRow(ctx, `SELECT jsonb_build_object(
+ 'provision',(SELECT jsonb_agg(x) FROM (SELECT action,status,attempts,count(*) FROM provision_jobs GROUP BY action,status,attempts ORDER BY action,status,attempts) x),
+ 'email',(SELECT jsonb_agg(x) FROM (SELECT status,attempts,count(*) FROM email_outbox GROUP BY status,attempts ORDER BY status,attempts) x),
+ 'sms',(SELECT jsonb_agg(x) FROM (SELECT status,attempts,count(*) FROM sms_outbox GROUP BY status,attempts ORDER BY status,attempts) x),
+ 'orders',(SELECT jsonb_agg(x) FROM (SELECT status,count(*) FROM orders GROUP BY status ORDER BY status) x))`).Scan(&raw)
+	state := map[string]any{"snapshotAvailable": err == nil, "candidateVerified": false, "capacityVerified": false, "verificationSamples": e.verificationSamples}
+	if err == nil {
+		state["queues"] = json.RawMessage(raw)
+	}
+	pids := make([]int, 0, len(workers))
+	clean := true
+	var workerErrors []map[string]any
+	for _, w := range workers {
+		pids = append(pids, w.cmd.Process.Pid)
+		clean = clean && w.stopped && w.cleanTERM
+		log, readErr := os.ReadFile(w.logPath)
+		if readErr != nil || len(log) > 1<<20 {
+			continue
+		}
+		for _, line := range bytes.Split(log, []byte("\n")) {
+			var entry struct{ Level, Msg, Error string }
+			if json.Unmarshal(line, &entry) != nil || entry.Level != "ERROR" {
+				continue
+			}
+			code := "unknown"
+			if match := regexp.MustCompile(`SQLSTATE ([A-Z0-9]{5})`).FindStringSubmatch(entry.Error); len(match) == 2 {
+				code = match[1]
+			}
+			workerErrors = append(workerErrors, map[string]any{"pid": w.cmd.Process.Pid, "messageSHA256": g09SourceHash(entry.Msg), "errorSHA256": g09SourceHash(entry.Error), "sqlstate": code})
+		}
+	}
+	state["workerPIDs"], state["workersExitedViaTERM"] = pids, clean
+	state["workerErrors"] = workerErrors
+	if public, err := json.Marshal(state); err == nil {
+		t.Logf("G09_COHORT_FAILURE %s", public)
+	}
+}
 
 // These observations describe only the sealed source-Handler cohort. They do
 // not turn an in-process API, loopback channels or race timings into capacity.
@@ -96,6 +162,14 @@ func (e *g09CohortEnv) observeVerifier(t *testing.T, phase string, expected *boo
 	// intermediate queue samples retain availability/null semantics and status.
 	evidence.Sample.Tasks = nil
 	e.verificationSamples = append(e.verificationSamples, evidence)
+	baseline := e.verificationSamples[0].Queues.Database
+	if queues.Database.Deadlocks == nil || baseline.Deadlocks == nil || *queues.Database.Deadlocks != *baseline.Deadlocks || !sameG09OptionalTime(queues.Database.StatsReset, baseline.StatsReset) {
+		t.Fatal("cohort database deadlock counter changed or became unavailable/reset")
+	}
+}
+
+func sameG09OptionalTime(a, b *time.Time) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && a.Equal(*b))
 }
 
 func (e *g09CohortEnv) verifyWrongOwnerRejected(t *testing.T, records []g09CohortSource) {
