@@ -1,0 +1,10 @@
+{
+  "sealed": "/tmp/zjmfgo-g09-runtime-candidate-fixed-cache-20261017",
+  "manifestSHA": "859230a9347ef5bff6b0da39711b0f255b2dab275fb694e90851b2b2895fb07f",
+  "source": "/www/wwwroot/zjmfgo-g09-controller-bootstrap",
+  "runnerCommit": "78b4d1e15010d9281b16b61e5bf1add680a4dd46",
+  "runRoot": "/tmp/zjmfgo-g09-runtime-run2-20261017",
+  "pgSocket": "/tmp/zjmfgo-refund-pg18-20261016/.s.PGSQL.55439",
+  "budget": "/tmp/zjmfgo-g09-runtime-budget-20261017.json",
+  "budgetSHA": "5c0d369518f0cd0d08ee7bb148b3a8634d5abea207cec8fc9e6b1ffe9b7ac7a8"
+}

@@ -1,0 +1,18 @@
+{
+  "--source": "/www/wwwroot/zjmfgo-g09-controller-bootstrap",
+  "--commit": "78b4d1e15010d9281b16b61e5bf1add680a4dd46",
+  "--output": "/tmp/zjmfgo-g09-runtime-candidate-fixed-cache-20261017",
+  "--dependencies": "/tmp/zjmfgo-runtime-trusted-dependencies-20261017/node_modules",
+  "--dependency-provenance": "/tmp/zjmfgo-runtime-trusted-dependencies-20261017/dependencies.json",
+  "--dependency-provenance-sha256": "76fd9fca5468507a9eee8741bb701ad18a7a3869589801b84fb8729e8799ecd1",
+  "--node": "/www/server/nodejs/v24.16.0/bin/node",
+  "--node-license": "/www/server/nodejs/v24.16.0/LICENSE",
+  "--node-provenance": "/tmp/zjmfgo-node-provenance-20261017.json",
+  "--node-provenance-sha256": "d5b3ecb606d8b99a46369560e91fbe5b6e992c0c06f67dde5b65db3228db3526",
+  "--budget": "/tmp/zjmfgo-runtime-build-budget2-20261017.json",
+  "--budget-sha256": "6fdabaf445638e89f2b206dbd7da8f30c7f491b56612018ee33d3e03895fa6ef",
+  "--api-internal-url": "http://127.0.0.1:19388",
+  "--web-origin": "http://127.0.0.1:19389",
+  "--public-origin": "http://127.0.0.1:19389",
+  "--runtime-user": "www"
+}
