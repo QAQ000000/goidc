@@ -191,3 +191,38 @@ test('real event-loop blocking started recorder cannot reproduce the formerly fa
   assert.equal(calls, 0); assert.equal(result.total.timeout, 1); assert.equal(result.total.dispatched, 0); assert.equal(result.total.succeeded, 0); assert.equal(result.ok, false);
   assert.ok(result.total.scheduleLag.maxMs >= 15);
 });
+
+test('success microtask after absolute drain boundary cannot bypass an overdue drain timer', async () => {
+  const clock = new Clock(); let resolve, signal;
+  const pending = runG09Load({ profile: profile({ requestTimeoutMs: 1000, drainTimeoutMs: 10, phases: [{ name: 'short', durationMs: 5, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 10 }] }] }), clock,
+    perform: data => { signal = data.signal; return new Promise(done => { resolve = done; }); } });
+  await clock.advance(5); clock.time = 15; resolve({ status: 200 }); await clock.flush();
+  const result = await pending;
+  assert.equal(signal.aborted, true); assert.equal(result.drainDeadlineAt, 15);
+  assert.equal(result.total.unfinished, 1); assert.equal(result.total.failed, 1); assert.equal(result.total.completed, 0); assert.equal(result.total.succeeded, 0); assert.equal(result.ok, false);
+  assert.equal(clock.timers.size, 0);
+});
+
+test('histogram quantiles remain conservative and missing samples cannot satisfy a numeric SLO', async () => {
+  const clock = new Clock();
+  const pending = runG09Load({ profile: profile({ maxConcurrency: 32, drainTimeoutMs: 1000, phases: [{ name: 'steady', durationMs: 200, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 100 }] }] }), clock,
+    perform: data => delayed(clock, data.streamSequence === 19 ? 501 : 201)(data) });
+  await clock.advance(1000); const result = await pending;
+  const latency = result.phaseCategories['steady/read'].latency;
+  assert.equal(latency.count, 20); assert.equal(latency.p95UpperMs, 500); assert.equal(latency.p99UpperMs, 501);
+  assert.ok(latency.p95UpperMs >= 201); assert.ok(latency.p99UpperMs >= 501);
+  // A controller must use finite-number checks: JS null <= threshold is true.
+  const controller = new AbortController(); controller.abort();
+  const empty = await runG09Load({ profile: profile(), clock: new Clock(), signal: controller.signal });
+  assert.equal(empty.total.latency.p99UpperMs, null); assert.equal(Number.isFinite(empty.total.latency.p99UpperMs), false);
+});
+
+test('finished recorder failures and asynchronous recorders cannot silently pass a run', async () => {
+  for (const recorder of [row => { if (row.event === 'finished') throw new Error('write failed'); }, async () => {}]) {
+    const clock = new Clock(); let calls = 0;
+    const pending = runG09Load({ profile: profile(), clock, record: recorder, perform: () => { calls++; return { status: 200 }; } });
+    await clock.advance(200); const result = await pending;
+    assert.equal(result.ok, false); assert.equal(result.reason, 'record_failed'); assert.equal(result.total.planned, 10);
+    assert.equal(result.total.planned, result.total.started + result.total.dropped); assert.ok(calls <= 1); assert.equal(clock.timers.size, 0);
+  }
+});
