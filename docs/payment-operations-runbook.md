@@ -33,7 +33,7 @@
 4. 确认只解决完整匹配的责任组，不改原账单、成功支付、客户余额、资源或佣金；其他交易号或未核验责任仍冻结。同交易号同金额后续重复通知保留历史，但不会再次冻结已解决的责任组。
 5. “异常责任资金汇总与收退流水”独立列示责任收入、已确认退回、待退和未核验金额。它不冲减普通销售净收入；凭证摘要不是自动到账证明。写操作需要有效员工浏览器会话，旧角色不会自动获新增权限。权限、会话及客户范围在数据库锁等待后重新检查。
 
-本批详情见[实施契约](payment-exception-resolution-contract-20261016.md)、[关单核验后端验收](payment-close-verification-backend-acceptance-20261017.md)、[责任退回后端验收](payment-anomaly-refund-backend-acceptance-20261017.md)。现用MPAY的标准查询差异见[商户协议复核](mpay-merchant-protocol-boundary-20261016.md)，不将其内部管理补单接口当成商户查单。
+本批详情见[实施契约](payment-exception-resolution-contract-20261016.md)、[关单核验后端验收](archive/README.md#f-7a764f2a39fe)、[责任退回后端验收](archive/README.md#f-9e373b30dd2b)。现用MPAY的标准查询差异见[商户协议复核](archive/README.md#f-fb0086507c2b)，不将其内部管理补单接口当成商户查单。
 
 ## 外部支付退款
 
@@ -48,4 +48,4 @@
 
 旧 SDK 的 POST /api.php?act=refund 只有 pid/key/trade_no/money，缺少商户退款号、幂等保证和退款结果查询，受理成功不能证明实际到账。本轮 MPAY 路由没有可信的标准关单/原路退款契约，不调用旧接口试探资金操作。
 
-指定商户为同机 http://127.0.0.1:82（PID 1000），真实扫码付款和异步通知通过，标准查单返回 404。同机 localhost HTTP 回调不代表公网 HTTPS 可达。详见 [真实支付验收](real-payment-acceptance-20261013.md)。
+指定商户为同机 http://127.0.0.1:82（PID 1000），真实扫码付款和异步通知通过，标准查单返回 404。同机 localhost HTTP 回调不代表公网 HTTPS 可达。详见 [真实支付验收](archive/README.md#f-3e9048caa174)。

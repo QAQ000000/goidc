@@ -1,8 +1,8 @@
 # 后台 105 页页面契约索引
 
-运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可复现生成 JSON 和本索引。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。
+运行 `node scripts/admin-page-contracts.mjs [台账路径] [旧版规范路径] [浏览器证据JSON路径]` 可在 `output/audit/` 生成 JSON 和索引；本文件保留当前人工审查入口。旧规范默认使用现有本地文档；不读取环境配置或部署密钥。
 
-[完整机器可读契约](./generated/admin-page-contracts.json) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `docs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。
+[完整机器可读契约](archive/README.md#f-ec7f78266753) 包含旧版字段、筛选、批量动作、弹窗、校验、真实注册 API 与证据、权限登记、存储及迁移候选、状态和四尺寸验收。源码存在不等于完成；本生成器没有执行编译或浏览器，1440/1024/390/320 四尺寸及无浏览器证据的结果为未验证。可选 `docs/admin-restore-browser-evidence.json` 按精确 newRoute 和宽度绑定验收与截图，仍不自动改变整体页面完成状态。旧规范绝对路径仅用于来源引用，并非部署配置。
 
 浏览器列和 JSON 的 result/checks 保留历史验收范围；截图失配或摘要未建立单独标注，不能据此证明本次完整性。生成器不读取截图，运行 `node scripts/check-admin-browser-evidence.mjs --root 截图所在项目根目录 --strict` 只读复核当前文件和摘要。
 

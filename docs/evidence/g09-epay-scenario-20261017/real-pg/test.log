@@ -1,5 +1,0 @@
-=== RUN   TestG09EpaySourceScenarioSmoke
-    g09_epay_source_smoke_test.go:152: PASS: two real source API intents -> independently signed Node notifications each with one exact duplicate -> paid invoices, unique payment/event/audit and unchanged balances; 12 real HTTP requests; real merchant/worker/candidate/capacity unverified
---- PASS: TestG09EpaySourceScenarioSmoke (2.10s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/httpapi	3.129s

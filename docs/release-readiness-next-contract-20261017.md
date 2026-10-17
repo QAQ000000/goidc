@@ -2,9 +2,9 @@
 
 **状态：计划，未验收，不计通过；G04 / G09 保持未关闭。** 审查源码基线 `3e3f12dcfb838a27c640b3a74f254d370eed7061`。本批只读源码、部署模板、既有报告、systemd/进程和监听信息，并执行三个只读 HTTP 探针；没有改代码、服务、数据库或代理，没有部署、运行全量测试、负载或浏览器。本文中的正式执行步骤均为下一批计划。
 
-后续准备首增量已完成[独立候选与当前schema代表性恢复验收](release-preparation-integration-acceptance-20261017.md)：固定源码构建器/摘要核验和同schema153夹具恢复通过。下表原始缺口作为基线保留；正式业务范围、完整runtime依赖、业务快照升级、真实目标及切流/切回/负载仍未验收，不据此关闭本契约。
+后续准备首增量已完成[独立候选与当前schema代表性恢复验收](archive/README.md#f-9eea5958b7e3)：固定源码构建器/摘要核验和同schema153夹具恢复通过。下表原始缺口作为基线保留；正式业务范围、完整runtime依赖、业务快照升级、真实目标及切流/切回/负载仍未验收，不据此关闭本契约。
 
-后续 G09 增量已完成[真实 worker SIGKILL 专项](worker-sigkill-acceptance-20261017.md)：供应商 sync/create 与 SMS 代表性网络回执丢失窗口、双 ready 进程恢复和终态重启通过，18 个子进程及4个schema清理已核验。仅 SQL 加速租约/退避，不证明实际五分钟恢复时间；其余提交故障点、SMTP、真实渠道、容量和 RTO/RPO 保持开放。本文后续表格与“可先准备”列表保留原计划口径，当前完成范围以专项及[当前差距](replacement-gap-audit-20261017.md)为准。
+后续 G09 增量已完成[真实 worker SIGKILL 专项](archive/README.md#f-9f0a2fbb3d5a)：供应商 sync/create 与 SMS 代表性网络回执丢失窗口、双 ready 进程恢复和终态重启通过，18 个子进程及4个schema清理已核验。仅 SQL 加速租约/退避，不证明实际五分钟恢复时间；其余提交故障点、SMTP、真实渠道、容量和 RTO/RPO 保持开放。本文后续表格与“可先准备”列表保留原计划口径，当前完成范围以专项及[当前差距](replacement-gap-audit-20261017.md)为准。
 
 ## 1. 当前证据能够证明什么
 
@@ -12,15 +12,15 @@
 | --- | --- | --- |
 | [README](../README.md)、[全量入口](../scripts/test-all.sh) | 强制隔离测试库与非缓存 Go 全量；前端 lint/typecheck/proxy/build 分开列出 | 没有将选定源码、迁移、API/worker/Web、systemd/代理配置组合为可核验的一致发布包；全量入口本身不执行前端、负载或所有 opt-in 进程测试 |
 | [systemd 模板](../deploy/systemd/zjmfgo-web.service) | 非 root 用户、重启策略、文件系统保护；Web 模板监听回环 | 固定可变工作目录；`After=` 仅启动顺序，不等待 API ready，不等于完整冷启动依赖管理；现场已安装 unit 必须独立核对 |
-| [代理修复](review-fixes-20261016.md)、[proxy 测试](../scripts/proxy-headers.test.mjs) | 一次性 Next 小应用的 dev/prod rewrite、伪造来源头及业务头透传；完整应用曾在独立临时目录构建 | 不证明当前常驻 Web 已含修复，不覆盖真实 Nginx/HTTPS、真实前端构建切换、旧页面静态资源可用或运行目录被 build 覆盖 |
-| [10-14 切换演练](migration-reconciliation-20261014.md)、[切换手册](cutover-runbook.md) | 历史 schema137 的隔离备份恢复/回滚，旧 PHP 冒烟；更早三服务重启/自愈记录 | 当前发布候选的全套恢复、真实目标维护页/切流/切回；历史独立 Nginx 因 `resty.core` 缺失未完成切流 |
-| [常驻 worker 验收](supplier-worker-acceptance-20261016.md) | 真实双 worker、定时 tick、TERM/重启、唯一续费/扣款及未知期限冻结；loopback 供应商 | 最新候选的任务执行中强杀、完整积压排空、目标容量和真实供应商未知结果恢复；不能把 TERM 重启当任意崩溃恢复 |
+| [代理修复](archive/README.md#f-ee600faf9a2c)、[proxy 测试](../scripts/proxy-headers.test.mjs) | 一次性 Next 小应用的 dev/prod rewrite、伪造来源头及业务头透传；完整应用曾在独立临时目录构建 | 不证明当前常驻 Web 已含修复，不覆盖真实 Nginx/HTTPS、真实前端构建切换、旧页面静态资源可用或运行目录被 build 覆盖 |
+| [10-14 切换演练](archive/README.md#f-f54b5f253356)、[切换手册](cutover-runbook.md) | 历史 schema137 的隔离备份恢复/回滚，旧 PHP 冒烟；更早三服务重启/自愈记录 | 当前发布候选的全套恢复、真实目标维护页/切流/切回；历史独立 Nginx 因 `resty.core` 缺失未完成切流 |
+| [常驻 worker 验收](archive/README.md#f-60e65ea15281) | 真实双 worker、定时 tick、TERM/重启、唯一续费/扣款及未知期限冻结；loopback 供应商 | 最新候选的任务执行中强杀、完整积压排空、目标容量和真实供应商未知结果恢复；不能把 TERM 重启当任意崩溃恢复 |
 | [只读/写任务恢复测试](../internal/httpapi/supplier_readonly_recovery_test.go)、[outbox 测试](../internal/httpapi/notification_outbox_recovery_test.go) | 过期/遗弃任务状态夹具与恢复函数，区分可重试只读和必须核验的写动作、死信边界 | 不等于最新生产 worker 在实际进程崩溃点上的端到端恢复 |
 | 各批四尺寸 / API / race 报告 | 指定提交与指定流程的局部证据，可复用有精确版本及摘要的证据 | 没有按本次上线范围汇总的角色/状态矩阵与发布候选绑定；未找到可据以声称目标容量达标的负载报告或专用负载脚本 |
 
 ## 2. 现场版本快照及复核方法
 
-**时效补充：本节表格是恢复前的只读快照，不能当作当前运行状态。** 后续发现主代理曾在常驻工作目录构建，误覆盖 `.next`，登录页引用资源返回500；随后以原Web源码独立重建并仅重启旧Web恢复，当前恢复BUILD_ID为 `0iI9JDdJluwxA2Y10gqnW`。API/worker进程与摘要均未变，恢复后的本机HTML/资源及只读浏览器冒烟通过，详见[事故与恢复](live-web-build-recovery-20261017.md)。下表单个HTML200本身没有排除该故障。恢复没有部署迁移153或本批前端，G04/G09不因此通过。
+**时效补充：本节表格是恢复前的只读快照，不能当作当前运行状态。** 后续发现主代理曾在常驻工作目录构建，误覆盖 `.next`，登录页引用资源返回500；随后以原Web源码独立重建并仅重启旧Web恢复，当前恢复BUILD_ID为 `0iI9JDdJluwxA2Y10gqnW`。API/worker进程与摘要均未变，恢复后的本机HTML/资源及只读浏览器冒烟通过，详见[事故与恢复](archive/README.md#f-561d7264f02b)。下表单个HTML200本身没有排除该故障。恢复没有部署迁移153或本批前端，G04/G09不因此通过。
 
 只读观察时 API / worker / Web 均 active。API PID `608393`、worker PID `608413`、Web PID `608418`，启动时间均为 2026-10-16 09:39（Asia/Shanghai）。API `127.0.0.1:8088`；Web **`0.0.0.0:3088`**，与仓库 Web 模板的 `127.0.0.1` 不同。这里只登记差异，没有变更绑定或推断公网可达性。
 
@@ -52,7 +52,7 @@
 
 ## 4. Web 构建和回滚的明确约束
 
-**后续防护增量：** `3dd0196` 已新增Linux `prebuild` 运行目录检查，真实同cwd的Next进程会使构建拒绝；主目录只执行检查，确实退出1。README现已要求独立目录构建。下段关于缺少该检查/说明的描述仅是本契约建立时的基线；独立发布、原子切换及旧chunk保留等缺口仍未关闭。防护及其cwd/时序/直接调用限制见[恢复记录](live-web-build-recovery-20261017.md)。
+**后续防护增量：** `3dd0196` 已新增Linux `prebuild` 运行目录检查，真实同cwd的Next进程会使构建拒绝；主目录只执行检查，确实退出1。README现已要求独立目录构建。下段关于缺少该检查/说明的描述仅是本契约建立时的基线；独立发布、原子切换及旧chunk保留等缺口仍未关闭。防护及其cwd/时序/直接调用限制见[恢复记录](archive/README.md#f-561d7264f02b)。
 
 现有 `web/package.json` 的 `build` 是 `next build`，默认输出当前目录 `.next`；`start` / systemd 从固定工作目录读取同一 `.next`。README 没有阻止执行人在常驻目录直接 build，也没有原子发布/资源保留脚本或发布清单。**当前检查未覆盖常驻 Next 使用中 `.next` 被构建覆盖的风险**。只完成临时目录构建是合适的隔离验证，但不等于该风险已在正式发布流程解决或演练通过。
 

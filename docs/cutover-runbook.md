@@ -226,7 +226,7 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
 正式窗口必须由 DBA 提供 GTID/binlog 权限证据；不能用快照时间代替增量边界。
 当前源库较 10-09 快照增加 1 个订单、1 张账单和 1 个服务，问题从 245 变为
 247 条。逐类丢弃/合成/人工修正决定与证据见
-[`migration-reconciliation-20261014.md`](migration-reconciliation-20261014.md)。
+[`migration-reconciliation-20261014.md`](archive/README.md#f-f54b5f253356)。
 
 隔离 PG18 完成迁移至 137、完整 apply、custom dump 恢复和 `pg_restore
 --clean --if-exists` 回滚；在临时源新增 `products/999999` 后，现有 importer
@@ -283,4 +283,4 @@ Worker 的外部调用必须以任务状态、供应商查单和人工确认结�
 
 ## 追加：真实付款与人工资金流程
 
-2026-10-13 真实扫码付款及异步通知已通过，旧过期单人工补单的迟到通知处理通过；当前 MPAY 标准查单返回 404，自动关单与原路退款不支持，实际退款到账未验证。详见 [支付验收](real-payment-acceptance-20261013.md) 和 [关单/退款人工操作手册](payment-operations-runbook.md)。
+2026-10-13 真实扫码付款及异步通知已通过，旧过期单人工补单的迟到通知处理通过；当前 MPAY 标准查单返回 404，自动关单与原路退款不支持，实际退款到账未验证。详见 [支付验收](archive/README.md#f-3e9048caa174) 和 [关单/退款人工操作手册](payment-operations-runbook.md)。

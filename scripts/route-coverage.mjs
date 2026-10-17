@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFile, writeFile, readdir, access } from 'node:fs/promises';
+import { readFile, writeFile, readdir, access, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,7 +89,7 @@ export async function generate({ cwd = process.cwd(), strict = false } = {}) {
   const inventoryPath = 'docs/generated/legacy-inventory.json';
   const reviewPath = 'docs/audit/route-reviews.json';
   const serverPath = 'internal/httpapi/server.go';
-  const outputPath = 'docs/generated/route-coverage.json';
+  const outputPath = 'output/audit/route-coverage.json';
   const inventory = JSON.parse(await readFile(path.join(cwd, inventoryPath), 'utf8'));
   const manifest = JSON.parse(await readFile(path.join(cwd, reviewPath), 'utf8'));
   const server = await readFile(path.join(cwd, serverPath), 'utf8');
@@ -141,6 +141,7 @@ export async function generate({ cwd = process.cwd(), strict = false } = {}) {
     current_only_legacy_calls: currentOnly, routes };
   // Strict mode refuses to replace a previously reviewed artifact with an incomplete audit.
   if (strict && counts.unreviewed) throw new Error(counts.unreviewed + ' routes still require review');
+  await mkdir(path.dirname(path.join(cwd, outputPath)), { recursive: true });
   await writeFile(path.join(cwd, outputPath), JSON.stringify(result, null, 2) + '\n');
   return result.summary;
 }

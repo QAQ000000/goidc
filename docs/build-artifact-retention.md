@@ -9,7 +9,7 @@
 - `bin/previous/20261006T113424Z-native-security/`
 - `bin/previous/20261006T093251Z-native-core/`
 
-第四批发布另保留必要的 schema077 恢复包 `bin/previous/20261006T143838Z-batch4/`，包含数据库、环境、四个二进制及旧前端；已实际恢复升级到080并核对业务摘要，见 [第四批验收](batch4-acceptance.md)。用户确认空间够用后未继续删除上述历史恢复包，当前共三份。
+第四批发布另保留必要的 schema077 恢复包 `bin/previous/20261006T143838Z-batch4/`，包含数据库、环境、四个二进制及旧前端；已实际恢复升级到080并核对业务摘要，见 [第四批验收](archive/README.md#f-48c7368d605f)。用户确认空间够用后未继续删除上述历史恢复包，当前共三份。
 
 根分区使用率从 99% 降至 76%，可用空间从约 1.3 GB 增至约 23 GB。API、worker 和 web 均保持 active；没有修改共享 PostgreSQL、Nginx或旧 PHP 项目。
 

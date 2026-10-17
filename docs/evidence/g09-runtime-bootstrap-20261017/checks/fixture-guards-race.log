@@ -1,8 +1,0 @@
-=== RUN   TestG09CandidateFixtureProtocolGuards
---- PASS: TestG09CandidateFixtureProtocolGuards (0.00s)
-=== RUN   TestG09CandidateFixtureBootstrapGuards
---- PASS: TestG09CandidateFixtureBootstrapGuards (0.02s)
-=== RUN   TestG09CandidateFixtureCleanupGuards
---- PASS: TestG09CandidateFixtureCleanupGuards (0.00s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/store	1.072s

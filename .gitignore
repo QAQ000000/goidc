@@ -8,3 +8,7 @@ output/
 .playwright-cli/
 *.pid
 *.log
+# Historical run artifacts are archived; fresh generator outputs belong in output/.
+/docs/evidence/
+/docs/generated/*.json
+!/docs/generated/legacy-inventory.json

@@ -1,9 +1,0 @@
-Synthetic session-only PREPARE; no schema/data changes.
-Original mixed bigint/text parameter: exit 1
-ERROR:  operator does not exist: bigint = text
-LINE 1: ...cle_type_probe AS SELECT ''::text=$1::text AND 1::bigint=$1;
-                                                                   ^
-HINT:  No operator matches the given name and argument types. You might need to add explicit type casts.
-
-Consistent bigint parameter then text cast: exit 0
-PREPARE

@@ -1,7 +1,0 @@
-=== RUN   TestPGObserverPureConfiguration
---- PASS: TestPGObserverPureConfiguration (0.00s)
-=== RUN   TestPGObserverIsolatedPG18Snapshot
-    pg_observer_test.go:143: explicit isolated PG18 observer opt-in required
---- SKIP: TestPGObserverIsolatedPG18Snapshot (0.00s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/g09fixture	0.008s

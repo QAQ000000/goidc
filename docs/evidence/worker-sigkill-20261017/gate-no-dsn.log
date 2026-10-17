@@ -1,1 +1,0 @@
-ZJMFGO_TEST_DATABASE_URL must point to an isolated loopback PostgreSQL 18 database ending in _test.

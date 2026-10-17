@@ -1,4 +1,0 @@
-=== RUN   TestLocalRenewalUpgradeFrom154DoesNotInventEffects
---- PASS: TestLocalRenewalUpgradeFrom154DoesNotInventEffects (4.06s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/store	4.075s

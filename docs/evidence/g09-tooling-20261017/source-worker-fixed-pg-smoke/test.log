@@ -1,5 +1,0 @@
-=== RUN   TestG09SourceWorkerLoopbackSmoke
-    g09_source_worker_smoke_test.go:395: PASS: source HTTP purchase/ticket -> real cmd/worker x2 -> simulation job 1 succeeded + email 1/SMS 1 sent; SQL source mapping and durable protocol hashes agree; TERM/Wait complete; candidate/600-task/capacity/minute-tick stability unverified
---- PASS: TestG09SourceWorkerLoopbackSmoke (5.62s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/httpapi	5.632s

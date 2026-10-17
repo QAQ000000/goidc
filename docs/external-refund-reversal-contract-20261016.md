@@ -1,6 +1,6 @@
 # 外部退款到账登记与关联冲正契约（2026-10-16）
 
-状态：后端可验证核心已实现，隔离PG18/race与fixture生命周期通过，见[后端验收](external-refund-reversal-backend-acceptance-20261016.md)；主线全量及前端浏览器由集成验收另列。本契约承接 `external_refunds` 第一增量，限定在“原商户已实际退款、证据已由人工核验”的后台登记流程；不调用商户退款接口，也不把本地过期或管理员口头确认当作退款到账证据。
+状态：后端可验证核心已实现，隔离PG18/race与fixture生命周期通过，见[后端验收](archive/README.md#f-5bfe6b3bd57e)；主线全量及前端浏览器由集成验收另列。本契约承接 `external_refunds` 第一增量，限定在“原商户已实际退款、证据已由人工核验”的后台登记流程；不调用商户退款接口，也不把本地过期或管理员口头确认当作退款到账证据。
 
 旧版事实参考：`/www/wwwroot/zjmf-manger-decoded/app/admin/controller/InvoiceController.php:1151` 以原 accounts 收款/退款合计约束金额，区分 `addascredit` 与 `only`，`only` 记外部出款并把账单改 `Refunded`；`ClientsServicesController.php:1452` 另有按天/全额/自定义的资源退款。Go 保留原收款与出款分开追溯的语义，但不照搬未核验到账、浮点金额、只改资源退款记录的宽松状态操作。
 

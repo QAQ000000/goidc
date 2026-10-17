@@ -1,6 +1,0 @@
-{
-  "exit_code": 1,
-  "finished_at": "2026-10-17T11:54:13.749100+08:00",
-  "timeout": "45m per package, unchanged",
-  "isolation": "loopback PostgreSQL18 *_test; one full suite; per-test random schemas"
-}

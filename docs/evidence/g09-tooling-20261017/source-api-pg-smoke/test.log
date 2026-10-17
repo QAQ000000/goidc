@@ -1,5 +1,0 @@
-=== RUN   TestG09SourceAPIScenarioSmoke
-    g09_source_api_smoke_test.go:195: PASS: source HTTP-to-Node manual balance payment, renewal, purchase, ticket and SQL facts; worker/candidate/capacity unverified
---- PASS: TestG09SourceAPIScenarioSmoke (2.25s)
-PASS
-ok  	github.com/codex/zjmfgo/internal/httpapi	2.255s

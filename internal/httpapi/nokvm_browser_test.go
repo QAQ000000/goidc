@@ -1,9 +1,7 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -16,19 +14,10 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
-	"github.com/jackc/pgx/v5"
 )
 
 func TestNOKVMBrowserFixture(t *testing.T) {
-	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
-	if ready == "" || finish == "" {
-		t.Skip("opt-in isolated browser fixture")
-	}
-	for _, path := range []string{ready, finish} {
-		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-			t.Fatal("use fresh fixture paths")
-		}
-	}
+	ready, finish := browserFixturePaths(t)
 	var creates atomic.Int32
 	var mu sync.Mutex
 	calls := []string{}
@@ -62,63 +51,19 @@ func TestNOKVMBrowserFixture(t *testing.T) {
 	}
 	server := httptest.NewServer(New(f.db, config.Config{PublicOrigin: origin, PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
 	defer server.Close()
-	ctx, stop := context.WithCancel(context.Background())
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				job, err := f.db.ClaimProvisionJob(ctx)
-				if errors.Is(err, pgx.ErrNoRows) {
-					continue
-				}
-				if err != nil {
-					t.Errorf("browser worker claim: %v", err)
-					return
-				}
-				if err = f.db.ProcessProvisionJob(ctx, *job); err != nil {
-					t.Errorf("browser worker: %v", err)
-					return
-				}
-			}
-		}
-	}()
-	defer func() { stop(); <-workerDone }()
+	stop := startBrowserProvisionWorker(t, f.db, nil)
+	defer stop()
 	var schema string
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
 		t.Fatal(err)
 	}
-	manifest, _ := json.Marshal(map[string]any{"api_origin": server.URL, "schema": schema, "username": "nokvm-root", "product_id": f.pid, "service_id": f.sid, "invoice_id": f.invoice})
-	if err := os.WriteFile(ready, manifest, 0600); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(ready)
-	defer os.Remove(finish)
-	t.Log("NOKVM browser fixture ready")
-	deadline := time.NewTimer(20 * time.Minute)
-	defer deadline.Stop()
-	tick := time.NewTicker(250 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		select {
-		case <-deadline.C:
-			t.Fatal("browser fixture timeout")
-		case <-tick.C:
-			if _, err := os.Stat(finish); err == nil {
-				mu.Lock()
-				evidence, _ := json.Marshal(map[string]any{"creates": creates.Load(), "calls": calls})
-				mu.Unlock()
-				t.Log(string(evidence))
-				if creates.Load() != 2 {
-					t.Errorf("expected exactly two create requests, got %d", creates.Load())
-				}
-				return
-			}
-		}
+	writeBrowserJSON(t, ready, map[string]any{"api_origin": server.URL, "schema": schema, "username": "nokvm-root", "product_id": f.pid, "service_id": f.sid, "invoice_id": f.invoice})
+	waitBrowserFinish(t, ready, finish, 20*time.Minute)
+	mu.Lock()
+	evidence, _ := json.Marshal(map[string]any{"creates": creates.Load(), "calls": calls})
+	mu.Unlock()
+	t.Log(string(evidence))
+	if creates.Load() != 2 {
+		t.Errorf("expected exactly two create requests, got %d", creates.Load())
 	}
 }

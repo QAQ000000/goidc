@@ -1,6 +1,6 @@
 # 客户信用门户设计契约（2026-10-16）
 
-状态：本批已实现并通过[隔离验收](customer-credit-portal-acceptance-20261016.md)，未部署。设计核对基线：`fd2a576e3c65c129ac7d1b5a8497c5d42bd61e87`；下文源码现状描述保留设计时点，实际实现与证据以验收文档为准。线上还款、账期合账、授信审批及现金退付仍未实现。
+状态：本批已实现并通过[隔离验收](archive/README.md#f-d383850d251d)，未部署。设计核对基线：`fd2a576e3c65c129ac7d1b5a8497c5d42bd61e87`；下文源码现状描述保留设计时点，实际实现与证据以验收文档为准。线上还款、账期合账、授信审批及现金退付仍未实现。
 
 ## 1. 范围与旧规范映射
 
@@ -13,7 +13,7 @@
 | 同页：应还、已还、还款日期；未出账、当月还款状态 | [迁移129](../db/migrations/129_credit_lifecycle.sql:1) 无账期、到期日、合账实体 | 仅按消费对应还款事实展示；不把创建日当还款期限，不把未还债务称未出账，不生成当月还款结论 |
 | 第39页，824–839行：信用总开关 | [信用设置](../internal/httpapi/credit_settings.go:8)、[付款校验](../internal/store/finance.go:164) | 总开关决定能否新增信用付款，不抹去既有债务 |
 | 常规设置，921行：前台信用额开关 | [设置结构](../internal/store/site_settings.go:37)、[设置表单](../web/src/components/site-settings.tsx:63) | 独立显示偏好；不得冒充付款授权开关 |
-| 缺口审计：客户信用门户 | [缺口记录](replacement-gap-audit-20261016.md:52) | 关闭客户可见性缺口；线上还款、授信审批、账期合账、已还款现金退付继续待实现 |
+| 缺口审计：客户信用门户 | [缺口记录](archive/README.md#f-e27ef7af0553) | 关闭客户可见性缺口；线上还款、授信审批、账期合账、已还款现金退付继续待实现 |
 
 旧规范源文件：`/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md`。以上为逐项设计映射，不将后台旧规范当作已有客户门户规范。
 
@@ -74,7 +74,7 @@ tab、q、日期、状态、页码及page size写URL；改筛选/条数重置第
 
 ## 7. 设计验收清单
 
-本表列出设计要求；实际运行结果和边界见[验收文档](customer-credit-portal-acceptance-20261016.md)，不把静态核对记作运行PASS。
+本表列出设计要求；实际运行结果和边界见[验收文档](archive/README.md#f-d383850d251d)，不把静态核对记作运行PASS。
 
 | 检查 | 必须形成的证据 |
 | --- | --- |

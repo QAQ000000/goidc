@@ -67,7 +67,7 @@ multiple or contradictory resources are rejected. `apply_credit` uses `enough=1`
 The exact invoice is read again after payment, including an incomplete or failed
 payment response, and must be Paid with unchanged cost and resource. No payment
 is resent when that read cannot confirm the outcome. Pending resources proceed
-through the existing sync queue. See [real unattended acceptance](supplier-unattended-acceptance-20261013.md)
+through the existing sync queue. See [real unattended acceptance](archive/README.md#f-1fa4fed8401c)
 for the 2026-10-13 CDN experience product result and deployment boundary.
 
 `Sync` first uses GET `/host/header?host_id=...&source=API`, which is the
@@ -100,7 +100,7 @@ the resulting local state is still provisioning. `Fraud` remains unsupported
 and requires explicit reconciliation rather than an inferred deletion.
 Isolated supplier race tests cover delayed callbacks and an in-flight `Active`
 read completing after a deletion callback. These changes are not yet deployed.
-See [legacy lifecycle review](legacy-supplier-lifecycle-review-20261013.md).
+See [legacy lifecycle review](archive/README.md#f-6836dc177d91).
 
 The downstream exposes the legacy callback `POST /api/host/sync` (and the
 versioned alias `/api/v1/host/sync`). The upstream sends `id` as the local
@@ -222,4 +222,4 @@ rejections or cost/ownership mismatches fail explicitly and release the lease.
 Manual successful reconciliation also confirms the original invoice and extended
 due date, rather than accepting an already-active resource as proof of renewal.
 Late polling/callback responses cannot shorten a confirmed supplier due date.
-See [renewal acceptance and runbook](supplier-renewal-acceptance-20261013.md).
+See [renewal acceptance and runbook](archive/README.md#f-f2eac220df6f).

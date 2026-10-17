@@ -1,7 +1,0 @@
-testing: warning: no tests to run
-PASS
-ok  	github.com/codex/zjmfgo/internal/store	1.035s [no tests to run]
-testing: warning: no tests to run
-PASS
-ok  	github.com/codex/zjmfgo/internal/httpapi	1.034s [no tests to run]
-Missing executed PASS for TestNotificationWorkerSIGKILLRecovery.

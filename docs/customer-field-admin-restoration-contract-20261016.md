@@ -11,7 +11,7 @@
 | 字段设置与提交 | [管理组件](../web/src/components/admin-customer-custom-fields.tsx:17)已有六类型、字段标识、名称、描述、正则、选项、排序、三标志及启用；真实CRUD | 保持字段语义，补齐草稿、冲突和异常恢复 |
 | 名称、类型、描述及检索提示 | 旧文把编辑控件和检索项混列；[列表API](../internal/httpapi/customer_custom_fields.go:89)已有q跨标识/名称/描述搜索、类型及启用筛选 | 固定现有三种筛选，不虚构独立描述搜索或无后端的“高级搜索” |
 | 在客户个人资料中显示 | 后台客户资料及定义版本已有；公开注册链路已完成 | 本批只做联动回归，不重写客户资料、六类型渲染或匿名注册 |
-| 注册显示与内部字段 | [注册批次验收](customer-registration-fields-acceptance-20261016.md)已覆盖公开白名单、内部required隔离、公开版本409及未知注册停止重提 | 沿用已验收契约，不新增公开字段或暴露正则/内部ID |
+| 注册显示与内部字段 | [注册批次验收](archive/README.md#f-f00be718a565)已覆盖公开白名单、内部required隔离、公开版本409及未知注册停止重提 | 沿用已验收契约，不新增公开字段或暴露正则/内部ID |
 
 基线已有 `GET/POST /admin/customer-fields`、`PATCH/DELETE /admin/customer-fields/{id}`；尚无字段详情GET。列表q当前直接进入ILIKE，`%/_`具有通配语义，无100字符限制；count和items分两次查询。前端筛选只在组件state，保存/删除每次生成新幂等键，没有原请求持久恢复。编辑409只显示错误，取消/遮罩/Escape直接关闭草稿。[原实现](../web/src/components/admin-customer-custom-fields.tsx:24)不能记作本批恢复能力已完成。
 

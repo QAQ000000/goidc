@@ -2494,7 +2494,7 @@
       "contract_delta": "GET /affiliate/overview按新单级规则及账务事件，不兼容/v1/affiliates文本字段和旧统计口径。",
       "evidence": [
         "internal/httpapi/affiliate.go",
-        "docs/affiliate-settlement-acceptance.md"
+        "docs/archive/README.md#f-56d4dfcb86eb"
       ],
       "go_routes": [
         "GET /api/v1/affiliate/overview"
@@ -2526,7 +2526,7 @@
       "contract_delta": "POST /affiliate/withdrawals使用金额整数分、收款资料/版本、幂等键；支付结果人工核验与审计不同于旧状态。",
       "evidence": [
         "internal/httpapi/affiliate_withdrawals.go",
-        "docs/affiliate-settlement-acceptance.md"
+        "docs/archive/README.md#f-56d4dfcb86eb"
       ],
       "go_routes": [
         "POST /api/v1/affiliate/withdrawals"
@@ -2557,7 +2557,7 @@
       "contract_delta": "GET /affiliate/commissions以账单快照及冲正事件为依据，冻结/解锁语义替代旧affiliate表。",
       "evidence": [
         "internal/httpapi/affiliate.go",
-        "docs/affiliate-settlement-acceptance.md"
+        "docs/archive/README.md#f-56d4dfcb86eb"
       ],
       "go_routes": [
         "GET /api/v1/affiliate/commissions"
@@ -4418,7 +4418,7 @@
         "cmd/worker/main.go",
         "internal/store/email.go",
         "internal/store/sms.go",
-        "docs/notification-scheduler-acceptance.md"
+        "docs/archive/README.md#f-9d2b3596b3a9"
       ],
       "go_routes": [],
       "pages": [],
@@ -4434,7 +4434,7 @@
         "cmd/worker/main.go",
         "internal/store/email.go",
         "internal/store/sms.go",
-        "docs/notification-scheduler-acceptance.md"
+        "docs/archive/README.md#f-9d2b3596b3a9"
       ],
       "go_routes": [],
       "pages": [],
@@ -4450,7 +4450,7 @@
         "cmd/worker/main.go",
         "internal/store/email.go",
         "internal/store/sms.go",
-        "docs/notification-scheduler-acceptance.md"
+        "docs/archive/README.md#f-9d2b3596b3a9"
       ],
       "go_routes": [],
       "pages": [],
@@ -4466,7 +4466,7 @@
         "cmd/worker/main.go",
         "internal/store/email.go",
         "internal/store/sms.go",
-        "docs/notification-scheduler-acceptance.md"
+        "docs/archive/README.md#f-9d2b3596b3a9"
       ],
       "go_routes": [],
       "pages": [],
@@ -4510,7 +4510,7 @@
       "contract_delta": "不提供通用URL/请求体批量执行端点，外部目的地址受适配器和环境约束。",
       "evidence": [
         "cmd/worker/main.go",
-        "docs/notification-scheduler-acceptance.md"
+        "docs/archive/README.md#f-9d2b3596b3a9"
       ],
       "go_routes": [],
       "pages": [],

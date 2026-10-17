@@ -1,9 +1,0 @@
-{
-  "source_commit": "f6e8cb4c71453e6b285e3d460cb11147ba55fac6",
-  "started_at": "2026-10-17T04:14:24.288093+00:00",
-  "command": "scripts/test-all.sh",
-  "timeout": "45m per package, unchanged",
-  "isolation": "loopback PostgreSQL18 *_test; single full suite; per-test random schemas",
-  "exit_code": 1,
-  "finished_at": "2026-10-17T04:42:15.106213+00:00"
-}

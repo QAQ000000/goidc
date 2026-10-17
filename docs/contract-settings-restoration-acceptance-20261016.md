@@ -17,7 +17,7 @@
 | 全部相关合同race | PASS，退出0；HTTP105.516s（总107.26s）；`/tmp/contract-settings-validation-20261016/race.log` |
 | Go build/vet | PASS，退出0；6.32s/6.05s，同目录build/vet日志 |
 | 最终前端typecheck/lint/webpack build | PASS；lint仅7条既有warning；`/tmp/zjmfgo-contract-settings-frontend-final.log`；独立worktree，不覆盖常驻构建 |
-| 浏览器 | PASS，1440/1024/390/320；49张截图（含320×568短屏），摘要strict49/49；[去敏证据](contract-settings-browser-evidence-20261016.json) |
+| 浏览器 | PASS，1440/1024/390/320；49张截图（含320×568短屏），摘要strict49/49；[去敏证据](archive/README.md#f-e13a9e66941a) |
 | 生命周期兼容 | PASS；修改/停用模板不改历史正文，关闭总开关后创建/提交明确contracts_disabled，历史可读 |
 | 审计/事务 | PASS；同key并发唯一审计、异参409、撤权重放拒绝、审计失败完整回滚并可同key重试 |
 

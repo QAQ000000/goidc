@@ -45,4 +45,4 @@
 
 PG18 隔离 HTTP 回归、快照/客户隔离/销售转交等待专项、Go vet、前端 lint/typecheck/生产构建、桌面及手机浏览器均通过。浏览器验证搜索筛选、取消、模拟意图后余额支付、退款、只读管理员、续费和购物车详情跳转。
 
-初版验收当时实例为 schema055，BUILD_ID 为 `h_Fy2K5hKpo4gwdUv0pKy`。备份 `bin/previous/20261005T204418Z-transactions/` 包含 PG dump、四个二进制、替换前实际 `.next` 及归档；隔离恢复和旧/新 API 检查通过，部署前后 15 张业务表完整摘要一致。root 真实登录、读取及会话撤销通过；测试数据只写入隔离库，测试库和预览已清理。详见 [初版验收记录](../output/playwright/transactions-acceptance-20261006.md)，当前批次状态见 [重构台账](reconstruction.md)。
+初版验收当时实例为 schema055，BUILD_ID 为 `h_Fy2K5hKpo4gwdUv0pKy`。备份 `bin/previous/20261005T204418Z-transactions/` 包含 PG dump、四个二进制、替换前实际 `.next` 及归档；隔离恢复和旧/新 API 检查通过，部署前后 15 张业务表完整摘要一致。root 真实登录、读取及会话撤销通过；测试数据只写入隔离库，测试库和预览已清理。初版验收记录原位于部署机的 `output/playwright/transactions-acceptance-20261006.md`，未随仓库保存；当前批次状态见 [重构台账](reconstruction.md)。

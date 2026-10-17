@@ -76,7 +76,7 @@ worker在事务外预读上游电源，只有on/off可发送旧签名GET。明�
 
 再按旧 `nokvm_Sync` 的 GET `/api/virtual/{id}` 读取flow累计入站/出站bytes和flow_limit GiB。累计统计周期由供应商决定，与图表选择范围独立；Go不据此收费或自动暂停。计数及限额用十进制字符串返回，前端BigInt换算GiB，避免JavaScript整数精度损失；总和溢出或累计读取失败时usage为null/usage_available=false，已取得的图表仍返回。限额0显示不限，缺失限额显示暂不可用。
 
-客户限本人已审核的active/suspended NOKVM服务；管理员只需services.view并满足客户范围。每分钟30次限制、no-store，网络调用在事务外，结束后重新检查账号、权限、范围、归属、资源/profile和服务状态，HTTP层再检查会话/API key撤销。查询不修改服务、凭据、账期、余额、库存或开通任务。前端提供四种范围、CPU/网络/磁盘切换、vda/vdb选择、提示值、刷新、CSV及加载/错误重试/空数据状态。证据见 [监控验收](nokvm-monitoring-acceptance.md)。
+客户限本人已审核的active/suspended NOKVM服务；管理员只需services.view并满足客户范围。每分钟30次限制、no-store，网络调用在事务外，结束后重新检查账号、权限、范围、归属、资源/profile和服务状态，HTTP层再检查会话/API key撤销。查询不修改服务、凭据、账期、余额、库存或开通任务。前端提供四种范围、CPU/网络/磁盘切换、vda/vdb选择、提示值、刷新、CSV及加载/错误重试/空数据状态。证据见 [监控验收](archive/README.md#f-0546e04e5252)。
 
 ## VNC 与后续范围
 

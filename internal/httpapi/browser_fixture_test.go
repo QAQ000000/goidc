@@ -1,14 +1,11 @@
 package httpapi
 
 import (
-	"encoding/json"
-	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
@@ -102,17 +99,7 @@ func adminBrowserFixture(t *testing.T, username string, setup func(*store.Store,
 }
 
 func adminBrowserFixtureStore(t *testing.T, username string, db *store.Store, setup func(*store.Store, http.Handler)) {
-	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
-	if ready == "" || finish == "" {
-		t.Skip("opt-in browser fixture")
-	}
-	for _, path := range []string{ready, finish} {
-		if _, err := os.Stat(path); err == nil {
-			t.Fatal("browser fixture requires new ready and finish paths")
-		} else if !errors.Is(err, os.ErrNotExist) {
-			t.Fatal(err)
-		}
-	}
+	ready, finish := browserFixturePaths(t)
 	var h http.Handler
 	if db == nil {
 		db, h = testServer(t)
@@ -154,37 +141,6 @@ func adminBrowserFixtureStore(t *testing.T, username string, db *store.Store, se
 	if err := db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
 		t.Fatal(err)
 	}
-	manifest, _ := json.Marshal(map[string]string{"api_origin": server.URL, "username": username, "schema": schema})
-	if err := os.WriteFile(ready, manifest, 0600); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(ready)
-	defer os.Remove(finish)
-	t.Log("isolated browser fixture ready")
-	limit := 15 * time.Minute
-	if raw := os.Getenv("ZJMFGO_BROWSER_TIMEOUT_SECONDS"); raw != "" {
-		if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 60 {
-			limit = time.Duration(seconds) * time.Second
-		}
-	}
-	if testDeadline, ok := t.Deadline(); ok {
-		limit = min(limit, time.Until(testDeadline)-30*time.Second)
-	}
-	if limit <= 0 {
-		t.Fatal("insufficient time for browser acceptance")
-	}
-	deadline := time.NewTimer(limit)
-	defer deadline.Stop()
-	tick := time.NewTicker(250 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		select {
-		case <-tick.C:
-			if _, err := os.Stat(finish); err == nil {
-				return
-			}
-		case <-deadline.C:
-			t.Fatal("browser fixture was not closed before its cleanup deadline")
-		}
-	}
+	writeBrowserJSON(t, ready, map[string]string{"api_origin": server.URL, "username": username, "schema": schema})
+	waitBrowserFinish(t, ready, finish, 15*time.Minute)
 }

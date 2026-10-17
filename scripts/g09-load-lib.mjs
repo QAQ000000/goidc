@@ -54,9 +54,10 @@ export function canonicalG09Profile(profile) {
 
 // This helper enforces redirects and target policy. Injected performers are trusted
 // controller code and must enforce the same policy for every transaction request.
-export async function performG09Fetch({ origin, signal }) {
+export async function performG09Fetch({ origin, signal, pathname = '/' }) {
   validateG09Origin(origin);
-  const response = await fetch(`${origin}/`, { signal, redirect: 'error' });
+  if (typeof pathname !== 'string' || !pathname.startsWith('/') || pathname.startsWith('//') || new URL(pathname, origin).origin !== origin) throw new Error('Same-origin path required');
+  const response = await fetch(new URL(pathname, origin), { signal, redirect: 'error' });
   // Consume the body so completion measures the whole HTTP request, not headers.
   if (response.body) { const reader = response.body.getReader(); let bytes = 0; try { while (true) { const part = await reader.read(); if (part.done) break; bytes += part.value.byteLength; if (bytes > 1048576) { await reader.cancel(); throw new Error('Response body budget exceeded'); } } } finally { reader.releaseLock(); } }
   return { status: response.status };

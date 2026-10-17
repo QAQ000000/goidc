@@ -6,7 +6,8 @@ The explicitly opted-in PG observer test creates and removes a random authorized
 PG18 test schema and seeds bounded fixture-only queue rows; this is separate
 from protocol-only default tests.
 The opt-in fixture runner and its candidate/namespace integration remain to be
-implemented. In particular, **there is no executable 600-task fixture yet**.
+implemented. The source-handler 600-task/two-worker test is executable in `internal/httpapi`;
+it is separate from sealed-candidate capacity acceptance. See `docs/capacity.md`.
 
 ## Protocol sinks
 
@@ -80,23 +81,11 @@ concurrent attempt. Queue/entity facts are schema scoped; database statistics
 include all its schemas and WAL is cluster wide. No SQL text or message body is
 collected. The opt-in `ZJMFGO_G09_PG_OBSERVER_SMOKE=1` test requires an authorized
 `ZJMFGO_TEST_DATABASE_URL`; see `docs/g09-pg-observer-increment-20261017.md`.
-No full candidate controller, 600-task run or capacity claim is provided here.
+No full candidate controller or capacity claim is provided by this package.
+The source-handler 600-task runner lives in `internal/httpapi`.
 
-## Offline capacity protocol
+## Scope after simplification
 
-`CapacityFixture` is a separate, explicit protocol state machine for the
-future controller. It accepts the existing 450 source rows in bounded chunks,
-seals them through `SealCohortSources` (300 purchases plus 150 tickets, which
-map to 600 queue entities), and then checks a caller-supplied read-only
-projection one entity at a time. A pending projection remains `draining`;
-only six hundred valid terminal observations move the protocol to
-`CapacityVerified`. This state is evidence about the supplied projection
-only, never a production worker, database, delivery, or capacity result.
-
-`Cleanup` is an ownership/state guard and has no deletion or process side
-effect. `ValidateCapacityRequest` and `Apply` use a private sequence and a
-separate action set (`register-sources`, `seal-sources`, `begin-drain`,
-`verify-drain`, `abort`, `cleanup`); the existing bootstrap control protocol
-is unchanged. The focused contract tests require
-`ZJMFGO_G09_CAPACITY_FIXTURE_PROTOCOL=1` and use no PostgreSQL or external
-service.
+The unconnected offline capacity protocol is archived with its tests. Protocol
+sinks, journals, cohort reconciliation and the PG observer remain because the
+executable HTTP/worker regressions use them. See `docs/capacity.md`.

@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -85,21 +84,5 @@ func setupExternalRefundReversalBrowser(t *testing.T, db *store.Store, h http.Ha
 
 func writePaymentBrowserManifest(t *testing.T, value any) {
 	t.Helper()
-	manifest, err := json.Marshal(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := os.Getenv("ZJMFGO_BROWSER_READY_FILE") + ".fixture.json"
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.Remove(path) })
-	if _, err = file.Write(manifest); err != nil {
-		file.Close()
-		t.Fatal(err)
-	}
-	if err = file.Close(); err != nil {
-		t.Fatal(err)
-	}
+	writeBrowserJSON(t, os.Getenv("ZJMFGO_BROWSER_READY_FILE")+".fixture.json", value)
 }

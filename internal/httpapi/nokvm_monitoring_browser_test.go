@@ -2,12 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -17,15 +15,7 @@ import (
 )
 
 func TestNOKVMMonitoringBrowserFixture(t *testing.T) {
-	ready, finish := os.Getenv("ZJMFGO_BROWSER_READY_FILE"), os.Getenv("ZJMFGO_BROWSER_FINISH_FILE")
-	if ready == "" || finish == "" {
-		t.Skip("opt-in isolated browser fixture")
-	}
-	for _, path := range []string{ready, finish} {
-		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-			t.Fatal("use fresh fixture paths")
-		}
-	}
+	ready, finish := browserFixturePaths(t)
 	var reads atomic.Int32
 	f := nokvmFixtureSetup(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "monitoring") {
@@ -61,33 +51,13 @@ func TestNOKVMMonitoringBrowserFixture(t *testing.T) {
 	}
 	server := httptest.NewServer(New(f.db, config.Config{PublicOrigin: "http://localhost:3099", PaymentMockEnabled: true, PaymentGatewaySecret: "integration-payment-secret", NOKVMProfiles: f.db.Provisioners, ProvisionEncryptionKey: f.db.ProvisionEncryptionKey}, slog.Default()).Handler())
 	defer server.Close()
-	manifest, _ := json.Marshal(map[string]any{"api_origin": server.URL, "service_id": f.sid, "customer": "nokvm-customer", "reader": "monitoring-browser-reader"})
-	if err := os.WriteFile(ready, manifest, 0600); err != nil {
-		t.Fatal(err)
+	writeBrowserJSON(t, ready, map[string]any{"api_origin": server.URL, "service_id": f.sid, "customer": "nokvm-customer", "reader": "monitoring-browser-reader"})
+	waitBrowserFinish(t, ready, finish, 20*time.Minute)
+	if reads.Load() < 4 || f.powerInvariant(t) != before {
+		t.Fatal("monitor reads/finance invariant", reads.Load())
 	}
-	defer os.Remove(ready)
-	defer os.Remove(finish)
-	t.Log("monitoring browser fixture ready")
-	deadline := time.NewTimer(20 * time.Minute)
-	defer deadline.Stop()
-	tick := time.NewTicker(250 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		select {
-		case <-deadline.C:
-			t.Fatal("browser fixture timeout")
-		case <-tick.C:
-			if _, err := os.Stat(finish); err != nil {
-				continue
-			}
-			if reads.Load() < 4 || f.powerInvariant(t) != before {
-				t.Fatal("monitor reads/finance invariant", reads.Load())
-			}
-			var jobs int
-			if err := f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM provision_jobs WHERE service_id=$1", f.sid).Scan(&jobs); err != nil || jobs != 1 {
-				t.Fatal("monitor created jobs", jobs, err)
-			}
-			return
-		}
+	var jobs int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM provision_jobs WHERE service_id=$1", f.sid).Scan(&jobs); err != nil || jobs != 1 {
+		t.Fatal("monitor created jobs", jobs, err)
 	}
 }
