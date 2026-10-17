@@ -49,31 +49,48 @@ func (e *g09CohortEnv) logFailureState(t *testing.T, workers []*g09SourceWorkerC
 	}
 	pids := make([]int, 0, len(workers))
 	clean := true
-	var workerErrors []map[string]any
 	for _, w := range workers {
 		pids = append(pids, w.cmd.Process.Pid)
 		clean = clean && w.stopped && w.cleanTERM
-		log, readErr := os.ReadFile(w.logPath)
-		if readErr != nil || len(log) > 1<<20 {
-			continue
-		}
-		for _, line := range bytes.Split(log, []byte("\n")) {
-			var entry struct{ Level, Msg, Error string }
-			if json.Unmarshal(line, &entry) != nil || entry.Level != "ERROR" {
-				continue
-			}
-			code := "unknown"
-			if match := regexp.MustCompile(`SQLSTATE ([A-Z0-9]{5})`).FindStringSubmatch(entry.Error); len(match) == 2 {
-				code = match[1]
-			}
-			workerErrors = append(workerErrors, map[string]any{"pid": w.cmd.Process.Pid, "messageSHA256": g09SourceHash(entry.Msg), "errorSHA256": g09SourceHash(entry.Error), "sqlstate": code})
-		}
 	}
 	state["workerPIDs"], state["workersExitedViaTERM"] = pids, clean
-	state["workerErrors"] = workerErrors
+	state["workerLogs"] = g09CohortWorkerLogEvidence(workers)
 	if public, err := json.Marshal(state); err == nil {
 		t.Logf("G09_COHORT_FAILURE %s", public)
 	}
+}
+
+var g09CohortSQLState = regexp.MustCompile(`SQLSTATE ([A-Z0-9]{5})`)
+
+func g09CohortWorkerLogEvidence(workers []*g09SourceWorkerChild) map[string]any {
+	var entries []map[string]any
+	for _, w := range workers {
+		log, err := os.ReadFile(w.logPath)
+		if err != nil || len(log) > 1<<20 {
+			return map[string]any{"available": false, "reason": "private_log_unavailable_or_budget"}
+		}
+		for _, line := range bytes.Split(log, []byte("\n")) {
+			if len(line) == 0 {
+				continue
+			}
+			var entry struct{ Level, Msg, Error string }
+			if json.Unmarshal(line, &entry) != nil {
+				return map[string]any{"available": false, "reason": "private_log_invalid"}
+			}
+			if entry.Level != "ERROR" {
+				continue
+			}
+			code := "unknown"
+			if match := g09CohortSQLState.FindStringSubmatch(entry.Error); len(match) == 2 {
+				code = match[1]
+			}
+			entries = append(entries, map[string]any{"pid": w.cmd.Process.Pid, "messageSHA256": g09SourceHash(entry.Msg), "errorSHA256": g09SourceHash(entry.Error), "sqlstate": code})
+			if len(entries) > 100 {
+				return map[string]any{"available": false, "reason": "private_log_error_budget"}
+			}
+		}
+	}
+	return map[string]any{"available": true, "errorCount": len(entries), "errors": entries}
 }
 
 // These observations describe only the sealed source-Handler cohort. They do

@@ -80,3 +80,7 @@ DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库
 固定 `8962873`，独占授权PG18强制 opt-in race 退出1，用例140.58秒；pilot PASS，正式600来源完成封存，独立只读样本逐600任务全部pending/attempt0、不变量通过。排空后原 `verifySources(false)` 的某附加SQL布尔断言失败，旧helper只输出nil错误，无法定位具体谓词，不记为600成功或容量通过。原始日志、sealed边界与失败结果留在 `evidence/g09-cohort-20261017/run1/`，schema集合恢复、常驻三服务身份未变、API/Web前后200；父代理随后确认两个owned worker PID均不存在，未追认缺失的正常退出证据。
 
 复跑前仅增加脱敏query SHA256/数值实体参数、失败队列/采样投影及owned TERM/Wait记录；不公开SQL、正文、地址或driver错误。新增数据库deadlock计数变化/不可用/重置即FAIL守卫。原来源120秒和worker总10分钟门槛不变，不降低逐实体检查或修改生产实现。
+
+诊断 `run2` 固定 `5a2db1a` 退出1，用例143.03秒。SQL hash `0426390b…` 精确对应通用purchase关联断言，service/create ID271已有正常sync行；失败快照实际是300 create succeeded +150 mail sent +150 SMS sent（各attempt1），另29个正常sync succeeded。断言的`j.id=$9`写在SELECT布尔表达式、JOIN却仅service_id，QueryRow可能取到sync行。独立分支窄修将冻结create ID同时放进JOIN，保留全部原谓词及计数，不改生产代码或周期背景。
+
+run2两个worker均正常TERM/Wait、PID消失，32个数据库样本deadlocks均0，schema和常驻核对通过，FAIL原证据不覆盖。另记录1次job claim的`23514`：错误hash与已知`renewal_refund_hold`守卫字符串完全匹配，任务领取事务回滚后由正常轮询继续；不把该事件抹成无错误日志，也不调整154/155保护。后续成功/失败结果均保留脱敏worker错误数量/hash/SQLSTATE，可用性不明不当0；不声称零worker ERROR。

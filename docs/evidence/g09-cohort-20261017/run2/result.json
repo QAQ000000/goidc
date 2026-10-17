@@ -1,0 +1,109 @@
+{
+  "mode": "exact_600_source_two_worker_prerequisite",
+  "source_commit": "5a2db1aa9f48773ae97a68112c212e37a567fc48",
+  "started_at": "2026-10-17T06:14:23.531361+00:00",
+  "commands": [
+    [
+      "scripts/go.sh",
+      "test",
+      "-race",
+      "./internal/httpapi",
+      "-run",
+      "^TestG09CohortSourceWorkerSmoke$",
+      "-count=1",
+      "-timeout=20m",
+      "-v"
+    ]
+  ],
+  "postgresql": [
+    "18.0"
+  ],
+  "health_before": {
+    "api": 200,
+    "web": 200
+  },
+  "resident_before": {
+    "608393": {
+      "start_ticks": "6845798",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "608413": {
+      "start_ticks": "6845905",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "1647696": {
+      "start_ticks": "12716699",
+      "exe": "/www/server/nodejs/v24.16.0/bin/node",
+      "cwd": "/www/wwwroot/zjmfgo/web"
+    }
+  },
+  "schemas_before": [
+    "information_schema",
+    "pg_catalog",
+    "pg_toast",
+    "public",
+    "zjmfgo_test_68923040c22a2af1",
+    "zjmfgo_test_d68c631a65c4da8a"
+  ],
+  "candidate_verified": false,
+  "capacity_verified": false,
+  "pass": false,
+  "source_sha256": {
+    "internal/httpapi/g09_cohort_source_worker_smoke_test.go": "0fb79849bea4142973b4d209a55a7da6f5e836f080c7f2b5bfc7b7bf2987df63",
+    "internal/httpapi/g09_cohort_source_guards_test.go": "a585ef10dbcb73f2817cacaa39cd89aa409e9e88f849e7b850ccc28cafa6e784",
+    "internal/httpapi/g09_cohort_verifier_integration_test.go": "3ba36b10ec4c15f28760a823138b680c5dfdfeed65ae5446fccb8679242f714a",
+    "internal/g09fixture/cohort.go": "6e65590c7592ebe347d57b830a11f9d8b09713a19f7078c0b9d2ac22818bfab8",
+    "internal/g09fixture/cohort_entities.go": "056beab4bd0c92408a64155bb012e3b0e144458549ddf370e200dc55d2ba9bc8",
+    "internal/g09fixture/cohort_verifier.go": "3cb62406364cb5bf329ed79389e49d4c910608c2158d43dbc60161faeddba719",
+    "internal/g09fixture/cohort_test.go": "84b45d44740f9ab678aebff955008fdf3d68cb372a95c150ca2f9b96a1d69f1d"
+  },
+  "exit_code": 1,
+  "test_pass": false,
+  "skipped": false,
+  "wrong_owner_sql_rejected_and_latched": false,
+  "boundary_phases": [
+    "sealed_pending"
+  ],
+  "boundary_denominators": [
+    600
+  ],
+  "boundary_statuses": [
+    "PENDING"
+  ],
+  "schemas_after": [
+    "information_schema",
+    "pg_catalog",
+    "pg_toast",
+    "public",
+    "zjmfgo_test_68923040c22a2af1",
+    "zjmfgo_test_d68c631a65c4da8a"
+  ],
+  "schemas_restored": true,
+  "resident_after": {
+    "608393": {
+      "start_ticks": "6845798",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-api",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "608413": {
+      "start_ticks": "6845905",
+      "exe": "/www/wwwroot/zjmfgo/bin/zjmfgo-worker",
+      "cwd": "/www/wwwroot/zjmfgo"
+    },
+    "1647696": {
+      "start_ticks": "12716699",
+      "exe": "/www/server/nodejs/v24.16.0/bin/node",
+      "cwd": "/www/wwwroot/zjmfgo/web"
+    }
+  },
+  "resident_processes_unchanged": true,
+  "health_after": {
+    "api": 200,
+    "web": 200
+  },
+  "source_unchanged": true,
+  "owned_worker_pids_absent": null,
+  "finished_at": "2026-10-17T06:17:05.556912+00:00"
+}
