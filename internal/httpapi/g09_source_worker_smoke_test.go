@@ -524,6 +524,11 @@ type g09SourceWorkerChild struct {
 
 func g09StartSourceWorker(t *testing.T, binary, dir, dsn string, key []byte, slot int) *g09SourceWorkerChild {
 	t.Helper()
+	return g09StartSourceWorkerOrigin(t, binary, dir, dsn, key, slot, "http://localhost:3088")
+}
+
+func g09StartSourceWorkerOrigin(t *testing.T, binary, dir, dsn string, key []byte, slot int, origin string) *g09SourceWorkerChild {
+	t.Helper()
 	c := &g09SourceWorkerChild{done: make(chan error, 1), logPath: filepath.Join(dir, fmt.Sprintf("worker-%d.private.jsonl", slot))}
 	var err error
 	c.log, err = os.OpenFile(c.logPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
@@ -532,7 +537,7 @@ func g09StartSourceWorker(t *testing.T, binary, dir, dsn string, key []byte, slo
 	}
 	c.cmd = exec.Command(binary)
 	c.cmd.Dir = dir // No project .env, credentials, proxies or inherited channel config.
-	c.cmd.Env = []string{"DATABASE_URL=" + dsn, "PUBLIC_ORIGIN=http://localhost:3088", "PROVISION_ENCRYPTION_KEY=" + hex.EncodeToString(key), "PAYMENT_MOCK_ENABLED=false", "SMTP_HOST=127.0.0.1", "SMTP_PORT=1", "SMTP_FROM=g09-disabled@example.test", "SMTP_TLS_MODE=none"}
+	c.cmd.Env = []string{"DATABASE_URL=" + dsn, "PUBLIC_ORIGIN=" + origin, "PROVISION_ENCRYPTION_KEY=" + hex.EncodeToString(key), "PAYMENT_MOCK_ENABLED=false", "SMTP_HOST=127.0.0.1", "SMTP_PORT=1", "SMTP_FROM=g09-disabled@example.test", "SMTP_TLS_MODE=none"}
 	c.cmd.Stdout, c.cmd.Stderr = c.log, c.log
 	if err = c.cmd.Start(); err != nil {
 		c.log.Close()
