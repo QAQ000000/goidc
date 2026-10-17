@@ -26,9 +26,20 @@ export function responseEvidence(response, { phase, route, purpose } = {}) {
 export function sessionCookie(headers) {
   const values = headers['set-cookie'];
   check(Array.isArray(values), 'Session Cookie absent');
-  const cookies = values.filter(value => /^zjmfgo_session=/.test(value)).map(value => value.split(';')[0]);
-  check(cookies.length === 1 && /^zjmfgo_session=[A-Za-z0-9_-]{16,256}$/.test(cookies[0]), 'Invalid session Cookie');
-  return cookies[0];
+  const cookies = values.filter(value => /^zjmfgo_session=/.test(value));
+  check(cookies.length === 1, 'Exactly one session Cookie required');
+  const [cookie, ...attributes] = cookies[0].split(';').map(value => value.trim());
+  check(/^zjmfgo_session=[A-Za-z0-9_-]{16,256}$/.test(cookie), 'Invalid session Cookie');
+  const names = attributes.map(value => value.split('=')[0].toLowerCase());
+  check(new Set(names).size === names.length && attributes.some(value => /^httponly$/i.test(value)) && attributes.some(value => /^path=\/$/i.test(value)) && attributes.some(value => /^samesite=lax$/i.test(value)) && !names.includes('secure') && !names.includes('domain'), 'Session Cookie transport attributes differ');
+  return cookie;
+}
+export function noStore(headers) { return /(?:^|,)\s*no-store\s*(?:,|$)/i.test(headers['cache-control'] ?? ''); }
+export function publicRedirect(location, origin) {
+  check(typeof location === 'string' && location.length > 0, 'Redirect location absent');
+  const target = new URL(location, origin);
+  check(target.origin === origin && !target.username && !target.password, 'Public redirect exposes nonpublic origin');
+  return target.pathname;
 }
 export function selectDrainAsset(entries) {
   const selected = entries.filter(row => /\.js$/.test(row.url) && row.bytes >= 65536 && row.bytes <= 131072).sort((a, b) => a.bytes - b.bytes || a.url.localeCompare(b.url))[0];
@@ -195,7 +206,8 @@ export async function runInner() {
     }
     check(same(buildDualWebPlan(Object.fromEntries(Object.entries(releases).map(([key, row]) => [key, { root: row.root, manifest: row.manifest, description: row.description, manifestSHA256: plan[key].manifestSHA256 }]))), plan), 'Plan differs from actual declared packages');
     check(releases.old.env.DATABASE_URL === releases.next.env.DATABASE_URL && request.pgSocket === `/pg/.s.PGSQL.${releases.old.database.port}` && (await lstat(request.pgSocket)).isSocket(), 'Exact shared-schema database bridge required');
-    evidence.isolation = { uid: process.getuid(), gid: process.getgid(), netNamespace, mountNamespace, loopbackOnly: true, sourceHidden: true, toolchainHidden: true, readOnlyReleases: true };
+    evidence.isolation = { uid: process.getuid(), gid: process.getgid(), netNamespace, networkNamespace: netNamespace, mountNamespace, pidNamespace: await readlink('/proc/self/ns/pid'), loopbackOnly: true, sourceHidden: true, toolchainHidden: true, readOnlyReleases: true };
+    await writeJSON('/mutable/isolation.json', evidence.isolation);
     bridge = net.createServer(client => {
       const upstream = net.createConnection({ path: request.pgSocket });
       for (const socket of [client, upstream]) { bridgeSockets.add(socket); socket.once('close', () => bridgeSockets.delete(socket)); }
@@ -235,7 +247,12 @@ export async function runInner() {
       mark(`${key}-web-ready`); row.webHandle = service(key, 'web', row.steps.web);
       await waitFor(async () => { check(!row.webHandle.exited && !interrupted, 'Web exited'); return requestHTTP(plan[key].web, '/', { timeoutMS: 1000 }).then(r => r.status === 200).catch(() => false); }, row.description.timeouts.readySeconds, 'Web ready');
       internal[key] = await verifyPages(row.manifest, row.root, plan[key].web);
-      const html = await requestHTTP(plan[key].web, '/'); check(html.status === 200 && html.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'SSR used fallback site metadata');
+      const html = await requestHTTP(plan[key].web, '/'); check(html.status === 200 && noStore(html.headers) && html.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'SSR used fallback site metadata or allows storage');
+      for (const route of ['/login', '/admin-login', '/api/v1/site']) {
+        const response = await requestHTTP(plan[key].web, route);
+        check(response.status === 200 && noStore(response.headers), 'Internal Web dynamic cache policy differs');
+        evidence.checks.push(responseEvidence(response, { phase: `${key}-internal`, route, purpose: 'internal-dynamic-no-store' }));
+      }
       const ids = await auditProcesses(row.root, ['api', 'web'].map(name => ({ ...row.steps[name], name: `${key}-${name}`, traceName: `${key}-${name}` })), '/mutable/logs');
       check(ids.length === 2 && ['api', 'web'].every(name => ids.some(item => item.name === `${key}-${name}`)), 'Actual package service identities absent');
       for (const id of ids) {
@@ -255,6 +272,10 @@ export async function runInner() {
     const drainAsset = selectDrainAsset(plan.retention.entries), observations = evidence.observations;
     async function record(origin, route, options = {}, purpose = 'check') {
       const result = await requestHTTP(origin, route, options); evidence.checks.push(responseEvidence(result, { phase, route, purpose }));
+      if (!route.startsWith('/_next/static/')) {
+        check(noStore(result.headers), 'Dynamic response must prohibit storage');
+        if (origin === plan.publicOrigin && [301, 302, 303, 307, 308].includes(result.status)) publicRedirect(result.headers.location, plan.publicOrigin);
+      }
       check(evidence.checks.length < 3000, 'Bounded check evidence exceeded'); return result;
     }
     function goodAsset(response, entry, method = 'GET', generation) {
@@ -314,7 +335,8 @@ export async function runInner() {
       const activeKey = name === 'next' ? 'next' : 'old', manifest = releases[activeKey].manifest;
       for (const route of ['/', '/login', '/admin-login']) {
         const result = await record(plan.publicOrigin, route, {}, 'public-html');
-        check(result.status === 200 && result.headers['x-release-generation'] === name && result.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Public real SSR HTML/generation differs');
+        const expectedTitle = route === '/admin-login' ? '<title>登录 - 财务系统</title>' : `<title>${prepared.siteMarker}</title>`;
+        check(result.status === 200 && result.headers['x-release-generation'] === name && result.body.toString().includes(expectedTitle), 'Public real SSR HTML/generation differs');
         const assets = pageAssets(result.body.toString(), plan.publicOrigin);
         for (const resource of assets) {
           const record = manifest.artifacts.find(row => row.path === assetArtifact(resource, manifest.web.appRoot));
@@ -368,6 +390,21 @@ export async function runInner() {
         const result = await record(plan.publicOrigin, '/api/v1/auth/logout', { method: 'POST', headers: { ...headers, Cookie: actor[who].cookie } }, 'rejected-origin-or-requested-with');
         check(result.status === 403, 'Origin/requested-with failure mutated auth'); await me(plan.publicOrigin, actor[who]);
       }
+      const spoofed = { Forwarded: 'for=198.51.100.7;host=invalid.example;proto=https', 'X-Forwarded-Host': 'invalid.example:443', 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': '198.51.100.7', 'X-Real-IP': '198.51.100.7' };
+      for (const who of ['customer', 'admin']) {
+        const result = await record(plan.publicOrigin, '/api/v1/me', { headers: { ...spoofed, Cookie: actor[who].cookie } }, 'spoofed-forwarding-session');
+        const data = JSON.parse(result.body).data;
+        check(result.status === 200 && data.id === actor[who].id && data.role === actor[who].role, 'Spoofed forwarding changed session identity');
+        const permission = await record(plan.publicOrigin, '/api/v1/admin/site-settings', { headers: { ...spoofed, Cookie: actor[who].cookie } }, 'spoofed-forwarding-permission');
+        check(permission.status === (who === 'customer' ? 403 : 200), 'Spoofed forwarding changed permission');
+        const route = who === 'customer' ? '/console/contracts' : '/admin';
+        const ssr = await record(plan.publicOrigin, route, { headers: { ...spoofed, Cookie: actor[who].cookie } }, 'spoofed-forwarding-ssr');
+        check(ssr.status === 200 && ssr.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Spoofed forwarding changed real SSR');
+      }
+      const spoofedHome = await record(plan.publicOrigin, '/', { headers: spoofed }, 'spoofed-forwarding-home');
+      check(spoofedHome.status === 200 && spoofedHome.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Spoofed forwarding changed site metadata');
+      const spoofedRedirect = await record(plan.publicOrigin, '/admin', { headers: spoofed }, 'spoofed-forwarding-redirect');
+      check([302, 303, 307, 308].includes(spoofedRedirect.status) && publicRedirect(spoofedRedirect.headers.location, plan.publicOrigin) === '/admin-login', 'Spoofed forwarding exposed nonpublic redirect');
       await verifyStaticAndPages(name); await verifyNegative(name);
       await waitFor(async () => {
         const log = (await readFile('/mutable/access.log')).subarray(logOffset).toString();
@@ -391,8 +428,9 @@ export async function runInner() {
               const result = await requestHTTP(plan.publicOrigin, route, person ? { headers: { Cookie: person.cookie } } : {});
               check(result.status === 200 && ['old', 'next', 'restored'].includes(result.headers['x-release-generation']), 'Observer response failed');
               if (entry) goodAsset(result, entry);
-              else if (person) { const data = JSON.parse(result.body).data; check(data.id === person.id && data.role === person.role, 'Observed session changed'); }
+              else if (person) { check(noStore(result.headers), 'Observed API permits storage'); const data = JSON.parse(result.body).data; check(data.id === person.id && data.role === person.role, 'Observed session changed'); }
               else check(result.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Observed fallback HTML');
+              if (!entry) check(noStore(result.headers), 'Observed dynamic response permits storage');
               check(observations.length < MAX_OBSERVATIONS, 'Bounded observations exceeded');
               observations.push(responseEvidence(result, { phase, route, purpose: 'continuous-read-only' }));
             } catch { observer.failure = true; observer.running = false; break; }

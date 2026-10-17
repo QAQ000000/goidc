@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream } from './release-dual-web-scenario.mjs';
+import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect } from './release-dual-web-scenario.mjs';
 
 const origin = 'http://127.0.0.1:53188';
 
@@ -17,6 +17,17 @@ test('session extraction accepts exactly one named session and never includes Co
   const cookie = `zjmfgo_session=${'a'.repeat(64)}`;
   assert.equal(sessionCookie({ 'set-cookie': ['unrelated=value; Path=/', `${cookie}; Path=/; HttpOnly; SameSite=Lax`] }), cookie);
   for (const headers of [{}, { 'set-cookie': cookie }, { 'set-cookie': [cookie, cookie] }, { 'set-cookie': ['zjmfgo_session=short'] }, { 'set-cookie': [`${cookie}\r\nInjected=1`] }]) assert.throws(() => sessionCookie(headers));
+  for (const attributes of ['Path=/; SameSite=Lax', 'HttpOnly; SameSite=Lax', 'HttpOnly; Path=/console; SameSite=Lax', 'HttpOnly; Path=/; SameSite=None', 'HttpOnly; Path=/; SameSite=Lax; Secure', 'HttpOnly; Path=/; SameSite=Lax; Domain=127.0.0.1', 'HttpOnly; Path=/; SameSite=Lax; Path=/other']) assert.throws(() => sessionCookie({ 'set-cookie': [`${cookie}; ${attributes}`] }));
+});
+
+test('dynamic no-store permits reviewed composite directives and rejects weak cache policies', () => {
+  for (const value of ['no-store', 'private, no-cache, no-store, max-age=0, must-revalidate', 'NO-STORE']) assert.equal(noStore({ 'cache-control': value }), true);
+  for (const value of [undefined, 'no-cache', 'private', 'public, max-age=300', 'x-no-store', 'no-store=invalid']) assert.equal(noStore({ 'cache-control': value }), false);
+});
+
+test('public redirects resolve only to the public origin and never expose internal endpoints', () => {
+  for (const value of ['/login', `${origin}/login`, 'login?next=%2Fadmin']) assert.equal(publicRedirect(value, origin), '/login');
+  for (const value of ['http://127.0.0.1:53088/login', 'http://127.0.0.1:58089/login', '//invalid.example/login', 'https://127.0.0.1:53188/login', `http://user:pass@127.0.0.1:53188/login`, '']) assert.throws(() => publicRedirect(value, origin));
 });
 
 test('drain selector uses a real bounded chunk and fails closed on only oversized or tiny files', () => {
