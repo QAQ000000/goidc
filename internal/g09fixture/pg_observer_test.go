@@ -151,7 +151,7 @@ func TestPGObserverIsolatedPG18Snapshot(t *testing.T) {
  i AS (INSERT INTO order_items(order_id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents) SELECT o.id,p.id,'fixture','monthly',1,100,0,100 FROM o,p RETURNING id,order_id,product_id),
  s AS (INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle,status,provision_mode) SELECT o.user_id,i.order_id,i.id,i.product_id,'fixture','observer.test','monthly','active','simulation' FROM i JOIN o ON o.id=i.order_id RETURNING id),
  j AS (INSERT INTO provision_jobs(service_id,action,status,idempotency_key,locked_at) SELECT id,'sync','running','observer-job',clock_timestamp() FROM s RETURNING id)
- INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,running_job_id) SELECT 'fixture','zjmf','http://127.0.0.1:1','fixture',decode('01','hex'),id FROM j`)
+ INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,running_job_id) SELECT 'fixture','zjmf_finance_v1','http://127.0.0.1:1','fixture',decode('01','hex'),id FROM j`)
 	if err != nil {
 		t.Fatal("observer queue seed failed")
 	}
@@ -272,5 +272,73 @@ func TestPGObserverIsolatedPG18Snapshot(t *testing.T) {
 	}
 	if _, err = cancelled.Sample(t.Context()); err == nil {
 		t.Fatal("failed observer resumed")
+	}
+}
+
+func TestPGObserverPureConcurrentRefusalAndBudget(t *testing.T) {
+	cfg, err := observerFixtureConfig("postgres://synthetic:private@127.0.0.1:1/g09_observer_test?sslmode=disable")
+	if err != nil {
+		t.Fatal("synthetic config failed")
+	}
+	cfg.ConnConfig.RuntimeParams["search_path"] = "zjmfgo_test_0123456789abcdef"
+	entered, release := make(chan struct{}, 1), make(chan struct{})
+	var dials atomic.Int64
+	cfg.ConnConfig.DialFunc = func(ctx context.Context, _, _ string) (net.Conn, error) {
+		dials.Add(1)
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
+		select {
+		case <-release:
+			return nil, errors.New("synthetic_dial_refused")
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatal("synthetic pool failed")
+	}
+	defer pool.Close()
+	config := PGObserverConfig{Database: "g09_observer_test", Schema: "zjmfgo_test_0123456789abcdef", MaxSamples: 1, Timeout: time.Second}
+	observer, err := NewPGObserver(pool, config)
+	if err != nil {
+		t.Fatal("synthetic observer failed")
+	}
+	first := make(chan error, 1)
+	go func() { _, err := observer.Sample(t.Context()); first <- err }()
+	select {
+	case <-entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sample did not reach synthetic dial")
+	}
+	// The first call is held inside a no-network dial function. The overlapping
+	// caller must refuse immediately, not wait for that dial/context to finish.
+	second := make(chan error, 1)
+	go func() { _, err := observer.Sample(t.Context()); second <- err }()
+	select {
+	case err := <-second:
+		if err == nil || err.Error() != "pg_observer_sampling_refused" {
+			t.Error("overlap not refused")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("overlap queued behind inflight call")
+	}
+	close(release)
+	if err := <-first; err == nil || observer.state.Load() != 2 {
+		t.Fatal("inflight failure was not latched")
+	}
+	before := dials.Load()
+	if _, err := observer.Sample(t.Context()); err == nil || dials.Load() != before {
+		t.Fatal("latched observer tried another connection")
+	}
+	exhausted, err := NewPGObserver(pool, config)
+	if err != nil {
+		t.Fatal("budget observer config failed")
+	}
+	exhausted.count = config.MaxSamples
+	if _, err := exhausted.Sample(t.Context()); err == nil || dials.Load() != before || exhausted.state.Load() != 2 {
+		t.Fatal("exhausted budget dialed or did not latch")
 	}
 }

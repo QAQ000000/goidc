@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -71,12 +71,11 @@ type PGObservation struct {
 }
 
 type PGObserver struct {
-	mu        sync.Mutex
+	state     atomic.Int32 // 0 ready, 1 sampling, 2 permanently failed.
 	pool      *pgxpool.Pool
 	config    PGObserverConfig
 	schemaOID uint32
 	count     int
-	failed    bool
 }
 
 func validateObserverConfig(pool *pgxpool.Pool, c PGObserverConfig) error {
@@ -114,15 +113,17 @@ func NewPGObserver(pool *pgxpool.Pool, config PGObserverConfig) (*PGObserver, er
 }
 
 func (o *PGObserver) Sample(ctx context.Context) (out PGObservation, err error) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if o.failed || o.count >= o.config.MaxSamples {
-		o.failed = true
+	if !o.state.CompareAndSwap(0, 1) {
+		o.state.Store(2) // Overlap invalidates the original sample as well.
+		return out, errors.New("pg_observer_sampling_refused")
+	}
+	if o.count >= o.config.MaxSamples {
+		o.state.Store(2)
 		return out, errors.New("pg_observer_sampling_refused")
 	}
 	defer func() {
 		if err != nil {
-			o.failed = true
+			o.state.Store(2)
 			out = PGObservation{}
 			err = errors.New("pg_observer_sample_failed")
 		}
@@ -263,5 +264,10 @@ func (o *PGObserver) Sample(ctx context.Context) (out PGObservation, err error) 
 	}
 	o.count++
 	out.Sequence = o.count
+	// Publishing success is one atomic transition. Any overlapping call that
+	// observed sampling has already latched state=2, so this result is discarded.
+	if !o.state.CompareAndSwap(1, 0) {
+		return out, errors.New("overlap")
+	}
 	return out, nil
 }

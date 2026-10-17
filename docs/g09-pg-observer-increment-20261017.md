@@ -1,6 +1,6 @@
 # G09 只读PG观察辅助器增量
 
-状态：小型helper及opt-in隔离PG测试已实现；真实PG查询尚未执行。当前仅完成无DSN编译/纯配置验证（1 PASS、1个明确opt-in SKIP）。不证明SQL运行正确、worker业务排空或容量；不连接PG、不修改常驻服务、不构建应用。证据在 `evidence/g09-pg-observer-20261017/no-pg-test.txt`。
+状态：小型helper及opt-in隔离PG测试已实现；真实PG查询尚未执行。当前仅完成无DSN编译/纯配置验证（最新race专项2 PASS、1个明确opt-in SKIP）。不证明SQL运行正确、worker业务排空或容量；不连接PG、不修改常驻服务、不构建应用。证据在 `evidence/g09-pg-observer-20261017/no-pg-concurrency-race.txt`（初轮证据 `no-pg-test.txt` 保留）。
 
 `internal/g09fixture/pg_observer.go` 仅供测试fixture/controller使用，生产入口没有导入本包。`NewPGObserver(pool, config)` 不连接，校验并复制冻结的明确授权配置：精确 `_test` 数据库、`zjmfgo_test_[a-f0-9]{16}` schema、最多512个唯一正数supplier账户ID、1–1000样本和1ms–5秒查询时限；pool配置必须精确匹配数据库/schema search_path且只用IPv4 loopback。调用方负责该池和schema的独占授权，不接收外部任意SQL/表名/DSN参数，不允许带秘密记录器的pool。
 
@@ -26,3 +26,9 @@ env -u ZJMFGO_TEST_DATABASE_URL -u DATABASE_URL -u ZJMFGO_G09_PG_OBSERVER_SMOKE 
 纯配置用例使用禁止网络的DialFunc并确认dial次数为0，覆盖目标覆盖参数/非loopback/非_test/错误schema/重复账户/预算拒绝及配置切片冻结。首次compile发现availability原因字段声明遗漏，补齐后上述命令PASS；真实SQL仍未验证。
 
 后续仅在主线全量结束且取得独占PG授权后，显式设置 `ZJMFGO_G09_PG_OBSERVER_SMOKE=1` 和授权的 `ZJMFGO_TEST_DATABASE_URL`，运行相同测试选择器。opt-in fixture在任何schema写入前核验PG18/数据库/loopback，随机独占schema、完整生产迁移、有限fixture-only队列及lease seed，退出关闭专属pool、DROP唯一schema并查询确认消失；未授权默认SKIP。测试覆盖ready/future/nil年龄、lease、脱敏、样本预算、锁阻塞超时锁定、物理session search_path不符和取消锁定。代码完成不代表这些PG断言已通过；受限数据库角色的实际availability分支也待授权实测。
+
+## 静态复核后的窄修
+
+fixture账户provider改为真实注册值 `zjmf_finance_v1`，不再使用描述符式简写。lease指向simulation服务的running job仅是只读join样例，不证明真实supplier领取/保留/释放账户租约；需真实worker专项另验。未弱化任何生产迁移trigger，data-modifying CTE seed兼容性仍待独占PG实测。
+
+Sample入口使用非阻塞原子状态机，禁止mutex排队延后timeout：并发调用立即拒绝并锁定失败，原inflight即使已读完也必须通过原子成功发布关卡，否则丢弃结果为FAIL。成功发布与下一次调用有明确原子顺序；不会因更晚、已经不重叠的新调用追认撤回此前成功样本。增加无网络合成DialFunc暂停inflight、并发立即拒绝、失败后无再次dial、样本预算耗尽不dial的race回归。最新测试2 PASS、1 SKIP，所有DialFunc均拦截为合成错误，未建立任何PG/网络连接。
