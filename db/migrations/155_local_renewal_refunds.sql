@@ -7,7 +7,7 @@ CREATE TABLE service_renewal_effects (
  service_id bigint NOT NULL REFERENCES services(id), user_id bigint NOT NULL REFERENCES users(id),
  billing_cycle text NOT NULL CHECK(billing_cycle IN ('monthly','quarterly','annually')),
  before_due timestamptz, period_start timestamptz NOT NULL, after_due timestamptz NOT NULL,
- before_used bigint NOT NULL CHECK(before_used>=0), after_used bigint NOT NULL CHECK(after_used>=before_used AND after_used<=before_used+1),
+ before_used bigint NOT NULL CHECK(before_used>=0), after_used bigint NOT NULL CHECK(after_used>=before_used AND after_used-before_used<=1),
  effective_at timestamptz NOT NULL, configuration jsonb NOT NULL, item_snapshot jsonb NOT NULL,
  CHECK(after_due>period_start), CHECK(before_due IS NULL OR period_start>=before_due)
 );
@@ -42,7 +42,7 @@ CREATE TRIGGER local_renewal_reversal_immutable BEFORE INSERT OR UPDATE OR DELET
 -- Same payment transaction for all three tenders. This AFTER trigger sees the
 -- actual paid transition; a subsequent Go settlement call detects the effect.
 CREATE FUNCTION settle_local_renewal_effect() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE ii invoice_items; s services; used_after bigint; start_at timestamptz; finish_at timestamptz;
+DECLARE ii invoice_items; s services; used_after bigint; start_at timestamptz; finish_at timestamptz; settled_at timestamptz;
 BEGIN
  IF NEW.status<>'paid' OR OLD.status<>'unpaid' OR NEW.order_id IS NOT NULL OR NEW.invoice_kind<>'automatic' THEN RETURN NEW; END IF;
  IF NOT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=NEW.id AND item_type='renew') THEN RETURN NEW; END IF;
@@ -58,11 +58,12 @@ BEGIN
   IF ii.renewal_discount_ordinal<>s.renewal_discounts_used+1 OR ii.renewal_discount_percent<>s.renewal_discount_percent OR ii.renewal_fixed_discount_cents<>s.renewal_fixed_discount_cents OR ii.renewal_discount_limit<>s.renewal_discount_limit OR ii.renewal_promo_code<>s.renewal_promo_code OR (s.renewal_discount_limit>0 AND ii.renewal_discount_ordinal>s.renewal_discount_limit) THEN RAISE EXCEPTION 'renewal_benefit_changed' USING ERRCODE='23514'; END IF;
   used_after:=used_after+1;
  END IF;
- start_at:=GREATEST(coalesce(s.next_due_at,transaction_timestamp()),transaction_timestamp());
+ settled_at:=clock_timestamp();
+ start_at:=GREATEST(coalesce(s.next_due_at,settled_at),settled_at);
  finish_at:=start_at+CASE s.billing_cycle WHEN 'quarterly' THEN interval '3 months' WHEN 'annually' THEN interval '1 year' ELSE interval '1 month' END;
- UPDATE services SET next_due_at=finish_at,renewal_discounts_used=used_after,auto_renew_error='',version=version+1,updated_at=transaction_timestamp() WHERE id=s.id;
+ UPDATE services SET next_due_at=finish_at,renewal_discounts_used=used_after,auto_renew_error='',version=version+1,updated_at=settled_at WHERE id=s.id;
  INSERT INTO service_renewal_effects(invoice_id,item_id,service_id,user_id,billing_cycle,before_due,period_start,after_due,before_used,after_used,effective_at,configuration,item_snapshot)
- VALUES(NEW.id,ii.id,s.id,s.user_id,s.billing_cycle,s.next_due_at,start_at,finish_at,s.renewal_discounts_used,used_after,transaction_timestamp(),local_renewal_configuration(s),external_refund_order_snapshot(ii));
+ VALUES(NEW.id,ii.id,s.id,s.user_id,s.billing_cycle,s.next_due_at,start_at,finish_at,s.renewal_discounts_used,used_after,settled_at,local_renewal_configuration(s),external_refund_order_snapshot(ii));
  RETURN NEW;
 END $$;
 CREATE TRIGGER zz_local_renewal_settle AFTER UPDATE OF status ON invoices FOR EACH ROW EXECUTE FUNCTION settle_local_renewal_effect();
@@ -134,6 +135,11 @@ CREATE TRIGGER zz_local_renewal_service_guard BEFORE UPDATE OR DELETE ON service
 CREATE FUNCTION guard_local_renewal_association() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE v jsonb; iid bigint; sid bigint; x record; h external_refund_renewal_holds;
 BEGIN
+ -- Existing commission identity already disqualifies this invoice. Preserve
+ -- withdrawal account -> bucket locking for pure bucket/status movements.
+ IF TG_TABLE_NAME='affiliate_commission_entries' AND TG_OP='UPDATE' AND
+  (external_refund_order_snapshot(NEW)-ARRAY['status','pending_cents','available_cents','reserved_cents','paid_cents','reversed_cents','reversal_at'])=
+  (external_refund_order_snapshot(OLD)-ARRAY['status','pending_cents','available_cents','reserved_cents','paid_cents','reversed_cents','reversal_at']) THEN RETURN NEW; END IF;
  FOR v IN SELECT value FROM jsonb_array_elements(CASE TG_OP WHEN 'INSERT' THEN jsonb_build_array(to_jsonb(NEW)) WHEN 'DELETE' THEN jsonb_build_array(to_jsonb(OLD)) ELSE jsonb_build_array(to_jsonb(OLD),to_jsonb(NEW)) END) LOOP
   iid:=CASE WHEN TG_TABLE_NAME='invoices' THEN (v->>'id')::bigint WHEN TG_TABLE_NAME='balance_ledger' AND v->>'reference_type'='invoice' THEN (v->>'reference_id')::bigint ELSE coalesce((v->>'invoice_id')::bigint,(v->>'source_invoice_id')::bigint) END;
   sid:=(v->>'service_id')::bigint;
@@ -155,6 +161,10 @@ BEGIN
    EXCEPTION WHEN lock_not_available THEN RAISE EXCEPTION 'renewal_refund_hold' USING ERRCODE='23514'; END;
    SELECT * INTO h FROM external_refund_renewal_holds WHERE service_id=x.id AND status IN ('pending','applying');
    IF h.refund_id IS NOT NULL THEN
+    -- A late paid-after-close receipt is evidence, not a new entitlement.
+    -- Preserve the existing anomaly intake while serializing it against the
+    -- refund. Confirmation rechecks the unresolved anomaly; rejection works.
+    IF TG_TABLE_NAME='payment_close_anomalies' AND TG_OP='INSERT' THEN CONTINUE; END IF;
     IF TG_TABLE_NAME='invoices' THEN
     IF TG_OP='UPDATE' AND h.status='applying' AND (v->>'id')::bigint=h.invoice_id AND NEW.status='refunded' AND
      (external_refund_order_snapshot(NEW)-ARRAY['status','version','updated_at'])=(external_refund_order_snapshot(OLD)-ARRAY['status','version','updated_at']) THEN CONTINUE; END IF;

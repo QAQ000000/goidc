@@ -351,6 +351,9 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 		return out, err
 	}
 	if renewalRefund {
+		if in.ExpectedOrderVersion != 0 || len(in.ExpectedServiceVersions) != 0 {
+			return out, conflict("invalid_external_refund", "续费账单不能提交新购订单版本")
+		}
 		if err = externalRefundAuthorize(ctx, tx, actor, "external_refunds.renewal_reverse", true); err != nil {
 			return out, err
 		}

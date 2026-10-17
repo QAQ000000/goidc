@@ -415,3 +415,113 @@ func TestLocalRenewalApplyingCannotCommit(t *testing.T) {
 		t.Fatal("applying committed")
 	}
 }
+
+func TestLocalRenewalParentApplicationAndLateEvidence(t *testing.T) {
+	f := newLocalRenewalFixture(t, true, 734)
+	ctx := t.Context()
+	var profile, address, application int64
+	for _, q := range []struct {
+		sql  string
+		dest *int64
+	}{
+		{`INSERT INTO invoice_profiles(user_id,profile_type,title) VALUES($1,'individual','guard') RETURNING id`, &profile},
+		{`INSERT INTO invoice_addresses(user_id,recipient,phone,address) VALUES($1,'guard','123','guard address') RETURNING id`, &address},
+	} {
+		if err := f.db.Pool.QueryRow(ctx, q.sql, f.customer).Scan(q.dest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO invoice_applications(user_id,profile_id,address_id,profile_snapshot,address_snapshot,amount_cents,status,review_note) VALUES($1,$2,$3,'{}','{}',734,'rejected','historical rejected') RETURNING id`, f.customer, profile, address).Scan(&application); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO invoice_application_items(application_id,source_invoice_id,invoice_no,description,amount_cents) VALUES($1,$2,'local','guard',734)`, application, f.renewInvoice); err != nil {
+		t.Fatal(err)
+	}
+	pending := f.renewalCreate(t)
+	if _, err := f.db.Pool.Exec(ctx, `UPDATE invoice_applications SET status='pending' WHERE id=$1`, application); err == nil {
+		t.Fatal("parent application reactivated during hold")
+	}
+	// Evidence intake must remain possible; it changes neither payment nor
+	// entitlement and makes a subsequent confirmation fail conservatively.
+	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO payment_close_anomalies(payment_id,invoice_id,user_id,provider,event_id,amount_cents,external_transaction_id,payload_sha256) VALUES($1,$2,$3,'mock','local-late-evidence',734,'local-late-tx',$4)`, f.payment, f.renewInvoice, f.customer, strings.Repeat("a", 64)); err != nil {
+		t.Fatal("late evidence suppressed", err)
+	}
+	if _, err := f.renewalReview(t, pending, true); conflictCode(t, err) != "renewal_payment_unresolved" {
+		t.Fatal(err)
+	}
+	if _, err := f.renewalReview(t, pending, false); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestLocalRenewalAssociationReverseLocksFailPromptly(t *testing.T) {
+	f := newLocalRenewalFixture(t, true, 734)
+	ctx := t.Context()
+	for _, kind := range []string{"invoice", "service"} {
+		t.Run(kind, func(t *testing.T) {
+			blocker, err := f.db.Pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer blocker.Rollback(ctx)
+			if kind == "invoice" {
+				_, err = blocker.Exec(ctx, `SELECT id FROM invoices WHERE id=$1 FOR UPDATE`, f.renewInvoice)
+			} else {
+				_, err = blocker.Exec(ctx, `SELECT id FROM services WHERE id=$1 FOR UPDATE`, f.service)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() {
+				_, err := f.db.Pool.Exec(ctx, `UPDATE payment_transactions SET updated_at=clock_timestamp() WHERE id=$1`, f.payment)
+				done <- err
+			}()
+			select {
+			case err = <-done:
+				if err == nil {
+					t.Fatal("reverse parent lock bypass")
+				}
+			case <-time.After(time.Second):
+				_ = blocker.Rollback(ctx)
+				t.Fatal("reverse parent lock blocked")
+			}
+		})
+	}
+}
+func TestLocalRenewalJobWinsAdmission(t *testing.T) {
+	f := newLocalRenewalFixture(t, true, 734)
+	ctx := t.Context()
+	c := f.renewalContext(t)
+	tx, err := f.db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT id FROM services WHERE id=$1 FOR UPDATE`, f.service); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.db.CreateExternalRefund(WithExternalRefundSession(ctx, "order-refund-request"), f.actor, f.renewInvoice, ExternalRefundInput{PaymentID: f.payment, AmountCents: 734, Method: "original_route", ProviderRefundID: "job-race-payout", ReceivedAt: time.Now(), EvidenceRef: "redacted", EvidenceSHA256: strings.Repeat("a", 64), Note: "job race", ExpectedVersion: c.InvoiceVersion, ExpectedRenewalEffectID: c.Effect.ID, ExpectedRenewalServiceVersion: c.ServiceVersion}, "local-job-refund-race")
+		done <- err
+	}()
+	select {
+	case err = <-done:
+		t.Fatalf("refund did not wait for service writer: %v", err)
+	case <-time.After(30 * time.Millisecond):
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key) VALUES($1,'suspend','local-job-race')`, f.service); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err = <-done:
+		if conflictCode(t, err) != "renewal_operation_pending" {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("refund stalled after service lock released")
+	}
+}
