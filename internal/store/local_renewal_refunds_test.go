@@ -525,3 +525,62 @@ func TestLocalRenewalJobWinsAdmission(t *testing.T) {
 		t.Fatal("refund stalled after service lock released")
 	}
 }
+
+func TestLocalRenewalFirstEffectCannotOvertakeUncommittedDependency(t *testing.T) {
+	base := newOrderRefundFixture(t, false)
+	ctx := t.Context()
+	var service int64
+	if err := base.db.Pool.QueryRow(ctx, `SELECT id FROM services WHERE order_id=$1 ORDER BY id LIMIT 1`, base.order).Scan(&service); err != nil {
+		t.Fatal(err)
+	}
+	before := time.Date(2028, 1, 31, 12, 0, 0, 0, time.UTC)
+	if _, err := base.db.Pool.Exec(ctx, `UPDATE services SET status='active',next_due_at=$2,recurring_price_cents=734 WHERE id=$1`, service, before); err != nil {
+		t.Fatal(err)
+	}
+	renewal, err := base.db.CreateRenewalInvoice(ctx, base.customer, service, "first-effect-create")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = base.db.CreatePaymentIntent(ctx, base.customer, renewal.InvoiceID, "mock", "first-effect-original", "", "first-effect-intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer, err := base.db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Rollback(ctx)
+	if _, err = writer.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key) VALUES($1,'suspend','first-effect-uncommitted')`, service); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	settle := func() error {
+		_, err := base.db.ProcessPaymentWebhook(ctx, "mock", "first-effect-event", "first-effect-original", renewal.InvoiceID, 734, "succeeded", []byte(`{"verified":"first effect race"}`), "first-effect-tx")
+		return err
+	}
+	go func() { done <- settle() }()
+	select {
+	case err = <-done:
+		if err == nil {
+			t.Fatal("first effect overtook uncommitted dependency")
+		}
+	case <-time.After(2 * time.Second):
+		_ = writer.Rollback(ctx)
+		t.Fatal("first effect reverse-lock attempt waited")
+	}
+	var effects int
+	var due time.Time
+	if err = base.db.Pool.QueryRow(ctx, `SELECT next_due_at,(SELECT count(*) FROM service_renewal_effects WHERE service_id=$1) FROM services WHERE id=$1`, service).Scan(&due, &effects); err != nil || effects != 0 || !due.Equal(before) {
+		t.Fatal("failed settlement not atomic", effects, due, err)
+	}
+	if err = writer.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = settle(); err != nil {
+		t.Fatal("receipt retry after dependency commit", err)
+	}
+	c, err := base.db.ExternalRefundRenewalContext(WithExternalRefundSession(ctx, "order-refund-request"), base.actor, renewal.InvoiceID)
+	if err != nil || c.Eligible || c.ReasonCode != "renewal_operation_pending" {
+		t.Fatal("committed dependency absent from refund admission", c, err)
+	}
+}
