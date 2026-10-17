@@ -65,4 +65,12 @@ ZJMFGO_G09_COHORT_SMOKE=1 REQUIRE_INTEGRATION=1 scripts/go.sh test ./internal/ht
   -run '^TestG09CohortSourceWorkerSmoke$' -count=1 -timeout=20m -v
 ```
 
-DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库，不允许 options；worker 使用唯一精确 search_path。当前本地 source-only seal/只读投影可由并行开发的 `internal/g09fixture` immutable sealer/verifier 接入替换；未合并接口不应被此文档冒称已运行验证。
+DSN 必须由私有环境提供 URL 形式的 loopback PostgreSQL 18 `_test` 库，不允许 options；worker 使用唯一精确 search_path。
+
+## 主线独立对账桥接（执行前）
+
+已接入独立 `internal/g09fixture` immutable sealer/verifier 与只读 PGObserver：启动 worker 前必须逐600任务 pending、attempt0；首轮排空和跨两个真实 minute tick 并正常停 worker 后都须逐实体 PASS。排空期间每次采样结束后至少间隔2秒，记录实际 ObservedAt 与耗时，不能称严格固定频率采样。事务只读，不推进任务时间或生产调度。
+
+三个边界的600任务观察投影保留在测试日志；FlowID 原本关联 mutation key，公开时逐条 SHA256，其他公开字段仅实体ID、状态、时间与计数，无原始请求/凭据/地址。中间样本保留队列和明确可用性/null语义。最终只读负例仅改 manifest 的 invoice owner，必须在真实 purchase SQL 核验失败并永久 latch；不修改数据库事实。worker 的10分钟总预算同时检查循环起点、成功时和正常停机后，避免在超时边界靠先break而误过。
+
+上述桥接已经纯编译与守卫检查，独立同模型只读审查无阻断；600真实PG入口仍待主代理实测，不能据此记为数据库或容量通过。

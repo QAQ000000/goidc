@@ -110,6 +110,7 @@ func TestG09CohortSourceWorkerSmoke(t *testing.T) {
 	sourceCancel()
 	e.ctx = t.Context()
 	e.seal(t, records, started, acceptedAt)
+	e.initVerifier(t, records)
 	e.drain(t, binary, scoped, records, g09SourceHash(string(binaryBytes)), started, acceptedAt)
 }
 
@@ -155,6 +156,9 @@ type g09CohortEnv struct {
 	notificationPath             string
 	mutations                    *os.File
 	oracles                      map[int64][]g09CohortDelivery
+	verifier                     *g09fixture.CohortVerifier
+	observer                     *g09fixture.PGObserver
+	verificationSamples          []g09CohortVerificationEvidence
 }
 
 const g09CohortFrom = "g09-cohort-fixture@example.test"
@@ -874,7 +878,11 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 	var samples []map[string]any
 	var previousBackground string
 	var minuteTicksVerified bool
+	var nextObservation time.Time
 	for {
+		if time.Now().After(deadline) {
+			t.Fatal("fixed ten-minute worker budget elapsed")
+		}
 		for _, w := range workers {
 			w.assertRunning(t)
 		}
@@ -893,10 +901,16 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 			samples = append(samples, map[string]any{"at": time.Now().UTC(), "background": background})
 			previousBackground = current
 		}
+		if !time.Now().Before(nextObservation) {
+			e.observeVerifier(t, "draining", nil, false)
+			nextObservation = time.Now().Add(2 * time.Second)
+		}
 		if e.complete(t, records) {
 			if drainedAt.IsZero() {
 				e.verifySources(t, records, false)
 				e.verifyProtocols(t, records, workerStarted, time.Now().UTC())
+				complete := true
+				e.observeVerifier(t, "first_drained", &complete, true)
 				drainedAt = time.Now().UTC()
 				digest = e.stableDigest(t, records)
 			}
@@ -904,6 +918,9 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 				t.Fatal("frozen cohort effects changed after drain")
 			}
 			if e.twoMinuteTicks(t, drainedAt) {
+				if time.Now().After(deadline) {
+					t.Fatal("minute-tick evidence arrived after fixed ten-minute worker budget")
+				}
 				minuteTicksVerified = true
 				break
 			}
@@ -924,8 +941,14 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 		}
 	}
 	workerEnded := time.Now().UTC()
+	if workerEnded.After(deadline) {
+		t.Fatal("clean worker shutdown exceeded fixed ten-minute worker budget")
+	}
 	e.verifySources(t, records, false)
 	e.verifyProtocols(t, records, workerStarted, workerEnded)
+	complete := true
+	e.observeVerifier(t, "final", &complete, true)
+	e.verifyWrongOwnerRejected(t, records)
 	if e.stableDigest(t, records) != digest {
 		t.Fatal("cohort final effects differ from first drained snapshot")
 	}
@@ -936,6 +959,11 @@ func (e *g09CohortEnv) drain(t *testing.T, binary, dsn string, records []g09Coho
 	if err := g09fixture.WritePrivateJSON(filepath.Join(e.private, "cohort-drain-result.private.json"), map[string]any{"schemaVersion": 1, "mode": "source_handler_600_prerequisite", "sourceWindowStart": start, "sourceWindowEnd": end, "sourceWindowSeconds": end.Sub(start).Seconds(), "workerStartedAt": workerStarted, "firstDrainedAt": drainedAt, "workerEndedAt": workerEnded, "workerBinarySHA256": binaryHash, "workerPIDs": []int{workers[0].cmd.Process.Pid, workers[1].cmd.Process.Pid}, "workersExitedViaTERM": true, "drainTimeoutSeconds": 600, "candidateVerified": false, "capacityVerified": false, "twoRealMinuteTicksVerified": minuteTicksVerified, "stableEffectSHA256": digest, "notificationAcceptances": 300, "backgroundSamples": samples, "backgroundAttemptHistoryComplete": false}); err != nil {
 		t.Fatal("private cohort result write failed")
 	}
+	public, err := json.Marshal(map[string]any{"mode": "source_handler_600_prerequisite", "sourceWindowStart": start, "sourceWindowEnd": end, "sourceWindowSeconds": end.Sub(start).Seconds(), "workerStartedAt": workerStarted, "firstDrainedAt": drainedAt, "workerEndedAt": workerEnded, "workerBinarySHA256": binaryHash, "workerPIDs": []int{workers[0].cmd.Process.Pid, workers[1].cmd.Process.Pid}, "workersExitedViaTERM": true, "drainTimeoutSeconds": 600, "candidateVerified": false, "capacityVerified": false, "twoRealMinuteTicksVerified": minuteTicksVerified, "stableEffectSHA256": digest, "notificationAcceptances": 300, "backgroundSamples": samples, "backgroundAttemptHistoryComplete": false, "verificationSamples": e.verificationSamples})
+	if err != nil {
+		t.Fatal("public cohort evidence encoding failed")
+	}
+	t.Logf("G09_COHORT_RESULT %s", public)
 	t.Logf("PASS: exact 600 tasks from real source HTTP (270 simulation + 30 supplier creates; 150 ticket email + 150 SMS), source %.3fs, real workers x2 drain %.3fs, effects persisted across two real minute scheduler ticks; candidate/namespace/27-minute/production capacity unverified", end.Sub(start).Seconds(), drainedAt.Sub(workerStarted).Seconds())
 }
 
