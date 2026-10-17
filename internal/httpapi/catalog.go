@@ -84,33 +84,13 @@ func (s *Server) catalogList(w http.ResponseWriter, r *http.Request, admin, page
 	if admin {
 		args = append(args, state)
 	}
-	var total int64
+	selectSQL := "SELECT " + productProjection(admin) + where + " ORDER BY sort_order,id"
 	if paged {
-		if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, args...).Scan(&total); err != nil {
-			s.fail(w, r, err)
-			return
-		}
+		s.writeListPage(w, r, "SELECT count(*)"+where, selectSQL, args, limit, offset)
+		return
 	}
 	n := len(args)
-	args = append(args, limit, offset)
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+productProjection(admin)+where+fmt.Sprintf(" ORDER BY sort_order,id LIMIT $%d OFFSET $%d", n+1, n+2), args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	if paged {
-		write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
-	} else {
-		write(w, 200, items)
-	}
+	s.list(w, r, selectSQL+fmt.Sprintf(" LIMIT $%d OFFSET $%d", n+1, n+2), append(args, limit, offset)...)
 }
 func (s *Server) product(w http.ResponseWriter, r *http.Request)      { s.productDetail(w, r, false) }
 func (s *Server) adminProduct(w http.ResponseWriter, r *http.Request) { s.productDetail(w, r, true) }

@@ -12,56 +12,34 @@ import (
 // Definition consumption is read-only, and does not grant access to CRUD.
 func (s *Server) customerFieldDefinitions(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var allowed bool
-	if err = tx.QueryRow(r.Context(), `SELECT u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND a.active AND ('customers.view'=ANY(a.permissions) OR 'customers.manage'=ANY(a.permissions)))) FROM users u LEFT JOIN admin_roles a ON a.id=u.admin_role_id WHERE u.id=$1`, identityFrom(r).ID).Scan(&allowed); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !allowed {
-		writeError(w, 403, "permission_denied", "没有读取客户字段的权限")
-		return
-	}
-	var version, total int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_field_catalogue WHERE id=1 FOR SHARE").Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM customer_custom_fields WHERE active").Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT id,field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active,version FROM customer_custom_fields WHERE active ORDER BY sort_order,id LIMIT $1 OFFSET $2`, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset, "definitions_version": version})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
+			return txResponse{}, err
+		}
+		var allowed bool
+		if err = tx.QueryRow(r.Context(), `SELECT u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND a.active AND ('customers.view'=ANY(a.permissions) OR 'customers.manage'=ANY(a.permissions)))) FROM users u LEFT JOIN admin_roles a ON a.id=u.admin_role_id WHERE u.id=$1`, identityFrom(r).ID).Scan(&allowed); err != nil {
+			return txResponse{}, err
+		}
+		if !allowed {
+			return txResponse{}, &txHTTPError{403, "permission_denied", "没有读取客户字段的权限"}
+		}
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_field_catalogue WHERE id=1 FOR SHARE").Scan(&version); err != nil {
+			return txResponse{}, err
+		}
+		page, err := listPage(r.Context(), tx, "SELECT count(*) FROM customer_custom_fields WHERE active",
+			`SELECT id,field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active,version FROM customer_custom_fields WHERE active ORDER BY sort_order,id`, nil, limit, offset, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		page["definitions_version"] = version
+
+		return txResponse{200, page}, nil
+	})
 }
 
 // An advisory lock also serializes the first request, when no receipt exists yet.

@@ -161,29 +161,17 @@ func (s *Server) ticketNotifications(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	where := ` FROM ticket_notification_deliveries d JOIN ticket_notification_events e ON e.id=d.event_id WHERE e.ticket_id=$1 AND ($2::boolean OR (d.recipient_kind='user' AND d.user_id=$3))`
-	var total int64
-	if err = tx.QueryRow(r.Context(), `SELECT count(*)`+where, id, staff, identityFrom(r).ID).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT d.id,e.event_key,e.kind AS event_kind,e.reply_id,d.channel,d.outcome,d.reason,d.created_at,CASE WHEN $2 THEN d.recipient_kind ELSE 'user' END AS recipient_kind,CASE WHEN $2 THEN d.address ELSE NULL END AS address,d.email_outbox_id,d.sms_outbox_id,coalesce((SELECT status FROM email_outbox WHERE id=d.email_outbox_id),(SELECT status FROM sms_outbox WHERE id=d.sms_outbox_id)) AS outbox_status`+where+` ORDER BY d.id DESC LIMIT $4 OFFSET $5`, id, staff, identityFrom(r).ID, limit, offset)
+	page, err := listPage(r.Context(), tx, `SELECT count(*)`+where,
+		`SELECT d.id,e.event_key,e.kind AS event_kind,e.reply_id,d.channel,d.outcome,d.reason,d.created_at,CASE WHEN $2 THEN d.recipient_kind ELSE 'user' END AS recipient_kind,CASE WHEN $2 THEN d.address ELSE NULL END AS address,d.email_outbox_id,d.sms_outbox_id,coalesce((SELECT status FROM email_outbox WHERE id=d.email_outbox_id),(SELECT status FROM sms_outbox WHERE id=d.sms_outbox_id)) AS outbox_status`+where+` ORDER BY d.id DESC`, []any{id, staff, identityFrom(r).ID}, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
 	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }
 
 // SQL arguments are fixed server-owned column/placeholder names and permission constants.

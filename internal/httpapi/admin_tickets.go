@@ -200,152 +200,117 @@ func (s *Server) createAdminTicket(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err = lockAdminTicketManager(r, tx, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("admin-ticket-create:%d:%s", actor, key)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var savedHash string
-	var savedJSON []byte
-	err = tx.QueryRow(r.Context(), `SELECT request_hash,result FROM admin_ticket_creation_receipts WHERE actor_id=$1 AND idempotency_key=$2`, actor, key).Scan(&savedHash, &savedJSON)
-	if err == nil {
-		if savedHash != hash {
-			writeError(w, http.StatusConflict, "idempotency_conflict", "相同请求键已用于不同内容")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if err = lockAdminTicketManager(r, tx, actor); err != nil {
+			return txResponse{}, err
 		}
-		var result adminTicketCreateResult
-		if err = json.Unmarshal(savedJSON, &result); err != nil {
-			s.fail(w, r, err)
-			return
+		if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("admin-ticket-create:%d:%s", actor, key)); err != nil {
+			return txResponse{}, err
 		}
-		var accessible bool
-		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM tickets t WHERE t.id=$1 AND admin_ticket_access_allowed($2,t.user_id,t.department_id))`, result.ID, actor).Scan(&accessible); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !accessible {
-			writeError(w, http.StatusNotFound, "not_found", "工单不存在或无权查看")
-			return
-		}
-		result.Replayed = true
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.LockAdminCustomer(r.Context(), tx, actor, in.CustomerID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "not_found", "客户不存在或无权选择")
-			return
-		}
-		s.fail(w, r, err)
-		return
-	}
-	var customerEmail string
-	var customerEmailVerified bool
-	err = tx.QueryRow(r.Context(), `SELECT email,email_verified FROM users
-WHERE id=$1 AND role='customer' AND status='active' AND admin_ticket_customer_allowed($2,id) FOR SHARE`, in.CustomerID, actor).Scan(&customerEmail, &customerEmailVerified)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "not_found", "客户不存在或无权选择")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var departmentActive, departmentAllowed bool
-	err = tx.QueryRow(r.Context(), `SELECT active,admin_ticket_department_allowed($1,id) FROM ticket_departments WHERE id=$2 FOR SHARE`, actor, in.DepartmentID).Scan(&departmentActive, &departmentAllowed)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusConflict, "invalid_ticket_department", "工单部门不可用")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !departmentAllowed {
-		writeError(w, http.StatusForbidden, "ticket_department_forbidden", "没有此工单部门的访问权限")
-		return
-	}
-	if !departmentActive {
-		writeError(w, http.StatusConflict, "invalid_ticket_department", "工单部门不可用")
-		return
-	}
-	if in.ServiceID != nil {
-		var serviceID int64
-		if err = tx.QueryRow(r.Context(), `SELECT id FROM services WHERE id=$1 AND user_id=$2 FOR SHARE`, *in.ServiceID, in.CustomerID).Scan(&serviceID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			s.fail(w, r, err)
-			return
-		}
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusConflict, "invalid_ticket_service", "关联服务不属于所选客户")
-			return
-		}
-	}
-	if in.AssigneeID != nil {
-		if err = lockAdminTicketAssignee(r, tx, *in.AssigneeID, in.DepartmentID); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeError(w, http.StatusConflict, "invalid_ticket_assignee", "处理人不可用或无权处理此部门工单")
-				return
+		var savedHash string
+		var savedJSON []byte
+		err = tx.QueryRow(r.Context(), `SELECT request_hash,result FROM admin_ticket_creation_receipts WHERE actor_id=$1 AND idempotency_key=$2`, actor, key).Scan(&savedHash, &savedJSON)
+		if err == nil {
+			if savedHash != hash {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "idempotency_conflict", "相同请求键已用于不同内容"}
 			}
-			s.fail(w, r, err)
-			return
+			var result adminTicketCreateResult
+			if err = json.Unmarshal(savedJSON, &result); err != nil {
+				return txResponse{}, err
+			}
+			var accessible bool
+			if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM tickets t WHERE t.id=$1 AND admin_ticket_access_allowed($2,t.user_id,t.department_id))`, result.ID, actor).Scan(&accessible); err != nil {
+				return txResponse{}, err
+			}
+			if !accessible {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "工单不存在或无权查看"}
+			}
+			result.Replayed = true
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-	}
-	var ticket adminTicketCreateResult
-	err = tx.QueryRow(r.Context(), `INSERT INTO tickets(ticket_no,user_id,department_id,assignee_id,service_id,subject,body,priority,created_by,cc,send_initial_email)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return txResponse{}, err
+		}
+		if err = store.LockAdminCustomer(r.Context(), tx, actor, in.CustomerID); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户不存在或无权选择"}
+			}
+			return txResponse{}, err
+		}
+		var customerEmail string
+		var customerEmailVerified bool
+		err = tx.QueryRow(r.Context(), `SELECT email,email_verified FROM users
+WHERE id=$1 AND role='customer' AND status='active' AND admin_ticket_customer_allowed($2,id) FOR SHARE`, in.CustomerID, actor).Scan(&customerEmail, &customerEmailVerified)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户不存在或无权选择"}
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		var departmentActive, departmentAllowed bool
+		err = tx.QueryRow(r.Context(), `SELECT active,admin_ticket_department_allowed($1,id) FROM ticket_departments WHERE id=$2 FOR SHARE`, actor, in.DepartmentID).Scan(&departmentActive, &departmentAllowed)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_ticket_department", "工单部门不可用"}
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		if !departmentAllowed {
+			return txResponse{}, &txHTTPError{http.StatusForbidden, "ticket_department_forbidden", "没有此工单部门的访问权限"}
+		}
+		if !departmentActive {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_ticket_department", "工单部门不可用"}
+		}
+		if in.ServiceID != nil {
+			var serviceID int64
+			if err = tx.QueryRow(r.Context(), `SELECT id FROM services WHERE id=$1 AND user_id=$2 FOR SHARE`, *in.ServiceID, in.CustomerID).Scan(&serviceID); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return txResponse{}, err
+			}
+			if errors.Is(err, pgx.ErrNoRows) {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_ticket_service", "关联服务不属于所选客户"}
+			}
+		}
+		if in.AssigneeID != nil {
+			if err = lockAdminTicketAssignee(r, tx, *in.AssigneeID, in.DepartmentID); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_ticket_assignee", "处理人不可用或无权处理此部门工单"}
+				}
+				return txResponse{}, err
+			}
+		}
+		var ticket adminTicketCreateResult
+		err = tx.QueryRow(r.Context(), `INSERT INTO tickets(ticket_no,user_id,department_id,assignee_id,service_id,subject,body,priority,created_by,cc,send_initial_email)
 VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
 RETURNING id,ticket_no,version`, in.CustomerID, in.DepartmentID, in.AssigneeID, in.ServiceID, in.Subject, in.Body, in.Priority, actor, string(ccJSON), in.SendEmail).Scan(&ticket.ID, &ticket.TicketNo, &ticket.Version)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	ticket.EmailStatus = "not_requested"
-	if in.SendEmail {
-		ticket.EmailStatus, err = queueAdminTicketEmail(r, tx, ticket.ID, customerEmail, customerEmailVerified, in.CC, ticket.TicketNo, in.Subject, in.Body)
 		if err != nil {
-			s.fail(w, r, err)
-			return
+			return txResponse{}, err
 		}
-		if _, err = tx.Exec(r.Context(), `UPDATE tickets SET initial_email_status=$2 WHERE id=$1`, ticket.ID, ticket.EmailStatus); err != nil {
-			s.fail(w, r, err)
-			return
+		ticket.EmailStatus = "not_requested"
+		if in.SendEmail {
+			ticket.EmailStatus, err = queueAdminTicketEmail(r, tx, ticket.ID, customerEmail, customerEmailVerified, in.CC, ticket.TicketNo, in.Subject, in.Body)
+			if err != nil {
+				return txResponse{}, err
+			}
+			if _, err = tx.Exec(r.Context(), `UPDATE tickets SET initial_email_status=$2 WHERE id=$1`, ticket.ID, ticket.EmailStatus); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	resultJSON, err := json.Marshal(ticket)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `INSERT INTO admin_ticket_creation_receipts(actor_id,idempotency_key,customer_id,ticket_id,request_hash,result)
+		resultJSON, err := json.Marshal(ticket)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO admin_ticket_creation_receipts(actor_id,idempotency_key,customer_id,ticket_id,request_hash,result)
 VALUES($1,$2,$3,$4,$5,$6::jsonb)`, actor, key, in.CustomerID, ticket.ID, hash, string(resultJSON)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "ticket.admin_created", "ticket", ticket.ID, map[string]any{"customer_id": in.CustomerID, "department_id": in.DepartmentID, "service_id": in.ServiceID, "assignee_id": in.AssigneeID, "priority": in.Priority, "cc_count": len(in.CC), "send_email": in.SendEmail, "email_status": ticket.EmailStatus}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, ticket)
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, actor, "ticket.admin_created", "ticket", ticket.ID, map[string]any{"customer_id": in.CustomerID, "department_id": in.DepartmentID, "service_id": in.ServiceID, "assignee_id": in.AssigneeID, "priority": in.Priority, "cc_count": len(in.CC), "send_email": in.SendEmail, "email_status": ticket.EmailStatus}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, ticket}, nil
+	})
 }
 
 func lockAdminTicketManager(r *http.Request, tx pgx.Tx, actor int64) error {

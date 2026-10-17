@@ -189,21 +189,19 @@ func (s *Store) FailPaymentCheck(ctx context.Context, check PaymentCheck, code s
 	if !slices.Contains([]string{"provider_unavailable", "provider_invalid", "settlement_failed"}, code) {
 		return fmt.Errorf("invalid payment check failure code")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	result, err := tx.Exec(ctx, "UPDATE payment_reconciliation_checks SET status='error',result_code=$2,completed_at=clock_timestamp() WHERE id=$1 AND payment_id=$3 AND actor_id IS NOT DISTINCT FROM nullif($4::bigint,0) AND source=$5 AND status='checking'", check.ID, code, check.PaymentID, check.ActorID, check.source())
-	if err != nil {
-		return err
-	}
-	if result.RowsAffected() == 1 {
-		if err = Audit(ctx, tx, check.ActorID, "payment.reconciliation.failed", "invoice", check.InvoiceID, map[string]any{"payment_id": check.PaymentID, "check_id": check.ID, "code": code, "source": check.source()}); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		result, err := tx.Exec(ctx, "UPDATE payment_reconciliation_checks SET status='error',result_code=$2,completed_at=clock_timestamp() WHERE id=$1 AND payment_id=$3 AND actor_id IS NOT DISTINCT FROM nullif($4::bigint,0) AND source=$5 AND status='checking'", check.ID, code, check.PaymentID, check.ActorID, check.source())
+		if err != nil {
 			return err
 		}
-	}
-	return tx.Commit(ctx)
+		if result.RowsAffected() == 1 {
+			if err = Audit(ctx, tx, check.ActorID, "payment.reconciliation.failed", "invoice", check.InvoiceID, map[string]any{"payment_id": check.PaymentID, "check_id": check.ID, "code": code, "source": check.source()}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (check PaymentCheck) source() string {

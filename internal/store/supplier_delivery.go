@@ -252,111 +252,109 @@ func (s *Store) failUndispatchedSupplierJob(ctx context.Context, j ProvisionJob,
 	return err
 }
 func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b SupplierBinding, result supplier.CreateResult, remote supplier.Service, callErr error) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var current, existing string
-	if err = tx.QueryRow(ctx, "SELECT status,upstream_id FROM services WHERE id=$1 FOR UPDATE", j.ServiceID).Scan(&current, &existing); err != nil {
-		return err
-	}
-	var state string
-	var attempts int
-	var valid bool
-	if err = tx.QueryRow(ctx, `SELECT status,attempts,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 FOR UPDATE`, j.ID).Scan(&state, &attempts, &valid); err != nil {
-		return err
-	}
-	if state != "running" || attempts != j.Attempts || !valid {
-		return conflict("job_lease_lost", "供应商响应到达时任务租约失效，请核验")
-	}
-	var running *int64
-	if err = tx.QueryRow(ctx, "SELECT running_job_id FROM supplier_accounts WHERE id=$1 FOR UPDATE", b.SupplierID).Scan(&running); err != nil {
-		return err
-	}
-	if running == nil || *running != j.ID {
-		return conflict("supplier_lease_lost", "供应商账户租约失效")
-	}
-	outcome, message := "succeeded", ""
-	if callErr != nil {
-		outcome, message = "waiting_verification", "供应商请求结果不明，请核验上游订单及资源，禁止直接重试"
-		var failure *supplier.Error
-		if errors.As(callErr, &failure) {
-			if failure.UpstreamID > 0 {
-				result.UpstreamID = failure.UpstreamID
-			}
-			if failure.InvoiceID > 0 {
-				result.InvoiceID = failure.InvoiceID
-			}
-			if !failure.Unknown && (j.Action == "renew" || (failure.UpstreamID == 0 && failure.InvoiceID == 0)) {
-				outcome, message = "failed", "供应商请求失败："+failure.Code
-			}
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		var current, existing string
+		if err = tx.QueryRow(ctx, "SELECT status,upstream_id FROM services WHERE id=$1 FOR UPDATE", j.ServiceID).Scan(&current, &existing); err != nil {
+			return err
 		}
-	} else if j.Action == "create" {
-		if result.UpstreamID < 1 || result.Currency != b.Currency || result.CostCents < 0 || result.CostCents > b.MaximumCostCents {
-			outcome, message = "waiting_verification", "供应商交付响应不完整，请核验资源及账单"
+		var state string
+		var attempts int
+		var valid bool
+		if err = tx.QueryRow(ctx, `SELECT status,attempts,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 FOR UPDATE`, j.ID).Scan(&state, &attempts, &valid); err != nil {
+			return err
+		}
+		if state != "running" || attempts != j.Attempts || !valid {
+			return conflict("job_lease_lost", "供应商响应到达时任务租约失效，请核验")
+		}
+		var running *int64
+		if err = tx.QueryRow(ctx, "SELECT running_job_id FROM supplier_accounts WHERE id=$1 FOR UPDATE", b.SupplierID).Scan(&running); err != nil {
+			return err
+		}
+		if running == nil || *running != j.ID {
+			return conflict("supplier_lease_lost", "供应商账户租约失效")
+		}
+		outcome, message := "succeeded", ""
+		if callErr != nil {
+			outcome, message = "waiting_verification", "供应商请求结果不明，请核验上游订单及资源，禁止直接重试"
+			var failure *supplier.Error
+			if errors.As(callErr, &failure) {
+				if failure.UpstreamID > 0 {
+					result.UpstreamID = failure.UpstreamID
+				}
+				if failure.InvoiceID > 0 {
+					result.InvoiceID = failure.InvoiceID
+				}
+				if !failure.Unknown && (j.Action == "renew" || (failure.UpstreamID == 0 && failure.InvoiceID == 0)) {
+					outcome, message = "failed", "供应商请求失败："+failure.Code
+				}
+			}
+		} else if j.Action == "create" {
+			if result.UpstreamID < 1 || result.Currency != b.Currency || result.CostCents < 0 || result.CostCents > b.MaximumCostCents {
+				outcome, message = "waiting_verification", "供应商交付响应不完整，请核验资源及账单"
+			} else {
+				remote = supplier.Service{UpstreamID: result.UpstreamID, ProductID: result.ProductID, Status: result.Status, Domain: result.Domain, NextDueDate: result.NextDueDate}
+				if remote.ProductID != b.UpstreamProductID {
+					outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
+				} else {
+					err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey)
+					if err != nil {
+						outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
+					}
+				}
+			}
 		} else {
-			remote = supplier.Service{UpstreamID: result.UpstreamID, ProductID: result.ProductID, Status: result.Status, Domain: result.Domain, NextDueDate: result.NextDueDate}
-			if remote.ProductID != b.UpstreamProductID {
+			if remote.ProductID != b.UpstreamProductID || strconv.FormatInt(remote.UpstreamID, 10) != existing {
 				outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
 			} else {
-				err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey)
-				if err != nil {
+				if err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
 					outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
 				}
 			}
 		}
-	} else {
-		if remote.ProductID != b.UpstreamProductID || strconv.FormatInt(remote.UpstreamID, 10) != existing {
-			outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
-		} else {
-			if err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
-				outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
+		// Sync cannot create or mutate an upstream resource, so read and apply
+		// failures release the account without requiring delivery reconciliation.
+		if j.Action == "sync" && outcome != "succeeded" {
+			outcome, message = "failed", "供应商同步失败，请稍后重试"
+		}
+		if outcome == "succeeded" && (j.Action == "create" || (j.Action == "sync" && current == "provisioning")) {
+			if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, j.ServiceID); err != nil {
+				return err
 			}
 		}
-	}
-	// Sync cannot create or mutate an upstream resource, so read and apply
-	// failures release the account without requiring delivery reconciliation.
-	if j.Action == "sync" && outcome != "succeeded" {
-		outcome, message = "failed", "供应商同步失败，请稍后重试"
-	}
-	if outcome == "succeeded" && (j.Action == "create" || (j.Action == "sync" && current == "provisioning")) {
-		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, j.ServiceID); err != nil {
+		if outcome == "succeeded" && current == "active" && (j.Action == "suspend" || j.Action == "sync") {
+			if err = s.QueueServiceSuspendedNotifications(ctx, tx, j.ServiceID); err != nil {
+				return err
+			}
+		}
+		if outcome == "failed" && j.Action == "create" {
+			if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", j.ServiceID, message); err != nil {
+				return err
+			}
+		}
+		// Store only normalized identifiers/costs, never supplier raw payloads or credentials.
+		payload, _ := json.Marshal(map[string]any{"upstream_id": result.UpstreamID, "invoice_id": result.InvoiceID, "cost_cents": result.CostCents, "currency": result.Currency, "upstream_status": remote.Status, "command_accepted": outcome == "succeeded" && (provision.IsPowerAction(j.Action) || j.Action == "rescue_system" || j.Action == "exit_rescue_system")})
+		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status=$2,last_error=$3,result=result||$4::jsonb,locked_at=NULL,completed_at=CASE WHEN $2='waiting_verification' THEN NULL ELSE now() END,updated_at=now() WHERE id=$1`, j.ID, outcome, message, payload); err != nil {
 			return err
 		}
-	}
-	if outcome == "succeeded" && current == "active" && (j.Action == "suspend" || j.Action == "sync") {
-		if err = s.QueueServiceSuspendedNotifications(ctx, tx, j.ServiceID); err != nil {
-			return err
+		if outcome != "waiting_verification" {
+			if _, err = tx.Exec(ctx, "UPDATE supplier_accounts SET running_job_id=NULL,updated_at=now() WHERE id=$1 AND running_job_id=$2", b.SupplierID, j.ID); err != nil {
+				return err
+			}
 		}
-	}
-	if outcome == "failed" && j.Action == "create" {
-		if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", j.ServiceID, message); err != nil {
-			return err
-		}
-	}
-	// Store only normalized identifiers/costs, never supplier raw payloads or credentials.
-	payload, _ := json.Marshal(map[string]any{"upstream_id": result.UpstreamID, "invoice_id": result.InvoiceID, "cost_cents": result.CostCents, "currency": result.Currency, "upstream_status": remote.Status, "command_accepted": outcome == "succeeded" && (provision.IsPowerAction(j.Action) || j.Action == "rescue_system" || j.Action == "exit_rescue_system")})
-	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status=$2,last_error=$3,result=result||$4::jsonb,locked_at=NULL,completed_at=CASE WHEN $2='waiting_verification' THEN NULL ELSE now() END,updated_at=now() WHERE id=$1`, j.ID, outcome, message, payload); err != nil {
-		return err
-	}
-	if outcome != "waiting_verification" {
-		if _, err = tx.Exec(ctx, "UPDATE supplier_accounts SET running_job_id=NULL,updated_at=now() WHERE id=$1 AND running_job_id=$2", b.SupplierID, j.ID); err != nil {
-			return err
-		}
-	}
-	if outcome == "succeeded" && (remote.Status == "provisioning" || remote.Status == "Pending" || remote.Status == "pending") {
-		if _, err = tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
+		if outcome == "succeeded" && (remote.Status == "provisioning" || remote.Status == "Pending" || remote.Status == "pending") {
+			if _, err = tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
 SELECT $1,'sync','supplier-sync-'||$2::bigint::text,now()+interval '30 seconds'
 WHERE (SELECT status FROM services WHERE id=$1)='provisioning'
 AND (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='sync')<120`, j.ServiceID, j.ID); err != nil {
+				return err
+			}
+		}
+		if err = Audit(ctx, tx, 0, "supplier.delivery."+outcome, "service", j.ServiceID, map[string]any{"job_id": j.ID, "supplier_id": b.SupplierID, "action": j.Action}); err != nil {
 			return err
 		}
-	}
-	if err = Audit(ctx, tx, 0, "supplier.delivery."+outcome, "service", j.ServiceID, map[string]any{"job_id": j.ID, "supplier_id": b.SupplierID, "action": j.Action}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		return nil
+	})
 }
 
 // Preserve the account lease and normalized response even when a resource

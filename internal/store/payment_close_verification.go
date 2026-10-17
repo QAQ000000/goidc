@@ -427,118 +427,114 @@ func paymentCloseResolution(ctx context.Context, tx pgx.Tx, paymentID, operation
 	return &out, err
 }
 func (s *Store) PaymentCloseVerificationResolution(ctx context.Context, paymentID int64) (*PaymentCloseResolution, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	out, err := paymentCloseResolution(ctx, tx, paymentID, 0)
-	if err != nil {
-		return nil, err
-	}
-	return out, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (*PaymentCloseResolution, error) {
+		var err error
+		out, err := paymentCloseResolution(ctx, tx, paymentID, 0)
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
+	})
 }
 func (s *Store) ListPaymentCloseVerifications(ctx context.Context, actor, invoice, paymentID int64, session string, limit, offset int) (map[string]any, error) {
 	if limit < 1 || limit > 100 || offset < 0 {
 		return nil, conflict("invalid_pagination", "分页参数无效")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if err = authorizePaymentClose(ctx, tx, actor, session, invoice, "invoices.view"); err != nil {
-		return nil, err
-	}
-	var version int64
-	var state, invoiceState, provider, reference string
-	var snapshot []byte
-	err = tx.QueryRow(ctx, `SELECT i.version,p.status,i.status,p.provider,p.provider_payment_id,p.credential_snapshot FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE p.id=$1 AND i.id=$2`, paymentID, invoice).Scan(&version, &state, &invoiceState, &provider, &reference, &snapshot)
-	if err != nil {
-		return nil, err
-	}
-	canVerify := authorizePaymentClose(ctx, tx, actor, session, invoice, "payments.close_verify") == nil
-	canReview := authorizePaymentClose(ctx, tx, actor, session, invoice, "payments.close_review") == nil
-	// Use only a non-empty original snapshot for capability discovery.
-	supported := false
-	if len(snapshot) > 0 {
-		g, enabled, e := s.PaymentTransactionGatewayTx(ctx, tx, provider, reference, PaymentConfiguration{})
-		_, ok := g.(payment.CloseStatusGateway)
-		supported = e == nil && enabled && ok
-	}
-	var anomaly, busy bool
-	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id)),
- EXISTS(SELECT 1 FROM payment_close_verification_requests r WHERE r.payment_id=$2 AND r.lease_until>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM payment_close_verification_results v WHERE v.request_id=r.id)) OR EXISTS(SELECT 1 FROM payment_reconciliation_checks WHERE payment_id=$2 AND status='checking' AND lease_until>clock_timestamp())`, invoice, paymentID).Scan(&anomaly, &busy)
-	if err != nil {
-		return nil, err
-	}
-	operations := []map[string]any{}
-	opRows, err := tx.Query(ctx, `SELECT id,operation_id,status,lease_until,payment_close_operation_unresolved(id) AND (status<>'checking' OR lease_until<=clock_timestamp()) FROM payment_close_operations WHERE payment_id=$1 ORDER BY id DESC LIMIT 50`, paymentID)
-	if err != nil {
-		return nil, err
-	}
-	for opRows.Next() {
-		var id int64
-		var external, status string
-		var lease time.Time
-		var eligible bool
-		if err = opRows.Scan(&id, &external, &status, &lease, &eligible); err != nil {
-			opRows.Close()
+	return withTx(ctx, s, func(tx pgx.Tx) (map[string]any, error) {
+		var err error
+		if err = authorizePaymentClose(ctx, tx, actor, session, invoice, "invoices.view"); err != nil {
 			return nil, err
 		}
-		operations = append(operations, map[string]any{"id": id, "operation_id": external, "status": status, "lease_until": lease, "can_verify": canVerify && supported && eligible && !anomaly && !busy && invoiceState == "unpaid"})
-	}
-	err = opRows.Err()
-	opRows.Close()
-	if err != nil {
-		return nil, err
-	}
-	var total int64
-	if err = tx.QueryRow(ctx, "SELECT count(*) FROM payment_close_verification_requests WHERE payment_id=$1", paymentID).Scan(&total); err != nil {
-		return nil, err
-	}
-	rows, err := tx.Query(ctx, closeVerificationSelect+"WHERE r.payment_id=$1 ORDER BY r.id DESC LIMIT $2 OFFSET $3", paymentID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-	items := []PaymentCloseVerification{}
-	for rows.Next() {
-		v, e := scanCloseVerification(rows)
-		if e != nil {
-			rows.Close()
-			return nil, e
+		var version int64
+		var state, invoiceState, provider, reference string
+		var snapshot []byte
+		err = tx.QueryRow(ctx, `SELECT i.version,p.status,i.status,p.provider,p.provider_payment_id,p.credential_snapshot FROM payment_transactions p JOIN invoices i ON i.id=p.invoice_id WHERE p.id=$1 AND i.id=$2`, paymentID, invoice).Scan(&version, &state, &invoiceState, &provider, &reference, &snapshot)
+		if err != nil {
+			return nil, err
 		}
-		if actor != v.RequestedBy {
-			v.RequestKeySHA256 = ""
+		canVerify := authorizePaymentClose(ctx, tx, actor, session, invoice, "payments.close_verify") == nil
+		canReview := authorizePaymentClose(ctx, tx, actor, session, invoice, "payments.close_review") == nil
+		// Use only a non-empty original snapshot for capability discovery.
+		supported := false
+		if len(snapshot) > 0 {
+			g, enabled, e := s.PaymentTransactionGatewayTx(ctx, tx, provider, reference, PaymentConfiguration{})
+			_, ok := g.(payment.CloseStatusGateway)
+			supported = e == nil && enabled && ok
 		}
-		independent := canReview && actor != v.RequestedBy && actor != v.OriginalActorID && v.ReviewStatus == ""
-		v.CanReject = independent && v.ResultStatus != ""
-		v.CanConfirm = independent && !anomaly && (v.ResultStatus == "closed" || v.ResultStatus == "succeeded") && (state == "succeeded" || ((state == "pending" || state == "expired") && invoiceState == "unpaid"))
-		items = append(items, v)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
-	}
-	resolution, err := paymentCloseResolution(ctx, tx, paymentID, 0)
-	if err != nil {
-		return nil, err
-	}
-	if resolution != nil {
-		for i := range items {
-			items[i].CanConfirm = false
-			items[i].CanReject = false
+		var anomaly, busy bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id)),
+ EXISTS(SELECT 1 FROM payment_close_verification_requests r WHERE r.payment_id=$2 AND r.lease_until>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM payment_close_verification_results v WHERE v.request_id=r.id)) OR EXISTS(SELECT 1 FROM payment_reconciliation_checks WHERE payment_id=$2 AND status='checking' AND lease_until>clock_timestamp())`, invoice, paymentID).Scan(&anomaly, &busy)
+		if err != nil {
+			return nil, err
 		}
-	}
-	canRequest := false
-	for _, op := range operations {
-		if op["can_verify"] == true {
-			canRequest = true
+		operations := []map[string]any{}
+		opRows, err := tx.Query(ctx, `SELECT id,operation_id,status,lease_until,payment_close_operation_unresolved(id) AND (status<>'checking' OR lease_until<=clock_timestamp()) FROM payment_close_operations WHERE payment_id=$1 ORDER BY id DESC LIMIT 50`, paymentID)
+		if err != nil {
+			return nil, err
 		}
-	}
-	out := map[string]any{"invoice_id": invoice, "payment_id": paymentID, "version": version, "lookup_supported": supported, "can_request": canRequest, "operations": operations, "effective_resolution": resolution, "items": items, "total": total, "limit": limit, "offset": offset}
-	return out, tx.Commit(ctx)
+		for opRows.Next() {
+			var id int64
+			var external, status string
+			var lease time.Time
+			var eligible bool
+			if err = opRows.Scan(&id, &external, &status, &lease, &eligible); err != nil {
+				opRows.Close()
+				return nil, err
+			}
+			operations = append(operations, map[string]any{"id": id, "operation_id": external, "status": status, "lease_until": lease, "can_verify": canVerify && supported && eligible && !anomaly && !busy && invoiceState == "unpaid"})
+		}
+		err = opRows.Err()
+		opRows.Close()
+		if err != nil {
+			return nil, err
+		}
+		var total int64
+		if err = tx.QueryRow(ctx, "SELECT count(*) FROM payment_close_verification_requests WHERE payment_id=$1", paymentID).Scan(&total); err != nil {
+			return nil, err
+		}
+		rows, err := tx.Query(ctx, closeVerificationSelect+"WHERE r.payment_id=$1 ORDER BY r.id DESC LIMIT $2 OFFSET $3", paymentID, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+		items := []PaymentCloseVerification{}
+		for rows.Next() {
+			v, e := scanCloseVerification(rows)
+			if e != nil {
+				rows.Close()
+				return nil, e
+			}
+			if actor != v.RequestedBy {
+				v.RequestKeySHA256 = ""
+			}
+			independent := canReview && actor != v.RequestedBy && actor != v.OriginalActorID && v.ReviewStatus == ""
+			v.CanReject = independent && v.ResultStatus != ""
+			v.CanConfirm = independent && !anomaly && (v.ResultStatus == "closed" || v.ResultStatus == "succeeded") && (state == "succeeded" || ((state == "pending" || state == "expired") && invoiceState == "unpaid"))
+			items = append(items, v)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		resolution, err := paymentCloseResolution(ctx, tx, paymentID, 0)
+		if err != nil {
+			return nil, err
+		}
+		if resolution != nil {
+			for i := range items {
+				items[i].CanConfirm = false
+				items[i].CanReject = false
+			}
+		}
+		canRequest := false
+		for _, op := range operations {
+			if op["can_verify"] == true {
+				canRequest = true
+			}
+		}
+		out := map[string]any{"invoice_id": invoice, "payment_id": paymentID, "version": version, "lookup_supported": supported, "can_request": canRequest, "operations": operations, "effective_resolution": resolution, "items": items, "total": total, "limit": limit, "offset": offset}
+		return out, nil
+	})
 }
 
 func (s *Store) PaymentCloseResolutionTx(ctx context.Context, tx pgx.Tx, paymentID int64) (*PaymentCloseResolution, error) {

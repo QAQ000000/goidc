@@ -163,28 +163,9 @@ func (s *Server) adminCustomerCustomFields(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var total int64
-	if err = tx.QueryRow(r.Context(), "SELECT count(*)"+where, pattern, fieldType, active).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), "SELECT "+customerCustomFieldColumns+where+" ORDER BY sort_order,id LIMIT $4 OFFSET $5", pattern, fieldType, active, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items := []customerCustomFieldDTO{}
-	for rows.Next() {
-		out, e := scanCustomerCustomField(rows)
-		if e != nil {
-			rows.Close()
-			s.fail(w, r, e)
-			return
-		}
-		items = append(items, out)
-	}
-	err = rows.Err()
-	rows.Close()
+	page, err := listPage(r.Context(), tx, "SELECT count(*)"+where,
+		"SELECT "+customerCustomFieldColumns+where+" ORDER BY sort_order,id", []any{pattern, fieldType, active}, limit, offset,
+		func(row pgx.CollectableRow) (customerCustomFieldDTO, error) { return scanCustomerCustomField(row) })
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -193,12 +174,7 @@ func (s *Server) adminCustomerCustomFields(w http.ResponseWriter, r *http.Reques
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, struct {
-		Items  []customerCustomFieldDTO `json:"items"`
-		Total  int64                    `json:"total"`
-		Limit  int                      `json:"limit"`
-		Offset int                      `json:"offset"`
-	}{items, total, limit, offset})
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -216,52 +192,36 @@ func (s *Server) createCustomerCustomField(w http.ResponseWriter, r *http.Reques
 	}
 	actor := identityFrom(r).ID
 	hash := settingMutationHash(in)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	operation := "customer_custom_field.create"
-	if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+			return txResponse{}, err
 		}
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var id int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active).Scan(&id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": 1}
-	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.created", "customer_custom_field", id, map[string]any{"field_key": in.FieldKey}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, result)
+		operation := "customer_custom_field.create"
+		if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
+			return txResponse{}, err
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		var id int64
+		err = tx.QueryRow(r.Context(), `INSERT INTO customer_custom_fields(field_key,label,field_type,description,validation_pattern,choices,sort_order,admin_only,required,show_on_register,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active).Scan(&id)
+		if err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "version": 1}
+		if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.created", "customer_custom_field", id, map[string]any{"field_key": in.FieldKey}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -286,68 +246,48 @@ func (s *Server) updateCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		ID    int64
 		Input customFieldInput
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	operation := "customer_custom_field.update:" + strconv.FormatInt(id, 10)
-	if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+			return txResponse{}, err
 		}
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var version int64
-	var fieldKey string
-	if err = tx.QueryRow(r.Context(), "SELECT version,field_key FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version, &fieldKey); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户自定义字段不存在")
-			return
+		operation := "customer_custom_field.update:" + strconv.FormatInt(id, 10)
+		if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if fieldKey != in.FieldKey {
-		writeError(w, http.StatusConflict, "field_key_immutable", "字段标识创建后不可修改")
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户自定义字段已变更，请刷新后重试")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE customer_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,validation_pattern=$6,choices=$7,sort_order=$8,admin_only=$9,required=$10,show_on_register=$11,active=$12,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": version + 1}
-	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.updated", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		var version int64
+		var fieldKey string
+		if err = tx.QueryRow(r.Context(), "SELECT version,field_key FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version, &fieldKey); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户自定义字段不存在"}
+			}
+			return txResponse{}, err
+		}
+		if fieldKey != in.FieldKey {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "field_key_immutable", "字段标识创建后不可修改"}
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户自定义字段已变更，请刷新后重试"}
+		}
+		if _, err = tx.Exec(r.Context(), `UPDATE customer_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,validation_pattern=$6,choices=$7,sort_order=$8,admin_only=$9,required=$10,show_on_register=$11,active=$12,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.ValidationPattern, in.Choices, in.SortOrder, in.AdminOnly, in.Required, in.ShowOnRegister, in.Active); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "version": version + 1}
+		if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.updated", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Request) {
@@ -374,61 +314,42 @@ func (s *Server) deleteCustomerCustomField(w http.ResponseWriter, r *http.Reques
 		ID              int64
 		ExpectedVersion int64
 	}{id, in.ExpectedVersion})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	operation := "customer_custom_field.delete:" + strconv.FormatInt(id, 10)
-	if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, _, _, err = lockCustomerManager(requestFileContext(r), tx, actor); err != nil {
+			return txResponse{}, err
 		}
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户自定义字段不存在")
-			return
+		operation := "customer_custom_field.delete:" + strconv.FormatInt(id, 10)
+		if err = lockCustomerMutation(r, tx, actor, operation, key); err != nil {
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户自定义字段已变更，请刷新后重试")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM customer_custom_fields WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "deleted": true}
-	if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.deleted", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户自定义字段不存在"}
+			}
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户自定义字段已变更，请刷新后重试"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM customer_custom_fields WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "deleted": true}
+		if err = store.Audit(r.Context(), tx, actor, "customer_custom_field.deleted", "customer_custom_field", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

@@ -11,50 +11,48 @@ import (
 )
 
 func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enabled bool, admin bool) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var ownerID int64
-	var status, cycle string
-	if err = tx.QueryRow(ctx, "SELECT user_id,status,billing_cycle FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&ownerID, &status, &cycle); err != nil {
-		return err
-	}
-	if !admin && ownerID != actorID {
-		return pgx.ErrNoRows
-	}
-	if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
-		return err
-	}
-	if enabled {
-		var supplierMode bool
-		if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		var ownerID int64
+		var status, cycle string
+		if err = tx.QueryRow(ctx, "SELECT user_id,status,billing_cycle FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&ownerID, &status, &cycle); err != nil {
 			return err
 		}
-		if supplierMode {
-			if _, _, err = s.requireSupplierRenewal(ctx, tx, serviceID); err != nil {
+		if !admin && ownerID != actorID {
+			return pgx.ErrNoRows
+		}
+		if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+			return err
+		}
+		if enabled {
+			var supplierMode bool
+			if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+				return err
+			}
+			if supplierMode {
+				if _, _, err = s.requireSupplierRenewal(ctx, tx, serviceID); err != nil {
+					return err
+				}
+			}
+
+			if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 				return err
 			}
 		}
-
-		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+		if cycle == "once" {
+			return conflict("nonrenewable_service", "一次性服务不可自动续费")
+		}
+		if status != "active" && status != "suspended" {
+			return conflict("invalid_auto_renew_state", "只有已启用或已暂停的服务可以设置自动续费")
+		}
+		if _, err = tx.Exec(ctx, "UPDATE services SET auto_renew=$2,auto_renew_error='',updated_at=now() WHERE id=$1", serviceID, enabled); err != nil {
 			return err
 		}
-	}
-	if cycle == "once" {
-		return conflict("nonrenewable_service", "一次性服务不可自动续费")
-	}
-	if status != "active" && status != "suspended" {
-		return conflict("invalid_auto_renew_state", "只有已启用或已暂停的服务可以设置自动续费")
-	}
-	if _, err = tx.Exec(ctx, "UPDATE services SET auto_renew=$2,auto_renew_error='',updated_at=now() WHERE id=$1", serviceID, enabled); err != nil {
-		return err
-	}
-	if err = Audit(ctx, tx, actorID, "service.auto_renew.updated", "service", serviceID, map[string]any{"enabled": enabled}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		if err = Audit(ctx, tx, actorID, "service.auto_renew.updated", "service", serviceID, map[string]any{"enabled": enabled}); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // autoRenewPendingInvoice is the operator-facing reason for a service that is
@@ -90,25 +88,23 @@ func autoRenewSkipReason(payErr error, status string, replayed bool) string {
 // transaction advisory lock serializes workers and is released on connection
 // loss, allowing an interrupted pass to resume through invoice/payment keys.
 func (s *Store) RunDailyAutoRenewals(ctx context.Context, log *slog.Logger) (int, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback(ctx)
-	var claimed, completed bool
-	if err = tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended('automatic-renewals-daily',0))").Scan(&claimed); err != nil || !claimed {
-		return 0, err
-	}
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM scheduler_runs WHERE task_key='automatic_renewals' AND status='succeeded' AND is_full_pass AND started_at>=date_trunc('day',now()))").Scan(&completed); err != nil || completed {
-		return 0, err
-	}
-	count, err := s.runScheduled(ctx, log, "automatic_renewals", true, func(c context.Context) (int, error) {
-		return s.ProcessAutoRenewals(c, 100)
+	return withTx(ctx, s, func(tx pgx.Tx) (int, error) {
+		var err error
+		var claimed, completed bool
+		if err = tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended('automatic-renewals-daily',0))").Scan(&claimed); err != nil || !claimed {
+			return 0, err
+		}
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM scheduler_runs WHERE task_key='automatic_renewals' AND status='succeeded' AND is_full_pass AND started_at>=date_trunc('day',now()))").Scan(&completed); err != nil || completed {
+			return 0, err
+		}
+		count, err := s.runScheduled(ctx, log, "automatic_renewals", true, func(c context.Context) (int, error) {
+			return s.ProcessAutoRenewals(c, 100)
+		})
+		if err != nil {
+			return count, err
+		}
+		return count, nil
 	})
-	if err != nil {
-		return count, err
-	}
-	return count, tx.Commit(ctx)
 }
 
 type autoRenewCandidate struct {

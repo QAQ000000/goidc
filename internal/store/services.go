@@ -657,36 +657,33 @@ RETURNING j.id,j.service_id,j.action,j.attempts`).Scan(&job.ID, &job.ServiceID, 
 // because only finishSupplierJob (never reached) and manual verification clear it.
 func (s *Store) RecoverStaleProvisionJobs(ctx context.Context) error {
 	readOnly := provision.ReadOnlyActions()
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	// Collect the stale dispatched read-only jobs under their own row locks first.
-	// Dispatch locks service -> job -> supplier account, so releasing the account
-	// lease before the job update would invert that order and risk a deadlock.
-	rows, err := tx.Query(ctx, `SELECT id FROM provision_jobs
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		// Collect the stale dispatched read-only jobs under their own row locks first.
+		// Dispatch locks service -> job -> supplier account, so releasing the account
+		// lease before the job update would invert that order and risk a deadlock.
+		rows, err := tx.Query(ctx, `SELECT id FROM provision_jobs
 WHERE status='running' AND locked_at<now()-interval '5 minutes'
   AND external_started_at IS NOT NULL AND action=ANY($1::text[])
 ORDER BY id FOR UPDATE`, readOnly)
-	if err != nil {
-		return err
-	}
-	var release []int64
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			rows.Close()
+		if err != nil {
 			return err
 		}
-		release = append(release, id)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET
+		var release []int64
+		for rows.Next() {
+			var id int64
+			if err = rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			release = append(release, id)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET
  status=CASE WHEN external_started_at IS NOT NULL AND NOT (action=ANY($1::text[])) THEN 'waiting_verification'
              WHEN attempts>=5 THEN 'failed' ELSE 'pending' END,
  available_at=now(),locked_at=NULL,updated_at=now(),
@@ -696,17 +693,18 @@ ORDER BY id FOR UPDATE`, readOnly)
                  ELSE 'worker lease expired' END,
  completed_at=CASE WHEN (external_started_at IS NULL OR action=ANY($1::text[])) AND attempts>=5 THEN now() ELSE NULL END
 WHERE status='running' AND locked_at<now()-interval '5 minutes'`, readOnly); err != nil {
-		return err
-	}
-	// Only read-only dispatches release the leased account; a write action keeps
-	// it so the unknown upstream result stays fenced until manual verification.
-	if len(release) > 0 {
-		if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET running_job_id=NULL,updated_at=now()
-WHERE running_job_id=ANY($1::bigint[])`, release); err != nil {
 			return err
 		}
-	}
-	return tx.Commit(ctx)
+		// Only read-only dispatches release the leased account; a write action keeps
+		// it so the unknown upstream result stays fenced until manual verification.
+		if len(release) > 0 {
+			if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET running_job_id=NULL,updated_at=now()
+WHERE running_job_id=ANY($1::bigint[])`, release); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error {
@@ -720,102 +718,100 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 	if dispatchMode == "nokvm" && job.Action != "upgrade" {
 		return s.processNOKVMJob(ctx, job)
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	overdueDue, err := lockOverdueSuspensionInvoice(ctx, tx, job)
-	if err != nil {
-		return err
-	}
-	if err = lockConfigurationChangeBalance(ctx, tx, job.ID, job.ServiceID); err != nil {
-		return err
-	}
-	var serviceStatus, mode, jobStatus string
-	var serviceID int64
-	if err = tx.QueryRow(ctx, "SELECT service_id FROM provision_jobs WHERE id=$1", job.ID).Scan(&serviceID); err != nil {
-		return err
-	}
-	if err = tx.QueryRow(ctx, "SELECT status,provision_mode FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&serviceStatus, &mode); err != nil {
-		return err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return err
-	}
-	var actual ProvisionJob
-	var leaseValid bool
-	if err = tx.QueryRow(ctx, `SELECT id,service_id,action,attempts,status,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 FOR UPDATE`, job.ID).Scan(&actual.ID, &actual.ServiceID, &actual.Action, &actual.Attempts, &jobStatus, &leaseValid); err != nil {
-		return err
-	}
-	if jobStatus != "running" || actual.Attempts != job.Attempts || !leaseValid {
-		return conflict("job_lease_lost", "任务租约已失效")
-	}
-	job = actual
-	if !overdueDue {
-		if err = cancelObsoleteOverdueSuspension(ctx, tx, job); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		overdueDue, err := lockOverdueSuspensionInvoice(ctx, tx, job)
+		if err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
-	}
-	if !allowedServiceAction(serviceStatus, job.Action) {
-		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='failed',last_error=$2,completed_at=now(),updated_at=now() WHERE id=$1`, job.ID, fmt.Sprintf("服务状态 %s 不允许 %s", serviceStatus, job.Action)); err != nil {
+		if err = lockConfigurationChangeBalance(ctx, tx, job.ID, job.ServiceID); err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
-	}
-	if mode == "manual" {
-		if job.Action == "create" || job.Action == "terminate" {
-			if _, err = tx.Exec(ctx, `UPDATE services SET status='provisioning',last_error='等待管理员确认实际资源',version=version+1,updated_at=now() WHERE id=$1`, job.ServiceID); err != nil {
+		var serviceStatus, mode, jobStatus string
+		var serviceID int64
+		if err = tx.QueryRow(ctx, "SELECT service_id FROM provision_jobs WHERE id=$1", job.ID).Scan(&serviceID); err != nil {
+			return err
+		}
+		if err = tx.QueryRow(ctx, "SELECT status,provision_mode FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&serviceStatus, &mode); err != nil {
+			return err
+		}
+		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return err
+		}
+		var actual ProvisionJob
+		var leaseValid bool
+		if err = tx.QueryRow(ctx, `SELECT id,service_id,action,attempts,status,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 FOR UPDATE`, job.ID).Scan(&actual.ID, &actual.ServiceID, &actual.Action, &actual.Attempts, &jobStatus, &leaseValid); err != nil {
+			return err
+		}
+		if jobStatus != "running" || actual.Attempts != job.Attempts || !leaseValid {
+			return conflict("job_lease_lost", "任务租约已失效")
+		}
+		job = actual
+		if !overdueDue {
+			if err = cancelObsoleteOverdueSuspension(ctx, tx, job); err != nil {
+				return err
+			}
+			return nil
+		}
+		if !allowedServiceAction(serviceStatus, job.Action) {
+			if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='failed',last_error=$2,completed_at=now(),updated_at=now() WHERE id=$1`, job.ID, fmt.Sprintf("服务状态 %s 不允许 %s", serviceStatus, job.Action)); err != nil {
+				return err
+			}
+			return nil
+		}
+		if mode == "manual" {
+			if job.Action == "create" || job.Action == "terminate" {
+				if _, err = tx.Exec(ctx, `UPDATE services SET status='provisioning',last_error='等待管理员确认实际资源',version=version+1,updated_at=now() WHERE id=$1`, job.ServiceID); err != nil {
+					return err
+				}
+			}
+			if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='waiting_manual',locked_at=NULL,updated_at=now() WHERE id=$1`, job.ID); err != nil {
+				return err
+			}
+			if job.Action == "upgrade" {
+				if _, err = tx.Exec(ctx, "UPDATE service_configuration_changes SET status='waiting_manual',updated_at=now() WHERE job_id=$1", job.ID); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		if mode == "nokvm" {
+			var kind string
+			if err = tx.QueryRow(ctx, "SELECT change_type FROM service_configuration_changes WHERE job_id=$1", job.ID).Scan(&kind); err != nil {
+				return err
+			}
+			if job.Action != "upgrade" || kind != "billing_cycle" {
+				return conflict("unsupported_supplier_upgrade", "NOKVM 暂不支持资源升级")
+			}
+		} else if mode != "simulation" {
+			return conflict("unsupported_delivery_mode", "未知交付模式")
+		}
+		if err = applyLocalServiceAction(ctx, tx, job, serviceStatus); err != nil {
+			return err
+		}
+		if job.Action == "create" {
+			if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, job.ServiceID); err != nil {
 				return err
 			}
 		}
-		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='waiting_manual',locked_at=NULL,updated_at=now() WHERE id=$1`, job.ID); err != nil {
-			return err
-		}
-		if job.Action == "upgrade" {
-			if _, err = tx.Exec(ctx, "UPDATE service_configuration_changes SET status='waiting_manual',updated_at=now() WHERE job_id=$1", job.ID); err != nil {
+		if job.Action == "suspend" && serviceStatus == "active" {
+			if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
 				return err
 			}
 		}
-		return tx.Commit(ctx)
-	}
-	if mode == "nokvm" {
-		var kind string
-		if err = tx.QueryRow(ctx, "SELECT change_type FROM service_configuration_changes WHERE job_id=$1", job.ID).Scan(&kind); err != nil {
+		resultMode, auditAction := "simulation", "service.simulation.completed"
+		if mode == "nokvm" {
+			resultMode = "local_billing_cycle"
+			auditAction = "service.billing_cycle.completed"
+		}
+		if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='succeeded',completed_at=now(),locked_at=NULL,updated_at=now(),last_error='',result=jsonb_build_object('mode',$2::text) WHERE id=$1`, job.ID, resultMode); err != nil {
 			return err
 		}
-		if job.Action != "upgrade" || kind != "billing_cycle" {
-			return conflict("unsupported_supplier_upgrade", "NOKVM 暂不支持资源升级")
-		}
-	} else if mode != "simulation" {
-		return conflict("unsupported_delivery_mode", "未知交付模式")
-	}
-	if err = applyLocalServiceAction(ctx, tx, job, serviceStatus); err != nil {
-		return err
-	}
-	if job.Action == "create" {
-		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, job.ServiceID); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO audit_events(action,entity_type,entity_id,payload) VALUES($4,'service',$1,jsonb_build_object('job_id',$2::bigint,'action',$3::text))`, fmt.Sprint(job.ServiceID), job.ID, job.Action, auditAction); err != nil {
 			return err
 		}
-	}
-	if job.Action == "suspend" && serviceStatus == "active" {
-		if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
-			return err
-		}
-	}
-	resultMode, auditAction := "simulation", "service.simulation.completed"
-	if mode == "nokvm" {
-		resultMode = "local_billing_cycle"
-		auditAction = "service.billing_cycle.completed"
-	}
-	if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='succeeded',completed_at=now(),locked_at=NULL,updated_at=now(),last_error='',result=jsonb_build_object('mode',$2::text) WHERE id=$1`, job.ID, resultMode); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO audit_events(action,entity_type,entity_id,payload) VALUES($4,'service',$1,jsonb_build_object('job_id',$2::bigint,'action',$3::text))`, fmt.Sprint(job.ServiceID), job.ID, job.Action, auditAction); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		return nil
+	})
 }
 
 func applyLocalServiceAction(ctx context.Context, tx pgx.Tx, job ProvisionJob, current string) error {

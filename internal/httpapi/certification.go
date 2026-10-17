@@ -70,35 +70,25 @@ func (s *Server) convertCertificationToCompany(w http.ResponseWriter, r *http.Re
 	}{in.Payload, in.ExpectedVersion})
 	hash := sha256.Sum256(hashBytes)
 	actor := identityFrom(r).ID
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	operation := "certification.convert_company"
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:])); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	out, err := s.db.ConvertCertificationToCompanyTx(r.Context(), tx, actor, in.Payload, in.ExpectedVersion)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:]), out); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusAccepted, out)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		operation := "certification.convert_company"
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:])); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		out, err := s.db.ConvertCertificationToCompanyTx(r.Context(), tx, actor, in.Payload, in.ExpectedVersion)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:]), out); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusAccepted, out}, nil
+	})
 }
 
 func (s *Server) adminCertifications(w http.ResponseWriter, r *http.Request) {
@@ -172,39 +162,28 @@ func (s *Server) reviewCertification(w http.ResponseWriter, r *http.Request) {
 	}{id, in.Decision, in.Note, in.ExpectedVersion})
 	hash := sha256.Sum256(hashBytes)
 	operation := "certification.review:" + strconv.FormatInt(id, 10)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	ctx := requestFileContext(r)
-	if err = s.db.LockCertificationReview(ctx, tx, identityFrom(r).ID, id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, identityFrom(r).ID, operation, key, hex.EncodeToString(hash[:])); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	if err := s.db.ReviewCertificationTx(ctx, tx, identityFrom(r).ID, id, in.Decision, in.Note, in.ExpectedVersion); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "status": in.Decision}
-	if err = saveSettingOperationTx(r, tx, identityFrom(r).ID, operation, key, hex.EncodeToString(hash[:]), result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		ctx := requestFileContext(r)
+		if err = s.db.LockCertificationReview(ctx, tx, identityFrom(r).ID, id); err != nil {
+			return txResponse{}, err
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, identityFrom(r).ID, operation, key, hex.EncodeToString(hash[:])); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		if err := s.db.ReviewCertificationTx(ctx, tx, identityFrom(r).ID, id, in.Decision, in.Note, in.ExpectedVersion); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "status": in.Decision}
+		if err = saveSettingOperationTx(r, tx, identityFrom(r).ID, operation, key, hex.EncodeToString(hash[:]), result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func (s *Server) adminCertificationHistory(w http.ResponseWriter, r *http.Request) {

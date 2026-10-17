@@ -69,16 +69,14 @@ func (s *Store) supplierConsoleBindingTx(ctx context.Context, tx pgx.Tx, actor, 
 }
 
 func (s *Store) supplierConsoleBinding(ctx context.Context, actor, serviceID int64, admin, manage bool) (supplierConsoleBinding, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return supplierConsoleBinding{}, err
-	}
-	defer tx.Rollback(ctx)
-	out, err := s.supplierConsoleBindingTx(ctx, tx, actor, serviceID, admin, manage)
-	if err != nil {
-		return out, err
-	}
-	return out, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (supplierConsoleBinding, error) {
+		var err error
+		out, err := s.supplierConsoleBindingTx(ctx, tx, actor, serviceID, admin, manage)
+		if err != nil {
+			return out, err
+		}
+		return out, nil
+	})
 }
 
 func (s *Store) supplierTemplates(ctx context.Context, actor, serviceID int64, admin bool) (supplierTemplateListing, error) {
@@ -135,25 +133,23 @@ func (s *Store) ServiceVNC(ctx context.Context, actor, serviceID int64, admin bo
 	if err != nil {
 		return "", supplierReadError(err)
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return "", err
-	}
-	defer tx.Rollback(ctx)
-	after, err := s.supplierConsoleBindingTx(ctx, tx, actor, serviceID, admin, true)
-	if err != nil {
-		return "", err
-	}
-	if after != b {
-		return "", conflict("supplier_resource_changed", "服务资源已变更，请刷新")
-	}
-	if !supplier.ValidConsoleURL(u) {
-		return "", conflict("console_url_invalid", "供应商控制台地址无效")
-	}
-	if err = Audit(ctx, tx, actor, "service.console.opened", "service", serviceID, map[string]any{}); err != nil {
-		return "", err
-	}
-	return u, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (string, error) {
+		var err error
+		after, err := s.supplierConsoleBindingTx(ctx, tx, actor, serviceID, admin, true)
+		if err != nil {
+			return "", err
+		}
+		if after != b {
+			return "", conflict("supplier_resource_changed", "服务资源已变更，请刷新")
+		}
+		if !supplier.ValidConsoleURL(u) {
+			return "", conflict("console_url_invalid", "供应商控制台地址无效")
+		}
+		if err = Audit(ctx, tx, actor, "service.console.opened", "service", serviceID, map[string]any{}); err != nil {
+			return "", err
+		}
+		return u, nil
+	})
 }
 
 // ServiceSupplierCapabilitiesTx is called only after the service visibility check.

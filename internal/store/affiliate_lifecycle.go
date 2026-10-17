@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -157,92 +158,90 @@ func (s *Store) SettleAffiliateCommissions(ctx context.Context, limit int) (int,
 }
 
 func (s *Store) releaseAffiliateEntry(ctx context.Context, id, run int64, owner string) (bool, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback(ctx)
-	var runID int64
-	if err = tx.QueryRow(ctx, "UPDATE affiliate_settlement_runs SET lease_until=clock_timestamp()+interval '2 minutes' WHERE id=$1 AND lease_owner=$2 AND status='running' AND lease_until>clock_timestamp() RETURNING id", run, owner).Scan(&runID); err != nil {
-		return false, err
-	}
-	var invoice, account int64
-	if err = tx.QueryRow(ctx, "SELECT invoice_id,account_id FROM affiliate_commission_entries WHERE id=$1", id).Scan(&invoice, &account); err != nil {
-		return false, err
-	}
-	var invoiceStatus string
-	var order *int64
-	if err = tx.QueryRow(ctx, "SELECT status,order_id FROM invoices WHERE id=$1 FOR UPDATE", invoice).Scan(&invoiceStatus, &order); err != nil {
-		return false, err
-	}
-	if order != nil {
-		var orderStatus, review string
-		if err = tx.QueryRow(ctx, "SELECT status,review_status FROM orders WHERE id=$1 FOR UPDATE", *order).Scan(&orderStatus, &review); err != nil {
+	return withTx(ctx, s, func(tx pgx.Tx) (bool, error) {
+		var err error
+		var runID int64
+		if err = tx.QueryRow(ctx, "UPDATE affiliate_settlement_runs SET lease_until=clock_timestamp()+interval '2 minutes' WHERE id=$1 AND lease_owner=$2 AND status='running' AND lease_until>clock_timestamp() RETURNING id", run, owner).Scan(&runID); err != nil {
 			return false, err
 		}
-		if orderStatus == "cancelled" || orderStatus == "refunded" || review != "approved" {
-			return false, tx.Commit(ctx)
-		}
-	}
-	rows, err := tx.Query(ctx, "SELECT s.id,s.status,s.import_review_required FROM services s WHERE s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id) ORDER BY s.id FOR UPDATE", order, invoice)
-	if err != nil {
-		return false, err
-	}
-	blocked := false
-	for rows.Next() {
-		var sid int64
-		var status string
-		var review bool
-		if err = rows.Scan(&sid, &status, &review); err != nil {
-			rows.Close()
+		var invoice, account int64
+		if err = tx.QueryRow(ctx, "SELECT invoice_id,account_id FROM affiliate_commission_entries WHERE id=$1", id).Scan(&invoice, &account); err != nil {
 			return false, err
 		}
-		if review || status != "active" {
-			blocked = true
+		var invoiceStatus string
+		var order *int64
+		if err = tx.QueryRow(ctx, "SELECT status,order_id FROM invoices WHERE id=$1 FOR UPDATE", invoice).Scan(&invoiceStatus, &order); err != nil {
+			return false, err
 		}
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return false, err
-	}
-	var held bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM provision_jobs j JOIN services s ON s.id=j.service_id WHERE (s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id)) AND j.status IN ('pending','running','waiting_manual','waiting_verification')) OR EXISTS(SELECT 1 FROM invoices WHERE id=$2 AND import_review_required) OR EXISTS(SELECT 1 FROM service_cancellation_requests c JOIN services s ON s.id=c.service_id WHERE (s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id)) AND c.status IN ('pending','approved'))", order, invoice).Scan(&held); err != nil {
-		return false, err
-	}
-	if blocked || held || invoiceStatus != "paid" {
-		return false, tx.Commit(ctx)
-	}
-	if err = lockAffiliateAccount(ctx, tx, account); err != nil {
-		return false, err
-	}
-	var amount int64
-	var before string
-	if err = tx.QueryRow(ctx, "SELECT pending_cents,status FROM affiliate_commission_entries WHERE id=$1 AND available_at<=now() AND reversal_at IS NULL FOR UPDATE", id).Scan(&amount, &before); err == pgx.ErrNoRows {
-		return false, tx.Commit(ctx)
-	}
-	if err != nil {
-		return false, err
-	}
-	if amount == 0 {
-		return false, tx.Commit(ctx)
-	}
-	if _, err = tx.Exec(ctx, "UPDATE affiliate_commission_entries SET available_cents=available_cents+pending_cents,pending_cents=0 WHERE id=$1", id); err != nil {
-		return false, err
-	}
-	if err = affiliateEvent(ctx, tx, id, 0, 0, run, "released", amount, before, "hold period elapsed", fmt.Sprintf("affiliate:release:%d", id)); err != nil {
-		return false, err
-	}
-	if err = offsetAffiliateClawbacks(ctx, tx, account, id, run); err != nil {
-		return false, err
-	}
-	if err = affiliateAudit(ctx, tx, account, 0, "affiliate.commission.released", "affiliate_commission", id, map[string]any{"amount_cents": amount, "run_id": run}); err != nil {
-		return false, err
-	}
-	if _, err = tx.Exec(ctx, "UPDATE affiliate_settlement_runs SET processed_count=processed_count+1 WHERE id=$1 AND lease_owner=$2", run, owner); err != nil {
-		return false, err
-	}
-	return true, tx.Commit(ctx)
+		if order != nil {
+			var orderStatus, review string
+			if err = tx.QueryRow(ctx, "SELECT status,review_status FROM orders WHERE id=$1 FOR UPDATE", *order).Scan(&orderStatus, &review); err != nil {
+				return false, err
+			}
+			if orderStatus == "cancelled" || orderStatus == "refunded" || review != "approved" {
+				return false, nil
+			}
+		}
+		rows, err := tx.Query(ctx, "SELECT s.id,s.status,s.import_review_required FROM services s WHERE s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id) ORDER BY s.id FOR UPDATE", order, invoice)
+		if err != nil {
+			return false, err
+		}
+		blocked := false
+		for rows.Next() {
+			var sid int64
+			var status string
+			var review bool
+			if err = rows.Scan(&sid, &status, &review); err != nil {
+				rows.Close()
+				return false, err
+			}
+			if review || status != "active" {
+				blocked = true
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return false, err
+		}
+		var held bool
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM provision_jobs j JOIN services s ON s.id=j.service_id WHERE (s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id)) AND j.status IN ('pending','running','waiting_manual','waiting_verification')) OR EXISTS(SELECT 1 FROM invoices WHERE id=$2 AND import_review_required) OR EXISTS(SELECT 1 FROM service_cancellation_requests c JOIN services s ON s.id=c.service_id WHERE (s.order_id=$1 OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=$2 AND ii.service_id=s.id)) AND c.status IN ('pending','approved'))", order, invoice).Scan(&held); err != nil {
+			return false, err
+		}
+		if blocked || held || invoiceStatus != "paid" {
+			return false, nil
+		}
+		if err = lockAffiliateAccount(ctx, tx, account); err != nil {
+			return false, err
+		}
+		var amount int64
+		var before string
+		if err = tx.QueryRow(ctx, "SELECT pending_cents,status FROM affiliate_commission_entries WHERE id=$1 AND available_at<=now() AND reversal_at IS NULL FOR UPDATE", id).Scan(&amount, &before); err == pgx.ErrNoRows {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if amount == 0 {
+			return false, nil
+		}
+		if _, err = tx.Exec(ctx, "UPDATE affiliate_commission_entries SET available_cents=available_cents+pending_cents,pending_cents=0 WHERE id=$1", id); err != nil {
+			return false, err
+		}
+		if err = affiliateEvent(ctx, tx, id, 0, 0, run, "released", amount, before, "hold period elapsed", fmt.Sprintf("affiliate:release:%d", id)); err != nil {
+			return false, err
+		}
+		if err = offsetAffiliateClawbacks(ctx, tx, account, id, run); err != nil {
+			return false, err
+		}
+		if err = affiliateAudit(ctx, tx, account, 0, "affiliate.commission.released", "affiliate_commission", id, map[string]any{"amount_cents": amount, "run_id": run}); err != nil {
+			return false, err
+		}
+		if _, err = tx.Exec(ctx, "UPDATE affiliate_settlement_runs SET processed_count=processed_count+1 WHERE id=$1 AND lease_owner=$2", run, owner); err != nil {
+			return false, err
+		}
+		return true, nil
+	})
 }
 func offsetAffiliateClawbacks(ctx context.Context, tx pgx.Tx, account, entry, run int64) error {
 	var available int64

@@ -67,27 +67,9 @@ func (s *Server) notificationTemplatesPage(w http.ResponseWriter, r *http.Reques
 		where = append(where, fmt.Sprintf("active=$%d", len(args)))
 	}
 	whereSQL := strings.Join(where, " AND ")
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM notification_templates WHERE "+whereSQL, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at
- ,channel,provider_template_id,version FROM notification_templates WHERE `+whereSQL+` ORDER BY channel,id LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM notification_templates WHERE "+whereSQL,
+		`SELECT id,kind,name,subject,body,active,updated_by,created_at,updated_at
+ ,channel,provider_template_id,version FROM notification_templates WHERE `+whereSQL+` ORDER BY channel,id`, args, limit, offset)
 }
 
 func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Request) {
@@ -121,53 +103,38 @@ func (s *Server) createNotificationTemplate(w http.ResponseWriter, r *http.Reque
 	if input.Active != nil {
 		active = *input.Active
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	actor := identityFrom(r).ID
-	if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, actor, "notifications"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	key := r.Header.Get("Idempotency-Key")
-	result := map[string]any{}
-	hash, replay, err := store.CreationReceipt(r.Context(), tx, actor, "notification_template.create", key, input, &result)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		actor := identityFrom(r).ID
+		if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, actor, "notifications"); err != nil {
+			return txResponse{}, err
 		}
-		write(w, http.StatusCreated, result)
-		return
-	}
-	var id int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO notification_templates(channel,kind,name,subject,body,provider_template_id,active,updated_by)
+		key := r.Header.Get("Idempotency-Key")
+		result := map[string]any{}
+		hash, replay, err := store.CreationReceipt(r.Context(), tx, actor, "notification_template.create", key, input, &result)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if replay {
+
+			return txResponse{http.StatusCreated, result}, nil
+		}
+		var id int64
+		err = tx.QueryRow(r.Context(), `INSERT INTO notification_templates(channel,kind,name,subject,body,provider_template_id,active,updated_by)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, input.Channel, input.Kind, input.Name, input.Subject, input.Body, input.ProviderTemplateID, active, identityFrom(r).ID).Scan(&id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.created", "notification_template", id, map[string]any{"kind": input.Kind, "version": 1}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result = map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind, "version": 1}
-	if err = store.SaveCreationReceipt(r.Context(), tx, actor, "notification_template.create", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, result)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.created", "notification_template", id, map[string]any{"kind": input.Kind, "version": 1}); err != nil {
+			return txResponse{}, err
+		}
+		result = map[string]any{"id": id, "channel": input.Channel, "kind": input.Kind, "version": 1}
+		if err = store.SaveCreationReceipt(r.Context(), tx, actor, "notification_template.create", key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Request) {
@@ -222,63 +189,48 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	actor := identityFrom(r).ID
-	if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var role string
-	var roleID *int64
-	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if role != "super_admin" {
-		var allowed bool
-		if roleID != nil {
-			if err = tx.QueryRow(r.Context(), "SELECT active AND 'notifications.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
-				s.fail(w, r, err)
-				return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		actor := identityFrom(r).ID
+		if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
+			return txResponse{}, err
+		}
+		var role string
+		var roleID *int64
+		if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
+			return txResponse{}, err
+		}
+		if role != "super_admin" {
+			var allowed bool
+			if roleID != nil {
+				if err = tx.QueryRow(r.Context(), "SELECT active AND 'notifications.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
+					return txResponse{}, err
+				}
+			}
+			if !allowed {
+				return txResponse{}, &txHTTPError{http.StatusForbidden, "permission_denied", "没有通知模板管理权限"}
 			}
 		}
-		if !allowed {
-			writeError(w, http.StatusForbidden, "permission_denied", "没有通知模板管理权限")
-			return
+		var kind, channel string
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT kind,channel,version FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel, &version); err != nil {
+			return txResponse{}, err
 		}
-	}
-	var kind, channel string
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT kind,channel,version FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != *input.ExpectedVersion {
-		writeError(w, 409, "notification_template_conflict", "模板已被其他管理员修改，请刷新后重新编辑")
-		return
-	}
-	if channel == "email" && input.Subject != nil && *input.Subject == "" {
-		writeError(w, http.StatusBadRequest, "invalid_notification_template", "邮件主题无效")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),version=version+1,updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.updated", "notification_template", id, map[string]any{"kind": kind, "active": input.Active}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind, "version": version + 1})
+		if version != *input.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "notification_template_conflict", "模板已被其他管理员修改，请刷新后重新编辑"}
+		}
+		if channel == "email" && input.Subject != nil && *input.Subject == "" {
+			return txResponse{}, &txHTTPError{http.StatusBadRequest, "invalid_notification_template", "邮件主题无效"}
+		}
+		if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),version=version+1,updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.updated", "notification_template", id, map[string]any{"kind": kind, "active": input.Active}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind, "version": version + 1}}, nil
+	})
 }
 
 func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {
@@ -318,47 +270,34 @@ func (s *Server) retryEmail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT status FROM email_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("email", "email_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if status == "sent" {
-		writeError(w, http.StatusConflict, "email_already_sent", "邮件已经发送")
-		return
-	}
-	if status == "sending" {
-		writeError(w, http.StatusConflict, "email_delivery_in_progress", "邮件正在投递，请等待当前任务完成")
-		return
-	}
-	var active bool
-	if err = tx.QueryRow(r.Context(), `SELECT (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM email_outbox WHERE id=$1`, id).Scan(&active); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !active || status == "expired" {
-		writeError(w, 409, "email_expired", "验证码邮件已过期，请重新申请验证码")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE email_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "email_outbox.retried", "email_outbox", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "status": "pending"})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var status string
+		if err = tx.QueryRow(r.Context(), "SELECT status FROM email_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("email", "email_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
+			return txResponse{}, err
+		}
+		if status == "sent" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "email_already_sent", "邮件已经发送"}
+		}
+		if status == "sending" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "email_delivery_in_progress", "邮件正在投递，请等待当前任务完成"}
+		}
+		var active bool
+		if err = tx.QueryRow(r.Context(), `SELECT (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM email_outbox WHERE id=$1`, id).Scan(&active); err != nil {
+			return txResponse{}, err
+		}
+		if !active || status == "expired" {
+			return txResponse{}, &txHTTPError{409, "email_expired", "验证码邮件已过期，请重新申请验证码"}
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE email_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "email_outbox.retried", "email_outbox", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "status": "pending"}}, nil
+	})
 }
 
 func (s *Server) smsOutbox(w http.ResponseWriter, r *http.Request) {
@@ -398,45 +337,32 @@ func (s *Server) retrySMS(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT status FROM sms_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("sms", "sms_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if status == "sent" {
-		writeError(w, http.StatusConflict, "sms_already_sent", "短信已经发送")
-		return
-	}
-	if status == "sending" {
-		writeError(w, http.StatusConflict, "sms_delivery_in_progress", "短信正在投递，请等待当前任务完成")
-		return
-	}
-	var active bool
-	if err = tx.QueryRow(r.Context(), `SELECT expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM sms_outbox WHERE id=$1`, id).Scan(&active); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !active || status == "expired" {
-		writeError(w, http.StatusConflict, "sms_expired", "短信已过期，请重新申请验证码")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE sms_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "sms_outbox.retried", "sms_outbox", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "status": "pending"})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var status string
+		if err = tx.QueryRow(r.Context(), "SELECT status FROM sms_outbox WHERE id=$1 AND "+ticketNotificationOutboxSQL("sms", "sms_outbox.id", "$2", "tickets.manage")+" FOR UPDATE", id, identityFrom(r).ID).Scan(&status); err != nil {
+			return txResponse{}, err
+		}
+		if status == "sent" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "sms_already_sent", "短信已经发送"}
+		}
+		if status == "sending" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "sms_delivery_in_progress", "短信正在投递，请等待当前任务完成"}
+		}
+		var active bool
+		if err = tx.QueryRow(r.Context(), `SELECT expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) FROM sms_outbox WHERE id=$1`, id).Scan(&active); err != nil {
+			return txResponse{}, err
+		}
+		if !active || status == "expired" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "sms_expired", "短信已过期，请重新申请验证码"}
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE sms_outbox SET status='pending',attempts=0,dead_letter_at=NULL,locked_at=NULL,available_at=now(),last_error='' WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "sms_outbox.retried", "sms_outbox", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "status": "pending"}}, nil
+	})
 }

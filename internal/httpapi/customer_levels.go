@@ -91,40 +91,29 @@ func (s *Server) createCustomerLevel(w http.ResponseWriter, r *http.Request) {
 	}
 	actor := identityFrom(r).ID
 	hash := settingMutationHash(in)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_level.create", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var id int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO customer_levels(name,min_income_cents,min_purchase_count,min_login_count,min_recent_login_count,min_renewal_count,min_recent_renewal_count,sort_order,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active).Scan(&id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": int64(1)}
-	if err = store.Audit(r.Context(), tx, actor, "customer_level.created", "customer_level", id, map[string]any{"name": in.Name}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, "customer_level.create", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, result)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_level.create", key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		var id int64
+		err = tx.QueryRow(r.Context(), `INSERT INTO customer_levels(name,min_income_cents,min_purchase_count,min_login_count,min_recent_login_count,min_renewal_count,min_recent_renewal_count,sort_order,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active).Scan(&id)
+		if err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "version": int64(1)}
+		if err = store.Audit(r.Context(), tx, actor, "customer_level.created", "customer_level", id, map[string]any{"name": in.Name}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, "customer_level.create", key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateCustomerLevel(w http.ResponseWriter, r *http.Request) {
@@ -149,53 +138,39 @@ func (s *Server) updateCustomerLevel(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input customerLevelInput
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	operation := "customer_level.update:" + strconv.FormatInt(id, 10)
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_levels WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户等级不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		operation := "customer_level.update:" + strconv.FormatInt(id, 10)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户等级已变更，请刷新后重试")
-		return
-	}
-	_, err = tx.Exec(r.Context(), `UPDATE customer_levels SET name=$2,min_income_cents=$3,min_purchase_count=$4,min_login_count=$5,min_recent_login_count=$6,min_renewal_count=$7,min_recent_renewal_count=$8,sort_order=$9,active=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": version + 1}
-	if err = store.Audit(r.Context(), tx, actor, "customer_level.updated", "customer_level", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_levels WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户等级不存在"}
+			}
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户等级已变更，请刷新后重试"}
+		}
+		_, err = tx.Exec(r.Context(), `UPDATE customer_levels SET name=$2,min_income_cents=$3,min_purchase_count=$4,min_login_count=$5,min_recent_login_count=$6,min_renewal_count=$7,min_recent_renewal_count=$8,sort_order=$9,active=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.MinIncomeCents, in.MinPurchaseCount, in.MinLoginCount, in.MinRecentLoginCount, in.MinRenewalCount, in.MinRecentRenewalCount, in.SortOrder, in.Active)
+		if err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "version": version + 1}
+		if err = store.Audit(r.Context(), tx, actor, "customer_level.updated", "customer_level", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func (s *Server) deleteCustomerLevel(w http.ResponseWriter, r *http.Request) {
@@ -219,50 +194,36 @@ func (s *Server) deleteCustomerLevel(w http.ResponseWriter, r *http.Request) {
 	}
 	actor := identityFrom(r).ID
 	hash := settingMutationHash(struct{ ID, Version int64 }{id, in.ExpectedVersion})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	operation := "customer_level.delete:" + strconv.FormatInt(id, 10)
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_levels WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户等级不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		operation := "customer_level.delete:" + strconv.FormatInt(id, 10)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户等级已变更，请刷新后重试")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM customer_levels WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "deleted": true}
-	if err = store.Audit(r.Context(), tx, actor, "customer_level.deleted", "customer_level", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_levels WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户等级不存在"}
+			}
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户等级已变更，请刷新后重试"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM customer_levels WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "deleted": true}
+		if err = store.Audit(r.Context(), tx, actor, "customer_level.deleted", "customer_level", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

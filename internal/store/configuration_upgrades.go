@@ -267,170 +267,168 @@ func proratedConfigurationDelta(delta, remaining, duration int64) (int64, error)
 
 func (s *Store) QuoteConfigurationChange(ctx context.Context, userID, serviceID int64, in ConfigurationChangeInput) (ConfigurationChange, error) {
 	var out ConfigurationChange
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback(ctx)
-	var deliveryMode string
-	if err = tx.QueryRow(ctx, "SELECT provision_mode FROM services WHERE id=$1 AND user_id=$2", serviceID, userID).Scan(&deliveryMode); err != nil {
-		return out, err
-	}
-	if deliveryMode == "supplier" {
-		return out, conflict("unsupported_supplier_upgrade", "该上游适配器暂未开放规格或账期变更")
-	}
-	if deliveryMode == "nokvm" {
-		return out, conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
-	}
-	if err = CatalogReadLock(ctx, tx); err != nil {
-		return out, err
-	}
-	var productID, owner int64
-	var status, cycle string
-	var due *time.Time
-	var originalJSON, originalIDsJSON []byte
-	err = tx.QueryRow(ctx, `SELECT s.user_id,s.product_id,s.status,s.billing_cycle,s.version,s.next_due_at,
- coalesce(s.recurring_price_cents,oi.price_cents),coalesce(s.config_snapshot,oi.config_snapshot,'[]'::jsonb),coalesce(s.option_ids,oi.config_options,'[]'::jsonb)
- FROM services s LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 AND s.user_id=$2 FOR UPDATE OF s`, serviceID, userID).
-		Scan(&owner, &productID, &status, &cycle, &out.ServiceVersion, &due, &out.OldRecurring, &originalJSON, &originalIDsJSON)
-	if err != nil {
-		return out, err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return out, err
-	}
-	if status != "active" || due == nil || !due.After(time.Now()) || cycle == "once" {
-		return out, conflict("configuration_change_unavailable", "只有未到期的已启用周期服务可以变更配置")
-	}
-	if in.ExpectedVersion != out.ServiceVersion {
-		return out, conflict("version_conflict", "服务已变更，请重新加载")
-	}
-	if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
-		return out, err
-	}
-	var pending bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND status IN ('pending','running','waiting_manual','waiting_verification'))
- OR EXISTS(SELECT 1 FROM service_cancellation_requests WHERE service_id=$1 AND status IN ('pending','approved'))
- OR EXISTS(SELECT 1 FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid')`, serviceID).Scan(&pending); err != nil {
-		return out, err
-	}
-	if pending {
-		return out, conflict("service_operation_pending", "服务已有任务、取消申请或续费账单")
-	}
-	var enabled, downgrade bool
-	if err = tx.QueryRow(ctx, "SELECT revision,config_upgrade_enabled,config_downgrade_enabled FROM products WHERE id=$1", productID).Scan(&out.ProductRevision, &enabled, &downgrade); err != nil {
-		return out, err
-	}
-	if !enabled {
-		return out, conflict("configuration_upgrade_disabled", "该商品未开放配置变更")
-	}
-	if out.ProductRevision != in.ExpectedRevision {
-		return out, conflict("version_conflict", "商品配置已变更，请重新加载")
-	}
-	selection, err := ValidateProductOptionsForCycleWithQuantities(ctx, tx, productID, cycle, in.OptionIDs, in.OptionQuantities)
-	if err != nil {
-		return out, err
-	}
-	var original []OptionSnapshot
-	if err = json.Unmarshal(originalJSON, &original); err != nil {
-		return out, err
-	}
-	before := map[int64]OptionSnapshot{}
-	var originalIDs []int64
-	if err = json.Unmarshal(originalIDsJSON, &originalIDs); err != nil {
-		return out, err
-	}
-	if len(originalIDs) != len(original) {
-		return out, conflict("configuration_snapshot_missing", "服务配置快照需要管理员复核")
-	}
-	for _, choice := range original {
-		if choice.ID < 1 || choice.GroupID < 1 || before[choice.GroupID].ID != 0 || !containsInt64(originalIDs, choice.ID) {
-			return out, conflict("configuration_snapshot_missing", "服务配置快照需要管理员复核")
-		}
-		before[choice.GroupID] = choice
-	}
-	// Keep the contracted price for unchanged groups, even if catalog prices changed.
-	after := map[int64]OptionSnapshot{}
-	out.Snapshot = []OptionSnapshot{}
-	delta := int64(0)
-	changed := false
-	for _, choice := range selection.Snapshot {
-		old := before[choice.GroupID]
-		if old.ID == choice.ID && max(old.Quantity, 1) == choice.Quantity {
-			choice = old
-			choice.Quantity = max(choice.Quantity, 1)
-		} else {
-			changed = true
-		}
-		after[choice.GroupID] = choice
-		out.Snapshot = append(out.Snapshot, choice)
-	}
-	groups := map[int64]bool{}
-	for id := range before {
-		groups[id] = true
-	}
-	for id := range after {
-		groups[id] = true
-	}
-	for groupID := range groups {
-		old, next := before[groupID], after[groupID]
-		if old.ID == next.ID && max(old.Quantity, 1) == max(next.Quantity, 1) {
-			continue
-		}
-		changed = true
-		if !downgrade && old.ID != 0 && (next.ID == 0 || next.PriceDeltaCents < old.PriceDeltaCents || (old.ID == next.ID && next.Quantity < max(old.Quantity, 1))) {
-			return out, conflict("configuration_downgrade_disabled", "该商品未开放降配")
-		}
-		var allowed bool
-		if err = tx.QueryRow(ctx, `SELECT upgrade_enabled AND product_id=$2 FROM product_option_groups WHERE id=$1`, groupID, productID).Scan(&allowed); err != nil {
+	return withTx(ctx, s, func(tx pgx.Tx) (ConfigurationChange, error) {
+		var err error
+		var deliveryMode string
+		if err = tx.QueryRow(ctx, "SELECT provision_mode FROM services WHERE id=$1 AND user_id=$2", serviceID, userID).Scan(&deliveryMode); err != nil {
 			return out, err
 		}
-		if !allowed {
-			return out, conflict("configuration_upgrade_disabled", "所选配置组不允许变更")
+		if deliveryMode == "supplier" {
+			return out, conflict("unsupported_supplier_upgrade", "该上游适配器暂未开放规格或账期变更")
 		}
-		for _, id := range []int64{old.ID, next.ID} {
-			if id == 0 {
+		if deliveryMode == "nokvm" {
+			return out, conflict("unsupported_supplier_upgrade", "NOKVM 资源升级尚未开放")
+		}
+		if err = CatalogReadLock(ctx, tx); err != nil {
+			return out, err
+		}
+		var productID, owner int64
+		var status, cycle string
+		var due *time.Time
+		var originalJSON, originalIDsJSON []byte
+		err = tx.QueryRow(ctx, `SELECT s.user_id,s.product_id,s.status,s.billing_cycle,s.version,s.next_due_at,
+ coalesce(s.recurring_price_cents,oi.price_cents),coalesce(s.config_snapshot,oi.config_snapshot,'[]'::jsonb),coalesce(s.option_ids,oi.config_options,'[]'::jsonb)
+ FROM services s LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 AND s.user_id=$2 FOR UPDATE OF s`, serviceID, userID).
+			Scan(&owner, &productID, &status, &cycle, &out.ServiceVersion, &due, &out.OldRecurring, &originalJSON, &originalIDsJSON)
+		if err != nil {
+			return out, err
+		}
+		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+		if status != "active" || due == nil || !due.After(time.Now()) || cycle == "once" {
+			return out, conflict("configuration_change_unavailable", "只有未到期的已启用周期服务可以变更配置")
+		}
+		if in.ExpectedVersion != out.ServiceVersion {
+			return out, conflict("version_conflict", "服务已变更，请重新加载")
+		}
+		if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+		var pending bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND status IN ('pending','running','waiting_manual','waiting_verification'))
+ OR EXISTS(SELECT 1 FROM service_cancellation_requests WHERE service_id=$1 AND status IN ('pending','approved'))
+ OR EXISTS(SELECT 1 FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid')`, serviceID).Scan(&pending); err != nil {
+			return out, err
+		}
+		if pending {
+			return out, conflict("service_operation_pending", "服务已有任务、取消申请或续费账单")
+		}
+		var enabled, downgrade bool
+		if err = tx.QueryRow(ctx, "SELECT revision,config_upgrade_enabled,config_downgrade_enabled FROM products WHERE id=$1", productID).Scan(&out.ProductRevision, &enabled, &downgrade); err != nil {
+			return out, err
+		}
+		if !enabled {
+			return out, conflict("configuration_upgrade_disabled", "该商品未开放配置变更")
+		}
+		if out.ProductRevision != in.ExpectedRevision {
+			return out, conflict("version_conflict", "商品配置已变更，请重新加载")
+		}
+		selection, err := ValidateProductOptionsForCycleWithQuantities(ctx, tx, productID, cycle, in.OptionIDs, in.OptionQuantities)
+		if err != nil {
+			return out, err
+		}
+		var original []OptionSnapshot
+		if err = json.Unmarshal(originalJSON, &original); err != nil {
+			return out, err
+		}
+		before := map[int64]OptionSnapshot{}
+		var originalIDs []int64
+		if err = json.Unmarshal(originalIDsJSON, &originalIDs); err != nil {
+			return out, err
+		}
+		if len(originalIDs) != len(original) {
+			return out, conflict("configuration_snapshot_missing", "服务配置快照需要管理员复核")
+		}
+		for _, choice := range original {
+			if choice.ID < 1 || choice.GroupID < 1 || before[choice.GroupID].ID != 0 || !containsInt64(originalIDs, choice.ID) {
+				return out, conflict("configuration_snapshot_missing", "服务配置快照需要管理员复核")
+			}
+			before[choice.GroupID] = choice
+		}
+		// Keep the contracted price for unchanged groups, even if catalog prices changed.
+		after := map[int64]OptionSnapshot{}
+		out.Snapshot = []OptionSnapshot{}
+		delta := int64(0)
+		changed := false
+		for _, choice := range selection.Snapshot {
+			old := before[choice.GroupID]
+			if old.ID == choice.ID && max(old.Quantity, 1) == choice.Quantity {
+				choice = old
+				choice.Quantity = max(choice.Quantity, 1)
+			} else {
+				changed = true
+			}
+			after[choice.GroupID] = choice
+			out.Snapshot = append(out.Snapshot, choice)
+		}
+		groups := map[int64]bool{}
+		for id := range before {
+			groups[id] = true
+		}
+		for id := range after {
+			groups[id] = true
+		}
+		for groupID := range groups {
+			old, next := before[groupID], after[groupID]
+			if old.ID == next.ID && max(old.Quantity, 1) == max(next.Quantity, 1) {
 				continue
 			}
-			if err = tx.QueryRow(ctx, `SELECT upgrade_enabled AND (id<>$2 OR NOT hidden) FROM product_options WHERE id=$1 AND group_id=$3`, id, next.ID, groupID).Scan(&allowed); err != nil {
+			changed = true
+			if !downgrade && old.ID != 0 && (next.ID == 0 || next.PriceDeltaCents < old.PriceDeltaCents || (old.ID == next.ID && next.Quantity < max(old.Quantity, 1))) {
+				return out, conflict("configuration_downgrade_disabled", "该商品未开放降配")
+			}
+			var allowed bool
+			if err = tx.QueryRow(ctx, `SELECT upgrade_enabled AND product_id=$2 FROM product_option_groups WHERE id=$1`, groupID, productID).Scan(&allowed); err != nil {
 				return out, err
 			}
 			if !allowed {
-				return out, conflict("configuration_upgrade_disabled", "所选配置项不允许变更")
+				return out, conflict("configuration_upgrade_disabled", "所选配置组不允许变更")
 			}
+			for _, id := range []int64{old.ID, next.ID} {
+				if id == 0 {
+					continue
+				}
+				if err = tx.QueryRow(ctx, `SELECT upgrade_enabled AND (id<>$2 OR NOT hidden) FROM product_options WHERE id=$1 AND group_id=$3`, id, next.ID, groupID).Scan(&allowed); err != nil {
+					return out, err
+				}
+				if !allowed {
+					return out, conflict("configuration_upgrade_disabled", "所选配置项不允许变更")
+				}
+			}
+			change := next.PriceDeltaCents - old.PriceDeltaCents
+			if (change > 0 && delta > maxInt64-change) || (change < 0 && delta < minInt64-change) {
+				return out, conflict("invalid_upgrade_price", "配置变更价格超出范围")
+			}
+			delta += change
 		}
-		change := next.PriceDeltaCents - old.PriceDeltaCents
-		if (change > 0 && delta > maxInt64-change) || (change < 0 && delta < minInt64-change) {
-			return out, conflict("invalid_upgrade_price", "配置变更价格超出范围")
+		if !changed {
+			return out, conflict("configuration_unchanged", "配置未发生变更")
 		}
-		delta += change
-	}
-	if !changed {
-		return out, conflict("configuration_unchanged", "配置未发生变更")
-	}
-	if (delta > 0 && out.OldRecurring > maxInt64-delta) || (delta < 0 && out.OldRecurring < -delta) {
-		return out, conflict("invalid_upgrade_price", "变更后服务周期金额无效")
-	}
-	out.NewRecurring = out.OldRecurring + delta
-	if delta < 0 && !downgrade {
-		return out, conflict("configuration_downgrade_disabled", "该商品未开放降配")
-	}
-	prorated, err := prorateServiceChange(ctx, tx, cycle, *due, delta)
-	if err != nil {
-		return out, err
-	}
-	out.AmountCents, out.CreditCents = max(prorated, 0), max(-prorated, 0)
-	out.DueAt, out.ServiceID, out.Status = *due, serviceID, "quoted"
-	out.ChangeType = "configuration"
-	newJSON, _ := json.Marshal(out.Snapshot)
-	idsJSON, _ := json.Marshal(selection.IDs)
-	quantitiesJSON, _ := json.Marshal(selection.Quantities)
-	err = tx.QueryRow(ctx, `INSERT INTO service_configuration_changes(service_id,user_id,product_revision,service_version,billing_cycle,new_billing_cycle,due_at,old_recurring_cents,new_recurring_cents,amount_cents,credit_cents,old_snapshot,new_snapshot,option_ids,option_quantities)
+		if (delta > 0 && out.OldRecurring > maxInt64-delta) || (delta < 0 && out.OldRecurring < -delta) {
+			return out, conflict("invalid_upgrade_price", "变更后服务周期金额无效")
+		}
+		out.NewRecurring = out.OldRecurring + delta
+		if delta < 0 && !downgrade {
+			return out, conflict("configuration_downgrade_disabled", "该商品未开放降配")
+		}
+		prorated, err := prorateServiceChange(ctx, tx, cycle, *due, delta)
+		if err != nil {
+			return out, err
+		}
+		out.AmountCents, out.CreditCents = max(prorated, 0), max(-prorated, 0)
+		out.DueAt, out.ServiceID, out.Status = *due, serviceID, "quoted"
+		out.ChangeType = "configuration"
+		newJSON, _ := json.Marshal(out.Snapshot)
+		idsJSON, _ := json.Marshal(selection.IDs)
+		quantitiesJSON, _ := json.Marshal(selection.Quantities)
+		err = tx.QueryRow(ctx, `INSERT INTO service_configuration_changes(service_id,user_id,product_revision,service_version,billing_cycle,new_billing_cycle,due_at,old_recurring_cents,new_recurring_cents,amount_cents,credit_cents,old_snapshot,new_snapshot,option_ids,option_quantities)
 	 VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id,expires_at`, serviceID, owner, out.ProductRevision, out.ServiceVersion, cycle, due, out.OldRecurring, out.NewRecurring, out.AmountCents, out.CreditCents, originalJSON, newJSON, idsJSON, quantitiesJSON).Scan(&out.ID, &out.ExpiresAt)
-	if err != nil {
-		return out, err
-	}
-	return out, tx.Commit(ctx)
+		if err != nil {
+			return out, err
+		}
+		return out, nil
+	})
 }
 
 const configurationChangeColumns = `id,service_id,amount_cents,credit_cents,old_recurring_cents,new_recurring_cents,product_revision,service_version,billing_cycle,new_billing_cycle,due_at,expires_at,new_snapshot,status,invoice_id,job_id,change_type,source_product_id,target_product_id,coalesce(target_product_revision,0),coalesce(target_product_name,''),upgrade_base_cents,upgrade_discount_cents,upgrade_promo_code`
@@ -637,102 +635,98 @@ func lockConfigurationChangeBalance(ctx context.Context, tx pgx.Tx, jobID, servi
 }
 
 func (s *Store) CancelConfigurationChange(ctx context.Context, userID, serviceID, changeID int64) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	// Serialize the quoted-to-unpaid transition before discovering its invoice.
-	if err = lockOperationKey(ctx, tx, "configuration-change-service", fmt.Sprintf("%d:%d", userID, serviceID)); err != nil {
-		return err
-	}
-	var invoice *int64
-	if err = tx.QueryRow(ctx, "SELECT invoice_id FROM service_configuration_changes WHERE id=$1 AND service_id=$2 AND user_id=$3", changeID, serviceID, userID).Scan(&invoice); err != nil {
-		return err
-	}
-	if invoice != nil {
-		if _, err = tx.Exec(ctx, "SELECT id FROM invoices WHERE id=$1 FOR UPDATE", *invoice); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		// Serialize the quoted-to-unpaid transition before discovering its invoice.
+		if err = lockOperationKey(ctx, tx, "configuration-change-service", fmt.Sprintf("%d:%d", userID, serviceID)); err != nil {
 			return err
 		}
-	}
-	if _, err = tx.Exec(ctx, "SELECT id FROM services WHERE id=$1 AND user_id=$2 FOR UPDATE", serviceID, userID); err != nil {
-		return err
-	}
-	var status string
-	if err = tx.QueryRow(ctx, "SELECT status FROM service_configuration_changes WHERE id=$1 FOR UPDATE", changeID).Scan(&status); err != nil {
-		return err
-	}
-	if status == "cancelled" {
-		return tx.Commit(ctx)
-	}
-	if status != "unpaid" && status != "quoted" {
-		return conflict("configuration_change_not_cancellable", "已付款或交付的变更不能直接取消")
-	}
-	if invoice != nil {
-		if err = requireNoRealPaymentPending(ctx, tx, *invoice); err != nil {
+		var invoice *int64
+		if err = tx.QueryRow(ctx, "SELECT invoice_id FROM service_configuration_changes WHERE id=$1 AND service_id=$2 AND user_id=$3", changeID, serviceID, userID).Scan(&invoice); err != nil {
 			return err
 		}
-	}
-	if err = releaseProductChangeStock(ctx, tx, changeID); err != nil {
-		return err
-	}
-	if invoice != nil {
-		if _, err = tx.Exec(ctx, "UPDATE invoices SET status='cancelled' WHERE id=$1 AND status='unpaid'", *invoice); err != nil {
+		if invoice != nil {
+			if _, err = tx.Exec(ctx, "SELECT id FROM invoices WHERE id=$1 FOR UPDATE", *invoice); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.Exec(ctx, "SELECT id FROM services WHERE id=$1 AND user_id=$2 FOR UPDATE", serviceID, userID); err != nil {
 			return err
 		}
-	}
-	if _, err = tx.Exec(ctx, "UPDATE service_configuration_changes SET status='cancelled',updated_at=now() WHERE id=$1", changeID); err != nil {
-		return err
-	}
-	if err = Audit(ctx, tx, userID, "service.configuration.cancelled", "service", serviceID, map[string]any{"change_id": changeID}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		var status string
+		if err = tx.QueryRow(ctx, "SELECT status FROM service_configuration_changes WHERE id=$1 FOR UPDATE", changeID).Scan(&status); err != nil {
+			return err
+		}
+		if status == "cancelled" {
+			return nil
+		}
+		if status != "unpaid" && status != "quoted" {
+			return conflict("configuration_change_not_cancellable", "已付款或交付的变更不能直接取消")
+		}
+		if invoice != nil {
+			if err = requireNoRealPaymentPending(ctx, tx, *invoice); err != nil {
+				return err
+			}
+		}
+		if err = releaseProductChangeStock(ctx, tx, changeID); err != nil {
+			return err
+		}
+		if invoice != nil {
+			if _, err = tx.Exec(ctx, "UPDATE invoices SET status='cancelled' WHERE id=$1 AND status='unpaid'", *invoice); err != nil {
+				return err
+			}
+		}
+		if _, err = tx.Exec(ctx, "UPDATE service_configuration_changes SET status='cancelled',updated_at=now() WHERE id=$1", changeID); err != nil {
+			return err
+		}
+		if err = Audit(ctx, tx, userID, "service.configuration.cancelled", "service", serviceID, map[string]any{"change_id": changeID}); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *Store) RetryConfigurationChange(ctx context.Context, actorID, serviceID, changeID int64) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
-		return err
-	}
-	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions) AND 'services.manage'=ANY(r.permissions)),false)
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+			return err
+		}
+		var allowed bool
+		if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions) AND 'services.manage'=ANY(r.permissions)),false)
  FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
-		return err
-	}
-	if !allowed {
-		return conflict("permission_denied", "没有管理服务的权限")
-	}
-	if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
-		return err
-	}
-	var state string
-	if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&state); err != nil {
-		return err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return err
-	}
-	if state != "active" {
-		return conflict("configuration_change_unavailable", "服务状态不能重试配置变更")
-	}
-	var jobID int64
-	var status string
-	if err = tx.QueryRow(ctx, `SELECT j.id,j.status FROM service_configuration_changes c JOIN provision_jobs j ON j.id=c.job_id JOIN invoices i ON i.id=c.invoice_id WHERE c.id=$1 AND c.service_id=$2 AND c.status='queued' AND i.status='paid' FOR UPDATE OF c,j`, changeID, serviceID).Scan(&jobID, &status); err != nil {
-		return err
-	}
-	if status != "failed" {
-		return conflict("configuration_change_retry_unavailable", "只有失败的配置交付任务可以重试")
-	}
-	if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='pending',locked_at=NULL,available_at=now(),completed_at=NULL,last_error='',updated_at=now() WHERE id=$1", jobID); err != nil {
-		return err
-	}
-	if err = Audit(ctx, tx, actorID, "service.configuration.retried", "service", serviceID, map[string]any{"change_id": changeID, "job_id": jobID}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+			return err
+		}
+		if !allowed {
+			return conflict("permission_denied", "没有管理服务的权限")
+		}
+		if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
+			return err
+		}
+		var state string
+		if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&state); err != nil {
+			return err
+		}
+		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return err
+		}
+		if state != "active" {
+			return conflict("configuration_change_unavailable", "服务状态不能重试配置变更")
+		}
+		var jobID int64
+		var status string
+		if err = tx.QueryRow(ctx, `SELECT j.id,j.status FROM service_configuration_changes c JOIN provision_jobs j ON j.id=c.job_id JOIN invoices i ON i.id=c.invoice_id WHERE c.id=$1 AND c.service_id=$2 AND c.status='queued' AND i.status='paid' FOR UPDATE OF c,j`, changeID, serviceID).Scan(&jobID, &status); err != nil {
+			return err
+		}
+		if status != "failed" {
+			return conflict("configuration_change_retry_unavailable", "只有失败的配置交付任务可以重试")
+		}
+		if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='pending',locked_at=NULL,available_at=now(),completed_at=NULL,last_error='',updated_at=now() WHERE id=$1", jobID); err != nil {
+			return err
+		}
+		if err = Audit(ctx, tx, actorID, "service.configuration.retried", "service", serviceID, map[string]any{"change_id": changeID, "job_id": jobID}); err != nil {
+			return err
+		}
+		return nil
+	})
 }

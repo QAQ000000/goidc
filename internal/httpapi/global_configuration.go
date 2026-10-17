@@ -20,25 +20,8 @@ func (s *Server) globalConfigurationGroups(w http.ResponseWriter, r *http.Reques
 		}
 	}
 	where := `($1='' OR g.name ILIKE '%'||$1||'%' OR g.description ILIKE '%'||$1||'%') AND ($2='' OR EXISTS(SELECT 1 FROM global_configuration_assignments a WHERE a.global_group_id=g.id AND a.product_id=NULLIF($2,'')::bigint))`
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT g.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'name',p.name,'revision',p.revision) ORDER BY p.id) FROM global_configuration_assignments a JOIN products p ON p.id=a.product_id WHERE a.global_group_id=g.id),'[]'::jsonb) AS products FROM global_configuration_groups g WHERE `+where+` ORDER BY g.id DESC LIMIT $3 OFFSET $4`, q, product, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	var total int64
-	if err = s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM global_configuration_groups g WHERE "+where, q, product).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM global_configuration_groups g WHERE "+where,
+		`SELECT g.*,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'name',p.name,'revision',p.revision) ORDER BY p.id) FROM global_configuration_assignments a JOIN products p ON p.id=a.product_id WHERE a.global_group_id=g.id),'[]'::jsonb) AS products FROM global_configuration_groups g WHERE `+where+` ORDER BY g.id DESC`, []any{q, product}, limit, offset)
 }
 func (s *Server) globalConfigurationDetail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)

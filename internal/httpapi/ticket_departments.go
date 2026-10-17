@@ -88,34 +88,24 @@ func (s *Server) updateTicketDepartment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 400, "invalid_ticket_department", "部门资料或版本无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "部门已变更，请重新加载")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE ticket_departments SET name=$2,active=$3,sort_order=$4,customer_visible=coalesce($5,customer_visible),version=version+1,updated_at=now() WHERE id=$1", id, in.Name, *in.Active, in.SortOrder, in.CustomerVisible); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.department.updated", "ticket_department", id, in); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"id": id, "version": version + 1})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "部门已变更，请重新加载"}
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE ticket_departments SET name=$2,active=$3,sort_order=$4,customer_visible=coalesce($5,customer_visible),version=version+1,updated_at=now() WHERE id=$1", id, in.Name, *in.Active, in.SortOrder, in.CustomerVisible); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.department.updated", "ticket_department", id, in); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, map[string]any{"id": id, "version": version + 1}}, nil
+	})
 }
 
 func (s *Server) deleteTicketDepartment(w http.ResponseWriter, r *http.Request) {
@@ -129,42 +119,30 @@ func (s *Server) deleteTicketDepartment(w http.ResponseWriter, r *http.Request) 
 	if !decode(w, r, &in) {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "部门已变更，请重新加载")
-		return
-	}
-	var used bool
-	if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM tickets WHERE department_id=$1) OR EXISTS(SELECT 1 FROM admin_ticket_departments WHERE department_id=$1)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM ticket_departments WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "部门已变更，请重新加载"}
+		}
+		var used bool
+		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM tickets WHERE department_id=$1) OR EXISTS(SELECT 1 FROM admin_ticket_departments WHERE department_id=$1)
  OR EXISTS(SELECT 1 FROM ticket_transfer_logs WHERE department_id=$1 OR previous_department_id=$1)`, id).Scan(&used); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if used {
-		writeError(w, 409, "department_in_use", "部门仍有关联工单、管理员或转移记录，请停用保留历史")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_departments WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.department.deleted", "ticket_department", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]bool{"deleted": true})
+			return txResponse{}, err
+		}
+		if used {
+			return txResponse{}, &txHTTPError{409, "department_in_use", "部门仍有关联工单、管理员或转移记录，请停用保留历史"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_departments WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.department.deleted", "ticket_department", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, map[string]bool{"deleted": true}}, nil
+	})
 }

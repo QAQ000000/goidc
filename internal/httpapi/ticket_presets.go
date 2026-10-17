@@ -31,26 +31,18 @@ func (s *Server) createTicketReplyPresetCategory(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusBadRequest, "invalid_preset_category", "预设回复分类无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var id int64
-	if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_preset_categories(name,sort_order) VALUES($1,$2) RETURNING id", input.Name, input.SortOrder).Scan(&id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.created", "ticket_reply_preset_category", id, input); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "name": input.Name, "sort_order": input.SortOrder, "active": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var id int64
+		if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_preset_categories(name,sort_order) VALUES($1,$2) RETURNING id", input.Name, input.SortOrder).Scan(&id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.created", "ticket_reply_preset_category", id, input); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, map[string]any{"id": id, "name": input.Name, "sort_order": input.SortOrder, "active": true}}, nil
+	})
 }
 
 func (s *Server) updateTicketReplyPresetCategory(w http.ResponseWriter, r *http.Request) {
@@ -81,34 +73,24 @@ func (s *Server) updateTicketReplyPresetCategory(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusBadRequest, "invalid_preset_category", "排序值无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_preset_categories SET name=COALESCE($2,name),sort_order=COALESCE($3,sort_order),active=COALESCE($4,active),updated_at=now() WHERE id=$1", id, input.Name, input.SortOrder, input.Active); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var exists bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_preset_categories WHERE id=$1)", id).Scan(&exists); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.updated", "ticket_reply_preset_category", id, input); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "updated": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_preset_categories SET name=COALESCE($2,name),sort_order=COALESCE($3,sort_order),active=COALESCE($4,active),updated_at=now() WHERE id=$1", id, input.Name, input.SortOrder, input.Active); err != nil {
+			return txResponse{}, err
+		}
+		var exists bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_preset_categories WHERE id=$1)", id).Scan(&exists); err != nil {
+			return txResponse{}, err
+		}
+		if !exists {
+			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "预设回复分类不存在"}
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.updated", "ticket_reply_preset_category", id, input); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "updated": true}}, nil
+	})
 }
 
 func (s *Server) deleteTicketReplyPresetCategory(w http.ResponseWriter, r *http.Request) {
@@ -116,44 +98,32 @@ func (s *Server) deleteTicketReplyPresetCategory(w http.ResponseWriter, r *http.
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var lockedID int64
-	err = tx.QueryRow(r.Context(), "SELECT id FROM ticket_reply_preset_categories WHERE id=$1 FOR UPDATE", id).Scan(&lockedID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "not_found", "预设回复分类不存在")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var referenced bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE category_id=$1)", id).Scan(&referenced); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if referenced {
-		writeError(w, http.StatusConflict, "preset_category_in_use", "请先删除或移动分类中的预设回复")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_preset_categories WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.deleted", "ticket_reply_preset_category", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var lockedID int64
+		err = tx.QueryRow(r.Context(), "SELECT id FROM ticket_reply_preset_categories WHERE id=$1 FOR UPDATE", id).Scan(&lockedID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "预设回复分类不存在"}
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		var referenced bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE category_id=$1)", id).Scan(&referenced); err != nil {
+			return txResponse{}, err
+		}
+		if referenced {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "preset_category_in_use", "请先删除或移动分类中的预设回复"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_preset_categories WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset_category.deleted", "ticket_reply_preset_category", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "deleted": true}}, nil
+	})
 }
 
 func validatePreset(categoryID int64, title, body string) bool {
@@ -174,35 +144,25 @@ func (s *Server) createTicketReplyPreset(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid_preset", "预设回复内容无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var categoryActive bool
-	if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", input.CategoryID).Scan(&categoryActive); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !categoryActive {
-		writeError(w, http.StatusConflict, "invalid_preset_category", "预设回复分类不可用")
-		return
-	}
-	var id int64
-	if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_presets(category_id,title,body) VALUES($1,$2,$3) RETURNING id", input.CategoryID, input.Title, input.Body).Scan(&id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.created", "ticket_reply_preset", id, input); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "category_id": input.CategoryID, "title": input.Title, "body": input.Body, "active": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var categoryActive bool
+		if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", input.CategoryID).Scan(&categoryActive); err != nil {
+			return txResponse{}, err
+		}
+		if !categoryActive {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_preset_category", "预设回复分类不可用"}
+		}
+		var id int64
+		if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_reply_presets(category_id,title,body) VALUES($1,$2,$3) RETURNING id", input.CategoryID, input.Title, input.Body).Scan(&id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.created", "ticket_reply_preset", id, input); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, map[string]any{"id": id, "category_id": input.CategoryID, "title": input.Title, "body": input.Body, "active": true}}, nil
+	})
 }
 
 func (s *Server) updateTicketReplyPreset(w http.ResponseWriter, r *http.Request) {
@@ -233,45 +193,33 @@ func (s *Server) updateTicketReplyPreset(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid_preset", "预设回复内容无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if input.CategoryID != nil {
-		var active bool
-		if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", *input.CategoryID).Scan(&active); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if input.CategoryID != nil {
+			var active bool
+			if err = tx.QueryRow(r.Context(), "SELECT active FROM ticket_reply_preset_categories WHERE id=$1", *input.CategoryID).Scan(&active); err != nil {
+				return txResponse{}, err
+			}
+			if !active {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "invalid_preset_category", "预设回复分类不可用"}
+			}
 		}
-		if !active {
-			writeError(w, http.StatusConflict, "invalid_preset_category", "预设回复分类不可用")
-			return
+		if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_presets SET category_id=COALESCE($2,category_id),title=COALESCE($3,title),body=COALESCE($4,body),active=COALESCE($5,active),updated_at=now() WHERE id=$1", id, input.CategoryID, input.Title, input.Body, input.Active); err != nil {
+			return txResponse{}, err
 		}
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE ticket_reply_presets SET category_id=COALESCE($2,category_id),title=COALESCE($3,title),body=COALESCE($4,body),active=COALESCE($5,active),updated_at=now() WHERE id=$1", id, input.CategoryID, input.Title, input.Body, input.Active); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var exists bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not_found", "预设回复不存在")
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.updated", "ticket_reply_preset", id, input); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "updated": true})
+		var exists bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
+			return txResponse{}, err
+		}
+		if !exists {
+			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "预设回复不存在"}
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.updated", "ticket_reply_preset", id, input); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "updated": true}}, nil
+	})
 }
 
 func (s *Server) deleteTicketReplyPreset(w http.ResponseWriter, r *http.Request) {
@@ -279,32 +227,22 @@ func (s *Server) deleteTicketReplyPreset(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var exists bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !exists {
-		writeError(w, http.StatusNotFound, "not_found", "预设回复不存在")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_presets WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.deleted", "ticket_reply_preset", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": id, "deleted": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var exists bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM ticket_reply_presets WHERE id=$1)", id).Scan(&exists); err != nil {
+			return txResponse{}, err
+		}
+		if !exists {
+			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "预设回复不存在"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_reply_presets WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.preset.deleted", "ticket_reply_preset", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": id, "deleted": true}}, nil
+	})
 }

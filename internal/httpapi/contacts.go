@@ -173,38 +173,28 @@ func (s *Server) createContact(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if adminRoute(r) {
-		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if adminRoute(r) {
+			if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	var id int64
-	if err = s.ensureContactEmail(r, tx, input.Email, 0); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	err = tx.QueryRow(r.Context(), `INSERT INTO customer_contacts(customer_id,username,sex,avatar,company_name,email,wechat_id,country,province,city,region,address1,address2,postcode,phone_number,permissions,general_emails,invoice_emails,product_emails,support_emails,status)
+		var id int64
+		if err = s.ensureContactEmail(r, tx, input.Email, 0); err != nil {
+			return txResponse{}, err
+		}
+		err = tx.QueryRow(r.Context(), `INSERT INTO customer_contacts(customer_id,username,sex,avatar,company_name,email,wechat_id,country,province,city,region,address1,address2,postcode,phone_number,permissions,general_emails,invoice_emails,product_emails,support_emails,status)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`, customerID, input.Username, input.Sex, input.Avatar, input.CompanyName, input.Email, input.WechatID, input.Country, input.Province, input.City, input.Region, input.Address1, input.Address2, input.Postcode, input.PhoneNumber, input.Permissions, input.GeneralEmails, input.InvoiceEmails, input.ProductEmails, input.SupportEmails, input.Status).Scan(&id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.created", "customer_contact", id, map[string]any{"customer_id": customerID, "email": input.Email}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "customer_id": customerID})
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.created", "customer_contact", id, map[string]any{"customer_id": customerID, "email": input.Email}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, map[string]any{"id": id, "customer_id": customerID}}, nil
+	})
 }
 
 func (s *Server) ensureContactEmail(r *http.Request, tx pgx.Tx, email string, contactID int64) error {
@@ -278,47 +268,35 @@ func (s *Server) updateContact(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if adminRoute(r) {
-		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if adminRoute(r) {
+			if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	var updated int64
-	if err = tx.QueryRow(r.Context(), "SELECT id FROM customer_contacts WHERE id=$1 AND customer_id=$2 FOR UPDATE", id, customerID).Scan(&updated); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if input.Email != nil {
-		if err = s.ensureContactEmail(r, tx, *input.Email, id); err != nil {
-			s.fail(w, r, err)
-			return
+		var updated int64
+		if err = tx.QueryRow(r.Context(), "SELECT id FROM customer_contacts WHERE id=$1 AND customer_id=$2 FOR UPDATE", id, customerID).Scan(&updated); err != nil {
+			return txResponse{}, err
 		}
-	}
-	err = tx.QueryRow(r.Context(), `UPDATE customer_contacts SET username=COALESCE($3,username),sex=COALESCE($4,sex),avatar=COALESCE($5,avatar),company_name=COALESCE($6,company_name),email=COALESCE($7,email),wechat_id=COALESCE($8,wechat_id),country=COALESCE($9,country),province=COALESCE($10,province),city=COALESCE($11,city),region=COALESCE($12,region),address1=COALESCE($13,address1),address2=COALESCE($14,address2),postcode=COALESCE($15,postcode),phone_number=COALESCE($16,phone_number),permissions=COALESCE($17,permissions),general_emails=COALESCE($18,general_emails),invoice_emails=COALESCE($19,invoice_emails),product_emails=COALESCE($20,product_emails),support_emails=COALESCE($21,support_emails),status=COALESCE($22,status),updated_at=now() WHERE id=$1 AND customer_id=$2 RETURNING id`, id, customerID, input.Username, input.Sex, input.Avatar, input.CompanyName, input.Email, input.WechatID, input.Country, input.Province, input.City, input.Region, input.Address1, input.Address2, input.Postcode, input.PhoneNumber, input.Permissions, input.GeneralEmails, input.InvoiceEmails, input.ProductEmails, input.SupportEmails, input.Status).Scan(&updated)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, 404, "not_found", "联系人不存在")
-			return
+		if input.Email != nil {
+			if err = s.ensureContactEmail(r, tx, *input.Email, id); err != nil {
+				return txResponse{}, err
+			}
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.updated", "customer_contact", id, map[string]any{"customer_id": customerID}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"id": updated})
+		err = tx.QueryRow(r.Context(), `UPDATE customer_contacts SET username=COALESCE($3,username),sex=COALESCE($4,sex),avatar=COALESCE($5,avatar),company_name=COALESCE($6,company_name),email=COALESCE($7,email),wechat_id=COALESCE($8,wechat_id),country=COALESCE($9,country),province=COALESCE($10,province),city=COALESCE($11,city),region=COALESCE($12,region),address1=COALESCE($13,address1),address2=COALESCE($14,address2),postcode=COALESCE($15,postcode),phone_number=COALESCE($16,phone_number),permissions=COALESCE($17,permissions),general_emails=COALESCE($18,general_emails),invoice_emails=COALESCE($19,invoice_emails),product_emails=COALESCE($20,product_emails),support_emails=COALESCE($21,support_emails),status=COALESCE($22,status),updated_at=now() WHERE id=$1 AND customer_id=$2 RETURNING id`, id, customerID, input.Username, input.Sex, input.Avatar, input.CompanyName, input.Email, input.WechatID, input.Country, input.Province, input.City, input.Region, input.Address1, input.Address2, input.Postcode, input.PhoneNumber, input.Permissions, input.GeneralEmails, input.InvoiceEmails, input.ProductEmails, input.SupportEmails, input.Status).Scan(&updated)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{404, "not_found", "联系人不存在"}
+			}
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.updated", "customer_contact", id, map[string]any{"customer_id": customerID}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, map[string]any{"id": updated}}, nil
+	})
 }
 
 func (s *Server) deleteContact(w http.ResponseWriter, r *http.Request) {
@@ -330,36 +308,26 @@ func (s *Server) deleteContact(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if adminRoute(r) {
-		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if adminRoute(r) {
+			if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	var deleted int64
-	if err = tx.QueryRow(r.Context(), "DELETE FROM customer_contacts WHERE id=$1 AND customer_id=$2 RETURNING id", id, customerID).Scan(&deleted); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, 404, "not_found", "联系人不存在")
-			return
+		var deleted int64
+		if err = tx.QueryRow(r.Context(), "DELETE FROM customer_contacts WHERE id=$1 AND customer_id=$2 RETURNING id", id, customerID).Scan(&deleted); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{404, "not_found", "联系人不存在"}
+			}
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.deleted", "customer_contact", id, map[string]any{"customer_id": customerID}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"id": deleted, "deleted": true})
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_contact.deleted", "customer_contact", id, map[string]any{"customer_id": customerID}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, map[string]any{"id": deleted, "deleted": true}}, nil
+	})
 }
 
 func (s *Server) customerGroups(w http.ResponseWriter, r *http.Request) {
@@ -370,25 +338,8 @@ func (s *Server) customerGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pagination(r)
-	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM customer_groups g WHERE `+where, q).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT g.id,g.name,g.color,g.discount_percent,g.suspend_delete_exempt,g.separate_invoices,g.version,g.created_at,g.updated_at,count(m.customer_id)::int AS member_count FROM customer_groups g LEFT JOIN customer_group_members m ON m.group_id=g.id WHERE `+where+` GROUP BY g.id ORDER BY g.id DESC LIMIT $2 OFFSET $3`, q, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, `SELECT count(*) FROM customer_groups g WHERE `+where,
+		`SELECT g.id,g.name,g.color,g.discount_percent,g.suspend_delete_exempt,g.separate_invoices,g.version,g.created_at,g.updated_at,count(m.customer_id)::int AS member_count FROM customer_groups g LEFT JOIN customer_group_members m ON m.group_id=g.id WHERE `+where+` GROUP BY g.id ORDER BY g.id DESC`, []any{q}, limit, offset)
 }
 
 func (s *Server) createCustomerGroup(w http.ResponseWriter, r *http.Request) {
@@ -417,41 +368,30 @@ func (s *Server) createCustomerGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	actor := identityFrom(r).ID
 	hash := settingMutationHash(input)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_group.create", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var id int64
-	var version int64
-	err = tx.QueryRow(r.Context(), "INSERT INTO customer_groups(name,color,discount_percent,suspend_delete_exempt,separate_invoices) VALUES($1,$2,$3,$4,$5) RETURNING id,version", input.Name, input.Color, input.DiscountPercent, input.SuspendDeleteExempt, input.SeparateInvoices).Scan(&id, &version)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": version}
-	if err = store.Audit(r.Context(), tx, actor, "customer_group.created", "customer_group", id, map[string]any{"name": input.Name}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, "customer_group.create", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, result)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_group.create", key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		var id int64
+		var version int64
+		err = tx.QueryRow(r.Context(), "INSERT INTO customer_groups(name,color,discount_percent,suspend_delete_exempt,separate_invoices) VALUES($1,$2,$3,$4,$5) RETURNING id,version", input.Name, input.Color, input.DiscountPercent, input.SuspendDeleteExempt, input.SeparateInvoices).Scan(&id, &version)
+		if err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "version": version}
+		if err = store.Audit(r.Context(), tx, actor, "customer_group.created", "customer_group", id, map[string]any{"name": input.Name}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, "customer_group.create", key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateCustomerGroup(w http.ResponseWriter, r *http.Request) {
@@ -501,58 +441,43 @@ func (s *Server) updateCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input any
 	}{id, input})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	operation := "customer_group.update:" + strconv.FormatInt(id, 10)
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var current int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户分组不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		operation := "customer_group.update:" + strconv.FormatInt(id, 10)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if current != input.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户分组已变更，请刷新后重试")
-		return
-	}
-	var updated, version int64
-	err = tx.QueryRow(r.Context(), "UPDATE customer_groups SET name=COALESCE($2,name),color=COALESCE($3,color),discount_percent=COALESCE($4,discount_percent),suspend_delete_exempt=COALESCE($5,suspend_delete_exempt),separate_invoices=COALESCE($6,separate_invoices),version=version+1,updated_at=now() WHERE id=$1 RETURNING id,version", id, input.Name, input.Color, input.DiscountPercent, input.SuspendDeleteExempt, input.SeparateInvoices).Scan(&updated, &version)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, 404, "not_found", "客户分组不存在")
-			return
+		var current int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户分组不存在"}
+			}
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": updated, "version": version}
-	if err = store.Audit(r.Context(), tx, actor, "customer_group.updated", "customer_group", id, map[string]any{"expected_version": input.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		if current != input.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户分组已变更，请刷新后重试"}
+		}
+		var updated, version int64
+		err = tx.QueryRow(r.Context(), "UPDATE customer_groups SET name=COALESCE($2,name),color=COALESCE($3,color),discount_percent=COALESCE($4,discount_percent),suspend_delete_exempt=COALESCE($5,suspend_delete_exempt),separate_invoices=COALESCE($6,separate_invoices),version=version+1,updated_at=now() WHERE id=$1 RETURNING id,version", id, input.Name, input.Color, input.DiscountPercent, input.SuspendDeleteExempt, input.SeparateInvoices).Scan(&updated, &version)
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{404, "not_found", "客户分组不存在"}
+			}
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": updated, "version": version}
+		if err = store.Audit(r.Context(), tx, actor, "customer_group.updated", "customer_group", id, map[string]any{"expected_version": input.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func (s *Server) deleteCustomerGroup(w http.ResponseWriter, r *http.Request) {
@@ -579,57 +504,42 @@ func (s *Server) deleteCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input any
 	}{id, input})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	operation := "customer_group.delete:" + strconv.FormatInt(id, 10)
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var current int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "客户分组不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		operation := "customer_group.delete:" + strconv.FormatInt(id, 10)
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if current != input.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "客户分组已变更，请刷新后重试")
-		return
-	}
-	var deleted int64
-	if err = tx.QueryRow(r.Context(), "DELETE FROM customer_groups WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM customer_group_members WHERE group_id=$1) RETURNING id", id).Scan(&deleted); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, 409, "group_in_use_or_missing", "分组不存在或仍有客户使用")
-			return
+		var current int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户分组不存在"}
+			}
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": deleted, "deleted": true}
-	if err = store.Audit(r.Context(), tx, actor, "customer_group.deleted", "customer_group", id, map[string]any{"expected_version": input.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		if current != input.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "客户分组已变更，请刷新后重试"}
+		}
+		var deleted int64
+		if err = tx.QueryRow(r.Context(), "DELETE FROM customer_groups WHERE id=$1 AND NOT EXISTS(SELECT 1 FROM customer_group_members WHERE group_id=$1) RETURNING id", id).Scan(&deleted); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{409, "group_in_use_or_missing", "分组不存在或仍有客户使用"}
+			}
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": deleted, "deleted": true}
+		if err = store.Audit(r.Context(), tx, actor, "customer_group.deleted", "customer_group", id, map[string]any{"expected_version": input.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func (s *Server) assignCustomerGroup(w http.ResponseWriter, r *http.Request) {
@@ -643,41 +553,30 @@ func (s *Server) assignCustomerGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var exists bool
-	if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='customer')", customerID).Scan(&exists); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !exists {
-		writeError(w, 404, "not_found", "客户不存在")
-		return
-	}
-	if input.GroupID == nil {
-		_, err = tx.Exec(r.Context(), "DELETE FROM customer_group_members WHERE customer_id=$1", customerID)
-	} else {
-		_, err = tx.Exec(r.Context(), "INSERT INTO customer_group_members(customer_id,group_id) VALUES($1,$2) ON CONFLICT(customer_id) DO UPDATE SET group_id=EXCLUDED.group_id", customerID, *input.GroupID)
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_group.assigned", "user", customerID, map[string]any{"group_id": input.GroupID}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"customer_id": customerID, "group_id": input.GroupID})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var exists bool
+		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
+			return txResponse{}, err
+		}
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='customer')", customerID).Scan(&exists); err != nil {
+			return txResponse{}, err
+		}
+		if !exists {
+			return txResponse{}, &txHTTPError{404, "not_found", "客户不存在"}
+		}
+		if input.GroupID == nil {
+			_, err = tx.Exec(r.Context(), "DELETE FROM customer_group_members WHERE customer_id=$1", customerID)
+		} else {
+			_, err = tx.Exec(r.Context(), "INSERT INTO customer_group_members(customer_id,group_id) VALUES($1,$2) ON CONFLICT(customer_id) DO UPDATE SET group_id=EXCLUDED.group_id", customerID, *input.GroupID)
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_group.assigned", "user", customerID, map[string]any{"group_id": input.GroupID}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, map[string]any{"customer_id": customerID, "group_id": input.GroupID}}, nil
+	})
 }

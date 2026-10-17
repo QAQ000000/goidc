@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgconn"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var promoCodePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{2,49}$`)
@@ -32,41 +32,30 @@ func (s *Server) applyCartPromo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_promo", "优惠码或购物车版本无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var cartID string
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT id::text,version FROM carts WHERE user_id=$1 FOR UPDATE", identityFrom(r).ID).Scan(&cartID, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != input.Version {
-		writeError(w, http.StatusConflict, "stale_cart", "购物车已更新，请刷新后操作")
-		return
-	}
-	quote, _, err := s.db.CartPromoQuote(r.Context(), tx, identityFrom(r).ID, cartID, input.Code, false)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `INSERT INTO cart_promo_codes(cart_id,promo_code_id,code) VALUES($1,$2,$3)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var cartID string
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT id::text,version FROM carts WHERE user_id=$1 FOR UPDATE", identityFrom(r).ID).Scan(&cartID, &version); err != nil {
+			return txResponse{}, err
+		}
+		if version != input.Version {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "stale_cart", "购物车已更新，请刷新后操作"}
+		}
+		quote, _, err := s.db.CartPromoQuote(r.Context(), tx, identityFrom(r).ID, cartID, input.Code, false)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if _, err = tx.Exec(r.Context(), `INSERT INTO cart_promo_codes(cart_id,promo_code_id,code) VALUES($1,$2,$3)
 ON CONFLICT(cart_id) DO UPDATE SET promo_code_id=EXCLUDED.promo_code_id,code=EXCLUDED.code,created_at=now()`, cartID, quote.ID, quote.Code); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE carts SET version=version+1,updated_at=now() WHERE id=$1", cartID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"code": quote.Code, "discount_cents": quote.DiscountCents, "version": version + 1})
+			return txResponse{}, err
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE carts SET version=version+1,updated_at=now() WHERE id=$1", cartID); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"code": quote.Code, "discount_cents": quote.DiscountCents, "version": version + 1}}, nil
+	})
 }
 
 func (s *Server) removeCartPromo(w http.ResponseWriter, r *http.Request) {
@@ -80,35 +69,25 @@ func (s *Server) removeCartPromo(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_cart", "购物车版本无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var cartID string
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT id::text,version FROM carts WHERE user_id=$1 FOR UPDATE", identityFrom(r).ID).Scan(&cartID, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != input.Version {
-		writeError(w, http.StatusConflict, "stale_cart", "购物车已更新，请刷新后操作")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM cart_promo_codes WHERE cart_id=$1", cartID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE carts SET version=version+1,updated_at=now() WHERE id=$1", cartID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"version": version + 1, "removed": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var cartID string
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT id::text,version FROM carts WHERE user_id=$1 FOR UPDATE", identityFrom(r).ID).Scan(&cartID, &version); err != nil {
+			return txResponse{}, err
+		}
+		if version != input.Version {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "stale_cart", "购物车已更新，请刷新后操作"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM cart_promo_codes WHERE cart_id=$1", cartID); err != nil {
+			return txResponse{}, err
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE carts SET version=version+1,updated_at=now() WHERE id=$1", cartID); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"version": version + 1, "removed": true}}, nil
+	})
 }
 
 type promoAdminInput struct {
@@ -257,66 +236,48 @@ func (s *Server) createPromoCode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	receipt := map[string]any{}
-	key := r.Header.Get("Idempotency-Key")
-	hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, input, &receipt)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
+			return txResponse{}, err
 		}
-		write(w, 201, receipt)
-		return
-	}
-	var id int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO promo_codes(code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,notes,created_by,recurring_limit,upgrade_only)
+		receipt := map[string]any{}
+		key := r.Header.Get("Idempotency-Key")
+		hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, input, &receipt)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if replay {
+
+			return txResponse{201, receipt}, nil
+		}
+		var id int64
+		err = tx.QueryRow(r.Context(), `INSERT INTO promo_codes(code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,notes,created_by,recurring_limit,upgrade_only)
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`, input.Code, input.DiscountType, input.Value, input.Cycles, input.AppliesProductIDs, input.RequiresProductIDs, input.RequiresExisting, start, expire, input.MaxUses, input.OneTime, input.OnlyNewCustomer, input.OnlyOldCustomer, input.OncePerCustomer, input.Recurring, input.Notes, identityFrom(r).ID, input.RecurringLimit, input.UpgradeOnly).Scan(&id)
-	if err != nil {
-		var pg *pgconn.PgError
-		if errors.As(err, &pg) && pg.Code == "23505" {
-			writeError(w, 409, "promo_code_exists", "优惠码已存在")
-			return
+		if err != nil {
+			var pg *pgconn.PgError
+			if errors.As(err, &pg) && pg.Code == "23505" {
+				return txResponse{}, &txHTTPError{409, "promo_code_exists", "优惠码已存在"}
+			}
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT `+promoAdminColumns+` FROM promo_codes WHERE id=$1`, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, hash, receipt); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.created", "promo_code", id, map[string]any{"code": input.Code, "discount_type": input.DiscountType}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, receipt)
+		rows, err := tx.Query(r.Context(), `SELECT `+promoAdminColumns+` FROM promo_codes WHERE id=$1`, id)
+		if err != nil {
+			return txResponse{}, err
+		}
+		receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, hash, receipt); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.created", "promo_code", id, map[string]any{"code": input.Code, "discount_type": input.DiscountType}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, receipt}, nil
+	})
 }
 
 // optionalPromoTime distinguishes omitted fields from explicit null/empty clears.
@@ -372,73 +333,54 @@ func (s *Server) updatePromoCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_promo", "优惠码字段无效")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	key := r.Header.Get("Idempotency-Key")
-	receipt := map[string]any{}
-	operation := fmt.Sprintf("promo_code.update.%d", id)
-	hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, input, &receipt)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
+			return txResponse{}, err
 		}
-		write(w, 200, receipt)
-		return
-	}
-	var currentStart, currentExpire *time.Time
-	var version int64
-	if err = tx.QueryRow(r.Context(), `SELECT starts_at,expires_at,version FROM promo_codes WHERE id=$1 FOR UPDATE`, id).Scan(&currentStart, &currentExpire, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if input.ExpectedVersion != nil && *input.ExpectedVersion != version {
-		writeError(w, 409, "promo_version_conflict", "优惠码已更新，请重新加载后保存")
-		return
-	}
-	if input.StartsAt.Present {
-		currentStart = input.StartsAt.Value
-	}
-	if input.ExpiresAt.Present {
-		currentExpire = input.ExpiresAt.Value
-	}
-	if currentStart != nil && currentExpire != nil && !currentExpire.After(*currentStart) {
-		writeError(w, 400, "invalid_promo_time", "结束时间必须晚于开始时间")
-		return
-	}
-	rows, err := tx.Query(r.Context(), `UPDATE promo_codes SET active=coalesce($2,active),starts_at=$3,expires_at=$4,max_uses=coalesce($5,max_uses),notes=coalesce($6,notes),version=version+1,updated_at=now() WHERE id=$1 RETURNING `+promoAdminColumns, id, input.Active, currentStart, currentExpire, input.MaxUses, input.Notes)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.updated", "promo_code", id, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, hash, receipt); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, receipt)
+		key := r.Header.Get("Idempotency-Key")
+		receipt := map[string]any{}
+		operation := fmt.Sprintf("promo_code.update.%d", id)
+		hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, input, &receipt)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if replay {
+
+			return txResponse{200, receipt}, nil
+		}
+		var currentStart, currentExpire *time.Time
+		var version int64
+		if err = tx.QueryRow(r.Context(), `SELECT starts_at,expires_at,version FROM promo_codes WHERE id=$1 FOR UPDATE`, id).Scan(&currentStart, &currentExpire, &version); err != nil {
+			return txResponse{}, err
+		}
+		if input.ExpectedVersion != nil && *input.ExpectedVersion != version {
+			return txResponse{}, &txHTTPError{409, "promo_version_conflict", "优惠码已更新，请重新加载后保存"}
+		}
+		if input.StartsAt.Present {
+			currentStart = input.StartsAt.Value
+		}
+		if input.ExpiresAt.Present {
+			currentExpire = input.ExpiresAt.Value
+		}
+		if currentStart != nil && currentExpire != nil && !currentExpire.After(*currentStart) {
+			return txResponse{}, &txHTTPError{400, "invalid_promo_time", "结束时间必须晚于开始时间"}
+		}
+		rows, err := tx.Query(r.Context(), `UPDATE promo_codes SET active=coalesce($2,active),starts_at=$3,expires_at=$4,max_uses=coalesce($5,max_uses),notes=coalesce($6,notes),version=version+1,updated_at=now() WHERE id=$1 RETURNING `+promoAdminColumns, id, input.Active, currentStart, currentExpire, input.MaxUses, input.Notes)
+		if err != nil {
+			return txResponse{}, err
+		}
+		receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.updated", "promo_code", id, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, hash, receipt); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, receipt}, nil
+	})
 }

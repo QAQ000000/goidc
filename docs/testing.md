@@ -30,3 +30,7 @@
 存储密文共用 `internal/secure.Seal/Open`，格式保持 `nonce || ciphertext || tag`。调用方继续负责 AAD、JSON/base64 编码、配置密钥长度及业务错误；已有密文无需迁移。`./scripts/go.sh test -race ./internal/secure ./internal/provision` 验证标准向量、旧格式互通、篡改/截断及凭据域隔离，store 和 HTTP 的渠道、支付、MFA、验证码、实名认证及敏感购买字段测试继续验证业务绑定。
 
 9 个设置写接口共用 `internal/httpapi/settings_mutation.go` 的幂等重放、审计、回执和提交流程，版本锁通过共同函数校验；调度保留重放前锁设置行再校验凭据的顺序，登录/MFA、实名认证及合同保留各自权限检查。操作 scope、请求 hash 和响应字段沿用原约定。支付、SMTP/SMS、站点、订单及供应商 API 设置由已有 store 事务负责，继续保留密钥保留/清除、渠道同步、会话复核等不同契约。独立 PG18 用例 `TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt` 对全部 9 个入口注入审计故障，验证业务/版本/回执一起回滚，随后同键重试成功且重放只产生一次审计。
+
+普通两次查询的分页共用 `internal/httpapi/list_page.go`：调用方保留计数/列表 SQL、投影、筛选和排序，助手绑定分页参数并统一空数组及分页信封。调用方继续选择连接池或已有事务及隔离级别；已有单条 CTE/JSON 列表保持原查询。`TestListPageFiltersBindingEmptyPagesAndErrors` 覆盖筛选、参数绑定、越界页总数、空数组、类型化结果和查询失败。
+
+普通事务共用 `store.WithTx`（基于 `pgx.BeginFunc`），有返回值的 store 操作使用类型化封装；HTTP 的 `Server.withTx` 在提交成功后才发送成功响应，校验失败保持原状态码和错误码并回滚。提交后 Cookie、MFA 失败计数、流式响应及外部调用的分阶段事务继续显式管理。独立 PG18 用例 `TestWithTxCommitRollbackPanicAndDeferredFailure`、`TestHTTPWithTxWaitsForCommitAndPreservesValidationStatus` 验证回调错误、panic、取消及延迟约束导致的提交失败不会遗留写入或误报成功；完整回归使用 `REQUIRE_INTEGRATION=1 ./scripts/go.sh test -race ./... -count=1 -timeout 45m`，同时配置隔离测试 DSN。

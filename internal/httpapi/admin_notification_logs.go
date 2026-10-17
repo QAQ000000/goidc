@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // adminNotificationLogQuery contains the common filters used by the legacy
@@ -97,31 +95,12 @@ func (s *Server) adminSMSLog(w http.ResponseWriter, r *http.Request) {
  FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
  WHERE td.sms_outbox_id=j.id ORDER BY td.id LIMIT 1
  ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args := append(append([]any{}, f.args...), limit, offset)
-	query := `SELECT j.id,j.created_at,j.recipient,j.recipient AS phone,j.kind,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT j.id,j.created_at,j.recipient,j.recipient AS phone,j.kind,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
  j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
  tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success,
- CASE WHEN j.body_encrypted<>''::bytea THEN '[已加密]' ELSE '' END AS content` + base +
-		" ORDER BY j.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
-	rows, err := s.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+ CASE WHEN j.body_encrypted<>''::bytea THEN '[已加密]' ELSE '' END AS content`+base+
+			" ORDER BY j.id DESC", f.args, limit, offset)
 }
 
 func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
@@ -166,30 +145,11 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
  WHERE td.email_outbox_id=j.id
  UNION ALL SELECT t.id,NULL::text,NULL::text,NULL::text,t.user_id,t.department_id FROM tickets t WHERE t.id=j.ticket_id LIMIT 1
  ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args := append(append([]any{}, f.args...), limit, offset)
-	query := `SELECT j.id,j.created_at,j.subject,j.recipient,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT j.id,j.created_at,j.subject,j.recipient,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
  j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
- tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success` + base +
-		" ORDER BY j.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
-	rows, err := s.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+ tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success`+base+
+			" ORDER BY j.id DESC", f.args, limit, offset)
 }
 
 func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
@@ -221,28 +181,9 @@ func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
 	}
 	where := strings.Join(f.where, " AND ")
 	base := " FROM admin_inbox_messages m JOIN users u ON u.id=m.user_id WHERE " + where
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args := append(append([]any{}, f.args...), limit, offset)
-	query := `SELECT m.id,m.created_at,m.subject,m.status,m.user_id,u.display_name AS username,m.read_at` + base +
-		" ORDER BY m.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
-	rows, err := s.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT m.id,m.created_at,m.subject,m.status,m.user_id,u.display_name AS username,m.read_at`+base+
+			" ORDER BY m.id DESC", f.args, limit, offset)
 }
 
 func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
@@ -290,29 +231,10 @@ func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 	}
 	where := strings.Join(f.where, " AND ")
 	base := " FROM admin_api_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE " + where
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args := append(append([]any{}, f.args...), limit, offset)
-	query := `SELECT a.id,a.created_at,a.method,a.path,a.path AS description,a.status_code,a.duration_ms,a.remote_ip,a.remote_ip AS ip,
- a.actor_id,u.display_name AS username` + base +
-		" ORDER BY a.id DESC LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args))
-	rows, err := s.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT a.id,a.created_at,a.method,a.path,a.path AS description,a.status_code,a.duration_ms,a.remote_ip,a.remote_ip AS ip,
+ a.actor_id,u.display_name AS username`+base+
+			" ORDER BY a.id DESC", f.args, limit, offset)
 }
 
 func validOutboxStatus(value string) bool {

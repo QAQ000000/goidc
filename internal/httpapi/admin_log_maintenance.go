@@ -42,29 +42,10 @@ func (s *Server) adminLoginLog(w http.ResponseWriter, r *http.Request) {
 	where := strings.Join(f.where, " AND ")
 	base := ` FROM audit_events a JOIN users u ON u.id=a.actor_id
 LEFT JOIN LATERAL (SELECT created_at FROM audit_events l WHERE l.action='auth.logout' AND l.actor_id=a.actor_id AND l.created_at>=a.created_at ORDER BY l.created_at LIMIT 1) logout ON true WHERE ` + where
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, f.args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args := append(append([]any{}, f.args...), limit, offset)
-	query := `SELECT a.id,a.created_at AS login_time,a.created_at AS last_access,logout.created_at AS logout_time,
-u.username,u.display_name,coalesce(a.payload->>'remote_addr','') AS ip` + base +
-		" ORDER BY a.id DESC LIMIT $" + itoa(len(args)-1) + " OFFSET $" + itoa(len(args))
-	rows, err := s.db.Pool.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT a.id,a.created_at AS login_time,a.created_at AS last_access,logout.created_at AS logout_time,
+u.username,u.display_name,coalesce(a.payload->>'remote_addr','') AS ip`+base+
+			" ORDER BY a.id DESC", f.args, limit, offset)
 }
 
 func itoa(value int) string {
@@ -104,52 +85,38 @@ func (s *Server) cleanupLogs(w http.ResponseWriter, r *http.Request) {
 	hashBytes := sha256.Sum256(payload)
 	requestHash := hex.EncodeToString(hashBytes[:])
 	actor := identityFrom(r).ID
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var replay map[string]any
-	if replayed, err := store.ReplayOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, &replay); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replayed {
-		replay["replayed"] = true
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var replay map[string]any
+		if replayed, err := store.ReplayOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, &replay); err != nil {
+			return txResponse{}, err
+		} else if replayed {
+			replay["replayed"] = true
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var deleted int64
-	switch input.LogType {
-	case "audit":
-		err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM audit_events WHERE created_at < $1 AND action <> 'log.cleanup.completed' RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
-	case "email":
-		err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM email_outbox WHERE created_at < $1 AND status IN ('sent','expired','dead_letter') RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
-	case "sms":
-		err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM sms_outbox WHERE created_at < $1 AND status IN ('sent','expired','dead_letter') RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
-	case "scheduler":
-		err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM scheduler_runs WHERE started_at < $1 AND status <> 'running' RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"log_type": input.LogType, "before": before, "deleted": deleted, "replayed": false}
-	if err = store.SaveOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "log.cleanup.completed", "log_cleanup", 0, map[string]any{"log_type": input.LogType, "before": before, "deleted": deleted, "idempotency_key": key}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var deleted int64
+		switch input.LogType {
+		case "audit":
+			err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM audit_events WHERE created_at < $1 AND action <> 'log.cleanup.completed' RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
+		case "email":
+			err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM email_outbox WHERE created_at < $1 AND status IN ('sent','expired','dead_letter') RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
+		case "sms":
+			err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM sms_outbox WHERE created_at < $1 AND status IN ('sent','expired','dead_letter') RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
+		case "scheduler":
+			err = tx.QueryRow(r.Context(), `WITH deleted AS (DELETE FROM scheduler_runs WHERE started_at < $1 AND status <> 'running' RETURNING 1) SELECT count(*) FROM deleted`, before).Scan(&deleted)
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"log_type": input.LogType, "before": before, "deleted": deleted, "replayed": false}
+		if err = store.SaveOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, actor, "log.cleanup.completed", "log_cleanup", 0, map[string]any{"log_type": input.LogType, "before": before, "deleted": deleted, "idempotency_key": key}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

@@ -64,19 +64,17 @@ func topupCapacity(limit, balance, reserved int64) int64 {
 }
 
 func (s *Store) OnlineTopupOptions(ctx context.Context, uid int64) (TopupOptions, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return TopupOptions{}, err
-	}
-	defer tx.Rollback(ctx)
-	if err = requireTopupSession(ctx, tx, uid); err != nil {
-		return TopupOptions{}, err
-	}
-	o, err := readTopupOptions(ctx, tx, uid)
-	if err != nil {
-		return o, err
-	}
-	return o, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (TopupOptions, error) {
+		var err error
+		if err = requireTopupSession(ctx, tx, uid); err != nil {
+			return TopupOptions{}, err
+		}
+		o, err := readTopupOptions(ctx, tx, uid)
+		if err != nil {
+			return o, err
+		}
+		return o, nil
+	})
 }
 func validateTopupOptions(o TopupOptions, amount, expected int64) error {
 	if expected != o.Version {

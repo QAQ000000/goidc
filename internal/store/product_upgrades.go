@@ -104,109 +104,107 @@ func (s *Store) SaveProductUpgradeTargets(ctx context.Context, actor, productID 
 
 func (s *Store) QuoteProductChange(ctx context.Context, userID, serviceID int64, in ProductChangeInput) (ConfigurationChange, error) {
 	var out ConfigurationChange
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback(ctx)
-	if err = CatalogReadLock(ctx, tx); err != nil {
-		return out, err
-	}
-	var source int64
-	var status, cycle, mode, kind string
-	var due *time.Time
-	var original []byte
-	var released bool
-	if err = tx.QueryRow(ctx, `SELECT s.product_id,s.status,s.billing_cycle,s.provision_mode,p.product_type,s.version,s.next_due_at,s.inventory_released,
+	return withTx(ctx, s, func(tx pgx.Tx) (ConfigurationChange, error) {
+		var err error
+		if err = CatalogReadLock(ctx, tx); err != nil {
+			return out, err
+		}
+		var source int64
+		var status, cycle, mode, kind string
+		var due *time.Time
+		var original []byte
+		var released bool
+		if err = tx.QueryRow(ctx, `SELECT s.product_id,s.status,s.billing_cycle,s.provision_mode,p.product_type,s.version,s.next_due_at,s.inventory_released,
  coalesce(s.recurring_price_cents,oi.price_cents),coalesce(s.config_snapshot,oi.config_snapshot,'[]'::jsonb)
  FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 AND s.user_id=$2 FOR UPDATE OF s`, serviceID, userID).Scan(&source, &status, &cycle, &mode, &kind, &out.ServiceVersion, &due, &released, &out.OldRecurring, &original); err != nil {
-		return out, err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return out, err
-	}
-	if mode == "nokvm" || mode == "supplier" {
-		return out, conflict("unsupported_supplier_upgrade", "该交付方式暂不支持商品升级，请联系管理员处理")
-	}
-	if status != "active" || due == nil || !due.After(time.Now()) || released || (cycle != "monthly" && cycle != "quarterly" && cycle != "annually") {
-		return out, conflict("product_change_unavailable", "只有未到期且已启用的月、季、年服务可以升级商品")
-	}
-	if in.ExpectedVersion != out.ServiceVersion {
-		return out, conflict("version_conflict", "服务已变更，请重新加载")
-	}
-	if err = requireServiceChangeIdle(ctx, tx, serviceID); err != nil {
-		return out, err
-	}
-	var downgrade, visible, compatible, approval bool
-	var stock *int
-	var price int64
-	if err = tx.QueryRow(ctx, `SELECT src.revision,t.allow_downgrade,p.revision,p.name,p.active AND catalog_category_visible(p.category_id) AND pp.active,
+			return out, err
+		}
+		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+		if mode == "nokvm" || mode == "supplier" {
+			return out, conflict("unsupported_supplier_upgrade", "该交付方式暂不支持商品升级，请联系管理员处理")
+		}
+		if status != "active" || due == nil || !due.After(time.Now()) || released || (cycle != "monthly" && cycle != "quarterly" && cycle != "annually") {
+			return out, conflict("product_change_unavailable", "只有未到期且已启用的月、季、年服务可以升级商品")
+		}
+		if in.ExpectedVersion != out.ServiceVersion {
+			return out, conflict("version_conflict", "服务已变更，请重新加载")
+		}
+		if err = requireServiceChangeIdle(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+		var downgrade, visible, compatible, approval bool
+		var stock *int
+		var price int64
+		if err = tx.QueryRow(ctx, `SELECT src.revision,t.allow_downgrade,p.revision,p.name,p.active AND catalog_category_visible(p.category_id) AND pp.active,
  p.product_type=$4 AND p.provision_mode=$5,p.approval_required,p.stock,pp.price_cents
  FROM product_upgrade_targets t JOIN products src ON src.id=t.product_id JOIN products p ON p.id=t.target_product_id
  JOIN product_prices pp ON pp.product_id=p.id AND pp.billing_cycle=$3 WHERE t.product_id=$1 AND t.target_product_id=$2`, source, in.TargetProductID, cycle, kind, mode).Scan(&out.ProductRevision, &downgrade, &out.TargetRevision, &out.TargetName, &visible, &compatible, &approval, &stock, &price); err != nil {
-		return out, err
-	}
-	if out.ProductRevision != in.ExpectedRevision || out.TargetRevision != in.TargetRevision {
-		return out, conflict("version_conflict", "商品已变更，请重新加载")
-	}
-	if !visible || !compatible || (approval && mode != "manual") {
-		return out, conflict("product_change_unavailable", "升级商品不可用或需要人工交付")
-	}
-	if stock != nil && *stock < 1 {
-		return out, conflict("insufficient_stock", "升级目标库存不足")
-	}
-	selection, err := ValidateProductOptionsForCycleWithQuantities(ctx, tx, in.TargetProductID, cycle, in.OptionIDs, in.OptionQuantities)
-	if err != nil {
-		return out, err
-	}
-	var hidden bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM product_options WHERE id=ANY($1) AND hidden)", selection.IDs).Scan(&hidden); err != nil {
-		return out, err
-	}
-	if hidden {
-		return out, conflict("product_change_unavailable", "升级商品所选配置不可用")
-	}
-	// Target setup fees do not form part of an existing service's upgrade contract.
-	recurring, _, err := OptionAmounts(price, 0, OptionSelection{PriceDeltaCents: selection.PriceDeltaCents})
-	if err != nil {
-		return out, err
-	}
-	delta := recurring - out.OldRecurring
-	if delta < 0 && !downgrade {
-		return out, conflict("product_downgrade_disabled", "当前升级路径不允许降低周期金额")
-	}
-	prorated, err := prorateServiceChange(ctx, tx, cycle, *due, delta)
-	if err != nil {
-		return out, err
-	}
-	out.ChangeType = "product"
-	out.SourceProductID = &source
-	out.TargetProductID = &in.TargetProductID
-	out.NewRecurring = recurring
-	out.AmountCents = max(prorated, 0)
-	out.CreditCents = max(-prorated, 0)
-	if strings.TrimSpace(in.PromoCode) != "" {
-		promo, promoErr := QuoteUpgradePromo(ctx, tx, userID, in.PromoCode, out.AmountCents, in.TargetProductID, cycle, false)
-		if promoErr != nil {
-			return out, promoErr
+			return out, err
 		}
-		out.UpgradeBaseCents = promo.BaseCents
-		out.UpgradeDiscountCents = promo.DiscountCents
-		out.UpgradePromoCode = promo.Code
-		out.AmountCents -= promo.DiscountCents
-	}
-	out.DueAt = *due
-	out.ServiceID = serviceID
-	out.Status = "quoted"
-	out.Snapshot = selection.Snapshot
-	snapshot, _ := json.Marshal(selection.Snapshot)
-	ids, _ := json.Marshal(selection.IDs)
-	qty, _ := json.Marshal(selection.Quantities)
-	if err = tx.QueryRow(ctx, `INSERT INTO service_configuration_changes(service_id,user_id,product_revision,service_version,billing_cycle,new_billing_cycle,due_at,old_recurring_cents,new_recurring_cents,amount_cents,credit_cents,old_snapshot,new_snapshot,option_ids,option_quantities,change_type,source_product_id,target_product_id,target_product_revision,target_product_name,upgrade_base_cents,upgrade_discount_cents,upgrade_promo_code)
+		if out.ProductRevision != in.ExpectedRevision || out.TargetRevision != in.TargetRevision {
+			return out, conflict("version_conflict", "商品已变更，请重新加载")
+		}
+		if !visible || !compatible || (approval && mode != "manual") {
+			return out, conflict("product_change_unavailable", "升级商品不可用或需要人工交付")
+		}
+		if stock != nil && *stock < 1 {
+			return out, conflict("insufficient_stock", "升级目标库存不足")
+		}
+		selection, err := ValidateProductOptionsForCycleWithQuantities(ctx, tx, in.TargetProductID, cycle, in.OptionIDs, in.OptionQuantities)
+		if err != nil {
+			return out, err
+		}
+		var hidden bool
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM product_options WHERE id=ANY($1) AND hidden)", selection.IDs).Scan(&hidden); err != nil {
+			return out, err
+		}
+		if hidden {
+			return out, conflict("product_change_unavailable", "升级商品所选配置不可用")
+		}
+		// Target setup fees do not form part of an existing service's upgrade contract.
+		recurring, _, err := OptionAmounts(price, 0, OptionSelection{PriceDeltaCents: selection.PriceDeltaCents})
+		if err != nil {
+			return out, err
+		}
+		delta := recurring - out.OldRecurring
+		if delta < 0 && !downgrade {
+			return out, conflict("product_downgrade_disabled", "当前升级路径不允许降低周期金额")
+		}
+		prorated, err := prorateServiceChange(ctx, tx, cycle, *due, delta)
+		if err != nil {
+			return out, err
+		}
+		out.ChangeType = "product"
+		out.SourceProductID = &source
+		out.TargetProductID = &in.TargetProductID
+		out.NewRecurring = recurring
+		out.AmountCents = max(prorated, 0)
+		out.CreditCents = max(-prorated, 0)
+		if strings.TrimSpace(in.PromoCode) != "" {
+			promo, promoErr := QuoteUpgradePromo(ctx, tx, userID, in.PromoCode, out.AmountCents, in.TargetProductID, cycle, false)
+			if promoErr != nil {
+				return out, promoErr
+			}
+			out.UpgradeBaseCents = promo.BaseCents
+			out.UpgradeDiscountCents = promo.DiscountCents
+			out.UpgradePromoCode = promo.Code
+			out.AmountCents -= promo.DiscountCents
+		}
+		out.DueAt = *due
+		out.ServiceID = serviceID
+		out.Status = "quoted"
+		out.Snapshot = selection.Snapshot
+		snapshot, _ := json.Marshal(selection.Snapshot)
+		ids, _ := json.Marshal(selection.IDs)
+		qty, _ := json.Marshal(selection.Quantities)
+		if err = tx.QueryRow(ctx, `INSERT INTO service_configuration_changes(service_id,user_id,product_revision,service_version,billing_cycle,new_billing_cycle,due_at,old_recurring_cents,new_recurring_cents,amount_cents,credit_cents,old_snapshot,new_snapshot,option_ids,option_quantities,change_type,source_product_id,target_product_id,target_product_revision,target_product_name,upgrade_base_cents,upgrade_discount_cents,upgrade_promo_code)
 	 VALUES($1,$2,$3,$4,$5,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'product',$15,$16,$17,$18,$19,$20,$21) RETURNING id,expires_at`, serviceID, userID, out.ProductRevision, out.ServiceVersion, cycle, due, out.OldRecurring, recurring, out.AmountCents, out.CreditCents, original, snapshot, ids, qty, source, in.TargetProductID, out.TargetRevision, out.TargetName, out.UpgradeBaseCents, out.UpgradeDiscountCents, out.UpgradePromoCode).Scan(&out.ID, &out.ExpiresAt); err != nil {
-		return out, err
-	}
-	return out, tx.Commit(ctx)
+			return out, err
+		}
+		return out, nil
+	})
 }
 
 func requireServiceChangeIdle(ctx context.Context, tx pgx.Tx, serviceID int64) error {

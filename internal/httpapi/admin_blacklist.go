@@ -65,27 +65,8 @@ func (s *Server) adminBlacklist(w http.ResponseWriter, r *http.Request) {
 		args = append(args, active == "true")
 		where += " AND (($2 AND (blocked_until IS NULL OR blocked_until>now())) OR (NOT $2 AND blocked_until IS NOT NULL AND blocked_until<=now()))"
 	}
-	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM auth_blacklist WHERE "+where, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	pageArgs := append(append([]any{}, args...), limit, offset)
-	query := "SELECT id,subject_type,subject,operation_type,remote_addr,reason,blocked_until,version,created_at,updated_at,(blocked_until IS NULL OR blocked_until>now()) AS active FROM auth_blacklist WHERE " + where + " ORDER BY id DESC LIMIT $" + strconv.Itoa(len(pageArgs)-1) + " OFFSET $" + strconv.Itoa(len(pageArgs))
-	rows, err := s.db.Pool.Query(r.Context(), query, pageArgs...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM auth_blacklist WHERE "+where,
+		"SELECT id,subject_type,subject,operation_type,remote_addr,reason,blocked_until,version,created_at,updated_at,(blocked_until IS NULL OR blocked_until>now()) AS active FROM auth_blacklist WHERE "+where+" ORDER BY id DESC", args, limit, offset)
 }
 
 func (s *Server) saveBlacklist(w http.ResponseWriter, r *http.Request) {
@@ -119,60 +100,47 @@ func (s *Server) saveBlacklist(w http.ResponseWriter, r *http.Request) {
 		ID int64
 		In blacklistInput
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var version int64
-	if created {
-		err = tx.QueryRow(r.Context(), `INSERT INTO auth_blacklist(subject_type,subject,operation_type,remote_addr,reason,blocked_until) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(subject_type,subject,operation_type) DO UPDATE SET remote_addr=excluded.remote_addr,reason=excluded.reason,blocked_until=excluded.blocked_until,version=auth_blacklist.version+1,updated_at=now() RETURNING id,version`, in.SubjectType, in.Subject, in.OperationType, in.RemoteAddr, in.Reason, in.BlockedUntil).Scan(&id, &version)
-	} else {
-		var current int64
-		err = tx.QueryRow(r.Context(), "SELECT version FROM auth_blacklist WHERE id=$1 FOR UPDATE", id).Scan(&current)
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "not_found", "黑名单记录不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		if err == nil && current != in.ExpectedVersion {
-			writeError(w, http.StatusConflict, "version_conflict", "黑名单记录已变更，请重新加载")
-			return
+		var version int64
+		if created {
+			err = tx.QueryRow(r.Context(), `INSERT INTO auth_blacklist(subject_type,subject,operation_type,remote_addr,reason,blocked_until) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(subject_type,subject,operation_type) DO UPDATE SET remote_addr=excluded.remote_addr,reason=excluded.reason,blocked_until=excluded.blocked_until,version=auth_blacklist.version+1,updated_at=now() RETURNING id,version`, in.SubjectType, in.Subject, in.OperationType, in.RemoteAddr, in.Reason, in.BlockedUntil).Scan(&id, &version)
+		} else {
+			var current int64
+			err = tx.QueryRow(r.Context(), "SELECT version FROM auth_blacklist WHERE id=$1 FOR UPDATE", id).Scan(&current)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "黑名单记录不存在"}
+			}
+			if err == nil && current != in.ExpectedVersion {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "黑名单记录已变更，请重新加载"}
+			}
+			if err == nil {
+				err = tx.QueryRow(r.Context(), `UPDATE auth_blacklist SET subject_type=$1,subject=$2,operation_type=$3,remote_addr=$4,reason=$5,blocked_until=$6,version=version+1,updated_at=now() WHERE id=$7 RETURNING version`, in.SubjectType, in.Subject, in.OperationType, in.RemoteAddr, in.Reason, in.BlockedUntil, id).Scan(&version)
+			}
 		}
-		if err == nil {
-			err = tx.QueryRow(r.Context(), `UPDATE auth_blacklist SET subject_type=$1,subject=$2,operation_type=$3,remote_addr=$4,reason=$5,blocked_until=$6,version=version+1,updated_at=now() WHERE id=$7 RETURNING version`, in.SubjectType, in.Subject, in.OperationType, in.RemoteAddr, in.Reason, in.BlockedUntil, id).Scan(&version)
+		if err != nil {
+			return txResponse{}, err
 		}
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": version}
-	action := "security.blacklist.created"
-	if !created {
-		action = "security.blacklist.updated"
-	}
-	if err = store.Audit(r.Context(), tx, actor, action, "auth_blacklist", id, map[string]any{"subject_type": in.SubjectType, "subject": in.Subject, "blocked_until": in.BlockedUntil}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, map[bool]int{true: http.StatusCreated, false: http.StatusOK}[created], result)
+		result := map[string]any{"id": id, "version": version}
+		action := "security.blacklist.created"
+		if !created {
+			action = "security.blacklist.updated"
+		}
+		if err = store.Audit(r.Context(), tx, actor, action, "auth_blacklist", id, map[string]any{"subject_type": in.SubjectType, "subject": in.Subject, "blocked_until": in.BlockedUntil}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{map[bool]int{true: http.StatusCreated, false: http.StatusOK}[created], result}, nil
+	})
 }
 
 func (s *Server) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
@@ -197,49 +165,35 @@ func (s *Server) deleteBlacklist(w http.ResponseWriter, r *http.Request) {
 	actor := identityFrom(r).ID
 	operation := "security.blacklist.delete:" + strconv.FormatInt(id, 10)
 	hash := settingMutationHash(struct{ ID, Version int64 }{id, in.ExpectedVersion})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var current int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM auth_blacklist WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusNotFound, "not_found", "黑名单记录不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if current != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "黑名单记录已变更，请重新加载")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM auth_blacklist WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "deleted": true}
-	if err = store.Audit(r.Context(), tx, actor, "security.blacklist.deleted", "auth_blacklist", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var current int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM auth_blacklist WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "黑名单记录不存在"}
+			}
+			return txResponse{}, err
+		}
+		if current != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "黑名单记录已变更，请重新加载"}
+		}
+		if _, err = tx.Exec(r.Context(), "DELETE FROM auth_blacklist WHERE id=$1", id); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "deleted": true}
+		if err = store.Audit(r.Context(), tx, actor, "security.blacklist.deleted", "auth_blacklist", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

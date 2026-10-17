@@ -1,10 +1,12 @@
 package httpapi
 
 import (
-	_ "github.com/codex/zjmfgo/internal/notification"
-	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
 	"time"
+
+	_ "github.com/codex/zjmfgo/internal/notification"
+	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) smsSettings(w http.ResponseWriter, r *http.Request) {
@@ -76,27 +78,18 @@ func (s *Server) testSMSSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 401, "unauthorized", "请先登录")
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if e = store.AuthorizeSMSTest(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value), in.ExpectedVersion); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = s.db.QueueSMS(r.Context(), tx, in.Recipient, "短信渠道测试消息", "test", "", time.Now().Add(5*time.Minute), in.ChannelInstanceID); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "sms.test_queued", "sms_settings", 1, map[string]any{"version": in.ExpectedVersion}); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, 202, map[string]any{"queued": true})
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if e = store.AuthorizeSMSTest(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value), in.ExpectedVersion); e != nil {
+			return txResponse{}, e
+		}
+		if e = s.db.QueueSMS(r.Context(), tx, in.Recipient, "短信渠道测试消息", "test", "", time.Now().Add(5*time.Minute), in.ChannelInstanceID); e != nil {
+			return txResponse{}, e
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "sms.test_queued", "sms_settings", 1, map[string]any{"version": in.ExpectedVersion}); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{202, map[string]any{"queued": true}}, nil
+	})
 }

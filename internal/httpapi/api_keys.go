@@ -44,32 +44,23 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	secret := "zjmfgo_" + hex.EncodeToString(raw)
 	prefix := "zjmfgo_" + hex.EncodeToString(raw[:8])
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if identityFrom(r).Role == "customer" {
-		if err = s.db.CheckCustomerAPIKeyEligibilityTx(r.Context(), tx, identityFrom(r).ID); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if identityFrom(r).Role == "customer" {
+			if err = s.db.CheckCustomerAPIKeyEligibilityTx(r.Context(), tx, identityFrom(r).ID); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	var id int64
-	if err = tx.QueryRow(r.Context(), "INSERT INTO api_keys(user_id,name,prefix,secret_hash,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id", identityFrom(r).ID, input.Name, prefix, tokenHash(secret), expiresAt).Scan(&id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "api_key.created", "api_key", id, map[string]any{"name": input.Name, "prefix": prefix, "expires_at": expiresAt}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, map[string]any{"id": id, "name": input.Name, "prefix": prefix, "secret": secret, "expires_at": expiresAt})
+		var id int64
+		if err = tx.QueryRow(r.Context(), "INSERT INTO api_keys(user_id,name,prefix,secret_hash,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id", identityFrom(r).ID, input.Name, prefix, tokenHash(secret), expiresAt).Scan(&id); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "api_key.created", "api_key", id, map[string]any{"name": input.Name, "prefix": prefix, "expires_at": expiresAt}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, map[string]any{"id": id, "name": input.Name, "prefix": prefix, "secret": secret, "expires_at": expiresAt}}, nil
+	})
 }
 
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -77,28 +68,19 @@ func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var keyID int64
-	if err = tx.QueryRow(r.Context(), "UPDATE api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1 AND user_id=$2 RETURNING id", id, identityFrom(r).ID).Scan(&keyID); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "密钥不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		var keyID int64
+		if err = tx.QueryRow(r.Context(), "UPDATE api_keys SET revoked_at=COALESCE(revoked_at,now()) WHERE id=$1 AND user_id=$2 RETURNING id", id, identityFrom(r).ID).Scan(&keyID); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "密钥不存在"}
+			}
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "api_key.revoked", "api_key", keyID, map[string]any{}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"id": keyID, "revoked": true})
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "api_key.revoked", "api_key", keyID, map[string]any{}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, map[string]any{"id": keyID, "revoked": true}}, nil
+	})
 }

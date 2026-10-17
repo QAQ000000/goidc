@@ -100,51 +100,49 @@ func (s *Store) ApplyAffiliateAccount(ctx context.Context, userID int64, key str
 	if userID < 1 || len(key) < 8 || len(key) > 128 {
 		return nil, conflict("invalid_affiliate_request", "推广申请参数无效")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-apply", fmt.Sprint(userID)); err != nil {
-		return nil, err
-	}
-	requestHash := affiliateHash("apply")
-	if result, replay, replayErr := affiliateOperation(ctx, tx, userID, "apply", key, requestHash); replayErr != nil {
-		return nil, replayErr
-	} else if replay {
-		return result, tx.Commit(ctx)
-	}
-	var id int64
-	var status, accountType string
-	err = tx.QueryRow(ctx, `SELECT id,status,account_type FROM affiliate_accounts WHERE user_id=$1 FOR UPDATE`, userID).Scan(&id, &status, &accountType)
-	if err == nil {
-		result := map[string]any{"account_id": id, "status": status, "account_type": accountType}
+	return withTx(ctx, s, func(tx pgx.Tx) (map[string]any, error) {
+		var err error
+		if err = lockOperationKey(ctx, tx, "affiliate-apply", fmt.Sprint(userID)); err != nil {
+			return nil, err
+		}
+		requestHash := affiliateHash("apply")
+		if result, replay, replayErr := affiliateOperation(ctx, tx, userID, "apply", key, requestHash); replayErr != nil {
+			return nil, replayErr
+		} else if replay {
+			return result, nil
+		}
+		var id int64
+		var status, accountType string
+		err = tx.QueryRow(ctx, `SELECT id,status,account_type FROM affiliate_accounts WHERE user_id=$1 FOR UPDATE`, userID).Scan(&id, &status, &accountType)
+		if err == nil {
+			result := map[string]any{"account_id": id, "status": status, "account_type": accountType}
+			if err = saveAffiliateOperation(ctx, tx, userID, "apply", key, requestHash, result); err != nil {
+				return nil, err
+			}
+			return result, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, err
+		}
+		var programID int64
+		if err = tx.QueryRow(ctx, "SELECT id FROM affiliate_programs WHERE status='active' ORDER BY id LIMIT 1").Scan(&programID); err != nil {
+			if err == pgx.ErrNoRows {
+				return nil, conflict("affiliate_disabled", "推广计划未启用")
+			}
+			return nil, err
+		}
+		if err = tx.QueryRow(ctx, `INSERT INTO affiliate_accounts(user_id,program_id,status) VALUES($1,$2,'pending') RETURNING id`, userID, programID).Scan(&id); err != nil {
+			return nil, err
+		}
+		result := map[string]any{"account_id": id, "status": "pending", "account_type": "referrer"}
 		if err = saveAffiliateOperation(ctx, tx, userID, "apply", key, requestHash, result); err != nil {
 			return nil, err
 		}
-		return result, tx.Commit(ctx)
-	}
-	if err != pgx.ErrNoRows {
-		return nil, err
-	}
-	var programID int64
-	if err = tx.QueryRow(ctx, "SELECT id FROM affiliate_programs WHERE status='active' ORDER BY id LIMIT 1").Scan(&programID); err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, conflict("affiliate_disabled", "推广计划未启用")
+		if err = Audit(ctx, tx, userID, "affiliate.account.applied", "affiliate_account", id, map[string]any{"program_id": programID}); err != nil {
+			return nil, err
 		}
-		return nil, err
-	}
-	if err = tx.QueryRow(ctx, `INSERT INTO affiliate_accounts(user_id,program_id,status) VALUES($1,$2,'pending') RETURNING id`, userID, programID).Scan(&id); err != nil {
-		return nil, err
-	}
-	result := map[string]any{"account_id": id, "status": "pending", "account_type": "referrer"}
-	if err = saveAffiliateOperation(ctx, tx, userID, "apply", key, requestHash, result); err != nil {
-		return nil, err
-	}
-	if err = Audit(ctx, tx, userID, "affiliate.account.applied", "affiliate_account", id, map[string]any{"program_id": programID}); err != nil {
-		return nil, err
-	}
-	return result, tx.Commit(ctx)
+		return result, nil
+	})
 }
 
 func affiliateOperation(ctx context.Context, tx pgx.Tx, userID int64, operation, key, requestHash string) (map[string]any, bool, error) {
@@ -404,47 +402,45 @@ func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID 
 	if actorID < 1 || accountID < 1 || len(key) < 8 || len(key) > 128 || expectedVersion < 1 {
 		return conflict("invalid_affiliate_request", "推广申请参数无效")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT u.role='super_admin' OR (u.role='admin' AND coalesce(r.active AND 'affiliates.manage'=ANY(r.permissions),false))
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		var allowed bool
+		if err = tx.QueryRow(ctx, `SELECT u.role='super_admin' OR (u.role='admin' AND coalesce(r.active AND 'affiliates.manage'=ANY(r.permissions),false))
 FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
-		return err
-	}
-	if !allowed {
-		return conflict("permission_denied", "没有审核推广账户的权限")
-	}
-	requestHash := affiliateHash(fmt.Sprintf("%d:%s:%d", accountID, status, expectedVersion))
-	if _, replay, replayErr := affiliateOperation(ctx, tx, actorID, "account.status", key, requestHash); replayErr != nil {
-		return replayErr
-	} else if replay {
-		return tx.Commit(ctx)
-	}
-	var version int64
-	var before string
-	if err = tx.QueryRow(ctx, "SELECT version,status FROM affiliate_accounts WHERE id=$1 FOR UPDATE", accountID).Scan(&version, &before); err != nil {
-		return err
-	}
-	if version != expectedVersion {
-		return conflict("version_conflict", "推广账户已变更，请重新加载")
-	}
-	command, err := tx.Exec(ctx, `UPDATE affiliate_accounts SET status=$2,approved_at=CASE WHEN $2='approved' THEN COALESCE(approved_at,now()) ELSE approved_at END,version=version+1,updated_at=now() WHERE id=$1`, accountID, status)
-	if err != nil {
-		return err
-	}
-	if command.RowsAffected() != 1 {
-		return conflict("affiliate_account_not_found", "推广账户不存在")
-	}
-	if err = Audit(ctx, tx, actorID, "affiliate.account.status_changed", "affiliate_account", accountID, map[string]any{"before_status": before, "status": status, "version": version + 1}); err != nil {
-		return err
-	}
-	if err = saveAffiliateOperation(ctx, tx, actorID, "account.status", key, requestHash, map[string]any{"account_id": accountID, "status": status}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+			return err
+		}
+		if !allowed {
+			return conflict("permission_denied", "没有审核推广账户的权限")
+		}
+		requestHash := affiliateHash(fmt.Sprintf("%d:%s:%d", accountID, status, expectedVersion))
+		if _, replay, replayErr := affiliateOperation(ctx, tx, actorID, "account.status", key, requestHash); replayErr != nil {
+			return replayErr
+		} else if replay {
+			return nil
+		}
+		var version int64
+		var before string
+		if err = tx.QueryRow(ctx, "SELECT version,status FROM affiliate_accounts WHERE id=$1 FOR UPDATE", accountID).Scan(&version, &before); err != nil {
+			return err
+		}
+		if version != expectedVersion {
+			return conflict("version_conflict", "推广账户已变更，请重新加载")
+		}
+		command, err := tx.Exec(ctx, `UPDATE affiliate_accounts SET status=$2,approved_at=CASE WHEN $2='approved' THEN COALESCE(approved_at,now()) ELSE approved_at END,version=version+1,updated_at=now() WHERE id=$1`, accountID, status)
+		if err != nil {
+			return err
+		}
+		if command.RowsAffected() != 1 {
+			return conflict("affiliate_account_not_found", "推广账户不存在")
+		}
+		if err = Audit(ctx, tx, actorID, "affiliate.account.status_changed", "affiliate_account", accountID, map[string]any{"before_status": before, "status": status, "version": version + 1}); err != nil {
+			return err
+		}
+		if err = saveAffiliateOperation(ctx, tx, actorID, "account.status", key, requestHash, map[string]any{"account_id": accountID, "status": status}); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // QueueAffiliateCommissions must run in the payment settlement transaction.

@@ -292,20 +292,18 @@ func (s *Store) FailPaymentClose(ctx context.Context, op PaymentCloseOperation, 
 	if code != "provider_unavailable" {
 		status = "unknown"
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	resultJSON, _ := json.Marshal(map[string]any{"status": status, "code": code})
-	result, err := tx.Exec(ctx, `UPDATE payment_close_operations SET status=$2,result_code=$3,result=$4,completed_at=clock_timestamp(),updated_at=clock_timestamp(),lease_until=clock_timestamp() WHERE id=$1 AND status='checking' AND lease_until>clock_timestamp()`, op.ID, status, code, resultJSON)
-	if err != nil {
-		return err
-	}
-	if result.RowsAffected() == 1 {
-		if err = Audit(ctx, tx, op.ActorID, "payment.intent.close_failed", "invoice", op.InvoiceID, map[string]any{"payment_id": op.PaymentID, "operation_id": op.OperationID, "code": code}); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		resultJSON, _ := json.Marshal(map[string]any{"status": status, "code": code})
+		result, err := tx.Exec(ctx, `UPDATE payment_close_operations SET status=$2,result_code=$3,result=$4,completed_at=clock_timestamp(),updated_at=clock_timestamp(),lease_until=clock_timestamp() WHERE id=$1 AND status='checking' AND lease_until>clock_timestamp()`, op.ID, status, code, resultJSON)
+		if err != nil {
 			return err
 		}
-	}
-	return tx.Commit(ctx)
+		if result.RowsAffected() == 1 {
+			if err = Audit(ctx, tx, op.ActorID, "payment.intent.close_failed", "invoice", op.InvoiceID, map[string]any{"payment_id": op.PaymentID, "operation_id": op.OperationID, "code": code}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }

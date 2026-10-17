@@ -84,39 +84,31 @@ func (s *Server) serviceDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if adminRoute(r) {
-		if err = store.LockAdminResourceCustomer(r.Context(), tx, identityFrom(r).ID, "service", id); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if adminRoute(r) {
+			if err = store.LockAdminResourceCustomer(r.Context(), tx, identityFrom(r).ID, "service", id); err != nil {
+				return txResponse{}, err
+			}
 		}
-	}
-	rows, err := tx.Query(r.Context(), `SELECT `+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+serviceJoins+`
+		rows, err := tx.Query(r.Context(), `SELECT `+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+serviceJoins+`
 WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NOT $2::boolean AND s.user_id=$3))`, id, adminRoute(r), identityFrom(r).ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	service, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if service["provision_mode"] == "supplier" {
-		caps, capErr := s.db.ServiceSupplierCapabilitiesTx(r.Context(), tx, id, adminRoute(r))
-		if capErr != nil {
-			s.fail(w, r, capErr)
-			return
+		if err != nil {
+			return txResponse{}, err
 		}
-		service["supplier_capabilities"] = caps
-	}
-	if adminRoute(r) {
-		metadata, queryErr := tx.Query(r.Context(), `SELECT p.name AS product_name,
+		service, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if service["provision_mode"] == "supplier" {
+			caps, capErr := s.db.ServiceSupplierCapabilitiesTx(r.Context(), tx, id, adminRoute(r))
+			if capErr != nil {
+				return txResponse{}, capErr
+			}
+			service["supplier_capabilities"] = caps
+		}
+		if adminRoute(r) {
+			metadata, queryErr := tx.Query(r.Context(), `SELECT p.name AS product_name,
  o.order_no,oi.price_cents AS first_price_cents,oi.setup_fee_cents,i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.paid_at,
  a.name AS supplier_name,b.upstream_product_id,b.provider AS supplier_provider,
  a.running_job_id AS supplier_running_job_id,j.service_id AS supplier_blocking_service_id,j.action AS supplier_blocking_action
@@ -124,59 +116,50 @@ WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NO
  JOIN order_items oi ON oi.id=s.order_item_id LEFT JOIN invoices i ON i.order_id=s.order_id
  LEFT JOIN supplier_product_bindings b ON b.product_id=s.product_id AND s.provision_mode='supplier'
  LEFT JOIN supplier_accounts a ON a.id=b.supplier_id LEFT JOIN provision_jobs j ON j.id=a.running_job_id WHERE s.id=$1`, id)
-		if queryErr != nil {
-			s.fail(w, r, queryErr)
-			return
+			if queryErr != nil {
+				return txResponse{}, queryErr
+			}
+			details, queryErr := pgx.CollectExactlyOneRow(metadata, pgx.RowToMap)
+			if queryErr != nil {
+				return txResponse{}, queryErr
+			}
+			for key, value := range details {
+				service[key] = value
+			}
 		}
-		details, queryErr := pgx.CollectExactlyOneRow(metadata, pgx.RowToMap)
-		if queryErr != nil {
-			s.fail(w, r, queryErr)
-			return
-		}
-		for key, value := range details {
-			service[key] = value
-		}
-	}
-	jobs, err := tx.Query(r.Context(), `SELECT id,action,status,attempts,available_at,locked_at,completed_at,last_error,result,request_payload,created_at
+		jobs, err := tx.Query(r.Context(), `SELECT id,action,status,attempts,available_at,locked_at,completed_at,last_error,result,request_payload,created_at
 FROM provision_jobs WHERE service_id=$1 ORDER BY id DESC LIMIT 50`, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	jobRows, err := pgx.CollectRows(jobs, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if jobRows == nil {
-		jobRows = []map[string]any{}
-	}
-	service["jobs"] = jobRows
-	cancellation, err := cancellationForService(r, s, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	service["cancellation"] = cancellation
-	changes, err := tx.Query(r.Context(), `SELECT id,status,change_type,target_product_id,target_product_name,billing_cycle,new_billing_cycle,amount_cents,credit_cents,old_recurring_cents,new_recurring_cents,due_at,new_snapshot AS config_snapshot,invoice_id,job_id,created_at,completed_at FROM service_configuration_changes WHERE service_id=$1 AND invoice_id IS NOT NULL ORDER BY id DESC LIMIT 20`, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	changeRows, err := pgx.CollectRows(changes, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if changeRows == nil {
-		changeRows = []map[string]any{}
-	}
-	service["configuration_changes"] = changeRows
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, service)
+		if err != nil {
+			return txResponse{}, err
+		}
+		jobRows, err := pgx.CollectRows(jobs, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if jobRows == nil {
+			jobRows = []map[string]any{}
+		}
+		service["jobs"] = jobRows
+		cancellation, err := cancellationForService(r, s, id)
+		if err != nil {
+			return txResponse{}, err
+		}
+		service["cancellation"] = cancellation
+		changes, err := tx.Query(r.Context(), `SELECT id,status,change_type,target_product_id,target_product_name,billing_cycle,new_billing_cycle,amount_cents,credit_cents,old_recurring_cents,new_recurring_cents,due_at,new_snapshot AS config_snapshot,invoice_id,job_id,created_at,completed_at FROM service_configuration_changes WHERE service_id=$1 AND invoice_id IS NOT NULL ORDER BY id DESC LIMIT 20`, id)
+		if err != nil {
+			return txResponse{}, err
+		}
+		changeRows, err := pgx.CollectRows(changes, pgx.RowToMap)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if changeRows == nil {
+			changeRows = []map[string]any{}
+		}
+		service["configuration_changes"] = changeRows
+
+		return txResponse{200, service}, nil
+	})
 }
 
 func (s *Server) serviceAction(w http.ResponseWriter, r *http.Request) {

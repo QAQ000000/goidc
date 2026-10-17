@@ -103,29 +103,27 @@ func readTopupLiability(ctx context.Context, tx pgx.Tx, invoice int64) (TopupLia
 }
 func (s *Store) GetTopupLiability(ctx context.Context, actor, invoice int64) (TopupLiability, error) {
 	var out TopupLiability
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback(ctx)
-	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
-		return out, err
-	}
-	if err = authorizeTopupLiability(ctx, tx, actor, false); err != nil {
-		return out, err
-	}
-	// Authorization locks the actor row. Recheck scope with a fresh statement
-	// snapshot after any concurrent scope revocation has finished committing.
-	// Keep the initial sales advisory lock before the actor lock to preserve
-	// the established sales-assignment lock order.
-	if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
-		return out, err
-	}
-	out, err = readTopupLiability(ctx, tx, invoice)
-	if err != nil {
-		return out, err
-	}
-	return out, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (TopupLiability, error) {
+		var err error
+		if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+			return out, err
+		}
+		if err = authorizeTopupLiability(ctx, tx, actor, false); err != nil {
+			return out, err
+		}
+		// Authorization locks the actor row. Recheck scope with a fresh statement
+		// snapshot after any concurrent scope revocation has finished committing.
+		// Keep the initial sales advisory lock before the actor lock to preserve
+		// the established sales-assignment lock order.
+		if err = LockAdminResourceCustomer(ctx, tx, actor, "invoice", invoice); err != nil {
+			return out, err
+		}
+		out, err = readTopupLiability(ctx, tx, invoice)
+		if err != nil {
+			return out, err
+		}
+		return out, nil
+	})
 }
 func (s *Store) ResolveTopupLiability(ctx context.Context, actor, invoice int64, in ResolveTopupLiabilityInput, key string) (TopupLiability, error) {
 	var out TopupLiability

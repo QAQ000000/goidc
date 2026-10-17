@@ -88,36 +88,23 @@ func (s *Server) supplierJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var total int
-	if err := tx.QueryRow(r.Context(), "SELECT count(*) "+supplierJobRows+filter, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, err := tx.Query(r.Context(), `SELECT j.id,j.service_id,u.id customer_id,u.display_name customer,p.name product,a.id supplier_id,a.name supplier,
+	page, err := listPage(r.Context(), tx, "SELECT count(*) "+supplierJobRows+filter,
+		`SELECT j.id,j.service_id,u.id customer_id,u.display_name customer,p.name product,a.id supplier_id,a.name supplier,
  j.action,'供应商交付任务'::text description,'supplier'::text source,j.status,j.attempts,j.created_at,j.updated_at,
  (j.status='failed' AND j.action='sync' AND j.external_started_at IS NULL AND a.active AND a.running_job_id IS NULL
  AND s.upstream_id<>'' AND s.status IN ('active','suspended') AND NOT EXISTS
  (SELECT 1 FROM provision_jobs other WHERE other.service_id=s.id AND other.id<>j.id AND other.status IN ('pending','running','waiting_manual','waiting_verification'))) can_retry,
  (j.status='waiting_verification') verification_required
- `+supplierJobRows+filter+` ORDER BY j.updated_at DESC,j.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+ `+supplierJobRows+filter+` ORDER BY j.updated_at DESC,j.id DESC`, args, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
 	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }
 
 func validSupplierJobAction(action string) bool {

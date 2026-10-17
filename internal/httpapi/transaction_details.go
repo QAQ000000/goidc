@@ -40,13 +40,8 @@ func (s *Server) transactionPage(w http.ResponseWriter, r *http.Request, project
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var total int64
-	if err = tx.QueryRow(r.Context(), "SELECT count(*)"+from, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	items, err := collectTransactionRows(tx.Query(r.Context(), fmt.Sprintf("SELECT %s%s ORDER BY %s DESC LIMIT $%d OFFSET $%d", projection, from, sort, len(args)-1, len(args)), args...))
+	page, err := listPage(r.Context(), tx, "SELECT count(*)"+from,
+		fmt.Sprintf("SELECT %s%s ORDER BY %s DESC", projection, from, sort), args, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -55,7 +50,7 @@ func (s *Server) transactionPage(w http.ResponseWriter, r *http.Request, project
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }
 
 func (s *Server) customerOrderDetail(w http.ResponseWriter, r *http.Request) {

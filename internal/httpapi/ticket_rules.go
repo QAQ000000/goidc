@@ -53,25 +53,8 @@ func (s *Server) ticketStatuses(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_pagination", "分页参数无效")
 		return
 	}
-	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,slug,title,sort_order,builtin,active,version FROM ticket_statuses ORDER BY sort_order,id LIMIT $1 OFFSET $2`, limit, offset)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	out, e := pgx.CollectRows(rows, pgx.RowToMap)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if out == nil {
-		out = []map[string]any{}
-	}
-	var total int64
-	if e = s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM ticket_statuses`).Scan(&total); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, 200, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, `SELECT count(*) FROM ticket_statuses`,
+		`SELECT id,slug,title,sort_order,builtin,active,version FROM ticket_statuses ORDER BY sort_order,id`, nil, limit, offset)
 }
 func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -98,66 +81,50 @@ func (s *Server) saveTicketStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
+			return txResponse{}, err
+		} else if replay {
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	var id int64
-	var version int64
-	var builtin bool
-	var currentTitle string
-	created := false
-	e = tx.QueryRow(r.Context(), `SELECT id,version,builtin,title FROM ticket_statuses WHERE slug=$1 FOR UPDATE`, in.Slug).Scan(&id, &version, &builtin, &currentTitle)
-	if e == pgx.ErrNoRows {
-		e = tx.QueryRow(r.Context(), `INSERT INTO ticket_statuses(slug,title,sort_order,active) VALUES($1,$2,$3,coalesce($4,true)) RETURNING id,version,builtin`, in.Slug, in.Title, in.SortOrder, in.Active).Scan(&id, &version, &builtin)
-		created = e == nil
-	} else if e == nil {
-		if in.ExpectedVersion < 1 || version != in.ExpectedVersion {
-			writeError(w, 409, "version_conflict", "状态已变更，请重新加载")
-			return
+		var id int64
+		var version int64
+		var builtin bool
+		var currentTitle string
+		created := false
+		e = tx.QueryRow(r.Context(), `SELECT id,version,builtin,title FROM ticket_statuses WHERE slug=$1 FOR UPDATE`, in.Slug).Scan(&id, &version, &builtin, &currentTitle)
+		if e == pgx.ErrNoRows {
+			e = tx.QueryRow(r.Context(), `INSERT INTO ticket_statuses(slug,title,sort_order,active) VALUES($1,$2,$3,coalesce($4,true)) RETURNING id,version,builtin`, in.Slug, in.Title, in.SortOrder, in.Active).Scan(&id, &version, &builtin)
+			created = e == nil
+		} else if e == nil {
+			if in.ExpectedVersion < 1 || version != in.ExpectedVersion {
+				return txResponse{}, &txHTTPError{409, "version_conflict", "状态已变更，请重新加载"}
+			}
+			if builtin && in.Title != currentTitle {
+				return txResponse{}, &txHTTPError{409, "builtin_status", "默认状态不可重命名"}
+			}
+			_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
+			version++
 		}
-		if builtin && in.Title != currentTitle {
-			writeError(w, 409, "builtin_status", "默认状态不可重命名")
-			return
+		if e != nil {
+			return txResponse{}, e
 		}
-		_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
-		version++
-	}
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	action := "ticket.status.updated"
-	if created {
-		action = "ticket.status.created"
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, action, "ticket_status", id, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"id": id, "version": version, "builtin": builtin}
-	if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, http.StatusOK, result)
+		action := "ticket.status.updated"
+		if created {
+			action = "ticket.status.created"
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, action, "ticket_status", id, in); e != nil {
+			return txResponse{}, e
+		}
+		result := map[string]any{"id": id, "version": version, "builtin": builtin}
+		if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 func (s *Server) ticketRules(w http.ResponseWriter, r *http.Request) {
 	limit, offset, ok := serviceActivityPagination(r)
@@ -165,25 +132,8 @@ func (s *Server) ticketRules(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_pagination", "分页参数无效")
 		return
 	}
-	rows, e := s.db.Pool.Query(r.Context(), `SELECT id,department_id,product_id,blocked_keywords,auto_reply,active,version FROM ticket_delivery_rules ORDER BY id DESC LIMIT $1 OFFSET $2`, limit, offset)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	out, e := pgx.CollectRows(rows, pgx.RowToMap)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if out == nil {
-		out = []map[string]any{}
-	}
-	var total int64
-	if e = s.db.Pool.QueryRow(r.Context(), `SELECT count(*) FROM ticket_delivery_rules`).Scan(&total); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, 200, map[string]any{"items": out, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, `SELECT count(*) FROM ticket_delivery_rules`,
+		`SELECT id,department_id,product_id,blocked_keywords,auto_reply,active,version FROM ticket_delivery_rules ORDER BY id DESC`, nil, limit, offset)
 }
 func (s *Server) saveTicketRule(w http.ResponseWriter, r *http.Request) {
 	var in struct {
@@ -209,57 +159,41 @@ func (s *Server) saveTicketRule(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
+			return txResponse{}, err
+		} else if replay {
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	var id, version int64
-	if in.DepartmentID != nil {
-		var ok bool
-		if e = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM ticket_departments WHERE id=$1)`, *in.DepartmentID).Scan(&ok); e != nil || !ok {
-			writeError(w, 400, "invalid_ticket_department", "部门不存在")
-			return
+		var id, version int64
+		if in.DepartmentID != nil {
+			var ok bool
+			if e = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM ticket_departments WHERE id=$1)`, *in.DepartmentID).Scan(&ok); e != nil || !ok {
+				return txResponse{}, &txHTTPError{400, "invalid_ticket_department", "部门不存在"}
+			}
 		}
-	}
-	if in.ProductID != nil {
-		var ok bool
-		if e = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM products WHERE id=$1)`, *in.ProductID).Scan(&ok); e != nil || !ok {
-			writeError(w, 400, "invalid_product", "产品不存在")
-			return
+		if in.ProductID != nil {
+			var ok bool
+			if e = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM products WHERE id=$1)`, *in.ProductID).Scan(&ok); e != nil || !ok {
+				return txResponse{}, &txHTTPError{400, "invalid_product", "产品不存在"}
+			}
 		}
-	}
-	e = tx.QueryRow(r.Context(), `INSERT INTO ticket_delivery_rules(department_id,product_id,blocked_keywords,auto_reply,active) VALUES($1,$2,$3,$4,coalesce($5,true)) RETURNING id,version`, in.DepartmentID, in.ProductID, in.BlockedKeywords, in.AutoReply, in.Active).Scan(&id, &version)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.rule.created", "ticket_delivery_rule", id, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"id": id, "version": version}
-	if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, http.StatusCreated, result)
+		e = tx.QueryRow(r.Context(), `INSERT INTO ticket_delivery_rules(department_id,product_id,blocked_keywords,auto_reply,active) VALUES($1,$2,$3,$4,coalesce($5,true)) RETURNING id,version`, in.DepartmentID, in.ProductID, in.BlockedKeywords, in.AutoReply, in.Active).Scan(&id, &version)
+		if e != nil {
+			return txResponse{}, e
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.rule.created", "ticket_delivery_rule", id, in); e != nil {
+			return txResponse{}, e
+		}
+		result := map[string]any{"id": id, "version": version}
+		if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateTicketStatus(w http.ResponseWriter, r *http.Request) {
@@ -286,57 +220,40 @@ func (s *Server) updateTicketStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
+			return txResponse{}, err
+		} else if replay {
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	var v int64
-	var builtin bool
-	var currentTitle string
-	if e = tx.QueryRow(r.Context(), `SELECT version,builtin,title FROM ticket_statuses WHERE id=$1 FOR UPDATE`, id).Scan(&v, &builtin, &currentTitle); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if v != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "状态已变更，请重新加载")
-		return
-	}
-	if builtin && in.Title != currentTitle {
-		writeError(w, http.StatusConflict, "builtin_status", "默认状态不可重命名")
-		return
-	}
-	_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.status.updated", "ticket_status", id, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"id": id, "version": v + 1, "builtin": builtin}
-	if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var v int64
+		var builtin bool
+		var currentTitle string
+		if e = tx.QueryRow(r.Context(), `SELECT version,builtin,title FROM ticket_statuses WHERE id=$1 FOR UPDATE`, id).Scan(&v, &builtin, &currentTitle); e != nil {
+			return txResponse{}, e
+		}
+		if v != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "状态已变更，请重新加载"}
+		}
+		if builtin && in.Title != currentTitle {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "builtin_status", "默认状态不可重命名"}
+		}
+		_, e = tx.Exec(r.Context(), `UPDATE ticket_statuses SET title=$2,sort_order=$3,active=coalesce($4,active),version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.SortOrder, in.Active)
+		if e != nil {
+			return txResponse{}, e
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.status.updated", "ticket_status", id, in); e != nil {
+			return txResponse{}, e
+		}
+		result := map[string]any{"id": id, "version": v + 1, "builtin": builtin}
+		if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 func (s *Server) deleteTicketStatus(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -359,55 +276,38 @@ func (s *Server) deleteTicketStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
+			return txResponse{}, err
+		} else if replay {
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	var builtin bool
-	var v int64
-	if e = tx.QueryRow(r.Context(), `SELECT builtin,version FROM ticket_statuses WHERE id=$1 FOR UPDATE`, id).Scan(&builtin, &v); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if builtin {
-		writeError(w, 409, "builtin_status", "默认状态不可删除")
-		return
-	}
-	if v != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "状态已变更，请重新加载")
-		return
-	}
-	if _, e = tx.Exec(r.Context(), `DELETE FROM ticket_statuses WHERE id=$1`, id); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.status.deleted", "ticket_status", id, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"id": id, "deleted": true}
-	if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var builtin bool
+		var v int64
+		if e = tx.QueryRow(r.Context(), `SELECT builtin,version FROM ticket_statuses WHERE id=$1 FOR UPDATE`, id).Scan(&builtin, &v); e != nil {
+			return txResponse{}, e
+		}
+		if builtin {
+			return txResponse{}, &txHTTPError{409, "builtin_status", "默认状态不可删除"}
+		}
+		if v != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "状态已变更，请重新加载"}
+		}
+		if _, e = tx.Exec(r.Context(), `DELETE FROM ticket_statuses WHERE id=$1`, id); e != nil {
+			return txResponse{}, e
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.status.deleted", "ticket_status", id, in); e != nil {
+			return txResponse{}, e
+		}
+		result := map[string]any{"id": id, "deleted": true}
+		if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 func (s *Server) updateTicketRule(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -524,48 +424,32 @@ func (s *Server) deleteTicketRule(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replay {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+
+		if result, replay, err := loadTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash); err != nil {
+			return txResponse{}, err
+		} else if replay {
+
+			return txResponse{http.StatusOK, result}, nil
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	var v int64
-	if e = tx.QueryRow(r.Context(), `SELECT version FROM ticket_delivery_rules WHERE id=$1 FOR UPDATE`, id).Scan(&v); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if v != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "规则已变更，请重新加载")
-		return
-	}
-	if _, e = tx.Exec(r.Context(), `DELETE FROM ticket_delivery_rules WHERE id=$1`, id); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.rule.deleted", "ticket_delivery_rule", id, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"id": id, "deleted": true}
-	if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var v int64
+		if e = tx.QueryRow(r.Context(), `SELECT version FROM ticket_delivery_rules WHERE id=$1 FOR UPDATE`, id).Scan(&v); e != nil {
+			return txResponse{}, e
+		}
+		if v != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "规则已变更，请重新加载"}
+		}
+		if _, e = tx.Exec(r.Context(), `DELETE FROM ticket_delivery_rules WHERE id=$1`, id); e != nil {
+			return txResponse{}, e
+		}
+		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.rule.deleted", "ticket_delivery_rule", id, in); e != nil {
+			return txResponse{}, e
+		}
+		result := map[string]any{"id": id, "deleted": true}
+		if e = saveTicketMutation(r.Context(), tx, identityFrom(r).ID, key, hash, result); e != nil {
+			return txResponse{}, e
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

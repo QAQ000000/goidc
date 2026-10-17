@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/provision"
+	"github.com/jackc/pgx/v5"
 )
 
 type monitoringBinding struct {
@@ -14,39 +15,37 @@ type monitoringBinding struct {
 
 func (s *Store) monitoringBinding(ctx context.Context, actorID, serviceID int64, admin bool) (monitoringBinding, error) {
 	var binding monitoringBinding
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return binding, err
-	}
-	defer tx.Rollback(ctx)
-	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (NOT $2::boolean OR u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions))),false)
+	return withTx(ctx, s, func(tx pgx.Tx) (monitoringBinding, error) {
+		var err error
+		var allowed bool
+		if err = tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (NOT $2::boolean OR u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions))),false)
  FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actorID, admin).Scan(&allowed); err != nil {
-		return binding, err
-	}
-	if !allowed {
-		return binding, conflict("permission_denied", "没有查看服务监控的权限")
-	}
-	if admin {
-		if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
 			return binding, err
 		}
-	}
-	var mode, status string
-	if err = tx.QueryRow(ctx, `SELECT s.user_id,s.provision_mode,s.status,coalesce(s.delivery_snapshot->>'profile_id',''),s.upstream_id
+		if !allowed {
+			return binding, conflict("permission_denied", "没有查看服务监控的权限")
+		}
+		if admin {
+			if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
+				return binding, err
+			}
+		}
+		var mode, status string
+		if err = tx.QueryRow(ctx, `SELECT s.user_id,s.provision_mode,s.status,coalesce(s.delivery_snapshot->>'profile_id',''),s.upstream_id
  FROM services s WHERE s.id=$1 AND ($2::boolean OR s.user_id=$3) FOR SHARE`, serviceID, admin, actorID).Scan(&binding.Owner, &mode, &status, &binding.Profile, &binding.Upstream); err != nil {
-		return binding, err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return binding, err
-	}
-	if mode != "nokvm" || (status != "active" && status != "suspended") || !provision.ValidResourceID(binding.Upstream) {
-		return binding, conflict("monitoring_unavailable", "该服务当前不支持资源监控")
-	}
-	if s.Provisioners[binding.Profile] == nil {
-		return binding, conflict("supplier_unavailable", "服务供应商暂不可用")
-	}
-	return binding, tx.Commit(ctx)
+			return binding, err
+		}
+		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return binding, err
+		}
+		if mode != "nokvm" || (status != "active" && status != "suspended") || !provision.ValidResourceID(binding.Upstream) {
+			return binding, conflict("monitoring_unavailable", "该服务当前不支持资源监控")
+		}
+		if s.Provisioners[binding.Profile] == nil {
+			return binding, conflict("supplier_unavailable", "服务供应商暂不可用")
+		}
+		return binding, nil
+	})
 }
 
 func (s *Store) ServiceMonitoring(ctx context.Context, actorID, serviceID int64, admin bool, period string) (provision.Monitoring, error) {

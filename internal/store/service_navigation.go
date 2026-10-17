@@ -2,8 +2,9 @@ package store
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type ServiceGroupInput struct {
@@ -137,29 +138,27 @@ func InitializeServiceNavigation(ctx context.Context, tx pgx.Tx, user int64) err
 }
 
 func (s *Store) SetServiceNavigation(ctx context.Context, user, group, version int64, visible bool) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err = CatalogReadLock(ctx, tx); err != nil {
-		return err
-	}
-	if err = InitializeServiceNavigation(ctx, tx, user); err != nil {
-		return err
-	}
-	var current int64
-	if err = tx.QueryRow(ctx, "SELECT version FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2 FOR UPDATE", user, group).Scan(&current); err != nil {
-		return err
-	}
-	if current != version {
-		return conflict("version_conflict", "导航显示设置已变更，请重新加载")
-	}
-	if _, err = tx.Exec(ctx, "UPDATE service_navigation_preferences SET visible=$3,version=version+1 WHERE user_id=$1 AND group_id=$2", user, group, visible); err != nil {
-		return err
-	}
-	if err = Audit(ctx, tx, user, "service_navigation.updated", "service_group", group, map[string]any{"visible": visible, "version": current + 1}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if err = CatalogReadLock(ctx, tx); err != nil {
+			return err
+		}
+		if err = InitializeServiceNavigation(ctx, tx, user); err != nil {
+			return err
+		}
+		var current int64
+		if err = tx.QueryRow(ctx, "SELECT version FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2 FOR UPDATE", user, group).Scan(&current); err != nil {
+			return err
+		}
+		if current != version {
+			return conflict("version_conflict", "导航显示设置已变更，请重新加载")
+		}
+		if _, err = tx.Exec(ctx, "UPDATE service_navigation_preferences SET visible=$3,version=version+1 WHERE user_id=$1 AND group_id=$2", user, group, visible); err != nil {
+			return err
+		}
+		if err = Audit(ctx, tx, user, "service_navigation.updated", "service_group", group, map[string]any{"visible": visible, "version": current + 1}); err != nil {
+			return err
+		}
+		return nil
+	})
 }

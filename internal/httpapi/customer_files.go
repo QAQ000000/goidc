@@ -99,17 +99,8 @@ func (s *Server) customerFiles(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	where := ` FROM customer_files f JOIN users c ON c.id=f.customer_id JOIN users u ON u.id=f.uploader_id WHERE ` + scope + `
  AND ($2::bigint IS NULL OR f.customer_id=$2) AND ($3='' OR f.title ILIKE '%'||$3||'%' OR f.remarks ILIKE '%'||$3||'%' OR f.filename ILIKE '%'||$3||'%')`
-	var total int64
-	if err := tx.QueryRow(r.Context(), "SELECT count(*)"+where, uid, filter, query).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), "SELECT "+columns+where+" ORDER BY f.id DESC LIMIT $4 OFFSET $5", uid, filter, query, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	page, err := listPage(r.Context(), tx, "SELECT count(*)"+where,
+		"SELECT "+columns+where+" ORDER BY f.id DESC", []any{uid, filter, query}, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -118,10 +109,7 @@ func (s *Server) customerFiles(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }
 func (s *Server) adminCustomerFileDetail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)

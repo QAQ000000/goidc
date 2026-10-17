@@ -100,25 +100,14 @@ func (s *Server) contentList(w http.ResponseWriter, r *http.Request, kind string
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE a.content_type=$1 AND ` + publicArticleWhere + ` AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.excerpt ILIKE '%'||$3||'%' OR a.body ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR ($4=0 AND a.category_id IS NULL AND NOT EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id)) OR EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id AND ac.category_id=$4)) AND ($5::bigint IS NULL OR EXISTS(SELECT 1 FROM content_article_tags at JOIN content_tags t ON t.id=at.tag_id WHERE at.article_id=a.id AND at.tag_id=$5 AND t.active))`
-	var total int64
-	if err = s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, level, q, category, tag).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+articleColumns+articleTaxonomyColumns+where+" ORDER BY a.sort_order,a.published_at DESC,a.id DESC LIMIT $6 OFFSET $7", kind, level, q, category, tag, limit, offset)
+	page, err := listPage(r.Context(), s.db.Pool, "SELECT count(*)"+where,
+		"SELECT "+articleColumns+articleTaxonomyColumns+where+" ORDER BY a.sort_order,a.published_at DESC,a.id DESC", []any{kind, level, q, category, tag}, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "content_type": kind, "total": total, "limit": limit, "offset": offset})
+	page["content_type"] = kind
+	write(w, 200, page)
 }
 func (s *Server) news(w http.ResponseWriter, r *http.Request)      { s.contentList(w, r, "news") }
 func (s *Server) knowledge(w http.ResponseWriter, r *http.Request) { s.contentList(w, r, "knowledge") }
@@ -230,26 +219,8 @@ func (s *Server) adminContentList(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	where := ` FROM content_articles a LEFT JOIN content_categories c ON c.id=a.category_id WHERE ($1='' OR a.content_type=$1) AND ($2='' OR a.status=$2) AND ($3='' OR a.title ILIKE '%'||$3||'%' OR a.slug ILIKE '%'||$3||'%') AND ($4::bigint IS NULL OR ($4=0 AND a.category_id IS NULL AND NOT EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id)) OR EXISTS(SELECT 1 FROM content_article_categories ac WHERE ac.article_id=a.id AND ac.category_id=$4)) AND ($5::bigint IS NULL OR EXISTS(SELECT 1 FROM content_article_tags at WHERE at.article_id=a.id AND at.tag_id=$5))`
-	var total int64
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, kind, status, q, category, tag).Scan(&total)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.published_at,a.views,a.status,a.access_level,a.version,a.author_id,a.created_at,a.updated_at,(a.status='published' AND a.published_at>now()) AS scheduled`+adminTaxonomyColumns+where+" ORDER BY a.sort_order,a.updated_at DESC,a.id DESC LIMIT $6 OFFSET $7", kind, status, q, category, tag, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*)"+where,
+		`SELECT a.id,a.content_type,a.category_id,c.name AS category_name,a.title,a.slug,a.excerpt,a.published_at,a.views,a.status,a.access_level,a.version,a.author_id,a.created_at,a.updated_at,(a.status='published' AND a.published_at>now()) AS scheduled`+adminTaxonomyColumns+where+" ORDER BY a.sort_order,a.updated_at DESC,a.id DESC", []any{kind, status, q, category, tag}, limit, offset)
 }
 func (s *Server) adminContentDetail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)

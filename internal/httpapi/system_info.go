@@ -54,26 +54,14 @@ func (s *Server) adminSystemDatabase(w http.ResponseWriter, r *http.Request) {
 	// Scope to the application's search_path schema, including in isolated tests.
 	// n_live_tup is PostgreSQL's estimate; never claim this as an exact row count.
 	where := ` FROM pg_stat_user_tables WHERE schemaname=current_schema() AND ($1='' OR relname ILIKE '%'||$1||'%')`
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+where, query).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT relname AS name,n_live_tup AS estimated_rows,pg_total_relation_size(relid) AS size_bytes`+where+` ORDER BY relname LIMIT $2 OFFSET $3`, query, limit, offset)
+	page, err := listPage(r.Context(), s.db.Pool, "SELECT count(*)"+where,
+		`SELECT relname AS name,n_live_tup AS estimated_rows,pg_total_relation_size(relid) AS size_bytes`+where+` ORDER BY relname`, []any{query}, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
 	}
 	write(w, http.StatusOK, map[string]any{
-		"items": items, "total": total, "limit": limit, "offset": offset,
+		"items": page["items"], "total": page["total"], "limit": limit, "offset": offset,
 		"status":            "ready",
 		"database":          database,
 		"server_version":    serverVersion,

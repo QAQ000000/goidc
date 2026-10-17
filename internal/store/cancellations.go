@@ -100,33 +100,31 @@ RETURNING id,service_id,user_id,type,reason,status,resolution_note,created_at,re
 
 func (s *Store) WithdrawServiceCancellation(ctx context.Context, userID, serviceID int64) (CancellationRequest, error) {
 	var out CancellationRequest
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback(ctx)
-	var ownerID int64
-	if err = tx.QueryRow(ctx, "SELECT user_id FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&ownerID); err != nil {
-		return out, err
-	}
-	if ownerID != userID {
-		return out, pgx.ErrNoRows
-	}
-	err = tx.QueryRow(ctx, `UPDATE service_cancellation_requests
+	return withTx(ctx, s, func(tx pgx.Tx) (CancellationRequest, error) {
+		var err error
+		var ownerID int64
+		if err = tx.QueryRow(ctx, "SELECT user_id FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&ownerID); err != nil {
+			return out, err
+		}
+		if ownerID != userID {
+			return out, pgx.ErrNoRows
+		}
+		err = tx.QueryRow(ctx, `UPDATE service_cancellation_requests
 SET status='withdrawn',resolved_at=now(),resolution_note='客户撤回'
 WHERE service_id=$1 AND user_id=$2 AND status='pending'
 RETURNING id,service_id,user_id,type,reason,status,resolution_note,created_at,resolved_at,resolved_by`, serviceID, userID).
-		Scan(&out.ID, &out.ServiceID, &out.UserID, &out.Type, &out.Reason, &out.Status, &out.ResolutionNote, &out.CreatedAt, &out.ResolvedAt, &out.ResolvedBy)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return out, conflict("cancellation_not_pending", "没有可撤回的取消申请")
-	}
-	if err != nil {
-		return out, err
-	}
-	if err = Audit(ctx, tx, userID, "service.cancellation.withdrawn", "service", serviceID, map[string]any{"request_id": out.ID}); err != nil {
-		return out, err
-	}
-	return out, tx.Commit(ctx)
+			Scan(&out.ID, &out.ServiceID, &out.UserID, &out.Type, &out.Reason, &out.Status, &out.ResolutionNote, &out.CreatedAt, &out.ResolvedAt, &out.ResolvedBy)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return out, conflict("cancellation_not_pending", "没有可撤回的取消申请")
+		}
+		if err != nil {
+			return out, err
+		}
+		if err = Audit(ctx, tx, userID, "service.cancellation.withdrawn", "service", serviceID, map[string]any{"request_id": out.ID}); err != nil {
+			return out, err
+		}
+		return out, nil
+	})
 }
 
 func (s *Store) ResolveServiceCancellation(ctx context.Context, actorID, requestID int64, decision, note string) (CancellationRequest, error) {

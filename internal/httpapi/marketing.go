@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -261,26 +260,8 @@ func (s *Server) marketingCampaigns(w http.ResponseWriter, r *http.Request) {
 		where = append(where, fmt.Sprintf("c.%s=$%d", key, len(args)))
 	}
 	base := ` FROM marketing_campaigns c JOIN users u ON u.id=c.created_by WHERE ` + strings.Join(where, " AND ")
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*)"+base, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT c.id,c.title,c.mode,c.channel,c.subject,c.status,c.recipient_count,c.version,c.created_at,c.updated_at,c.sent_at,u.display_name AS created_by`+base+` ORDER BY c.id DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*)"+base,
+		`SELECT c.id,c.title,c.mode,c.channel,c.subject,c.status,c.recipient_count,c.version,c.created_at,c.updated_at,c.sent_at,u.display_name AS created_by`+base+` ORDER BY c.id DESC`, args, limit, offset)
 }
 
 func (s *Server) marketingCampaignDetail(w http.ResponseWriter, r *http.Request) {
@@ -330,39 +311,28 @@ func (s *Server) createMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	audience, _ := json.Marshal(in.Audience)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replay {
-		_ = tx.Commit(r.Context())
-		write(w, 200, result)
-		return
-	}
-	var id int64
-	if err = tx.QueryRow(r.Context(), `INSERT INTO marketing_campaigns(title,mode,channel,subject,body,audience,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience, identityFrom(r).ID).Scan(&id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "status": "draft", "version": int64(1)}
-	if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "marketing_campaign.created", "marketing_campaign", id, map[string]any{"mode": in.Audience.Mode, "channel": in.Channel}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusCreated, result)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replay {
+
+			return txResponse{200, result}, nil
+		}
+		var id int64
+		if err = tx.QueryRow(r.Context(), `INSERT INTO marketing_campaigns(title,mode,channel,subject,body,audience,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience, identityFrom(r).ID).Scan(&id); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "status": "draft", "version": int64(1)}
+		if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "marketing_campaign.created", "marketing_campaign", id, map[string]any{"mode": in.Audience.Mode, "channel": in.Channel}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusCreated, result}, nil
+	})
 }
 
 func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request) {
@@ -397,53 +367,39 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replay {
-		_ = tx.Commit(r.Context())
-		write(w, 200, result)
-		return
-	}
-	var current int64
-	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT version,status FROM marketing_campaigns WHERE id=$1 FOR UPDATE", id).Scan(&current, &status); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if status != "draft" {
-		writeError(w, 409, "marketing_campaign_locked", "已发送的营销活动不能编辑")
-		return
-	}
-	if current != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "营销活动已被其他管理员修改，请刷新后重试")
-		return
-	}
-	audience, _ := json.Marshal(in.Audience)
-	if _, err = tx.Exec(r.Context(), `UPDATE marketing_campaigns SET title=$2,mode=$3,channel=$4,subject=$5,body=$6,audience=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "status": "draft", "version": current + 1}
-	if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "marketing_campaign.updated", "marketing_campaign", id, map[string]any{"version": current + 1}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replay {
+
+			return txResponse{200, result}, nil
+		}
+		var current int64
+		var status string
+		if err = tx.QueryRow(r.Context(), "SELECT version,status FROM marketing_campaigns WHERE id=$1 FOR UPDATE", id).Scan(&current, &status); err != nil {
+			return txResponse{}, err
+		}
+		if status != "draft" {
+			return txResponse{}, &txHTTPError{409, "marketing_campaign_locked", "已发送的营销活动不能编辑"}
+		}
+		if current != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "营销活动已被其他管理员修改，请刷新后重试"}
+		}
+		audience, _ := json.Marshal(in.Audience)
+		if _, err = tx.Exec(r.Context(), `UPDATE marketing_campaigns SET title=$2,mode=$3,channel=$4,subject=$5,body=$6,audience=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Title, in.Audience.Mode, in.Channel, in.Subject, in.Body, audience); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "status": "draft", "version": current + 1}
+		if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "marketing_campaign.updated", "marketing_campaign", id, map[string]any{"version": current + 1}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, result}, nil
+	})
 }
 
 func marketingOperationTx(ctx context.Context, tx pgx.Tx, actor int64, key, hash string) (map[string]any, bool, error) {
@@ -486,150 +442,124 @@ func (s *Server) sendMarketingCampaign(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	actor := identityFrom(r).ID
-	if result, replay, e := marketingOperationTx(r.Context(), tx, actor, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replay {
-		_ = tx.Commit(r.Context())
-		write(w, 200, result)
-		return
-	}
-	var title, channel, subject, body, status string
-	var audienceRaw []byte
-	var version int64
-	if err = tx.QueryRow(r.Context(), `SELECT title,channel,subject,body,audience,status,version FROM marketing_campaigns WHERE id=$1 FOR UPDATE`, id).Scan(&title, &channel, &subject, &body, &audienceRaw, &status, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if status != "draft" {
-		writeError(w, 409, "marketing_campaign_locked", "活动已发送或已取消")
-		return
-	}
-	if version != input.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "营销活动已被其他管理员修改，请刷新后重试")
-		return
-	}
-	var audience marketingAudience
-	if err = json.Unmarshal(audienceRaw, &audience); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	query, args, err := marketingAudienceQuery(actor, audience)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), query, args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	type recipient struct {
-		ID                           int64
-		Email, Phone                 string
-		EmailVerified, PhoneVerified bool
-		Name                         string
-	}
-	recipients := []recipient{}
-	for rows.Next() {
-		var item recipient
-		if err = rows.Scan(&item.ID, &item.Email, &item.Phone, &item.EmailVerified, &item.PhoneVerified, &item.Name); err != nil {
-			rows.Close()
-			s.fail(w, r, err)
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		actor := identityFrom(r).ID
+		if result, replay, e := marketingOperationTx(r.Context(), tx, actor, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replay {
+
+			return txResponse{200, result}, nil
 		}
-		recipients = append(recipients, item)
-	}
-	rows.Close()
-	if err = rows.Err(); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if len(recipients) > 10000 {
-		writeError(w, 409, "marketing_recipient_limit", "单次营销推送最多 10000 位客户")
-		return
-	}
-	if channel == "email" {
-		var available bool
-		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM channel_instances WHERE category='mail' AND enabled=true)`).Scan(&available); err != nil {
-			s.fail(w, r, err)
-			return
+		var title, channel, subject, body, status string
+		var audienceRaw []byte
+		var version int64
+		if err = tx.QueryRow(r.Context(), `SELECT title,channel,subject,body,audience,status,version FROM marketing_campaigns WHERE id=$1 FOR UPDATE`, id).Scan(&title, &channel, &subject, &body, &audienceRaw, &status, &version); err != nil {
+			return txResponse{}, err
 		}
-		if !available {
-			writeError(w, http.StatusConflict, "email_unavailable", "邮件渠道未启用")
-			return
+		if status != "draft" {
+			return txResponse{}, &txHTTPError{409, "marketing_campaign_locked", "活动已发送或已取消"}
 		}
-	}
-	queued := 0
-	for _, item := range recipients {
-		var emailID, smsID, inboxID *int64
-		switch channel {
-		case "email":
-			if item.Email == "" {
+		if version != input.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "营销活动已被其他管理员修改，请刷新后重试"}
+		}
+		var audience marketingAudience
+		if err = json.Unmarshal(audienceRaw, &audience); err != nil {
+			return txResponse{}, err
+		}
+		query, args, err := marketingAudienceQuery(actor, audience)
+		if err != nil {
+			return txResponse{}, err
+		}
+		rows, err := tx.Query(r.Context(), query, args...)
+		if err != nil {
+			return txResponse{}, err
+		}
+		type recipient struct {
+			ID                           int64
+			Email, Phone                 string
+			EmailVerified, PhoneVerified bool
+			Name                         string
+		}
+		recipients := []recipient{}
+		for rows.Next() {
+			var item recipient
+			if err = rows.Scan(&item.ID, &item.Email, &item.Phone, &item.EmailVerified, &item.PhoneVerified, &item.Name); err != nil {
+				rows.Close()
+				return txResponse{}, err
+			}
+			recipients = append(recipients, item)
+		}
+		rows.Close()
+		if err = rows.Err(); err != nil {
+			return txResponse{}, err
+		}
+		if len(recipients) > 10000 {
+			return txResponse{}, &txHTTPError{409, "marketing_recipient_limit", "单次营销推送最多 10000 位客户"}
+		}
+		if channel == "email" {
+			var available bool
+			if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM channel_instances WHERE category='mail' AND enabled=true)`).Scan(&available); err != nil {
+				return txResponse{}, err
+			}
+			if !available {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "email_unavailable", "邮件渠道未启用"}
+			}
+		}
+		queued := 0
+		for _, item := range recipients {
+			var emailID, smsID, inboxID *int64
+			switch channel {
+			case "email":
+				if item.Email == "" {
+					continue
+				}
+				var value int64
+				if err = tx.QueryRow(r.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,$2,$3,'marketing',(SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1)) RETURNING id`, item.Email, subject, body).Scan(&value); err != nil {
+					return txResponse{}, err
+				}
+				emailID = &value
+			case "sms":
+				if !item.PhoneVerified || item.Phone == "" {
+					continue
+				}
+				value, queueErr := s.db.QueueSMSWithID(r.Context(), tx, item.Phone, body, "marketing", "", time.Now().Add(30*24*time.Hour))
+				if queueErr != nil {
+					return txResponse{}, queueErr
+				}
+				smsID = &value
+			case "inbox":
+				var value int64
+				if err = tx.QueryRow(r.Context(), `INSERT INTO admin_inbox_messages(user_id,subject,body) VALUES($1,$2,$3) RETURNING id`, item.ID, subject, body).Scan(&value); err != nil {
+					return txResponse{}, err
+				}
+				inboxID = &value
+			}
+			if emailID == nil && smsID == nil && inboxID == nil {
 				continue
 			}
-			var value int64
-			if err = tx.QueryRow(r.Context(), `INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,$2,$3,'marketing',(SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1)) RETURNING id`, item.Email, subject, body).Scan(&value); err != nil {
-				s.fail(w, r, err)
-				return
+			if _, err = tx.Exec(r.Context(), `INSERT INTO marketing_campaign_recipients(campaign_id,user_id,channel,email_outbox_id,sms_outbox_id,inbox_message_id) VALUES($1,$2,$3,$4,$5,$6)`, id, item.ID, channel, emailID, smsID, inboxID); err != nil {
+				return txResponse{}, err
 			}
-			emailID = &value
-		case "sms":
-			if !item.PhoneVerified || item.Phone == "" {
-				continue
-			}
-			value, queueErr := s.db.QueueSMSWithID(r.Context(), tx, item.Phone, body, "marketing", "", time.Now().Add(30*24*time.Hour))
-			if queueErr != nil {
-				s.fail(w, r, queueErr)
-				return
-			}
-			smsID = &value
-		case "inbox":
-			var value int64
-			if err = tx.QueryRow(r.Context(), `INSERT INTO admin_inbox_messages(user_id,subject,body) VALUES($1,$2,$3) RETURNING id`, item.ID, subject, body).Scan(&value); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-			inboxID = &value
+			queued++
 		}
-		if emailID == nil && smsID == nil && inboxID == nil {
-			continue
+		newStatus := "queued"
+		var sentAt any
+		if channel == "inbox" || queued == 0 {
+			newStatus = "completed"
+			sentAt = time.Now()
 		}
-		if _, err = tx.Exec(r.Context(), `INSERT INTO marketing_campaign_recipients(campaign_id,user_id,channel,email_outbox_id,sms_outbox_id,inbox_message_id) VALUES($1,$2,$3,$4,$5,$6)`, id, item.ID, channel, emailID, smsID, inboxID); err != nil {
-			s.fail(w, r, err)
-			return
+		if _, err = tx.Exec(r.Context(), `UPDATE marketing_campaigns SET status=$2,recipient_count=$3,version=version+1,updated_at=now(),sent_at=$4 WHERE id=$1`, id, newStatus, queued, sentAt); err != nil {
+			return txResponse{}, err
 		}
-		queued++
-	}
-	newStatus := "queued"
-	var sentAt any
-	if channel == "inbox" || queued == 0 {
-		newStatus = "completed"
-		sentAt = time.Now()
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE marketing_campaigns SET status=$2,recipient_count=$3,version=version+1,updated_at=now(),sent_at=$4 WHERE id=$1`, id, newStatus, queued, sentAt); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "status": newStatus, "recipient_count": queued, "version": version + 1}
-	if err = saveMarketingOperation(r.Context(), tx, actor, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "marketing_campaign.sent", "marketing_campaign", id, map[string]any{"channel": channel, "recipient_count": queued}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusAccepted, result)
+		result := map[string]any{"id": id, "status": newStatus, "recipient_count": queued, "version": version + 1}
+		if err = saveMarketingOperation(r.Context(), tx, actor, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, actor, "marketing_campaign.sent", "marketing_campaign", id, map[string]any{"channel": channel, "recipient_count": queued}); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusAccepted, result}, nil
+	})
 }

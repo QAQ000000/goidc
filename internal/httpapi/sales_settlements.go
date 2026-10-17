@@ -3,12 +3,13 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 	"math"
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 type salesSettlementInput struct {
@@ -153,164 +154,130 @@ func (s *Server) salesSettlementWrite(w http.ResponseWriter, r *http.Request, cr
 			return
 		}
 	}
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	permission := "sales.view"
-	if create {
-		permission = "sales.manage"
-	}
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
 
-	if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock_shared(70108190)`); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = salesSettlementAuth(r, tx, permission); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if create {
-		if e = salesSettlementAuth(r, tx, "sales.view"); e != nil {
-			s.fail(w, r, e)
-			return
+		permission := "sales.view"
+		if create {
+			permission = "sales.manage"
 		}
-	}
-	var fullScope bool
-	if e = tx.QueryRow(r.Context(), `SELECT role='super_admin' OR customer_scope='all' FROM users WHERE id=$1`, identityFrom(r).ID).Scan(&fullScope); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if !fullScope {
-		writeError(w, 403, "full_customer_scope_required", "正式销售结算需要全部客户范围权限")
-		return
-	}
 
-	if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(13520261013)`); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	hash := settingMutationHash(in)
-	if create {
-		if replay, yes, err := loadSettingReplayTx(r, tx, identityFrom(r).ID, "sales.settlement", key, hash); err != nil {
-			s.fail(w, r, err)
-			return
-		} else if yes {
-			var allowed bool
-			if e = tx.QueryRow(r.Context(), `SELECT NOT EXISTS(SELECT 1 FROM sales_settlement_items WHERE settlement_id=$1 AND NOT admin_customer_allowed($2,customer_id))`, replay["id"], identityFrom(r).ID).Scan(&allowed); e != nil {
-				s.fail(w, r, e)
-				return
-			}
-			if !allowed {
-				writeError(w, 404, "not_found", "结算不存在或无权查看")
-				return
-			}
-			if e = tx.Commit(r.Context()); e != nil {
-				s.fail(w, r, e)
-				return
-			}
-			write(w, 200, replay)
-			return
+		if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock_shared(70108190)`); e != nil {
+			return txResponse{}, e
 		}
-	}
+		if e = salesSettlementAuth(r, tx, permission); e != nil {
+			return txResponse{}, e
+		}
+		if create {
+			if e = salesSettlementAuth(r, tx, "sales.view"); e != nil {
+				return txResponse{}, e
+			}
+		}
+		var fullScope bool
+		if e = tx.QueryRow(r.Context(), `SELECT role='super_admin' OR customer_scope='all' FROM users WHERE id=$1`, identityFrom(r).ID).Scan(&fullScope); e != nil {
+			return txResponse{}, e
+		}
+		if !fullScope {
+			return txResponse{}, &txHTTPError{403, "full_customer_scope_required", "正式销售结算需要全部客户范围权限"}
+		}
 
-	sourceRows, e := tx.Query(r.Context(), `SELECT DISTINCT user_id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY user_id`, in.OrderIDs)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	customers, e := pgx.CollectRows(sourceRows, pgx.RowTo[int64])
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	for _, customer := range customers {
-		if e = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customer); e != nil {
-			s.fail(w, r, e)
-			return
+		if _, e = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(13520261013)`); e != nil {
+			return txResponse{}, e
 		}
-		if e = store.LockFinancialCustomer(r.Context(), tx, customer); e != nil {
-			s.fail(w, r, e)
-			return
+		hash := settingMutationHash(in)
+		if create {
+			if replay, yes, err := loadSettingReplayTx(r, tx, identityFrom(r).ID, "sales.settlement", key, hash); err != nil {
+				return txResponse{}, err
+			} else if yes {
+				var allowed bool
+				if e = tx.QueryRow(r.Context(), `SELECT NOT EXISTS(SELECT 1 FROM sales_settlement_items WHERE settlement_id=$1 AND NOT admin_customer_allowed($2,customer_id))`, replay["id"], identityFrom(r).ID).Scan(&allowed); e != nil {
+					return txResponse{}, e
+				}
+				if !allowed {
+					return txResponse{}, &txHTTPError{404, "not_found", "结算不存在或无权查看"}
+				}
+
+				return txResponse{200, replay}, nil
+			}
 		}
-	}
-	sourceRows, e = tx.Query(r.Context(), `SELECT id FROM invoices WHERE order_id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	sourceRows, e = tx.Query(r.Context(), `SELECT id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	// Rules and global turnover are read by one SQL snapshot. A later refund of a
-	// different source does not retroactively recalculate immutable tier snapshots.
-	items, e := salesSettlementPreviewTx(r, tx, in, start, end)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	digest := settingMutationHash(struct {
-		Month string
-		Items []salesSettlementItem
-	}{in.Month, items})
-	var total int64
-	for _, i := range items {
-		if total > math.MaxInt64-i.CommissionCents {
-			writeError(w, 400, "settlement_too_large", "结算总额过大，请减少订单")
-			return
-		}
-		total += i.CommissionCents
-	}
-	result := map[string]any{"month": in.Month, "items": items, "total_commission_cents": total, "commission_cents": total, "reversed_cents": int64(0), "net_commission_cents": total, "preview_digest": digest, "attribution_basis": "current_at_confirmation", "scope": "purchase_only", "turnover_basis": "all_eligible_purchase_cash_receipts"}
-	if create {
-		if digest != in.PreviewDigest {
-			writeError(w, 409, "preview_changed", "预览已变更，请重新预览并确认")
-			return
-		}
-		var id int64
-		e = tx.QueryRow(r.Context(), `INSERT INTO sales_settlements(month,actor_id) VALUES($1,$2) RETURNING id`, in.Month, identityFrom(r).ID).Scan(&id)
+
+		sourceRows, e := tx.Query(r.Context(), `SELECT DISTINCT user_id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY user_id`, in.OrderIDs)
 		if e != nil {
-			s.fail(w, r, e)
-			return
+			return txResponse{}, e
 		}
-		for _, i := range items {
-			raw, _ := json.Marshal(i)
-			_, e = tx.Exec(r.Context(), `INSERT INTO sales_settlement_items(settlement_id,order_id,invoice_id,customer_id,sales_owner_id,snapshot,commission_cents) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, i.OrderID, i.InvoiceID, i.CustomerID, i.SalesOwnerID, raw, i.CommissionCents)
-			if e != nil {
-				s.fail(w, r, e)
-				return
+		customers, e := pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+		if e != nil {
+			return txResponse{}, e
+		}
+		for _, customer := range customers {
+			if e = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customer); e != nil {
+				return txResponse{}, e
+			}
+			if e = store.LockFinancialCustomer(r.Context(), tx, customer); e != nil {
+				return txResponse{}, e
 			}
 		}
-		result["id"] = id
-		result["status"] = "confirmed"
-		if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "sales.settlement_confirmed", "sales_settlement", id, result); e != nil {
-			s.fail(w, r, e)
-			return
+		sourceRows, e = tx.Query(r.Context(), `SELECT id FROM invoices WHERE order_id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
+		if e != nil {
+			return txResponse{}, e
 		}
-		if e = saveSettingOperationTx(r, tx, identityFrom(r).ID, "sales.settlement", key, hash, result); e != nil {
-			s.fail(w, r, e)
-			return
+		_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+		if e != nil {
+			return txResponse{}, e
 		}
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, 200, result)
+		sourceRows, e = tx.Query(r.Context(), `SELECT id FROM orders WHERE id=ANY($1::bigint[]) ORDER BY id FOR UPDATE`, in.OrderIDs)
+		if e != nil {
+			return txResponse{}, e
+		}
+		_, e = pgx.CollectRows(sourceRows, pgx.RowTo[int64])
+		if e != nil {
+			return txResponse{}, e
+		}
+		// Rules and global turnover are read by one SQL snapshot. A later refund of a
+		// different source does not retroactively recalculate immutable tier snapshots.
+		items, e := salesSettlementPreviewTx(r, tx, in, start, end)
+		if e != nil {
+			return txResponse{}, e
+		}
+		digest := settingMutationHash(struct {
+			Month string
+			Items []salesSettlementItem
+		}{in.Month, items})
+		var total int64
+		for _, i := range items {
+			if total > math.MaxInt64-i.CommissionCents {
+				return txResponse{}, &txHTTPError{400, "settlement_too_large", "结算总额过大，请减少订单"}
+			}
+			total += i.CommissionCents
+		}
+		result := map[string]any{"month": in.Month, "items": items, "total_commission_cents": total, "commission_cents": total, "reversed_cents": int64(0), "net_commission_cents": total, "preview_digest": digest, "attribution_basis": "current_at_confirmation", "scope": "purchase_only", "turnover_basis": "all_eligible_purchase_cash_receipts"}
+		if create {
+			if digest != in.PreviewDigest {
+				return txResponse{}, &txHTTPError{409, "preview_changed", "预览已变更，请重新预览并确认"}
+			}
+			var id int64
+			e = tx.QueryRow(r.Context(), `INSERT INTO sales_settlements(month,actor_id) VALUES($1,$2) RETURNING id`, in.Month, identityFrom(r).ID).Scan(&id)
+			if e != nil {
+				return txResponse{}, e
+			}
+			for _, i := range items {
+				raw, _ := json.Marshal(i)
+				_, e = tx.Exec(r.Context(), `INSERT INTO sales_settlement_items(settlement_id,order_id,invoice_id,customer_id,sales_owner_id,snapshot,commission_cents) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, i.OrderID, i.InvoiceID, i.CustomerID, i.SalesOwnerID, raw, i.CommissionCents)
+				if e != nil {
+					return txResponse{}, e
+				}
+			}
+			result["id"] = id
+			result["status"] = "confirmed"
+			if e = store.Audit(r.Context(), tx, identityFrom(r).ID, "sales.settlement_confirmed", "sales_settlement", id, result); e != nil {
+				return txResponse{}, e
+			}
+			if e = saveSettingOperationTx(r, tx, identityFrom(r).ID, "sales.settlement", key, hash, result); e != nil {
+				return txResponse{}, e
+			}
+		}
+
+		return txResponse{200, result}, nil
+	})
 }
 
 func (s *Server) salesSettlements(w http.ResponseWriter, r *http.Request) {
@@ -344,35 +311,27 @@ func (s *Server) salesSettlements(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	filter := ` WHERE ($2=0 OR s.id=$2) AND NOT EXISTS(SELECT 1 FROM sales_settlement_items hidden WHERE hidden.settlement_id=s.id AND NOT admin_customer_allowed($1,hidden.customer_id))`
-	var total int64
-	if e := tx.QueryRow(r.Context(), `SELECT count(*) FROM sales_settlements s`+filter, actor.ID, id).Scan(&total); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	rows, e := tx.Query(r.Context(), `SELECT s.id,s.month,s.created_at,COALESCE(jsonb_agg(si.snapshot || jsonb_build_object('status',si.status,'reversed_at',si.reversed_at) ORDER BY si.order_id),'[]'),sum(si.commission_cents)::bigint,COALESCE(sum(si.commission_cents) FILTER(WHERE si.status='reversed'),0)::bigint,count(*) FILTER(WHERE si.status='reversed'),count(*) FROM sales_settlements s JOIN sales_settlement_items si ON si.settlement_id=s.id`+filter+` GROUP BY s.id ORDER BY s.id DESC LIMIT $3 OFFSET $4`, actor.ID, id, limit, offset)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	items, e := pgx.CollectRows(rows, func(row pgx.CollectableRow) (map[string]any, error) {
-		var sid, gross, rev, reversedCount, itemCount int64
-		var month string
-		var at time.Time
-		var raw json.RawMessage
-		e := row.Scan(&sid, &month, &at, &raw, &gross, &rev, &reversedCount, &itemCount)
-		status := "confirmed"
-		if reversedCount > 0 {
-			status = "partially_reversed"
-			if reversedCount == itemCount {
-				status = "reversed"
+	page, e := listPage(r.Context(), tx, `SELECT count(*) FROM sales_settlements s`+filter,
+		`SELECT s.id,s.month,s.created_at,COALESCE(jsonb_agg(si.snapshot || jsonb_build_object('status',si.status,'reversed_at',si.reversed_at) ORDER BY si.order_id),'[]'),sum(si.commission_cents)::bigint,COALESCE(sum(si.commission_cents) FILTER(WHERE si.status='reversed'),0)::bigint,count(*) FILTER(WHERE si.status='reversed'),count(*) FROM sales_settlements s JOIN sales_settlement_items si ON si.settlement_id=s.id`+filter+` GROUP BY s.id ORDER BY s.id DESC`, []any{actor.ID, id}, limit, offset, func(row pgx.CollectableRow) (map[string]any, error) {
+			var sid, gross, rev, reversedCount, itemCount int64
+			var month string
+			var at time.Time
+			var raw json.RawMessage
+			e := row.Scan(&sid, &month, &at, &raw, &gross, &rev, &reversedCount, &itemCount)
+			status := "confirmed"
+			if reversedCount > 0 {
+				status = "partially_reversed"
+				if reversedCount == itemCount {
+					status = "reversed"
+				}
 			}
-		}
-		return map[string]any{"id": sid, "month": month, "created_at": at, "items": raw, "status": status, "commission_cents": gross, "reversed_cents": rev, "net_commission_cents": gross - rev, "scope": "purchase_only", "turnover_basis": "all_eligible_purchase_cash_receipts", "attribution_basis": "current_at_confirmation"}, e
-	})
+			return map[string]any{"id": sid, "month": month, "created_at": at, "items": raw, "status": status, "commission_cents": gross, "reversed_cents": rev, "net_commission_cents": gross - rev, "scope": "purchase_only", "turnover_basis": "all_eligible_purchase_cash_receipts", "attribution_basis": "current_at_confirmation"}, e
+		})
 	if e != nil {
 		s.fail(w, r, e)
 		return
 	}
+	items := page["items"].([]map[string]any)
 	if id > 0 {
 		if len(items) == 0 {
 			writeError(w, 404, "not_found", "结算不存在或无权查看")
@@ -389,5 +348,5 @@ func (s *Server) salesSettlements(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }

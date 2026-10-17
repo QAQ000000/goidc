@@ -286,15 +286,12 @@ func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, d
 	if len(note) > 2000 {
 		return conflict("invalid_certification_review", "审核备注过长")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err := s.ReviewCertificationTx(ctx, tx, reviewerID, id, decision, note, expected); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.ReviewCertificationTx(ctx, tx, reviewerID, id, decision, note, expected); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 // LockCertificationReview authorizes both a new decision and receipt replay.

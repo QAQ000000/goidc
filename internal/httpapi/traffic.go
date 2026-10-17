@@ -81,124 +81,89 @@ func (s *Server) trafficProducts(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input trafficProductInput
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%d:%s:%s", actor, operation, key)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	if id == 0 {
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%d:%s:%s", actor, operation, key)); err != nil {
+			return txResponse{}, err
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		if id == 0 {
+			if err = ensureTrafficProductLinks(r, tx, in.ApplicableProductIDs); err != nil {
+				return txResponse{}, err
+			}
+			var created int64
+			err = tx.QueryRow(r.Context(), `INSERT INTO traffic_products(name,capacity_gb,price_cents,active,stock) VALUES($1,$2,$3,$4,$5) RETURNING id`, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock).Scan(&created)
+			if err != nil {
+				return txResponse{}, err
+			}
+			if err = replaceTrafficProductLinks(r, tx, created, in.ApplicableProductIDs); err != nil {
+				return txResponse{}, err
+			}
+			result := map[string]any{"id": created, "version": int64(1)}
+			if err = store.Audit(r.Context(), tx, actor, "traffic_product.created", "traffic_product", created, map[string]any{"name": in.Name, "capacity_gb": in.CapacityGB, "price_cents": in.PriceCents}); err != nil {
+				return txResponse{}, err
+			}
+			if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+				return txResponse{}, err
+			}
+
+			return txResponse{http.StatusCreated, result}, nil
+		}
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM traffic_products WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "流量包不存在"}
+			}
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "流量包已变更，请刷新后重试"}
+		}
+		if r.Method == http.MethodDelete {
+			var count int64
+			if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM traffic_orders WHERE traffic_product_id=$1", id).Scan(&count); err != nil {
+				return txResponse{}, err
+			}
+			if count > 0 {
+				return txResponse{}, &txHTTPError{http.StatusConflict, "traffic_product_in_use", "已有流量包订单，不能删除；请停用后保留历史记录"}
+			}
+			if _, err = tx.Exec(r.Context(), "DELETE FROM traffic_products WHERE id=$1", id); err != nil {
+				return txResponse{}, err
+			}
+			result := map[string]any{"id": id, "deleted": true}
+			if err = store.Audit(r.Context(), tx, actor, "traffic_product.deleted", "traffic_product", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+				return txResponse{}, err
+			}
+			if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+				return txResponse{}, err
+			}
+
+			return txResponse{http.StatusOK, result}, nil
+		}
 		if err = ensureTrafficProductLinks(r, tx, in.ApplicableProductIDs); err != nil {
-			s.fail(w, r, err)
-			return
+			return txResponse{}, err
 		}
-		var created int64
-		err = tx.QueryRow(r.Context(), `INSERT INTO traffic_products(name,capacity_gb,price_cents,active,stock) VALUES($1,$2,$3,$4,$5) RETURNING id`, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock).Scan(&created)
-		if err != nil {
-			s.fail(w, r, err)
-			return
+		if _, err = tx.Exec(r.Context(), `UPDATE traffic_products SET name=$2,capacity_gb=$3,price_cents=$4,active=$5,stock=$6,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock); err != nil {
+			return txResponse{}, err
 		}
-		if err = replaceTrafficProductLinks(r, tx, created, in.ApplicableProductIDs); err != nil {
-			s.fail(w, r, err)
-			return
+		if err = replaceTrafficProductLinks(r, tx, id, in.ApplicableProductIDs); err != nil {
+			return txResponse{}, err
 		}
-		result := map[string]any{"id": created, "version": int64(1)}
-		if err = store.Audit(r.Context(), tx, actor, "traffic_product.created", "traffic_product", created, map[string]any{"name": in.Name, "capacity_gb": in.CapacityGB, "price_cents": in.PriceCents}); err != nil {
-			s.fail(w, r, err)
-			return
+		result := map[string]any{"id": id, "version": version + 1}
+		if err = store.Audit(r.Context(), tx, actor, "traffic_product.updated", "traffic_product", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
 		}
 		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			s.fail(w, r, err)
-			return
+			return txResponse{}, err
 		}
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, http.StatusCreated, result)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM traffic_products WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "流量包不存在")
-			return
-		}
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "流量包已变更，请刷新后重试")
-		return
-	}
-	if r.Method == http.MethodDelete {
-		var count int64
-		if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM traffic_orders WHERE traffic_product_id=$1", id).Scan(&count); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if count > 0 {
-			writeError(w, http.StatusConflict, "traffic_product_in_use", "已有流量包订单，不能删除；请停用后保留历史记录")
-			return
-		}
-		if _, err = tx.Exec(r.Context(), "DELETE FROM traffic_products WHERE id=$1", id); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		result := map[string]any{"id": id, "deleted": true}
-		if err = store.Audit(r.Context(), tx, actor, "traffic_product.deleted", "traffic_product", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	if err = ensureTrafficProductLinks(r, tx, in.ApplicableProductIDs); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE traffic_products SET name=$2,capacity_gb=$3,price_cents=$4,active=$5,stock=$6,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.CapacityGB, in.PriceCents, in.Active, in.Stock); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = replaceTrafficProductLinks(r, tx, id, in.ApplicableProductIDs); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "version": version + 1}
-	if err = store.Audit(r.Context(), tx, actor, "traffic_product.updated", "traffic_product", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }
 
 func ensureTrafficProductLinks(r *http.Request, tx pgx.Tx, ids []int64) error {
@@ -241,34 +206,22 @@ func (s *Server) trafficProductList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var total int64
-	if err := tx.QueryRow(r.Context(), `SELECT count(*) FROM traffic_products tp WHERE ($1='' OR tp.name ILIKE '%'||$1||'%') AND ($2='' OR tp.active=($2='true'))`, q, active).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT tp.id,tp.name,tp.capacity_gb,tp.price_cents,tp.active,tp.stock,tp.sold_count,tp.version,tp.created_at,tp.updated_at,
+	page, err := listPage(r.Context(), tx, `SELECT count(*) FROM traffic_products tp WHERE ($1='' OR tp.name ILIKE '%'||$1||'%') AND ($2='' OR tp.active=($2='true'))`,
+		`SELECT tp.id,tp.name,tp.capacity_gb,tp.price_cents,tp.active,tp.stock,tp.sold_count,tp.version,tp.created_at,tp.updated_at,
 COALESCE(array_agg(tpp.product_id ORDER BY tpp.product_id) FILTER (WHERE tpp.product_id IS NOT NULL), '{}') AS applicable_product_ids,
 COALESCE(jsonb_agg(jsonb_build_object('id',p.id,'name',p.name) ORDER BY p.id) FILTER (WHERE p.id IS NOT NULL), '[]'::jsonb) AS applicable_products
 FROM traffic_products tp LEFT JOIN traffic_product_products tpp ON tpp.traffic_product_id=tp.id LEFT JOIN products p ON p.id=tpp.product_id
 WHERE ($1='' OR tp.name ILIKE '%'||$1||'%') AND ($2='' OR tp.active=($2='true'))
-GROUP BY tp.id ORDER BY tp.id DESC LIMIT $3 OFFSET $4`, q, active, limit, offset)
+GROUP BY tp.id ORDER BY tp.id DESC`, []any{q, active}, limit, offset, pgx.RowToMap)
 	if err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
 	}
 	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) trafficOrders(w http.ResponseWriter, r *http.Request) {
@@ -347,94 +300,70 @@ func (s *Server) cancelTrafficOrder(w http.ResponseWriter, r *http.Request) {
 		ID int64
 		In any
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%d:%s:%s", actor, operation, key)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var invoiceID int64
-	var customerID int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM traffic_orders WHERE id=$1", id).Scan(&customerID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.LockAdminCustomer(r.Context(), tx, actor, customerID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT invoice_id FROM traffic_orders WHERE id=$1 AND admin_customer_allowed($2,user_id)", id, actor).Scan(&invoiceID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var invoiceStatus string
-	if err = tx.QueryRow(r.Context(), "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var version int64
-	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT version,status FROM traffic_orders WHERE id=$1 AND admin_customer_allowed($2,user_id) FOR UPDATE", id, actor).Scan(&version, &status); err != nil {
-		if err == pgx.ErrNoRows {
-			writeError(w, http.StatusNotFound, "not_found", "流量包订单不存在")
-			return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("%d:%s:%s", actor, operation, key)); err != nil {
+			return txResponse{}, err
 		}
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "流量包订单已变更，请刷新后重试")
-		return
-	}
-	if status != "pending" {
-		writeError(w, http.StatusConflict, "traffic_order_not_cancellable", "只有待支付流量包订单可以取消")
-		return
-	}
-	if invoiceStatus != "unpaid" {
-		writeError(w, 409, "traffic_order_not_cancellable", "只有待支付流量包订单可以取消")
-		return
-	}
-	var paymentPending bool
-	if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id)) OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND payment_close_operation_unresolved(id))", invoiceID).Scan(&paymentPending); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if paymentPending {
-		writeError(w, 409, "payment_pending", "存在未确认的真实付款，先查单后再取消")
-		return
-	}
-	if err = store.ReleaseTrafficInvoice(r.Context(), tx, invoiceID, "cancelled"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE invoices SET status='cancelled' WHERE id=$1", invoiceID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": id, "status": "cancelled", "version": version + 1}
-	if err = store.Audit(r.Context(), tx, actor, "traffic_order.cancelled", "traffic_order", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+		var invoiceID int64
+		var customerID int64
+		if err = tx.QueryRow(r.Context(), "SELECT user_id FROM traffic_orders WHERE id=$1", id).Scan(&customerID); err != nil {
+			return txResponse{}, err
+		}
+		if err = store.LockAdminCustomer(r.Context(), tx, actor, customerID); err != nil {
+			return txResponse{}, err
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		if err = tx.QueryRow(r.Context(), "SELECT invoice_id FROM traffic_orders WHERE id=$1 AND admin_customer_allowed($2,user_id)", id, actor).Scan(&invoiceID); err != nil {
+			return txResponse{}, err
+		}
+		var invoiceStatus string
+		if err = tx.QueryRow(r.Context(), "SELECT status FROM invoices WHERE id=$1 FOR UPDATE", invoiceID).Scan(&invoiceStatus); err != nil {
+			return txResponse{}, err
+		}
+		var version int64
+		var status string
+		if err = tx.QueryRow(r.Context(), "SELECT version,status FROM traffic_orders WHERE id=$1 AND admin_customer_allowed($2,user_id) FOR UPDATE", id, actor).Scan(&version, &status); err != nil {
+			if err == pgx.ErrNoRows {
+				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "流量包订单不存在"}
+			}
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "流量包订单已变更，请刷新后重试"}
+		}
+		if status != "pending" {
+			return txResponse{}, &txHTTPError{http.StatusConflict, "traffic_order_not_cancellable", "只有待支付流量包订单可以取消"}
+		}
+		if invoiceStatus != "unpaid" {
+			return txResponse{}, &txHTTPError{409, "traffic_order_not_cancellable", "只有待支付流量包订单可以取消"}
+		}
+		var paymentPending bool
+		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE invoice_id=$1 AND status IN ('pending','expired') AND provider<>'mock') OR EXISTS(SELECT 1 FROM payment_close_anomalies WHERE invoice_id=$1 AND payment_close_anomaly_unresolved(id)) OR EXISTS(SELECT 1 FROM payment_close_operations WHERE invoice_id=$1 AND payment_close_operation_unresolved(id))", invoiceID).Scan(&paymentPending); err != nil {
+			return txResponse{}, err
+		}
+		if paymentPending {
+			return txResponse{}, &txHTTPError{409, "payment_pending", "存在未确认的真实付款，先查单后再取消"}
+		}
+		if err = store.ReleaseTrafficInvoice(r.Context(), tx, invoiceID, "cancelled"); err != nil {
+			return txResponse{}, err
+		}
+		if _, err = tx.Exec(r.Context(), "UPDATE invoices SET status='cancelled' WHERE id=$1", invoiceID); err != nil {
+			return txResponse{}, err
+		}
+		result := map[string]any{"id": id, "status": "cancelled", "version": version + 1}
+		if err = store.Audit(r.Context(), tx, actor, "traffic_order.cancelled", "traffic_order", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{http.StatusOK, result}, nil
+	})
 }

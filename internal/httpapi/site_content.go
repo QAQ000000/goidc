@@ -44,51 +44,38 @@ func (s *Server) themeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	actor := identityFrom(r).ID
 	hash := settingMutationHash(in)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "theme.settings", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM site_theme_settings WHERE id=1 FOR UPDATE").Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "主题配置已变更，请刷新后重试")
-		return
-	}
-	var out map[string]any
-	row, err := tx.Query(r.Context(), `UPDATE site_theme_settings SET template=$1,primary_color=$2,logo_variant=$3,footer_text=$4,version=version+1,updated_at=now() WHERE id=1 RETURNING template,primary_color,logo_variant,footer_text,version,updated_at`, in.Template, in.PrimaryColor, in.LogoVariant, in.FooterText)
-	if err == nil {
-		out, err = pgx.CollectExactlyOneRow(row, pgx.RowToMap)
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "theme.settings_updated", "site_theme_settings", 1, map[string]any{"version": version + 1}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, "theme.settings", key, hash, out); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, out)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "theme.settings", key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{200, replay}, nil
+		}
+		var version int64
+		if err = tx.QueryRow(r.Context(), "SELECT version FROM site_theme_settings WHERE id=1 FOR UPDATE").Scan(&version); err != nil {
+			return txResponse{}, err
+		}
+		if version != in.ExpectedVersion {
+			return txResponse{}, &txHTTPError{409, "version_conflict", "主题配置已变更，请刷新后重试"}
+		}
+		var out map[string]any
+		row, err := tx.Query(r.Context(), `UPDATE site_theme_settings SET template=$1,primary_color=$2,logo_variant=$3,footer_text=$4,version=version+1,updated_at=now() WHERE id=1 RETURNING template,primary_color,logo_variant,footer_text,version,updated_at`, in.Template, in.PrimaryColor, in.LogoVariant, in.FooterText)
+		if err == nil {
+			out, err = pgx.CollectExactlyOneRow(row, pgx.RowToMap)
+		}
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.Audit(r.Context(), tx, actor, "theme.settings_updated", "site_theme_settings", 1, map[string]any{"version": version + 1}); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, "theme.settings", key, hash, out); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, out}, nil
+	})
 }
 
 type siteFieldWrite struct {
@@ -136,78 +123,64 @@ func (s *Server) siteFields(w http.ResponseWriter, r *http.Request) {
 		ID    int64
 		Input siteFieldWrite
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	op := "site_field.create"
-	if id > 0 {
-		op = "site_field.update:" + strconv.FormatInt(id, 10)
-	}
-	if r.Method == http.MethodDelete {
-		op = "site_field.delete:" + strconv.FormatInt(id, 10)
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if id > 0 {
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM site_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-			if err == pgx.ErrNoRows {
-				writeError(w, 404, "not_found", "官网字段不存在")
-				return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		op := "site_field.create"
+		if id > 0 {
+			op = "site_field.update:" + strconv.FormatInt(id, 10)
+		}
+		if r.Method == http.MethodDelete {
+			op = "site_field.delete:" + strconv.FormatInt(id, 10)
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{200, replay}, nil
+		}
+		var version int64
+		if id > 0 {
+			if err = tx.QueryRow(r.Context(), "SELECT version FROM site_custom_fields WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+				if err == pgx.ErrNoRows {
+					return txResponse{}, &txHTTPError{404, "not_found", "官网字段不存在"}
+				}
+				return txResponse{}, err
 			}
-			s.fail(w, r, err)
-			return
+			if version != in.ExpectedVersion {
+				return txResponse{}, &txHTTPError{409, "version_conflict", "官网字段已变更，请刷新后重试"}
+			}
 		}
-		if version != in.ExpectedVersion {
-			writeError(w, 409, "version_conflict", "官网字段已变更，请刷新后重试")
-			return
+		var result map[string]any
+		if r.Method == http.MethodDelete {
+			if _, err = tx.Exec(r.Context(), "DELETE FROM site_custom_fields WHERE id=$1", id); err == nil {
+				result = map[string]any{"id": id, "deleted": true}
+			}
+		} else if id == 0 {
+			err = tx.QueryRow(r.Context(), `INSERT INTO site_custom_fields(field_key,label,field_type,description,required,active,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder).Scan(&id)
+			result = map[string]any{"id": id, "version": 1}
+		} else {
+			_, err = tx.Exec(r.Context(), `UPDATE site_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,required=$6,active=$7,sort_order=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder)
+			result = map[string]any{"id": id, "version": version + 1}
 		}
-	}
-	var result map[string]any
-	if r.Method == http.MethodDelete {
-		if _, err = tx.Exec(r.Context(), "DELETE FROM site_custom_fields WHERE id=$1", id); err == nil {
-			result = map[string]any{"id": id, "deleted": true}
+		if err != nil {
+			return txResponse{}, err
 		}
-	} else if id == 0 {
-		err = tx.QueryRow(r.Context(), `INSERT INTO site_custom_fields(field_key,label,field_type,description,required,active,sort_order) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder).Scan(&id)
-		result = map[string]any{"id": id, "version": 1}
-	} else {
-		_, err = tx.Exec(r.Context(), `UPDATE site_custom_fields SET field_key=$2,label=$3,field_type=$4,description=$5,required=$6,active=$7,sort_order=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.FieldKey, in.Label, in.FieldType, in.Description, in.Required, in.Active, in.SortOrder)
-		result = map[string]any{"id": id, "version": version + 1}
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	action := "site_field.created"
-	if id > 0 && version > 0 {
-		action = "site_field.updated"
-	}
-	if r.Method == http.MethodDelete {
-		action = "site_field.deleted"
-	}
-	if err = store.Audit(r.Context(), tx, actor, action, "site_custom_field", id, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
+		action := "site_field.created"
+		if id > 0 && version > 0 {
+			action = "site_field.updated"
+		}
+		if r.Method == http.MethodDelete {
+			action = "site_field.deleted"
+		}
+		if err = store.Audit(r.Context(), tx, actor, action, "site_custom_field", id, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, result}, nil
+	})
 }
 
 type siteNavWrite struct {
@@ -261,78 +234,64 @@ func (s *Server) siteNavigationMutation(w http.ResponseWriter, r *http.Request, 
 		ID    int64
 		Input siteNavWrite
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	op := "site_navigation.create"
-	if id > 0 {
-		op = "site_navigation.update:" + strconv.FormatInt(id, 10)
-	}
-	if r.Method == http.MethodDelete {
-		op = "site_navigation.delete:" + strconv.FormatInt(id, 10)
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if id > 0 {
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM site_navigation_items WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-			if err == pgx.ErrNoRows {
-				writeError(w, 404, "not_found", "导航项不存在")
-				return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		op := "site_navigation.create"
+		if id > 0 {
+			op = "site_navigation.update:" + strconv.FormatInt(id, 10)
+		}
+		if r.Method == http.MethodDelete {
+			op = "site_navigation.delete:" + strconv.FormatInt(id, 10)
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{200, replay}, nil
+		}
+		var version int64
+		if id > 0 {
+			if err = tx.QueryRow(r.Context(), "SELECT version FROM site_navigation_items WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+				if err == pgx.ErrNoRows {
+					return txResponse{}, &txHTTPError{404, "not_found", "导航项不存在"}
+				}
+				return txResponse{}, err
 			}
-			s.fail(w, r, err)
-			return
+			if version != in.ExpectedVersion {
+				return txResponse{}, &txHTTPError{409, "version_conflict", "导航项已变更，请刷新后重试"}
+			}
 		}
-		if version != in.ExpectedVersion {
-			writeError(w, 409, "version_conflict", "导航项已变更，请刷新后重试")
-			return
+		var result = map[string]any{"id": id}
+		if r.Method == http.MethodDelete {
+			_, err = tx.Exec(r.Context(), "DELETE FROM site_navigation_items WHERE id=$1", id)
+			result["deleted"] = true
+		} else if id == 0 {
+			err = tx.QueryRow(r.Context(), `INSERT INTO site_navigation_items(parent_id,label,href,icon,sort_order,open_new_tab,active) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active).Scan(&id)
+			result["id"] = id
+			result["version"] = 1
+		} else {
+			_, err = tx.Exec(r.Context(), `UPDATE site_navigation_items SET parent_id=$2,label=$3,href=$4,icon=$5,sort_order=$6,open_new_tab=$7,active=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active)
+			result["version"] = version + 1
 		}
-	}
-	var result = map[string]any{"id": id}
-	if r.Method == http.MethodDelete {
-		_, err = tx.Exec(r.Context(), "DELETE FROM site_navigation_items WHERE id=$1", id)
-		result["deleted"] = true
-	} else if id == 0 {
-		err = tx.QueryRow(r.Context(), `INSERT INTO site_navigation_items(parent_id,label,href,icon,sort_order,open_new_tab,active) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active).Scan(&id)
-		result["id"] = id
-		result["version"] = 1
-	} else {
-		_, err = tx.Exec(r.Context(), `UPDATE site_navigation_items SET parent_id=$2,label=$3,href=$4,icon=$5,sort_order=$6,open_new_tab=$7,active=$8,version=version+1,updated_at=now() WHERE id=$1`, id, in.ParentID, in.Label, in.HRef, in.Icon, in.SortOrder, in.OpenNewTab, in.Active)
-		result["version"] = version + 1
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	action := "site_navigation.created"
-	if id > 0 && version > 0 {
-		action = "site_navigation.updated"
-	}
-	if r.Method == http.MethodDelete {
-		action = "site_navigation.deleted"
-	}
-	if err = store.Audit(r.Context(), tx, actor, action, "site_navigation_item", id, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
+		if err != nil {
+			return txResponse{}, err
+		}
+		action := "site_navigation.created"
+		if id > 0 && version > 0 {
+			action = "site_navigation.updated"
+		}
+		if r.Method == http.MethodDelete {
+			action = "site_navigation.deleted"
+		}
+		if err = store.Audit(r.Context(), tx, actor, action, "site_navigation_item", id, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, result}, nil
+	})
 }
 
 type friendlyLinkWrite struct {
@@ -392,78 +351,64 @@ func (s *Server) friendlyLinkMutation(w http.ResponseWriter, r *http.Request, id
 		ID    int64
 		Input friendlyLinkWrite
 	}{id, in})
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	op := "friendly_link.create"
-	if id > 0 {
-		op = "friendly_link.update:" + strconv.FormatInt(id, 10)
-	}
-	if r.Method == http.MethodDelete {
-		op = "friendly_link.delete:" + strconv.FormatInt(id, 10)
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if id > 0 {
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM friendly_links WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
-			if err == pgx.ErrNoRows {
-				writeError(w, 404, "not_found", "友情链接不存在")
-				return
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		var err error
+		op := "friendly_link.create"
+		if id > 0 {
+			op = "friendly_link.update:" + strconv.FormatInt(id, 10)
+		}
+		if r.Method == http.MethodDelete {
+			op = "friendly_link.delete:" + strconv.FormatInt(id, 10)
+		}
+		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
+			return txResponse{}, e
+		} else if replayed {
+
+			return txResponse{200, replay}, nil
+		}
+		var version int64
+		if id > 0 {
+			if err = tx.QueryRow(r.Context(), "SELECT version FROM friendly_links WHERE id=$1 FOR UPDATE", id).Scan(&version); err != nil {
+				if err == pgx.ErrNoRows {
+					return txResponse{}, &txHTTPError{404, "not_found", "友情链接不存在"}
+				}
+				return txResponse{}, err
 			}
-			s.fail(w, r, err)
-			return
+			if version != in.ExpectedVersion {
+				return txResponse{}, &txHTTPError{409, "version_conflict", "友情链接已变更，请刷新后重试"}
+			}
 		}
-		if version != in.ExpectedVersion {
-			writeError(w, 409, "version_conflict", "友情链接已变更，请刷新后重试")
-			return
+		result := map[string]any{"id": id}
+		if r.Method == http.MethodDelete {
+			_, err = tx.Exec(r.Context(), "DELETE FROM friendly_links WHERE id=$1", id)
+			result["deleted"] = true
+		} else if id == 0 {
+			err = tx.QueryRow(r.Context(), `INSERT INTO friendly_links(name,url,logo_url,description,sort_order,active) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active).Scan(&id)
+			result["id"] = id
+			result["version"] = 1
+		} else {
+			_, err = tx.Exec(r.Context(), `UPDATE friendly_links SET name=$2,url=$3,logo_url=$4,description=$5,sort_order=$6,active=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active)
+			result["version"] = version + 1
 		}
-	}
-	result := map[string]any{"id": id}
-	if r.Method == http.MethodDelete {
-		_, err = tx.Exec(r.Context(), "DELETE FROM friendly_links WHERE id=$1", id)
-		result["deleted"] = true
-	} else if id == 0 {
-		err = tx.QueryRow(r.Context(), `INSERT INTO friendly_links(name,url,logo_url,description,sort_order,active) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active).Scan(&id)
-		result["id"] = id
-		result["version"] = 1
-	} else {
-		_, err = tx.Exec(r.Context(), `UPDATE friendly_links SET name=$2,url=$3,logo_url=$4,description=$5,sort_order=$6,active=$7,version=version+1,updated_at=now() WHERE id=$1`, id, in.Name, in.URL, in.LogoURL, in.Description, in.SortOrder, in.Active)
-		result["version"] = version + 1
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	action := "friendly_link.created"
-	if id > 0 && version > 0 {
-		action = "friendly_link.updated"
-	}
-	if r.Method == http.MethodDelete {
-		action = "friendly_link.deleted"
-	}
-	if err = store.Audit(r.Context(), tx, actor, action, "friendly_link", id, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
+		if err != nil {
+			return txResponse{}, err
+		}
+		action := "friendly_link.created"
+		if id > 0 && version > 0 {
+			action = "friendly_link.updated"
+		}
+		if r.Method == http.MethodDelete {
+			action = "friendly_link.deleted"
+		}
+		if err = store.Audit(r.Context(), tx, actor, action, "friendly_link", id, result); err != nil {
+			return txResponse{}, err
+		}
+		if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
+			return txResponse{}, err
+		}
+
+		return txResponse{200, result}, nil
+	})
 }
 
 func (s *Server) listOne(w http.ResponseWriter, r *http.Request, query string) {
@@ -482,25 +427,8 @@ func (s *Server) listOne(w http.ResponseWriter, r *http.Request, query string) {
 
 func (s *Server) siteContentPaged(w http.ResponseWriter, r *http.Request, selectSQL, where string, args ...any) {
 	limit, offset := pagination(r)
-	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM ("+selectSQL+" WHERE "+where+") AS rows", args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), selectSQL+" WHERE "+where+" ORDER BY sort_order,id LIMIT $3 OFFSET $4", append(args, limit, offset)...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM ("+selectSQL+" WHERE "+where+") AS rows",
+		selectSQL+" WHERE "+where+" ORDER BY sort_order,id", args, limit, offset)
 }
 
 func (s *Server) adminFileGroups(w http.ResponseWriter, r *http.Request) {
@@ -508,23 +436,6 @@ func (s *Server) adminFileGroups(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	active := r.URL.Query().Get("active")
 	where := `FROM download_category_tree c WHERE ($1='' OR c.name ILIKE '%'||$1||'%' OR c.description ILIKE '%'||$1||'%') AND ($2='' OR c.active=($2='true'))`
-	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) "+where, q, active).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT c.id,c.parent_id,c.name,c.description,c.sort_order,c.active,c.version,c.created_at,c.updated_at,c.path,c.depth,c.effective_active,(SELECT count(*) FROM downloads d WHERE download_category_contains(c.id,d.category_id)) AS file_count,(SELECT count(*) FROM download_categories child WHERE child.parent_id=c.id) AS child_count `+where+` ORDER BY c.sort_path LIMIT $3 OFFSET $4`, q, active, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) "+where,
+		`SELECT c.id,c.parent_id,c.name,c.description,c.sort_order,c.active,c.version,c.created_at,c.updated_at,c.path,c.depth,c.effective_active,(SELECT count(*) FROM downloads d WHERE download_category_contains(c.id,d.category_id)) AS file_count,(SELECT count(*) FROM download_categories child WHERE child.parent_id=c.id) AS child_count `+where+` ORDER BY c.sort_path`, []any{q, active}, limit, offset)
 }

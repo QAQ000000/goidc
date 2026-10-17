@@ -3,7 +3,6 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -104,26 +103,8 @@ func (s *Server) adminJobQueue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	whereSQL := strings.Join(where, " AND ")
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), adminJobsCTE+"SELECT count(*) FROM jobs WHERE "+whereSQL, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, err := s.db.Pool.Query(r.Context(), adminJobsCTE+"SELECT source,id,service_id,customer_id,customer,product,action,description,status,attempts,available_at,created_at,updated_at,has_error FROM jobs WHERE "+whereSQL+" ORDER BY created_at DESC,id DESC LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args)), args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, adminJobsCTE+"SELECT count(*) FROM jobs WHERE "+whereSQL,
+		adminJobsCTE+"SELECT source,id,service_id,customer_id,customer,product,action,description,status,attempts,available_at,created_at,updated_at,has_error FROM jobs WHERE "+whereSQL+" ORDER BY created_at DESC,id DESC", args, limit, offset)
 }
 
 func validJobStatus(value string) bool {

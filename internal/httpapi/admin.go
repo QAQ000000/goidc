@@ -601,24 +601,6 @@ func (s *Server) adminLogPage(w http.ResponseWriter, r *http.Request) {
 		where = "(a.action ILIKE $1 OR a.entity_type ILIKE $1 OR a.entity_id::text ILIKE $1 OR u.display_name ILIKE $1)"
 	}
 	table := "audit_events a LEFT JOIN users u ON u.id=a.actor_id"
-	var total int
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM "+table+" WHERE "+where, args...).Scan(&total); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT a.id,a.created_at,a.action,a.entity_type,a.entity_id,a.actor_id,u.display_name AS actor_name FROM "+table+" WHERE "+where+" ORDER BY a.id DESC LIMIT $"+strconv.Itoa(len(args)-1)+" OFFSET $"+strconv.Itoa(len(args)), args...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM "+table+" WHERE "+where,
+		"SELECT a.id,a.created_at,a.action,a.entity_type,a.entity_id,a.actor_id,u.display_name AS actor_name FROM "+table+" WHERE "+where+" ORDER BY a.id DESC", args, limit, offset)
 }

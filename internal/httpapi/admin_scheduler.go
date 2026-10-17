@@ -2,10 +2,11 @@ package httpapi
 
 import (
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func schedulerFilter(r *http.Request) (string, []any, bool) {
@@ -57,26 +58,8 @@ func (s *Server) adminJobExecutionLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_scheduler_filter", "日志筛选参数无效")
 		return
 	}
-	var total int
-	if e := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM scheduler_runs WHERE "+where, args...).Scan(&total); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	args = append(args, limit, offset)
-	rows, e := s.db.Pool.Query(r.Context(), "SELECT id,task_key,started_at,finished_at,duration_ms,status,affected_count,error_code FROM scheduler_runs WHERE "+where+fmt.Sprintf(" ORDER BY started_at DESC,id DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	items, e := pgx.CollectRows(rows, pgx.RowToMap)
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	s.writeListPage(w, r, "SELECT count(*) FROM scheduler_runs WHERE "+where,
+		"SELECT id,task_key,started_at,finished_at,duration_ms,status,affected_count,error_code FROM scheduler_runs WHERE "+where+" ORDER BY started_at DESC,id DESC", args, limit, offset)
 }
 func (s *Server) adminSchedulerTrend(w http.ResponseWriter, r *http.Request) {
 	where, args, ok := schedulerFilter(r)

@@ -159,98 +159,96 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 }
 
 func (s *Store) finishNOKVMJob(ctx context.Context, job ProvisionJob, result provision.Result, callErr error) error {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var current string
-	if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", job.ServiceID).Scan(&current); err != nil {
-		return err
-	}
-	var status string
-	var attempts int
-	var valid bool
-	if err = tx.QueryRow(ctx, `SELECT status,attempts,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 AND external_started_at IS NOT NULL FOR UPDATE`, job.ID).Scan(&status, &attempts, &valid); err != nil {
-		return err
-	}
-	if status != "running" || attempts != job.Attempts || !valid {
-		return conflict("job_lease_lost", "供应商响应到达时任务租约已失效，请核验实际资源")
-	}
-	if callErr != nil {
-		state, message := "waiting_verification", "供应商请求结果不明，请核验实际资源，禁止直接重试"
-		var failure *provision.Error
-		if errors.As(callErr, &failure) && !failure.Unknown {
-			state = "failed"
-			message = "供应商请求失败：" + failure.Code
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		var current string
+		if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", job.ServiceID).Scan(&current); err != nil {
+			return err
 		}
-		// A read-only action cannot have written upstream state, so a failed read
-		// or a local apply failure has no unknown result to reconcile. Report it
-		// as retryable instead of blocking the service behind manual verification,
-		// which would also block refunds and credential reads.
-		if provision.IsReadOnlyAction(job.Action) {
-			state, message = "failed", "供应商读取失败，请稍后重试"
+		var status string
+		var attempts int
+		var valid bool
+		if err = tx.QueryRow(ctx, `SELECT status,attempts,coalesce(locked_at>clock_timestamp()-interval '5 minutes',false) FROM provision_jobs WHERE id=$1 AND external_started_at IS NOT NULL FOR UPDATE`, job.ID).Scan(&status, &attempts, &valid); err != nil {
+			return err
 		}
-		if (job.Action == "reinstall" || provision.IsStorageAction(job.Action) || provision.IsNATAction(job.Action) || provision.IsCDROMAction(job.Action)) && result.CommandAccepted {
-			message = "供应商已受理快照或备份操作，请核验实际结果，禁止重复提交"
-			if provision.IsNATAction(job.Action) {
-				message = "供应商已受理 NAT 操作，请核验实际结果，禁止重复提交"
+		if status != "running" || attempts != job.Attempts || !valid {
+			return conflict("job_lease_lost", "供应商响应到达时任务租约已失效，请核验实际资源")
+		}
+		if callErr != nil {
+			state, message := "waiting_verification", "供应商请求结果不明，请核验实际资源，禁止直接重试"
+			var failure *provision.Error
+			if errors.As(callErr, &failure) && !failure.Unknown {
+				state = "failed"
+				message = "供应商请求失败：" + failure.Code
 			}
-			if provision.IsCDROMAction(job.Action) {
-				message = "供应商已受理光驱操作，请核验实际挂载状态与启动顺序，禁止重复提交"
+			// A read-only action cannot have written upstream state, so a failed read
+			// or a local apply failure has no unknown result to reconcile. Report it
+			// as retryable instead of blocking the service behind manual verification,
+			// which would also block refunds and credential reads.
+			if provision.IsReadOnlyAction(job.Action) {
+				state, message = "failed", "供应商读取失败，请稍后重试"
 			}
-			if job.Action == "reinstall" {
-				message = "供应商已受理重装，请核验安装完成及新登录密码，禁止重复提交"
+			if (job.Action == "reinstall" || provision.IsStorageAction(job.Action) || provision.IsNATAction(job.Action) || provision.IsCDROMAction(job.Action)) && result.CommandAccepted {
+				message = "供应商已受理快照或备份操作，请核验实际结果，禁止重复提交"
+				if provision.IsNATAction(job.Action) {
+					message = "供应商已受理 NAT 操作，请核验实际结果，禁止重复提交"
+				}
+				if provision.IsCDROMAction(job.Action) {
+					message = "供应商已受理光驱操作，请核验实际挂载状态与启动顺序，禁止重复提交"
+				}
+				if job.Action == "reinstall" {
+					message = "供应商已受理重装，请核验安装完成及新登录密码，禁止重复提交"
+				}
+				raw, _ := json.Marshal(result)
+				if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET result=$2 WHERE id=$1", job.ID, raw); err != nil {
+					return err
+				}
+				if job.Action == "reinstall" || provision.IsStorageRestore(job.Action) {
+					if _, err = tx.Exec(ctx, `UPDATE services SET resource_info=resource_info||jsonb_build_object('power','processing'),version=version+1,updated_at=now() WHERE id=$1`, job.ServiceID); err != nil {
+						return err
+					}
+				}
 			}
-			raw, _ := json.Marshal(result)
-			if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET result=$2 WHERE id=$1", job.ID, raw); err != nil {
+			if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status=$2,last_error=$3,locked_at=NULL,completed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,updated_at=now() WHERE id=$1", job.ID, state, message); err != nil {
 				return err
 			}
-			if job.Action == "reinstall" || provision.IsStorageRestore(job.Action) {
-				if _, err = tx.Exec(ctx, `UPDATE services SET resource_info=resource_info||jsonb_build_object('power','processing'),version=version+1,updated_at=now() WHERE id=$1`, job.ServiceID); err != nil {
+			if job.Action == "create" && state == "failed" {
+				if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", job.ServiceID, message); err != nil {
 					return err
 				}
 			}
+			if err = Audit(ctx, tx, 0, "service.nokvm."+state, "service", job.ServiceID, map[string]any{"job_id": job.ID, "action": job.Action}); err != nil {
+				return err
+			}
+			return nil
 		}
-		if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status=$2,last_error=$3,locked_at=NULL,completed_at=CASE WHEN $2='failed' THEN now() ELSE NULL END,updated_at=now() WHERE id=$1", job.ID, state, message); err != nil {
+		if err = s.applyNOKVMResult(ctx, tx, job, current, result); err != nil {
 			return err
 		}
-		if job.Action == "create" && state == "failed" {
-			if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", job.ServiceID, message); err != nil {
+		if job.Action == "create" {
+			if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, job.ServiceID); err != nil {
 				return err
 			}
 		}
-		if err = Audit(ctx, tx, 0, "service.nokvm."+state, "service", job.ServiceID, map[string]any{"job_id": job.ID, "action": job.Action}); err != nil {
+		if job.Action == "suspend" && current == "active" {
+			if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
+				return err
+			}
+		}
+		raw, _ := json.Marshal(result)
+		if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='succeeded',result=$2,last_error='',locked_at=NULL,completed_at=now(),updated_at=now() WHERE id=$1", job.ID, raw); err != nil {
 			return err
 		}
-		return tx.Commit(ctx)
-	}
-	if err = s.applyNOKVMResult(ctx, tx, job, current, result); err != nil {
-		return err
-	}
-	if job.Action == "create" {
-		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, job.ServiceID); err != nil {
+		if provision.IsPowerAction(job.Action) {
+			if err = enqueuePowerSync(ctx, tx, job); err != nil {
+				return err
+			}
+		}
+		if err = Audit(ctx, tx, 0, "service.nokvm.completed", "service", job.ServiceID, map[string]any{"job_id": job.ID, "action": job.Action}); err != nil {
 			return err
 		}
-	}
-	if job.Action == "suspend" && current == "active" {
-		if err = s.QueueServiceSuspendedNotifications(ctx, tx, job.ServiceID); err != nil {
-			return err
-		}
-	}
-	raw, _ := json.Marshal(result)
-	if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='succeeded',result=$2,last_error='',locked_at=NULL,completed_at=now(),updated_at=now() WHERE id=$1", job.ID, raw); err != nil {
-		return err
-	}
-	if provision.IsPowerAction(job.Action) {
-		if err = enqueuePowerSync(ctx, tx, job); err != nil {
-			return err
-		}
-	}
-	if err = Audit(ctx, tx, 0, "service.nokvm.completed", "service", job.ServiceID, map[string]any{"job_id": job.ID, "action": job.Action}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		return nil
+	})
 }
 
 func enqueuePowerSync(ctx context.Context, tx pgx.Tx, job ProvisionJob) error {

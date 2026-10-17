@@ -83,47 +83,45 @@ func (s *Store) SyncSupplierHost(ctx context.Context, in SupplierHostSyncInput) 
 			return conflict("supplier_callback_invalid", "供应商回调字段无效")
 		}
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var mode, existing, current, snapshotSupplier string
-	var supplierID, upstreamProductID int64
-	if err = tx.QueryRow(ctx, `SELECT s.provision_mode,s.upstream_id,s.status,coalesce(s.delivery_snapshot->>'supplier_id',''),
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		var mode, existing, current, snapshotSupplier string
+		var supplierID, upstreamProductID int64
+		if err = tx.QueryRow(ctx, `SELECT s.provision_mode,s.upstream_id,s.status,coalesce(s.delivery_snapshot->>'supplier_id',''),
  b.supplier_id,b.upstream_product_id
  FROM services s JOIN supplier_product_bindings b ON b.product_id=s.product_id
  WHERE s.id=$1 FOR UPDATE`, serviceID).Scan(&mode, &existing, &current, &snapshotSupplier, &supplierID, &upstreamProductID); err != nil {
-		return err
-	}
-	if mode != "supplier" || snapshotSupplier != strconv.FormatInt(supplierID, 10) {
-		return conflict("supplier_callback_invalid", "服务供应商绑定无效")
-	}
-	if existing != "" && existing != strconv.FormatInt(hostID, 10) {
-		return conflict("supplier_resource_mismatch", "供应商资源与本地服务不匹配")
-	}
-	status := strings.TrimSpace(in.DomainStatus)
-	if status == "" {
-		status = current
-	}
-	remote := supplier.Service{UpstreamID: hostID, ProductID: upstreamProductID, Status: status, Domain: strings.TrimSpace(in.Domain), Username: strings.TrimSpace(in.Username), Password: html.UnescapeString(in.Password), DedicatedIP: strings.TrimSpace(in.DedicatedIP), AssignedIPs: strings.TrimSpace(in.AssignedIPs), Port: port, OS: strings.TrimSpace(in.OS), OSURL: strings.TrimSpace(in.OSURL), SuspendReason: strings.TrimSpace(in.SuspendReason), SuspendReasonType: strings.TrimSpace(in.SuspendReasonType), NextDueDate: strings.TrimSpace(in.NextDueDate)}
-	if err = applySupplierRemoteSafely(ctx, tx, ProvisionJob{ServiceID: serviceID, Action: "sync"}, remote, s.ProvisionEncryptionKey); err != nil {
-		return err
-	}
-	if current == "provisioning" && (status == "active" || status == "Active") {
-		if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, serviceID); err != nil {
 			return err
 		}
-	}
-	if current == "active" && (status == "suspended" || status == "Suspended") {
-		if err = s.QueueServiceSuspendedNotifications(ctx, tx, serviceID); err != nil {
+		if mode != "supplier" || snapshotSupplier != strconv.FormatInt(supplierID, 10) {
+			return conflict("supplier_callback_invalid", "服务供应商绑定无效")
+		}
+		if existing != "" && existing != strconv.FormatInt(hostID, 10) {
+			return conflict("supplier_resource_mismatch", "供应商资源与本地服务不匹配")
+		}
+		status := strings.TrimSpace(in.DomainStatus)
+		if status == "" {
+			status = current
+		}
+		remote := supplier.Service{UpstreamID: hostID, ProductID: upstreamProductID, Status: status, Domain: strings.TrimSpace(in.Domain), Username: strings.TrimSpace(in.Username), Password: html.UnescapeString(in.Password), DedicatedIP: strings.TrimSpace(in.DedicatedIP), AssignedIPs: strings.TrimSpace(in.AssignedIPs), Port: port, OS: strings.TrimSpace(in.OS), OSURL: strings.TrimSpace(in.OSURL), SuspendReason: strings.TrimSpace(in.SuspendReason), SuspendReasonType: strings.TrimSpace(in.SuspendReasonType), NextDueDate: strings.TrimSpace(in.NextDueDate)}
+		if err = applySupplierRemoteSafely(ctx, tx, ProvisionJob{ServiceID: serviceID, Action: "sync"}, remote, s.ProvisionEncryptionKey); err != nil {
 			return err
 		}
-	}
-	if err = Audit(ctx, tx, 0, "supplier.callback.synced", "service", serviceID, map[string]any{"upstream_id": hostID, "status": status, "type": strings.TrimSpace(in.Type)}); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+		if current == "provisioning" && (status == "active" || status == "Active") {
+			if err = s.QueueServiceProvisionSuccessNotifications(ctx, tx, serviceID); err != nil {
+				return err
+			}
+		}
+		if current == "active" && (status == "suspended" || status == "Suspended") {
+			if err = s.QueueServiceSuspendedNotifications(ctx, tx, serviceID); err != nil {
+				return err
+			}
+		}
+		if err = Audit(ctx, tx, 0, "supplier.callback.synced", "service", serviceID, map[string]any{"upstream_id": hostID, "status": status, "type": strings.TrimSpace(in.Type)}); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func readSupplierCredentials(ctx context.Context, tx pgx.Tx, serviceID int64, key []byte) (provision.Credentials, error) {

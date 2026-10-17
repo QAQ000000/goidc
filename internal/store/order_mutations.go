@@ -44,22 +44,20 @@ func (s *Store) BindOrderBatch(ctx context.Context, actor int64, action, key str
 	}
 	digest := sha256.Sum256(body)
 	hash := hex.EncodeToString(digest[:])
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if err = requireAdminOrdersManager(ctx, tx, actor); err != nil {
-		return err
-	}
-	if replayed, err := ReplayOperation(ctx, tx, actor, "order-batch:"+action, key, hash, nil); err != nil {
-		return err
-	} else if !replayed {
-		if err = SaveOperation(ctx, tx, actor, "order-batch:"+action, key, hash, map[string]any{}); err != nil {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		if err = requireAdminOrdersManager(ctx, tx, actor); err != nil {
 			return err
 		}
-	}
-	return tx.Commit(ctx)
+		if replayed, err := ReplayOperation(ctx, tx, actor, "order-batch:"+action, key, hash, nil); err != nil {
+			return err
+		} else if !replayed {
+			if err = SaveOperation(ctx, tx, actor, "order-batch:"+action, key, hash, map[string]any{}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 func checkOrderVersion(version int64, expected []int64) error {
 	if len(expected) != 1 || expected[0] < 1 {

@@ -254,67 +254,65 @@ func (s *Store) ReviewAffiliateWithdrawal(ctx context.Context, actor, id int64, 
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-withdrawal-review", fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return nil, err
-	}
-	account, _, status, version, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.withdrawals.review")
-	if err != nil {
-		return nil, err
-	}
-	if result, replay, e := affiliateOperation(ctx, tx, actor, "withdrawal.review", key, hash); e != nil {
-		return nil, e
-	} else if replay {
-		return result, tx.Commit(ctx)
-	}
-	if version != in.ExpectedVersion {
-		return nil, conflict("version_conflict", "提现申请已更新")
-	}
-	if status != "submitted" && status != "reviewing" && status != "failed" && !(status == "approved" && in.Decision == "rejected") {
-		return nil, conflict("withdrawal_state_conflict", "提现申请当前状态不可审核")
-	}
-	next := in.Decision
-	if status == "approved" && next == "rejected" {
-		next = "cancelled"
-	}
-	if next == "request_info" {
-		next = "reviewing"
-	}
-	if next == "approved" {
-		var reversed bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM affiliate_withdrawal_allocations a JOIN affiliate_commission_entries e ON e.id=a.entry_id WHERE a.withdrawal_id=$1 AND a.status='reserved' AND e.reversal_at IS NOT NULL)`, id).Scan(&reversed); err != nil {
+	return withTx(ctx, s, func(tx pgx.Tx) (map[string]any, error) {
+		var err error
+		if err = lockOperationKey(ctx, tx, "affiliate-withdrawal-review", fmt.Sprintf("%d:%s", actor, key)); err != nil {
 			return nil, err
 		}
-		if reversed {
-			return nil, conflict("withdrawal_state_conflict", "预留佣金已退款，请驳回提现")
-		}
-	}
-	if next == "rejected" || next == "cancelled" {
-		if err = releaseAffiliateWithdrawal(ctx, tx, actor, account, id); err != nil {
+		account, _, status, version, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.withdrawals.review")
+		if err != nil {
 			return nil, err
 		}
-	}
-	if _, err = tx.Exec(ctx, "INSERT INTO affiliate_withdrawal_reviews(withdrawal_id,reviewer_id,decision,note) VALUES($1,$2,$3,$4)", id, actor, in.Decision, in.Note); err != nil {
-		return nil, err
-	}
-	if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawals SET status=$2,version=version+1,reviewed_at=now(),updated_at=now() WHERE id=$1", id, next); err != nil {
-		return nil, err
-	}
-	result := map[string]any{"id": id, "status": next, "version": version + 1}
-	if err = affiliateWithdrawalEvent(ctx, tx, id, actor, in.Decision, status, next, in.Note); err != nil {
-		return nil, err
-	}
-	if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.reviewed", "affiliate_withdrawal", id, map[string]any{"decision": in.Decision, "note": in.Note, "version": version + 1}); err != nil {
-		return nil, err
-	}
-	if err = saveAffiliateOperation(ctx, tx, actor, "withdrawal.review", key, hash, result); err != nil {
-		return nil, err
-	}
-	return result, tx.Commit(ctx)
+		if result, replay, e := affiliateOperation(ctx, tx, actor, "withdrawal.review", key, hash); e != nil {
+			return nil, e
+		} else if replay {
+			return result, nil
+		}
+		if version != in.ExpectedVersion {
+			return nil, conflict("version_conflict", "提现申请已更新")
+		}
+		if status != "submitted" && status != "reviewing" && status != "failed" && !(status == "approved" && in.Decision == "rejected") {
+			return nil, conflict("withdrawal_state_conflict", "提现申请当前状态不可审核")
+		}
+		next := in.Decision
+		if status == "approved" && next == "rejected" {
+			next = "cancelled"
+		}
+		if next == "request_info" {
+			next = "reviewing"
+		}
+		if next == "approved" {
+			var reversed bool
+			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM affiliate_withdrawal_allocations a JOIN affiliate_commission_entries e ON e.id=a.entry_id WHERE a.withdrawal_id=$1 AND a.status='reserved' AND e.reversal_at IS NOT NULL)`, id).Scan(&reversed); err != nil {
+				return nil, err
+			}
+			if reversed {
+				return nil, conflict("withdrawal_state_conflict", "预留佣金已退款，请驳回提现")
+			}
+		}
+		if next == "rejected" || next == "cancelled" {
+			if err = releaseAffiliateWithdrawal(ctx, tx, actor, account, id); err != nil {
+				return nil, err
+			}
+		}
+		if _, err = tx.Exec(ctx, "INSERT INTO affiliate_withdrawal_reviews(withdrawal_id,reviewer_id,decision,note) VALUES($1,$2,$3,$4)", id, actor, in.Decision, in.Note); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawals SET status=$2,version=version+1,reviewed_at=now(),updated_at=now() WHERE id=$1", id, next); err != nil {
+			return nil, err
+		}
+		result := map[string]any{"id": id, "status": next, "version": version + 1}
+		if err = affiliateWithdrawalEvent(ctx, tx, id, actor, in.Decision, status, next, in.Note); err != nil {
+			return nil, err
+		}
+		if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.reviewed", "affiliate_withdrawal", id, map[string]any{"decision": in.Decision, "note": in.Note, "version": version + 1}); err != nil {
+			return nil, err
+		}
+		if err = saveAffiliateOperation(ctx, tx, actor, "withdrawal.review", key, hash, result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
 func releaseAffiliateWithdrawal(ctx context.Context, tx pgx.Tx, actor, account, id int64) error {
@@ -385,111 +383,109 @@ func (s *Store) RegisterAffiliatePayout(ctx context.Context, actor, id int64, ke
 	if err != nil {
 		return nil, err
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-withdrawal-payout", fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return nil, err
-	}
-	account, _, status, version, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.payout")
-	if err != nil {
-		return nil, err
-	}
-	if result, replay, e := affiliateOperation(ctx, tx, actor, "withdrawal.payout", key, hash); e != nil {
-		return nil, e
-	} else if replay {
-		return result, tx.Commit(ctx)
-	}
-	if status == "paid" {
-		return nil, conflict("payout_duplicate", "提现已登记打款")
-	}
-	if status != "approved" || version != in.ExpectedVersion {
-		return nil, conflict("withdrawal_state_conflict", "提现未批准或版本已更新")
-	}
-	var method string
-	var amount int64
-	if err = tx.QueryRow(ctx, "SELECT payout_method,amount_cents FROM affiliate_withdrawals WHERE id=$1", id).Scan(&method, &amount); err != nil {
-		return nil, err
-	}
-	if err = lockOperationKey(ctx, tx, "affiliate-payout-ref", method+":"+in.ExternalRef); err != nil {
-		return nil, err
-	}
-	var duplicate bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM affiliate_payouts WHERE method=$1 AND external_ref=$2)", method, in.ExternalRef).Scan(&duplicate); err != nil {
-		return nil, err
-	}
-	if duplicate {
-		return nil, conflict("payout_duplicate", "打款流水已被登记")
-	}
-	rows, err := tx.Query(ctx, `SELECT e.id,a.amount_cents,e.status,e.reversal_at IS NOT NULL FROM affiliate_withdrawal_allocations a JOIN affiliate_commission_entries e ON e.id=a.entry_id WHERE a.withdrawal_id=$1 AND a.status='reserved' ORDER BY e.id FOR UPDATE OF e,a`, id)
-	if err != nil {
-		return nil, err
-	}
-	type item struct {
-		id, amount int64
-		before     string
-		reversed   bool
-	}
-	var items []item
-	left := amount
-	for rows.Next() {
-		var i item
-		if err = rows.Scan(&i.id, &i.amount, &i.before, &i.reversed); err != nil {
-			rows.Close()
+	return withTx(ctx, s, func(tx pgx.Tx) (map[string]any, error) {
+		var err error
+		if err = lockOperationKey(ctx, tx, "affiliate-withdrawal-payout", fmt.Sprintf("%d:%s", actor, key)); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
-		left -= i.amount
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, err
-	}
-	if left != 0 {
-		return nil, conflict("withdrawal_balance_conflict", "预留资金与提现额不一致")
-	}
-	for _, i := range items {
-		if i.reversed {
-			return nil, conflict("withdrawal_state_conflict", "佣金已退款，禁止打款")
-		}
-	}
-	channel, _ := json.Marshal(map[string]any{"channel": in.Channel, "note": in.Note, "registration": "offline"})
-	var payoutID int64
-	if err = tx.QueryRow(ctx, `INSERT INTO affiliate_payouts(withdrawal_id,method,external_ref,channel_snapshot,paid_at,proof_hash,actor_id) VALUES($1,$2,$3,$4,now(),$5,$6) RETURNING id`, id, method, in.ExternalRef, channel, in.ProofHash, actor).Scan(&payoutID); err != nil {
-		return nil, err
-	}
-	// Offline registration records approved -> paying -> paid atomically.
-	if err = affiliateWithdrawalEvent(ctx, tx, id, actor, "paying", status, "paying", in.Note); err != nil {
-		return nil, err
-	}
-	for _, i := range items {
-		if _, err = tx.Exec(ctx, "UPDATE affiliate_commission_entries SET reserved_cents=reserved_cents-$2,paid_cents=paid_cents+$2 WHERE id=$1", i.id, i.amount); err != nil {
+		account, _, status, version, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.payout")
+		if err != nil {
 			return nil, err
 		}
-		if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawal_allocations SET status='paid' WHERE withdrawal_id=$1 AND entry_id=$2", id, i.id); err != nil {
+		if result, replay, e := affiliateOperation(ctx, tx, actor, "withdrawal.payout", key, hash); e != nil {
+			return nil, e
+		} else if replay {
+			return result, nil
+		}
+		if status == "paid" {
+			return nil, conflict("payout_duplicate", "提现已登记打款")
+		}
+		if status != "approved" || version != in.ExpectedVersion {
+			return nil, conflict("withdrawal_state_conflict", "提现未批准或版本已更新")
+		}
+		var method string
+		var amount int64
+		if err = tx.QueryRow(ctx, "SELECT payout_method,amount_cents FROM affiliate_withdrawals WHERE id=$1", id).Scan(&method, &amount); err != nil {
 			return nil, err
 		}
-		if err = affiliateEvent(ctx, tx, i.id, actor, id, 0, "paid", -i.amount, i.before, "offline payout registered", fmt.Sprintf("affiliate:payout:%d:%d", id, i.id)); err != nil {
+		if err = lockOperationKey(ctx, tx, "affiliate-payout-ref", method+":"+in.ExternalRef); err != nil {
 			return nil, err
 		}
-	}
-	if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawals SET status='paid',paid_at=now(),version=version+1,updated_at=now() WHERE id=$1", id); err != nil {
-		return nil, err
-	}
-	result := map[string]any{"id": id, "payout_id": payoutID, "status": "paid", "version": version + 1}
-	if err = affiliateWithdrawalEvent(ctx, tx, id, actor, "paid", "paying", "paid", in.Note); err != nil {
-		return nil, err
-	}
-	if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.paid", "affiliate_withdrawal", id, map[string]any{"payout_id": payoutID, "external_ref": in.ExternalRef, "proof_hash": in.ProofHash, "amount_cents": amount}); err != nil {
-		return nil, err
-	}
-	if err = saveAffiliateOperation(ctx, tx, actor, "withdrawal.payout", key, hash, result); err != nil {
-		return nil, err
-	}
-	return result, tx.Commit(ctx)
+		var duplicate bool
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM affiliate_payouts WHERE method=$1 AND external_ref=$2)", method, in.ExternalRef).Scan(&duplicate); err != nil {
+			return nil, err
+		}
+		if duplicate {
+			return nil, conflict("payout_duplicate", "打款流水已被登记")
+		}
+		rows, err := tx.Query(ctx, `SELECT e.id,a.amount_cents,e.status,e.reversal_at IS NOT NULL FROM affiliate_withdrawal_allocations a JOIN affiliate_commission_entries e ON e.id=a.entry_id WHERE a.withdrawal_id=$1 AND a.status='reserved' ORDER BY e.id FOR UPDATE OF e,a`, id)
+		if err != nil {
+			return nil, err
+		}
+		type item struct {
+			id, amount int64
+			before     string
+			reversed   bool
+		}
+		var items []item
+		left := amount
+		for rows.Next() {
+			var i item
+			if err = rows.Scan(&i.id, &i.amount, &i.before, &i.reversed); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			items = append(items, i)
+			left -= i.amount
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		if left != 0 {
+			return nil, conflict("withdrawal_balance_conflict", "预留资金与提现额不一致")
+		}
+		for _, i := range items {
+			if i.reversed {
+				return nil, conflict("withdrawal_state_conflict", "佣金已退款，禁止打款")
+			}
+		}
+		channel, _ := json.Marshal(map[string]any{"channel": in.Channel, "note": in.Note, "registration": "offline"})
+		var payoutID int64
+		if err = tx.QueryRow(ctx, `INSERT INTO affiliate_payouts(withdrawal_id,method,external_ref,channel_snapshot,paid_at,proof_hash,actor_id) VALUES($1,$2,$3,$4,now(),$5,$6) RETURNING id`, id, method, in.ExternalRef, channel, in.ProofHash, actor).Scan(&payoutID); err != nil {
+			return nil, err
+		}
+		// Offline registration records approved -> paying -> paid atomically.
+		if err = affiliateWithdrawalEvent(ctx, tx, id, actor, "paying", status, "paying", in.Note); err != nil {
+			return nil, err
+		}
+		for _, i := range items {
+			if _, err = tx.Exec(ctx, "UPDATE affiliate_commission_entries SET reserved_cents=reserved_cents-$2,paid_cents=paid_cents+$2 WHERE id=$1", i.id, i.amount); err != nil {
+				return nil, err
+			}
+			if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawal_allocations SET status='paid' WHERE withdrawal_id=$1 AND entry_id=$2", id, i.id); err != nil {
+				return nil, err
+			}
+			if err = affiliateEvent(ctx, tx, i.id, actor, id, 0, "paid", -i.amount, i.before, "offline payout registered", fmt.Sprintf("affiliate:payout:%d:%d", id, i.id)); err != nil {
+				return nil, err
+			}
+		}
+		if _, err = tx.Exec(ctx, "UPDATE affiliate_withdrawals SET status='paid',paid_at=now(),version=version+1,updated_at=now() WHERE id=$1", id); err != nil {
+			return nil, err
+		}
+		result := map[string]any{"id": id, "payout_id": payoutID, "status": "paid", "version": version + 1}
+		if err = affiliateWithdrawalEvent(ctx, tx, id, actor, "paid", "paying", "paid", in.Note); err != nil {
+			return nil, err
+		}
+		if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.paid", "affiliate_withdrawal", id, map[string]any{"payout_id": payoutID, "external_ref": in.ExternalRef, "proof_hash": in.ProofHash, "amount_cents": amount}); err != nil {
+			return nil, err
+		}
+		if err = saveAffiliateOperation(ctx, tx, actor, "withdrawal.payout", key, hash, result); err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
 
 const affiliateWithdrawalProjection = `w.id,w.withdrawal_no,w.account_id,w.amount_cents,w.fee_cents,w.payout_cents,w.status,w.payout_method,w.payout_target_masked,w.payout_target_snapshot,w.version,w.submitted_at,w.reviewed_at,w.paid_at,w.created_at`
@@ -563,33 +559,31 @@ func (s *Store) AffiliatePayoutTarget(ctx context.Context, actor, id int64, reas
 	if reason == "" || utf8.RuneCountInString(reason) > 1000 {
 		return nil, conflict("invalid_payout_reason", "读取收款账户需填写用途")
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	account, _, status, _, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.payout")
-	if err != nil {
-		return nil, err
-	}
-	if status != "approved" {
-		return nil, conflict("withdrawal_state_conflict", "仅可读取已批准申请的收款账户")
-	}
-	var raw []byte
-	var aad string
-	if err = tx.QueryRow(ctx, "SELECT payout_target_ciphertext,payout_target_aad FROM affiliate_withdrawals WHERE id=$1", id).Scan(&raw, &aad); err != nil {
-		return nil, err
-	}
-	clear, err := s.affiliateTargetCrypt(raw, aad, false)
-	if err != nil {
-		return nil, fmt.Errorf("withdrawal target unavailable")
-	}
-	var result map[string]string
-	if err = json.Unmarshal(clear, &result); err != nil {
-		return nil, err
-	}
-	if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.target_read", "affiliate_withdrawal", id, map[string]any{"reason": reason}); err != nil {
-		return nil, err
-	}
-	return result, tx.Commit(ctx)
+	return withTx(ctx, s, func(tx pgx.Tx) (map[string]string, error) {
+		var err error
+		account, _, status, _, err := s.lockWithdrawal(ctx, tx, actor, id, "affiliates.payout")
+		if err != nil {
+			return nil, err
+		}
+		if status != "approved" {
+			return nil, conflict("withdrawal_state_conflict", "仅可读取已批准申请的收款账户")
+		}
+		var raw []byte
+		var aad string
+		if err = tx.QueryRow(ctx, "SELECT payout_target_ciphertext,payout_target_aad FROM affiliate_withdrawals WHERE id=$1", id).Scan(&raw, &aad); err != nil {
+			return nil, err
+		}
+		clear, err := s.affiliateTargetCrypt(raw, aad, false)
+		if err != nil {
+			return nil, fmt.Errorf("withdrawal target unavailable")
+		}
+		var result map[string]string
+		if err = json.Unmarshal(clear, &result); err != nil {
+			return nil, err
+		}
+		if err = affiliateAudit(ctx, tx, account, actor, "affiliate.withdrawal.target_read", "affiliate_withdrawal", id, map[string]any{"reason": reason}); err != nil {
+			return nil, err
+		}
+		return result, nil
+	})
 }
