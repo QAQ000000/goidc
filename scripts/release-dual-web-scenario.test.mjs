@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect, safeErrorFrames } from './release-dual-web-scenario.mjs';
+import { responseEvidence, sessionCookie, selectDrainAsset, rawAttackTargets, rawRequestBytes, parseRawResponse, identicalIdentity, traceConnectsAPI, accessUpstream, noStore, publicRedirect, safeErrorFrames, safeMappingEvidence } from './release-dual-web-scenario.mjs';
 
 const origin = 'http://127.0.0.1:53188';
 
@@ -11,6 +11,13 @@ test('failure frames retain fixed script locations and discard messages, names a
   assert.doesNotMatch(JSON.stringify(frames), /SECRET|Cookie|password|environment|fixture|config/);
   assert.deepEqual(safeErrorFrames({}), []);
   assert.equal(safeErrorFrames({ stack: 'error\n' + '    at /control/release-dual-web-scenario.mjs:1:2\n'.repeat(40) }).length, 12);
+});
+
+test('loaded-map failure evidence keeps only a reviewed class and basename', () => {
+  assert.deepEqual(safeMappingEvidence('/usr/lib64/libc.so.6', 'host'), { class: 'host', basename: 'libc.so.6' });
+  assert.deepEqual(safeMappingEvidence('/releases/old/artifact/runtime/node', 'bundled'), { class: 'bundled', basename: 'node' });
+  assert.deepEqual(safeMappingEvidence('/tmp/secret Cookie\nbody', 'unreviewed'), { class: 'unknown', basename: 'redacted' });
+  assert.doesNotMatch(JSON.stringify(safeMappingEvidence('/tmp/secret Cookie\nbody', 'unreviewed')), /secret|Cookie|body|tmp/);
 });
 
 test('evidence copies only status, timing and body digest, excluding response headers and contents', () => {

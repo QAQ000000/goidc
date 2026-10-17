@@ -28,6 +28,10 @@ export function safeErrorFrames(error) {
     return match && diagnosticScripts.has(match[1]) ? [{ script: match[1], line: Number(match[2]), column: Number(match[3]) }] : [];
   }).slice(0, 12);
 }
+export function safeMappingEvidence(filename, kind = 'unknown') {
+  const basename = path.posix.basename(String(filename));
+  return { class: ['bundled', 'host', 'tooling', 'nginx', 'lua', 'unknown'].includes(kind) ? kind : 'unknown', basename: /^[A-Za-z0-9._+@-]{1,128}$/.test(basename) ? basename : 'redacted' };
+}
 
 export function responseEvidence(response, { phase, route, purpose } = {}) {
   return { phase, route, purpose, method: response.method, status: response.status, generation: response.headers['x-release-generation'] ?? null,
@@ -143,16 +147,27 @@ async function workers(master) {
 }
 async function loadedMaps(pid, { root, manifest, baseline, tooling }) {
   const allowed = new Map();
-  for (const row of [...(tooling.hostLibraries ?? []), ...(tooling.libraries ?? []), ...(tooling.luaFiles ?? [])]) { allowed.set(row.path, row.sha256); if (row.resolved) allowed.set(row.resolved, row.sha256); }
+  const kindByPath = new Map();
+  const allow = async (filename, digest, kind) => {
+    if (typeof filename !== 'string' || !/^[a-f0-9]{64}$/.test(digest ?? '')) return;
+    allowed.set(filename, digest); kindByPath.set(filename, kind);
+    const canonical = await realpath(filename).catch(() => null);
+    if (canonical) { allowed.set(canonical, digest); kindByPath.set(canonical, kind); }
+  };
+  for (const row of [...(tooling.hostLibraries ?? []), ...(tooling.libraries ?? []), ...(tooling.luaFiles ?? [])]) { await allow(row.path, row.sha256, row.path.endsWith('.so') ? 'tooling' : 'lua'); if (row.resolved) await allow(row.resolved, row.sha256, row.path.endsWith('.so') ? 'tooling' : 'lua'); }
+  for (const row of tooling.hostLibraries ?? []) await allow(row.path, row.sha256, 'host');
   allowed.set('/tools/nginx', tooling.nginxSHA256);
-  for (const row of baseline?.dependencies ?? []) if (row.provider === 'host') allowed.set(row.path, row.sha256);
-  if (root) for (const row of manifest.artifacts.filter(row => !row.link)) allowed.set(`${root}/${row.path}`, row.sha256);
+  kindByPath.set('/tools/nginx', 'nginx');
+  if (root) for (const row of manifest.artifacts.filter(row => !row.link)) await allow(`${root}/${row.path}`, row.sha256, 'bundled');
+  for (const row of baseline?.dependencies ?? []) if (row.provider === 'host') await allow(row.path, row.sha256, 'host');
   const mappings = [...new Set((await readFile(`/proc/${pid}/maps`, 'utf8')).split('\n').map(line => line.match(/^\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\/.*)$/)?.[1]).filter(Boolean))], result = [];
   for (const filename of mappings) {
     if (filename === '/dev/zero (deleted)') continue;
     check(!filename.endsWith(' (deleted)'), 'Deleted loaded mapping');
-    const actual = await realpath(filename), expected = allowed.get(filename) ?? allowed.get(actual);
-    check(expected && await fileHash(filename) === expected, 'Unanchored or modified loaded object'); result.push({ path: filename, sha256: expected });
+    const actual = await realpath(filename), expected = allowed.get(filename) ?? allowed.get(actual), kind = kindByPath.get(filename) ?? kindByPath.get(actual) ?? 'unknown';
+    if (!expected) { const error = new Error('Unanchored loaded object'); error.safeEvidence = safeMappingEvidence(filename, kind); throw error; }
+    if (await fileHash(filename) !== expected) { const error = new Error('Modified loaded object'); error.safeEvidence = safeMappingEvidence(filename, kind); throw error; }
+    result.push({ path: filename, sha256: expected });
   }
   check(result.length > 0, 'Actual loaded maps absent'); return { pid, objects: result };
 }
@@ -542,7 +557,8 @@ export async function runInner() {
     await closeBridge().catch(() => {});
     // The outer controller is the sole abort writer after it has stopped the
     // namespace, avoiding command sequence races on asynchronous termination.
-    const failure = { ok: false, phase, reason: interrupted ? 'Scenario interrupted' : 'Controlled acceptance boundary failed', frames, allOwnedExited, listenersGone: false, fixtureCleaned: false, ...evidence };
+    const mapping = error?.safeEvidence && { mapping: error.safeEvidence };
+    const failure = { ok: false, phase, reason: interrupted ? 'Scenario interrupted' : 'Controlled acceptance boundary failed', frames, ...(mapping ?? {}), allOwnedExited, listenersGone: false, fixtureCleaned: false, ...evidence };
     await writeJSON('/mutable/failure.json', failure).catch(() => {}); await writeJSON('/mutable/result.json', failure).catch(() => {});
     throw new Error('Controlled dual Web scenario failed');
   } finally { process.removeListener('SIGTERM', signal); process.removeListener('SIGINT', signal); }
