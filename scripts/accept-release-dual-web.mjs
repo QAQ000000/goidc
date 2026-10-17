@@ -58,6 +58,19 @@ export async function stopDualOwned(handle, { gracefulSeconds = 15, killedSecond
   handle.groupGone = true;
   return { groupGone: true, forced: Boolean(stopFailure) };
 }
+export function ordinaryHostIdentity(status, uid, gid) {
+  const actualUID = status.match(/^Uid:[\t ]+(\d+)[\t ]+(\d+)[\t ]+(\d+)[\t ]+(\d+)[\t ]*$/m);
+  const actualGID = status.match(/^Gid:[\t ]+(\d+)[\t ]+(\d+)[\t ]+(\d+)[\t ]+(\d+)[\t ]*$/m);
+  // procfs emits an empty Groups line after clear-groups. Never let whitespace
+  // consume its newline and turn the following NStgid field into group IDs.
+  const groups = status.match(/^Groups:[\t ]*([^\r\n]*)$/m)?.[1]?.trim();
+  return Boolean(actualUID?.slice(1).every(value => Number(value) === uid) && actualGID?.slice(1).every(value => Number(value) === gid) && groups === '');
+}
+export function safeWrapperStage(value) {
+  const allowed = ['socket-bind', 'socket-readonly', 'ordinary-wrapper-start', 'ordinary-host-identity', 'scenario-wait', 'scenario-exited'];
+  requireThat(value && allowed.includes(value.stage), 'Unknown wrapper diagnostic stage');
+  return { stage: value.stage, ...(value.failed === true ? { failed: true, childExited: typeof value.childExited === 'boolean' ? value.childExited : null, childExitCode: Number.isInteger(value.childExitCode) && value.childExitCode >= 0 && value.childExitCode <= 255 ? value.childExitCode : null, childSpawnFailed: typeof value.childSpawnFailed === 'boolean' ? value.childSpawnFailed : null } : {}) };
+}
 async function namespaceMembers(isolation) {
   const namespace = isolation?.pidNamespace ?? isolation?.namespaces?.pid;
   requireThat(typeof namespace === 'string' && /^pid:\[\d+\]$/.test(namespace) && namespace !== await readlink('/proc/self/ns/pid'), 'Owned private PID namespace proof missing');
@@ -322,7 +335,7 @@ export async function acceptDualWeb(options) {
   await mkdir(runRoot, { mode: 0o755 });
   const control = path.join(runRoot, 'control'), fixture = path.join(runRoot, 'fixture'), mutable = path.join(runRoot, 'mutable'), goTemporary = path.join(runRoot, 'go-tmp'), goCache = path.join(runRoot, 'go-cache'), fixtureRequest = path.join(runRoot, '.fixture-request.json');
   const releases = { old: path.join(runRoot, 'old'), next: path.join(runRoot, 'next') };
-  const started = Date.now(); let fixtureProcess, sandbox, timer, failure, monitoring = false, monitorTask, stopping, fixtureStarted;
+  const started = Date.now(); let fixtureProcess, sandbox, timer, failure, monitoring = false, monitorTask, stopping, fixtureStarted, stage = 'setup';
   const stopSandbox = () => stopping ??= stopDualOwned(sandbox).then(result => { report.sandboxStop = result; if (result.forced) failure ??= new Error('Sandbox required KILL'); return result.groupGone; }).catch(error => { failure ??= error; return false; });
   const interrupt = () => { failure ??= new Error('Dual Web controller interrupted'); if (sandbox) void stopSandbox(); };
   process.once('SIGTERM', interrupt); process.once('SIGINT', interrupt);
@@ -351,6 +364,7 @@ export async function acceptDualWeb(options) {
     await mkdir(control, { mode: 0o755 }); await mkdir(fixture, { mode: 0o700 }); await ownDirectory(mutable, uid, gid); await mkdir(goTemporary, { mode: 0o700 }); await mkdir(goCache, { mode: 0o700 });
     for (const name of ['tmp', 'logs', 'home', 'state', 'cache', 'client_body', 'proxy', 'fastcgi', 'uwsgi', 'scgi', 'empty']) await ownDirectory(path.join(mutable, name), uid, gid);
     for (const label of ['old', 'next']) {
+      stage = `copy-${label}`;
       await copyIndependent(inputs[label], releases[label]);
       requireThat(equal(await runtimeInventory(releases[label]), manifests[label].artifacts), 'Independent dual runtime copy differs');
       await mkdir(path.join(releases[label], manifests[label].web.appRoot, '.next/cache'), { mode: 0o755, recursive: true });
@@ -364,6 +378,7 @@ export async function acceptDualWeb(options) {
       await writeFile(path.join(control, `${phase}.conf`), conf, { mode: 0o444, flag: 'wx' });
     }
     await ensureBudget(); requireThat(!failure, 'Resource boundary failed before fixture launch');
+    stage = 'fixture-start';
     requireThat(Date.now() < started + maximumMilliseconds - cleanupWindowMilliseconds, 'Insufficient fixture cleanup window before launch');
     const goEnv = { ...toolEnv, HOME: '/root' };
     const fixtureEnv = { ...goEnv, TMPDIR: goTemporary, GOTMPDIR: goTemporary, GOCACHE: goCache, GOMODCACHE: pre.goModCache, ZJMFGO_RELEASE_DUAL_WEB_FIXTURE: '1', ZJMFGO_RELEASE_DUAL_WEB_FIXTURE_ALLOW_SCHEMA: '1', ZJMFGO_RELEASE_DUAL_WEB_FIXTURE_DIR: fixture, ZJMFGO_TEST_DATABASE_URL: pre.databaseURL };
@@ -371,6 +386,7 @@ export async function acceptDualWeb(options) {
     fixtureStarted = Date.now();
     fixtureProcess = launch('/usr/bin/unshare', ['--mount', '--propagation', 'private', process.execPath, path.join(control, 'accept-release-dual-web.mjs'), '--fixture-worker', fixtureRequest]);
     const ready = await waitFor(async () => { requireThat(!failure && !fixtureProcess.exited, 'Fixture exited/resource boundary failed before schema-ready'); return jsonFile(path.join(fixture, 'schema-ready.json')).catch(() => null); }, 120, 'dual fixture schema-ready');
+    stage = 'fixture-input-validation';
     requireThat(ready.ok && ready.pgVersion >= 180000 && ready.pgVersion < 190000 && ready.database === pre.database.database && /^release_runtime_[a-f0-9]{24,64}$/.test(ready.schema), 'Dedicated PG18 fixture identity mismatch');
     await chown(fixture, uid, gid);
     for (const name of ['config.json', 'credentials.json']) {
@@ -391,9 +407,11 @@ export async function acceptDualWeb(options) {
     const mountRequest = path.join(control, 'mount-request.json');
     await writeJSON(mountRequest, { parentPID: process.pid, parentMountNamespace: pre.hostBefore.mountNamespace, originalSocket: inputs.pgSocket, stagedSocket, uid, gid, argv, hostIdentityOutput: path.join(mutable, 'host-identity.json') });
     requireThat(!failure, 'Resource boundary failed before namespace launch');
+    stage = 'namespace-start';
     requireThat(Date.now() < Math.min(fixtureStarted + dualFixtureActiveMilliseconds, started + maximumMilliseconds - cleanupWindowMilliseconds), 'Insufficient fixture cleanup window before namespace launch');
     sandbox = launch('/usr/bin/unshare', ['--mount', '--propagation', 'private', path.join(releases.next, manifests.next.runtime.node.path), path.join(control, 'accept-release-dual-web.mjs'), '--mount-worker', mountRequest]);
     await waitDualScenario({ sandbox, fixture: fixtureProcess, fixtureDirectory: fixture, milliseconds: Math.min(fixtureStarted + dualFixtureActiveMilliseconds, started + maximumMilliseconds - cleanupWindowMilliseconds) - Date.now() });
+    stage = 'scenario-result';
     requireThat(!failure && !sandbox.failed && sandbox.code === 0, 'Dual Web namespace failed/resource boundary crossed');
     report.runtime = await jsonFile(path.join(mutable, 'result.json'));
     requireThat(report.runtime.ok && report.runtime.allOwnedExited && report.runtime.listenersGone && report.runtime.fixtureCleaned, 'Inner dual Web execution/exit/fixture proof incomplete');
@@ -406,7 +424,7 @@ export async function acceptDualWeb(options) {
     report.audit = await auditDualTraceFiles(path.join(mutable, 'logs'), manifests);
     report.mutable = await mutableAudit(mutable);
     await ensureBudget(); report.status = 'PASS';
-  } catch (error) { failure ??= error; }
+  } catch (error) { failure ??= error; report.failureStage = stage; }
   finally {
     clearInterval(timer);
     await monitorTask?.catch(error => { failure ??= error; });
@@ -453,6 +471,11 @@ export async function acceptDualWeb(options) {
     } catch (error) { failure ??= error; }
     report.runtime ??= await jsonFile(path.join(mutable, 'result.json')).catch(() => null);
     report.hostOrdinaryIdentity ??= await jsonFile(path.join(mutable, 'host-identity.json')).catch(() => null);
+    report.wrapperStages = [];
+    for (const filename of (await readdir(mutable).catch(() => [])).filter(name => /^wrapper-stage-\d{2}\.json$/.test(name)).sort().slice(0, 16)) {
+      try { report.wrapperStages.push(safeWrapperStage(await jsonFile(path.join(mutable, filename)))); }
+      catch (error) { failure ??= error; report.wrapperStages.push({ diagnosticInvalid: true }); }
+    }
     // Config/credentials and run copies are always discarded; retain only bounded sanitized evidence.
     for (const name of ['config.json', 'credentials.json', 'config.json.tmp', 'credentials.json.tmp']) await rm(path.join(fixture, name), { force: true }).catch(error => { failure ??= error; });
     for (const directory of [releases.old, releases.next, control, goTemporary, goCache, fixtureRequest]) await rm(directory, { force: true, recursive: true }).catch(error => { failure ??= error; });
@@ -467,20 +490,29 @@ export async function dualMountWorker(filename) {
   const request = await jsonFile(filename);
   requireThat(process.ppid === request.parentPID && await readlink('/proc/self/ns/mnt') !== request.parentMountNamespace && await readlink(`/proc/${process.ppid}/ns/mnt`) === request.parentMountNamespace, 'Refusing PG socket staging outside owned private mount namespace');
   requireThat(Number.isSafeInteger(request.uid) && request.uid > 0 && Number.isSafeInteger(request.gid) && request.gid > 0 && request.argv[request.argv.indexOf('--uid') + 1] === String(request.uid) && request.argv[request.argv.indexOf('--gid') + 1] === String(request.gid), 'Ordinary outer/inner identity binding mismatch');
-  let child, mounted = false;
+  let child, mounted = false, sequence = 0, currentStage = 'namespace-validated';
+  const recordStage = async stage => { currentStage = stage; await writeJSON(path.join(path.dirname(request.hostIdentityOutput), `wrapper-stage-${String(++sequence).padStart(2, '0')}.json`), { stage }); };
   try {
+    await recordStage('socket-bind');
     command('/usr/bin/mount', ['--bind', request.originalSocket, request.stagedSocket]); mounted = true;
+    await recordStage('socket-readonly');
     command('/usr/bin/mount', ['-o', 'remount,bind,ro', request.stagedSocket]);
+    await recordStage('ordinary-wrapper-start');
     child = launch('/usr/bin/setpriv', ['--reuid', String(request.uid), '--regid', String(request.gid), '--clear-groups', '--pdeathsig', 'KILL', '--', '/usr/bin/bwrap', ...request.argv], { detached: false });
+    await recordStage('ordinary-host-identity');
     const identity = await waitFor(async () => {
       requireThat(!child.exited, 'Ordinary namespace wrapper exited before host identity proof');
       const status = await readFile(`/proc/${child.child.pid}/status`, 'utf8').catch(() => '');
-      const uid = status.match(/^Uid:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/m), gid = status.match(/^Gid:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/m), groups = status.match(/^Groups:\s*([^\n]*)/m)?.[1]?.trim();
-      if (!uid?.slice(1).every(value => Number(value) === request.uid) || !gid?.slice(1).every(value => Number(value) === request.gid) || groups !== '') return null;
+      if (!ordinaryHostIdentity(status, request.uid, request.gid)) return null;
       return { pid: child.child.pid, uid: request.uid, gid: request.gid, groupsCleared: true, evidence: 'all four host /proc Uid/Gid values after setpriv; no supplementary groups', mountNamespace: await readlink('/proc/self/ns/mnt') };
     }, 5, 'Host ordinary identity observation');
     await writeJSON(request.hostIdentityOutput, identity);
+    await recordStage('scenario-wait');
     await child.done; requireThat(!child.failed && child.code === 0, 'Private dual Web scenario failed');
+    await recordStage('scenario-exited');
+  } catch (error) {
+    await writeJSON(path.join(path.dirname(request.hostIdentityOutput), `wrapper-stage-${String(++sequence).padStart(2, '0')}.json`), { stage: currentStage, failed: true, childExited: child?.exited ?? null, childExitCode: child?.code ?? null, childSpawnFailed: child?.failed ?? null }).catch(() => {});
+    throw error;
   } finally {
     // Child shares this owned process group; the outer stop covers the entire tree.
     if (child && !child.exited) { try { child.child.kill('SIGTERM'); } catch {} await deadline(child.done, 15000, 'Namespace wrapper stop deadline'); }

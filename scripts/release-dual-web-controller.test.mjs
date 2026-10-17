@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { auditDualTraceFiles, dualControllerFiles, dualNamespaceArgs, parseDualWebOptions, pgStorageSettings, stopDualOwned, validateDualRunRoot, waitDualScenario } from './accept-release-dual-web.mjs';
+import { auditDualTraceFiles, dualControllerFiles, dualNamespaceArgs, ordinaryHostIdentity, parseDualWebOptions, pgStorageSettings, safeWrapperStage, stopDualOwned, validateDualRunRoot, waitDualScenario } from './accept-release-dual-web.mjs';
 
 const named = { old: '/tmp/input-old', next: '/tmp/input-next', 'old-source': '/tmp/source', 'next-source': '/tmp/source', 'old-manifest-sha256': 'a'.repeat(64), 'next-manifest-sha256': 'b'.repeat(64), 'runner-commit': 'c'.repeat(40), 'run-root': '/tmp/zjmfgo-dual-web-case', 'pg-socket': '/tmp/pg/.s.PGSQL.55439', budget: '/tmp/budget.json', 'budget-sha256': 'd'.repeat(64) };
 const argv = () => Object.entries(named).flatMap(([key, value]) => [`--${key}`, value]);
@@ -134,4 +134,23 @@ test('PostgreSQL storage evidence fails closed for wrong identity and unbudgeted
   assert.equal(pgStorageSettings(JSON.stringify({ ...settings, loggingCollector: 'on' }), expected).loggingCollector, 'on');
   for (const altered of [{ port: 55440 }, { database: 'business' }, { address: '203.0.113.1' }, { version: 170000 }, { dataDirectory: 'relative' }, { logDestination: 'syslog' }, { loggingCollector: 'unknown' }, { defaultTablespace: 'outside' }, { tempTablespaces: 'outside' }, { customTablespaces: 1 }]) assert.throws(() => pgStorageSettings(JSON.stringify({ ...settings, ...altered }), expected));
   assert.throws(() => pgStorageSettings('malformed', expected));
+});
+
+
+test('ordinary procfs identity accepts empty Groups without consuming the next status field', () => {
+  const status = 'Name:\tbwrap\nUid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\nGroups:\t \nNStgid:\t12345\nNSpid:\t12345\n';
+  assert.equal(ordinaryHostIdentity(status, 1000, 1000), true);
+  assert.equal(ordinaryHostIdentity(status.replace('Groups:\t ', 'Groups:'), 1000, 1000), true);
+  assert.equal(ordinaryHostIdentity(status.replace('Groups:\t ', 'Groups:\t1000 1001'), 1000, 1000), false);
+  assert.equal(ordinaryHostIdentity(status.replace('Groups:\t \n', ''), 1000, 1000), false);
+  assert.equal(ordinaryHostIdentity(status.replace('Uid:\t1000\t1000\t1000\t1000', 'Uid:\t0\t1000\t1000\t1000'), 1000, 1000), false);
+  assert.equal(ordinaryHostIdentity(status.replace('Gid:\t1000\t1000\t1000\t1000', 'Gid:\t1000\t1000\t0\t1000'), 1000, 1000), false);
+});
+
+
+test('wrapper diagnostics retain only fixed safe stage and primitive exit metadata', () => {
+  assert.deepEqual(safeWrapperStage({ stage: 'scenario-wait', secret: 'do-not-retain' }), { stage: 'scenario-wait' });
+  assert.deepEqual(safeWrapperStage({ stage: 'ordinary-host-identity', failed: true, childExited: true, childExitCode: 1, childSpawnFailed: false, error: 'sensitive-value' }), { stage: 'ordinary-host-identity', failed: true, childExited: true, childExitCode: 1, childSpawnFailed: false });
+  assert.deepEqual(safeWrapperStage({ stage: 'socket-bind', failed: true, childExited: 'secret', childExitCode: 'secret', childSpawnFailed: { value: 'secret' } }), { stage: 'socket-bind', failed: true, childExited: null, childExitCode: null, childSpawnFailed: null });
+  assert.throws(() => safeWrapperStage({ stage: 'sensitive-value' }));
 });
