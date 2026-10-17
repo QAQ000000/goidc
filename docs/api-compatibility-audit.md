@@ -27,12 +27,12 @@
 
 ## 结果
 
-生成时间和完整逐项证据见 `docs/generated/route-coverage.json`。当前基线如下：
+生成时间和完整逐项证据见 `output/audit/route-coverage.json`（运行 `node scripts/route-coverage.mjs` 生成，不跟踪）；封存基线见 [历史审计](archive/README.md)。下表为封存基线：
 
 | 项目 | 数量 |
 | --- | ---: |
 | 旧 Route 调用声明 | 1,352 |
-| Go 路由注册 | 348 |
+| Go 路由注册（封存基线） | 348 |
 | 已审查 | 1,352 |
 | 未审查 | 0 |
 | `matched` | 0 |

@@ -12,3 +12,6 @@ output/
 /docs/evidence/
 /docs/generated/*.json
 !/docs/generated/legacy-inventory.json
+
+# mimosa scanner state
+.mimosa/
