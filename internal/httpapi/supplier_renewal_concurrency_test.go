@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -198,23 +197,37 @@ func TestSupplierRenewalQuotationRechecksConcurrentChanges(t *testing.T) {
 				}
 				return
 			}
-			if change == "auto_renew_disabled" {
-				if !errors.Is(first.err, pgx.ErrNoRows) {
-					t.Fatal("disabled automatic renewal accepted", first.err)
-				}
-			} else {
-				want := "supplier_renewal_quote_changed"
-				if change == "account_disabled" {
-					want = "supplier_disabled"
-				}
-				var c *store.Conflict
-				if !errors.As(first.err, &c) || c.Code != want {
-					t.Fatalf("expected %s, got %v", want, first.err)
-				}
+			want := "supplier_renewal_quote_changed"
+			switch change {
+			case "auto_renew_disabled":
+				// The generation/switch guard now rejects this before the older
+				// missing-row admission check; require its precise race contract.
+				want = "auto_renewal_race"
+			case "account_disabled":
+				want = "supplier_disabled"
 			}
-			var invoices int
-			if err = f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM invoice_items WHERE service_id=$1 AND item_type='renew'", sid).Scan(&invoices); err != nil || invoices != 0 {
-				t.Fatal("rejected quotation persisted a renewal", invoices, err)
+			var c *store.Conflict
+			if !errors.As(first.err, &c) || c.Code != want {
+				t.Fatalf("expected %s, got %v", want, first.err)
+			}
+			if first.invoice.InvoiceID != 0 {
+				t.Fatal("rejected quotation returned an invoice", first.invoice.InvoiceID)
+			}
+			var invoices, receipts, audits int
+			if err = f.db.Pool.QueryRow(t.Context(), `SELECT
+ (SELECT count(*) FROM invoice_items WHERE service_id=$1 AND item_type='renew'),
+ (SELECT count(*) FROM invoices WHERE user_id=$2 AND idempotency_key='concurrent-quote'),
+ (SELECT count(*) FROM audit_events WHERE action='service.renewal.created' AND entity_id=$1::bigint::text)`, sid, f.uid).Scan(&invoices, &receipts, &audits); err != nil {
+				t.Fatal(err)
+			}
+			if invoices != 0 || receipts != 0 || audits != 0 {
+				t.Fatalf("rejected quotation persisted items=%d invoices=%d audits=%d", invoices, receipts, audits)
+			}
+			if change == "auto_renew_disabled" {
+				var enabled bool
+				if err = f.db.Pool.QueryRow(t.Context(), "SELECT auto_renew FROM services WHERE id=$1", sid).Scan(&enabled); err != nil || enabled {
+					t.Fatal("rejected quotation restored automatic renewal", enabled, err)
+				}
 			}
 		})
 	}
