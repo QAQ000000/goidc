@@ -58,7 +58,7 @@ func TestLocalRenewalUpgradeFrom154DoesNotInventEffects(t *testing.T) {
 	}
 	// Preserve the old arithmetic's actual final facts; never reconstruct a
 	// before_due from this value during upgrade.
-	if _, err = db.Pool.Exec(ctx, `UPDATE services SET status='active',next_due_at='2028-02-29T12:00:00Z',recurring_price_cents=1000,renewal_discounts_used=1 WHERE id=$1`, service); err != nil {
+	if _, err = db.Pool.Exec(ctx, `UPDATE services SET status='active',next_due_at='2028-02-29T12:00:00Z',recurring_price_cents=1000,renewal_fixed_discount_cents=100,renewal_promo_code='HISTORY',renewal_discount_limit=1,renewal_discounts_used=1 WHERE id=$1`, service); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,amount_cents,status,paid_at) VALUES('SYNTHETIC-154-RENEWAL',$1,1000,'paid',now()) RETURNING id`, customer).Scan(&invoice); err != nil {
