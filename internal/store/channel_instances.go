@@ -106,7 +106,7 @@ func validateChannelInput(in ChannelInstanceInput, creating bool) (channel.Descr
 			continue
 		}
 		value, exists := in.Config[field.Key]
-		if !exists || strings.TrimSpace(fmt.Sprint(value)) == "" {
+		if !exists || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
 			return channel.Descriptor{}, nil, conflict("invalid_channel_config", "缺少渠道必填配置")
 		}
 	}
@@ -354,7 +354,11 @@ func (s *Store) DeleteChannelInstance(ctx context.Context, actor int64, sessionH
 }
 
 func configString(config map[string]any, key string) string {
-	return strings.TrimSpace(fmt.Sprint(config[key]))
+	value := config[key]
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 func configInt(config map[string]any, key string) int {
