@@ -81,3 +81,22 @@ include all its schemas and WAL is cluster wide. No SQL text or message body is
 collected. The opt-in `ZJMFGO_G09_PG_OBSERVER_SMOKE=1` test requires an authorized
 `ZJMFGO_TEST_DATABASE_URL`; see `docs/g09-pg-observer-increment-20261017.md`.
 No full candidate controller, 600-task run or capacity claim is provided here.
+
+## Offline capacity protocol
+
+`CapacityFixture` is a separate, explicit protocol state machine for the
+future controller. It accepts the existing 450 source rows in bounded chunks,
+seals them through `SealCohortSources` (300 purchases plus 150 tickets, which
+map to 600 queue entities), and then checks a caller-supplied read-only
+projection one entity at a time. A pending projection remains `draining`;
+only six hundred valid terminal observations move the protocol to
+`CapacityVerified`. This state is evidence about the supplied projection
+only, never a production worker, database, delivery, or capacity result.
+
+`Cleanup` is an ownership/state guard and has no deletion or process side
+effect. `ValidateCapacityRequest` and `Apply` use a private sequence and a
+separate action set (`register-sources`, `seal-sources`, `begin-drain`,
+`verify-drain`, `abort`, `cleanup`); the existing bootstrap control protocol
+is unchanged. The focused contract tests require
+`ZJMFGO_G09_CAPACITY_FIXTURE_PROTOCOL=1` and use no PostgreSQL or external
+service.
