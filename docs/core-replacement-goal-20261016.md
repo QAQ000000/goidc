@@ -62,3 +62,5 @@
 - 静态保留准备已由runner `5008427` 完成：两封存静态集以真实目标Nginx在普通用户私有namespace执行220→382→382，两次HUP、984组GET/HEAD、131次旧URL持续请求、31协议反例及7文件夹具通过，输入/宿主身份未变、退出清理通过，见[独立验收](release-static-retention-acceptance-20261017.md)。candidate2仅作历史静态来源，不启动或补env；该结果不等于完整双Web、生产切流或容量通过。G04/G09仍开放，台账仍45完成/60部分；正式静态保留窗口/清理、公网HTTPS、业务快照升级及强杀恢复继续待验收。
 
 - 本地未消费整期续费精确冲正已集成迁移155（产品基线5179259）：不可变生效事实、持久冻结、独立确认/驳回、精确恢复原due/优惠次数及关闭auto-renew/generation防重放，余额/零额/未还信用复用同一逆操作。主线store/HTTP race、真实154升级、dump/restore与四宽真实API浏览器已验证，新增首次effect竞争race已补验；历史唯一轮`f6e8cb4`因商品升级并发回调500退出1（HTTP1659.871秒、store229.621秒）；`c6d2314`前移既有invoice锁后，最终强制隔离PG18全量退出0（HTTP1653.256秒、store237.273秒），五项组合race及Go build/vet通过，154/155保护未改。历史失败均保留，不追认PASS。见[阶段验收](local-renewal-refund-acceptance-20261017.md)。专用API/Web/浏览器及schema已正常回收，常驻三服务和业务库未变。G03、总体目标及45完成/60部分台账均不关闭。
+
+- G09采样时窗、魔方协议sink及只读PG观察器已从独立分支审查合入，固定 `f9e7b96` 联合62项Node和16个Go小包顶层race全部实际PASS、无SKIP，Go build/vet通过；schema及常驻服务核对通过，见[工具增量](g09-tooling-increment-20261017.md)。PG受限role分支仍待测；尚无完整600来源、候选controller和27分钟容量实测，G09不关闭。供应商source API→实际worker小链继续在独立分支实现，未据工具测试声称真实云主机或容量通过。

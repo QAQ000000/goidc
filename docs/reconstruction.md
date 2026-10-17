@@ -287,3 +287,5 @@ schema059 已部署，实现 Go 原生抬头/地址维护、申请快照、本�
 2026-10-17 续费退款最终回归追加：快照`f6e8cb4`的唯一强制隔离PG18全量自然结束并退出1，HTTP1659.871秒、store229.621秒；此前供应商陈旧断言修复通过，新失败为商品升级与取消并发下的一次支付回调500，当时转独立分支定位；后续修复与通过结果见下。未修改原45分钟上限，未把已通过专项或Node工具回归替代全量结果；见[本批验收](local-renewal-refund-acceptance-20261017.md)。G03及总体目标保持未关闭。
 
 2026-10-17 并发回调修复最终验收：`c6d2314`将既有invoice锁前移至回调首次payment更新前，普通取消锁竞争不再被154关联trigger误判为退款hold；154/155及真实冻结SQL保护保持不变。固定快照唯一强制隔离PG18全量退出0（HTTP1653.256秒、store237.273秒），五项组合race实际PASS无SKIP、Go build/vet/diff通过；旧失败证据保留，见[回调修复与集成证据](evidence/epay-upgrade-callback-20261017/README.md)。各轮schema恢复、常驻三进程身份未变，API/Web前后200。未部署、推送、重启常驻服务或写业务库；本地续费退款本增量通过，G03复杂业务/真实到账、G09容量和总体目标仍未关闭，台账仍45完成/60部分。
+
+2026-10-17 G09工具合并：2秒owned进程采样时窗、真实编译魔方适配器的durable协议sink、精确schema只读PG18观察器已审查合入。固定 `f9e7b96` 联合62项Node、16个Go小包顶层race（明确PG opt-in）全部PASS且无SKIP，build/vet/diff退出0，schema恢复及常驻服务身份/健康通过；见[工具增量](g09-tooling-increment-20261017.md)。WAL明确整个cluster、不可用IO/首CPU为null，协议接纳不冒充真实VM/容量；尚缺600来源及完整候选controller/正常周期/27分钟profile，G09和总体目标继续开放。

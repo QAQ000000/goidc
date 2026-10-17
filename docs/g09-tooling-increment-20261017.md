@@ -14,6 +14,10 @@
 - `scripts/g09-workload-report.mjs`：绑定负载开始时冻结的完整预算及phase计划；校验接纳/真实派发/完成/失败守恒、阶段和总观察时窗、绝对排空预算及固定直方图，按真实拖尾窗口重算吞吐。缺样本、篡改桶边界、缩短子统计窗口或拿更宽松profile实测后套更严格profile都不能通过。只评估work-unit结果，始终返回`capacityVerified=false`，实际HTTP子请求及资金/worker/候选身份另验。
 - `scripts/g09-process-sampler.mjs`：只采controller明确登记的直接子进程，不扫描全机、不读取命令参数/环境、不发送信号。登记及每次采样前后核对PID/start ticks、父进程、UID、可执行文件路径、cwd和net/mount namespace；目标变化、退出、计数倒退、并发采样或预算耗尽后拒绝继续。输出CPU ticks/相邻采样单核百分比、RSS、线程、FD数量及可用的I/O计数，不发布路径。候选文件摘要和只读封存仍须由controller独立验证；本工具不证明candidate身份。
 
+- `scripts/g09-sampler-window.mjs`：冻结2秒slot、时窗、样本预算及资源阈值，以独占0600/fsync journal保存profile/样本/结果；漏采、越时、时钟倒退、身份变化或资源越线即锁定失败并请求停止。它是有界采样调度helper，尚未接入完整候选controller；首CPU样本和不可用IO保留null，详见[专项边界](g09-sampler-window-increment-20261017.md)。
+- `internal/g09fixture/supplier.go`：真实编译魔方适配器连接loopback供应商协议sink，冻结逐服务token/host/invoice身份、请求预算，成功响应前持久化事实；覆盖原始重复协议和丢回执。只证明协议接纳及同身份恢复，不证明真实VM、worker或通用exactly-once扣款，见[供应商sink](g09-supplier-sink-increment-20261017.md)。
+- `internal/g09fixture/pg_observer.go`：精确授权_test/schema的有界只读PG18观察器，返回三队列ready/future/年龄、账户保留owner、库级统计与明确cluster作用域WAL；并发/身份/超时/预算失败后拒绝继续。已实际迁移155并完成隔离PG race，受限role分支仍待实测，见[PG观察器](g09-pg-observer-increment-20261017.md)。
+
 ## 验证边界
 
 Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排空截止后的微任务、未知链冻结、独立客户预算、付款前金额及身份核验、版本请求、HTTP409、原请求保护和证据去敏。Go小包race只覆盖协议接收器/控制文件，不连接PG。执行日志与退出码另存[工具证据](evidence/g09-tooling-20261017/)。已有强制全量使用启动时的固定快照，后续工具修补专项单列，不能追认包含新增文件。
@@ -22,11 +26,13 @@ Node用例覆盖实际loopback重定向拒绝、日志阻塞超时复现、排�
 
 量化分位数为直方图保守上界；`null`表示没有样本，必须先用 `Number.isFinite`检查，不能利用JavaScript的`null <= limit`当通过。阶段SLO使用`phaseCategories`，同时检查计划数、接纳比例、failed/dropped/timeout/unfinished；负载库inflight drain不代表worker业务排空。
 
-进程采样增量已通过49项合并Node回归，其中6项覆盖真实owned子进程和身份/退出/预算/并发拒绝，见`process-sampler-increment/`。当前宿主内核没有`/proc/<pid>/io`，实际记录`ioAvailable=false`、`io=null`及原因，不把未采集当零；其他读取或权限错误仍使采样失败。首个CPU样本无差分，同样返回null；CPU百分比基于`getconf CLK_TCK`和真实相邻观察窗口，可因多线程超过100%。controller仍须按2秒调度、持久化样本并执行预先冻结的资源停止门槛；这些还未接入，本轮不输出容量PASS。
+进程采样早期49项合并Node回归保留于`process-sampler-increment/`；后续采样时窗与负载/场景/报告器联合62项PASS、0失败/跳过。当前宿主内核没有`/proc/<pid>/io`，实际记录`ioAvailable=false`、`io=null`及原因，不把未采集当零；其他读取或权限错误仍使采样失败。首个CPU样本无差分，同样返回null；CPU百分比基于`getconf CLK_TCK`和真实相邻观察窗口，可因多线程超过100%。时窗helper已实现2秒调度、持久化及资源停止回调，但完整controller仍须接入并有界执行stop，不能输出容量PASS。
+
+主线合并固定 `f9e7b96` 实测：62项Node、16个Go小包顶层race全部PASS且无SKIP（PG opt-in明确启用），Go build/vet/diff退出0；见 `evidence/g09-tooling-20261017/merged-helpers/`。schema恢复、常驻三进程身份不变、API/Web前后200。此前唯一全量在固定产品代码 `c6d2314` 退出0（HTTP1653.256秒、store237.273秒），新工具组合专项单列，不追认全量包含后加helper；生产入口未导入fixture。
 
 ## 继续实现
 
-外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、完整负载的两个真实worker编排、SQL资金/权益全量核对、周期背景/PG采样与进程采样调度，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
+外部付款签名/重复回调事务、Web/静态资源请求分配、完整账号/账单/供应商商品准备、600任务来源及协议逐实体关联、完整负载的两个真实worker编排、SQL资金/权益全量核对、周期背景及PG/进程采样helper的联合接入，以及普通用户namespace内同一封存候选API/Web/Nginx/worker控制器仍待完成。当前scenario返回 `deliveryVerified=false` 和 `accountingVerified=false`；HTTP链成功不能据此宣称开通、投递或对账成功。
 
 后续先以opt-in真实Go HTTP→Node小链验证请求契约，再固定干净候选执行小规模试跑和预先冻结的27分钟profile。source API试跑也不能代替最终候选容量验收。
 

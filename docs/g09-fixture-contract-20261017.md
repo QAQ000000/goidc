@@ -1,8 +1,8 @@
 # G09 真实 API、真实 worker 容量夹具实施契约
 
-状态：设计，未实现、未执行、未验收。源码基线 `02706ad`；参考 `29e9d7c:docs/g09-capacity-drain-plan-20261017.md`，该计划文件不在本分支基线，不能声称已随基线存在。本轮只读源码及编写本文，不运行 PG、迁移、构建、负载或服务。本契约供后续实现独立 opt-in fixture 与 Node controller；下面新增动作名不是现存产品 API。
+状态：完整600任务及候选controller仍为设计，未实现、未执行、未验收；已有小链及工具的实际进展另列下段。源码基线 `02706ad`；参考 `29e9d7c:docs/g09-capacity-drain-plan-20261017.md`，该计划文件不在本分支基线，不能声称已随基线存在。本轮只读源码及编写本文，不运行 PG、迁移、构建、负载或服务。本契约供后续实现独立 opt-in fixture 与 Node controller；下面新增动作名不是现存产品 API。
 
-后续实施：开环/业务场景/报告器、SMTP/SMS持久化协议sink、owned进程采样已落地；源码API→Node及两个真实cmd/worker的有限小闭环已通过，精确边界见[工具增量](g09-tooling-increment-20261017.md)。本契约的完整600任务fixture、候选controller和容量实测仍未完成。
+后续实施：开环/业务场景/报告器、SMTP/SMS及魔方持久化协议sink、owned进程采样和2秒时窗、只读PG观察器已落地并通过组合专项；源码API→Node及两个真实cmd/worker的有限小闭环已通过，精确边界见[工具增量](g09-tooling-increment-20261017.md)。本契约的完整600任务fixture、候选controller和容量实测仍未完成。
 
 ## 固定首轮口径
 

@@ -1,7 +1,10 @@
 # G09 fixture infrastructure (partial implementation)
 
 This package is acceptance infrastructure. Production binaries do not import it.
-It does not start a database, seed accounts, execute a worker, or claim capacity.
+The helpers do not start a database, seed accounts, execute a worker, or claim capacity.
+The explicitly opted-in PG observer test creates and removes a random authorized
+PG18 test schema and seeds bounded fixture-only queue rows; this is separate
+from protocol-only default tests.
 The opt-in fixture runner and its candidate/namespace integration remain to be
 implemented. In particular, **there is no executable 600-task fixture yet**.
 
@@ -55,8 +58,26 @@ private directory and must serialize control request/response handling; these
 helpers are not an interprocess lock or a sandbox against a hostile same-UID
 process. No control HTTP endpoint is introduced.
 
-Focused validation: `go test -race ./internal/g09fixture -count=1`. Tests use only
+Default focused validation: `go test -race ./internal/g09fixture -count=1`.
+With no explicit PG opt-in, protocol tests use only
 ephemeral loopback listeners and temporary files; no PostgreSQL, external
 channels, release build or production process is involved.
 The provider compatibility test resolves the actual compiled SMTP/SMS adapters
 and checks their durable sink records, without claiming an outbox or worker run.
+
+## Supplier and read-only PostgreSQL observation
+
+`NewSupplierSink` freezes bounded per-service identities and 32-character
+downstream tokens. The real compiled ZJMF adapter uses loopback HTTP; accepted
+protocol facts are durable before success. Duplicate raw settle/pay acceptance
+does not prove exactly-once charging. See the supplier sink acceptance document
+under `docs/g09-supplier-sink-increment-20261017.md`.
+
+`NewPGObserver` validates an explicitly authorized `_test` database, random schema
+and supplier IDs without connecting; `Sample` uses bounded read-only PG18
+transactions, verifies physical connection identity and latches any error or
+concurrent attempt. Queue/entity facts are schema scoped; database statistics
+include all its schemas and WAL is cluster wide. No SQL text or message body is
+collected. The opt-in `ZJMFGO_G09_PG_OBSERVER_SMOKE=1` test requires an authorized
+`ZJMFGO_TEST_DATABASE_URL`; see `docs/g09-pg-observer-increment-20261017.md`.
+No full candidate controller, 600-task run or capacity claim is provided here.
