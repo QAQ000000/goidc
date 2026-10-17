@@ -202,6 +202,7 @@ export async function acceptG09Runtime(options) {
     await guardReserve(runRoot, pre.budget, pre.availableSpace.bytes);
     // Compiler inputs, including shared module cache, are read-only. Only this
     // exclusively owned run root is writable; compilation has no host network.
+    requireThat(!failure, 'g09_interrupted_before_compile');
     const compile = activeBuild = launch('/usr/bin/bwrap', ['--die-with-parent', '--unshare-net', '--ro-bind', '/', '/', '--bind', runRoot, runRoot, '--proc', '/proc', '--dev', '/dev', '--cap-drop', 'ALL', '--chdir', options.source, '--', goWrapper, 'test', '-mod=readonly', '-c', '-o', fixtureBinary, './internal/store'], { cwd: options.source, env: goEnv, stdio: ['ignore', compileLog.fd, compileLog.fd] });
     try { await deadline(compile.done, Math.min(pre.budget.maxBuildSeconds, 300) * 1000); requireThat(!compile.failed && compile.code === 0, 'g09_fixture_compile_failed'); }
     finally { try { await stop(compile, 5); } finally { activeBuild = null; await compileLog.close(); } }
@@ -218,6 +219,7 @@ export async function acceptG09Runtime(options) {
     // Unknown control results must never cause an early TERM that skips that defer.
     fixtureDeadline = Date.now() + (9 * 60 + 15) * 1000;
     fixtureLog = await open(path.join(runRoot, 'host-fixture.log'), 'wx', 0o600);
+    requireThat(!failure, 'g09_interrupted_before_fixture');
     fixtureProcess = launch('/usr/bin/setpriv', ['--reuid', String(uid), '--regid', String(gid), '--clear-groups', '--', fixtureBinary, '-test.run=^TestG09CandidateFixture$', '-test.timeout=9m', '-test.v'], { cwd: fixtureTemporary, env: fixtureEnv, stdio: ['ignore', fixtureLog.fd, fixtureLog.fd] });
     const ready = await available(fixtureProcess, async () => {
       const filename = path.join(fixture, 'schema-ready.json');
