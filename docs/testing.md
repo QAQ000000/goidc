@@ -42,3 +42,7 @@
 前端共用 `resource-table.tsx` 的表格、分页、详情字段及 `mutation-dialog.tsx` 的确认框；页面继续管理筛选 URL、授权、请求版本和重试键。`data-pages.tsx` 保留原导出入口，业务分别位于报表、订单、服务、账户和通用列表模块；订单展示及开票资料编辑也各自独立。`node --test scripts/resource-components.test.mjs` 验证实际组件的渲染和事件边界，不代表浏览器端到端验收。
 
 G09 来源 HTTP/易支付脚本共用 `g09-source-controller.mjs`，保留旧 CLI、证据文件名、结果字段、精确请求计数及未验证标记；私有清单统一拒绝符号链接、多硬链接和宽松权限。`node --test scripts/g09-source-controller.test.mjs` 验证文件边界，显式 `ZJMFGO_G09_SOURCE_API_SMOKE=1 ZJMFGO_G09_EPAY_SOURCE_SMOKE=1` 的 Go 回归验证真实来源处理链路。运行时验收仍由 `accept-g09-runtime.mjs` 控制、`g09-workload-report.mjs` 汇总；来源冒烟不能证明真实商户、worker 或生产容量。
+
+依赖安装控制流测试 `node --test scripts/prepare-runtime-dependency-input.test.mjs` 在独立 Node 测试进程内 mock `statfs`，按夹具目录实际分配块采样，峰值预算保持 1 MiB。用例验证正常安装、超时及失败清理，2 MiB 写入触发峰值保护，另验证恰好预算/超出一字节、保留空间和 inode 边界。模拟文件系统仅用于夹具，不构成真实磁盘容量证据；生产 `statfs` 和保护逻辑保持原样。
+
+代码量复核以固定提交为边界：`git diff --numstat 3d0b698^ 3d0b698` 为 +2,966/-2,531，净增 435 行；其中 Go/MJS/TSX（含测试）净增 427 行。TSX 从 24,157 增至 24,366 行，前端收益是结构重组与公共流程复用，不能计为代码削减。`git diff --numstat f999984^ 3d0b698 -- '*.go' '*.mjs' '*.tsx'` 合计净减 3,696 行，其中 Go 减 3,089、MJS 减 816、TSX 增 209；单文件缩短不代表全库减量，文档/封存资产另行统计。

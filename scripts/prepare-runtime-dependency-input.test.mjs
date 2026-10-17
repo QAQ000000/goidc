@@ -1,16 +1,39 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { execFileSync, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileHash, inventory, sha256 } from './release-candidate-lib.mjs';
-import { validateDependencies } from './release-runtime-builder-lib.mjs';
+import { guardReserve, validateDependencies } from './release-runtime-builder-lib.mjs';
 import { cleanSourceInput, installBudget, installEnvironment, parseArgs, preflight, prepareDependencyInput, trustedToolchain, validateLock, validateRegistry } from './prepare-runtime-dependency-input.mjs';
+const MiB = 1024 ** 2;
 const GiB = 1024 ** 3;
+
+// Node runs this file's tests serially in their own process. Replace only the
+// filesystem sampler, retaining real preflight, periodic guards and cleanup.
+// Count allocated blocks in this fixture so unrelated parallel writes cannot
+// consume its 1 MiB budget. This is a simulator, not real capacity evidence.
+function mockSpace(t, sample) {
+  const method = t.mock.method(fs.promises, 'statfs', sample);
+  syncBuiltinESMExports();
+  t.after(() => { method.mock.restore(); syncBuiltinESMExports(); });
+}
+async function allocatedBytes(root) {
+  const stat = await lstat(root);
+  let bytes = stat.blocks * 512;
+  if (stat.isDirectory()) for (const name of await readdir(root)) bytes += await allocatedBytes(path.join(root, name));
+  return bytes;
+}
 async function fixture(t, behavior = 'ok') {
   const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-dependency-input-test-'));
   t.after(async () => { spawnSync('/usr/bin/chmod', ['-R', 'u+w', root]); await rm(root, { recursive: true, force: true }); });
+  mockSpace(t, async filename => {
+    assert(filename === root || filename.startsWith(root + path.sep), 'sampler escaped owned fixture');
+    return { bavail: BigInt(4 * MiB - await allocatedBytes(root)), bsize: 1n, ffree: 20000n };
+  });
   const source = path.join(root, 'source'), npmRoot = path.join(root, 'npm');
   await mkdir(path.join(source, 'web'), { recursive: true }); await mkdir(path.join(npmRoot, 'bin'), { recursive: true });
   const lock = { lockfileVersion: 3, packages: { '': { name: 'fixture' }, 'node_modules/fixture': { version: '1.0.0', resolved: 'https://registry.npmjs.org/fixture/-/fixture-1.0.0.tgz', integrity: 'sha512-YWJjZA==' } } };
@@ -19,16 +42,14 @@ async function fixture(t, behavior = 'ok') {
   git('init', '-q'); git('config', 'user.email', 'test@example.invalid'); git('config', 'user.name', 'test'); git('add', '.'); git('commit', '-qm', 'fixture');
   const node = path.join(root, 'fake-node'), npmCLI = path.join(npmRoot, 'bin/npm-cli.js'), nodeLicense = path.join(root, 'LICENSE');
   // Tiny owned simulator for control-flow tests; never a claimed real npm run.
-  await writeFile(node, `#!/bin/sh\nif [ "$1" = --version ]; then echo v24.16.0; exit 0; fi\nif [ "$2" = --version ]; then echo 11.13.0; exit 0; fi\n${behavior === 'timeout' ? '/usr/bin/sleep 5' : behavior === 'fail' ? 'exit 7' : ''}\n/usr/bin/mkdir -p node_modules/fixture\n/usr/bin/printf fixture > node_modules/fixture/file\n/usr/bin/printf 'owned fixture install complete'\n`, { mode: 0o700 });
+  await writeFile(node, `#!/bin/sh\nif [ "$1" = --version ]; then echo v24.16.0; exit 0; fi\nif [ "$2" = --version ]; then echo 11.13.0; exit 0; fi\n${behavior === 'timeout' ? '/usr/bin/sleep 5' : behavior === 'fail' ? 'exit 7' : behavior === 'peak' ? '/usr/bin/dd if=/dev/zero of="$TMPDIR/over-budget" bs=1048576 count=2 2>/dev/null\n/usr/bin/sleep 5' : ''}\n/usr/bin/mkdir -p node_modules/fixture\n/usr/bin/printf fixture > node_modules/fixture/file\n/usr/bin/printf 'owned fixture install complete'\n`, { mode: 0o700 });
   await writeFile(npmCLI, 'trusted fake cli'); await writeFile(nodeLicense, 'fixture license');
   const nodeProvenance = path.join(root, 'node.json'), npmProvenance = path.join(root, 'npm.json');
   const n = { format: 'zjmfgo-runtime-node-provenance-v1', platform: 'linux/x64', version: 'v24.16.0', source: 'unit fixture, not production provenance', sha256: await fileHash(node), licenseSHA256: await fileHash(nodeLicense) };
   const files = await inventory(npmRoot, { dependencies: true });
   await writeFile(nodeProvenance, JSON.stringify(n));
   await writeFile(npmProvenance, JSON.stringify({ format: 'zjmfgo-runtime-npm-provenance-v1', platform: 'linux/x64', nodeVersion: n.version, version: '11.13.0', source: 'unit fixture, not production provenance', inputTreeSHA256: sha256(JSON.stringify(files)), files }));
-  // Filesystem-wide reserve sampling also sees other parallel test fixtures.
-  // Keep the simulator budget above their transient writes; production guards stay unchanged.
-  return { root, lock, source, revision: git('rev-parse', 'HEAD'), output: path.join(root, 'output'), node, nodeLicense, nodeProvenance, nodeProvenanceSHA256: await fileHash(nodeProvenance), npmRoot, npmCLI, npmProvenance, npmProvenanceSHA256: await fileHash(npmProvenance), registryURL: 'https://registry.npmjs.org', budget: { cacheBytes: 1024, outputBytes: 1024, reserveBytes: 1, maxPeakBytes: GiB, maxSeconds: 5 } };
+  return { root, lock, source, revision: git('rev-parse', 'HEAD'), output: path.join(root, 'output'), node, nodeLicense, nodeProvenance, nodeProvenanceSHA256: await fileHash(nodeProvenance), npmRoot, npmCLI, npmProvenance, npmProvenanceSHA256: await fileHash(npmProvenance), registryURL: 'https://registry.npmjs.org', budget: { cacheBytes: 1024, outputBytes: 1024, reserveBytes: 1, maxPeakBytes: MiB, maxSeconds: 5 } };
 }
 
 test('install budget and registry fail closed without echoing credential-bearing input', () => {
@@ -69,6 +90,7 @@ test('existing output and insufficient budget never delete or create paths', asy
 });
 test('owned simulator success produces builder-compatible proof and sealed tree', async t => {
   const f = await fixture(t); const result = await prepareDependencyInput({ ...f, execute: true }); const proof = JSON.parse(await readFile(result.provenance, 'utf8'));
+  assert.equal(proof.evidence.budget.maxPeakBytes, MiB);
   assert.equal(result.status, 'INSTALLED'); assert.equal(await fileHash(result.provenance), result.provenanceSHA256); assert.equal((await lstat(path.join(result.dependencies, 'fixture/file'))).mode & 0o222, 0); assert.equal((await lstat(path.join(result.dependencies, 'fixture'))).mode & 0o222, 0);
   await validateDependencies(result.dependencies, proof, proof.lockSHA256, { node: 'v24.16.0', npm: '11.13.0', platform: 'linux/x64' });
   await assert.rejects(lstat(path.join(f.output, 'cache')), { code: 'ENOENT' }); assert.equal(proof.evidence.sourceCommit, f.revision); assert.match(proof.evidence.logSHA256, /^[a-f0-9]{64}$/);
@@ -77,4 +99,27 @@ for (const behavior of ['fail', 'timeout']) test(`owned simulator ${behavior} re
   const f = await fixture(t, behavior); f.budget.maxSeconds = 1;
   await assert.rejects(prepareDependencyInput({ ...f, execute: true }), behavior === 'timeout' ? /timed out/ : /failed/);
   await assert.rejects(lstat(f.output), { code: 'ENOENT' }); assert.equal(await readFile(f.npmCLI, 'utf8'), 'trusted fake cli');
+});
+
+test('owned simulator exceeding 1 MiB peak is stopped and cleans only exclusive output', async t => {
+  const f = await fixture(t, 'peak');
+  const sibling = path.join(f.root, 'keep'); await writeFile(sibling, 'unrelated');
+  await assert.rejects(prepareDependencyInput({ ...f, execute: true }), /disk reserve\/recorded peak crossed/);
+  await assert.rejects(lstat(f.output), { code: 'ENOENT' });
+  assert.equal(await readFile(sibling, 'utf8'), 'unrelated');
+  assert.equal(await readFile(f.npmCLI, 'utf8'), 'trusted fake cli');
+});
+
+test('reserve guard accepts the exact peak and rejects one extra byte, low reserve and low inodes', async t => {
+  const initial = 4 * MiB;
+  let bytes = initial - MiB, inodes = 20000;
+  mockSpace(t, async () => ({ bavail: BigInt(bytes), bsize: 1n, ffree: BigInt(inodes) }));
+  const budget = { maxPeakBytes: MiB, minReserveBytes: 1, minReserveInodes: 10000 };
+  assert.equal((await guardReserve('/fixture', budget, initial)).bytes, bytes);
+  bytes--;
+  await assert.rejects(guardReserve('/fixture', budget, initial), /disk reserve\/recorded peak crossed/);
+  bytes = 0;
+  await assert.rejects(guardReserve('/fixture', budget, bytes), /disk reserve\/recorded peak crossed/);
+  bytes = initial; inodes = 9999;
+  await assert.rejects(guardReserve('/fixture', budget, initial), /disk reserve\/recorded peak crossed/);
 });
