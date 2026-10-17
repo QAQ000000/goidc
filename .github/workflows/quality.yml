@@ -46,9 +46,6 @@ jobs:
       - name: Run governance tool tests
         run: node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
 
-      - name: Run Node regression
-        run: node --test scripts/*.test.mjs
-
       - name: Check Go toolchain and compile tests
         run: |
           ./scripts/check-go-toolchain.sh
