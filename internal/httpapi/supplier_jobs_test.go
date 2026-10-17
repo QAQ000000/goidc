@@ -102,7 +102,7 @@ func TestSupplierJobRetrySameKeyAcrossServices(t *testing.T) {
 		t.Fatalf("same key across services returned %d and %d", first, second)
 	}
 	var pending, receipts int
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM provision_jobs WHERE id=ANY($1) AND status='pending'),(SELECT count(*) FROM admin_setting_operations WHERE operation='supplier.job.retry' AND idempotency_key='supplier-retry-shared-key')", []int64{jobs[0].jobID, jobs[1].jobID}).Scan(&pending, &receipts); err != nil || pending != 1 || receipts != 1 {
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM provision_jobs WHERE id=ANY($1) AND status='pending'),(SELECT count(*) FROM mutation_operations WHERE scope='admin:supplier.job.retry' AND idempotency_key='supplier-retry-shared-key')", []int64{jobs[0].jobID, jobs[1].jobID}).Scan(&pending, &receipts); err != nil || pending != 1 || receipts != 1 {
 		t.Fatal(pending, receipts, err)
 	}
 }

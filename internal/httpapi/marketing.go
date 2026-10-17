@@ -336,7 +336,7 @@ func (s *Server) createMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	defer tx.Rollback(r.Context())
-	if result, replay, e := marketingOperationTx(tx, identityFrom(r).ID, key, hash); e != nil {
+	if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
 		s.fail(w, r, e)
 		return
 	} else if replay {
@@ -350,7 +350,7 @@ func (s *Server) createMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	result := map[string]any{"id": id, "status": "draft", "version": int64(1)}
-	if err = saveMarketingOperation(tx, identityFrom(r).ID, key, hash, result); err != nil {
+	if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -403,7 +403,7 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	defer tx.Rollback(r.Context())
-	if result, replay, e := marketingOperationTx(tx, identityFrom(r).ID, key, hash); e != nil {
+	if result, replay, e := marketingOperationTx(r.Context(), tx, identityFrom(r).ID, key, hash); e != nil {
 		s.fail(w, r, e)
 		return
 	} else if replay {
@@ -431,7 +431,7 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	result := map[string]any{"id": id, "status": "draft", "version": current + 1}
-	if err = saveMarketingOperation(tx, identityFrom(r).ID, key, hash, result); err != nil {
+	if err = saveMarketingOperation(r.Context(), tx, identityFrom(r).ID, key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -446,34 +446,17 @@ func (s *Server) updateMarketingCampaign(w http.ResponseWriter, r *http.Request)
 	write(w, 200, result)
 }
 
-func marketingOperationTx(tx pgx.Tx, actor int64, key, hash string) (map[string]any, bool, error) {
-	var savedHash string
-	var raw []byte
-	err := tx.QueryRow(context.Background(), `SELECT request_hash,result FROM marketing_campaign_operations WHERE actor_id=$1 AND idempotency_key=$2 FOR UPDATE`, actor, key).Scan(&savedHash, &raw)
-	if err == pgx.ErrNoRows {
-		return nil, false, nil
+func marketingOperationTx(ctx context.Context, tx pgx.Tx, actor int64, key, hash string) (map[string]any, bool, error) {
+	var out map[string]any
+	replayed, err := store.ReplayOperation(ctx, tx, actor, "marketing", key, hash, &out)
+	if err == nil && replayed {
+		out["replayed"] = true
 	}
-	if err != nil {
-		return nil, false, err
-	}
-	if savedHash != hash {
-		return nil, false, &store.Conflict{Code: "idempotency_conflict", Message: "相同幂等键对应不同营销操作"}
-	}
-	var result map[string]any
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, false, err
-	}
-	result["replayed"] = true
-	return result, true, nil
+	return out, replayed, err
 }
 
-func saveMarketingOperation(tx pgx.Tx, actor int64, key, hash string, result map[string]any) error {
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(context.Background(), `INSERT INTO marketing_campaign_operations(actor_id,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4)`, actor, key, hash, raw)
-	return err
+func saveMarketingOperation(ctx context.Context, tx pgx.Tx, actor int64, key, hash string, result map[string]any) error {
+	return store.SaveOperation(ctx, tx, actor, "marketing", key, hash, result)
 }
 
 func (s *Server) sendMarketingCampaign(w http.ResponseWriter, r *http.Request) {
@@ -510,7 +493,7 @@ func (s *Server) sendMarketingCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	actor := identityFrom(r).ID
-	if result, replay, e := marketingOperationTx(tx, actor, key, hash); e != nil {
+	if result, replay, e := marketingOperationTx(r.Context(), tx, actor, key, hash); e != nil {
 		s.fail(w, r, e)
 		return
 	} else if replay {
@@ -636,7 +619,7 @@ func (s *Server) sendMarketingCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := map[string]any{"id": id, "status": newStatus, "recipient_count": queued, "version": version + 1}
-	if err = saveMarketingOperation(tx, actor, key, hash, result); err != nil {
+	if err = saveMarketingOperation(r.Context(), tx, actor, key, hash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}

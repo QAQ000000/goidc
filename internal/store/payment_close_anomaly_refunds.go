@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -363,26 +362,14 @@ func (s *Store) paymentAnomalyRefundWrite(ctx context.Context, actor, invoice, a
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "payment-anomaly-refund", fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return out, err
-	}
 	raw, _ := json.Marshal([]any{invoice, anchor, id, confirm, in, review})
 	digest := sha256.Sum256(raw)
 	hash := hex.EncodeToString(digest[:])
-	var saved string
-	var result []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM payment_close_anomaly_refund_operations WHERE actor_id=$1 AND idempotency_key=$2", actor, key).Scan(&saved, &result)
-	if err == nil {
-		if saved != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同请求")
-		}
-		if err = json.Unmarshal(result, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, actor, "payment-anomaly-refund", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	var pid int64
 	if id > 0 {
@@ -487,11 +474,7 @@ func (s *Store) paymentAnomalyRefundWrite(ctx context.Context, actor, invoice, a
 	if err = Audit(ctx, tx, actor, action, "payment_anomaly_refund", id, map[string]any{"invoice_id": invoice, "payment_id": pid, "anchor_anomaly_id": anchor, "amount_cents": g.AmountCents, "status": out.Refund.Status}); err != nil {
 		return out, err
 	}
-	result, err = json.Marshal(out)
-	if err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, "INSERT INTO payment_close_anomaly_refund_operations(actor_id,idempotency_key,invoice_id,refund_id,request_hash,result) VALUES($1,$2,$3,$4,$5,$6)", actor, key, invoice, id, hash, result); err != nil {
+	if err = SaveOperation(ctx, tx, actor, "payment-anomaly-refund", key, hash, out); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)

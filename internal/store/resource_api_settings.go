@@ -141,21 +141,10 @@ func (s *Store) UpdateResourceAPISettings(ctx context.Context, actor int64, sess
 	if err = resourceAPIManagerCheck(ctx, tx, actor, sessionHash); err != nil {
 		return out, err
 	}
-	var saved string
-	var receipt []byte
-	err = tx.QueryRow(ctx, `SELECT request_hash,result FROM admin_setting_operations
-WHERE actor_id=$1 AND operation='resource_api.settings' AND idempotency_key=$2 FOR UPDATE`, actor, key).Scan(&saved, &receipt)
-	if err == nil {
-		if saved != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同的资源 API 设置")
-		}
-		if err = json.Unmarshal(receipt, &out); err != nil {
-			return out, err
-		}
-		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if replayed, err := ReplayOperation(ctx, tx, actor, "admin:resource_api.settings", key, hash, &out); err != nil {
 		return out, err
+	} else if replayed {
+		return out, tx.Commit(ctx)
 	}
 	var current ResourceAPISettings
 	if err = tx.QueryRow(ctx, `SELECT enabled,require_certification,require_verified_phone,version,updated_at
@@ -177,9 +166,7 @@ RETURNING enabled,require_certification,require_verified_phone,version,updated_a
 	}); err != nil {
 		return out, err
 	}
-	result, _ := json.Marshal(out)
-	if _, err = tx.Exec(ctx, `INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result)
-VALUES($1,'resource_api.settings',$2,$3,$4)`, actor, key, hash, result); err != nil {
+	if err = SaveOperation(ctx, tx, actor, "admin:resource_api.settings", key, hash, out); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)
@@ -257,33 +244,18 @@ func (s *Store) TestSupplierConnection(ctx context.Context, actor int64, session
 		return SupplierConnectionResult{}, err
 	}
 	defer tx.Rollback(ctx)
-	lockName := fmt.Sprintf("supplier-connection-test:%d:%s", actor, key)
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", lockName); err != nil {
-		return SupplierConnectionResult{}, err
-	}
 	if err = resourceAPIManagerCheck(ctx, tx, actor, sessionHash); err != nil {
 		return SupplierConnectionResult{}, err
 	}
-	var savedHash string
-	var savedResult []byte
-	err = tx.QueryRow(ctx, `SELECT request_hash,result FROM admin_setting_operations
-WHERE actor_id=$1 AND operation='supplier.connection_test' AND idempotency_key=$2 FOR UPDATE`, actor, key).Scan(&savedHash, &savedResult)
-	if err == nil {
-		if savedHash != requestHash {
-			return SupplierConnectionResult{}, conflict("idempotency_conflict", "相同幂等键已用于其他供应商测试")
-		}
-		var result SupplierConnectionResult
-		if err = json.Unmarshal(savedResult, &result); err != nil {
-			return SupplierConnectionResult{}, err
-		}
+	var result SupplierConnectionResult
+	if replayed, err := ReplayOperation(ctx, tx, actor, "admin:supplier.connection_test", key, requestHash, &result); err != nil {
+		return SupplierConnectionResult{}, err
+	} else if replayed {
 		if result.Message == "测试进行中" {
 			return SupplierConnectionResult{}, conflict("supplier_test_in_progress", result.Message)
 		}
 		result.Replayed = true
 		return result, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return SupplierConnectionResult{}, err
 	}
 	var account supplier.Account
 	var sealed []byte
@@ -307,9 +279,7 @@ FROM supplier_accounts WHERE id=$1 FOR SHARE`, supplierID).Scan(&account.ID, &ac
 		return SupplierConnectionResult{}, conflict("invalid_supplier", "供应商配置无效，请检查接口配置")
 	}
 	pending := SupplierConnectionResult{SupplierID: supplierID, Provider: account.Provider, Message: "测试进行中"}
-	pendingJSON, _ := json.Marshal(pending)
-	if _, err = tx.Exec(ctx, `INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result)
-VALUES($1,'supplier.connection_test',$2,$3,$4)`, actor, key, requestHash, pendingJSON); err != nil {
+	if err = SaveOperation(ctx, tx, actor, "admin:supplier.connection_test", key, requestHash, pending); err != nil {
 		return SupplierConnectionResult{}, err
 	}
 	if err = Audit(ctx, tx, actor, "supplier.connection_test_started", "supplier", supplierID, map[string]any{"version": version}); err != nil {
@@ -323,7 +293,7 @@ VALUES($1,'supplier.connection_test',$2,$3,$4)`, actor, key, requestHash, pendin
 	probeCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	products, probeErr := adapter.Catalog(probeCtx)
 	cancel()
-	result := SupplierConnectionResult{SupplierID: supplierID, Provider: account.Provider, ProductCount: len(products), Capabilities: adapter.Capabilities(), CheckedAt: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds()}
+	result = SupplierConnectionResult{SupplierID: supplierID, Provider: account.Provider, ProductCount: len(products), Capabilities: adapter.Capabilities(), CheckedAt: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds()}
 	if probeErr == nil {
 		result.OK, result.Message = true, "连接成功"
 	} else {
@@ -352,8 +322,8 @@ VALUES($1,'supplier.connection_test',$2,$3,$4)`, actor, key, requestHash, pendin
 	if err = Audit(finalCtx, finish, actor, "supplier.connection_test_completed", "supplier", supplierID, map[string]any{"ok": result.OK, "duration_ms": result.DurationMS, "product_count": result.ProductCount, "version": version}); err != nil {
 		return SupplierConnectionResult{}, err
 	}
-	if _, err = finish.Exec(finalCtx, `UPDATE admin_setting_operations SET result=$4
-WHERE actor_id=$1 AND operation='supplier.connection_test' AND idempotency_key=$2 AND request_hash=$3`, actor, key, requestHash, resultJSON); err != nil {
+	if _, err = finish.Exec(finalCtx, `UPDATE mutation_operations SET result=$4
+WHERE actor_id=$1 AND scope='admin:supplier.connection_test' AND idempotency_key=$2 AND request_hash=$3`, actor, key, requestHash, resultJSON); err != nil {
 		return SupplierConnectionResult{}, err
 	}
 	if err = finish.Commit(finalCtx); err != nil {

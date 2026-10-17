@@ -148,32 +148,13 @@ func (s *Store) ApplyAffiliateAccount(ctx context.Context, userID int64, key str
 }
 
 func affiliateOperation(ctx context.Context, tx pgx.Tx, userID int64, operation, key, requestHash string) (map[string]any, bool, error) {
-	var savedHash string
-	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT request_hash,result FROM affiliate_operations WHERE user_id=$1 AND operation=$2 AND idempotency_key=$3 FOR UPDATE`, userID, operation, key).Scan(&savedHash, &raw)
-	if err == pgx.ErrNoRows {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	if savedHash != requestHash {
-		return nil, false, conflict("idempotency_conflict", "相同幂等键对应不同推广操作")
-	}
 	var result map[string]any
-	if err = json.Unmarshal(raw, &result); err != nil {
-		return nil, false, err
-	}
-	return result, true, nil
+	replayed, err := ReplayOperation(ctx, tx, userID, "affiliate:"+operation, key, requestHash, &result)
+	return result, replayed, err
 }
 
 func saveAffiliateOperation(ctx context.Context, tx pgx.Tx, userID int64, operation, key, requestHash string, result map[string]any) error {
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO affiliate_operations(user_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)`, userID, operation, key, requestHash, raw)
-	return err
+	return SaveOperation(ctx, tx, userID, "affiliate:"+operation, key, requestHash, result)
 }
 
 func (s *Store) CreateAffiliateLink(ctx context.Context, userID int64, key, requestHash, landingPath, note string, productID *int64) (AffiliateLink, bool, error) {
@@ -186,9 +167,6 @@ func (s *Store) CreateAffiliateLink(ctx context.Context, userID int64, key, requ
 		return out, false, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-link", fmt.Sprintf("%d:%s", userID, key)); err != nil {
-		return out, false, err
-	}
 	if result, replay, replayErr := affiliateOperation(ctx, tx, userID, "link.create", key, requestHash); replayErr != nil {
 		return out, false, replayErr
 	} else if replay {
@@ -246,9 +224,6 @@ func (s *Store) UpdateAffiliateLink(ctx context.Context, userID, linkID int64, k
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "affiliate-link-update", fmt.Sprintf("%d:%s", userID, key)); err != nil {
-		return out, err
-	}
 	requestHash = affiliateHash(fmt.Sprintf("%d:%s", linkID, requestHash))
 	if result, replay, replayErr := affiliateOperation(ctx, tx, userID, "link.update", key, requestHash); replayErr != nil {
 		return out, replayErr
@@ -441,9 +416,6 @@ FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u
 	}
 	if !allowed {
 		return conflict("permission_denied", "没有审核推广账户的权限")
-	}
-	if err = lockOperationKey(ctx, tx, "affiliate-account-status", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
-		return err
 	}
 	requestHash := affiliateHash(fmt.Sprintf("%d:%s:%d", accountID, status, expectedVersion))
 	if _, replay, replayErr := affiliateOperation(ctx, tx, actorID, "account.status", key, requestHash); replayErr != nil {

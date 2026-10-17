@@ -160,7 +160,7 @@ func TestOrderExternalRefundSnapshotAndAuditRollback(t *testing.T) {
 	}
 	var state string
 	var stock, release, receipts int
-	if e = f.db.Pool.QueryRow(ctx, `SELECT h.status,p.stock,(SELECT count(*) FROM external_refund_order_stock_releases),(SELECT count(*) FROM external_refund_operations WHERE idempotency_key='order-refund-audit-failure') FROM external_refund_order_holds h CROSS JOIN products p WHERE h.refund_id=$1 AND p.id=$2`, pending.Refund.ID, f.product).Scan(&state, &stock, &release, &receipts); e != nil || state != "pending" || stock != 10 || release != 0 || receipts != 0 {
+	if e = f.db.Pool.QueryRow(ctx, `SELECT h.status,p.stock,(SELECT count(*) FROM external_refund_order_stock_releases),(SELECT count(*) FROM mutation_operations WHERE scope='external-refund' AND idempotency_key='order-refund-audit-failure') FROM external_refund_order_holds h CROSS JOIN products p WHERE h.refund_id=$1 AND p.id=$2`, pending.Refund.ID, f.product).Scan(&state, &stock, &release, &receipts); e != nil || state != "pending" || stock != 10 || release != 0 || receipts != 0 {
 		t.Fatal(state, stock, release, receipts, e)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"math"
 	"net/http"
 	"strings"
@@ -330,7 +329,14 @@ func (s *Server) updateFinanceSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_finance_settings", "充值财务设置无效")
 		return
 	}
-	s.updateSingletonSettings(w, r, "finance.settings_updated", "finance_settings", in.ExpectedVersion, map[string]any{"topup_enabled": *in.TopupEnabled, "min_topup_cents": in.MinTopupCents, "max_topup_cents": in.MaxTopupCents, "max_balance_cents": in.MaxBalanceCents, "require_active_order": *in.RequireActiveOrder}, `UPDATE finance_settings SET topup_enabled=$1,min_topup_cents=$2,max_topup_cents=$3,max_balance_cents=$4,require_active_order=$5,version=version+1,updated_at=now() WHERE id=1 AND version=$6 RETURNING version`, *in.TopupEnabled, in.MinTopupCents, in.MaxTopupCents, in.MaxBalanceCents, *in.RequireActiveOrder, in.ExpectedVersion)
+	audit := map[string]any{"topup_enabled": *in.TopupEnabled, "min_topup_cents": in.MinTopupCents, "max_topup_cents": in.MaxTopupCents, "max_balance_cents": in.MaxBalanceCents, "require_active_order": *in.RequireActiveOrder}
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "finance.settings_updated", entity: "finance_settings", operation: "finance_settings", request: audit,
+		apply: func(tx pgx.Tx) (any, any, error) {
+			next, err := updateSettingsVersion(r, tx, "finance_settings", in.ExpectedVersion, "设置已变更，请重新加载", `UPDATE finance_settings SET topup_enabled=$1,min_topup_cents=$2,max_topup_cents=$3,max_balance_cents=$4,require_active_order=$5,version=version+1,updated_at=now() WHERE id=1 AND version=$6 RETURNING version`, *in.TopupEnabled, in.MinTopupCents, in.MaxTopupCents, in.MaxBalanceCents, *in.RequireActiveOrder, in.ExpectedVersion)
+			return map[string]any{"version": next}, audit, err
+		},
+	})
 }
 
 func (s *Server) invoiceSettings(w http.ResponseWriter, r *http.Request) {
@@ -368,7 +374,14 @@ func (s *Server) updateInvoiceSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bps := int64(math.Round(in.RatePercent * 100))
-	s.updateSingletonSettings(w, r, "invoice.settings_updated", "invoice_settings", in.ExpectedVersion, map[string]any{"enabled": *in.Enabled, "rate_percent": in.RatePercent}, `UPDATE invoice_settings SET enabled=$1,rate_bps=$2,version=version+1,updated_at=now() WHERE id=1 AND version=$3 RETURNING version`, *in.Enabled, bps, in.ExpectedVersion)
+	audit := map[string]any{"enabled": *in.Enabled, "rate_percent": in.RatePercent}
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "invoice.settings_updated", entity: "invoice_settings", operation: "invoice_settings", request: audit,
+		apply: func(tx pgx.Tx) (any, any, error) {
+			next, err := updateSettingsVersion(r, tx, "invoice_settings", in.ExpectedVersion, "设置已变更，请重新加载", `UPDATE invoice_settings SET enabled=$1,rate_bps=$2,version=version+1,updated_at=now() WHERE id=1 AND version=$3 RETURNING version`, *in.Enabled, bps, in.ExpectedVersion)
+			return map[string]any{"version": next}, audit, err
+		},
+	})
 }
 
 type shippingMethodInput struct {
@@ -546,140 +559,29 @@ func (s *Server) updateContractSettings(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 400, "invalid_contract_settings", "合同设置无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	tx, actor, ok := s.contractTx(w, r, true, true)
-	if !ok {
-		return
-	}
-	defer tx.Rollback(r.Context())
 	audit := map[string]any{"enabled": *in.Enabled}
-	hash := settingMutationHash(audit)
-	if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("contract-settings:%d:%s", actor, key)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, err := loadSettingReplayTx(r, tx, actor, "contract_settings", key, hash); err != nil {
-		s.fail(w, r, err)
-		return
-	} else if replayed {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if err := tx.QueryRow(r.Context(), "SELECT version FROM contract_settings WHERE id=1 FOR UPDATE").Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "设置已变更，请重新加载")
-		return
-	}
-	var next int64
-	if err := tx.QueryRow(r.Context(), "UPDATE contract_settings SET enabled=$1,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled).Scan(&next); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"version": next}
-	if err := store.Audit(r.Context(), tx, actor, "contract.settings_updated", "contract_settings", 1, audit); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err := saveSettingOperationTx(r, tx, actor, "contract_settings", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err := tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "contract.settings_updated", entity: "contract_settings", operation: "contract_settings", request: audit,
+		begin: func() (pgx.Tx, bool) {
+			tx, _, ok := s.contractTx(w, r, true, true)
+			return tx, ok
+		},
+		apply: func(tx pgx.Tx) (any, any, error) {
+			next, err := updateSettingsVersion(r, tx, "contract_settings", in.ExpectedVersion, "设置已变更，请重新加载",
+				"UPDATE contract_settings SET enabled=$1,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled)
+			return map[string]any{"version": next}, audit, err
+		},
+	})
 }
 
-func (s *Server) updateSingletonSettings(w http.ResponseWriter, r *http.Request, action, entity string, expected int64, audit map[string]any, query string, args ...any) {
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(audit)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, entity, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), `SELECT version FROM `+entity+` WHERE id=1 FOR UPDATE`).Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if version != expected {
-		writeError(w, 409, "version_conflict", "设置已变更，请重新加载")
-		return
-	}
-	var next int64
-	if err = tx.QueryRow(r.Context(), query, args...).Scan(&next); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"version": next}
-	if err = store.Audit(r.Context(), tx, actor, action, entity, 1, audit); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, entity, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, result)
-}
-
-// Helpers keep context handling explicit at call sites while allowing replay
-// lookup to run under the same row lock as the mutation.
 func loadSettingReplayTx(r *http.Request, tx pgx.Tx, actor int64, operation, key, hash string) (map[string]any, bool, error) {
-	var saved string
-	var raw []byte
-	err := tx.QueryRow(r.Context(), `SELECT request_hash,result FROM admin_setting_operations WHERE actor_id=$1 AND operation=$2 AND idempotency_key=$3 FOR UPDATE`, actor, operation, key).Scan(&saved, &raw)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, err
-	}
-	if saved != hash {
-		return nil, false, &store.Conflict{Code: "idempotency_conflict", Message: "相同幂等键对应不同的设置操作"}
-	}
 	var out map[string]any
-	if err = json.Unmarshal(raw, &out); err != nil {
-		return nil, false, err
+	replayed, err := store.ReplayOperation(r.Context(), tx, actor, "admin:"+operation, key, hash, &out)
+	if err == nil && replayed {
+		out["replayed"] = true
 	}
-	out["replayed"] = true
-	return out, true, nil
+	return out, replayed, err
 }
 func saveSettingOperationTx(r *http.Request, tx pgx.Tx, actor int64, operation, key, hash string, result map[string]any) error {
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(r.Context(), `INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)`, actor, operation, key, hash, raw)
-	return err
+	return store.SaveOperation(r.Context(), tx, actor, "admin:"+operation, key, hash, result)
 }

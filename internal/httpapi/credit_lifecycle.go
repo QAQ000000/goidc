@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -244,24 +246,16 @@ func (s *Server) creditFreeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor := identityFrom(r).ID
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("credit-freeze:%d:%s", actor, key)); err != nil {
+	// Keep this canonical encoding in sync with migration 156's credit backfill.
+	digest := sha256.Sum256([]byte(fmt.Sprintf("%d:%t:%d:%s", id, in.Frozen, in.ExpectedVersion, in.Note)))
+	hash := hex.EncodeToString(digest[:])
+	var replay map[string]any
+	if replayed, err := store.ReplayOperation(r.Context(), tx, actor, "credit-freeze", key, hash, &replay); err != nil {
 		s.fail(w, r, err)
 		return
-	}
-	var oldID, oldExpected, oldVersion int64
-	var oldFrozen bool
-	var oldNote string
-	err = tx.QueryRow(r.Context(), "SELECT user_id,frozen,expected_version,version_after,note FROM credit_account_operations WHERE actor_id=$1 AND idempotency_key=$2", actor, key).Scan(&oldID, &oldFrozen, &oldExpected, &oldVersion, &oldNote)
-	if err == nil {
-		if oldID != id || oldFrozen != in.Frozen || oldExpected != in.ExpectedVersion || oldNote != in.Note {
-			writeError(w, 409, "idempotency_conflict", "幂等键对应其他操作")
-			return
-		}
-		write(w, 200, map[string]any{"version": oldVersion, "replayed": true})
-		return
-	}
-	if err != pgx.ErrNoRows {
-		s.fail(w, r, err)
+	} else if replayed {
+		replay["replayed"] = true
+		write(w, 200, replay)
 		return
 	}
 	var version int64
@@ -277,7 +271,7 @@ func (s *Server) creditFreeze(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if _, err = tx.Exec(r.Context(), "INSERT INTO credit_account_operations(actor_id,idempotency_key,user_id,frozen,expected_version,version_after,note) VALUES($1,$2,$3,$4,$5,$6,$7)", actor, key, id, in.Frozen, version, version+1, in.Note); err != nil {
+	if err = store.SaveOperation(r.Context(), tx, actor, "credit-freeze", key, hash, map[string]any{"version": version + 1}); err != nil {
 		s.fail(w, r, err)
 		return
 	}

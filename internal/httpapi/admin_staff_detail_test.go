@@ -61,7 +61,7 @@ func TestAdminStaffDetailAndSafeRetry(t *testing.T) {
 	expect(t, request(h, "PATCH", path, payload, root, "staff-password-key-20261013"), 200)
 	expect(t, request(h, "PATCH", path, payload, root, "staff-password-key-20261013"), 200)
 	var proof string
-	if err := db.Pool.QueryRow(t.Context(), "SELECT result->>'password_proof' FROM admin_setting_operations WHERE actor_id=$1 AND idempotency_key='staff-password-key-20261013'", rootID).Scan(&proof); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT result->>'password_proof' FROM mutation_operations WHERE scope LIKE 'admin:%' AND actor_id=$1 AND idempotency_key='staff-password-key-20261013'", rootID).Scan(&proof); err != nil {
 		t.Fatal(err)
 	}
 	if cost, err := bcrypt.Cost([]byte(proof)); err != nil || cost != 12 {

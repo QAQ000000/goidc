@@ -414,8 +414,8 @@ func TestOrderMutationsConcurrentNotesAndCancelSameVersion(t *testing.T) {
 (SELECT count(*) FROM services WHERE order_id=o.id),
 (SELECT count(*) FROM services WHERE order_id=o.id AND status='cancelled'),
 (SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
-(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
-(SELECT min(action) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%' AND (result->>'order_id')::bigint=o.id),
+(SELECT min(substr(scope,7)) FROM mutation_operations WHERE scope LIKE 'order:%' AND (result->>'order_id')::bigint=o.id),
 (SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.notes.updated','order.cancelled'))
 FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 WHERE o.id=$1`, id, invoice, f.productID).Scan(&storedVersion, &status, &notes, &invoiceStatus, &stock, &services, &cancelled, &released, &receipts, &receiptAction, &audits); err != nil {
 			t.Fatal(err)
@@ -447,7 +447,7 @@ func TestOrderMutationsDeleteAuditFailureRollsBackCancellation(t *testing.T) {
 (SELECT count(*) FROM services WHERE order_id=o.id AND status='pending_payment'),
 (SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
 (SELECT coalesce(sum(version),0) FROM services WHERE order_id=o.id),
-(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%' AND (result->>'order_id')::bigint=o.id),
 (SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.cancelled','order.deleted'))
 FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 WHERE o.id=$1`, id, invoice, f.productID).Scan(&out.version, &out.status, &out.deleted, &out.deletedBy, &out.reason, &out.invoiceStatus, &out.stock, &out.services, &out.pendingServices, &out.released, &out.serviceVersions, &out.receipts, &out.audits); err != nil {
 			t.Fatal(err)
@@ -507,7 +507,7 @@ SELECT id,'create','waiting_verification','mutation-uncertain-external-job',1,no
 (SELECT count(*) FROM services WHERE order_id=o.id),
 (SELECT count(*) FROM services WHERE order_id=o.id AND inventory_released),
 (SELECT coalesce(sum(version),0) FROM services WHERE order_id=o.id),
-(SELECT count(*) FROM order_operation_receipts WHERE order_id=o.id),
+(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%' AND (result->>'order_id')::bigint=o.id),
 (SELECT count(*) FROM audit_events WHERE entity_type='order' AND entity_id=o.id::text AND action IN ('order.cancelled','order.deleted'))
 FROM orders o JOIN invoices i ON i.id=$2 JOIN products p ON p.id=$3 JOIN provision_jobs j ON j.id=$4 WHERE o.id=$1`, id, invoice, f.productID, jobID).Scan(&out.version, &out.orderStatus, &out.deleted, &out.invoiceStatus, &out.stock, &out.jobStatus, &out.externalStarted, &out.jobResult, &out.services, &out.released, &out.serviceVersions, &out.receipts, &out.audits); err != nil {
 					t.Fatal(err)

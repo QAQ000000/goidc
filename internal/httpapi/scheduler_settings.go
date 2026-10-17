@@ -2,8 +2,10 @@ package httpapi
 
 import (
 	"encoding/json"
-	"github.com/codex/zjmfgo/internal/store"
 	"net/http"
+
+	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 )
 
 type schedulerConfig struct {
@@ -56,67 +58,36 @@ func (s *Server) updateSchedulerSettings(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "invalid_scheduler_settings", e.Error())
 		return
 	}
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
-	tx, e := s.db.Pool.Begin(r.Context())
-	if e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var cur int64
-	if e = tx.QueryRow(r.Context(), "SELECT version FROM scheduler_task_settings WHERE id=1 FOR UPDATE").Scan(&cur); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	ctx := requestFileContext(r)
-	if e = store.LockFileCredential(ctx, tx, actor); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	var allowed bool
-	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1 FOR SHARE", actor).Scan(&allowed); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if !allowed {
-		writeError(w, 403, "permission_denied", "没有管理任务配置的权限")
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "scheduler.settings", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	if cur != in.Version {
-		writeError(w, 409, "version_conflict", "任务配置已变更，请重新加载")
-		return
-	}
-	raw, _ := json.Marshal(in.Settings)
-	var next int64
-	if e = tx.QueryRow(r.Context(), "UPDATE scheduler_task_settings SET enabled=$1,settings=$2::jsonb,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled, raw).Scan(&next); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = store.Audit(r.Context(), tx, actor, "scheduler.settings_updated", "scheduler_task_settings", 1, in); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	result := map[string]any{"version": next}
-	if e = saveSettingOperationTx(r, tx, actor, "scheduler.settings", key, hash, result); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	if e = tx.Commit(r.Context()); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	write(w, 200, result)
+	var current int64
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "scheduler.settings_updated", entity: "scheduler_task_settings", operation: "scheduler.settings", request: in,
+		beforeReplay: func(tx pgx.Tx) error {
+			// The singleton lock must precede credential and actor locks, even on replay.
+			if err := tx.QueryRow(r.Context(), "SELECT version FROM scheduler_task_settings WHERE id=1 FOR UPDATE").Scan(&current); err != nil {
+				return err
+			}
+			ctx := requestFileContext(r)
+			actor := identityFrom(r).ID
+			if err := store.LockFileCredential(ctx, tx, actor); err != nil {
+				return err
+			}
+			var allowed bool
+			if err := tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1 FOR SHARE", actor).Scan(&allowed); err != nil {
+				return err
+			}
+			if !allowed {
+				return &store.Conflict{Code: "permission_denied", Message: "没有管理任务配置的权限"}
+			}
+			return nil
+		},
+		apply: func(tx pgx.Tx) (any, any, error) {
+			if current != in.Version {
+				return nil, nil, &store.Conflict{Code: "version_conflict", Message: "任务配置已变更，请重新加载"}
+			}
+			raw, _ := json.Marshal(in.Settings)
+			var next int64
+			err := tx.QueryRow(r.Context(), "UPDATE scheduler_task_settings SET enabled=$1,settings=$2::jsonb,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled, raw).Scan(&next)
+			return map[string]any{"version": next}, in, err
+		},
+	})
 }

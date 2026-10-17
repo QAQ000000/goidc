@@ -2,15 +2,14 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/mail"
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -39,20 +38,8 @@ func smtpSeal(key []byte, value string) ([]byte, error) {
 	if len(key) != 32 {
 		return nil, conflict("smtp_encryption_unconfigured", "凭据加密密钥未配置")
 	}
-	b, e := aes.NewCipher(key)
-	if e != nil {
-		return nil, e
-	}
-	g, e := cipher.NewGCM(b)
-	if e != nil {
-		return nil, e
-	}
-	n := make([]byte, g.NonceSize())
-	if _, e = rand.Read(n); e != nil {
-		return nil, e
-	}
 	raw, _ := json.Marshal(value)
-	return g.Seal(n, n, raw, []byte("smtp:password")), nil
+	return secure.Seal(key, []byte("smtp:password"), raw)
 }
 func smtpOpen(key, sealed []byte) (string, error) {
 	if len(sealed) == 0 {
@@ -61,24 +48,16 @@ func smtpOpen(key, sealed []byte) (string, error) {
 	if len(key) != 32 {
 		return "", fmt.Errorf("SMTP credentials unavailable")
 	}
-	b, e := aes.NewCipher(key)
-	if e != nil {
-		return "", e
-	}
-	g, e := cipher.NewGCM(b)
-	if e != nil {
-		return "", e
-	}
-	if len(sealed) < g.NonceSize() {
+	raw, err := secure.Open(key, []byte("smtp:password"), sealed)
+	if errors.Is(err, secure.ErrInvalidCiphertext) {
 		return "", fmt.Errorf("invalid smtp secret")
 	}
-	raw, e := g.Open(nil, sealed[:g.NonceSize()], sealed[g.NonceSize():], []byte("smtp:password"))
-	if e != nil {
-		return "", e
+	if err != nil {
+		return "", err
 	}
 	var out string
-	e = json.Unmarshal(raw, &out)
-	return out, e
+	err = json.Unmarshal(raw, &out)
+	return out, err
 }
 func (s *Store) SMTPSettings(ctx context.Context, fallback SMTPRuntimeConfig) (SMTPSettings, error) {
 	var o SMTPSettings

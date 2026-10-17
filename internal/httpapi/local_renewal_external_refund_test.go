@@ -348,7 +348,7 @@ func TestLocalRenewalExternalRefundHTTPAuditFailureRollback(t *testing.T) {
 	f.assertBusiness(t, false)
 	var status string
 	var operations int
-	if err := f.db.Pool.QueryRow(t.Context(), `SELECT r.status,(SELECT count(*) FROM external_refund_operations WHERE idempotency_key='renewal-rollback-confirm') FROM external_refunds r WHERE id=$1`, int64(refund["id"].(float64))).Scan(&status, &operations); err != nil || status != "pending_review" || operations != 0 {
+	if err := f.db.Pool.QueryRow(t.Context(), `SELECT r.status,(SELECT count(*) FROM mutation_operations WHERE scope='external-refund' AND idempotency_key='renewal-rollback-confirm') FROM external_refunds r WHERE id=$1`, int64(refund["id"].(float64))).Scan(&status, &operations); err != nil || status != "pending_review" || operations != 0 {
 		t.Fatal("failed review left partial receipt", status, operations, err)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), `DROP TRIGGER reject_renewal_review_audit ON audit_events;DROP FUNCTION reject_renewal_review_audit()`); err != nil {

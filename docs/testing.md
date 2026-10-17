@@ -20,3 +20,13 @@
 前端检查仍使用 `npm --prefix web run lint`、`typecheck`、`test:proxy`。构建使用独立目录，禁止绕过运行目录保护；此文档不启动或重启项目服务。
 
 静态审查生成器 `node scripts/route-coverage.mjs` 和 `node scripts/admin-page-contracts.mjs` 将新结果写入忽略的 `output/audit/`。前者仍读取版本化的 `docs/generated/legacy-inventory.json` 与 `docs/audit/route-reviews.json`；生成器所需旧源码及旧页面规范须另行提供。历史生成快照保存在封存包。
+
+幂等回执由 `mutation_operations(actor_id, scope, idempotency_key)` 统一保存。迁移 156 原样搬运旧请求 hash/JSON 结果及已有时间戳，信用冻结从原字段生成等价 hash；原充值操作表没有时间戳，使用迁移时间。13 张回执/批量请求绑定表被移除，关单操作、关单核验请求、服务取消申请继续保存业务状态与外键。
+
+新增写路径在业务事务内先调用 `store.ReplayOperation`，再执行业务和 `store.SaveOperation`；回放前仍须检查当前权限及客户范围。scope 沿用旧表的幂等键域：如 `admin:<operation>`、`affiliate:<operation>`、`order:<action>`，发票申请的创建/审核/调整仍共享 `invoice-application`，不能按 API 动作拆开以绕过旧键冲突。供应商连接测试保留“进行中→完成”的两阶段结果更新。表合并须随对应二进制一起升级；不支持旧二进制继续访问已删除表。
+
+独立 PG18 可运行 `./scripts/go.sh test -race ./internal/store -run '^TestMutationOperation'`，覆盖旧 schema 升级、跨 scope/actor 隔离、首次并发请求、取消等待及回执与审计共同回滚；业务权限/资金回归仍由原测试负责。
+
+存储密文共用 `internal/secure.Seal/Open`，格式保持 `nonce || ciphertext || tag`。调用方继续负责 AAD、JSON/base64 编码、配置密钥长度及业务错误；已有密文无需迁移。`./scripts/go.sh test -race ./internal/secure ./internal/provision` 验证标准向量、旧格式互通、篡改/截断及凭据域隔离，store 和 HTTP 的渠道、支付、MFA、验证码、实名认证及敏感购买字段测试继续验证业务绑定。
+
+9 个设置写接口共用 `internal/httpapi/settings_mutation.go` 的幂等重放、审计、回执和提交流程，版本锁通过共同函数校验；调度保留重放前锁设置行再校验凭据的顺序，登录/MFA、实名认证及合同保留各自权限检查。操作 scope、请求 hash 和响应字段沿用原约定。支付、SMTP/SMS、站点、订单及供应商 API 设置由已有 store 事务负责，继续保留密钥保留/清除、渠道同步、会话复核等不同契约。独立 PG18 用例 `TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt` 对全部 9 个入口注入审计故障，验证业务/版本/回执一起回滚，随后同键重试成功且重放只产生一次审计。

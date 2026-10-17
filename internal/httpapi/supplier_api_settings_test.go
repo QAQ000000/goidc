@@ -55,7 +55,7 @@ func TestSupplierAPISettingsSchemaPermissionsAndConnectionProbe(t *testing.T) {
 		t.Fatalf("connection probe audit count=%d err=%v", auditCount, err)
 	}
 	var operationCount int
-	if err := f.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM admin_setting_operations WHERE operation='supplier.connection_test' AND idempotency_key='supplier-connection-probe-1'`).Scan(&operationCount); err != nil || operationCount != 1 {
+	if err := f.db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mutation_operations WHERE scope='admin:supplier.connection_test' AND idempotency_key='supplier-connection-probe-1'`).Scan(&operationCount); err != nil || operationCount != 1 {
 		t.Fatalf("connection probe operation receipt count=%d err=%v", operationCount, err)
 	}
 }
@@ -92,7 +92,7 @@ func TestResourceAPISettingsVersionIdempotencyAndBearerGate(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_events WHERE actor_id=$1 AND action='resource_api.settings_updated'`, rootID).Scan(&auditCount); err != nil || auditCount != 1 {
 		t.Fatalf("resource API settings audit count=%d err=%v", auditCount, err)
 	}
-	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM admin_setting_operations WHERE actor_id=$1 AND operation='resource_api.settings' AND idempotency_key='resource-api-settings-disable'`, rootID).Scan(&operationCount); err != nil || operationCount != 1 {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mutation_operations WHERE actor_id=$1 AND scope='admin:resource_api.settings' AND idempotency_key='resource-api-settings-disable'`, rootID).Scan(&operationCount); err != nil || operationCount != 1 {
 		t.Fatalf("resource API settings receipt count=%d err=%v", operationCount, err)
 	}
 	blocked := requestBearer(h, "GET", "/api/v1/cart", nil, key)

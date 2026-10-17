@@ -2,12 +2,9 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"net"
 	"net/url"
 	"regexp"
@@ -15,6 +12,8 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/secure"
+	"github.com/jackc/pgx/v5"
 )
 
 func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, expected int64) error {
@@ -60,25 +59,15 @@ func smsCrypt(key, input []byte, domain string, seal bool) ([]byte, error) {
 	if len(key) != 32 {
 		return nil, fmt.Errorf("SMS encryption unavailable")
 	}
-	b, e := aes.NewCipher(key)
-	if e != nil {
-		return nil, e
-	}
-	g, e := cipher.NewGCM(b)
-	if e != nil {
-		return nil, e
-	}
+	aadBytes := []byte("sms:" + domain)
 	if seal {
-		n := make([]byte, g.NonceSize())
-		if _, e = rand.Read(n); e != nil {
-			return nil, e
-		}
-		return g.Seal(n, n, input, []byte("sms:"+domain)), nil
+		return secure.Seal(key, aadBytes, input)
 	}
-	if len(input) < g.NonceSize() {
+	out, err := secure.Open(key, aadBytes, input)
+	if errors.Is(err, secure.ErrInvalidCiphertext) {
 		return nil, fmt.Errorf("SMS encryption unavailable")
 	}
-	return g.Open(nil, input[:g.NonceSize()], input[g.NonceSize():], []byte("sms:"+domain))
+	return out, err
 }
 
 type SMSSettings struct {

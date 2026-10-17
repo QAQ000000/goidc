@@ -2,11 +2,7 @@ package store
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 // RetrySupplierJob only re-arms a failed job for which dispatch was never started.
@@ -39,9 +35,6 @@ func (s *Store) RetrySupplierJob(ctx context.Context, actorID int64, sessionHash
 	if err = tx.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", sessionHash, actorID).Scan(&sessionUser); err != nil {
 		return false, conflict("unauthorized", "登录已失效")
 	}
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", fmt.Sprintf("supplier-job-retry:%d:%s", actorID, key)); err != nil {
-		return false, err
-	}
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
 		return false, err
 	}
@@ -57,16 +50,10 @@ func (s *Store) RetrySupplierJob(ctx context.Context, actorID int64, sessionHash
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return false, err
 	}
-	var savedHash string
-	err = tx.QueryRow(ctx, "SELECT request_hash FROM admin_setting_operations WHERE actor_id=$1 AND operation='supplier.job.retry' AND idempotency_key=$2 FOR UPDATE", actorID, key).Scan(&savedHash)
-	if err == nil {
-		if savedHash != requestHash {
-			return false, conflict("idempotency_conflict", "相同幂等键对应不同重试请求")
-		}
-		return true, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if replayed, err := ReplayOperation(ctx, tx, actorID, "admin:supplier.job.retry", key, requestHash, nil); err != nil {
 		return false, err
+	} else if replayed {
+		return true, nil
 	}
 	var action, jobStatus string
 	var actualAttempts int
@@ -99,8 +86,7 @@ func (s *Store) RetrySupplierJob(ctx context.Context, actorID int64, sessionHash
 	if err = Audit(ctx, tx, actorID, "supplier.job.retried", "service", serviceID, map[string]any{"job_id": jobID, "attempts": attempts, "supplier_id": supplierID}); err != nil {
 		return false, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result)
- VALUES($1,'supplier.job.retry',$2,$3,'{"queued":true}'::jsonb)`, actorID, key, requestHash); err != nil {
+	if err = SaveOperation(ctx, tx, actorID, "admin:supplier.job.retry", key, requestHash, map[string]any{"queued": true}); err != nil {
 		return false, err
 	}
 	return false, tx.Commit(ctx)

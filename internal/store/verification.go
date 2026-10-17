@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -14,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -35,30 +34,15 @@ func (s *Store) VerificationPayload(id string, raw []byte, seal bool) ([]byte, e
 	if len(s.ProvisionEncryptionKey) != 32 {
 		return nil, conflict("verification_unconfigured", "验证码加密尚未配置")
 	}
-	block, err := aes.NewCipher(s.ProvisionEncryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	g, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	aad := []byte("zjmfgo:verification-delivery:v1:" + id)
+	aadBytes := []byte("zjmfgo:verification-delivery:v1:" + id)
 	if seal {
-		n := make([]byte, g.NonceSize())
-		if _, err = rand.Read(n); err != nil {
-			return nil, err
-		}
-		return g.Seal(n, n, raw, aad), nil
+		return secure.Seal(s.ProvisionEncryptionKey, aadBytes, raw)
 	}
-	if len(raw) < g.NonceSize() {
-		return nil, fmt.Errorf("verification delivery unavailable")
-	}
-	out, err := g.Open(nil, raw[:g.NonceSize()], raw[g.NonceSize():], aad)
+	out, err := secure.Open(s.ProvisionEncryptionKey, aadBytes, raw)
 	if err != nil {
 		return nil, fmt.Errorf("verification delivery unavailable")
 	}
-	return out, nil
+	return out, err
 }
 
 type VerificationChallenge struct {

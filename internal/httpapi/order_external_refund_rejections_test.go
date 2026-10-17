@@ -159,7 +159,7 @@ func TestOrderExternalRefundHTTPBroadRejections(t *testing.T) {
 func orderExternalRefundBoundarySnapshot(t *testing.T, f orderExternalRefundHTTPFixture) map[string]string {
 	t.Helper()
 	result := f.snapshot(t)
-	for _, name := range []string{"invoice_profiles", "invoice_addresses", "invoice_applications", "invoice_application_items", "invoice_application_operations", "service_configuration_changes", "service_cancellation_requests", "traffic_orders", "traffic_products", "affiliate_programs", "affiliate_rule_sets", "affiliate_accounts", "affiliate_commission_events", "affiliate_withdrawals", "affiliate_withdrawal_allocations", "affiliate_clawbacks"} {
+	for _, name := range []string{"invoice_profiles", "invoice_addresses", "invoice_applications", "invoice_application_items", "mutation_operations", "service_configuration_changes", "service_cancellation_requests", "traffic_orders", "traffic_products", "affiliate_programs", "affiliate_rule_sets", "affiliate_accounts", "affiliate_commission_events", "affiliate_withdrawals", "affiliate_withdrawal_allocations", "affiliate_clawbacks"} {
 		var value string
 		if err := f.db.Pool.QueryRow(t.Context(), `SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text COLLATE "C"),'[]')::text FROM `+pgx.Identifier{name}.Sanitize()+` r`).Scan(&value); err != nil {
 			t.Fatal(err)

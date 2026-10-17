@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -47,38 +45,19 @@ func CreationReceipt(ctx context.Context, tx pgx.Tx, actor int64, operation, key
 	if len(key) < 8 || len(key) > 128 {
 		return "", false, conflict("invalid_idempotency_key", "幂等键长度必须在 8 到 128 之间")
 	}
-	if err := lockOperationKey(ctx, tx, fmt.Sprintf("admin-create:%d:%s", actor, operation), key); err != nil {
-		return "", false, err
-	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return "", false, err
 	}
 	sum := sha256.Sum256(raw)
 	hash := hex.EncodeToString(sum[:])
-	var saved string
-	var receipt []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM admin_setting_operations WHERE actor_id=$1 AND operation=$2 AND idempotency_key=$3", actor, operation, key).Scan(&saved, &receipt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return hash, false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	if saved != hash {
-		return "", false, conflict("idempotency_conflict", "相同幂等键对应不同创建请求")
-	}
-	return hash, true, json.Unmarshal(receipt, result)
+	replayed, err := ReplayOperation(ctx, tx, actor, "admin:"+operation, key, hash, result)
+	return hash, replayed, err
 }
 
 func SaveCreationReceipt(ctx context.Context, tx pgx.Tx, actor int64, operation, key, hash string, result any) error {
 	if key == "" {
 		return nil
 	}
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, "INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)", actor, operation, key, hash, raw)
-	return err
+	return SaveOperation(ctx, tx, actor, "admin:"+operation, key, hash, result)
 }

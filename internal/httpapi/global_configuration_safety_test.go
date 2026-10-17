@@ -31,7 +31,7 @@ func TestGlobalConfigurationAuditRollbackAndRevokedReplay(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM global_configuration_groups WHERE name=$1`, input.Name).Scan(&groups); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM admin_setting_operations WHERE idempotency_key='global-safety-audit-failure'`).Scan(&receipts); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mutation_operations WHERE scope LIKE 'admin:%' AND idempotency_key='global-safety-audit-failure'`).Scan(&receipts); err != nil {
 		t.Fatal(err)
 	}
 	if groups != 0 || receipts != 0 {

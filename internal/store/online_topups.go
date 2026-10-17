@@ -298,21 +298,11 @@ func (s *Store) CancelOnlineTopup(ctx context.Context, uid, invoice int64, in On
 	raw, _ := json.Marshal([]any{invoice, in})
 	sum := sha256.Sum256(raw)
 	hash := hex.EncodeToString(sum[:])
-	var old string
-	var result []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM balance_topup_operations WHERE user_id=$1 AND idempotency_key=$2", uid, key).Scan(&old, &result)
-	if err == nil {
-		if old != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同请求")
-		}
-		if err = json.Unmarshal(result, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, uid, "balance-topup", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	err = tx.QueryRow(ctx, `SELECT t.invoice_id,i.invoice_no,t.amount_cents,t.status,i.version,t.settings_version FROM balance_topups t JOIN invoices i ON i.id=t.invoice_id WHERE t.user_id=$1 AND t.invoice_id=$2 FOR UPDATE OF i,t`, uid, invoice).Scan(&out.InvoiceID, &out.InvoiceNo, &out.AmountCents, &out.Status, &out.Version, &out.SettingsVersion)
 	if err != nil {
@@ -341,8 +331,7 @@ func (s *Store) CancelOnlineTopup(ctx context.Context, uid, invoice int64, in On
 		return out, err
 	}
 	out.Status = "cancelled"
-	result, _ = json.Marshal(out)
-	if _, err = tx.Exec(ctx, "INSERT INTO balance_topup_operations(user_id,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4)", uid, key, hash, result); err != nil {
+	if err = SaveOperation(ctx, tx, uid, "balance-topup", key, hash, out); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)

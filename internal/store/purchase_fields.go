@@ -2,9 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -14,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -280,20 +278,12 @@ func SealPurchaseValue(key []byte, owner, product int64, field, value string) (s
 	if len(key) != 32 || owner < 1 || product < 1 || field == "" {
 		return "", errors.New("purchase field encryption is not configured")
 	}
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(b)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return "", err
-	}
 	aad := []byte(fmt.Sprintf("purchase-field:%d:%d:%s", owner, product, field))
-	return "enc:v2:" + base64.RawURLEncoding.EncodeToString(gcm.Seal(nonce, nonce, []byte(value), aad)), nil
+	sealed, err := secure.Seal(key, aad, []byte(value))
+	if err != nil {
+		return "", err
+	}
+	return "enc:v2:" + base64.RawURLEncoding.EncodeToString(sealed), nil
 }
 func unsealPurchaseValue(key []byte, owner, product int64, field, value string) (string, error) {
 	if !strings.HasPrefix(value, "enc:v2:") || len(key) != 32 {
@@ -303,15 +293,10 @@ func unsealPurchaseValue(key []byte, owner, product int64, field, value string) 
 	if err != nil {
 		return "", err
 	}
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(b)
-	if err != nil || len(payload) < gcm.NonceSize() {
+	aad := []byte(fmt.Sprintf("purchase-field:%d:%d:%s", owner, product, field))
+	plain, err := secure.Open(key, aad, payload)
+	if errors.Is(err, secure.ErrInvalidCiphertext) {
 		return "", errors.New("invalid encrypted purchase field")
 	}
-	aad := []byte(fmt.Sprintf("purchase-field:%d:%d:%s", owner, product, field))
-	plain, err := gcm.Open(nil, payload[:gcm.NonceSize()], payload[gcm.NonceSize():], aad)
 	return string(plain), err
 }

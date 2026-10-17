@@ -177,7 +177,7 @@ func TestManualInvoicePermissionsValidationAndTransferReplay(t *testing.T) {
 func TestManualInvoiceMigrationAndCorruptItemsGuard(t *testing.T) {
 	f := configurationUpgradeFixture(t, false)
 	ctx := t.Context()
-	if _, err := f.db.Pool.Exec(ctx, `DROP TABLE manual_invoice_operations; DROP TRIGGER invoice_version ON invoices; DROP FUNCTION advance_invoice_version();
+	if _, err := f.db.Pool.Exec(ctx, `DROP TABLE IF EXISTS manual_invoice_operations; DROP TRIGGER invoice_version ON invoices; DROP FUNCTION advance_invoice_version();
  ALTER TABLE invoices DROP CONSTRAINT manual_invoice_origin,DROP COLUMN invoice_kind,DROP COLUMN version,DROP COLUMN updated_at;
  ALTER TABLE payment_transactions DROP COLUMN checkout_url; DELETE FROM schema_migrations WHERE version='056_manual_invoices.sql'`); err != nil {
 		t.Fatal(err)
@@ -186,6 +186,9 @@ func TestManualInvoiceMigrationAndCorruptItemsGuard(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := f.db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Pool.Exec(ctx, "DROP TABLE manual_invoice_operations"); err != nil {
 		t.Fatal(err)
 	}
 	var kind string

@@ -34,7 +34,7 @@ func TestExternalRefundResolvedTopupHTTPRevocationWhileLocked(t *testing.T) {
 				}
 				snapshot := func() string {
 					var value string
-					if err := f.db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_array((SELECT balance_cents FROM users WHERE id=$1),(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM external_refunds r WHERE invoice_id=$2),(SELECT jsonb_agg(to_jsonb(v) ORDER BY refund_id) FROM external_refund_reversal_reservations v WHERE invoice_id=$2),(SELECT count(*) FROM balance_ledger WHERE user_id=$1),(SELECT count(*) FROM external_refund_operations WHERE invoice_id=$2),(SELECT count(*) FROM audit_events))::text`, f.uid, invoice).Scan(&value); err != nil {
+					if err := f.db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_array((SELECT balance_cents FROM users WHERE id=$1),(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM external_refunds r WHERE invoice_id=$2),(SELECT jsonb_agg(to_jsonb(v) ORDER BY refund_id) FROM external_refund_reversal_reservations v WHERE invoice_id=$2),(SELECT count(*) FROM balance_ledger WHERE user_id=$1),(SELECT count(*) FROM mutation_operations WHERE scope='external-refund' AND (result->'refund'->>'invoice_id')::bigint=$2),(SELECT count(*) FROM audit_events))::text`, f.uid, invoice).Scan(&value); err != nil {
 						t.Fatal(err)
 					}
 					return value

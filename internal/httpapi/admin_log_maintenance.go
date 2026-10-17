@@ -110,29 +110,17 @@ func (s *Server) cleanupLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var savedHash string
-	var savedResult []byte
-	err = tx.QueryRow(r.Context(), `SELECT request_hash,result FROM log_cleanup_operations WHERE actor_id=$1 AND idempotency_key=$2 FOR UPDATE`, actor, key).Scan(&savedHash, &savedResult)
-	if err == nil {
-		if savedHash != requestHash {
-			writeError(w, http.StatusConflict, "idempotency_conflict", "幂等键已用于其他清理请求")
-			return
-		}
-		var result map[string]any
-		if json.Unmarshal(savedResult, &result) != nil {
-			writeError(w, http.StatusInternalServerError, "invalid_operation_result", "清理结果无效")
-			return
-		}
-		result["replayed"] = true
+	var replay map[string]any
+	if replayed, err := store.ReplayOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, &replay); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if replayed {
+		replay["replayed"] = true
 		if err = tx.Commit(r.Context()); err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		write(w, http.StatusOK, result)
-		return
-	}
-	if err != pgx.ErrNoRows {
-		s.fail(w, r, err)
+		write(w, http.StatusOK, replay)
 		return
 	}
 	var deleted int64
@@ -151,8 +139,7 @@ func (s *Server) cleanupLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result := map[string]any{"log_type": input.LogType, "before": before, "deleted": deleted, "replayed": false}
-	encoded, _ := json.Marshal(result)
-	if _, err = tx.Exec(r.Context(), `INSERT INTO log_cleanup_operations(actor_id,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4)`, actor, key, requestHash, encoded); err != nil {
+	if err = store.SaveOperation(r.Context(), tx, actor, "log-cleanup", key, requestHash, result); err != nil {
 		s.fail(w, r, err)
 		return
 	}

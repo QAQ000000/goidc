@@ -373,27 +373,14 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if err = LockFinancialCustomer(ctx, tx, customer); err != nil {
 		return out, err
 	}
-	if err = lockOperationKey(ctx, tx, "external-refund", fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return out, err
-	}
 	b, _ := json.Marshal([]any{invoice, id, confirm, in, review})
 	h := sha256.Sum256(b)
 	hash := hex.EncodeToString(h[:])
-	var oldHash string
-	var result []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM external_refund_operations WHERE actor_id=$1 AND idempotency_key=$2", actor, key).Scan(&oldHash, &result)
-	if err == nil {
-		if oldHash != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同请求")
-		}
-		if err = json.Unmarshal(result, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, actor, "external-refund", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	payment := in.PaymentID
 	if id > 0 {
@@ -590,11 +577,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	if err = Audit(ctx, tx, actor, action, "external_refund", id, map[string]any{"invoice_id": invoice, "payment_id": payment, "amount_cents": out.Refund.AmountCents, "status": out.Refund.Status}); err != nil {
 		return out, err
 	}
-	result, err = json.Marshal(out)
-	if err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, "INSERT INTO external_refund_operations(actor_id,idempotency_key,invoice_id,refund_id,request_hash,result) VALUES($1,$2,$3,$4,$5,$6)", actor, key, invoice, id, hash, result); err != nil {
+	if err = SaveOperation(ctx, tx, actor, "external-refund", key, hash, out); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)

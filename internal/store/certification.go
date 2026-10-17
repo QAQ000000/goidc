@@ -2,15 +2,13 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -91,35 +89,16 @@ func sealCertification(key []byte, id string, payload any) ([]byte, string, erro
 	if err != nil {
 		return nil, "", err
 	}
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, "", err
-	}
-	g, err := cipher.NewGCM(b)
-	if err != nil {
-		return nil, "", err
-	}
 	aad := "zjmfgo:certification:v1:" + id
-	nonce := make([]byte, g.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, "", err
-	}
-	return g.Seal(nonce, nonce, raw, []byte(aad)), aad, nil
+	sealed, err := secure.Seal(key, []byte(aad), raw)
+	return sealed, aad, err
 }
 
 func openCertification(key []byte, aad string, sealed []byte) (map[string]any, error) {
-	if len(key) != 32 || len(sealed) < 12 {
+	if len(key) != 32 {
 		return nil, errors.New("certification data unavailable")
 	}
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	g, err := cipher.NewGCM(b)
-	if err != nil {
-		return nil, err
-	}
-	raw, err := g.Open(nil, sealed[:g.NonceSize()], sealed[g.NonceSize():], []byte(aad))
+	raw, err := secure.Open(key, []byte(aad), sealed)
 	if err != nil {
 		return nil, errors.New("certification data unavailable")
 	}

@@ -81,7 +81,7 @@ func TestAuthSettingsContractAndEnforcement(t *testing.T) {
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/verification/request", map[string]any{"purpose": "register", "channel": "email", "recipient": "new@example.test"}, "", ""), 409)
 	var auditCount, receiptCount int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM audit_events WHERE action='auth.settings_updated'),(SELECT count(*) FROM admin_setting_operations WHERE operation='auth.settings')").Scan(&auditCount, &receiptCount); err != nil || auditCount != 1 || receiptCount != 1 {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM audit_events WHERE action='auth.settings_updated'),(SELECT count(*) FROM mutation_operations WHERE scope='admin:auth.settings')").Scan(&auditCount, &receiptCount); err != nil || auditCount != 1 || receiptCount != 1 {
 		t.Fatal(auditCount, receiptCount, err)
 	}
 }

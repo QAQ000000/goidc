@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 
@@ -86,77 +85,34 @@ func (s *Server) adminAuthSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_auth_settings", "注册登录安全设置无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
 	cookie, err := r.Cookie("zjmfgo_session")
 	if err != nil {
 		writeError(w, 401, "unauthorized", "请先登录")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err = store.RecheckSettingsManager(r.Context(), tx, actor, tokenHash(cookie.Value)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "auth.settings", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var current int64
-	if _, err = tx.Exec(r.Context(), "SELECT id FROM site_settings WHERE id=1 FOR UPDATE"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM auth_settings WHERE id=1 FOR UPDATE").Scan(&current); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if current != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "注册登录设置已变更，请重新加载")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE auth_settings SET login_enabled=$1,registration_email_enabled=$2,registration_phone_enabled=$3,login_username_enabled=$4,login_email_enabled=$5,login_phone_enabled=$6,phone_verification_required=$7,verification_email_enabled=$8,verification_sms_enabled=$9,captcha_auto_enabled=$10,login_max_attempts=$11,login_lockout_minutes=$12,version=version+1,updated_at=now() WHERE id=1`, *in.LoginEnabled, *in.RegistrationEmailEnabled, *in.RegistrationPhoneEnabled, *in.LoginUsernameEnabled, *in.LoginEmailEnabled, *in.LoginPhoneEnabled, *in.PhoneVerificationRequired, *in.VerificationEmailEnabled, *in.VerificationSMSEnabled, *in.CaptchaAutoEnabled, in.LoginMaxAttempts, in.LoginLockoutMinutes); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE site_settings SET registration_enabled=$1,email_verification_required=$2,auth_captcha_enabled=$3,version=version+1,updated_at=now() WHERE id=1`, *in.RegistrationEnabled, *in.EmailVerificationRequired, *in.AuthCaptchaEnabled); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	out, err := readAuthSettings(r.Context(), tx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "auth.settings_updated", "auth_settings", 1, map[string]any{"before_version": current, "after": out}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{}
-	raw, _ := json.Marshal(out)
-	_ = json.Unmarshal(raw, &result)
-	if err = saveSettingOperationTx(r, tx, actor, "auth.settings", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, out)
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "auth.settings_updated", entity: "auth_settings", operation: "auth.settings", request: in,
+		beforeReplay: func(tx pgx.Tx) error {
+			return store.RecheckSettingsManager(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value))
+		},
+		apply: func(tx pgx.Tx) (any, any, error) {
+			if _, err := tx.Exec(r.Context(), "SELECT id FROM site_settings WHERE id=1 FOR UPDATE"); err != nil {
+				return nil, nil, err
+			}
+			current, err := lockSettingsVersion(r, tx, "auth_settings", in.ExpectedVersion, "注册登录设置已变更，请重新加载")
+			if err != nil {
+				return nil, nil, err
+			}
+			if _, err := tx.Exec(r.Context(), `UPDATE auth_settings SET login_enabled=$1,registration_email_enabled=$2,registration_phone_enabled=$3,login_username_enabled=$4,login_email_enabled=$5,login_phone_enabled=$6,phone_verification_required=$7,verification_email_enabled=$8,verification_sms_enabled=$9,captcha_auto_enabled=$10,login_max_attempts=$11,login_lockout_minutes=$12,version=version+1,updated_at=now() WHERE id=1`, *in.LoginEnabled, *in.RegistrationEmailEnabled, *in.RegistrationPhoneEnabled, *in.LoginUsernameEnabled, *in.LoginEmailEnabled, *in.LoginPhoneEnabled, *in.PhoneVerificationRequired, *in.VerificationEmailEnabled, *in.VerificationSMSEnabled, *in.CaptchaAutoEnabled, in.LoginMaxAttempts, in.LoginLockoutMinutes); err != nil {
+				return nil, nil, err
+			}
+			if _, err := tx.Exec(r.Context(), `UPDATE site_settings SET registration_enabled=$1,email_verification_required=$2,auth_captcha_enabled=$3,version=version+1,updated_at=now() WHERE id=1`, *in.RegistrationEnabled, *in.EmailVerificationRequired, *in.AuthCaptchaEnabled); err != nil {
+				return nil, nil, err
+			}
+			out, err := readAuthSettings(r.Context(), tx)
+			return out, map[string]any{"before_version": current, "after": out}, err
+		},
+	})
 }
 
 type mfaSettingsView struct {
@@ -194,67 +150,26 @@ func (s *Server) adminMFASettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_mfa_settings", "MFA 设置无效")
 		return
 	}
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
 	cookie, err := r.Cookie("zjmfgo_session")
 	if err != nil {
 		writeError(w, 401, "unauthorized", "请先登录")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err = store.RecheckSettingsManager(r.Context(), tx, actor, tokenHash(cookie.Value)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "mfa.settings", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, 200, replay)
-		return
-	}
-	var current int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM mfa_settings WHERE id=1 FOR UPDATE").Scan(&current); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if current != in.ExpectedVersion {
-		writeError(w, 409, "version_conflict", "MFA 策略已变更，请重新加载")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE mfa_settings SET customer_enabled=$1,admin_enabled=$2,version=version+1,updated_at=now() WHERE id=1", *in.CustomerEnabled, *in.AdminEnabled); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	out, err := readMFASettings(r.Context(), tx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, actor, "mfa.settings_updated", "mfa_settings", 1, map[string]any{"before_version": current, "after": out}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{}
-	raw, _ := json.Marshal(out)
-	_ = json.Unmarshal(raw, &result)
-	if err = saveSettingOperationTx(r, tx, actor, "mfa.settings", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, out)
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "mfa.settings_updated", entity: "mfa_settings", operation: "mfa.settings", request: in,
+		beforeReplay: func(tx pgx.Tx) error {
+			return store.RecheckSettingsManager(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value))
+		},
+		apply: func(tx pgx.Tx) (any, any, error) {
+			current, err := lockSettingsVersion(r, tx, "mfa_settings", in.ExpectedVersion, "MFA 策略已变更，请重新加载")
+			if err != nil {
+				return nil, nil, err
+			}
+			if _, err := tx.Exec(r.Context(), "UPDATE mfa_settings SET customer_enabled=$1,admin_enabled=$2,version=version+1,updated_at=now() WHERE id=1", *in.CustomerEnabled, *in.AdminEnabled); err != nil {
+				return nil, nil, err
+			}
+			out, err := readMFASettings(r.Context(), tx)
+			return out, map[string]any{"before_version": current, "after": out}, err
+		},
+	})
 }

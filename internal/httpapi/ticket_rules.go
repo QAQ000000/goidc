@@ -26,33 +26,16 @@ func ticketMutationHash(action string, id int64, input any) (string, error) {
 }
 
 func loadTicketMutation(ctx context.Context, tx pgx.Tx, actor int64, key, hash string) (map[string]any, bool, error) {
-	var savedHash string
-	var raw []byte
-	err := tx.QueryRow(ctx, `SELECT request_hash,result FROM ticket_mutation_operations WHERE actor_id=$1 AND idempotency_key=$2 FOR UPDATE`, actor, key).Scan(&savedHash, &raw)
-	if err == pgx.ErrNoRows {
-		return nil, false, nil
+	var out map[string]any
+	replayed, err := store.ReplayOperation(ctx, tx, actor, "ticket", key, hash, &out)
+	if err == nil && replayed {
+		out["replayed"] = true
 	}
-	if err != nil {
-		return nil, false, err
-	}
-	if savedHash != hash {
-		return nil, false, &store.Conflict{Code: "idempotency_conflict", Message: "相同幂等键对应不同工单操作"}
-	}
-	var result map[string]any
-	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, false, err
-	}
-	result["replayed"] = true
-	return result, true, nil
+	return out, replayed, err
 }
 
 func saveTicketMutation(ctx context.Context, tx pgx.Tx, actor int64, key, hash string, result map[string]any) error {
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO ticket_mutation_operations(actor_id,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4)`, actor, key, hash, raw)
-	return err
+	return store.SaveOperation(ctx, tx, actor, "ticket", key, hash, result)
 }
 
 func ticketMutationKey(w http.ResponseWriter, r *http.Request) (string, bool) {

@@ -18,7 +18,7 @@
 
 ## 拟定数据与接口
 
-迁移 143 新增独立 `external_refunds` 和 `external_refund_operations`，状态为 `pending_review / confirmed / rejected`，金额为整数分、仅匹配原单全额；支付/账单关联、幂等键与原商户退款流水有数据库唯一保护。原商户身份从支付加密快照提取 APIURL/PID，规范 scheme/host/default-port/尾斜杠并计算摘要，不包括密钥；跨支付类型和复制实例共享唯一约束。不同域名实际指向同一商户的网络别名无法自动推断，需要未来明确映射，不能宣称全网商户身份已识别。已确认记录不可覆写，修正通过新审计记录和专门流程处理。仅在隔离 PG18 应用迁移，运行库未变更。
+迁移 143 新增独立 `external_refunds` 和操作回执（迁移 156 后统一存于 `mutation_operations`，作用域为 `external-refund`），状态为 `pending_review / confirmed / rejected`，金额为整数分、仅匹配原单全额；支付/账单关联、幂等键与原商户退款流水有数据库唯一保护。原商户身份从支付加密快照提取 APIURL/PID，规范 scheme/host/default-port/尾斜杠并计算摘要，不包括密钥；跨支付类型和复制实例共享唯一约束。不同域名实际指向同一商户的网络别名无法自动推断，需要未来明确映射，不能宣称全网商户身份已识别。已确认记录不可覆写，修正通过新审计记录和专门流程处理。仅在隔离 PG18 应用迁移，运行库未变更。
 
 后台提供账单级退款记录分页、提交登记、独立复核确认、驳回接口；设置独立的查看、登记、确认权限，默认不给普通角色隐式扩权。接口返回 `version`，写操作带 `expected_version` 与幂等键，统一错误结构；列表使用 `items/total/limit/offset`。具体路由见 [HTTP 验收](archive/README.md#f-bc1dd0726201)。
 

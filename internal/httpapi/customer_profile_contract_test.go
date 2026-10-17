@@ -233,7 +233,7 @@ func TestCustomerProfileMutationIdempotencyConcurrencyAndAuditRollback(t *testin
 	delete(newBody, "custom_fields")
 	expect(t, request(h, "POST", "/api/v1/admin/customers", newBody, root, "profile-create-rollback-key"), 500)
 	var users, receipts, audits int
-	if err := db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM users WHERE username='profile-rollback-customer'),(SELECT count(*) FROM admin_setting_operations WHERE idempotency_key IN ('profile-audit-rollback-key','profile-create-rollback-key')),(SELECT count(*) FROM audit_events WHERE entity_type='user' AND entity_id=$1 AND action IN ('customer.created','customer.updated'))`, fmt.Sprint(id)).Scan(&users, &receipts, &audits); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM users WHERE username='profile-rollback-customer'),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'admin:%' AND idempotency_key IN ('profile-audit-rollback-key','profile-create-rollback-key')),(SELECT count(*) FROM audit_events WHERE entity_type='user' AND entity_id=$1 AND action IN ('customer.created','customer.updated'))`, fmt.Sprint(id)).Scan(&users, &receipts, &audits); err != nil {
 		t.Fatal(err)
 	}
 	if users != 0 || receipts != 0 || audits != 3 {

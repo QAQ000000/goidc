@@ -334,7 +334,7 @@ func TestPaymentAnomalySameKeyConcurrencyAndRevokedReplay(t *testing.T) {
 		t.Fatal(created, replayed)
 	}
 	var facts, receipts, claims int
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM payment_close_anomaly_refund_operations),(SELECT count(*) FROM external_refund_payout_claims)").Scan(&facts, &receipts, &claims); err != nil || facts != 1 || receipts != 1 || claims != 1 {
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM mutation_operations WHERE scope='payment-anomaly-refund'),(SELECT count(*) FROM external_refund_payout_claims)").Scan(&facts, &receipts, &claims); err != nil || facts != 1 || receipts != 1 || claims != 1 {
 		t.Fatal(facts, receipts, claims, err)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actorID); err != nil {
@@ -406,7 +406,7 @@ func TestPaymentAnomalyScopeNarrowedWhileAuthorizationWaits(t *testing.T) {
 				t.Fatal("scoped request did not complete")
 			}
 			var facts, decisions int
-			if err = f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM payment_close_anomaly_refund_operations)").Scan(&facts, &decisions); err != nil {
+			if err = f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM mutation_operations WHERE scope='payment-anomaly-refund')").Scan(&facts, &decisions); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "confirm" || mode == "replay" {
@@ -492,7 +492,7 @@ func TestPaymentAnomalyAuditFailureRollsBackAllFacts(t *testing.T) {
 	in := paymentAnomalyInput(anchor, "anomaly-audit-outgoing")
 	expect(t, request(f.h, "POST", create, in, f.root, "anomaly-audit-create"), 500)
 	var refunds, claims, operations int64
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM external_refund_payout_claims),(SELECT count(*) FROM payment_close_anomaly_refund_operations)").Scan(&refunds, &claims, &operations); err != nil || refunds != 0 || claims != 0 || operations != 0 {
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM external_refund_payout_claims),(SELECT count(*) FROM mutation_operations WHERE scope='payment-anomaly-refund')").Scan(&refunds, &claims, &operations); err != nil || refunds != 0 || claims != 0 || operations != 0 {
 		t.Fatal(refunds, claims, operations, err)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), "DROP TRIGGER anomaly_reject_audit ON audit_events"); err != nil {

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -15,9 +14,6 @@ import (
 func orderOperationStart(ctx context.Context, tx pgx.Tx, actor, orderID int64, action, key string, payload any, result any) (string, bool, error) {
 	if len(key) < 8 || len(key) > 128 {
 		return "", false, conflict("invalid_order_operation", "请提供8至128字符的幂等键")
-	}
-	if err := lockOperationKey(ctx, tx, "order-"+action, fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return "", false, err
 	}
 	body, err := json.Marshal(struct {
 		OrderID int64
@@ -28,28 +24,11 @@ func orderOperationStart(ctx context.Context, tx pgx.Tx, actor, orderID int64, a
 	}
 	digest := sha256.Sum256(body)
 	hash := hex.EncodeToString(digest[:])
-	var previous string
-	var savedID int64
-	var raw []byte
-	err = tx.QueryRow(ctx, "SELECT order_id,request_hash,result FROM order_operation_receipts WHERE actor_id=$1 AND action=$2 AND idempotency_key=$3", actor, action, key).Scan(&savedID, &previous, &raw)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return hash, false, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	if previous != hash || savedID != orderID {
-		return "", false, conflict("idempotency_conflict", "相同幂等键对应不同订单操作")
-	}
-	return hash, true, json.Unmarshal(raw, result)
+	replayed, err := ReplayOperation(ctx, tx, actor, "order:"+action, key, hash, result)
+	return hash, replayed, err
 }
 func saveOrderOperation(ctx context.Context, tx pgx.Tx, actor, id int64, action, key, hash string, result any) error {
-	raw, err := json.Marshal(result)
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, "INSERT INTO order_operation_receipts(actor_id,action,idempotency_key,order_id,request_hash,result) VALUES($1,$2,$3,$4,$5,$6)", actor, action, key, id, hash, raw)
-	return err
+	return SaveOperation(ctx, tx, actor, "order:"+action, key, hash, result)
 }
 
 // BindOrderBatch prevents reusing one batch key with a different selection or
@@ -73,15 +52,12 @@ func (s *Store) BindOrderBatch(ctx context.Context, actor int64, action, key str
 	if err = requireAdminOrdersManager(ctx, tx, actor); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO order_batch_requests(actor_id,action,idempotency_key,request_hash) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, actor, action, key, hash); err != nil {
+	if replayed, err := ReplayOperation(ctx, tx, actor, "order-batch:"+action, key, hash, nil); err != nil {
 		return err
-	}
-	var stored string
-	if err = tx.QueryRow(ctx, `SELECT request_hash FROM order_batch_requests WHERE actor_id=$1 AND action=$2 AND idempotency_key=$3`, actor, action, key).Scan(&stored); err != nil {
-		return err
-	}
-	if stored != hash {
-		return conflict("idempotency_conflict", "相同幂等键对应不同批量订单操作")
+	} else if !replayed {
+		if err = SaveOperation(ctx, tx, actor, "order-batch:"+action, key, hash, map[string]any{}); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }

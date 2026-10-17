@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
@@ -18,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -378,31 +377,14 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) encryptMFASecret(secret string) ([]byte, error) {
-	block, err := aes.NewCipher(s.cfg.MFAEncryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return nil, err
-	}
-	return gcm.Seal(nonce, nonce, []byte(secret), nil), nil
+	return secure.Seal(s.cfg.MFAEncryptionKey, nil, []byte(secret))
 }
 
 func (s *Server) decryptMFASecret(payload []byte) (string, error) {
-	block, err := aes.NewCipher(s.cfg.MFAEncryptionKey)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil || len(payload) < gcm.NonceSize() {
+	plain, err := secure.Open(s.cfg.MFAEncryptionKey, nil, payload)
+	if errors.Is(err, secure.ErrInvalidCiphertext) {
 		return "", errors.New("invalid MFA secret")
 	}
-	plain, err := gcm.Open(nil, payload[:gcm.NonceSize()], payload[gcm.NonceSize():], nil)
 	return string(plain), err
 }
 

@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -67,33 +65,20 @@ func (s *Store) MergeManualInvoices(ctx context.Context, actorID int64, in Manua
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "manual-invoice-merge", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
-		return out, err
-	}
-	var savedHash string
-	var saved []byte
 	canonical, err := json.Marshal(in)
 	if err != nil {
 		return out, err
 	}
 	digest := sha256.Sum256(canonical)
 	hash := hex.EncodeToString(digest[:])
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM manual_invoice_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
-	if err == nil {
-		if savedHash != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同合并操作")
-		}
-		if err = json.Unmarshal(saved, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, actorID, "manual-invoice", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		if err = LockAdminResourceCustomer(ctx, tx, actorID, "invoice", out.InvoiceID); err != nil {
 			return out, err
 		}
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	var customerID int64
 	var due time.Time
@@ -160,11 +145,7 @@ func (s *Store) MergeManualInvoices(ctx context.Context, actorID int64, in Manua
 			return out, err
 		}
 	}
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO manual_invoice_operations(actor_id,idempotency_key,invoice_id,action,request_hash,result) VALUES($1,$2,$3,'merge',$4,$5)`, actorID, key, out.InvoiceID, hash, encoded); err != nil {
+	if err = SaveOperation(ctx, tx, actorID, "manual-invoice", key, hash, out); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, actorID, "invoice.manual.merge", "invoice", out.InvoiceID, map[string]any{"source_invoice_ids": in.Sources, "user_id": customerID, "amount_cents": total}); err != nil {
@@ -219,9 +200,6 @@ func manualInvoiceReplay(ctx context.Context, tx pgx.Tx, actorID, invoiceID int6
 	if len(key) < 8 || len(key) > 128 {
 		return out, "", conflict("invalid_idempotency_key", "幂等键长度必须在 8 到 128 之间")
 	}
-	if err := lockOperationKey(ctx, tx, "manual-invoice", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
-		return out, "", err
-	}
 	canonical, err := json.Marshal(struct {
 		InvoiceID int64  `json:"invoice_id"`
 		Action    string `json:"action"`
@@ -232,20 +210,9 @@ func manualInvoiceReplay(ctx context.Context, tx pgx.Tx, actorID, invoiceID int6
 	}
 	digest := sha256.Sum256(canonical)
 	hash := hex.EncodeToString(digest[:])
-	var savedHash string
-	var saved []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM manual_invoice_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return out, hash, nil
-	}
-	if err != nil {
-		return out, "", err
-	}
-	if savedHash != hash {
-		return out, "", conflict("idempotency_conflict", "相同幂等键对应不同账单操作")
-	}
-	if err = json.Unmarshal(saved, &out); err != nil {
-		return out, "", err
+	replayed, err := ReplayOperation(ctx, tx, actorID, "manual-invoice", key, hash, &out)
+	if err != nil || !replayed {
+		return out, hash, err
 	}
 	// Replays must respect the invoice's current customer scope, including transfers.
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "invoice", out.InvoiceID); err != nil {
@@ -256,16 +223,11 @@ func manualInvoiceReplay(ctx context.Context, tx pgx.Tx, actorID, invoiceID int6
 }
 
 func finishManualInvoice(ctx context.Context, tx pgx.Tx, actorID int64, action, key, hash string, out ManualInvoiceResult, details map[string]any) (ManualInvoiceResult, error) {
-	encoded, err := json.Marshal(out)
-	if err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO manual_invoice_operations(actor_id,idempotency_key,invoice_id,action,request_hash,result)
- VALUES($1,$2,$3,$4,$5,$6)`, actorID, key, out.InvoiceID, action, hash, encoded); err != nil {
+	if err := SaveOperation(ctx, tx, actorID, "manual-invoice", key, hash, out); err != nil {
 		return out, err
 	}
 	details["amount_cents"], details["version"] = out.AmountCents, out.Version
-	if err = Audit(ctx, tx, actorID, "invoice.manual."+action, "invoice", out.InvoiceID, details); err != nil {
+	if err := Audit(ctx, tx, actorID, "invoice.manual."+action, "invoice", out.InvoiceID, details); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)

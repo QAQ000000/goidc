@@ -54,57 +54,16 @@ func (s *Server) updateSalesSettings(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	key, ok := settingMutationKey(w, r)
-	if !ok {
-		return
-	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "sales.settings", key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		_ = tx.Commit(r.Context())
-		write(w, http.StatusOK, replay)
-		return
-	}
-	var current int64
-	if err = tx.QueryRow(r.Context(), "SELECT version FROM sales_settings WHERE id=1 FOR UPDATE").Scan(&current); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if current != in.ExpectedVersion {
-		writeError(w, http.StatusConflict, "version_conflict", "销售设置已变更，请重新加载")
-		return
-	}
-	var version int64
-	if err = tx.QueryRow(r.Context(), `UPDATE sales_settings SET order_assignment=$1,registration_assignment=$2,version=version+1,updated_at=now()
-WHERE id=1 RETURNING version`, in.OrderAssignment, in.RegistrationAssignment).Scan(&version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result := map[string]any{"id": 1, "version": version}
-	if err = store.Audit(r.Context(), tx, actor, "sales.settings_updated", "sales_settings", 1, map[string]any{
-		"order_assignment": in.OrderAssignment, "registration_assignment": in.RegistrationAssignment, "previous_version": current,
-	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, "sales.settings", key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, result)
+	s.updateSingletonSettings(w, r, settingsUpdate{
+		action: "sales.settings_updated", entity: "sales_settings", operation: "sales.settings", request: in,
+		apply: func(tx pgx.Tx) (any, any, error) {
+			next, err := updateSettingsVersion(r, tx, "sales_settings", in.ExpectedVersion, "销售设置已变更，请重新加载",
+				`UPDATE sales_settings SET order_assignment=$1,registration_assignment=$2,version=version+1,updated_at=now() WHERE id=1 RETURNING version`, in.OrderAssignment, in.RegistrationAssignment)
+			return map[string]any{"id": 1, "version": next}, map[string]any{
+				"order_assignment": in.OrderAssignment, "registration_assignment": in.RegistrationAssignment, "previous_version": in.ExpectedVersion,
+			}, err
+		},
+	})
 }
 
 type salesCommissionGroupInput struct {

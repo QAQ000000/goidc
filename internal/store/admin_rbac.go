@@ -340,27 +340,17 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 	digest := sha256.Sum256(raw)
 	requestHash := hex.EncodeToString(digest[:])
 	if key != "" {
-		var savedHash string
-		var result []byte
-		err = tx.QueryRow(ctx, "SELECT request_hash,result FROM admin_setting_operations WHERE actor_id=$1 AND operation=$2 AND idempotency_key=$3", actorID, operation, key).Scan(&savedHash, &result)
-		if err == nil {
-			if savedHash != requestHash {
-				return 0, conflict("idempotency_conflict", "相同幂等键对应不同的管理员资料")
-			}
-			var saved struct {
-				ID            int64  `json:"id"`
-				PasswordProof string `json:"password_proof,omitempty"`
-			}
-			if err = json.Unmarshal(result, &saved); err != nil {
-				return 0, err
-			}
+		var saved struct {
+			ID            int64  `json:"id"`
+			PasswordProof string `json:"password_proof,omitempty"`
+		}
+		if replayed, err := ReplayOperation(ctx, tx, actorID, "admin:"+operation, key, requestHash, &saved); err != nil {
+			return 0, err
+		} else if replayed {
 			if (in.Password == "") != (saved.PasswordProof == "") || (in.Password != "" && bcrypt.CompareHashAndPassword([]byte(saved.PasswordProof), []byte(in.Password)) != nil) {
 				return 0, conflict("idempotency_conflict", "相同幂等键对应不同的管理员密码")
 			}
 			return saved.ID, tx.Commit(ctx)
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return 0, err
 		}
 	}
 
@@ -491,11 +481,11 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 	if key != "" {
 		// Keep the expensive password verifier; never persist a fast digest of a
 		// password in an idempotency receipt.
-		result, _ := json.Marshal(struct {
+		result := struct {
 			ID            int64  `json:"id"`
 			PasswordProof string `json:"password_proof,omitempty"`
-		}{id, string(hash)})
-		if _, err = tx.Exec(ctx, "INSERT INTO admin_setting_operations(actor_id,operation,idempotency_key,request_hash,result) VALUES($1,$2,$3,$4,$5)", actorID, operation, key, requestHash, result); err != nil {
+		}{id, string(hash)}
+		if err = SaveOperation(ctx, tx, actorID, "admin:"+operation, key, requestHash, result); err != nil {
 			return 0, err
 		}
 	}

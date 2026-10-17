@@ -2,17 +2,16 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -54,25 +53,15 @@ func (s *Store) affiliateTargetCrypt(raw []byte, aad string, seal bool) ([]byte,
 	if len(s.ProvisionEncryptionKey) != 32 {
 		return nil, conflict("withdrawal_encryption_unavailable", "提现加密密钥未配置")
 	}
-	block, err := aes.NewCipher(s.ProvisionEncryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	g, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
+	aadBytes := []byte(aad)
 	if seal {
-		nonce := make([]byte, g.NonceSize())
-		if _, err = rand.Read(nonce); err != nil {
-			return nil, err
-		}
-		return g.Seal(nonce, nonce, raw, []byte(aad)), nil
+		return secure.Seal(s.ProvisionEncryptionKey, aadBytes, raw)
 	}
-	if len(raw) < g.NonceSize() {
+	out, err := secure.Open(s.ProvisionEncryptionKey, aadBytes, raw)
+	if errors.Is(err, secure.ErrInvalidCiphertext) {
 		return nil, fmt.Errorf("withdrawal target unavailable")
 	}
-	return g.Open(nil, raw[:g.NonceSize()], raw[g.NonceSize():], []byte(aad))
+	return out, err
 }
 func maskAffiliateTarget(value string) string {
 	r := []rune(value)

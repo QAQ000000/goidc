@@ -2,9 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -14,6 +11,7 @@ import (
 
 	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/payment"
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -165,30 +163,16 @@ func (s *Store) paymentSecret(value []byte, seal bool) (string, error) {
 	if len(s.ProvisionEncryptionKey) != 32 {
 		return "", conflict("payment_encryption_unconfigured", "支付密钥加密尚未配置")
 	}
-	block, err := aes.NewCipher(s.ProvisionEncryptionKey)
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
 	aad := []byte("zjmfgo:payment-settings:epay-key:v1")
 	if seal {
-		nonce := make([]byte, gcm.NonceSize())
-		if _, err = rand.Read(nonce); err != nil {
-			return "", err
-		}
-		return string(gcm.Seal(nonce, nonce, value, aad)), nil
+		out, err := secure.Seal(s.ProvisionEncryptionKey, aad, value)
+		return string(out), err
 	}
-	if len(value) < gcm.NonceSize() {
-		return "", errors.New("invalid encrypted payment configuration")
-	}
-	raw, err := gcm.Open(nil, value[:gcm.NonceSize()], value[gcm.NonceSize():], aad)
+	out, err := secure.Open(s.ProvisionEncryptionKey, aad, value)
 	if err != nil {
 		return "", errors.New("invalid encrypted payment configuration")
 	}
-	return string(raw), nil
+	return string(out), err
 }
 
 func lockPaymentConfiguration(ctx context.Context, tx pgx.Tx) error {

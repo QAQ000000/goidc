@@ -2,15 +2,13 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/payment"
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -34,30 +32,15 @@ func (s *Store) paymentCredentials(reference string, raw []byte, seal bool) ([]b
 	if len(s.ProvisionEncryptionKey) != 32 {
 		return nil, conflict("payment_encryption_unconfigured", "支付密钥加密尚未配置")
 	}
-	block, err := aes.NewCipher(s.ProvisionEncryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-	aad := []byte("zjmfgo:payment-credentials:v1:" + reference)
+	aadBytes := []byte("zjmfgo:payment-credentials:v1:" + reference)
 	if seal {
-		nonce := make([]byte, gcm.NonceSize())
-		if _, err = rand.Read(nonce); err != nil {
-			return nil, err
-		}
-		return gcm.Seal(nonce, nonce, raw, aad), nil
+		return secure.Seal(s.ProvisionEncryptionKey, aadBytes, raw)
 	}
-	if len(raw) < gcm.NonceSize() {
-		return nil, fmt.Errorf("payment credentials unavailable")
-	}
-	decoded, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], aad)
+	out, err := secure.Open(s.ProvisionEncryptionKey, aadBytes, raw)
 	if err != nil {
 		return nil, fmt.Errorf("payment credentials unavailable")
 	}
-	return decoded, nil
+	return out, err
 }
 
 func (s *Store) snapshotPaymentCredentials(reference string, cfg PaymentConfiguration, legacy bool) ([]byte, error) {

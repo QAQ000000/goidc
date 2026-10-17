@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -295,21 +294,11 @@ func (s *Store) CreateInvoiceApplication(ctx context.Context, userID int64, in I
 	canonical, _ := json.Marshal(in)
 	sum := sha256.Sum256(canonical)
 	hash := hex.EncodeToString(sum[:])
-	var savedHash string
-	var saved []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM invoice_application_operations WHERE actor_id=$1 AND idempotency_key=$2", userID, key).Scan(&savedHash, &saved)
-	if err == nil {
-		if savedHash != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同发票申请")
-		}
-		if err = json.Unmarshal(saved, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, userID, "invoice-application", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	var owner int64
 	if err = tx.QueryRow(ctx, "SELECT user_id FROM invoice_profiles WHERE id=$1 AND user_id=$2", in.ProfileID, userID).Scan(&owner); err != nil {
@@ -376,8 +365,7 @@ func (s *Store) CreateInvoiceApplication(ctx context.Context, userID int64, in I
 			return out, err
 		}
 	}
-	encoded, _ := json.Marshal(out)
-	if _, err = tx.Exec(ctx, "INSERT INTO invoice_application_operations(actor_id,idempotency_key,application_id,action,request_hash,result) VALUES($1,$2,$3,'create',$4,$5)", userID, key, out.ApplicationID, hash, encoded); err != nil {
+	if err = SaveOperation(ctx, tx, userID, "invoice-application", key, hash, out); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, userID, "invoice_application.created", "invoice_application", out.ApplicationID, map[string]any{"amount_cents": total, "invoice_ids": invoiceIDs}); err != nil {
@@ -409,9 +397,6 @@ func (s *Store) ReviewInvoiceApplication(ctx context.Context, actorID, id int64,
 	if !allowed {
 		return out, conflict("permission_denied", "没有审核发票的权限")
 	}
-	if err = lockOperationKey(ctx, tx, "invoice-application", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
-		return out, err
-	}
 	var userID int64
 	if err = tx.QueryRow(ctx, "SELECT user_id FROM invoice_applications WHERE id=$1", id).Scan(&userID); err != nil {
 		return out, err
@@ -425,21 +410,11 @@ func (s *Store) ReviewInvoiceApplication(ctx context.Context, actorID, id int64,
 	}{id, in})
 	sum := sha256.Sum256(canonical)
 	hash := hex.EncodeToString(sum[:])
-	var savedHash string
-	var saved []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM invoice_application_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
-	if err == nil {
-		if savedHash != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同审核操作")
-		}
-		if err = json.Unmarshal(saved, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, actorID, "invoice-application", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	if err = tx.QueryRow(ctx, "SELECT user_id,status,amount_cents,version FROM invoice_applications WHERE id=$1 FOR UPDATE", id).Scan(&userID, &out.Status, &out.AmountCents, &out.Version); err != nil {
 		return out, err
@@ -474,8 +449,7 @@ func (s *Store) ReviewInvoiceApplication(ctx context.Context, actorID, id int64,
 	out.ApplicationID = id
 	out.Status = in.Status
 	out.Version++
-	encoded, _ := json.Marshal(out)
-	if _, err = tx.Exec(ctx, "INSERT INTO invoice_application_operations(actor_id,idempotency_key,application_id,action,request_hash,result) VALUES($1,$2,$3,'review',$4,$5)", actorID, key, id, hash, encoded); err != nil {
+	if err = SaveOperation(ctx, tx, actorID, "invoice-application", key, hash, out); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, actorID, "invoice_application.reviewed", "invoice_application", id, map[string]any{"status": in.Status, "note": in.ReviewNote}); err != nil {
@@ -625,33 +599,20 @@ func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicati
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "invoice-application", fmt.Sprintf("%d:%s", actorID, key)); err != nil {
-		return out, err
-	}
 	canonical, _ := json.Marshal(struct {
 		ID    int64
 		Input InvoiceApplicationAdjustment
 	}{applicationID, in})
 	sum := sha256.Sum256(canonical)
 	hash := hex.EncodeToString(sum[:])
-	var savedHash string
-	var saved []byte
-	err = tx.QueryRow(ctx, "SELECT request_hash,result FROM invoice_application_operations WHERE actor_id=$1 AND idempotency_key=$2", actorID, key).Scan(&savedHash, &saved)
-	if err == nil {
+	if replayed, err := ReplayOperation(ctx, tx, actorID, "invoice-application", key, hash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		if err = invoiceDocumentAuthorize(ctx, tx, actorID); err != nil {
-			return out, err
-		}
-		if savedHash != hash {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同发票调整")
-		}
-		if err = json.Unmarshal(saved, &out); err != nil {
 			return out, err
 		}
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	var status string
 	if err = tx.QueryRow(ctx, "SELECT status,version FROM invoice_applications WHERE id=$1 FOR UPDATE", applicationID).Scan(&status, &out.Version); err != nil {
@@ -680,8 +641,7 @@ func (s *Store) AdjustInvoiceApplication(ctx context.Context, actorID, applicati
 	if err = tx.QueryRow(ctx, "SELECT amount_cents,version FROM invoice_applications WHERE id=$1", applicationID).Scan(&out.AmountCents, &out.Version); err != nil {
 		return out, err
 	}
-	encoded, _ := json.Marshal(out)
-	if _, err = tx.Exec(ctx, "INSERT INTO invoice_application_operations(actor_id,idempotency_key,application_id,action,request_hash,result) VALUES($1,$2,$3,'adjust',$4,$5)", actorID, key, applicationID, hash, encoded); err != nil {
+	if err = SaveOperation(ctx, tx, actorID, "invoice-application", key, hash, out); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, actorID, "invoice_application.adjusted", "invoice_application", applicationID, map[string]any{"action": in.Action, "adjustment_id": out.AdjustmentID, "customer_id": customerID, "document_number": in.DocumentNumber}); err != nil {

@@ -107,7 +107,7 @@ func TestAdminEntryCreationCredentialRecheckAndAuditRollback(t *testing.T) {
 		if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM "+tc.table+" WHERE "+tc.where).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("audit failure left row: %d %v", count, err)
 		}
-		if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM admin_setting_operations WHERE idempotency_key=$1", key).Scan(&count); err != nil || count != 0 {
+		if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM mutation_operations WHERE scope LIKE 'admin:%' AND idempotency_key=$1", key).Scan(&count); err != nil || count != 0 {
 			t.Fatalf("audit failure left receipt: %d %v", count, err)
 		}
 	}

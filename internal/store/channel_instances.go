@@ -2,8 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -47,30 +46,15 @@ func channelSeal(key []byte, instanceID, raw string, seal bool) ([]byte, error) 
 	if len(key) != 32 {
 		return nil, conflict("channel_encryption_unconfigured", "渠道凭据加密密钥未配置")
 	}
-	b, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
-	}
-	g, err := cipher.NewGCM(b)
-	if err != nil {
-		return nil, err
-	}
-	aad := []byte("zjmfgo:channel-instance:v1:" + instanceID)
+	aadBytes := []byte("zjmfgo:channel-instance:v1:" + instanceID)
 	if seal {
-		nonce := make([]byte, g.NonceSize())
-		if _, err = rand.Read(nonce); err != nil {
-			return nil, err
-		}
-		return g.Seal(nonce, nonce, []byte(raw), aad), nil
+		return secure.Seal(key, aadBytes, []byte(raw))
 	}
-	if len(raw) < g.NonceSize() {
-		return nil, errors.New("channel secret unavailable")
-	}
-	plain, err := g.Open(nil, []byte(raw[:g.NonceSize()]), []byte(raw[g.NonceSize():]), aad)
+	out, err := secure.Open(key, aadBytes, []byte(raw))
 	if err != nil {
 		return nil, errors.New("channel secret unavailable")
 	}
-	return plain, nil
+	return out, err
 }
 
 func channelID() string {

@@ -51,7 +51,7 @@ func TestUpgradePolicyAtomicityAndSessionReplay(t *testing.T) {
 			var enabled, downgrade bool
 			check := func() {
 				t.Helper()
-				if err := f.db.Pool.QueryRow(t.Context(), `SELECT revision,config_upgrade_enabled,config_downgrade_enabled,(SELECT count(*) FROM product_upgrade_targets WHERE product_id=$1),(SELECT count(*) FROM admin_setting_operations WHERE idempotency_key=$2) FROM products WHERE id=$1`, f.productID, key).Scan(&current, &enabled, &downgrade, &targets, &receipts); err != nil {
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT revision,config_upgrade_enabled,config_downgrade_enabled,(SELECT count(*) FROM product_upgrade_targets WHERE product_id=$1),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'admin:%' AND idempotency_key=$2) FROM products WHERE id=$1`, f.productID, key).Scan(&current, &enabled, &downgrade, &targets, &receipts); err != nil {
 					t.Fatal(err)
 				}
 			}

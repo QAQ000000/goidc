@@ -61,7 +61,7 @@ func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
 				body = payload
 			}
 			var beforeOrders, beforeInvoices, beforeReceipts, beforeAudits int
-			if err := f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM order_operation_receipts)+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&beforeOrders, &beforeInvoices, &beforeReceipts, &beforeAudits); err != nil {
+			if err := f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%')+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&beforeOrders, &beforeInvoices, &beforeReceipts, &beforeAudits); err != nil {
 				t.Fatal(err)
 			}
 			tx, err := f.db.Pool.Begin(t.Context())
@@ -108,7 +108,7 @@ func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
 				t.Fatal("wrong rejection", response.Body.String())
 			}
 			var orders, invoices, receipts, audits int
-			if err = f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM order_operation_receipts)+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&orders, &invoices, &receipts, &audits); err != nil {
+			if err = f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%')+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&orders, &invoices, &receipts, &audits); err != nil {
 				t.Fatal(err)
 			}
 			if orders != beforeOrders || invoices != beforeInvoices || receipts != beforeReceipts || audits != beforeAudits {
