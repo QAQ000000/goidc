@@ -2,14 +2,14 @@ import { performance } from 'node:perf_hooks';
 
 const defaultClock = { now: () => performance.now(), setTimeout, clearTimeout };
 const bounds = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000, 600000, Infinity];
-const counters = () => ({ planned: 0, started: 0, completed: 0, accepted: 0, succeeded: 0, failed: 0, timeout: 0, dropped: 0, cancelled: 0, unfinished: 0 });
+const counters = () => ({ planned: 0, started: 0, dispatched: 0, completed: 0, accepted: 0, succeeded: 0, failed: 0, timeout: 0, dropped: 0, cancelled: 0, unfinished: 0 });
 const histogram = () => ({ count: 0, sum: 0, max: 0, buckets: bounds.map(() => 0) });
 function observe(h, value) { h.count++; h.sum += value; h.max = Math.max(h.max, value); h.buckets[bounds.findIndex(bound => value <= bound)]++; }
 function metric(h) {
   const quantile = p => { if (!h.count) return null; let count = 0; for (let i = 0; i < bounds.length; i++) { count += h.buckets[i]; if (count >= Math.ceil(h.count * p)) return Math.min(bounds[i], h.max); } };
   return { count: h.count, meanMs: h.count ? h.sum / h.count : null, maxMs: h.count ? h.max : null, p95UpperMs: quantile(.95), p99UpperMs: quantile(.99), buckets: bounds.map((upper, i) => ({ upperMs: Number.isFinite(upper) ? upper : null, count: h.buckets[i] })) };
 }
-const group = () => ({ ...counters(), latency: histogram(), scheduleLag: histogram() });
+const group = () => ({ ...counters(), latency: histogram(), admissionLag: histogram(), scheduleLag: histogram() });
 const label = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,48}$/.test(value);
 const integer = (value, min, max) => Number.isSafeInteger(value) && value >= min && value <= max;
 
@@ -88,7 +88,9 @@ export async function runG09Load({ profile, perform = performG09Fetch, record = 
   }
   function complete(task, response, rejected = false, unfinished = false) {
     if (finalized || !active.has(task.id)) return;
+    if (clock.now() >= task.deadline) abort(task, 'timeout');
     clock.clearTimeout(task.timer); active.delete(task.id);
+    if (task.dispatchedAt === null) for (const g of groups(task.stream)) observe(g.scheduleLag, Math.max(0, clock.now() - task.plannedAt));
     phases[task.stream.phase].lastEndedAt = clock.now();
     const endedAt = clock.now(), status = Number.isInteger(response?.status) && response.status >= 100 && response.status <= 599 ? response.status : null;
     const httpOK = status !== null && status >= 200 && status < 300;
@@ -101,28 +103,38 @@ export async function runG09Load({ profile, perform = performG09Fetch, record = 
     if (task.reason === 'cancelled') increment(task.stream, 'cancelled');
     if (unfinished) increment(task.stream, 'unfinished');
     if (!unfinished) for (const g of groups(task.stream)) observe(g.latency, Math.max(0, endedAt - task.startedAt));
-    emit({ event: 'finished', id: task.id, phase: task.stream.phase, category: task.stream.category, unit: task.stream.unit, attempt: 1, plannedAt: task.plannedAt, startedAt: task.startedAt, endedAt, scheduleLagMs: task.startedAt - task.plannedAt, latencyMs: unfinished ? null : Math.max(0, endedAt - task.startedAt), status, accepted, succeeded, completed: !unfinished, reason: unfinished ? 'unfinished' : task.reason ?? (rejected ? 'request_failed' : succeeded ? null : 'not_successful') });
+    emit({ event: 'finished', id: task.id, phase: task.stream.phase, category: task.stream.category, unit: task.stream.unit, attempt: 1, plannedAt: task.plannedAt, startedAt: task.startedAt, admittedAt: task.startedAt, deadlineAt: task.deadline, dispatched: task.dispatchedAt !== null, dispatchedAt: task.dispatchedAt, dispatchLagMs: task.dispatchedAt === null ? null : task.dispatchedAt - task.plannedAt, admissionLagMs: task.startedAt - task.plannedAt, endedAt, scheduleLagMs: (task.dispatchedAt ?? endedAt) - task.plannedAt, latencyMs: unfinished ? null : Math.max(0, endedAt - task.startedAt), status, accepted, succeeded, completed: !unfinished, reason: unfinished ? 'unfinished' : task.reason ?? (rejected ? 'request_failed' : succeeded ? null : 'not_successful') });
     maybeFinish();
   }
   function abort(task, why) { if (!task.reason) { task.reason = why; task.controller.abort(); } }
   function launch(stream, index, now) {
     const id = ++nextId, plannedAt = startedAt + stream.offset + index * stream.interval;
-    const task = { id, stream, plannedAt, startedAt: now, controller: new AbortController(), reason: null };
+    const task = { id, stream, plannedAt, startedAt: now, deadline: now + config.requestTimeoutMs, dispatchedAt: null, controller: new AbortController(), reason: null };
     active.set(id, task); increment(stream, 'planned'); increment(stream, 'started');
-    for (const g of groups(stream)) observe(g.scheduleLag, now - plannedAt);
+    for (const g of groups(stream)) observe(g.admissionLag, now - plannedAt);
     task.timer = clock.setTimeout(() => abort(task, 'timeout'), config.requestTimeoutMs);
-    emit({ event: 'started', id, phase: stream.phase, category: stream.category, unit: stream.unit, attempt: 1, plannedAt, startedAt: now, scheduleLagMs: now - plannedAt });
+    emit({ event: 'started', id, phase: stream.phase, category: stream.category, unit: stream.unit, attempt: 1, plannedAt, startedAt: now, admittedAt: now, deadlineAt: task.deadline, admissionLagMs: now - plannedAt });
     if (stopped) abort(task, 'cancelled');
-    Promise.resolve().then(() => { if (task.controller.signal.aborted) throw new Error('Aborted before dispatch'); return perform({ requestId: id, streamSequence: index, unit: stream.unit, origin: plan.origin, phase: stream.phase, category: stream.category, unit: stream.unit, attempt: 1, plannedAt, startedAt: now, signal: task.controller.signal }); }).then(response => complete(task, response), () => complete(task, null, true));
+    Promise.resolve().then(() => {
+      const dispatchNow = clock.now();
+      // Timers cannot run during synchronous recorder/performer work. Absolute
+      // deadlines are authoritative, both here and in complete().
+      if (dispatchNow >= task.deadline) abort(task, 'timeout');
+      else if (dispatchNow >= startedAt + stream.offset + stream.duration || dispatchNow - plannedAt > config.maxScheduleLagMs) abort(task, 'schedule_late');
+      if (task.controller.signal.aborted) throw new Error('Aborted before dispatch');
+      task.dispatchedAt = dispatchNow; increment(stream, 'dispatched');
+      for (const g of groups(stream)) observe(g.scheduleLag, dispatchNow - plannedAt);
+      return perform({ requestId: id, streamSequence: index, unit: stream.unit, origin: plan.origin, phase: stream.phase, category: stream.category, attempt: 1, plannedAt, startedAt: now, admittedAt: now, dispatchedAt: dispatchNow, deadlineAt: task.deadline, signal: task.controller.signal });
+    }).then(response => complete(task, response), () => complete(task, null, true));
   }
   function maybeFinish() {
     if (finalized || !stopped || active.size) return;
     finalized = true; clock.clearTimeout(timer); clock.clearTimeout(drainTimer); signal?.removeEventListener('abort', cancelled);
     const endedAt = clock.now();
-    const summarize = (g, duration) => { const { latency, scheduleLag, lastEndedAt, ...counts } = g; void lastEndedAt; return { ...counts, measurementDurationMs: duration, latency: metric(latency), scheduleLag: metric(scheduleLag), successfulThroughputPerSecond: duration > 0 ? g.succeeded * 1000 / duration : 0 }; };
+    const summarize = (g, duration) => { const { latency, admissionLag, scheduleLag, lastEndedAt, ...counts } = g; void lastEndedAt; return { ...counts, measurementDurationMs: duration, latency: metric(latency), admissionLag: metric(admissionLag), scheduleLag: metric(scheduleLag), successfulThroughputPerSecond: duration > 0 ? g.succeeded * 1000 / duration : 0 }; };
     const mapped = (obj, duration) => Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, summarize(value, duration(key))]));
     const phaseDuration = name => { const stream = plan.streams.find(stream => stream.phase === name); return Math.max(0, Math.max(Math.min(stopAt, startedAt + stream.offset + stream.duration), phases[name].lastEndedAt ?? 0) - (startedAt + stream.offset)); };
-    finish({ unit: 'work_unit', workloadPlanned: plan.planned, ok: !reason && total.failed === 0 && total.dropped === 0, reason, origin: plan.origin, startedAt, stoppedAt: stopAt, endedAt, plannedDurationMs: plan.durationMs, elapsedMs: endedAt - startedAt, total: summarize(total, endedAt - startedAt), phases: mapped(phases, phaseDuration), categories: Object.fromEntries(Object.entries(categories).map(([key, value]) => [key, { unit: streams.find(stream => stream.category === key).unit, ...summarize(value, endedAt - startedAt) }])), phaseCategories: Object.fromEntries(Object.entries(phaseCategories).map(([key, value]) => [key, { unit: streams.find(stream => `${stream.phase}/${stream.category}` === key).unit, ...summarize(value, phaseDuration(key.split('/')[0])) }])), quantiles: 'bounded histogram upper estimates; latency excludes unfinished operations; throughput uses actual observation windows; work units are not necessarily HTTP requests', recordsRetained: 0 });
+    finish({ unit: 'work_unit', workloadPlanned: plan.planned, ok: !reason && total.failed === 0 && total.dropped === 0, reason, origin: plan.origin, startedAt, stoppedAt: stopAt, endedAt, plannedDurationMs: plan.durationMs, elapsedMs: endedAt - startedAt, total: summarize(total, endedAt - startedAt), phases: mapped(phases, phaseDuration), categories: Object.fromEntries(Object.entries(categories).map(([key, value]) => [key, { unit: streams.find(stream => stream.category === key).unit, ...summarize(value, endedAt - startedAt) }])), phaseCategories: Object.fromEntries(Object.entries(phaseCategories).map(([key, value]) => [key, { unit: streams.find(stream => `${stream.phase}/${stream.category}` === key).unit, ...summarize(value, phaseDuration(key.split('/')[0])) }])), quantiles: 'bounded histogram upper estimates; startedAt aliases admittedAt; started counts admissions, dispatched counts actual performer calls; latency includes recorder/scheduler overhead and excludes unfinished operations; scheduleLag measures dispatch, or terminal observation for undispatched work; admissionLag measures admission; controller HTTP subrequests are separate; throughput uses actual observation windows; work units are not necessarily HTTP requests', recordsRetained: 0 });
   }
   function stop(why = null) {
     if (stopped) return;

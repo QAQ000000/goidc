@@ -127,3 +127,67 @@ test('already cancelled run dispatches nothing and safely handles prototype-shap
   const result = await runG09Load({ profile: profile({ phases: [{ name: '__proto__', durationMs: 10, streams: [{ category: 'constructor', unit: 'http_request', ratePerSecond: 100 }] }] }), clock, signal: controller.signal, perform: () => { calls++; return { status: 200 }; } });
   assert.equal(calls, 0); assert.equal(result.total.dropped, 1); assert.equal(result.phases.__proto__.dropped, 1);
 });
+
+test('slow started recorder exhausts absolute timeout before any performer side effect', async () => {
+  const clock = new Clock(), rows = []; let calls = 0;
+  const pending = runG09Load({ profile: profile({ requestTimeoutMs: 1, phases: [{ name: 'short', durationMs: 10, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 100 }] }] }), clock,
+    record: row => { rows.push(row); if (row.event === 'started') clock.time += 30; },
+    perform: () => { calls++; return { status: 200 }; } });
+  await clock.advance(50); const result = await pending;
+  assert.equal(calls, 0); assert.equal(result.total.dispatched, 0); assert.equal(result.total.timeout, 1);
+  assert.equal(result.total.succeeded, 0); assert.equal(result.ok, false);
+  const finished = rows.find(row => row.event === 'finished');
+  assert.equal(finished.dispatched, false); assert.equal(finished.dispatchedAt, null); assert.equal(finished.dispatchLagMs, null);
+  assert.equal(finished.scheduleLagMs, 30); assert.equal(result.total.scheduleLag.maxMs, 30); assert.equal(result.total.admissionLag.maxMs, 0);
+});
+
+test('resolved promise past deadline loses to timeout even before overdue timer gets an event-loop turn', async () => {
+  const clock = new Clock(); let resolve, aborted = false;
+  const pending = runG09Load({ profile: profile({ requestTimeoutMs: 10, phases: [{ name: 'short', durationMs: 5, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 100 }] }] }), clock,
+    perform: ({ signal }) => { signal.addEventListener('abort', () => { aborted = true; }); return new Promise(done => { resolve = done; }); } });
+  await clock.flush(); clock.time = 10; resolve({ status: 200 }); await clock.flush();
+  assert.equal(aborted, true);
+  await clock.advance(20, true); const result = await pending;
+  assert.equal(result.total.timeout, 1); assert.equal(result.total.dispatched, 1); assert.equal(result.total.accepted, 0); assert.equal(result.total.succeeded, 0);
+});
+
+test('synchronous performer exceeding deadline cannot turn its late 200 into success', async () => {
+  const clock = new Clock(); let aborted = false;
+  const pending = runG09Load({ profile: profile({ requestTimeoutMs: 10, phases: [{ name: 'short', durationMs: 5, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 100 }] }] }), clock,
+    perform: ({ signal }) => { signal.addEventListener('abort', () => { aborted = true; }); clock.time += 30; return { status: 200 }; } });
+  await clock.advance(50); const result = await pending;
+  assert.equal(aborted, true); assert.equal(result.total.dispatched, 1); assert.equal(result.total.timeout, 1);
+  assert.equal(result.total.completed, 1); assert.equal(result.total.failed, 1); assert.equal(result.total.latency.maxMs, 30);
+});
+
+test('dispatch lag includes recorder time and pre-dispatch schedule budget prevents late side effects', async () => {
+  for (const maxScheduleLagMs of [5, 20]) {
+    const clock = new Clock(), rows = []; let calls = 0;
+    const pending = runG09Load({ profile: profile({ maxScheduleLagMs, phases: [{ name: 'one', durationMs: 20, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 10 }] }] }), clock,
+      record: row => { rows.push(row); if (row.event === 'started') clock.time += 8; }, perform: data => { calls++; assert.equal(data.dispatchedAt, 8); return { status: 200 }; } });
+    await clock.advance(30); const result = await pending;
+    assert.equal(calls, maxScheduleLagMs === 5 ? 0 : 1); assert.equal(result.total.admissionLag.maxMs, 0); assert.equal(result.total.scheduleLag.maxMs, 8);
+    assert.equal(rows.find(row => row.event === 'finished').dispatchLagMs, maxScheduleLagMs === 5 ? null : 8);
+    assert.equal(result.total.succeeded, maxScheduleLagMs === 5 ? 0 : 1);
+  }
+});
+
+test('cross-phase tails have independent actual phase windows and do not inflate throughput', async () => {
+  const clock = new Clock();
+  const pending = runG09Load({ profile: profile({ phases: ['one','two'].map(name => ({ name, durationMs: 100, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 10 }] })) }), clock,
+    perform: data => delayed(clock, data.phase === 'one' ? 150 : 5)(data) });
+  await clock.advance(250); const result = await pending;
+  assert.equal(result.total.succeeded, 2); assert.equal(result.total.successfulThroughputPerSecond, 10);
+  assert.equal(result.phases.one.measurementDurationMs, 150); assert.equal(result.phases.one.successfulThroughputPerSecond, 1000 / 150);
+  assert.equal(result.phases.two.measurementDurationMs, 100); assert.equal(result.phases.two.successfulThroughputPerSecond, 10);
+  assert.equal(result.phaseCategories['one/read'].latency.maxMs, 150); assert.equal(result.phaseCategories['two/read'].latency.maxMs, 5);
+});
+
+test('real event-loop blocking started recorder cannot reproduce the formerly false-success result', async () => {
+  let calls = 0;
+  const result = await runG09Load({ profile: profile({ requestTimeoutMs: 1, maxScheduleLagMs: 50, phases: [{ name: 'short', durationMs: 5, streams: [{ category: 'read', unit: 'http_request', ratePerSecond: 10 }] }] }),
+    record: row => { if (row.event === 'started') { const until = performance.now() + 15; while (performance.now() < until) { /* simulate slow synchronous disk recorder */ } } },
+    perform: () => { calls++; return { status: 200 }; } });
+  assert.equal(calls, 0); assert.equal(result.total.timeout, 1); assert.equal(result.total.dispatched, 0); assert.equal(result.total.succeeded, 0); assert.equal(result.ok, false);
+  assert.ok(result.total.scheduleLag.maxMs >= 15);
+});
