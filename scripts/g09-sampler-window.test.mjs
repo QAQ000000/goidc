@@ -109,3 +109,19 @@ test('actual owned-child cwd change invalidates the registered identity and stop
   const result = await f.window.run();
   assert.equal(result.failureCode, 'window_sample_failed'); assert.equal(result.persisted, 0); assert.equal(f.stopped.length, 1);
 });
+
+test('journal failure after one durable sample cannot pass end-window conservation', async t => {
+  const f = await fixture(t);
+  const sleep = f.options.clock.sleep;
+  let sleeps = 0;
+  f.options.clock.sleep = async ms => {
+    await sleep(ms);
+    if (++sleeps === 2) await chmod(f.options.journalPath, 0o644);
+  };
+  const result = await f.window.run();
+  assert.equal(result.state, 'failed'); assert.equal(result.attempted, 2);
+  assert.equal(result.persisted, 1); assert.equal(result.missing, 2); assert.equal(f.stopped.length, 1);
+  const records = (await readFile(f.options.journalPath, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.equal(records.filter(r => r.kind === 'sample').length, 1);
+  assert.ok(!records.some(r => r.kind === 'summary' && r.state === 'complete'));
+});
