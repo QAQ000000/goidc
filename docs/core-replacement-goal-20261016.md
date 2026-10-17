@@ -71,3 +71,4 @@ G09候选运行前置已在固定 `78b4d1e` 完成，双迁移、隔离 API/Web/
 
 - G09精确600任务前置批次已在固定 `2f32106` 的run4实际隔离PG18 race通过：来源24.672秒、双worker首次排空77.514秒、三边界逐600独立核对及两个真实minute调度周期、副作用稳定和wrong-owner SQL负例通过；两worker正常TERM/Wait、schema/常驻核对通过。72项Node、21小包race、7HTTPrace及build/vet通过无SKIP，run1–3 FAIL和2条23514日志保留，见[本批验收](g09-cohort-acceptance-20261017.md)。易支付双渠道签名/重复回调小链已另有实际PG证据，未访问商户checkout。未部署/推送/重启常驻或写业务库，45完成/60部分及总体目标不关闭。下一批先接同封存候选/namespace/宿主TCP fixture与协议进程，再完成历史基数和27分钟联合profile。
 - G09容量前置已在 `550f334` 合入：固定五阶段/27分钟容量profile、业务混合比例、数据规模、600任务排空阈值，以及候选清单/源码/二进制/loopback/预算/run-root校验均有独立入口和测试；`--execute` 明确拒绝，未把静态前置写成容量PASS。完整容量controller、历史基数、真实HTTP/worker排空、资金/资源不变量、进程/namespace实测和生产切流仍待完成，G09及总体目标继续开放。
+- G09离线容量fixture在 `1aac142` 合入：固定450来源映射600队列任务，具备分批注册、封存、只读实体投影核验、PENDING/失败冻结及无副作用cleanup guard；专项 race、Go build/vet通过。该协议层不访问PG或候选服务，不能作为实际排空证据。容量 controller、真实候选seed/API负载、双worker阶段控制及observer投影仍待完成。

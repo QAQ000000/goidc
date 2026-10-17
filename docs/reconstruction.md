@@ -290,6 +290,7 @@ schema059 已部署，实现 Go 原生抬头/地址维护、申请快照、本�
 
 2026-10-17 G09工具合并：2秒owned进程采样时窗、真实编译魔方适配器的durable协议sink、精确schema只读PG18观察器已审查合入。固定 `f9e7b96` 联合62项Node、16个Go小包顶层race（明确PG opt-in）全部PASS且无SKIP，build/vet/diff退出0，schema恢复及常驻服务身份/健康通过；见[工具增量](g09-tooling-increment-20261017.md)。WAL明确整个cluster、不可用IO/首CPU为null，协议接纳不冒充真实VM/容量；当时尚缺600来源；后续run4已通过有限600来源/双worker/正常周期，完整候选controller及27分钟profile仍未完成，G09和总体目标继续开放。
 2026-10-17 G09容量前置：独立 `codex/g09-capacity-profile-validator-20261017` 分支合入 `550f334`，冻结五阶段27分钟profile、速率/事务比例、1000客户/2000服务/10000账单、双worker和600任务排空门槛；新增候选清单、源码/二进制身份、loopback端口、预算和独立run-root前置校验。95项相关Node测试90 PASS、5项既有运行时opt-in明确跳过；`--execute` 当前明确拒绝，未启动服务、数据库或负载，容量与worker业务ready仍未验证。
+2026-10-17 G09离线容量fixture：独立 `codex/g09-capacity-fixture-20261017` 分支合入 `1aac142`，新增450来源登记/封存、600实体任务映射、逐ID drain投影状态机和严格私有协议校验。主线 opt-in 专项race通过，Go build/vet通过。fixture自身无数据库、API、worker或清理副作用；它证明的是协议拒绝伪造与状态迁移规则，不证明任何实际任务排空。candidate seed、双worker控制、只读PG来源投影和完整容量controller仍待实现，见[专项验收](g09-capacity-fixture-protocol-increment-20261017.md)。
 
 2026-10-17 G09供应商来源小链：按要求使用gpt-6.1-sol独立分支提交，审查后合入`1fc49a5`。真实API供应商建账/catalog/import/publish及客户订单付款形成任务，实际worker完成create、管理员API独立sync；主线`6a7f727`四项race无SKIP通过（HTTP13.243秒）及vet通过，余额/库存/服务身份/任务/审计和9条durable协议hash核对通过。测试owned进程TERM/Wait、schema清理与常驻身份/健康均通过，见[专项](g09-supplier-worker-smoke-20261017.md)。无真实上游/业务库/部署/推送/重启，G09容量、G03及整体接管仍开放。
 
