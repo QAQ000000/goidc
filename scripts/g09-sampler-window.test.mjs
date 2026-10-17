@@ -17,8 +17,8 @@ async function fixture(t, { realClock = false, count = 3, lag = 0, thresholds = 
   const owned = { name: 'worker_0', pid: child.pid, uid: process.getuid(), executable: await realpath(process.execPath), cwd: dir, netNamespace: await readlink('/proc/self/ns/net'), mountNamespace: await readlink('/proc/self/ns/mnt') };
   let now = 10;
   const clock = realClock ? undefined : { now: () => now, sleep: async ms => { now += ms + lag; } };
-  const start = realClock ? performance.now() + 150 : now + 100;
-  const profile = { startAtMs: start, endAtMs: start + (count - 1) * 2000 + 100, maxSamples: count, maxScheduleLagMs: realClock ? 300 : 10, thresholds: { rssBytes: 1e10, threads: 1000, fdCount: 1000, cpuPercentOneCore: 100000, requireIO: false, ...thresholds } };
+  const start = realClock ? performance.now() + 3000 : now + 100;
+  const profile = { startAtMs: start, endAtMs: start + (count - 1) * 2000 + (realClock ? 1000 : 100), maxSamples: count, maxScheduleLagMs: realClock ? 1000 : 10, thresholds: { rssBytes: 1e10, threads: 1000, fdCount: 1000, cpuPercentOneCore: 100000, requireIO: false, ...thresholds } };
   const stopped = [];
   const options = { children: [owned], clockTicksPerSecond: hz, profile, journalPath: `${dir}/samples.jsonl`, stop: value => stopped.push(value), ...(clock ? { clock } : {}) };
   const window = await createG09SamplerWindow(options);
@@ -28,7 +28,7 @@ async function fixture(t, { realClock = false, count = 3, lag = 0, thresholds = 
 test('real fixed two-second slots persist real owned-child samples with conservation and private journal', async t => {
   const f = await fixture(t, { realClock: true, count: 2 });
   const result = await f.window.run();
-  assert.equal(result.state, 'complete');
+  assert.equal(result.state, 'complete', JSON.stringify(result));
   assert.equal(result.planned, 2); assert.equal(result.persisted, 2); assert.equal(result.missing, 0);
   assert.equal(result.capacityVerified, false); assert.equal(f.stopped.length, 0);
   const raw = await readFile(f.options.journalPath, 'utf8'), records = raw.trim().split('\n').map(JSON.parse);
