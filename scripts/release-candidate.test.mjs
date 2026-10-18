@@ -6,6 +6,10 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { apiTarget, builderFiles, builderVersion, inventory, selectedDigest, sha256, sourceProof, templateFiles, verifyCandidate } from './release-candidate-lib.mjs';
 import { buildCandidate, prepareDestination } from './build-release-candidate.mjs';
+import { captureModuleBuildEvidence, moduleManifestFormat, moduleProfilePath } from './module-manifest-lib.mjs';
+
+const fixtureModule = { category: 'sms', id: 'fixture', version: 'builtin', schema_version: 1, contract_version: 1, instance_mode: 'channel', factory_available: true };
+const fixtureProfile = { format: 'goidc-module-build-profile-v1', profile: 'default', contract_version: 1, modules: [fixtureModule] };
 
 async function temporary(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'zjmfgo-release-unit-'));
@@ -24,6 +28,7 @@ async function repo(t) {
   command(root, 'config', 'user.name', 'Fixture');
   for (const name of new Set([...builderFiles, ...templateFiles, 'go.mod', 'go.sum', 'web/package-lock.json', 'db/migrations/001_fixture.sql'])) await put(root, name, `fixture ${name}\n`);
   await put(root, '.gitignore', 'ignored\n');
+  await put(root, moduleProfilePath, JSON.stringify(fixtureProfile));
   command(root, 'add', '.'); command(root, 'commit', '--quiet', '-m', 'fixture');
   return root;
 }
@@ -40,12 +45,14 @@ async function candidate(t) {
   await put(root, 'web/.next/server/pages-manifest.json', '{}');
   await put(root, 'web/.next/server/app/index.js', 'fixture-server');
   await put(root, 'web/.next/static/chunks/index.js', 'fixture-client');
+  const modules = await captureModuleBuildEvidence({ source, root, metaRelative: 'meta', binaryPaths: { api: 'bin/api', worker: 'bin/worker' }, run: filename => JSON.stringify({ format: moduleManifestFormat, profile: 'default', binary: path.basename(filename), contract_version: 1, modules: [{ ...fixtureModule, descriptor_sha256: 'a'.repeat(64) }] }) });
   const manifest = {
     format: 'zjmfgo-release-candidate-v1', source: proof,
     builder: { version: builderVersion, ...selectedDigest(proof.files, builderFiles) },
     templates: selectedDigest(proof.files, templateFiles), tools: { go: 'fixture-go', node: process.version, npm: 'fixture-npm' },
     locks: { goMod: proof.files.find(file => file.path === 'go.mod').sha256, goSum: proof.files.find(file => file.path === 'go.sum').sha256, web: proof.files.find(file => file.path === 'web/package-lock.json').sha256 },
     binaries: Object.fromEntries(['api', 'worker', 'migrate'].map(name => [name, `vcs.revision=${proof.commit}\nvcs.modified=false`])),
+    modules,
     migrations: proof.files.filter(file => file.path.startsWith('db/migrations/')),
     web: { apiInternalURL: 'http://127.0.0.1:8088', buildID: 'fixture-build-id', bundler: 'webpack' }, artifacts: await inventory(root),
   };
@@ -101,7 +108,7 @@ test('verify actual fixture files, source and manifest anchor; detect corruption
 });
 
 test('required-file, source checksum, BUILD_ID, rewrite and template checks are independent', async t => {
-  for (const scenario of ['missing', 'migration', 'build-id', 'rewrite', 'template', 'lock', 'binary']) {
+  for (const scenario of ['missing', 'migration', 'build-id', 'rewrite', 'template', 'lock', 'binary', 'module-evidence', 'module-binary']) {
     await t.test(scenario, async t => {
       const f = await candidate(t);
       if (scenario === 'missing') await rm(path.join(f.root, 'bin/migrate'));
@@ -111,6 +118,8 @@ test('required-file, source checksum, BUILD_ID, rewrite and template checks are 
       if (scenario === 'template') f.manifest.templates.sha256 = '0'.repeat(64);
       if (scenario === 'lock') f.manifest.locks.goMod = '0'.repeat(64);
       if (scenario === 'binary') f.manifest.binaries.worker = 'vcs.modified=true';
+      if (scenario === 'module-evidence') delete f.manifest.modules;
+      if (scenario === 'module-binary') f.manifest.modules.manifests.worker.binary_sha256 = '0'.repeat(64);
       // Intentionally reseal our synthetic fixture to test semantic invariants,
       // rather than only exercising the trusted manifest hash gate.
       f.manifest.artifacts = (await inventory(f.root)).filter(file => file.path !== 'manifest.json');

@@ -18,6 +18,8 @@ type SupplierInput struct {
 	Password        string `json:"password"`
 	Active          *bool  `json:"active"`
 	ExpectedVersion int64  `json:"expected_version"`
+	DisableOnly     bool   `json:"disable_only"`
+	SessionHash     string `json:"-"`
 }
 
 type SupplierImportInput struct {
@@ -59,6 +61,12 @@ type supplierSnapshot struct {
 }
 
 func (s *Store) SaveSupplier(ctx context.Context, actor, id int64, in SupplierInput) (int64, error) {
+	if in.DisableOnly {
+		if id < 1 || in.ExpectedVersion < 1 || in.Active == nil || *in.Active || in.Name != "" || in.Provider != "" || in.BaseURL != "" || in.Username != "" || in.Password != "" {
+			return 0, conflict("invalid_supplier_disable", "仅停用请求必须指定现有供应商和版本，不能修改其他字段")
+		}
+		return s.disableSupplier(ctx, actor, id, in.ExpectedVersion, in.SessionHash)
+	}
 	in.Name, in.BaseURL, in.Username = strings.TrimSpace(in.Name), strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"), strings.TrimSpace(in.Username)
 	if !contentTextValid(in.Name, 180, false) || in.Name == "" || len(in.Username) > 255 || in.Username == "" || len(in.Password) > 4096 || in.Active == nil || len(s.ProvisionEncryptionKey) != 32 {
 		return 0, conflict("invalid_supplier", "名称、账户、状态或加密配置无效")
@@ -111,6 +119,47 @@ func (s *Store) SaveSupplier(ctx context.Context, actor, id int64, in SupplierIn
 		return 0, err
 	}
 	if err = Audit(ctx, tx, actor, "supplier.saved", "supplier", id, map[string]any{"provider": in.Provider, "active": *in.Active, "password_changed": in.Password != ""}); err != nil {
+		return 0, err
+	}
+	return id, tx.Commit(ctx)
+}
+
+// disableSupplier does not resolve a factory, decrypt credentials or require an
+// encryption key. Configuration must remain manageable after an implementation
+// has been removed from a build. The narrow write cannot alter its identity or
+// bypass in-flight supplier jobs, optimistic locking, authorization or audit.
+func (s *Store) disableSupplier(ctx context.Context, actor, id, expected int64, sessionHash string) (int64, error) {
+	if sessionHash == "" {
+		return 0, conflict("unauthorized", "登录已失效")
+	}
+	tx, err := s.CatalogTx(ctx, actor)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+	if err = resourceAPIManagerCheck(ctx, tx, actor, sessionHash); err != nil {
+		return 0, err
+	}
+	var version int64
+	var provider string
+	var active bool
+	var running *int64
+	if err = tx.QueryRow(ctx, `SELECT version,provider,active,running_job_id FROM supplier_accounts WHERE id=$1 FOR UPDATE`, id).Scan(&version, &provider, &active, &running); err != nil {
+		return 0, err
+	}
+	if version != expected {
+		return 0, conflict("version_conflict", "供应商已变更，请重新加载")
+	}
+	if !active {
+		return 0, conflict("supplier_already_disabled", "供应商已停用，请重新加载")
+	}
+	if running != nil {
+		return 0, conflict("supplier_busy", "供应商存在进行中或待核验的交付任务，请先处理")
+	}
+	if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET active=false,version=version+1,updated_at=now() WHERE id=$1`, id); err != nil {
+		return 0, err
+	}
+	if err = Audit(ctx, tx, actor, "supplier.disabled", "supplier", id, map[string]any{"provider": provider, "previous_active": true, "active": false, "version": version + 1, "password_changed": false}); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)

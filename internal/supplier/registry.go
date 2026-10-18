@@ -38,6 +38,12 @@ func Register(provider Provider, descriptor channel.Descriptor, factory Provider
 	if provider.ID == "" || provider.Name == "" || factory == nil || descriptor.ID == "" {
 		return errors.New("invalid supplier registration")
 	}
+	if descriptor.InstanceMode == "" {
+		descriptor.InstanceMode = "supplier"
+	}
+	if descriptor.InstanceMode != "supplier" {
+		return errors.New("supplier adapters require supplier account configuration")
+	}
 	providerState.Lock()
 	defer providerState.Unlock()
 	if _, exists := providerState.metadata[provider.ID]; exists {
@@ -67,7 +73,7 @@ func init() {
 	MustRegister(
 		Provider{ID: ProviderZJMF, Name: "魔方财务", Capabilities: Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true, Renew: true}},
 		channel.Descriptor{
-			ID: "zjmf", Name: "魔方财务", Category: channel.Provision,
+			ID: "zjmf", Name: "魔方财务", Category: channel.Provision, InstanceMode: "supplier",
 			Capabilities: []string{"catalog", "create", "sync", "renew", "power", "reset_password", "rescue", "vnc", "reinstall"},
 			Fields: []channel.Field{
 				{Key: "endpoint", Label: "API 地址", Type: channel.Text, Required: true},
@@ -80,7 +86,7 @@ func init() {
 	// NOKVM still uses its dedicated profile store. Its descriptor is visible
 	// in the common catalogue, but its account factory is migrated separately.
 	channel.MustRegister(channel.Descriptor{
-		ID: "nokvm", Name: "NOKVM", Category: channel.Provision,
+		ID: "nokvm", Name: "NOKVM", Category: channel.Provision, InstanceMode: "profile",
 		Capabilities: []string{"create", "sync", "power", "reset_password", "rescue", "vnc", "reinstall"},
 		Fields:       []channel.Field{{Key: "profile", Label: "部署配置", Type: channel.Text, Required: true, Secret: true}},
 	})

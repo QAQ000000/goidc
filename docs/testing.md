@@ -2,6 +2,8 @@
 
 完整的开发生命周期、证据等级和领域到测试的对应关系见[工程治理契约](architecture/engineering-governance.md)及[领域验收矩阵](architecture/contract-verification-matrix.md)。本文只维护具体测试入口、前置条件和不应过度解释的边界。
 
+编译模块的字段/凭据/schema、默认装配、前端组件和候选清单验证见[编译模块契约](compiled-module-architecture.md#验证入口与发布边界)。配置 `ZJMFGO_TEST_DATABASE_URL` 和 `REQUIRE_INTEGRATION=1` 才能执行其中数据库专项；模块清单/组件测试通过不代表实际渠道已连通。
+
 测试按行为和业务域保留，不以测试/生产行数比例作为删除标准。资金、权限、并发、幂等及故障恢复断言是必需的回归保护。
 
 | 范围 | 入口 | 前置条件 |

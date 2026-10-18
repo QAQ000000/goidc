@@ -2,49 +2,198 @@
   "schemaVersion": 1,
   "contracts": [
     {
+      "id": "compiled-modules",
+      "contract": "docs/compiled-module-architecture.md",
+      "implementation": [
+        "internal/channel",
+        "internal/module",
+        "internal/modules",
+        "internal/store/channel_configuration.go",
+        "audit/module-build-profile.json",
+        "scripts/module-manifest-lib.mjs",
+        "web/src/components/channel-instances.tsx"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/...",
+        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/httpapi -run 'TestChannelConfiguration|TestCompiledMail|TestCompiledSMS|TestNotificationEnable|TestDefaultIDCSmartSMS|TestPaymentSchemaMismatch|TestDefaultPaymentContract|TestMissingSupplierDisable'",
+        "node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs scripts/release-candidate.test.mjs scripts/release-runtime.test.mjs"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL 18 credentials, audit rollback and historical payment compatibility",
+        "browser configuration and deployment-specific external channel verification"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "module",
+          "store",
+          "web",
+          "release"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-compiled-module-manifest"
+      }
+    },
+    {
+      "id": "notification-center",
+      "contract": "docs/notification-architecture.md",
+      "implementation": [
+        "internal/notify",
+        "internal/notification",
+        "internal/store/notification_center.go",
+        "internal/httpapi/notification_center.go",
+        "db/migrations/162_unified_notifications.sql",
+        "web/src/components/notification-center.tsx",
+        "web/src/components/notification-preferences.tsx"
+      ],
+      "tests": [
+        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/store ./internal/httpapi -run TestNotificationCenter",
+        "./scripts/go.sh test ./internal/notification -run \"Telegram|NotificationCenter\"",
+        "node --test scripts/notification-center-components.test.mjs"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL 18 consent, binding, scope, transactional rollback and lease recovery",
+        "real browser with local Telegram protocol simulator; live Telegram verification remains separate"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "notification",
+          "store",
+          "httpapi",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-notification-protocol"
+      }
+    },
+    {
       "id": "payments",
       "contract": "docs/payments.md",
-      "implementation": ["internal/payment", "internal/store"],
-      "tests": ["./scripts/go.sh test ./... -run 'Payment|MutationOperation'"],
+      "implementation": [
+        "internal/payment",
+        "internal/store"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./... -run 'Payment|MutationOperation'"
+      ],
       "evaluation": [],
-      "review": {"required": true, "owners": ["payment", "store"]},
-      "releaseEvidence": {"required": true, "kind": "isolated-pg-and-external-channel"}
+      "review": {
+        "required": true,
+        "owners": [
+          "payment",
+          "store"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-external-channel"
+      }
     },
     {
       "id": "transactions",
       "contract": "docs/transactions.md",
-      "implementation": ["internal/store", "internal/httpapi"],
-      "tests": ["./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'"],
+      "implementation": [
+        "internal/store",
+        "internal/httpapi"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'"
+      ],
       "evaluation": [],
-      "review": {"required": true, "owners": ["store", "httpapi"]},
-      "releaseEvidence": {"required": true, "kind": "isolated-pg"}
+      "review": {
+        "required": true,
+        "owners": [
+          "store",
+          "httpapi"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg"
+      }
     },
     {
       "id": "admin-rbac",
       "contract": "docs/admin-rbac.md",
-      "implementation": ["internal/httpapi", "internal/store", "web/src/app/admin"],
-      "tests": ["./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'", "node scripts/admin-page-contracts.mjs"],
-      "evaluation": ["browser acceptance with an isolated test account"],
-      "review": {"required": true, "owners": ["httpapi", "web"]},
-      "releaseEvidence": {"required": true, "kind": "api-and-browser"}
+      "implementation": [
+        "internal/httpapi",
+        "internal/store",
+        "web/src/app/admin"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'",
+        "node scripts/admin-page-contracts.mjs"
+      ],
+      "evaluation": [
+        "browser acceptance with an isolated test account"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "httpapi",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "api-and-browser"
+      }
     },
     {
       "id": "provider-nokvm",
       "contract": "docs/nokvm-delivery.md",
-      "implementation": ["internal/provision", "internal/supplier"],
-      "tests": ["./scripts/go.sh test ./... -run 'NOKVM|Supplier|Provision'"],
-      "evaluation": ["controlled external provider verification"],
-      "review": {"required": true, "owners": ["provision", "supplier"]},
-      "releaseEvidence": {"required": true, "kind": "isolated-and-external-provider"}
+      "implementation": [
+        "internal/provision",
+        "internal/supplier"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./... -run 'NOKVM|Supplier|Provision'"
+      ],
+      "evaluation": [
+        "controlled external provider verification"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "provision",
+          "supplier"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-and-external-provider"
+      }
     },
     {
       "id": "migration-cutover",
       "contract": "docs/legacy-migration.md",
-      "implementation": ["db/migrations", "cmd/migrate", "docs/cutover-runbook.md"],
-      "tests": ["./scripts/go.sh test ./... -run 'Migration|Checksum'"],
-      "evaluation": ["isolated PostgreSQL migration and rollback rehearsal"],
-      "review": {"required": true, "owners": ["migration", "release"]},
-      "releaseEvidence": {"required": true, "kind": "candidate-and-rollback"}
+      "implementation": [
+        "db/migrations",
+        "cmd/migrate",
+        "docs/cutover-runbook.md"
+      ],
+      "tests": [
+        "./scripts/go.sh test ./... -run 'Migration|Checksum'"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL migration and rollback rehearsal"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "migration",
+          "release"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "candidate-and-rollback"
+      }
     }
   ]
 }

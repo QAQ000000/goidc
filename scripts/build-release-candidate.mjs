@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { apiTarget, builderFiles, builderVersion, fileHash, git, inventory, noLinks, selectedDigest, sha256, sourceProof, templateFiles, verifyCandidate } from './release-candidate-lib.mjs';
+import { captureModuleBuildEvidence } from './module-manifest-lib.mjs';
 
 export async function prepareDestination(repo, destination) {
   const output = path.resolve(destination);
@@ -62,6 +63,7 @@ export async function buildCandidate({ source, revision, output, dependencies, a
       binaries[name] = run('bash', ['scripts/go.sh', 'version', '-m', path.join(root, 'bin', name)], checkout, true).split('\n').slice(1).join('\n');
       if (!binaries[name].includes(`vcs.revision=${proof.commit}`) || !binaries[name].includes('vcs.modified=false')) throw new Error(`Go build source proof invalid: ${name}`);
     }
+    const modules = await captureModuleBuildEvidence({ source: checkout, root, metaRelative: 'meta', binaryPaths: { api: 'bin/api', worker: 'bin/worker' }, run });
     await symlink(dependencies, path.join(checkout, 'web/node_modules'));
     const nextVersion = JSON.parse(await readFile(path.join(dependencies, 'next/package.json'), 'utf8')).version;
     run('npm', ['run', 'build', '--', '--webpack'], path.join(checkout, 'web'));
@@ -85,7 +87,7 @@ export async function buildCandidate({ source, revision, output, dependencies, a
       builder: { version: builderVersion, ...builder }, templates: selectedDigest(proof.files, templateFiles), tools,
       locks: { goMod: proof.files.find(file => file.path === 'go.mod').sha256, goSum: proof.files.find(file => file.path === 'go.sum').sha256, web: committedLock.sha256 },
       sharedDependencies: { sha256: depsSHA, files: depsInventory.length, policy: 'read-only reuse; full tree before/after; trusted owner required; no installation' },
-      commands: { go: 'bash scripts/go.sh build -mod=readonly -trimpath -buildvcs=true', web: 'npm run build -- --webpack' }, binaries, migrations,
+      commands: { go: 'bash scripts/go.sh build -mod=readonly -trimpath -buildvcs=true', web: 'npm run build -- --webpack' }, binaries, modules, migrations,
       web: { bundler: 'webpack', nextVersion, apiInternalURL: target, buildID: (await readFile(path.join(root, 'web/.next/BUILD_ID'), 'utf8')).trim(), cacheExcluded: true, runtimeDependenciesIncluded: false },
       artifacts: await inventory(root),
       scope: 'Local preparation only. No deploy, services, proxy, database, old chunk retention or source authenticity of uncontrolled external builds proven.',

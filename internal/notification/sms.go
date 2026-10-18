@@ -24,6 +24,14 @@ type SMSProvider interface {
 
 var smsRegistry = module.NewRegistry[SMSProvider](channel.SMS)
 
+func RegisterSMSFactory(desc channel.Descriptor, factory module.Factory[SMSProvider]) error {
+	return smsRegistry.Register(desc, factory)
+}
+
+func NewSMSProvider(id string, config module.Config) (SMSProvider, error) {
+	return smsRegistry.New(id, config)
+}
+
 func RegisterSMSProvider(name string, p SMSProvider) error {
 	return RegisterSMSProviderDescriptor(channel.Descriptor{ID: name, Name: name, Category: channel.SMS, Capabilities: []string{"send"}}, p)
 }
@@ -32,7 +40,7 @@ func RegisterSMSProviderDescriptor(desc channel.Descriptor, p SMSProvider) error
 	if desc.ID == "" || p == nil || desc.Category != channel.SMS {
 		return errors.New("invalid SMS provider registration")
 	}
-	if err := smsRegistry.Register(desc, func(module.Config) (SMSProvider, error) { return p, nil }); err != nil {
+	if err := RegisterSMSFactory(desc, func(module.Config) (SMSProvider, error) { return p, nil }); err != nil {
 		return err
 	}
 	return nil
@@ -41,17 +49,29 @@ func RegisterSMSProviderDescriptor(desc channel.Descriptor, p SMSProvider) error
 const idcsmartDefaultEndpoint = "http://api1.idcsmart.com/smsapi.php?action=send"
 
 func init() {
-	if err := RegisterSMSProviderDescriptor(channel.Descriptor{
+	if err := RegisterSMSFactory(channel.Descriptor{
 		ID: "generic_http_json", Name: "通用 HTTP JSON 短信", Category: channel.SMS,
 		Capabilities: []string{"send"},
 		Fields: []channel.Field{
 			{Key: "endpoint", Label: "HTTPS 接口", Type: channel.Text, Required: true},
 			{Key: "token", Label: "访问令牌", Type: channel.Text, Required: true, Secret: true},
 		},
-	}, genericHTTPSMS{}); err != nil {
+	}, func(config module.Config) (SMSProvider, error) {
+		runtime := store.SMSRuntimeConfig{Endpoint: configString(config.Values, "endpoint"), Token: smsSecret(config, "token")}
+		if !store.ValidSMSEndpoint(runtime.Endpoint) || runtime.Token == "" {
+			return nil, errors.New("invalid SMS configuration")
+		}
+		return configuredSMSProvider{provider: genericHTTPSMS{}, config: runtime}, nil
+	}); err != nil {
 		panic(err)
 	}
-	if err := RegisterSMSProviderDescriptor(channel.Descriptor{
+	channel.MustRegisterConfigValidator(channel.SMS, "generic_http_json", func(values map[string]any, _ map[string]bool) []channel.ValidationError {
+		if !store.ValidSMSEndpoint(configString(values, "endpoint")) {
+			return []channel.ValidationError{{Field: "endpoint", Code: "invalid_sms_endpoint"}}
+		}
+		return nil
+	})
+	if err := RegisterSMSFactory(channel.Descriptor{
 		ID: "idcsmart", Name: "智简魔方", Category: channel.SMS,
 		Capabilities: []string{"send"},
 		Fields: []channel.Field{
@@ -59,9 +79,21 @@ func init() {
 			{Key: "sign", Label: "短信 SignName", Type: channel.Text, Required: true},
 			{Key: "key", Label: "应用秘钥", Type: channel.Text, Required: true, Secret: true},
 		},
-	}, idcsmartSMS{endpoint: idcsmartDefaultEndpoint}); err != nil {
+	}, func(config module.Config) (SMSProvider, error) {
+		runtime := store.SMSRuntimeConfig{API: configString(config.Values, "api"), Sign: configString(config.Values, "sign"), Key: smsSecret(config, "key")}
+		if runtime.API == "" || runtime.Sign == "" || runtime.Key == "" {
+			return nil, errors.New("invalid SMS configuration")
+		}
+		return configuredSMSProvider{provider: idcsmartSMS{endpoint: idcsmartDefaultEndpoint}, config: runtime}, nil
+	}); err != nil {
 		panic(err)
 	}
+	channel.MustRegisterConfigValidator(channel.SMS, "idcsmart", func(values map[string]any, _ map[string]bool) []channel.ValidationError {
+		if strings.ContainsAny(configString(values, "api"), "\r\n\x00") {
+			return []channel.ValidationError{{Field: "api", Code: "invalid_sms_api"}}
+		}
+		return nil
+	})
 }
 func SendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
 	_, err := SendSMSWithEvidence(ctx, c, j)
@@ -80,12 +112,17 @@ func SendSMSWithEvidence(ctx context.Context, c store.SMSRuntimeConfig, j store.
 }
 
 func sendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
-	validConfig := c.Provider == "idcsmart" && c.API != "" && c.Sign != "" && c.Key != ""
-	if c.Provider != "idcsmart" {
-		validConfig = store.ValidSMSEndpoint(c.Endpoint) && c.Token != ""
+	config := c.ModuleConfig
+	if config.Values == nil {
+		// Compatibility for callers using the original runtime struct. New
+		// adapters receive their complete schema through ModuleConfig.
+		config = module.Config{
+			Values:  map[string]any{"endpoint": c.Endpoint, "api": c.API, "sign": c.Sign},
+			Secrets: map[string]string{"token": c.Token, "key": c.Key}, Payload: c,
+		}
 	}
-	p, resolveErr := smsRegistry.New(c.Provider, module.Config{Payload: c})
-	if !c.Enabled || resolveErr != nil || p == nil || !validConfig || !store.ValidSMSRecipient(j.Recipient) || !j.ExpiresAt.After(time.Now()) {
+	p, resolveErr := NewSMSProvider(c.Provider, config)
+	if !c.Enabled || resolveErr != nil || p == nil || !store.ValidSMSRecipient(j.Recipient) || !j.ExpiresAt.After(time.Now()) {
 		return errors.New("SMS delivery failed")
 	}
 	setSMSOutcome(ctx, "provider_failed")
@@ -94,6 +131,13 @@ func sendSMS(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) erro
 	}
 	setSMSOutcome(ctx, "accepted")
 	return nil
+}
+
+func smsSecret(config module.Config, key string) string {
+	if value := config.Secrets[key]; value != "" {
+		return value
+	}
+	return config.Secret
 }
 
 func setSMSOutcome(ctx context.Context, outcome string) {
@@ -126,6 +170,17 @@ func readSMSResponse(ctx context.Context, resp *http.Response) ([]byte, error) {
 }
 
 type genericHTTPSMS struct{}
+
+// Configured adapters retain the exact factory snapshot. The runtime struct
+// argument remains available for previously registered SMSProvider adapters.
+type configuredSMSProvider struct {
+	provider SMSProvider
+	config   store.SMSRuntimeConfig
+}
+
+func (p configuredSMSProvider) Send(ctx context.Context, _ store.SMSRuntimeConfig, job store.SMSJob) error {
+	return p.provider.Send(ctx, p.config, job)
+}
 
 // idcsmartSMS implements the compiled-in 智简魔方 official SMS module. The
 // default instance has a fixed upstream URL; the endpoint field is only used
@@ -232,6 +287,9 @@ func idcsmartSign(sign string) string {
 var _ SMSProvider = idcsmartSMS{}
 
 func (genericHTTPSMS) Send(ctx context.Context, c store.SMSRuntimeConfig, j store.SMSJob) error {
+	if !store.ValidSMSEndpoint(c.Endpoint) || c.Token == "" {
+		return errors.New("invalid SMS configuration")
+	}
 	raw, e := json.Marshal(map[string]string{"recipient": j.Recipient, "message": j.Body, "kind": j.Kind})
 	if e != nil {
 		return e

@@ -61,7 +61,7 @@ func TestChannelInstancesCatalogueAndSecretLifecycle(t *testing.T) {
 	if data(t, updated)["display_name"] != "测试短信二" {
 		t.Fatal(updated.Body.String())
 	}
-	stale := request(h, http.MethodPut, "/api/v1/admin/channel-instances/"+item["id"].(string), map[string]any{"display_name": "过期", "expected_version": int64(item["version"].(float64))}, admin, "")
+	stale := request(h, http.MethodPut, "/api/v1/admin/channel-instances/"+item["id"].(string), map[string]any{"display_name": "过期", "enabled": false, "expected_version": int64(item["version"].(float64))}, admin, "")
 	expect(t, stale, http.StatusConflict)
 	deleted := request(h, http.MethodDelete, "/api/v1/admin/channel-instances/"+item["id"].(string), map[string]any{"expected_version": int64(data(t, updated)["version"].(float64))}, admin, "")
 	expect(t, deleted, http.StatusOK)

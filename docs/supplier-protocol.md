@@ -131,6 +131,27 @@ AES-GCM binds credentials and fixed custom fields to their owner and domain.
 The existing `PROVISION_ENCRYPTION_KEY` must remain stable. No supplier raw
 response or password enters customer DTOs, audit payloads or job result JSON.
 
+Missing compiled providers remain visible in the application catalogue and
+supplier account list. An administrator can stop an existing active account
+with `PUT /api/v1/admin/suppliers/{id}` and
+`{"disable_only":true,"active":false,"expected_version":<current version>}`.
+This narrow operation changes only `active`, `version` and `updated_at`; it
+preserves the name, provider, endpoint, username and credential ciphertext.
+It neither constructs an adapter nor decrypts credentials, so an absent
+implementation or encryption key does not prevent a safe stop. Other account
+fields cannot be supplied in the same request. New accounts, full edits and
+re-enabling still require a supported compiled provider.
+
+The stop rechecks the current session and `products.view` / `products.manage`
+grant inside the catalogue transaction, requires an active account and matching
+version, and retains the `running_job_id` guard. An in-flight or unresolved
+delivery must be reconciled before stopping the account. The
+`supplier.disabled` audit event commits with the state change; audit failure,
+stale versions and permission/session revocation leave the account unchanged.
+The supplier page exposes this operation for missing providers and disables
+their normal editor and catalogue fetch. Isolated PG18 regression entry:
+`REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/httpapi -run '^TestMissingSupplierDisable' -count=1`.
+
 The worker holds `supplier_accounts.running_job_id` durably before any network
 write. Waiting for another account job does not consume a delivery attempt.
 Unknown results retain this lease and enter `waiting_verification`; subsequent

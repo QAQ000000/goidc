@@ -12,6 +12,10 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/notification-center"] = "notifications.view"
+	m["PATCH /api/v1/admin/notification-center/rules/{id}"] = "notifications.manage"
+	m["PATCH /api/v1/admin/notification-center/templates/{id}"] = "notifications.manage"
+	m["POST /api/v1/admin/notification-center/channels/{id}/webhook"] = "settings.manage"
 	m["GET /api/v1/admin/reports/product-income/groups"] = "reports.view"
 	m["GET /api/v1/admin/reports/tickets/handlers"] = "reports.view"
 	m["GET /api/v1/admin/reports/annual-cash"] = "reports.view"

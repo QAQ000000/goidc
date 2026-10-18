@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -13,13 +14,18 @@ import (
 )
 
 type appCatalogueItem struct {
-	Descriptor            channel.Descriptor `json:"descriptor"`
-	FactoryAvailable      bool               `json:"factory_available"`
-	InstanceCount         int64              `json:"instance_count"`
-	EnabledInstanceCount  int64              `json:"enabled_instance_count"`
-	SecretConfiguredCount int64              `json:"secret_configured_count"`
-	Status                string             `json:"status"`
-	ConfigurationURL      string             `json:"configuration_url"`
+	Descriptor               channel.Descriptor `json:"descriptor"`
+	FactoryAvailable         bool               `json:"factory_available"`
+	InstanceCount            int64              `json:"instance_count"`
+	EnabledInstanceCount     int64              `json:"enabled_instance_count"`
+	SecretConfiguredCount    int64              `json:"secret_configured_count"`
+	ChannelInstanceCount     int64              `json:"channel_instance_count"`
+	SupplierAccountCount     int64              `json:"supplier_account_count"`
+	ProfileCount             int64              `json:"profile_count"`
+	SchemaIncompatibleCount  int64              `json:"schema_incompatible_count"`
+	UnsupportedInstanceCount int64              `json:"unsupported_instance_count"`
+	Status                   string             `json:"status"`
+	ConfigurationURL         string             `json:"configuration_url"`
 }
 
 type appBuild struct {
@@ -52,7 +58,7 @@ func parseAppListQuery(values url.Values) (appListQuery, error) {
 	}
 	out.Category = strings.TrimSpace(values.Get("category"))
 	switch channel.Category(out.Category) {
-	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision:
+	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision, channel.Bot:
 	default:
 		return out, fmt.Errorf("应用类别无效")
 	}
@@ -60,7 +66,7 @@ func parseAppListQuery(values url.Values) (appListQuery, error) {
 		out.Status = v
 	}
 	switch out.Status {
-	case "all", "enabled", "disabled", "unconfigured":
+	case "all", "enabled", "disabled", "unconfigured", "implementation_missing", "configuration_incompatible":
 	default:
 		return out, fmt.Errorf("应用状态无效")
 	}
@@ -114,25 +120,70 @@ func compiledAppsPage(query appListQuery, counts []store.AppConfigurationCount) 
 		category channel.Category
 		id       string
 	}
-	state := make(map[key]store.AppConfigurationCount)
+	state := make(map[key][]store.AppConfigurationCount)
 	for _, count := range counts {
 		k := key{count.Category, count.ImplementationID}
-		old := state[k]
-		old.InstanceCount += count.InstanceCount
-		old.EnabledInstanceCount += count.EnabledInstanceCount
-		old.SecretConfiguredCount += count.SecretConfiguredCount
-		state[k] = old
+		state[k] = append(state[k], count)
 	}
+	descriptors := channel.List(channel.Category(query.Category))
+	compiled := make(map[key]bool, len(descriptors))
+	for _, descriptor := range descriptors {
+		compiled[key{descriptor.Category, descriptor.ID}] = true
+	}
+	// Configuration outlives a particular build. Keep missing implementations
+	// visible so administrators can inspect and disable their saved instances.
+	for k, groups := range state {
+		if compiled[k] || (query.Category != "" && string(k.category) != query.Category) {
+			continue
+		}
+		mode := "channel"
+		for _, group := range groups {
+			if group.Source == "supplier" {
+				mode = "supplier"
+			}
+		}
+		descriptors = append(descriptors, channel.Descriptor{ID: k.id, Name: k.id + "（实现未编入）", Category: k.category, Version: "unavailable", InstanceMode: mode})
+	}
+	sort.Slice(descriptors, func(i, j int) bool {
+		if descriptors[i].Category != descriptors[j].Category {
+			return descriptors[i].Category < descriptors[j].Category
+		}
+		return descriptors[i].ID < descriptors[j].ID
+	})
 	items := make([]appCatalogueItem, 0)
-	for _, descriptor := range channel.List(channel.Category(query.Category)) {
-		count := state[key{descriptor.Category, descriptor.ID}]
-		if query.View == "configured" && count.InstanceCount == 0 {
+	for _, descriptor := range descriptors {
+		k := key{descriptor.Category, descriptor.ID}
+		item := appCatalogueItem{Descriptor: descriptor, FactoryAvailable: channel.HasFactory(descriptor.Category, descriptor.ID)}
+		for _, count := range state[k] {
+			item.InstanceCount += count.InstanceCount
+			item.EnabledInstanceCount += count.EnabledInstanceCount
+			item.SecretConfiguredCount += count.SecretConfiguredCount
+			switch count.Source {
+			case "supplier":
+				item.SupplierAccountCount += count.InstanceCount
+			case "profile":
+				item.ProfileCount += count.InstanceCount
+			default:
+				item.ChannelInstanceCount += count.InstanceCount
+				if compiled[k] && count.SchemaVersion != descriptor.SchemaVersion {
+					item.SchemaIncompatibleCount += count.InstanceCount
+				}
+				if compiled[k] && (descriptor.InstanceMode != "channel" || !item.FactoryAvailable) {
+					item.UnsupportedInstanceCount += count.InstanceCount
+				}
+			}
+		}
+		if query.View == "configured" && item.InstanceCount == 0 {
 			continue
 		}
 		status := "unconfigured"
-		if count.EnabledInstanceCount > 0 {
+		if !compiled[k] {
+			status = "implementation_missing"
+		} else if item.SchemaIncompatibleCount > 0 || item.UnsupportedInstanceCount > 0 {
+			status = "configuration_incompatible"
+		} else if item.EnabledInstanceCount > 0 {
 			status = "enabled"
-		} else if count.InstanceCount > 0 {
+		} else if item.InstanceCount > 0 {
 			status = "disabled"
 		}
 		if query.Status != "all" && query.Status != status {
@@ -142,15 +193,15 @@ func compiledAppsPage(query appListQuery, counts []store.AppConfigurationCount) 
 		if query.Q != "" && !strings.Contains(strings.ToLower(searchable), query.Q) {
 			continue
 		}
-		configurationURL := "/admin/channels?category=" + url.QueryEscape(string(descriptor.Category))
-		if descriptor.Category == channel.Provision {
-			configurationURL = "/admin/suppliers"
+		item.ConfigurationURL = "/admin/channels?category=" + url.QueryEscape(string(descriptor.Category))
+		switch descriptor.InstanceMode {
+		case "supplier":
+			item.ConfigurationURL = "/admin/suppliers"
+		case "profile":
+			item.ConfigurationURL = "/admin/products"
 		}
-		items = append(items, appCatalogueItem{
-			Descriptor: descriptor, FactoryAvailable: channel.HasFactory(descriptor.Category, descriptor.ID),
-			InstanceCount: count.InstanceCount, EnabledInstanceCount: count.EnabledInstanceCount,
-			SecretConfiguredCount: count.SecretConfiguredCount, Status: status, ConfigurationURL: configurationURL,
-		})
+		item.Status = status
+		items = append(items, item)
 	}
 	page := appCataloguePage{Total: len(items), Limit: query.Limit, Offset: query.Offset, Items: make([]appCatalogueItem, 0)}
 	if query.Offset < len(items) {
@@ -172,6 +223,9 @@ func (s *Server) apps(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if profiles := len(s.cfg.NOKVMProfiles); profiles > 0 {
+		counts = append(counts, store.AppConfigurationCount{Source: "profile", Category: channel.Provision, ImplementationID: "nokvm", InstanceCount: int64(profiles), EnabledInstanceCount: int64(profiles)})
 	}
 	page := compiledAppsPage(query, counts)
 	info, _ := debug.ReadBuildInfo()

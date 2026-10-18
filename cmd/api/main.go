@@ -12,11 +12,19 @@ import (
 
 	"github.com/codex/zjmfgo/internal/config"
 	"github.com/codex/zjmfgo/internal/httpapi"
+	"github.com/codex/zjmfgo/internal/modules/manifest"
 	"github.com/codex/zjmfgo/internal/store"
 )
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if handled, err := manifest.WriteCLI(os.Args[1:], os.Stdout, "api"); handled {
+		if err != nil {
+			log.Error("module manifest unavailable", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		log.Error("configuration invalid", "error", err)

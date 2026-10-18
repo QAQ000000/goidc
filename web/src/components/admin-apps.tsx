@@ -5,6 +5,7 @@ import { Boxes, Package, RefreshCw, Search, Settings2, ShieldAlert } from "lucid
 import { useAdminListNavigation } from "@/hooks/use-admin-list-navigation";
 import { useResource } from "@/hooks/use-resource";
 import { ApiError } from "@/lib/api";
+import { channelInstanceMode, type ChannelDescriptor } from "@/lib/channel-configuration";
 import { AdminPagination } from "./admin-pagination";
 import { Failure, Loading } from "./common";
 import { Workspace, useAdminPermission } from "./workspace";
@@ -12,20 +13,19 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-type Category = "payment" | "oauth" | "sms" | "mail" | "certification" | "provision";
+type Category = "payment" | "oauth" | "sms" | "mail" | "bot" | "certification" | "provision";
 type AppItem = {
-  descriptor: {
-    id: string;
-    name: string;
-    category: Category;
-    capabilities: string[] | null;
-    fields: { key: string; label: string; type: string; required: boolean; secret: boolean; options?: string[] }[] | null;
-  };
+  descriptor: ChannelDescriptor;
   factory_available: boolean;
   instance_count: number;
   enabled_instance_count: number;
   secret_configured_count: number;
-  status: "enabled" | "disabled" | "unconfigured";
+  schema_incompatible_count?: number;
+  unsupported_instance_count?: number;
+  channel_instance_count?: number;
+  supplier_account_count?: number;
+  profile_count?: number;
+  status: "enabled" | "disabled" | "unconfigured" | "implementation_missing" | "configuration_incompatible";
   configuration_url: string;
 };
 type AppsPage = {
@@ -41,11 +41,12 @@ const categories: { id: Category; label: string }[] = [
   { id: "oauth", label: "第三方登录" },
   { id: "sms", label: "短信" },
   { id: "mail", label: "邮件" },
+  { id: "bot", label: "机器人通知" },
   { id: "certification", label: "实名认证" },
   { id: "provision", label: "供应商开通" },
 ];
-const statuses = ["all", "enabled", "disabled", "unconfigured"] as const;
-const statusLabels = { all: "全部状态", enabled: "有已启用实例", disabled: "实例全部停用", unconfigured: "尚未配置" };
+const statuses = ["all", "enabled", "disabled", "unconfigured", "implementation_missing", "configuration_incompatible"] as const;
+const statusLabels = { all: "全部状态", enabled: "有已启用实例", disabled: "实例全部停用", unconfigured: "尚未配置", implementation_missing: "实现缺失", configuration_incompatible: "配置不兼容" };
 const extraDefaults = { category: "", limit: "25" };
 const pageSizes = [10, 20, 50, 100];
 const capabilityLabels: Record<string, string> = {
@@ -105,10 +106,11 @@ function AccessDenied() {
   return <section className="data-surface space-y-3 p-8 text-center" role="alert"><ShieldAlert className="mx-auto size-8 text-muted-foreground" aria-hidden="true" /><h2 className="text-sm font-medium">无权访问应用管理</h2><p className="text-xs text-muted-foreground">仅超级管理员可以查看应用目录与配置状态。</p></section>;
 }
 
-function AppCard({ item, returnHref }: { item: AppItem; returnHref: string }) {
+export function AppCard({ item, returnHref }: { item: AppItem; returnHref: string }) {
   const { descriptor } = item;
   const configuration = new URL(item.configuration_url, "https://admin.local");
-  const canConfigure = item.factory_available && configuration.origin === "https://admin.local" && ["/admin/channels", "/admin/suppliers"].includes(configuration.pathname);
+  const external = channelInstanceMode(descriptor) !== "channel";
+  const canConfigure = (item.factory_available || external || item.status === "implementation_missing") && configuration.origin === "https://admin.local" && ["/admin/channels", "/admin/suppliers", "/admin/products"].includes(configuration.pathname);
   configuration.searchParams.set("return_to", returnHref);
   return <article className="data-surface flex min-w-0 flex-col overflow-hidden">
     <div className="flex min-w-0 items-start gap-3 p-4 sm:p-5">
@@ -117,10 +119,14 @@ function AppCard({ item, returnHref }: { item: AppItem; returnHref: string }) {
       <Badge variant="outline">{categories.find(category => category.id === descriptor.category)?.label ?? descriptor.category}</Badge>
     </div>
     <div className="min-w-0 flex-1 space-y-4 px-4 pb-4 sm:px-5">
-      <div className="flex flex-wrap gap-2"><Badge variant="outline" className={item.status === "enabled" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-muted/50 text-muted-foreground"}>{statusLabels[item.status]}</Badge><Badge variant="outline" className={item.factory_available ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>运行工厂：{item.factory_available ? "已注册" : "未注册"}</Badge></div>
+      <div className="flex flex-wrap gap-2"><Badge variant="outline" className={item.status === "enabled" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "bg-muted/50 text-muted-foreground"}>{statusLabels[item.status]}</Badge><Badge variant="outline" className={external ? "bg-muted/50 text-muted-foreground" : item.factory_available ? "border-blue-200 bg-blue-50 text-blue-700" : "border-amber-200 bg-amber-50 text-amber-700"}>{external ? "独立配置入口" : `运行工厂：${item.factory_available ? "已注册" : "未注册"}`}</Badge></div>
+      <p className="break-words text-xs text-muted-foreground">模块 {descriptor.version || "版本未提供"} · 配置版本 {descriptor.schema_version ?? "未提供"} · 契约版本 {descriptor.contract_version ?? "未提供"}</p>
       <dl className="grid min-w-0 grid-cols-3 gap-2 rounded-md bg-muted/30 px-3 py-3 text-center">{[["配置实例", item.instance_count], ["已启用", item.enabled_instance_count], ["已配置凭据", item.secret_configured_count]].map(([label, count]) => <div key={String(label)} className="min-w-0"><dt className="text-[11px] text-muted-foreground">{label}</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{count}</dd></div>)}</dl>
       <div className="min-w-0"><h3 className="mb-2 text-xs text-muted-foreground">模块能力</h3><div className="flex min-w-0 flex-wrap gap-1.5">{descriptor.capabilities?.length ? descriptor.capabilities.map(capability => <span key={capability} title={capability} className="max-w-full break-all rounded bg-muted px-2 py-1 text-xs">{capabilityLabels[capability] ?? capability}</span>) : <span className="text-xs text-muted-foreground">未声明扩展能力</span>}</div></div>
-      {!item.factory_available && <p className="text-xs leading-5 text-amber-700">当前版本仅包含模块描述，尚未提供运行工厂。</p>}
+      {!!item.schema_incompatible_count && <p className="text-xs leading-5 text-amber-700">{item.schema_incompatible_count} 个实例的配置版本不兼容，需迁移后使用。</p>}
+      {!!item.unsupported_instance_count && <p className="text-xs leading-5 text-amber-700">{item.unsupported_instance_count} 个旧渠道配置未接入当前业务入口。<Link className="ml-1 underline" href={`/admin/channels?category=${encodeURIComponent(descriptor.category)}`}>查看并停用旧配置</Link></p>}
+      <p className="text-xs leading-5 text-muted-foreground">启用数量不代表配置已验证，连接可用性需在配置入口测试。</p>
+      {!item.factory_available && !external && <p className="text-xs leading-5 text-amber-700">{item.status === "implementation_missing" ? "当前构建缺少此实现，保留原配置供核对、停用或删除。" : "当前版本仅包含模块描述，尚未提供运行工厂。"}</p>}
     </div>
     <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-t bg-muted/15 px-4 py-3 sm:px-5"><span className="text-xs text-muted-foreground">{descriptor.fields?.length ?? 0} 项配置字段</span>{canConfigure ? <Button variant="ghost" size="sm" asChild><Link href={configuration.pathname + configuration.search}><Settings2 size={14} />{item.instance_count ? "管理配置" : "前往配置"}<span className="sr-only">：{descriptor.name}</span></Link></Button> : <span className="text-xs text-muted-foreground">暂不可配置</span>}</div>
   </article>;

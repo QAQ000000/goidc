@@ -4,10 +4,11 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { selectStandaloneTraces, traceSelectionManifestPaths } from './release-runtime-trace-selection.mjs';
 import { apiTarget, fileHash, noLinks, safeRelative, selectedDigest, sha256, sourceProof } from './release-candidate-lib.mjs';
+import { verifyModuleBuildEvidence } from './module-manifest-lib.mjs';
 
 export const schemaVersion = 2;
 export const runtimeFormat = 'zjmfgo-release-candidate-v2';
-export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'web/next.config.ts'];
+export const runtimeBuilderFiles = ['scripts/build-release-runtime-candidate.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs', 'scripts/release-runtime-lib.mjs', 'scripts/verify-release-runtime.mjs', 'scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/module-manifest-lib.mjs', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'web/next.config.ts'];
 const hashPattern = /^[a-f0-9]{64}$/;
 const inside = (root, file) => file.startsWith(`${root}/`);
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -121,6 +122,7 @@ export async function validateRuntimeManifest(root, manifest, actual, { goComman
     requireThat(binary.buildInfo.split('\n').filter(line => /\bvcs\.revision=/.test(line)).length === 1 && binary.buildInfo.includes(`vcs.revision=${manifest.source.commit}`) && /(?:^|\s)vcs\.modified=false(?:\s|$)/.test(binary.buildInfo) && !binary.buildInfo.includes('vcs.modified=true'), 'Go binary source mismatch');
     requireThat(readRuntimeGoBuildInfo(path.join(root, binary.path), goCommand) === binary.buildInfo, 'Actual Go build info mismatch');
   }
+  await verifyModuleBuildEvidence({ root, evidence: manifest.modules, sourceFiles: manifest.source.files, artifacts: actual, metaRelative: 'artifact/meta', binaryPaths: { api: 'artifact/bin/api', worker: 'artifact/bin/worker' } });
   const node = manifest.runtime?.node;
   requireThat(node?.path === 'artifact/runtime/node' && node.version === manifest.tools.node && nonempty(node.source) && node.licensePath === 'artifact/runtime/LICENSE', 'Node runtime provenance missing');
   requireThat((await file(node.path)).executable && (await file(node.licensePath)).bytes > 0, 'Node runtime/mandatory license missing');

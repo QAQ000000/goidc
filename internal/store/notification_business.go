@@ -32,7 +32,7 @@ FROM invoices i JOIN users u ON u.id=i.user_id WHERE i.id=$1`, invoiceID).
 			return err
 		}
 	}
-	return nil
+	return s.queueUnifiedInvoicePaid(ctx, tx, invoiceID, userID, invoiceNo, amount)
 }
 
 func (s *Store) queuePaymentSuccessEmail(ctx context.Context, tx pgx.Tx, invoiceID, userID int64, invoiceNo, amount, recipient string) error {
@@ -48,7 +48,7 @@ func (s *Store) queuePaymentSuccessEmail(ctx context.Context, tx pgx.Tx, invoice
 		return nil
 	}
 	var instanceID string
-	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}
@@ -159,7 +159,7 @@ func (s *Store) queueServiceProvisionEmail(ctx context.Context, tx pgx.Tx, servi
 		return nil
 	}
 	var instanceID string
-	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}
@@ -269,7 +269,7 @@ func (s *Store) queueServiceSuspendedEmail(ctx context.Context, tx pgx.Tx, servi
 		return nil
 	}
 	var instanceID string
-	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}

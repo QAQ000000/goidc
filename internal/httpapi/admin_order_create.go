@@ -87,7 +87,7 @@ func (s *Server) adminOrderCreateOptions(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		var mailEnabled bool
-		if err := s.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled)").Scan(&mailEnabled); err != nil {
+		if err := s.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channel_instances WHERE category='mail' AND enabled)").Scan(&mailEnabled); err != nil {
 			s.fail(w, r, err)
 			return
 		}

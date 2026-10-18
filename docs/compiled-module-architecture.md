@@ -1,54 +1,100 @@
 # 编译期模块与渠道扩展契约
 
-本项目采用“编译进 Go 二进制、数据库保存实例配置”的扩展模型。它适合支付、短信、邮件、实名、OAuth 和上游供应商等需要访问内部事务与权限边界的模块，也避免了 PHP 运行时上传插件带来的代码执行、版本兼容和回滚问题。
+本项目采用“Go 编译适配器、数据库保存实例、前端按元数据渲染”的扩展模型。代码在编译时进入 API/worker，启动时注册描述符与类型化工厂；配置不能引入可执行代码。当前供应商、支付、邮件、短信、实名需要分别遵守各自的业务契约。
 
-## 当前结论
+## 当前装配与构建核验
 
-项目已经有两层基础：`internal/channel` 保存前端可读的编译渠道目录，`channel_instances` 保存启用状态、普通配置、加密密钥、版本和业务引用。第一阶段补齐了行为注册层：支付、短信、SMTP、实名认证和供应商都可以通过类型化工厂解析，而业务代码不再需要为每个新增实现增加 `switch`。
+`internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification 和 supplier。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 9 个模块，含 Telegram Bot；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)。
 
-公共目录只保存描述信息和一个内部工厂边界；具体类别通过 `internal/module.Registry[T]` 获得类型安全的 `New`。数据库配置不会被当作 Go 代码、路径或动态库加载。
+程序可在读取环境变量、连接数据库之前输出公共模块清单：
 
-## 契约分层
+```bash
+./bin/api --module-manifest
+./bin/worker --module-manifest
+```
 
-每个类别拥有自己的业务接口：
+清单包含类别、稳定 ID、实现版本、配置 schema 版本、宿主契约版本、实例来源、工厂存在性和描述符摘要，不含配置值与凭据。内置实现的 `version=builtin` 随核心提交发布，不代表有独立版本号。
 
-| 类别 | 行为契约 | 运行时实例来源 |
-|---|---|---|
-| payment | `Gateway`：创建支付意图、验签、解析回调；查单/退款用能力接口 | `channel_instances` + 支付工厂 |
-| sms | `SMSProvider`：发送短信 | `channel_instances` + 短信工厂 |
-| mail | `MailProvider`：发送邮件、检查启用状态 | `channel_instances` + SMTP 工厂 |
-| certification | `Provider`：提交和查询实名结果 | `channel_instances` + 实名工厂 |
-| provision | `supplier.Adapter`：目录、商品、开通、同步和已验证动作 | `supplier_accounts` + 供应商工厂 |
+两个候选构建器都会执行刚构建的二进制，核对预期清单、实际注册清单和 API/worker 描述符一致性。产物保存预期 profile、两个实际清单及其与源码、二进制的哈希绑定。离线验证重验这些证据，不执行候选目录中的应用代码。当前只实现明确的 default 组合，尚未提供任意 build tags 裁剪工具。
 
-描述符用于后台动态表单和能力展示，工厂只负责创建可执行对象。能力集合不能单独打开业务动作；新增续费、升级、暂停或退款能力时，必须同时补 store、队列、财务、权限、审计、幂等和真实协议验收。
+新增模块必须同步装配和预期清单；发布前检查现有实例、在途任务、历史支付回调与服务绑定。不能因为新清单没有某实现就删除数据库记录。
 
-## 新增一个模块
+## 配置定义与前端契约
 
-1. 在对应类别包中实现接口和错误归一化，所有外部请求接收 `context.Context`，限制超时、响应大小和重定向。
-2. 在模块目录注册一个稳定 ID、中文名称、能力集合和配置字段 schema。密钥字段标记为 `secret`，不要把密钥放入普通 `config`。
-3. 在服务构建的汇总导入中匿名引入实现包，或使用明确的 Go build tag 选择构建组合。生产部署需要重新构建并替换二进制。
-4. 用隔离 PG18 数据库验证创建、编辑、密钥保留、停用、版本冲突和删除保护；用协议夹具验证签名、金额、状态和未知结果。
-5. 只有完成真实渠道验收后，才在能力目录和后台文案中宣称可用。
+`channel.Descriptor` 定义 ID、名称、类别、能力、字段以及以下版本边界：
 
-## 配置与密钥规则
+| 字段 | 含义 |
+| --- | --- |
+| `version` | 实现版本；内置模块由核心提交追溯 |
+| `contract_version` | 宿主模块协议版本；当前只接受 1 |
+| `schema_version` | 配置值的结构版本，与并发更新版本分开 |
+| `instance_mode` | `channel`、`supplier` 或 `profile`，决定真实配置来源 |
 
-- 实例拥有稳定 ID；支付单、通知任务等业务记录绑定创建时的实例 ID。
-- 普通配置放 `config jsonb`，敏感配置使用 AES-GCM 保存，并以实例 ID 作为 AAD。
-- 读取接口只返回 `secret_configured`，不回显原值；编辑时留空表示保留原密钥，显式清除才删除。
-- 写入携带 `expected_version`，冲突返回 `409`；禁用或删除仍保留历史业务引用和审计记录。
-- 更换商户或上游凭据应新建实例/账户，不修改已有交易或服务快照依赖的身份。
+注册时拒绝重复字段、未知字段类型、无效默认值和不支持的宿主契约。字段支持 text、textarea、number、boolean、select、multiselect，以及默认值、数字上下界和整数约束。
 
-## 与“应用商店”的关系
+同一份定义用于服务端配置归一化、错误分类和前端表单。服务端拒绝未知键、错误类型、无效枚举，以及密钥字段混入普通配置。布尔 false、数字 0 和空数组不被当成未提供值；可选 null 被省略，默认值真正进入保存的配置。
 
-首版“我的应用/应用商店”只能展示当前二进制已编译的模块、版本、能力和配置状态，并提供启用配置、升级提示和重启/部署说明。后台在线上传 Go 插件、运行时加载 `.so`、执行第三方脚本均不属于本模型。
+模块可以注册纯本地 `ConfigValidator`，仅接收普通值和凭据存在标记，不接收明文密钥，也不能联网或执行业务操作。启用、运行解析及配置状态使用相同校验入口；SMTP 和内置 SMS 已接入本地协议配置校验。
 
-如果以后必须支持第三方团队独立发布而不重启主服务，应另立 RPC/子进程模块协议：进程隔离、签名清单、权限沙箱、超时、熔断、升级和回滚都要先定义，不能把运行时 `plugin` 包直接接入生产。
+前端使用已编译的 React 组件渲染上述字段，未知字段类型阻止保存。复杂布局、自定义交互和新业务操作仍需扩展前端并重新构建；本模型不装载任意远程 JavaScript。
 
-## 下一步顺序
+## 实例、凭据与并发
 
-1. 继续沿用供应商 API 设置页，补供应商适配器真实账户验收；已完成编译目录、账户脱敏摘要、资源 API 门禁和只读连通性测试；继续使用 `supplier_accounts`，不要复制成另一套渠道账户表。
-2. 补供应商适配器的续费、升级、暂停/恢复、终止和复杂配置契约，每项能力独立验收。
-3. 增加 OAuth、官方支付宝/微信和实名认证第三方适配器。
-4. 应用目录已接入构建版本清单；后续只扩展编译进二进制的模块和真实配置，不把未编译模块显示成可安装的假数据。
+迁移 161 为渠道实例增加 `schema_version` 和按字段保存的密文对象。旧单密钥列与既有密文格式保持兼容；命名多密钥分别使用 AES-GCM，并以实例 ID 和字段名作为 AAD，防止跨实例或字段替换密文。
 
-相关页面进度见 [`admin-full-ui-restore-ledger.md`](admin-full-ui-restore-ledger.md)。当前 105 页登记为 47 页已完成、58 页部分完成、0 页待实现。我的应用和应用商店已接入真实编译目录；完整旧版应用安装、在线升级、供应商 API 设置的完整浏览器状态矩阵、供应商适配器的真实账户验收及续费/升级等动作仍需推进。
+- 普通值通过 `config` 写入；命名密钥通过 `secure_config` 写入，空字符串或省略表示保留。
+- `clear_secure_fields` 显式清除指定密钥；同一字段不能同时替换和清除。
+- 旧 `secret/clear_secret` 只适用于恰有一个密钥字段的模块，不能与命名写入格式混用。
+- API 只返回 `secure_fields` 的存在标记；它不证明凭据可解密或外部连接成功。
+- 更新必须明确提供 `enabled` 和 `expected_version`；新前端同时提交 `schema_version/expected_schema_version`。
+- 持久化 schema 与当前描述不兼容时拒绝配置写入和新业务解析，不隐式转换；后续升级须提供显式迁移并验证回滚。
+- 已有实例的类别和实现 ID 不可更换，需新建实例；默认渠道的专用设置页面保留既有兼容同步逻辑。
+- 更新、密钥替换、版本增加和审计在同一事务中提交。已有业务引用继续阻止删除。
+
+读取时只返回已知、合法的非密钥配置字段，同时返回字段名与错误码。缺失实现或 schema 不兼容的实例不回显配置内容，保留数据库原值和管理行，允许仅停用或在无业务引用时删除。
+
+## 实际运行边界
+
+| 类别 | 行为契约与运行范围 |
+| --- | --- |
+| mail | 类型化 `MailProvider`；默认选择、实例解析、验证码、业务通知、试发和 worker 统一按实现 ID 分发 |
+| sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
+| payment | 类型化 `Gateway`；仍以 mock/epay 资金协议为当前边界，新支付协议必须补回调、快照、查单、退款、对账和权限验收 |
+| certification | 已注册人工审核；新增第三方仍需实名流程与数据保护验收 |
+| provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
+
+`RuntimeChannelInstance` 使用单行快照解析普通实例，校验启用、工厂、实例来源、schema 和本地配置，再解密凭据。默认渠道保留部署配置和旧 singleton 兼容，但不允许以默认入口绕过 schema 检查。历史支付继续使用交易凭据快照，不因新实例停用而改写既有交易身份。
+
+邮件和短信 outbox 绑定实例 ID，在发送时解析当前配置和凭据，没有冻结入队时的配置版本。轮换凭据会影响待发送与重试任务；停用或不兼容会使对应发送失败，按原有通知重试规则处理。它与支付交易的凭据快照语义不同。
+
+邮件和短信已有第二个测试适配器，分别使用独立字段和双密钥，通过 API 创建、试发、outbox 领取、通用分发及完成验证。这证明对应类别无需增加具体实现分支；它不是实际供应商或独立 worker 进程验收。
+
+## 状态与生命周期
+
+渠道实例区分 `valid`、`invalid`、`implementation_missing`、`schema_incompatible`、`external`。`valid` 表示当前保存状态通过本地配置检查；启用才要求必填凭据及模块本地校验，不能将它解释为凭据认证或远端健康成功。
+
+应用目录继续用聚合数据展示配置/启用数量，另列 schema 不兼容和专用入口误配数量；不加载全部配置或解密凭据来计算目录状态。供应商账户和 NOKVM profile 的来源分别统计。能力用于界面展示，真实业务操作仍由服务端校验权限、资源范围、状态、版本和适配器支持。
+
+缺失实现的供应商账户提供专用停用路径，只修改启用状态和并发版本，不解密或改写身份与凭据；仍检查当前会话、`products.manage`、版本、在途任务和审计。具体请求见[供应商契约](supplier-protocol.md)。
+
+配置保存先本地校验，失败回滚并保留旧配置；外部发送/支付/交付通过各自队列和事务执行。当前没有通用的连接健康协议、实例连接池缓存、全局热切换或每任务 panic 隔离。新增这些机制时必须定义资源释放、超时、在途版本与未知外部结果处理，不能以自动重试掩盖可能已成功的写操作。
+
+第三方独立发布或跨语言成为实际需求后，可以另立 RPC/子进程协议，明确签名清单、权限、超时、故障恢复与兼容；本阶段继续使用受控编译和本地 UI 组件。
+
+## 验证入口与发布边界
+
+```bash
+./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/... ./internal/notification ./internal/payment ./internal/supplier
+node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs
+```
+
+配置隔离 PG18、设置 `REQUIRE_INTEGRATION=1` 后，运行 `internal/httpapi` 中的 `TestChannelConfiguration`、`TestChannelInstances`、`TestCompiledMail`、`TestCompiledSMS`、`TestMissingSupplierDisable`、SMTP/SMS 及支付实例 schema/快照回归。覆盖类型/default、逐字段凭据、AAD、审计回滚、孤儿停用、旧 schema 拒绝、默认渠道兼容和新增适配器分发。
+
+前端还需 lint/typecheck；构建证据需候选和离线验证测试。数据库、组件事件、浏览器、实际外部渠道和生产发布分别记录证据，不能互相替代。迁移与新 API/worker 应在同一发布包使用；回退前检查旧二进制能否理解已有模块、配置版本和命名凭据。
+
+## 参考案例
+
+- [Caddy 模块生命周期](https://caddyserver.com/docs/extending-caddy#module-lifecycle)、[xcaddy 构建选择](https://github.com/caddyserver/xcaddy#custom-builds)：装配、配置验证和资源生命周期。
+- [Redpanda Connect 配置定义](https://github.com/redpanda-data/benthos/blob/main/public/service/config.go)：统一字段约束、解析与文档；敏感标记不等于加密。
+- [Grafana 凭据配置](https://grafana.com/developers/plugin-tools/how-to-guides/data-source-plugins/add-authentication-for-data-source-plugins#encrypt-data-source-configuration)、[插件元数据](https://grafana.com/developers/plugin-tools/reference/plugin-json)：分字段密钥和兼容清单。
+- [JSON Forms](https://jsonforms.io/docs/)：数据约束、布局与本地组件注册分层。本项目目前使用有限字段契约，没有新增该库依赖。

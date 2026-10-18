@@ -80,7 +80,7 @@ func (s *Server) testSMSSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
 
-		if e = store.AuthorizeSMSTest(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value), in.ExpectedVersion); e != nil {
+		if e = store.AuthorizeSMSTest(r.Context(), tx, identityFrom(r).ID, tokenHash(cookie.Value), in.ExpectedVersion, in.ChannelInstanceID); e != nil {
 			return txResponse{}, e
 		}
 		if e = s.db.QueueSMS(r.Context(), tx, in.Recipient, "短信渠道测试消息", "test", "", time.Now().Add(5*time.Minute), in.ChannelInstanceID); e != nil {

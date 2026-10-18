@@ -295,7 +295,7 @@ test('running transitive builder helpers must match the independently clean sele
     try { await buildRuntimeCandidate({ source, revision }); process.exitCode = 2; }
     catch (error) { process.stderr.write(error.message); process.exitCode = 1; }
   `;
-  for (const name of ['scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs']) {
+  for (const name of ['scripts/build-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/module-manifest-lib.mjs']) {
     const original = await readFile(path.join(runner, name));
     await writeFile(path.join(runner, name), Buffer.concat([original, Buffer.from('\n// changed external running helper\n')]));
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code, path.join(runner, 'scripts/build-release-runtime-candidate.mjs'), source, revision], { encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } });

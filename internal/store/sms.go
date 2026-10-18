@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -12,11 +11,12 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
 
-func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, expected int64) error {
+func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, expected int64, channelInstanceID ...string) error {
 	if e := recheckSettingsManager(ctx, tx, actor, hash); e != nil {
 		return e
 	}
@@ -28,8 +28,23 @@ func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, 
 		return conflict("permission_denied", "需要超级管理员权限")
 	}
 	var version int64
-	if e := tx.QueryRow(ctx, `SELECT version FROM sms_settings WHERE id=1 FOR UPDATE`).Scan(&version); e != nil {
-		return e
+	instanceID := ""
+	if len(channelInstanceID) > 0 {
+		instanceID = strings.TrimSpace(channelInstanceID[0])
+	}
+	if instanceID == "" {
+		if e := tx.QueryRow(ctx, `SELECT version FROM sms_settings WHERE id=1 FOR UPDATE`).Scan(&version); e != nil {
+			return e
+		}
+	} else {
+		var category, implementation string
+		var enabled bool
+		if e := tx.QueryRow(ctx, `SELECT category,implementation_id,enabled,version FROM channel_instances WHERE id=$1 FOR UPDATE`, instanceID).Scan(&category, &implementation, &enabled, &version); e != nil {
+			return e
+		}
+		if category != string(channel.SMS) || !enabled || !channel.HasFactory(channel.SMS, implementation) {
+			return conflict("invalid_sms", "短信渠道未启用或实现不可用")
+		}
 	}
 	if version != expected {
 		return conflict("version_conflict", "短信配置已变更，请重新加载")
@@ -86,6 +101,10 @@ type SMSRuntimeConfig struct {
 	// the generic HTTP provider credential for backwards compatibility.
 	API, Sign, Key string
 	Enabled        bool
+	// ModuleConfig carries the complete schema-defined configuration to a
+	// compiled factory. The fields above remain the built-in adapters' legacy
+	// compatibility view; future providers do not need new fields here.
+	ModuleConfig module.Config `json:"-"`
 }
 
 func (s *Store) SMSSettings(ctx context.Context) (SMSSettings, error) {
@@ -155,6 +174,14 @@ func (s *Store) UpdateSMSSettings(ctx context.Context, actor int64, hash string,
 	return s.SMSSettings(ctx)
 }
 func (s *Store) ResolveSMSConfig(ctx context.Context) (SMSRuntimeConfig, error) {
+	var instanceID string
+	lookupErr := s.Pool.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID)
+	if lookupErr == nil {
+		return s.ResolveSMSConfigForInstance(ctx, instanceID)
+	}
+	if !errors.Is(lookupErr, pgx.ErrNoRows) {
+		return SMSRuntimeConfig{}, lookupErr
+	}
 	var o SMSRuntimeConfig
 	var sealed []byte
 	e := s.Pool.QueryRow(ctx, `SELECT enabled,provider,endpoint,token_encrypted FROM sms_settings WHERE id=1`).Scan(&o.Enabled, &o.Provider, &o.Endpoint, &sealed)
@@ -162,11 +189,22 @@ func (s *Store) ResolveSMSConfig(ctx context.Context) (SMSRuntimeConfig, error) 
 		return o, e
 	}
 	if !o.Enabled {
-		var instanceID string
-		if lookupErr := s.Pool.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); lookupErr == nil {
-			return s.ResolveSMSConfigForInstance(ctx, instanceID)
-		}
 		return o, nil
+	}
+	var implementation string
+	var schemaVersion int
+	contractErr := s.Pool.QueryRow(ctx, `SELECT implementation_id,schema_version FROM channel_instances WHERE id='sms-default'`).Scan(&implementation, &schemaVersion)
+	if contractErr != nil && !errors.Is(contractErr, pgx.ErrNoRows) {
+		return SMSRuntimeConfig{}, contractErr
+	}
+	if contractErr == nil {
+		desc, registered := channel.Lookup(channel.SMS, implementation)
+		if !registered || !channel.HasFactory(channel.SMS, implementation) || desc.InstanceMode != "channel" {
+			return SMSRuntimeConfig{}, conflict("channel_not_registered", "短信渠道实现未注册")
+		}
+		if schemaVersion != desc.SchemaVersion {
+			return SMSRuntimeConfig{}, conflict("channel_schema_incompatible", "渠道配置版本不兼容，需要显式迁移")
+		}
 	}
 	raw, e := smsCrypt(s.ProvisionEncryptionKey, sealed, "token", false)
 	if e != nil {
@@ -182,44 +220,26 @@ func (s *Store) ResolveSMSConfigForInstance(ctx context.Context, instanceID stri
 	if strings.TrimSpace(instanceID) == "" {
 		return s.ResolveSMSConfig(ctx)
 	}
-	var category, implementation string
-	var enabled bool
-	var rawConfig []byte
-	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,config FROM channel_instances WHERE id=$1`, instanceID).Scan(&category, &implementation, &enabled, &rawConfig); err != nil {
-		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
-	}
-	if category != "sms" || !SMSProviderRegistered(implementation) {
-		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
-	}
-	var config map[string]any
-	if err := json.Unmarshal(rawConfig, &config); err != nil {
+	config, implementation, err := s.RuntimeChannelInstance(ctx, instanceID, channel.SMS)
+	if err != nil {
 		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
 	}
 	out := SMSRuntimeConfig{
-		Provider: implementation,
-		Endpoint: configString(config, "endpoint"),
-		API:      configString(config, "api"),
-		Sign:     configString(config, "sign"),
-		Enabled:  enabled,
+		Provider:     implementation,
+		Endpoint:     configString(config.Values, "endpoint"),
+		API:          configString(config.Values, "api"),
+		Sign:         configString(config.Values, "sign"),
+		Token:        config.Secrets["token"],
+		Key:          config.Secrets["key"],
+		Enabled:      true,
+		ModuleConfig: config,
 	}
-	if !enabled {
-		return out, nil
+	if out.Token == "" {
+		out.Token = config.Secret
 	}
-	if implementation != "idcsmart" && !ValidSMSEndpoint(out.Endpoint) {
-		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
+	if out.Key == "" {
+		out.Key = config.Secret
 	}
-	if implementation == "idcsmart" && (out.API == "" || out.Sign == "") {
-		return SMSRuntimeConfig{}, fmt.Errorf("SMS channel unavailable")
-	}
-	secret, err := s.ChannelInstanceSecret(ctx, instanceID)
-	if err != nil || secret == "" {
-		return SMSRuntimeConfig{}, fmt.Errorf("SMS credentials unavailable")
-	}
-	// The compiled-in provider registry decides how this secret is used. Keep
-	// Token populated for the generic adapter and Key for credentialed vendors
-	// such as 智简魔方.
-	out.Token = secret
-	out.Key = secret
 	return out, nil
 }
 
@@ -299,7 +319,7 @@ func (s *Store) queueSMSWithTemplateID(ctx context.Context, tx pgx.Tx, recipient
 		return 0, e
 	}
 	var id int64
-	e = tx.QueryRow(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id,template_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND implementation_id=(SELECT provider FROM sms_settings WHERE id=1) AND enabled=true ORDER BY sort_order,id LIMIT 1)),$7) RETURNING id`, recipient, sealed, kind, challengeID, expiresAt, instanceID, templateID).Scan(&id)
+	e = tx.QueryRow(ctx, `INSERT INTO sms_outbox(recipient,body_encrypted,kind,challenge_id,expires_at,verification_id,channel_instance_id,template_id) VALUES($1,$2,$3,$4,$5,NULLIF($4,''),COALESCE(NULLIF($6,''),(SELECT id FROM channel_instances WHERE category='sms' AND enabled=true ORDER BY sort_order,id LIMIT 1)),$7) RETURNING id`, recipient, sealed, kind, challengeID, expiresAt, instanceID, templateID).Scan(&id)
 	return id, e
 }
 func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {

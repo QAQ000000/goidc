@@ -73,7 +73,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 ## CI 门禁
 
-`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态门禁，执行 `git diff --check`、文档治理、链接、`audit/contract-gates.json` 门禁清单校验、治理工具测试、Go 编译检查以及 Web lint/typecheck/代理测试。它不会把未提供的 PG18、浏览器、真实供应商或生产环境条件伪装成通过。
+`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行 `git diff --check`、文档治理、链接、`audit/contract-gates.json` 门禁清单校验、治理工具测试、Go 编译、模块注册与构建清单测试，以及 Web lint/typecheck、代理和渠道组件测试。它不会把未提供的 PG18、浏览器、真实供应商或生产环境条件伪装成通过。
 
 本地等价入口如下：
 
@@ -84,10 +84,13 @@ node scripts/check-contract-gates.mjs
 node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
 ./scripts/check-go-toolchain.sh
 ./scripts/go.sh test ./... -run '^$'
+./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/...
+node --test scripts/module-manifest.test.mjs
 npm ci --prefix web
 npm --prefix web run lint
 npm --prefix web run typecheck
 npm --prefix web run test:proxy
+node --test scripts/channel-components.test.mjs
 ```
 
 需要独立 PG18 的完整回归、浏览器夹具、真实外部渠道和候选发布验证，仍按[测试说明](../testing.md)、[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。

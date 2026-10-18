@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
 )
@@ -32,6 +34,35 @@ type SMTPRuntimeConfig struct {
 	Port                     int
 	Username, Password, From string
 	TLSMode, FromName        string
+}
+
+// ResolveMailConfigForInstance resolves the implementation selected by an
+// outbox job without assuming the mail transport is SMTP. Unbound jobs select
+// the category default; legacy SMTP/environment is the final fallback when no
+// enabled instance exists.
+func (s *Store) ResolveMailConfigForInstance(ctx context.Context, instanceID string, fallback SMTPRuntimeConfig) (string, module.Config, error) {
+	instanceID = strings.TrimSpace(instanceID)
+	if instanceID == "" {
+		err := s.Pool.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND enabled ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return "", module.Config{}, err
+		}
+	}
+	if instanceID != "" {
+		config, implementation, err := s.RuntimeChannelInstance(ctx, instanceID, channel.Mail)
+		return implementation, config, err
+	}
+	legacy, err := s.ResolveSMTPConfig(ctx, fallback)
+	if err != nil {
+		return "", module.Config{}, err
+	}
+	return "smtp", module.Config{
+		Values: map[string]any{
+			"host": legacy.Host, "port": legacy.Port, "username": legacy.Username,
+			"from": legacy.From, "from_name": legacy.FromName, "tls_mode": legacy.TLSMode,
+		},
+		Secret: legacy.Password, Secrets: map[string]string{"password": legacy.Password},
+	}, nil
 }
 
 func smtpSeal(key []byte, value string) ([]byte, error) {
@@ -196,32 +227,34 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1", actor).Scan(&super); e != nil || !super {
 		return 0, conflict("permission_denied", "需要超级管理员权限")
 	}
-	var version int64
-	var configured, enabled bool
-	if e = tx.QueryRow(ctx, "SELECT version,configured,enabled FROM smtp_settings WHERE id=1 FOR UPDATE").Scan(&version, &configured, &enabled); e != nil {
-		return 0, e
-	}
-	if version != expected {
-		return 0, conflict("version_conflict", "SMTP配置已变更，请重新加载")
-	}
 	instanceID := ""
 	if len(channelInstanceID) > 0 {
 		instanceID = strings.TrimSpace(channelInstanceID[0])
-		if instanceID != "" {
-			var valid bool
-			if e = tx.QueryRow(ctx, `SELECT category='mail' AND implementation_id='smtp' AND enabled FROM channel_instances WHERE id=$1`, instanceID).Scan(&valid); e != nil {
-				return 0, e
-			}
-			if !valid {
-				return 0, conflict("invalid_smtp", "邮件渠道未启用")
-			}
+	}
+	var version int64
+	if instanceID != "" {
+		var category, implementation string
+		var enabled bool
+		if e = tx.QueryRow(ctx, `SELECT category,implementation_id,enabled,version FROM channel_instances WHERE id=$1 FOR UPDATE`, instanceID).Scan(&category, &implementation, &enabled, &version); e != nil {
+			return 0, e
+		}
+		if category != string(channel.Mail) || !enabled || !channel.HasFactory(channel.Mail, implementation) {
+			return 0, conflict("invalid_smtp", "邮件渠道未启用或实现不可用")
+		}
+	} else {
+		var configured, enabled bool
+		if e = tx.QueryRow(ctx, "SELECT version,configured,enabled FROM smtp_settings WHERE id=1 FOR UPDATE").Scan(&version, &configured, &enabled); e != nil {
+			return 0, e
+		}
+		if !configured || !enabled {
+			return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
 		}
 	}
-	if instanceID == "" && (!configured || !enabled) {
-		return 0, conflict("invalid_smtp", "请先保存并启用SMTP配置")
+	if version != expected {
+		return 0, conflict("version_conflict", "邮件配置已变更，请重新加载")
 	}
 	var id int64
-	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'SMTP test','SMTP configuration test message.','system',COALESCE(NULLIF($2,''),(SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1))) RETURNING id", recipient, instanceID).Scan(&id); e != nil {
+	if e = tx.QueryRow(ctx, "INSERT INTO email_outbox(recipient,subject,body,kind,channel_instance_id) VALUES($1,'Mail channel test','Mail channel configuration test message.','system',COALESCE(NULLIF($2,''),(SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1))) RETURNING id", recipient, instanceID).Scan(&id); e != nil {
 		return 0, e
 	}
 	if e = Audit(ctx, tx, actor, "smtp.test_queued", "email_outbox", id, map[string]any{"version": version}); e != nil {
@@ -244,6 +277,17 @@ func (s *Store) ResolveSMTPConfig(ctx context.Context, fallback SMTPRuntimeConfi
 	}
 	if err != nil {
 		return SMTPRuntimeConfig{}, err
+	}
+	var implementation string
+	var schemaVersion int
+	contractErr := s.Pool.QueryRow(ctx, `SELECT implementation_id,schema_version FROM channel_instances WHERE id='mail-smtp-default'`).Scan(&implementation, &schemaVersion)
+	if contractErr != nil && !errors.Is(contractErr, pgx.ErrNoRows) {
+		return SMTPRuntimeConfig{}, contractErr
+	}
+	if contractErr == nil {
+		if err := validateSMTPModuleContract(implementation, schemaVersion); err != nil {
+			return SMTPRuntimeConfig{}, err
+		}
 	}
 	if !configured || !enabled {
 		var instanceID string
@@ -270,20 +314,24 @@ func (s *Store) ResolveSMTPConfigForInstance(ctx context.Context, instanceID str
 	}
 	var category, implementation string
 	var enabled bool
-	var rawConfig []byte
-	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,config FROM channel_instances WHERE id=$1`, instanceID).Scan(&category, &implementation, &enabled, &rawConfig); err != nil {
+	var schemaVersion int
+	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,schema_version FROM channel_instances WHERE id=$1`, instanceID).Scan(&category, &implementation, &enabled, &schemaVersion); err != nil {
 		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
 	}
 	if category != "mail" || implementation != "smtp" {
 		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
 	}
+	if err := validateSMTPModuleContract(implementation, schemaVersion); err != nil {
+		return SMTPRuntimeConfig{}, err
+	}
 	if !enabled {
 		return SMTPRuntimeConfig{}, nil
 	}
-	var config map[string]any
-	if err := json.Unmarshal(rawConfig, &config); err != nil {
-		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
+	runtime, _, err := s.RuntimeChannelInstance(ctx, instanceID, channel.Mail)
+	if err != nil {
+		return SMTPRuntimeConfig{}, err
 	}
+	config := runtime.Values
 	out := SMTPRuntimeConfig{
 		Host:     configString(config, "host"),
 		Port:     configInt(config, "port"),
@@ -300,8 +348,11 @@ func (s *Store) ResolveSMTPConfigForInstance(ctx context.Context, instanceID str
 		}
 	}
 	if out.Username != "" {
-		secret, err := s.ChannelInstanceSecret(ctx, instanceID)
-		if err != nil || secret == "" {
+		secret := runtime.Secrets["password"]
+		if secret == "" {
+			secret = runtime.Secret
+		}
+		if secret == "" {
 			return SMTPRuntimeConfig{}, fmt.Errorf("SMTP credentials unavailable")
 		}
 		out.Password = secret
@@ -310,4 +361,15 @@ func (s *Store) ResolveSMTPConfigForInstance(ctx context.Context, instanceID str
 		return SMTPRuntimeConfig{}, fmt.Errorf("SMTP channel unavailable")
 	}
 	return out, nil
+}
+
+func validateSMTPModuleContract(implementation string, schemaVersion int) error {
+	desc, registered := channel.Lookup(channel.Mail, implementation)
+	if implementation != "smtp" || !registered || desc.InstanceMode != "channel" || !channel.HasFactory(channel.Mail, implementation) {
+		return conflict("channel_not_registered", "邮件渠道实现未注册")
+	}
+	if schemaVersion != desc.SchemaVersion {
+		return conflict("channel_schema_incompatible", "渠道配置版本不兼容，需要显式迁移")
+	}
+	return nil
 }

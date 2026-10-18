@@ -7,6 +7,7 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/notification"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -45,9 +46,12 @@ func (s *Server) verificationAvailable(ctx context.Context, channel string) erro
 			return nil
 		}
 	} else if channel == "email" {
-		cfg, err := s.db.ResolveSMTPConfig(ctx, s.smtpFallback())
-		if err == nil && cfg.Host != "" && cfg.From != "" {
-			return nil
+		implementation, cfg, err := s.db.ResolveMailConfigForInstance(ctx, "", s.smtpFallback())
+		if err == nil {
+			provider, factoryErr := notification.NewMailProvider(implementation, cfg)
+			if factoryErr == nil && provider != nil && provider.Enabled() {
+				return nil
+			}
 		}
 	}
 	return storeError("notification_channel_unavailable", "通知渠道尚未配置或未启用")

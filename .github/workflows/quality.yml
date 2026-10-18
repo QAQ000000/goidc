@@ -51,6 +51,11 @@ jobs:
           ./scripts/check-go-toolchain.sh
           ./scripts/go.sh test ./... -run '^$'
 
+      - name: Check compiled module contracts
+        run: |
+          ./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/...
+          node --test scripts/module-manifest.test.mjs
+
       - name: Install web dependencies
         run: npm ci --prefix web
 
@@ -59,3 +64,4 @@ jobs:
           npm --prefix web run lint
           npm --prefix web run typecheck
           npm --prefix web run test:proxy
+          node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs

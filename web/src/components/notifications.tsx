@@ -24,6 +24,7 @@ import {
 } from "./ui/table";
 import { Failure, Loading, Status } from "./common";
 import { Workspace, useAdminPermission, useAdminIdentity } from "./workspace";
+import { NotificationCenter } from "./notification-center";
 
 type Template = {
   version: number;
@@ -63,17 +64,18 @@ export function NotificationsView() {
 const templateStates = ["all", "active", "disabled"] as const;
 const templateDefaults = { channel: "email", limit: "25" };
 function NotificationManager() {
+  const [tab, setTab] = useState("center");
+  const [centerDirty, setCenterDirty] = useState(false);
   const navigation = useAdminListNavigation(true, templateStates, "all", templateDefaults);
   const templateChannel = navigation.extra.channel === "sms" ? "sms" : "email";
   const templateLimit = [25, 50, 100].includes(Number(navigation.extra.limit)) ? Number(navigation.extra.limit) : 25;
   const templatePage = navigation.page;
   const templateQuery = navigation.query;
   const setTemplatePage = navigation.setPage;
-  const templates = useResource<TemplatePage>(navigation.ready ? `/admin/notification-templates/page?channel=${templateChannel}&q=${encodeURIComponent(templateQuery)}&status=${navigation.status}&limit=${templateLimit}&offset=${templatePage * templateLimit}` : null, false);
-  const outbox = useResource<EmailJob[]>("/admin/email-outbox?limit=50");
-  const smsOutbox = useResource<SMSJob[]>("/admin/sms-outbox?limit=50");
+  const templates = useResource<TemplatePage>(tab === "templates" && navigation.ready ? `/admin/notification-templates/page?channel=${templateChannel}&q=${encodeURIComponent(templateQuery)}&status=${navigation.status}&limit=${templateLimit}&offset=${templatePage * templateLimit}` : null, false);
+  const outbox = useResource<EmailJob[]>(tab === "outbox" ? "/admin/email-outbox?limit=50" : null);
+  const smsOutbox = useResource<SMSJob[]>(tab === "outbox" ? "/admin/sms-outbox?limit=50" : null);
   const manage = useAdminPermission("notifications.manage");
-  const [tab, setTab] = useState("templates");
   const [outboxChannel, setOutboxChannel] = useState<"email" | "sms">("email");
   const [edit, setEdit] = useState<Template | null>(null);
   const [editingDirty, setEditingDirty] = useState(false);
@@ -121,7 +123,7 @@ function NotificationManager() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="page-title">通知管理</h1>
         <div className="flex gap-2">
-          <Button
+          {tab !== "center" && <Button
             variant="outline"
             size="icon"
             title="刷新通知"
@@ -129,7 +131,7 @@ function NotificationManager() {
             onClick={refresh}
           >
             <RotateCcw />
-          </Button>
+          </Button>}
           {manage && tab === "templates" && (
             <Button asChild><Link href={`/admin/notifications/new${navigation.suffix}`}><Plus />新增模板</Link></Button>
           )}
@@ -137,15 +139,16 @@ function NotificationManager() {
       </div>
       <nav aria-label="通知分区" className="mb-5 flex overflow-x-auto border-b">
         {[
-          ["templates", "模板管理"],
-          ["outbox", "投递队列"],
+          ["center", "统一通知中心"],
+          ["templates", "邮件 / 短信模板"],
+          ["outbox", "邮件 / 短信队列"],
         ].map(([value, label]) => (
           <button
             type="button"
             key={value}
             aria-current={tab === value ? "page" : undefined}
             className={`shrink-0 border-b-2 px-5 py-3 text-sm ${tab === value ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground"}`}
-            onClick={() => setTab(value)}
+            onClick={() => { if (value === tab || !centerDirty || window.confirm("通知中心有未保存的修改，确定切换并丢弃草稿吗？")) setTab(value); }}
           >
             {label}
           </button>
@@ -175,7 +178,7 @@ function NotificationManager() {
           <select aria-label="模板状态" value={navigation.status} onChange={(event) => { navigation.setStatus(event.target.value); setTemplatePage(0); }} className="rounded border px-3 py-2 text-sm"><option value="all">全部状态</option><option value="active">启用</option><option value="disabled">停用</option></select>
         </div>
       )}
-      {error ? (
+      {tab === "center" ? <NotificationCenter onDirty={setCenterDirty} /> : error ? (
         <Failure error={error} retry={refresh} />
       ) : tab === "templates" ? (
         !templates.data ? (

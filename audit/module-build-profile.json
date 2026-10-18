@@ -1,0 +1,16 @@
+{
+  "format": "goidc-module-build-profile-v1",
+  "profile": "default",
+  "contract_version": 1,
+  "modules": [
+    { "category": "bot", "id": "telegram_bot", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "certification", "id": "manual", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "mail", "id": "smtp", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "payment", "id": "epay", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "payment", "id": "mock", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "provision", "id": "nokvm", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "profile", "factory_available": false },
+    { "category": "provision", "id": "zjmf", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "supplier", "factory_available": true },
+    { "category": "sms", "id": "generic_http_json", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "sms", "id": "idcsmart", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true }
+  ]
+}

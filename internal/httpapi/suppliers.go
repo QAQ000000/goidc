@@ -97,6 +97,14 @@ func (s *Server) saveSupplier(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	if in.DisableOnly {
+		cookie, err := r.Cookie("zjmfgo_session")
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+			return
+		}
+		in.SessionHash = tokenHash(cookie.Value)
+	}
 	saved, err := s.db.SaveSupplier(r.Context(), identityFrom(r).ID, id, in)
 	if err != nil {
 		s.fail(w, r, err)

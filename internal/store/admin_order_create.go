@@ -353,7 +353,7 @@ func (s *Store) queueAdminOrderEmail(ctx context.Context, tx pgx.Tx, customer in
 	if err != nil {
 		return "", err
 	}
-	err = tx.QueryRow(ctx, "SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled ORDER BY sort_order,id LIMIT 1").Scan(&instance)
+	err = tx.QueryRow(ctx, "SELECT id FROM channel_instances WHERE category='mail' AND enabled ORDER BY sort_order,id LIMIT 1").Scan(&instance)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "skipped_channel", nil
 	}

@@ -16,30 +16,39 @@ import (
 )
 
 type ChannelInstance struct {
-	ID               string         `json:"id"`
-	Category         string         `json:"category"`
-	ImplementationID string         `json:"implementation_id"`
-	DisplayName      string         `json:"display_name"`
-	Enabled          bool           `json:"enabled"`
-	SortOrder        int            `json:"sort_order"`
-	Config           map[string]any `json:"config"`
-	SecretConfigured bool           `json:"secret_configured"`
-	Version          int64          `json:"version"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
+	ID                  string                    `json:"id"`
+	Category            string                    `json:"category"`
+	ImplementationID    string                    `json:"implementation_id"`
+	DisplayName         string                    `json:"display_name"`
+	Enabled             bool                      `json:"enabled"`
+	SortOrder           int                       `json:"sort_order"`
+	Config              map[string]any            `json:"config"`
+	SecretConfigured    bool                      `json:"secret_configured"`
+	Version             int64                     `json:"version"`
+	CreatedAt           time.Time                 `json:"created_at"`
+	UpdatedAt           time.Time                 `json:"updated_at"`
+	SchemaVersion       int                       `json:"schema_version"`
+	SecureFields        map[string]bool           `json:"secure_fields"`
+	FactoryAvailable    bool                      `json:"factory_available"`
+	ConfigurationStatus string                    `json:"configuration_status"`
+	ValidationErrors    []channel.ValidationError `json:"validation_errors,omitempty"`
 }
 
 type ChannelInstanceInput struct {
-	ID               string         `json:"id"`
-	Category         string         `json:"category"`
-	ImplementationID string         `json:"implementation_id"`
-	DisplayName      string         `json:"display_name"`
-	Enabled          bool           `json:"enabled"`
-	SortOrder        int            `json:"sort_order"`
-	Config           map[string]any `json:"config"`
-	Secret           *string        `json:"secret"`
-	ClearSecret      bool           `json:"clear_secret"`
-	ExpectedVersion  int64          `json:"expected_version"`
+	ID                    string            `json:"id"`
+	Category              string            `json:"category"`
+	ImplementationID      string            `json:"implementation_id"`
+	DisplayName           string            `json:"display_name"`
+	Enabled               bool              `json:"enabled"`
+	SortOrder             int               `json:"sort_order"`
+	Config                map[string]any    `json:"config"`
+	Secret                *string           `json:"secret"`
+	ClearSecret           bool              `json:"clear_secret"`
+	ExpectedVersion       int64             `json:"expected_version"`
+	SchemaVersion         int               `json:"schema_version"`
+	ExpectedSchemaVersion int               `json:"expected_schema_version"`
+	SecureConfig          map[string]string `json:"secure_config"`
+	ClearSecureFields     []string          `json:"clear_secure_fields"`
 }
 
 func channelSeal(key []byte, instanceID, raw string, seal bool) ([]byte, error) {
@@ -79,22 +88,26 @@ func validateChannelInput(in ChannelInstanceInput, creating bool) (channel.Descr
 	if !ok {
 		return channel.Descriptor{}, nil, conflict("channel_not_registered", "渠道实现未注册")
 	}
+	if desc.InstanceMode != "channel" {
+		return channel.Descriptor{}, nil, conflict("channel_external_configuration", "请使用该模块的专用配置入口")
+	}
+	if !channel.HasFactory(category, id) {
+		return channel.Descriptor{}, nil, conflict("channel_factory_unavailable", "当前构建未提供模块运行工厂")
+	}
+	if in.SchemaVersion != 0 && in.SchemaVersion != desc.SchemaVersion {
+		return channel.Descriptor{}, nil, conflict("channel_schema_incompatible", "模块配置定义已变更，请重新加载")
+	}
 	if creating && strings.TrimSpace(in.ID) != "" && (len(in.ID) > 64 || strings.ContainsAny(in.ID, " \t\r\n")) {
 		return channel.Descriptor{}, nil, conflict("invalid_channel", "渠道实例 ID 无效")
 	}
 	if strings.TrimSpace(in.DisplayName) == "" || len(in.DisplayName) > 160 || in.SortOrder < -100000 || in.SortOrder > 100000 {
 		return channel.Descriptor{}, nil, conflict("invalid_channel", "渠道实例名称或排序无效")
 	}
-	for _, field := range desc.Fields {
-		if !field.Required || field.Secret {
-			continue
-		}
-		value, exists := in.Config[field.Key]
-		if !exists || value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
-			return channel.Descriptor{}, nil, conflict("invalid_channel_config", "缺少渠道必填配置")
-		}
+	normalized, validationErrors := channel.NormalizeConfig(desc, in.Config)
+	if len(validationErrors) > 0 {
+		return channel.Descriptor{}, nil, conflict("invalid_channel_config", "渠道配置字段、类型或取值无效")
 	}
-	encoded, err := channelConfigJSON(in.Config)
+	encoded, err := channelConfigJSON(normalized)
 	if err != nil || len(encoded) > 128<<10 {
 		return channel.Descriptor{}, nil, conflict("invalid_channel_config", "渠道配置无效")
 	}
@@ -111,88 +124,39 @@ func validateChannelInput(in ChannelInstanceInput, creating bool) (channel.Descr
 	return desc, encoded, nil
 }
 
-func hasSecretField(desc channel.Descriptor) bool {
-	for _, field := range desc.Fields {
-		if field.Secret {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Store) ListChannelInstances(ctx context.Context, category string) ([]ChannelInstance, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT id,category,implementation_id,display_name,enabled,sort_order,config,secret_ciphertext,version,created_at,updated_at FROM channel_instances WHERE ($1='' OR category=$1) ORDER BY category,sort_order,id`, strings.TrimSpace(category))
+	rows, err := s.Pool.Query(ctx, "SELECT "+channelInstanceColumns+" FROM channel_instances WHERE ($1='' OR category=$1) ORDER BY category,sort_order,id", strings.TrimSpace(category))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	result := []ChannelInstance{}
 	for rows.Next() {
-		var item ChannelInstance
-		var config, secret []byte
-		if err = rows.Scan(&item.ID, &item.Category, &item.ImplementationID, &item.DisplayName, &item.Enabled, &item.SortOrder, &config, &secret, &item.Version, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
+		rec, scanErr := scanChannelRecord(rows)
+		if scanErr != nil {
+			return nil, scanErr
 		}
-		if err = json.Unmarshal(config, &item.Config); err != nil {
-			return nil, err
-		}
-		item.SecretConfigured = len(secret) > 0
-		result = append(result, item)
+		result = append(result, describeChannelRecord(rec))
 	}
 	return result, rows.Err()
 }
 
 func (s *Store) GetChannelInstance(ctx context.Context, id string) (ChannelInstance, error) {
-	var out ChannelInstance
-	var config, secret []byte
-	err := s.Pool.QueryRow(ctx, `SELECT id,category,implementation_id,display_name,enabled,sort_order,config,secret_ciphertext,version,created_at,updated_at FROM channel_instances WHERE id=$1`, id).Scan(&out.ID, &out.Category, &out.ImplementationID, &out.DisplayName, &out.Enabled, &out.SortOrder, &config, &secret, &out.Version, &out.CreatedAt, &out.UpdatedAt)
+	rec, err := scanChannelRecord(s.Pool.QueryRow(ctx, "SELECT "+channelInstanceColumns+" FROM channel_instances WHERE id=$1", id))
 	if err != nil {
-		return out, err
+		return ChannelInstance{}, err
 	}
-	if err = json.Unmarshal(config, &out.Config); err != nil {
-		return out, err
-	}
-	out.SecretConfigured = len(secret) > 0
-	return out, nil
+	return describeChannelRecord(rec), nil
 }
 
-// ChannelInstanceSecret is intentionally only used by compiled-in adapters.
-// API responses never include the decrypted value.
+// ChannelInstanceSecret preserves the single-credential compatibility boundary.
+// Multi-credential modules use ChannelInstanceSecrets instead.
 func (s *Store) ChannelInstanceSecret(ctx context.Context, id string) (string, error) {
-	var sealed []byte
-	var aad string
-	var category, implementation string
-	if err := s.Pool.QueryRow(ctx, "SELECT category,implementation_id,secret_ciphertext,secret_aad FROM channel_instances WHERE id=$1", id).Scan(&category, &implementation, &sealed, &aad); err != nil {
-		return "", err
-	}
-	if len(sealed) == 0 {
-		return "", nil
-	}
-	if aad != "" && aad != "zjmfgo:channel-instance:v1:"+id {
-		var plain string
-		var err error
-		switch {
-		case category == string(channel.Payment) && implementation == "epay" && aad == "zjmfgo:payment-settings:epay-key:v1":
-			plain, err = s.paymentSecret(sealed, false)
-		case category == string(channel.Mail) && implementation == "smtp" && aad == "zjmfgo:smtp-settings:password:v1":
-			plain, err = smtpOpen(s.ProvisionEncryptionKey, sealed)
-		case category == string(channel.SMS) && aad == "sms:token":
-			var raw []byte
-			raw, err = smsCrypt(s.ProvisionEncryptionKey, sealed, "token", false)
-			plain = string(raw)
-		default:
-			return "", errors.New("channel secret unavailable")
-		}
-		if err != nil {
-			return "", errors.New("channel secret unavailable")
-		}
-		return plain, nil
-	}
-	plain, err := channelSeal(s.ProvisionEncryptionKey, id, string(sealed), false)
+	rec, err := scanChannelRecord(s.Pool.QueryRow(ctx, "SELECT "+channelInstanceColumns+" FROM channel_instances WHERE id=$1", id))
 	if err != nil {
 		return "", err
 	}
-	return string(plain), nil
+	return s.openChannelSingle(rec)
 }
 
 func (s *Store) CreateChannelInstance(ctx context.Context, actor int64, sessionHash string, in ChannelInstanceInput) (ChannelInstance, error) {
@@ -204,16 +168,10 @@ func (s *Store) CreateChannelInstance(ctx context.Context, actor int64, sessionH
 	if id == "" {
 		id = channelID()
 	}
-	secret := []byte{}
-	if in.Secret != nil && *in.Secret != "" {
-		sealed, sealErr := channelSeal(s.ProvisionEncryptionKey, id, *in.Secret, true)
-		if sealErr != nil {
-			return ChannelInstance{}, sealErr
-		}
-		secret = sealed
-	}
-	if in.Enabled && len(secret) == 0 && hasSecretField(desc) {
-		return ChannelInstance{}, conflict("invalid_channel_secret", "启用渠道需要密钥")
+	rec := channelRecord{item: ChannelInstance{ID: id}, fields: map[string][]byte{}}
+	secret, aad, fields, err := s.mergeChannelCredentials(rec, desc, in)
+	if err != nil {
+		return ChannelInstance{}, err
 	}
 	tx, err := settingsManagementTx(ctx, s, actor)
 	if err != nil {
@@ -223,10 +181,10 @@ func (s *Store) CreateChannelInstance(ctx context.Context, actor int64, sessionH
 	if err = recheckSettingsManager(ctx, tx, actor, sessionHash); err != nil {
 		return ChannelInstance{}, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled,sort_order,config,secret_ciphertext,secret_aad) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, id, desc.Category, desc.ID, strings.TrimSpace(in.DisplayName), in.Enabled, in.SortOrder, config, secret, "zjmfgo:channel-instance:v1:"+id); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled,sort_order,config,secret_ciphertext,secret_aad,schema_version,secret_fields) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, id, desc.Category, desc.ID, strings.TrimSpace(in.DisplayName), in.Enabled, in.SortOrder, config, secret, aad, desc.SchemaVersion, fields); err != nil {
 		return ChannelInstance{}, err
 	}
-	if err = Audit(ctx, tx, actor, "channel.instance_created", "channel_instance", 0, map[string]any{"id": id, "category": desc.Category, "implementation_id": desc.ID}); err != nil {
+	if err = Audit(ctx, tx, actor, "channel.instance_created", "channel_instance", 0, map[string]any{"id": id, "category": desc.Category, "implementation_id": desc.ID, "schema_version": desc.SchemaVersion}); err != nil {
 		return ChannelInstance{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -239,61 +197,66 @@ func (s *Store) UpdateChannelInstance(ctx context.Context, actor int64, sessionH
 	if strings.TrimSpace(id) == "" || in.ExpectedVersion < 1 {
 		return ChannelInstance{}, conflict("invalid_channel", "渠道实例或版本无效")
 	}
-	in.ID = id
-	var old ChannelInstance
-	var oldSecret []byte
-	var oldAAD string
+	disableOnly := onlyDisableChannel(in)
 	tx, err := settingsManagementTx(ctx, s, actor)
 	if err != nil {
-		return old, err
+		return ChannelInstance{}, err
 	}
 	defer tx.Rollback(ctx)
 	if err = recheckSettingsManager(ctx, tx, actor, sessionHash); err != nil {
-		return old, err
+		return ChannelInstance{}, err
 	}
-	if err = tx.QueryRow(ctx, `SELECT id,category,implementation_id,display_name,enabled,sort_order,config,secret_ciphertext,secret_aad,version,created_at,updated_at FROM channel_instances WHERE id=$1 FOR UPDATE`, id).Scan(&old.ID, &old.Category, &old.ImplementationID, &old.DisplayName, &old.Enabled, &old.SortOrder, &old.Config, &oldSecret, &oldAAD, &old.Version, &old.CreatedAt, &old.UpdatedAt); err != nil {
-		return old, err
+	rec, err := scanChannelRecord(tx.QueryRow(ctx, "SELECT "+channelInstanceColumns+" FROM channel_instances WHERE id=$1 FOR UPDATE", id))
+	if err != nil {
+		return ChannelInstance{}, err
 	}
+	old := rec.item
 	if old.Version != in.ExpectedVersion {
 		return old, conflict("version_conflict", "渠道配置已变更，请重新加载")
 	}
-	if in.Category == "" {
-		in.Category, in.ImplementationID = old.Category, old.ImplementationID
+	if disableOnly {
+		if _, err = tx.Exec(ctx, "UPDATE channel_instances SET enabled=false,version=version+1,updated_at=now() WHERE id=$1", id); err != nil {
+			return old, err
+		}
+		if err = s.disableLegacyChannel(ctx, tx, id); err != nil {
+			return old, err
+		}
+		if err = Audit(ctx, tx, actor, "channel.instance_updated", "channel_instance", 0, map[string]any{"id": id, "version": old.Version + 1, "enabled": false}); err != nil {
+			return old, err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			return old, err
+		}
+		return s.GetChannelInstance(ctx, id)
 	}
-	if in.ImplementationID == "" {
-		in.ImplementationID = old.ImplementationID
+	if in.Category != "" && in.Category != old.Category || in.ImplementationID != "" && in.ImplementationID != old.ImplementationID {
+		return old, conflict("channel_identity_immutable", "请新建实例以更换模块实现")
 	}
+	in.ID, in.Category, in.ImplementationID = id, old.Category, old.ImplementationID
 	if in.DisplayName == "" {
 		in.DisplayName = old.DisplayName
 	}
 	if in.Config == nil {
 		in.Config = old.Config
 	}
-	desc, config, validationErr := validateChannelInput(in, false)
-	if validationErr != nil {
-		return old, validationErr
-	}
-	secret := oldSecret
-	aad := oldAAD
-	if in.ClearSecret {
-		secret, aad = []byte{}, ""
-	} else if in.Secret != nil && *in.Secret != "" {
-		sealed, sealErr := channelSeal(s.ProvisionEncryptionKey, id, *in.Secret, true)
-		if sealErr != nil {
-			return old, sealErr
-		}
-		secret, aad = sealed, "zjmfgo:channel-instance:v1:"+id
-	}
-	if in.Enabled && len(secret) == 0 && hasSecretField(desc) {
-		return old, conflict("invalid_channel_secret", "启用渠道需要密钥")
-	}
-	if _, err = tx.Exec(ctx, `UPDATE channel_instances SET category=$2,implementation_id=$3,display_name=$4,enabled=$5,sort_order=$6,config=$7,secret_ciphertext=$8,secret_aad=$9,version=version+1,updated_at=now() WHERE id=$1`, id, desc.Category, desc.ID, strings.TrimSpace(in.DisplayName), in.Enabled, in.SortOrder, config, secret, aad); err != nil {
+	desc, config, err := validateChannelInput(in, false)
+	if err != nil {
 		return old, err
 	}
-	if err = s.syncLegacyChannelInstance(ctx, tx, id, desc, in.Config, in.Enabled, secret, aad); err != nil {
+	if err = checkChannelSchema(in, old.SchemaVersion, desc); err != nil {
 		return old, err
 	}
-	if err = Audit(ctx, tx, actor, "channel.instance_updated", "channel_instance", 0, map[string]any{"id": id, "version": old.Version + 1, "category": desc.Category, "implementation_id": desc.ID, "secret_changed": (in.Secret != nil && *in.Secret != "") || in.ClearSecret}); err != nil {
+	secret, aad, fields, err := s.mergeChannelCredentials(rec, desc, in)
+	if err != nil {
+		return old, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE channel_instances SET display_name=$2,enabled=$3,sort_order=$4,config=$5,secret_ciphertext=$6,secret_aad=$7,secret_fields=$8,version=version+1,updated_at=now() WHERE id=$1`, id, strings.TrimSpace(in.DisplayName), in.Enabled, in.SortOrder, config, secret, aad, fields); err != nil {
+		return old, err
+	}
+	if err = s.syncLegacyChannelInstance(ctx, tx, id, desc, configFromJSON(config), in.Enabled, secret, aad); err != nil {
+		return old, err
+	}
+	if err = Audit(ctx, tx, actor, "channel.instance_updated", "channel_instance", 0, map[string]any{"id": id, "version": old.Version + 1, "category": desc.Category, "implementation_id": desc.ID, "schema_version": desc.SchemaVersion, "secret_changed": (in.Secret != nil && *in.Secret != "") || in.ClearSecret || len(in.SecureConfig) > 0 || len(in.ClearSecureFields) > 0}); err != nil {
 		return old, err
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -319,7 +282,7 @@ func (s *Store) DeleteChannelInstance(ctx context.Context, actor int64, sessionH
 		return err
 	}
 	var referenced bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM email_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM sms_outbox WHERE channel_instance_id=$1)`, id).Scan(&referenced); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM email_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM sms_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM notification_routes WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_targets WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_binding_challenges WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_deliveries WHERE instance_id=$1)`, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced {

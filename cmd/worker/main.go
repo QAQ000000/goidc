@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
-	"github.com/codex/zjmfgo/internal/module"
+	"github.com/codex/zjmfgo/internal/modules/manifest"
 	"github.com/codex/zjmfgo/internal/notification"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
@@ -19,6 +19,13 @@ import (
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	if handled, err := manifest.WriteCLI(os.Args[1:], os.Stdout, "worker"); handled {
+		if err != nil {
+			log.Error("module manifest unavailable", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		log.Error("configuration invalid", "error", err)
@@ -111,6 +118,13 @@ func main() {
 		}
 	}()
 	defer notificationWorker.Wait()
+	var centerWorker sync.WaitGroup
+	centerWorker.Add(1)
+	go func() {
+		defer centerWorker.Done()
+		notification.RunNotificationCenter(ctx, db, log)
+	}()
+	defer centerWorker.Wait()
 	// A full renewal pass can outlast the provisioning poll interval. Run it
 	// independently so one day's renewal work does not delay delivery or mail.
 	var renewalWorker sync.WaitGroup
@@ -196,18 +210,12 @@ func main() {
 					_ = db.RecoverStaleEmailJobs(ctx)
 					continue
 				}
-				smtpRuntime, resolveErr := db.ResolveSMTPConfigForInstance(ctx, job.ChannelInstanceID, smtpFallback)
-				smtpConfig, factoryErr := notification.NewMailProvider("smtp", module.Config{Values: map[string]any{"host": smtpRuntime.Host, "port": smtpRuntime.Port, "username": smtpRuntime.Username, "from": smtpRuntime.From, "tls_mode": smtpRuntime.TLSMode, "from_name": smtpRuntime.FromName}, Secret: smtpRuntime.Password})
+				implementation, mailConfig, resolveErr := db.ResolveMailConfigForInstance(ctx, job.ChannelInstanceID, smtpFallback)
 				var sendErr error
-				switch {
-				case resolveErr != nil:
+				if resolveErr != nil {
 					sendErr = resolveErr
-				case factoryErr != nil:
-					sendErr = factoryErr
-				case !smtpConfig.Enabled():
-					sendErr = errors.New("SMTP channel disabled")
-				default:
-					sendErr = smtpConfig.Send(*job)
+				} else {
+					sendErr = notification.SendMail(implementation, mailConfig, *job)
 				}
 				if completeErr := db.CompleteEmailJob(ctx, *job, sendErr); completeErr != nil {
 					log.Error("email completion failed", "job_id", job.ID, "error", completeErr)

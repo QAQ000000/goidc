@@ -18,18 +18,31 @@ const (
 	OAuth         Category = "oauth"
 	SMS           Category = "sms"
 	Mail          Category = "mail"
+	Bot           Category = "bot"
 	Certification Category = "certification"
 	Provision     Category = "provision"
 )
 
+// ValidCategory recognizes public module categories. Registry tests may use
+// private categories, while persisted/API contracts use this finite catalogue.
+func ValidCategory(category Category) bool {
+	switch category {
+	case Payment, OAuth, SMS, Mail, Bot, Certification, Provision:
+		return true
+	default:
+		return false
+	}
+}
+
 type FieldType string
 
 const (
-	Text     FieldType = "text"
-	Number   FieldType = "number"
-	Boolean  FieldType = "boolean"
-	Select   FieldType = "select"
-	Textarea FieldType = "textarea"
+	Text        FieldType = "text"
+	Number      FieldType = "number"
+	Boolean     FieldType = "boolean"
+	Select      FieldType = "select"
+	MultiSelect FieldType = "multiselect"
+	Textarea    FieldType = "textarea"
 )
 
 type Field struct {
@@ -39,14 +52,22 @@ type Field struct {
 	Required bool      `json:"required"`
 	Secret   bool      `json:"secret"`
 	Options  []string  `json:"options,omitempty"`
+	Default  any       `json:"default,omitempty"`
+	Min      *float64  `json:"min,omitempty"`
+	Max      *float64  `json:"max,omitempty"`
+	Integer  bool      `json:"integer,omitempty"`
 }
 
 type Descriptor struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Category     Category `json:"category"`
-	Capabilities []string `json:"capabilities"`
-	Fields       []Field  `json:"fields"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name"`
+	Category        Category `json:"category"`
+	Capabilities    []string `json:"capabilities"`
+	Fields          []Field  `json:"fields"`
+	Version         string   `json:"version"`
+	SchemaVersion   int      `json:"schema_version"`
+	ContractVersion int      `json:"contract_version"`
+	InstanceMode    string   `json:"instance_mode"`
 }
 
 // Factory is the erased boundary used by the common registry. Category
@@ -58,9 +79,11 @@ var ErrFactoryUnavailable = errors.New("channel factory is not registered")
 
 var registry = struct {
 	sync.RWMutex
-	items     map[string]Descriptor
-	factories map[string]Factory
-}{items: make(map[string]Descriptor), factories: make(map[string]Factory)}
+	items            map[string]Descriptor
+	factories        map[string]Factory
+	validators       map[string]ConfigValidator
+	secretValidators map[string]SecretValidator
+}{items: make(map[string]Descriptor), factories: make(map[string]Factory), validators: make(map[string]ConfigValidator), secretValidators: make(map[string]SecretValidator)}
 
 func key(category Category, id string) string { return string(category) + ":" + id }
 
@@ -69,15 +92,24 @@ func cloneDescriptor(desc Descriptor) Descriptor {
 	desc.Fields = append([]Field(nil), desc.Fields...)
 	for i := range desc.Fields {
 		desc.Fields[i].Options = append([]string(nil), desc.Fields[i].Options...)
+		desc.Fields[i].Default = cloneDefault(desc.Fields[i].Default)
+		if desc.Fields[i].Min != nil {
+			value := *desc.Fields[i].Min
+			desc.Fields[i].Min = &value
+		}
+		if desc.Fields[i].Max != nil {
+			value := *desc.Fields[i].Max
+			desc.Fields[i].Max = &value
+		}
 	}
 	return desc
 }
 
 func Register(desc Descriptor) error {
-	desc.ID = strings.TrimSpace(desc.ID)
-	desc.Name = strings.TrimSpace(desc.Name)
-	if desc.ID == "" || desc.Name == "" || desc.Category == "" {
-		return errors.New("invalid channel descriptor")
+	var err error
+	desc, err = normalizeDescriptor(desc)
+	if err != nil {
+		return err
 	}
 	registry.Lock()
 	defer registry.Unlock()
@@ -96,10 +128,10 @@ func RegisterFactory(desc Descriptor, factory Factory) error {
 	if factory == nil {
 		return errors.New("nil channel factory")
 	}
-	desc.ID = strings.TrimSpace(desc.ID)
-	desc.Name = strings.TrimSpace(desc.Name)
-	if desc.ID == "" || desc.Name == "" || desc.Category == "" {
-		return errors.New("invalid channel descriptor")
+	var err error
+	desc, err = normalizeDescriptor(desc)
+	if err != nil {
+		return err
 	}
 	registry.Lock()
 	defer registry.Unlock()

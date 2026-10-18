@@ -19,8 +19,11 @@ import (
 // compiled-in factory. Values contains non-secret fields; Secret is reserved
 // for the decrypted credential and must never be persisted by a factory.
 type Config struct {
-	Values       map[string]any
-	Secret       string
+	Values map[string]any
+	Secret string
+	// Secrets carries independently named credentials. Secret is retained for
+	// adapters and migrated instances which have exactly one credential field.
+	Secrets      map[string]string
 	PublicOrigin string
 	// Payload is an optional category-specific value. The generic registry
 	// does not inspect it; typed category packages validate it at the factory

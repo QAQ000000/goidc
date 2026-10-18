@@ -1,6 +1,7 @@
 "use client";
 import { CustomerCreditOverview } from "./customer-credit";
 import { TicketNotificationPreferences } from "./ticket-notification-preferences";
+import { NotificationInbox, NotificationPreferences } from "./notification-preferences";
 import { ContactsPanel } from "./admin-customer-detail";
 import { AccountVerification } from "./account-verification";
 import { useState } from "react";
@@ -51,6 +52,8 @@ export function AccountView() {
           <PasswordForm />
           {me.error ? <Failure error={me.error} retry={me.refresh} /> : !me.data ? <Loading /> : <AccountVerification email={me.data.email} phone={data.phone} phoneVerified={data.phone_verified} emailVerified={data.email_verified} onVerified={refresh} />}
           <TicketNotificationPreferences />
+          <NotificationPreferences />
+          <NotificationInbox />
           <MfaPanel />
           <ApiKeysPanel />
           <ContactsPanel />

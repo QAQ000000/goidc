@@ -128,7 +128,7 @@ func (s *Store) enqueueServiceExpiryEmail(ctx context.Context, tx pgx.Tx, item e
 	if !active {
 		return false, nil
 	}
-	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND implementation_id='smtp' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT id FROM channel_instances WHERE category='mail' AND enabled=true ORDER BY sort_order,id LIMIT 1`).Scan(&instanceID); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}

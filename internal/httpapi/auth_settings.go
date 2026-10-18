@@ -40,7 +40,7 @@ func readAuthSettings(ctx context.Context, q rowQuerier) (authSettingsView, erro
 	err := q.QueryRow(ctx, `SELECT a.login_enabled,s.registration_enabled,a.registration_email_enabled,a.registration_phone_enabled,
  a.login_username_enabled,a.login_email_enabled,a.login_phone_enabled,s.email_verification_required,a.phone_verification_required,
  a.verification_email_enabled,a.verification_sms_enabled,s.auth_captcha_enabled,a.captcha_auto_enabled,a.login_max_attempts,a.login_lockout_minutes,
- EXISTS(SELECT 1 FROM channel_instances c WHERE c.category='mail' AND c.implementation_id='smtp' AND c.enabled),
+ EXISTS(SELECT 1 FROM channel_instances c WHERE c.category='mail' AND c.enabled),
  EXISTS(SELECT 1 FROM channel_instances c WHERE c.category='sms' AND c.enabled),a.version,a.updated_at
  FROM auth_settings a JOIN site_settings s ON s.id=1 WHERE a.id=1`).Scan(
 		&out.LoginEnabled, &out.RegistrationEnabled, &out.RegistrationEmailEnabled, &out.RegistrationPhoneEnabled,

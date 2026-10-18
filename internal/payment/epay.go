@@ -35,7 +35,7 @@ func init() {
 		Fields: []channel.Field{
 			{Key: "api_url", Label: "网关地址", Type: channel.Text, Required: true},
 			{Key: "pid", Label: "商户 PID", Type: channel.Text, Required: true},
-			{Key: "types", Label: "支付类型", Type: channel.Select, Options: []string{"alipay", "wxpay", "qqpay", "bank"}},
+			{Key: "types", Label: "支付类型", Type: channel.MultiSelect, Options: []string{"alipay", "wxpay", "qqpay", "bank"}, Default: []string{"alipay"}},
 			{Key: "key", Label: "商户密钥", Type: channel.Text, Required: true, Secret: true},
 		},
 	}, func(config module.Config) (Gateway, error) {

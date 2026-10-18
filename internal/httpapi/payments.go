@@ -136,7 +136,6 @@ func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
 	labels := map[string]string{"alipay": "支付宝", "wxpay": "微信支付", "qqpay": "QQ 钱包", "bank": "网银支付"}
-	legacy, legacyErr := s.paymentConfiguration(r.Context())
 	instances, err := s.db.ListChannelInstances(r.Context(), "payment")
 	if err != nil {
 		s.fail(w, r, err)
@@ -146,13 +145,7 @@ func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
 		if !instance.Enabled && instance.ID != "payment-mock-default" {
 			continue
 		}
-		var configuration store.PaymentConfiguration
-		var resolveErr error
-		if instance.ID == "payment-default" || instance.ID == "payment-mock-default" {
-			configuration, resolveErr = legacy, legacyErr
-		} else {
-			configuration, resolveErr = s.db.PaymentConfigurationForInstance(r.Context(), instance.ID, s.paymentFallback())
-		}
+		configuration, resolveErr := s.db.PaymentConfigurationForInstance(r.Context(), instance.ID, s.paymentFallback())
 		if resolveErr != nil {
 			continue
 		}

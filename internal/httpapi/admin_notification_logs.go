@@ -154,7 +154,7 @@ func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"TRUE"}}
+	f := adminLogFilters{where: []string{"admin_customer_allowed($1,m.user_id)"}, args: []any{identityFrom(r).ID}}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
 		if status != "sent" && status != "read" && status != "failed" {
 			writeError(w, http.StatusBadRequest, "invalid_inbox_status", "站内信状态无效")

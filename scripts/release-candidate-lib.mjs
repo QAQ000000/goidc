@@ -3,9 +3,10 @@ import { createReadStream } from 'node:fs';
 import { lstat, readdir, readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { verifyModuleBuildEvidence } from './module-manifest-lib.mjs';
 
 export const builderVersion = 1;
-export const builderFiles = ['scripts/build-release-candidate.mjs', 'scripts/verify-release-candidate.mjs', 'scripts/release-candidate-lib.mjs'];
+export const builderFiles = ['scripts/build-release-candidate.mjs', 'scripts/verify-release-candidate.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/module-manifest-lib.mjs'];
 export const templateFiles = ['web/next.config.ts', 'web/package.json', 'scripts/go.sh', 'scripts/check-web-build-runtime.mjs', 'deploy/systemd/zjmfgo-api.service', 'deploy/systemd/zjmfgo-worker.service', 'deploy/systemd/zjmfgo-web.service'];
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 export const git = (repo, ...args) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 }).trim();
@@ -109,6 +110,7 @@ export async function verifyCandidate(root, expectedManifestSHA, sourceRepo) {
   for (const name of ['api', 'worker', 'migrate']) {
     if (!byPath.get(`bin/${name}`).executable || !manifest.binaries[name]?.includes(`vcs.revision=${manifest.source.commit}`) || !manifest.binaries[name]?.includes('vcs.modified=false')) throw new Error(`Binary provenance missing: ${name}`);
   }
+  await verifyModuleBuildEvidence({ root, evidence: manifest.modules, sourceFiles: manifest.source.files, artifacts: actual, metaRelative: 'meta', binaryPaths: { api: 'bin/api', worker: 'bin/worker' } });
   const buildID = (await readFile(path.join(root, 'web/.next/BUILD_ID'), 'utf8')).trim();
   if (!buildID || buildID !== manifest.web.buildID || manifest.web.bundler !== 'webpack') throw new Error('BUILD_ID or bundler mismatch');
   const target = apiTarget(manifest.web.apiInternalURL);

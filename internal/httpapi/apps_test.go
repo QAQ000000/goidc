@@ -51,7 +51,7 @@ func TestCompiledAppsHTTPContractFilteringAndRedaction(t *testing.T) {
 	adminID, cookie := user(t, db, h, "apps-contract-super", "super_admin")
 	response := request(h, "GET", "/api/v1/admin/apps?view=catalogue&limit=100", nil, cookie, "")
 	page := decodeAppsPage(t, response)
-	if page.Total != len(channel.List("")) || len(page.Items) != page.Total || page.Limit != 100 || page.Offset != 0 {
+	if page.Total != len(channel.List(""))+2 || len(page.Items) != page.Total || page.Limit != 100 || page.Offset != 0 {
 		t.Fatalf("catalogue contract: %+v", page)
 	}
 	items := make(map[string]appCatalogueItem)
@@ -63,14 +63,20 @@ func TestCompiledAppsHTTPContractFilteringAndRedaction(t *testing.T) {
 		t.Fatalf("wrong SMS aggregate: %+v", sms)
 	}
 	provision := items["provision:zjmf"]
-	if provision.InstanceCount != 3 || provision.EnabledInstanceCount != 1 || provision.SecretConfiguredCount != 2 || provision.Status != "enabled" || !provision.FactoryAvailable || provision.ConfigurationURL != "/admin/suppliers" {
+	if provision.InstanceCount != 3 || provision.EnabledInstanceCount != 1 || provision.SecretConfiguredCount != 2 || provision.Status != "configuration_incompatible" || provision.UnsupportedInstanceCount != 1 || provision.SupplierAccountCount != 2 || !provision.FactoryAvailable || provision.ConfigurationURL != "/admin/suppliers" {
 		t.Fatalf("wrong supplier mapping: %+v", provision)
 	}
 	metadata := items["provision:nokvm"]
 	if metadata.Descriptor.ID != "nokvm" || metadata.FactoryAvailable || metadata.Status != "unconfigured" {
 		t.Fatalf("metadata-only factory advertised: %+v", metadata)
 	}
-	for _, forbidden := range []string{"never-return", "private.invalid", "private-user", "私密实例名称", "私密供应商名称", "not_compiled", "secret_ciphertext", "credentials_encrypted", "\"config\"", "\"secret\":\""} {
+	if missing := items["sms:not_compiled"]; missing.Status != "implementation_missing" || missing.InstanceCount != 1 || missing.FactoryAvailable || missing.ConfigurationURL != "/admin/channels?category=sms" {
+		t.Fatalf("missing implementation became invisible: %+v", missing)
+	}
+	if missing := items["provision:not_compiled"]; missing.Status != "implementation_missing" || missing.SupplierAccountCount != 1 || missing.ConfigurationURL != "/admin/suppliers" {
+		t.Fatalf("missing supplier became invisible: %+v", missing)
+	}
+	for _, forbidden := range []string{"never-return", "private.invalid", "private-user", "私密实例名称", "私密供应商名称", "secret_ciphertext", "credentials_encrypted", "\"config\"", "\"secret\":\""} {
 		if strings.Contains(response.Body.String(), forbidden) {
 			t.Fatalf("response leaked %q", forbidden)
 		}
@@ -83,7 +89,7 @@ func TestCompiledAppsHTTPContractFilteringAndRedaction(t *testing.T) {
 	}
 	for _, query := range []string{
 		"view=catalogue&category=sms&status=enabled&q=GENERIC_HTTP_JSON",
-		"view=configured&category=provision&status=enabled&q=%E9%AD%94%E6%96%B9",
+		"view=configured&category=provision&status=configuration_incompatible&q=%E9%AD%94%E6%96%B9",
 		"view=catalogue&category=provision&status=unconfigured&q=nokvm",
 	} {
 		filtered := decodeAppsPage(t, request(h, "GET", "/api/v1/admin/apps?"+query, nil, cookie, ""))
@@ -120,6 +126,37 @@ func TestCompiledAppsHTTPContractFilteringAndRedaction(t *testing.T) {
 	var unmodified bool
 	if err := db.Pool.QueryRow(t.Context(), `SELECT bool_and(version=1) FROM channel_instances`).Scan(&unmodified); err != nil || !unmodified {
 		t.Fatalf("read changed configuration: %v", err)
+	}
+}
+
+func TestCompiledAppsRetainMissingAndIncompatibleConfigurations(t *testing.T) {
+	counts := []store.AppConfigurationCount{
+		{Source: "channel", Category: channel.Mail, ImplementationID: "smtp", SchemaVersion: 2, InstanceCount: 2, EnabledInstanceCount: 1},
+		{Source: "channel", Category: channel.Mail, ImplementationID: "smtp", SchemaVersion: 1, InstanceCount: 3, SecretConfiguredCount: 1},
+		{Source: "channel", Category: channel.SMS, ImplementationID: "removed_module", SchemaVersion: 1, InstanceCount: 1, EnabledInstanceCount: 1},
+		{Source: "supplier", Category: channel.Provision, ImplementationID: "removed_supplier", InstanceCount: 1},
+		{Source: "profile", Category: channel.Provision, ImplementationID: "nokvm", InstanceCount: 2, EnabledInstanceCount: 2},
+	}
+	page := compiledAppsPage(appListQuery{View: "configured", Status: "all", Limit: 100}, counts)
+	items := make(map[string]appCatalogueItem)
+	for _, item := range page.Items {
+		items[string(item.Descriptor.Category)+":"+item.Descriptor.ID] = item
+	}
+	if len(items) != 4 {
+		t.Fatalf("configured view lost rows: %+v", page)
+	}
+	if smtp := items["mail:smtp"]; smtp.InstanceCount != 5 || smtp.SchemaIncompatibleCount != 2 || smtp.Status != "configuration_incompatible" || smtp.ChannelInstanceCount != 5 {
+		t.Fatalf("schema incompatibility was hidden: %+v", smtp)
+	}
+	if missing := items["sms:removed_module"]; missing.Status != "implementation_missing" || missing.EnabledInstanceCount != 1 || missing.FactoryAvailable {
+		t.Fatalf("missing implementation not visible: %+v", missing)
+	}
+	if profile := items["provision:nokvm"]; profile.ProfileCount != 2 || profile.Status != "enabled" || profile.ConfigurationURL != "/admin/products" || profile.FactoryAvailable {
+		t.Fatalf("dedicated profile state incorrect: %+v", profile)
+	}
+	filtered := compiledAppsPage(appListQuery{View: "configured", Category: "sms", Status: "implementation_missing", Limit: 100}, counts)
+	if filtered.Total != 1 || filtered.Items[0].Descriptor.ID != "removed_module" {
+		t.Fatalf("missing filter inconsistent: %+v", filtered)
 	}
 }
 

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { prepareDestination } from './build-release-candidate.mjs';
 import { fileHash, git, inventory, noLinks, selectedDigest, sha256, sourceProof } from './release-candidate-lib.mjs';
+import { captureModuleBuildEvidence } from './module-manifest-lib.mjs';
 import { collectTraceEvidence, controlledPATH, freeSpace, guardReserve, makeLaunchDescription, makeOriginBuildRecord, ordinaryFiles, ownedBuildTemporaryEnvironment, pinnedJSON, runControlled, runtimeTarget, standaloneConfig, validateBudget, validateDependencies, validateRewrite } from './release-runtime-builder-lib.mjs';
 
 const scriptRoot = path.dirname(fileURLToPath(import.meta.url));
@@ -64,6 +65,7 @@ async function namespaceBuild(requestPath) {
     if (!buildInfo.includes(`vcs.revision=${proof.commit}`) || !buildInfo.includes('vcs.modified=false')) throw new Error(`Go binary source proof invalid: ${name}`);
     binaries[name] = { path: `artifact/bin/${name}`, buildInfo };
   }
+  const modules = await captureModuleBuildEvidence({ source: checkout, root, metaRelative: 'artifact/meta', binaryPaths: { api: binaries.api.path, worker: binaries.worker.path }, run });
   run(node, ['../scripts/check-web-build-runtime.mjs'], path.join(checkout, 'web'));
   run(node, ['node_modules/next/dist/bin/next', 'build', '--webpack'], path.join(checkout, 'web'));
   await guardReserve(root, budget, initialFreeBytes);
@@ -107,7 +109,7 @@ async function namespaceBuild(requestPath) {
   if (JSON.stringify(await sourceProof(checkout, proof.commit)) !== JSON.stringify(proof)) throw new Error('Build changed tracked checkout source');
   await validateDependencies(mounted, request.dependencyProof, request.lockSHA256, tools);
   await assertOwnedInputs(request);
-  await writeFile(path.join(root, '.build-result.json'), JSON.stringify({ binaries, web, runtime, migrations, traceEvidence }), { flag: 'wx' });
+  await writeFile(path.join(root, '.build-result.json'), JSON.stringify({ binaries, modules, web, runtime, migrations, traceEvidence }), { flag: 'wx' });
 }
 
 export async function buildRuntimeCandidate(options) {
@@ -160,7 +162,7 @@ export async function buildRuntimeCandidate(options) {
     for (const name of ['.checkout', '.scratch', '.build-request.json', '.build-result.json']) await rm(path.join(root, name), { recursive: true, force: true });
     if (JSON.stringify(await sourceProof(source, proof.commit)) !== JSON.stringify(proof)) throw new Error('Invoking source changed during build');
     await validateDependencies(dependencies, depInput.value, locks.web, tools);
-    const manifest = { format: 'zjmfgo-release-candidate-v2', createdAt: new Date().toISOString(), source: proof, builder, tools, locks, binaries: built.binaries, runtime: built.runtime, web: built.web, migrations: built.migrations, dependencies: { provenancePath: 'artifact/meta/dependencies.json', provenanceSHA256: options.dependencyProvenanceSHA256, lockSHA256: locks.web, inputTreeSHA256: depInput.value.inputTreeSHA256, ...built.traceEvidence }, launch: { path: 'launch/description.json' }, commands: { go: 'bash scripts/go.sh build -mod=readonly -trimpath -buildvcs=true', web: 'controlled-node node_modules/next/dist/bin/next build --webpack', isolation: 'private mount namespace; readonly dependency bind inside fixed tracing root' }, budget: { ...budgetEvidence, pinnedSHA256: options.budgetSHA256, finalFree: await guardReserve(root, budget, available.bytes) }, artifacts: await runtimeInventory(root), scope: summary.scope };
+    const manifest = { format: 'zjmfgo-release-candidate-v2', createdAt: new Date().toISOString(), source: proof, builder, tools, locks, binaries: built.binaries, modules: built.modules, runtime: built.runtime, web: built.web, migrations: built.migrations, dependencies: { provenancePath: 'artifact/meta/dependencies.json', provenanceSHA256: options.dependencyProvenanceSHA256, lockSHA256: locks.web, inputTreeSHA256: depInput.value.inputTreeSHA256, ...built.traceEvidence }, launch: { path: 'launch/description.json' }, commands: { go: 'bash scripts/go.sh build -mod=readonly -trimpath -buildvcs=true', web: 'controlled-node node_modules/next/dist/bin/next build --webpack', isolation: 'private mount namespace; readonly dependency bind inside fixed tracing root' }, budget: { ...budgetEvidence, pinnedSHA256: options.budgetSHA256, finalFree: await guardReserve(root, budget, available.bytes) }, artifacts: await runtimeInventory(root), scope: summary.scope };
     const raw = JSON.stringify(manifest, null, 2) + '\n';
     await writeFile(path.join(root, 'manifest.json'), raw, { mode: 0o600, flag: 'wx' });
     const manifestSHA256 = sha256(raw);

@@ -22,17 +22,38 @@ type MailProvider interface {
 
 var mailRegistry = module.NewRegistry[MailProvider](channel.Mail)
 
+// RegisterMailProvider is the typed composition boundary for compiled mail
+// adapters. Runtime code dispatches using the persisted implementation ID.
+func RegisterMailProvider(desc channel.Descriptor, factory module.Factory[MailProvider]) error {
+	return mailRegistry.Register(desc, factory)
+}
+
 func NewMailProvider(id string, config module.Config) (MailProvider, error) {
 	return mailRegistry.New(id, config)
 }
 
+// SendMail uses the same dispatch path for SMTP and other compiled adapters.
+// Provider errors can contain credentials or message contents, so the worker
+// receives a fixed error suitable for logs and outbox failure records.
+func SendMail(id string, config module.Config, job store.EmailJob) error {
+	provider, err := NewMailProvider(id, config)
+	if err != nil || provider == nil || !provider.Enabled() {
+		return fmt.Errorf("mail channel unavailable")
+	}
+	if err = provider.Send(job); err != nil {
+		return fmt.Errorf("mail delivery failed")
+	}
+	return nil
+}
+
 func init() {
+	minPort, maxPort := 1.0, 65535.0
 	mailRegistry.MustRegister(channel.Descriptor{
 		ID: "smtp", Name: "SMTP", Category: channel.Mail,
 		Capabilities: []string{"send", "test"},
 		Fields: []channel.Field{
 			{Key: "host", Label: "SMTP 主机", Type: channel.Text, Required: true},
-			{Key: "port", Label: "SMTP 端口", Type: channel.Number, Required: true},
+			{Key: "port", Label: "SMTP 端口", Type: channel.Number, Required: true, Integer: true, Min: &minPort, Max: &maxPort},
 			{Key: "username", Label: "用户名", Type: channel.Text},
 			{Key: "password", Label: "密码", Type: channel.Text, Secret: true},
 			{Key: "from", Label: "发件地址", Type: channel.Text, Required: true},
@@ -40,21 +61,60 @@ func init() {
 			{Key: "tls_mode", Label: "TLS 模式", Type: channel.Select, Options: []string{"implicit_tls", "starttls", "none"}},
 		},
 	}, func(config module.Config) (MailProvider, error) {
-		values := config.Values
-		port := 0
-		if raw, ok := values["port"].(float64); ok {
-			port = int(raw)
-		}
-		if raw, ok := values["port"].(int); ok {
-			port = raw
-		}
-		return SMTPConfig{
-			Host: configString(values, "host"), Port: port,
-			Username: configString(values, "username"), Password: config.Secret,
-			From: configString(values, "from"), FromName: configString(values, "from_name"),
-			TLSMode: configString(values, "tls_mode"),
-		}, nil
+		return smtpFromConfig(config)
 	})
+	channel.MustRegisterConfigValidator(channel.Mail, "smtp", func(values map[string]any, secureFields map[string]bool) []channel.ValidationError {
+		config := module.Config{Values: values}
+		if secureFields["password"] {
+			config.Secrets = map[string]string{"password": "configured"}
+		}
+		if _, err := smtpFromConfig(config); err != nil {
+			return []channel.ValidationError{{Field: "", Code: "invalid_smtp"}}
+		}
+		return nil
+	})
+}
+
+func smtpFromConfig(config module.Config) (SMTPConfig, error) {
+	values := config.Values
+	port := 0
+	if raw, ok := values["port"].(float64); ok {
+		port = int(raw)
+		if float64(port) != raw {
+			return SMTPConfig{}, fmt.Errorf("invalid SMTP configuration")
+		}
+	}
+	if raw, ok := values["port"].(int); ok {
+		port = raw
+	}
+	password := config.Secrets["password"]
+	if password == "" {
+		password = config.Secret
+	}
+	out := SMTPConfig{
+		Host: configString(values, "host"), Port: port,
+		Username: configString(values, "username"), Password: password,
+		From: configString(values, "from"), FromName: configString(values, "from_name"),
+		TLSMode: configString(values, "tls_mode"),
+	}
+	// An unused stored credential does not turn anonymous SMTP into login.
+	if out.Username == "" {
+		out.Password = ""
+	}
+	if out.Port == 0 {
+		if _, supplied := values["port"]; supplied {
+			return SMTPConfig{}, fmt.Errorf("invalid SMTP configuration")
+		}
+		if out.TLSMode == "implicit_tls" {
+			out.Port = 465
+		} else {
+			out.Port = 587
+		}
+	}
+	if err := out.Validate(); err != nil {
+		return SMTPConfig{}, err
+	}
+	return out, nil
 }
 
 func configString(values map[string]any, key string) string {
@@ -62,7 +122,7 @@ func configString(values map[string]any, key string) string {
 		return ""
 	}
 	value, ok := values[key]
-	if !ok {
+	if !ok || value == nil {
 		return ""
 	}
 	return fmt.Sprint(value)
@@ -80,6 +140,22 @@ type SMTPConfig struct {
 
 func (c SMTPConfig) Enabled() bool {
 	return strings.TrimSpace(c.Host) != "" && strings.TrimSpace(c.From) != ""
+}
+
+// Validate checks local transport configuration only; it never connects to a
+// remote SMTP server. Send still validates headers belonging to each job.
+func (c SMTPConfig) Validate() error {
+	from, err := mail.ParseAddress(c.From)
+	if !c.Enabled() || c.Port < 1 || c.Port > 65535 || err != nil || from.Address != c.From ||
+		strings.ContainsAny(c.Host+c.Username+c.From+c.FromName, "\r\n\x00") ||
+		strings.ContainsAny(c.Host, " /\\:") || (c.Username == "") != (c.Password == "") {
+		return fmt.Errorf("invalid SMTP configuration")
+	}
+	if c.TLSMode != "" && c.TLSMode != "implicit_tls" && c.TLSMode != "starttls" && c.TLSMode != "none" ||
+		c.TLSMode == "none" && (c.Username != "" || c.Password != "") {
+		return fmt.Errorf("invalid SMTP configuration")
+	}
+	return nil
 }
 
 func (c SMTPConfig) Send(job store.EmailJob) (err error) {
