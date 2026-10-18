@@ -149,6 +149,14 @@ export type SiteProfile = {
   maintenance_url: string;
   auth_captcha_enabled: boolean;
 };
+// Public display settings are separate from the administrative write DTO.
+export type SiteTheme = {
+  template: "default" | "classic" | "minimal";
+  primary_color: string;
+  logo_variant: "full" | "compact" | "text";
+  footer_text: string;
+};
+export type PublicSite = SiteProfile & { theme?: SiteTheme };
 export type SiteAdminSettings = {
   default_language: "zh_CN" | "en_US";
   language_menu_enabled: boolean;

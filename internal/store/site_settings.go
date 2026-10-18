@@ -53,6 +53,20 @@ type SiteSettings struct {
 	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
+// PublicSiteTheme contains presentation values only. Administrator mutation
+// metadata and unrelated settings must never cross this public boundary.
+type PublicSiteTheme struct {
+	Template     string `json:"template"`
+	PrimaryColor string `json:"primary_color"`
+	LogoVariant  string `json:"logo_variant"`
+	FooterText   string `json:"footer_text"`
+}
+
+type PublicSiteProfile struct {
+	SiteProfile
+	Theme PublicSiteTheme `json:"theme"`
+}
+
 const siteColumns = `site_name,description,company_name,logo_url,support_email,support_phone,address,support_url,terms_url,privacy_url,record_number,copyright,registration_enabled,maintenance_enabled,maintenance_message,maintenance_url,auth_captcha_enabled,email_verification_required,admin_settings,version,updated_at`
 
 func scanSite(row pgx.Row) (SiteSettings, error) {
@@ -69,6 +83,18 @@ func scanSite(row pgx.Row) (SiteSettings, error) {
 
 func (s *Store) SiteSettings(ctx context.Context) (SiteSettings, error) {
 	return scanSite(s.Pool.QueryRow(ctx, "SELECT "+siteColumns+" FROM site_settings WHERE id=1"))
+}
+
+// PublicSite reads one database snapshot and explicitly selects only the
+// public contract. Theme configuration remains independent of site mutations.
+func (s *Store) PublicSite(ctx context.Context) (PublicSiteProfile, error) {
+	var out PublicSiteProfile
+	err := s.Pool.QueryRow(ctx, `SELECT s.site_name,s.description,s.company_name,s.logo_url,s.support_email,s.support_phone,s.address,s.support_url,s.terms_url,s.privacy_url,s.record_number,s.copyright,s.registration_enabled,s.maintenance_enabled,s.maintenance_message,s.maintenance_url,s.auth_captcha_enabled,s.email_verification_required,t.template,t.primary_color,t.logo_variant,t.footer_text
+ FROM site_settings s JOIN site_theme_settings t ON t.id=s.id WHERE s.id=1`).Scan(
+		&out.Name, &out.Description, &out.CompanyName, &out.LogoURL, &out.SupportEmail, &out.SupportPhone, &out.Address, &out.SupportURL, &out.TermsURL, &out.PrivacyURL, &out.RecordNumber, &out.Copyright, &out.RegistrationEnabled, &out.MaintenanceEnabled, &out.MaintenanceMessage, &out.MaintenanceURL, &out.AuthCaptchaEnabled, &out.EmailVerificationRequired,
+		&out.Theme.Template, &out.Theme.PrimaryColor, &out.Theme.LogoVariant, &out.Theme.FooterText,
+	)
+	return out, err
 }
 
 func validateSite(in *SiteProfile) error {

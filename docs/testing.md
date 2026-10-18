@@ -14,6 +14,7 @@
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
 | 浏览器文件保存与下载请求 | `node --test scripts/download.test.mjs` | Node 与 Web 依赖；执行真实 helper/组件及 DOM/fetch 夹具，不启动浏览器 |
+| 站点主题展示 | `node --test scripts/site-theme.test.mjs`；后端 `TestSiteContentVersionedCRUDAndPermissions`、`TestSiteThemeValidationPermissionsAndReplay` | Node/Web 依赖；后端用例须隔离 PG18；SSR/组件夹具不等于真实浏览器视觉验收 |
 | 实际模块二进制 | `node scripts/check-module-binaries.mjs` | Linux、strace；真实构建 API/worker，在空应用配置下拒绝并检查全部网络 syscall |
 | 渠道与通知单元门禁 | `node scripts/test-compiled-notifications.mjs --unit` | 31 个指定入口，race；不继承应用配置或测试 DSN |
 | 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；57 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |

@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import type { ContentArticle, Product, SiteProfile } from "./api";
+import type { ContentArticle, Product, PublicSite } from "./api";
 
 const apiOrigin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
 
@@ -39,10 +39,10 @@ export function safeJSONLD(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
 }
 
-export const getSite = cache(async (): Promise<SiteProfile | null> => {
+export const getSite = cache(async (): Promise<PublicSite | null> => {
   try {
     const response = await fetch(`${apiOrigin}/api/v1/site`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
     if (!response.ok) return null;
-    return (await response.json()).data as SiteProfile;
+    return (await response.json()).data as PublicSite;
   } catch { return null; }
 });

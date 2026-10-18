@@ -9,12 +9,12 @@ import (
 )
 
 func (s *Server) publicSite(w http.ResponseWriter, r *http.Request) {
-	settings, err := s.db.SiteSettings(r.Context())
+	profile, err := s.db.PublicSite(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, settings.SiteProfile)
+	write(w, 200, profile)
 }
 
 func (s *Server) siteSettings(w http.ResponseWriter, r *http.Request) {

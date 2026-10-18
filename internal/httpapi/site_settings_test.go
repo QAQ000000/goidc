@@ -75,7 +75,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	w = request(h, "GET", "/api/v1/site", nil, "", "")
 	expect(t, w, 200)
 	public := data(t, w)
-	if len(public) != 18 || public["site_name"] != profile.Name || public["description"] != "云管理 服务" || public["version"] != nil || public["updated_at"] != nil {
+	if len(public) != 19 || public["site_name"] != profile.Name || public["description"] != "云管理 服务" || public["version"] != nil || public["updated_at"] != nil {
 		t.Fatal("public profile incorrect", w.Body.String())
 	}
 	var count int

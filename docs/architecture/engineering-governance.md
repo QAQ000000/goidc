@@ -73,7 +73,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 ## CI 门禁
 
-`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、31 项渠道通知单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理和组件测试。独立 PG18 job 强制执行 57 项集成入口，覆盖通知进程崩溃恢复和旧 schema 升级，并构建 API/worker 验证 160/161/162 启动拒绝。runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断；数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
+`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、CSV 输出、31 项渠道通知单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理、下载和主题组件测试。独立 PG18 job 的通知 runner 强制执行 57 项集成入口，覆盖通知进程崩溃恢复和旧 schema 升级，并构建 API/worker 验证 160/161/162 启动拒绝；runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断。该 job 另执行 8 项站点公开主题、管理权限与维护隔离回归。数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
 
 本地等价入口如下：
 
@@ -94,6 +94,7 @@ npm --prefix web run typecheck
 npm --prefix web run test:proxy
 node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs
 node --test scripts/download.test.mjs
+node --test scripts/site-theme.test.mjs
 ```
 
 配置独立 PG18 测试 URL 后运行 `node scripts/test-compiled-notifications.mjs --integration`；候选路径与强制启动检查变量见[测试说明](../testing.md#编译渠道与通知运行验收)。全量回归、浏览器夹具、真实外部渠道和候选发布验证仍按[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。

@@ -20,10 +20,18 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 8px;
+  --radius-sm: var(--control-radius-sm, 4px);
+  --radius-md: var(--control-radius-md, 6px);
+  --radius-lg: var(--control-radius-lg, 8px);
+  --radius-xl: var(--control-radius-xl, 8px);
+}
+/* Apply the readable text color to Tailwind's hover/arbitrary variants too.
+   The route selector wins over the built-in color rule without !important;
+   background utilities continue to use the configured --primary fill. */
+@utility text-primary {
+  body:has(> .site-theme-scope) & {
+    color: var(--site-primary-text, var(--primary));
+  }
 }
 :root {
   --background: #f7f8fa;
@@ -173,7 +181,7 @@ select {
 .data-surface {
   background: white;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--site-surface-radius, 6px);
   overflow: hidden;
 }
 .surface-head {
@@ -223,7 +231,7 @@ select {
 .product-tile {
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--site-surface-radius, 6px);
   padding: 24px;
 }
 .money {
@@ -237,6 +245,22 @@ select {
 .mobile-menu {
   display: none;
 }
+
+.site-theme-scope {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+}
+.site-theme-scope .sidebar,
+.site-theme-scope .topbar,
+.site-theme-scope .data-surface,
+.site-theme-scope .product-tile,
+.site-theme-scope .service-detail-tabs { background: var(--card); }
+.site-theme-scope main.bg-white { background: var(--background); }
+.site-theme-scope .service-detail-tab[data-state="active"] { color: var(--site-primary-text); }
+.site-theme-scope .service-detail-tab:focus-visible { outline-color: var(--ring); }
+.site-theme-scope .brand-icon { color: var(--primary-foreground); }
+.site-theme-scope .nav-link { border-radius: var(--site-surface-radius); }
 
 /* Portals inherit the admin tokens from body while an admin route is mounted. */
 .admin-theme,
