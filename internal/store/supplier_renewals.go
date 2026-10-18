@@ -80,6 +80,36 @@ func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID
 	return renew, out, nil
 }
 
+// Automatic collection must not spend local funds after an account stop or
+// configuration change has invalidated the quotation. The caller already owns
+// the invoice and service; requireSupplierRenewal takes the account's share
+// lock until payment commits, using the same service -> account order as quote
+// admission. It constructs an adapter locally and makes no upstream request.
+func (s *Store) requireAutomaticSupplierRenewalPayment(ctx context.Context, tx pgx.Tx, invoiceID, serviceID int64) error {
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT supplier_renewal_snapshot FROM invoice_items
+WHERE invoice_id=$1 AND service_id=$2 AND item_type='renew'`, invoiceID, serviceID).Scan(&raw); err != nil {
+		return err
+	}
+	var saved supplierRenewalSnapshot
+	if json.Unmarshal(raw, &saved) != nil {
+		return conflict("supplier_renewal_quote_changed", "供应商续费报价无效，原账单保留供人工处理")
+	}
+	_, current, err := s.requireSupplierRenewal(ctx, tx, serviceID)
+	if err != nil {
+		return err
+	}
+	// Price and previous deadline come from the original upstream read; every
+	// other field must still describe exactly the current immutable binding and
+	// account version. In particular, a changed ceiling never reauthorizes cost.
+	current.CostCents, current.PreviousDue = saved.CostCents, saved.PreviousDue
+	previousDue, dueErr := supplierDueDate(saved.PreviousDue)
+	if saved != current || saved.CostCents < 0 || saved.CostCents > current.MaximumCostCents || dueErr != nil || previousDue == nil {
+		return conflict("supplier_renewal_quote_changed", "供应商账户或续费报价已变更，原账单保留供人工处理")
+	}
+	return nil
+}
+
 func queueSupplierRenewal(ctx context.Context, tx pgx.Tx, invoiceID, serviceID int64) (bool, error) {
 	var mode string
 	if err := tx.QueryRow(ctx, "SELECT provision_mode FROM services WHERE id=$1", serviceID).Scan(&mode); err != nil {

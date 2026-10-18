@@ -502,13 +502,17 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 		installed, _ := json.Marshal(map[string]string{"name": remote.OS, "url": remote.OSURL})
 		installedOS = string(installed)
 	}
+	// A renew reaches this shared path only after Renew/ConfirmRenewal has
+	// confirmed the purchased period. Polling and callbacks are sync actions
+	// and cannot clear an unresolved automatic renewal error.
 	_, err = tx.Exec(ctx, `UPDATE services SET status=$2,upstream_id=$3,last_error='',version=version+1,updated_at=now(),
+ auto_renew_error=CASE WHEN $11::boolean THEN '' ELSE auto_renew_error END,
  domain=CASE WHEN $4<>'' THEN $4 ELSE domain END,
  username=CASE WHEN $5<>'' THEN $5 ELSE username END,
  credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
  resource_info=(CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END)||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin)
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin, j.Action == "renew")
 	if err != nil {
 		return err
 	}

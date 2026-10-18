@@ -44,7 +44,7 @@ export const unitSuites = {
 };
 
 export const integrationSuites = {
-  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards"],
+  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource"],
   "internal/httpapi": [
     "TestSupplierLifecycleFailedResourceTerminationReleasesInventoryOnce",
     "TestSupplierLifecycleManualPausePaidBeforeConfirmationPreservesFact",
@@ -102,6 +102,16 @@ export const integrationSuites = {
     "TestSupplierRenewalPaysUpstreamBeforeExtendingDue",
     "TestSupplierRenewalRefundBeforeDispatchPreservesDue",
     "TestSupplierAutoRenewalQueuesOnlyOneUpstreamRenewal",
+    "TestSupplierAutoRenewalRefreshesStaleDeadlineWithoutCharging",
+    "TestSupplierAutoRenewalInsufficientBalancePreservesOriginalInvoice",
+    "TestSupplierAutoRenewalNotificationWaitsForConfirmedPeriod",
+    "TestSupplierAutoRenewalPaymentRechecksOriginalIntent",
+    "TestAutoRenewalPaymentRejectsCancellationApprovedAfterCreation",
+    "TestSupplierAutoRenewalRejectsManualInvoiceKeyCollision",
+    "TestSupplierAutoRenewalSourceDatabaseGuards",
+    "TestSupplierAutoRenewalPaymentRechecksSupplierAccount",
+    "TestSupplierAutoRenewalDispatchFailuresRemainRecoverable",
+    "TestSupplierRenewalWorkerSIGKILLRecovery",
     "TestSupplierUnattendedInvoiceRecoveryPaymentAndActivation",
     "TestSupplierWorkerSIGKILLRecovery",
     "TestSupplierManagementImportCheckoutAndDelivery",

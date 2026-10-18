@@ -217,6 +217,12 @@
         "internal/httpapi/supplier_lifecycle.go",
         "internal/httpapi/services.go",
         "db/migrations/170_supplier_lifecycle.sql",
+        "db/migrations/171_automatic_renewal_sources.sql",
+        "internal/store/auto_renew_payment.go",
+        "internal/store/auto_renew.go",
+        "internal/store/renewals.go",
+        "internal/store/supplier_renewals.go",
+        "internal/store/finance.go",
         "web/src/components/supplier-delivery.tsx",
         "web/src/components/supplier-jobs.tsx"
       ],
@@ -228,6 +234,7 @@
       "evaluation": [
         "isolated PostgreSQL 18 with exact required run/pass and zero skips; test-only second provider, immutable identity, named credentials, real delivery/renewal/unknown outcomes, production worker SIGKILL and genuine schema165 upgrade",
         "capability-based suspend/resume/terminate, exact target/resource/product proof, unsupported waiting_manual without dispatch, repeated session/permission checks, unknown write lease retention, system billing suspension provenance and bounded paid recovery, billing changes preserve operator-applied upstream facts, genuine schema169 to 170 preservation and immutable credential-free request guards",
+        "automatic renewal checks actual upstream due window, immutable source and payment-time intent; no automatic collection of retained unpaid invoices; genuine schema170 to 171 upgrade without inferring sources from historical keys; real worker SIGKILL before renewal checkpoint and after upstream payment; notification only after full period confirmation",
         "real browser and external supplier account, financial settlement, callback and deployment require separate acceptance"
       ],
       "review": {

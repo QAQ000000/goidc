@@ -118,6 +118,60 @@ Isolated supplier race tests cover delayed callbacks and an in-flight `Active`
 read completing after a deletion callback. These changes are not yet deployed.
 See [legacy lifecycle review](archive/README.md#f-6836dc177d91).
 
+## Automatic renewal admission and payment
+
+Automatic renewal uses the local 24-hour due window and then reads the actual
+upstream renewal quotation. After rechecking the service version and original
+account/binding identity, an upstream deadline beyond the database's current
+24-hour window causes a safe skip: only advance the local due date, clear the
+old automatic-renewal error and record `supplier.auto_renewal.skipped` with
+`upstream_not_due`. Do not create an invoice, spend balance or count the skip
+as a paid renewal. Manual advance renewal remains available.
+
+Migration 171 records an immutable `auto_renewal_invoice_sources` fact in the
+same transaction as each automatic invoice: invoice, service, customer,
+expected due date and renewal generation. Insert validation requires the
+original unpaid invoice and its single matching renewal line. Historical
+invoices are not backfilled from an `auto-renew-*` key, because a customer can
+choose the same key for a manual request.
+
+`PayAutoRenewalInvoice` uses the existing balance transaction and repeats the
+source, ownership, single-line association, switch, original due date,
+generation, service-state and cancellation checks before debit. Supplier
+payments also hold the original account's shared lock and recheck its active
+state, version, capability and quotation identity/cost ceiling before local
+collection. A disabled or changed account leaves the original invoice unpaid.
+Ordinary
+manual and credit payment keep their existing rules. An unpaid invoice left
+by insufficient balance, changed intent or a process interruption is retained
+for manual payment; a later scheduler pass or top-up does not silently collect
+it. A paid invoice whose supplier renewal remains unresolved also requires
+operator handling; replaying that receipt must not count as another successful
+automatic collection or clear its pending error. An interrupted full daily
+pass may resume scanning other candidates.
+
+`invoice.paid` confirms local collection. `service.renewed` is emitted once
+only after the full upstream period is confirmed. An unknown renewal write
+keeps the original account lease and request identity, stops automatic resend
+and requires the existing read-only reconciliation path. A receipt lost
+before the invoice checkpoint must not be guessed from an unrelated invoice.
+
+Release migration 171 together with the matching API and worker after stopping
+old writers. Keep the original migration checksums and financial history;
+mixed old/new automatic writers are unsupported. Independent PostgreSQL and
+fake-provider fault tests establish these code boundaries; actual due-period
+purchase, public callbacks and production rollout require separate evidence.
+
+The real resource 4089 passed a zero-write negative acceptance with four
+current worker processes, TERM/restart and a real 65-second minute tick. A
+stale local deadline was advanced to the unchanged upstream December 19
+deadline, with exactly one skip audit and daily full pass, zero invoices,
+renewal jobs, debits, credit payments or renewal notifications. The remote
+balance remained CNY 9.96 before and after. The guarded disposable schema was
+dropped and the resource retained. This proves early-renewal prevention and
+resident scheduling against that provider; a genuinely due automatic purchase
+remains unverified. Sanitized evidence is in `output/supplier-autorenew/`.
+
 The downstream exposes the legacy callback `POST /api/host/sync` (and the
 versioned alias `/api/v1/host/sync`). The upstream sends `id` as the local
 service ID and `host_id` as its resource ID, together with `domainstatus`,

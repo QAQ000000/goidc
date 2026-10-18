@@ -80,6 +80,25 @@ WHERE user_id=$1 AND idempotency_key=$2`, userID, key).Scan(&out.InvoiceID, &out
 		if savedService != serviceID {
 			return out, nil, conflict("idempotency_conflict", "相同幂等键对应不同续费服务")
 		}
+		if automaticDue != nil {
+			generation, _ := ctx.Value(autoRenewGenerationKey{}).(int64)
+			if err = requireAutoRenewalInvoiceSource(ctx, tx, userID, out.InvoiceID, autoRenewalPayment{serviceID: serviceID, due: *automaticDue, generation: generation}); err != nil {
+				return out, nil, err
+			}
+			var supplierMode bool
+			if err = tx.QueryRow(ctx, "SELECT provision_mode='supplier' FROM services WHERE id=$1", serviceID).Scan(&supplierMode); err != nil {
+				return out, nil, err
+			}
+			if supplierMode {
+				// A prior local payment is not a fresh renewal success. Known
+				// failed and unresolved supplier jobs still require settlement;
+				// keep their pending/error reason instead of replaying the paid
+				// receipt and clearing it on every automatic scan.
+				if _, _, err = s.requireSupplierRenewal(ctx, tx, serviceID); err != nil {
+					return out, nil, err
+				}
+			}
+		}
 		out.ServiceID = serviceID
 		out.Replayed = true
 		return out, nil, tx.Commit(ctx)
@@ -154,6 +173,33 @@ WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid')`, service
 		if quote.serviceVersion != serviceVersion || !sameDue || quote.snapshot != snapshot {
 			return out, nil, conflict("supplier_renewal_quote_changed", "服务或供应商配置已变更，请重新获取续费报价")
 		}
+		if automaticDue != nil {
+			remoteDue, dueErr := supplierDueDate(quote.request.PreviousDue)
+			if dueErr != nil || remoteDue == nil {
+				return out, nil, conflict("supplier_due_invalid", "上游到期时间不可识别，请核验")
+			}
+			var outsideWindow bool
+			if err = tx.QueryRow(ctx, "SELECT $1::timestamptz>clock_timestamp()+interval '24 hours'", *remoteDue).Scan(&outsideWindow); err != nil {
+				return out, nil, err
+			}
+			if outsideWindow {
+				// A stale local deadline must never buy another period that the
+				// upstream has already supplied. Admission, binding/account identity
+				// and both quotation versions have been checked under their locks.
+				if _, err = tx.Exec(ctx, `UPDATE services SET next_due_at=greatest(next_due_at,$2),
+auto_renew_error='',version=version+1,updated_at=clock_timestamp() WHERE id=$1`, serviceID, *remoteDue); err != nil {
+					return out, nil, err
+				}
+				if err = Audit(ctx, tx, 0, "supplier.auto_renewal.skipped", "service", serviceID,
+					map[string]any{"reason": "upstream_not_due", "previous_due": due, "upstream_due": *remoteDue}); err != nil {
+					return out, nil, err
+				}
+				if err = tx.Commit(ctx); err != nil {
+					return out, nil, err
+				}
+				return out, nil, conflict("supplier_auto_renewal_not_due", "上游尚未进入自动续费期间，已同步到期时间")
+			}
+		}
 		snapshot.RenewalRequest = quote.request
 		supplierQuote, _ = json.Marshal(snapshot)
 	} else if quote != nil {
@@ -173,6 +219,13 @@ RETURNING id,invoice_no`, userID, out.AmountCents, key).Scan(&out.InvoiceID, &ou
 	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id,renewal_base_cents,renewal_discount_cents,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,renewal_discount_ordinal,supplier_renewal_snapshot)
 VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, out.InvoiceID, productName+"续费", out.AmountCents, serviceID, renewalBase, renewalDiscount, snapshot.Percent, snapshot.Code, snapshot.FixedCents, snapshot.Limit, ordinal, supplierQuote); err != nil {
 		return out, nil, err
+	}
+	if automaticDue != nil {
+		generation, _ := ctx.Value(autoRenewGenerationKey{}).(int64)
+		if _, err = tx.Exec(ctx, `INSERT INTO auto_renewal_invoice_sources(invoice_id,service_id,user_id,expected_due,generation)
+VALUES($1,$2,$3,$4,$5)`, out.InvoiceID, serviceID, userID, *automaticDue, generation); err != nil {
+			return out, nil, err
+		}
 	}
 	out.ServiceID = serviceID
 	if err = Audit(ctx, tx, userID, "service.renewal.created", "service", serviceID, map[string]any{"invoice_id": out.InvoiceID, "amount_cents": out.AmountCents, "billing_cycle": cycle, "base_cents": renewalBase, "discount_cents": renewalDiscount, "discount_percent": snapshot.Percent, "promo_code": snapshot.Code, "fixed_discount_cents": snapshot.FixedCents, "discount_limit": snapshot.Limit, "discount_ordinal": ordinal}); err != nil {

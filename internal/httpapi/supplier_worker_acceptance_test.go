@@ -32,11 +32,11 @@ func TestSupplierResidentWorkerAutoRenewal(t *testing.T) {
 			if err := f.db.ProcessProvisionJob(t.Context(), *create); err != nil {
 				t.Fatal(err)
 			}
-			// Make the existing fake's unrenewed period due soon; the immutable remote
-			// period remains its original timestamp, as in the existing renewal tests.
-			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET auto_renew=true,next_due_at=now()+interval '1 hour' WHERE id=$1", sid); err != nil {
-				t.Fatal(err)
-			}
+			// Both the actual upstream period and its local copy must enter the
+			// automatic collection window. A stale local deadline alone is a skip.
+			due := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+			after := supplierRenewalClock(t, f, due)
+			supplierArmNearDue(t, f, sid, due)
 			var before time.Time
 			var balance int64
 			if err := f.db.Pool.QueryRow(t.Context(), "SELECT s.next_due_at,u.balance_cents FROM services s JOIN users u ON u.id=s.user_id WHERE s.id=$1", sid).Scan(&before, &balance); err != nil {
@@ -160,7 +160,7 @@ func TestSupplierResidentWorkerAutoRenewal(t *testing.T) {
 					if state != "waiting_verification" || lease == nil || !due.Equal(before) {
 						t.Fatal("unconfirmed period not frozen", state, lease, due, before)
 					}
-				} else if state != "succeeded" || lease != nil || !due.Equal(time.Unix(1802678400, 0)) {
+				} else if state != "succeeded" || lease != nil || !due.Equal(after) {
 					t.Fatal("confirmed period not applied", state, lease, due)
 				}
 			}

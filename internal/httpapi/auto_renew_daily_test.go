@@ -118,7 +118,10 @@ func TestAutoRenewDailyPassSerializesWorkersAndRecoversInterruptedRun(t *testing
 	if message != "" {
 		t.Fatalf("paid renewal left stale error %q", message)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET next_due_at=now()+interval '1 hour' WHERE user_id=$1", uid); err != nil {
+	// Describe a distinct newly-due period, not another microsecond value in
+	// the first key's same second. A replayed old paid invoice is not proof of
+	// a second day's collection.
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET next_due_at=now()+interval '2 hours' WHERE user_id=$1", uid); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := db.RunDailyAutoRenewals(t.Context(), log); err != nil || n != 0 {
@@ -128,7 +131,19 @@ func TestAutoRenewDailyPassSerializesWorkersAndRecoversInterruptedRun(t *testing
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE scheduler_runs SET started_at=started_at-interval '1 day',finished_at=finished_at-interval '1 day' WHERE task_key='automatic_renewals'"); err != nil {
 		t.Fatal(err)
 	}
+	balanceBefore := autoRenewBalance(t, db, uid)
 	if n, err := db.RunDailyAutoRenewals(t.Context(), log); err != nil || n != 1 {
 		t.Fatalf("next-day count=%d err=%v", n, err)
+	}
+	paid, unpaid, total := autoRenewInvoiceStats(t, db, services[0])
+	var amount int64
+	var debits int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+ (SELECT i.amount_cents FROM invoices i JOIN invoice_items ii ON ii.invoice_id=i.id WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='paid' ORDER BY i.id DESC LIMIT 1),
+ (SELECT count(*) FROM balance_ledger WHERE user_id=$2 AND entry_type='payment' AND idempotency_key LIKE 'auto-pay-auto-renew-%')`, services[0], uid).Scan(&amount, &debits); err != nil {
+		t.Fatal(err)
+	}
+	if paid != 2 || unpaid != 0 || total != 2 || debits != 2 || autoRenewBalance(t, db, uid) != balanceBefore-amount {
+		t.Fatalf("next-day receipt replay mistaken for collection: paid=%d unpaid=%d total=%d debits=%d amount=%d", paid, unpaid, total, debits, amount)
 	}
 }

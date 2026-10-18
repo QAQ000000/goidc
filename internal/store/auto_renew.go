@@ -87,7 +87,9 @@ func autoRenewSkipReason(payErr error, status string, replayed bool) string {
 
 // RunDailyAutoRenewals runs one complete pass per database calendar day. The
 // transaction advisory lock serializes workers and is released on connection
-// loss, allowing an interrupted pass to resume through invoice/payment keys.
+// loss, allowing an interrupted pass to be scanned again. Committed unpaid
+// invoices remain for manual payment; interrupted or failed collection is not
+// retried automatically.
 func (s *Store) RunDailyAutoRenewals(ctx context.Context, log *slog.Logger) (int, error) {
 	return withTx(ctx, s, func(tx pgx.Tx) (int, error) {
 		var err error
@@ -187,7 +189,7 @@ func (s *Store) attemptAutoRenewal(ctx context.Context, item autoRenewCandidate)
 	if err != nil {
 		return false, autoRenewErrorText(err)
 	}
-	_, payErr := s.PayInvoice(ctx, item.userID, invoice.InvoiceID, "auto-pay-"+key)
+	_, payErr := s.PayAutoRenewalInvoice(ctx, item.userID, item.id, invoice.InvoiceID, item.due, item.generation, "auto-pay-"+key)
 	var status string
 	if err = s.Pool.QueryRow(ctx, "SELECT status FROM invoices WHERE id=$1", invoice.InvoiceID).Scan(&status); err != nil {
 		return false, err.Error()

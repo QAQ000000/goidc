@@ -58,7 +58,13 @@ export const integrationSuites = {
     "TestSelectedPaymentInstanceAutomaticQueryUsesSnapshot",
     "TestSupplierPeriodicSyncCanReuseCompletedJob",
     "TestAffiliateReleaseHoldsRecoveryAndRollback",
-    "TestSupplierResidentWorkerAutoRenewal"
+    "TestSupplierResidentWorkerAutoRenewal",
+    "TestSupplierAutoRenewalRefreshesStaleDeadlineWithoutCharging",
+    "TestSupplierAutoRenewalInsufficientBalancePreservesOriginalInvoice",
+    "TestSupplierAutoRenewalPaymentRechecksOriginalIntent",
+    "TestAutoRenewalPaymentRejectsCancellationApprovedAfterCreation",
+    "TestSupplierAutoRenewalRejectsManualInvoiceKeyCollision",
+    "TestSupplierAutoRenewalPaymentRechecksSupplierAccount"
   ]
 };
 

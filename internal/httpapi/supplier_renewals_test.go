@@ -125,9 +125,9 @@ func TestSupplierAutoRenewalQueuesOnlyOneUpstreamRenewal(t *testing.T) {
 	if err := f.db.ProcessProvisionJob(t.Context(), *create); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET auto_renew=true,next_due_at=now()+interval '1 hour' WHERE id=$1", sid); err != nil {
-		t.Fatal(err)
-	}
+	due := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	supplierRenewalClock(t, f, due)
+	supplierArmNearDue(t, f, sid, due)
 	var before, after time.Time
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT next_due_at FROM services WHERE id=$1", sid).Scan(&before); err != nil {
 		t.Fatal(err)
@@ -141,6 +141,10 @@ func TestSupplierAutoRenewalQueuesOnlyOneUpstreamRenewal(t *testing.T) {
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT next_due_at,(SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='renew') FROM services WHERE id=$1", sid).Scan(&after, &count); err != nil || !after.Equal(before) || count != 1 {
 		t.Fatal(before, after, count, err)
 	}
+	_, pendingError, _ := autoRenewState(t, f.db, sid)
+	if pendingError == "" {
+		t.Fatal("unresolved paid supplier renewal lost processing reason")
+	}
 	renew := f.claim(t)
 	if err := f.db.ProcessProvisionJob(t.Context(), *renew); err != nil {
 		t.Fatal(err)
@@ -148,5 +152,9 @@ func TestSupplierAutoRenewalQueuesOnlyOneUpstreamRenewal(t *testing.T) {
 	status, _, lease := f.state(t, renew)
 	if status != "succeeded" || lease != nil || f.renews.Load() != 1 || f.renewalPays.Load() != 1 {
 		t.Fatal(status, lease)
+	}
+	_, confirmedError, _ := autoRenewState(t, f.db, sid)
+	if confirmedError != "" {
+		t.Fatal("confirmed supplier renewal retained stale automatic error", confirmedError)
 	}
 }

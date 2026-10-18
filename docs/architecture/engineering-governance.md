@@ -80,7 +80,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
 
-独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 171 个 SQL 迁移文件、最大编号 170；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及取消续费界面、真实渠道和部署，均不得标为通过。
+独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 172 个 SQL 迁移文件、最大编号 171；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及取消续费界面、真实渠道和部署，均不得标为通过。
 
 本地等价入口如下：
 
@@ -116,6 +116,8 @@ node --test scripts/captcha-components.test.mjs
 配置独立 PG18 测试 URL 后运行 `node scripts/test-compiled-notifications.mjs --integration` 和 `node scripts/test-service-cancellations.mjs --integration`；候选路径与强制启动检查变量见[测试说明](../testing.md#编译渠道与通知运行验收)。全量回归、浏览器夹具、真实外部渠道和候选发布验证仍按[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。
 
 供应商生命周期迁移 170 同样须与 API/worker 成套发布。不得修改旧迁移 checksum；升级保留旧任务和资金，新增无凭据请求身份保护。宿主能力闭环与本地浏览器不能代替真实供应商执行；默认魔方三类生命周期写能力仍为关闭。具体规则见[供应商接入契约](supplier-module-development.md#生命周期动作)。
+
+自动续费迁移 171 同样须停旧 writer 后成套发布，新增可信来源事实，不按历史 key 回填。供应商与调度严格门禁保护实际到期窗口、付款前意图复核、未付原单不自动追扣和真实 worker 续费强杀恢复；资金入口调整还须执行适用的普通余额/信用/退款回归。真实上游未到期跳过仅证明防止提前扣款，不能替代真实到期自动续费、生产迁移或远端 CI。
 
 ## 变更清单
 

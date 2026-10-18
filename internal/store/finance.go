@@ -29,13 +29,13 @@ type PaymentResult struct {
 }
 
 func (s *Store) PayInvoice(ctx context.Context, userID, invoiceID int64, key string, expectedVersion ...int64) (PaymentResult, error) {
-	return s.payInvoice(ctx, userID, invoiceID, key, false, expectedVersion...)
+	return s.payInvoice(ctx, userID, invoiceID, key, false, nil, expectedVersion...)
 }
 func (s *Store) PayInvoiceCredit(ctx context.Context, userID, invoiceID int64, key string, expectedVersion int64, sessionHash string) (PaymentResult, error) {
 	ctx = context.WithValue(ctx, creditSessionKey{}, sessionHash)
-	return s.payInvoice(ctx, userID, invoiceID, key, true, expectedVersion)
+	return s.payInvoice(ctx, userID, invoiceID, key, true, nil, expectedVersion)
 }
-func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key string, credit bool, expectedVersion ...int64) (PaymentResult, error) {
+func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key string, credit bool, automatic *autoRenewalPayment, expectedVersion ...int64) (PaymentResult, error) {
 	var out PaymentResult
 	if userID < 1 || invoiceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_payment", "账单或幂等键无效")
@@ -50,6 +50,11 @@ func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key str
 	}
 	if err = lockOperationKey(ctx, tx, "payment", fmt.Sprintf("%d:%s", userID, key)); err != nil {
 		return out, err
+	}
+	if automatic != nil {
+		if err = requireAutoRenewalInvoiceSource(ctx, tx, userID, invoiceID, *automatic); err != nil {
+			return out, err
+		}
 	}
 	var balance int64
 	if credit {
@@ -127,6 +132,11 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	}
 	if err = requireRenewalInvoiceCancellationOpen(ctx, tx, invoiceID); err != nil {
 		return out, err
+	}
+	if automatic != nil {
+		if err = s.requireAutoRenewalPayment(ctx, tx, userID, invoiceID, *automatic); err != nil {
+			return out, err
+		}
 	}
 	if kind == "manual" && len(expectedVersion) != 1 {
 		return out, conflict("invoice_version_required", "人工账单付款必须提交当前账单版本")
