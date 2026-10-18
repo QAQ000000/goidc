@@ -1628,6 +1628,11 @@ func TestServiceCancellationApprovalAndWithdrawal(t *testing.T) {
 	if !jobAvailable.After(time.Now()) {
 		t.Fatalf("end-of-billing job was immediately available: %s", jobAvailable)
 	}
+	// Advance the fixture's entitlement as well as its queue deadline; a future
+	// paid entitlement must never be terminated merely by accelerating the job.
+	if _, err = db.Pool.Exec(context.Background(), "UPDATE services SET next_due_at=now()-interval '1 second' WHERE id=$1", serviceIDs[0]); err != nil {
+		t.Fatal(err)
+	}
 	if err = db.Pool.QueryRow(context.Background(), "UPDATE provision_jobs SET available_at=now() WHERE id=$1 RETURNING id", int64(data(t, endDecision)["job_id"].(float64))).Scan(&job.ID); err != nil {
 		t.Fatal(err)
 	}

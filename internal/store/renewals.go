@@ -102,6 +102,9 @@ FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON
 	if ownerID != userID {
 		return out, nil, pgx.ErrNoRows
 	}
+	if err = requireServiceCancellationOpen(ctx, tx, serviceID); err != nil {
+		return out, nil, err
+	}
 	if automaticDue != nil {
 		if !autoRenew || due == nil || (serviceStatus != "active" && serviceStatus != "suspended") {
 			return out, nil, pgx.ErrNoRows

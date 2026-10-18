@@ -23,17 +23,27 @@ func TestDefaultProfileMatchesCompiledModules(t *testing.T) {
 		t.Fatal(err)
 	}
 	api, worker := Current("api"), Current("worker")
-	if len(api.Modules) != 11 || api.Modules[0].Category != "bot" || api.Modules[0].ID != "telegram_bot" || !api.Modules[0].FactoryAvailable {
-		t.Fatalf("default Telegram assembly missing: %+v", api.Modules)
-	}
-	if api.Profile != profile.Profile || api.ContractVersion != profile.ContractVersion || !reflect.DeepEqual(api.Modules, worker.Modules) {
+	if api.Profile != profile.Profile || api.ContractVersion != profile.ContractVersion || worker.Profile != api.Profile || worker.ContractVersion != api.ContractVersion || !reflect.DeepEqual(api.Modules, worker.Modules) {
 		t.Fatalf("API/worker assembly contract differs: %+v / %+v", api, worker)
 	}
+	required := map[string]bool{"bot/telegram_bot": false, "captcha/builtin_png": false}
 	for i := range api.Modules {
+		key := string(api.Modules[i].Category) + "/" + api.Modules[i].ID
+		if _, needed := required[key]; needed {
+			if !api.Modules[i].FactoryAvailable {
+				t.Fatalf("required module factory missing: %s", key)
+			}
+			required[key] = true
+		}
 		if len(api.Modules[i].DescriptorSHA256) != 64 {
 			t.Fatalf("missing schema digest: %+v", api.Modules[i])
 		}
 		api.Modules[i].DescriptorSHA256 = ""
+	}
+	for key, present := range required {
+		if !present {
+			t.Errorf("required module missing from default profile: %s", key)
+		}
 	}
 	if !reflect.DeepEqual(api.Modules, profile.Modules) {
 		t.Fatalf("actual composition differs from required profile:\n%+v\n%+v", api.Modules, profile.Modules)

@@ -747,6 +747,13 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 			return conflict("job_lease_lost", "任务租约已失效")
 		}
 		job = actual
+		proceed, err := reviewCancellationJob(ctx, tx, job)
+		if err != nil {
+			return err
+		}
+		if !proceed {
+			return nil
+		}
 		if !overdueDue {
 			if err = cancelObsoleteOverdueSuspension(ctx, tx, job); err != nil {
 				return err
@@ -760,7 +767,9 @@ func (s *Store) ProcessProvisionJob(ctx context.Context, job ProvisionJob) error
 			return nil
 		}
 		if mode == "manual" {
-			if job.Action == "create" || job.Action == "terminate" {
+			// Until an operator confirms termination, retain the last known
+			// resource state. Cancellation review can still stop or defer this job.
+			if job.Action == "create" {
 				if _, err = tx.Exec(ctx, `UPDATE services SET status='provisioning',last_error='等待管理员确认实际资源',version=version+1,updated_at=now() WHERE id=$1`, job.ServiceID); err != nil {
 					return err
 				}
@@ -930,6 +939,16 @@ func (s *Store) CompleteManualServiceJob(ctx context.Context, actorID, serviceID
 	}
 	if mode != "manual" || status != "waiting_manual" || !allowedServiceAction(current, job.Action) {
 		return out, conflict("invalid_delivery_state", "任务当前不可人工确认")
+	}
+	proceed, err := reviewCancellationJob(ctx, tx, job)
+	if err != nil {
+		return out, err
+	}
+	if !proceed {
+		if err = tx.Commit(ctx); err != nil {
+			return out, err
+		}
+		return out, conflict("cancellation_job_blocked", "取消任务已停止或重新安排，请刷新任务并核验服务权益")
 	}
 	if job.Action == "create" {
 		if input.UpstreamID == "" {

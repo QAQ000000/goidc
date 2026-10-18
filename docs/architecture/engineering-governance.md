@@ -36,7 +36,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 | 领域 | 必查行为 | 最低验证 |
 | --- | --- | --- |
 | 支付、余额、发票 | 金额整数分、账本、未知外部结果、退款和重复请求 | Go 单元 + 独立 PG18 事务/幂等测试；真实渠道另行标记 |
-| 订单与服务 | 状态机、版本冲突、交付、续费、变更和取消 | Go 业务回归 + worker 恢复；外部供应商结果不能用模拟代替 |
+| 订单与服务 | 状态机、版本冲突、交付、续费、变更和取消；批准取消与续费付款互斥、既有外部资金事实保留 | Go 业务回归 + `scripts/test-service-cancellations.mjs --integration` + worker 恢复；外部供应商结果不能用模拟代替 |
 | RBAC 与后台 | 身份、角色、资源范围、撤权、页面/API 一致性 | API 权限测试 + 页面契约静态检查；浏览器验收单独记录 |
 | 供应商、NOKVM、通知 | 请求协议、超时、重试、凭据、未知结果和人工复核 | 适配器测试 + 隔离运行证据；真实渠道另行验收 |
 | 迁移与切换 | checksum、旧数据映射、冻结、回滚和切回 | 独立 PG 演练 + 候选构建；不能只凭静态盘点宣称完成 |
@@ -71,11 +71,16 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 - 将 429、503、超时、`Retry-After`、计费/配额错误和未知外部结果分开处理；未知写结果停止自动重发，进入待核验状态。
 - 对 API、worker、数据库和外部适配器记录结构化日志、指标和 trace 关联；日志不替代业务审计。
 - 发布必须能关联提交、迁移 checksum、构建产物、配置摘要、健康检查和回退步骤；构建不能覆盖正在运行的 Web 目录。
+- 取消续费的迁移 169、API 与 worker 成套发布：先停旧 API、worker 和其他旧 writer，再升级 schema/checksum 并启用配套候选。冲突历史仅对未派发 pending 任务安全重开；歧义历史阻断升级，须人工核实资源及资金。新 schema 不支持直接降级旧二进制，详见[交易契约](../transactions.md#历史冲突与发布边界)。
 - 长任务只有在确有上下文或并发需求时才使用 background、compaction、异步工具调用或 multi-agent，并保留取消和超时边界。
 
 ## CI 门禁
 
 `.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、报表 JSON 格式边界、31 项渠道通知单元 race、实名认证提供方与支付运行单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理、下载、主题和实名认证组件测试。独立 PG18 job 的通知 runner 强制执行 57 项集成入口，覆盖通知进程崩溃恢复和旧 schema 升级，并构建 API/worker 验证 160/161/162 启动拒绝；runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断。该 job 另执行 8 项站点公开主题、管理权限与维护隔离回归，以及实名认证严格集成 runner，覆盖实例快照、未知结果查询、租约与人工围栏、业务资格和 163 升级。同库另执行供应商严格 runner，验证账户身份/命名密钥、真实任务、未知写结果、worker SIGKILL 与 schema165 升级；另执行支付严格 runner，覆盖第二测试协议、多实例与历史密钥、查询/关单/退款边界和 164 升级，逐入口要求零 skip。另执行验证码严格 runner，覆盖图片/点击/widget、配置绑定、旧挑战兼容和并发单次消费；真实厂商另验。另执行内部调度严格 runner，覆盖目录权限、真实分发、审计故障和日续费全量去重。数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
+
+模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
+
+独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 170 个 SQL 迁移文件、最大编号 169；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及浏览器、真实渠道和部署，均不得标为通过。
 
 本地等价入口如下：
 
@@ -108,7 +113,7 @@ node --test scripts/scheduler-components.test.mjs
 node --test scripts/captcha-components.test.mjs
 ```
 
-配置独立 PG18 测试 URL 后运行 `node scripts/test-compiled-notifications.mjs --integration`；候选路径与强制启动检查变量见[测试说明](../testing.md#编译渠道与通知运行验收)。全量回归、浏览器夹具、真实外部渠道和候选发布验证仍按[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。
+配置独立 PG18 测试 URL 后运行 `node scripts/test-compiled-notifications.mjs --integration` 和 `node scripts/test-service-cancellations.mjs --integration`；候选路径与强制启动检查变量见[测试说明](../testing.md#编译渠道与通知运行验收)。全量回归、浏览器夹具、真实外部渠道和候选发布验证仍按[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。
 
 ## 变更清单
 

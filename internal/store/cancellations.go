@@ -78,6 +78,9 @@ FROM service_cancellation_requests WHERE user_id=$1 AND idempotency_key=$2`, use
 	if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
+	if err = requireServiceCancellationOpen(ctx, tx, serviceID); err != nil {
+		return out, err
+	}
 	var pending bool
 	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM service_cancellation_requests WHERE service_id=$1 AND status='pending')", serviceID).Scan(&pending); err != nil {
 		return out, err
@@ -143,6 +146,15 @@ func (s *Store) ResolveServiceCancellation(ctx context.Context, actorID, request
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "cancellation", requestID); err != nil {
 		return out, err
 	}
+	// Withdrawal and renewal admission own the service before cancellation rows.
+	// Read the immutable parent first, then repeat the child read under both locks.
+	var serviceID int64
+	if err = tx.QueryRow(ctx, "SELECT service_id FROM service_cancellation_requests WHERE id=$1", requestID).Scan(&serviceID); err != nil {
+		return out, err
+	}
+	if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&serviceStatus); err != nil {
+		return out, err
+	}
 	err = tx.QueryRow(ctx, `SELECT id,service_id,user_id,type,reason,status,resolution_note,created_at,resolved_at,resolved_by
 FROM service_cancellation_requests WHERE id=$1 FOR UPDATE`, requestID).
 		Scan(&out.ID, &out.ServiceID, &out.UserID, &kind, &out.Reason, &out.Status, &out.ResolutionNote, &out.CreatedAt, &out.ResolvedAt, &out.ResolvedBy)
@@ -153,10 +165,16 @@ FROM service_cancellation_requests WHERE id=$1 FOR UPDATE`, requestID).
 	if out.Status != "pending" {
 		return out, conflict("cancellation_already_resolved", "取消申请已经处理")
 	}
-	if err = tx.QueryRow(ctx, "SELECT status FROM services WHERE id=$1 FOR UPDATE", out.ServiceID).Scan(&serviceStatus); err != nil {
-		return out, err
+	if out.ServiceID != serviceID {
+		return out, conflict("cancellation_changed", "取消申请的服务已变化，请刷新后重试")
 	}
 	if decision == "approved" {
+		if err = requireServiceCancellationOpen(ctx, tx, out.ServiceID); err != nil {
+			return out, err
+		}
+		if err = requireCancellationPaymentsResolved(ctx, tx, out.ServiceID); err != nil {
+			return out, err
+		}
 		if err = requireServiceReviewed(ctx, tx, out.ServiceID); err != nil {
 			return out, err
 		}
@@ -171,19 +189,23 @@ FROM service_cancellation_requests WHERE id=$1 FOR UPDATE`, requestID).
 			return out, conflict("service_action_pending", "服务已有任务正在处理中")
 		}
 		var jobID int64
+		var generation int64
+		if err = tx.QueryRow(ctx, "UPDATE service_cancellation_requests SET approval_generation=approval_generation+1 WHERE id=$1 RETURNING approval_generation", requestID).Scan(&generation); err != nil {
+			return out, err
+		}
 		available := "now()"
 		if kind == "end_of_billing" {
 			available = "COALESCE(s.next_due_at,now())"
 		}
-		err = tx.QueryRow(ctx, fmt.Sprintf(`INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
-SELECT s.id,'terminate',$2,%s FROM services s WHERE s.id=$1
-RETURNING id`, available), out.ServiceID, fmt.Sprintf("service-cancellation-%d", requestID)).Scan(&jobID)
+		err = tx.QueryRow(ctx, fmt.Sprintf(`INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at,cancellation_request_id)
+SELECT s.id,'terminate',$2,%s,$3 FROM services s WHERE s.id=$1
+RETURNING id`, available), out.ServiceID, fmt.Sprintf("service-cancellation-%d-%d", requestID, generation), requestID).Scan(&jobID)
 		if err != nil {
 			return out, err
 		}
 		out.JobID = &jobID
 	}
-	err = tx.QueryRow(ctx, `UPDATE service_cancellation_requests SET status=$2,resolved_by=$3,resolution_note=$4,resolved_at=now()
+	err = tx.QueryRow(ctx, `UPDATE service_cancellation_requests SET status=$2,resolved_by=$3,resolution_note=$4,resolved_at=clock_timestamp()
 WHERE id=$1 RETURNING status,resolution_note,resolved_at,resolved_by`, requestID, decision, actorID, note).
 		Scan(&out.Status, &out.ResolutionNote, &out.ResolvedAt, &out.ResolvedBy)
 	if err != nil {

@@ -48,6 +48,13 @@ func (s *Store) processNOKVMJob(ctx context.Context, claimed ProvisionJob) error
 	if state != "running" || job.Attempts != claimed.Attempts || !valid || dispatched || mode != "nokvm" || job.ServiceID != claimed.ServiceID || job.Action != claimed.Action {
 		return conflict("job_lease_lost", "任务租约已失效或已发送至供应商")
 	}
+	proceed, err := reviewCancellationJob(ctx, tx, job)
+	if err != nil {
+		return err
+	}
+	if !proceed {
+		return tx.Commit(ctx)
+	}
 	if !overdueDue {
 		if err = cancelObsoleteOverdueSuspension(ctx, tx, claimed); err != nil {
 			return err

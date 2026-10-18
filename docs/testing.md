@@ -13,6 +13,7 @@
 | 编译全部 Go 测试 | `./scripts/go.sh test ./... -run '^$'` | Go 依赖可用；不执行测试 |
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
 | 报表 JSON 查询 | `./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'`；集成入口 `TestReportEndpointsJSONOnlyFormatsAndPermissions`，金额、权限和分页见[报表回归](credit-cash-reporting.md#回归入口) | 格式解析可独立验证；接口权限/范围仍须独立 PG18 回归 |
+| 服务取消与续费 | `node scripts/test-service-cancellations.mjs --integration` | 显式回环 PG18 `_test` URL；串行 race、逐入口 run/pass 零 skip；API/资金兼容、执行围栏及真实 schema168→169，规则与部署边界见[交易契约](transactions.md#服务取消与续费互斥) |
 | 内部调度任务 | `node scripts/test-scheduler.mjs --unit` / `--integration`、`node --test scripts/scheduler-components.test.mjs` | 集成须显式回环 PG18 `_test` URL，逐项 run/pass 零 skip；目录/取消/审计和日续费回归，真实 worker 与浏览器另验，见[调度契约](architecture/scheduler.md) |
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
@@ -34,7 +35,13 @@
 
 浏览器夹具是供浏览器连接的临时 API 环境，单独启动或编译夹具不代表浏览器验收。未显式配置的浏览器、真实外部渠道、旧库及常驻进程专项仍可能跳过。
 
+`TestDefaultProfileMatchesCompiledModules` 按 `audit/module-build-profile.json` 比较实际 API/worker 的 profile、契约版本和完整模块清单，逐项检查描述摘要，并按模块键验证 Telegram 与内置 PNG 的必需工厂；不固定模块数量或清单位置。清单必须随装配 profile 变更，不把某次历史模块数当作长期断言。
+
 实名认证规则见[领域契约](domain/certification.md)。认证 runner 核对实际执行的 Go JSON 事件和包结果，覆盖实例及密钥快照、未知提交只查询、过期租约与人工决定围栏、查询上限、审核事务、设置锁顺序、回执等待后撤权、提供方通过后的下单/API 密钥资格，以及从真实 163 起点升级。测试提供方只在测试中注册；默认发布清单仍只有人工提供方。租约和查询间隔可由测试 SQL 加速，不证明实际恢复耗时或真实认证厂商的协议。worker 单元夹具验证独立循环及取消，未强杀完整生产认证进程。
+
+认证锁竞争用例用独立直连观察 `pg_stat_activity`，连接、整轮观察和每条查询均有超时，不从被测业务池借观察连接。设置锁序用例将业务池固定为四个连接，保留 blocker、领取、新申请、设置更新的真实等待，并断言业务池已占满后释放阻塞；观察连接避免测试自身池饥饿，不改变生产锁顺序或取消真实竞争。
+
+取消续费 runner 同样核对 Go JSON 和包结果，拒绝无 DSN、非法连接覆盖、缺失入口及任何 skip。HTTP 回归覆盖待审可付款、批准后各付款方式/自动续费拒绝、真实未决支付阻审批、回调后最新权益、worker 延期及人工确认；并以 `pg_blocking_pids` 确认审批真实等待服务锁，验证重叠的余额、信用和在线付款立即冲突、不写资金，释放锁后审批可完成。store 回归从从未运行 169 的实际 schema168 造旧冲突，验证资金/意图/权益不改、原任务及审计保留、新审批 generation、歧义历史整次回滚与数据库入闸。时间及历史状态由隔离夹具控制；远端 CI、浏览器、真实支付/NOKVM 和生产迁移切换各需独立证据。
 
 支付接入规则见[支付模块开发契约](architecture/payment-module-development.md)。支付 runner 覆盖第二个仅测试装配的独立协议、两项命名密钥、指定实例与跨实例幂等、轮换/停用后的原交易、手动/worker 查询、可信关单及独立只读核验、迟到资金事实、退款商户与共享 payout claim、审计回滚和 164 升级。时间与查询计划可由测试 SQL 加速；没有真实商户扣款或退款网络请求，也没有远程预下单实现。能力组件验收不证明浏览器视觉，远端 CI、真实渠道和候选切换继续单列。
 

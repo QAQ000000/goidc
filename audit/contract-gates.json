@@ -116,12 +116,23 @@
       "contract": "docs/transactions.md",
       "implementation": [
         "internal/store",
-        "internal/httpapi"
+        "internal/httpapi",
+        "db/migrations/169_cancellation_renewal_admission.sql",
+        "internal/store/cancellations.go",
+        "internal/store/cancellation_renewal.go",
+        "internal/store/cancellation_jobs.go",
+        "scripts/test-service-cancellations.mjs"
       ],
       "tests": [
-        "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'"
+        "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'",
+        "node scripts/test-service-cancellations.mjs --integration"
       ],
-      "evaluation": [],
+      "evaluation": [
+        "isolated loopback PostgreSQL 18 test database; required Go JSON run/pass and package results with zero skips under serial race",
+        "pending cancellation permits renewal and payment; approved cancellation rejects new renewal and unpaid renewal balance, credit and online admission; real pending/expired or unresolved close/anomaly blocks approval under serialized service locks and NOWAIT finance admission",
+        "actual schema168 to 169 preserves money, intents, receipts, entitlement and old job/audit; only undispatched pending conflicts reopen; ambiguous history rejects upgrade atomically; reapproval creates a new generation and execution rechecks entitlement while manual termination preserves service state",
+        "stop old API, workers and other writers before upgrading paired migration and binaries; no direct old-binary downgrade on new schema; remote CI, browser, real merchants/providers and production cutover require separate evidence"
+      ],
       "review": {
         "required": true,
         "owners": [

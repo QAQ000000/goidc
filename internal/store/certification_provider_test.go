@@ -15,6 +15,7 @@ import (
 	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/module"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var certificationFixtureOnce sync.Once
@@ -381,20 +382,47 @@ func TestCertificationProviderResultSubjectAndRollback(t *testing.T) {
 	}
 }
 
-func waitCertificationQueryLock(t *testing.T, db *Store, fragment string) {
+func certificationLockObserver(t *testing.T, db *Store) *pgx.Conn {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
+	// An observer must not compete with the transactions whose locks it observes.
+	// In the settings scenario those transactions deliberately fill a small pool.
+	cfg := db.Pool.Config().ConnConfig.Copy()
+	cfg.ConnectTimeout = time.Second
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	observer, err := pgx.ConnectConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = observer.Close(ctx)
+	})
+	return observer
+}
+
+func waitCertificationQueryLock(t *testing.T, observer *pgx.Conn, fragment string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	for {
 		var waiting bool
-		if err := db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND datname=current_database() AND wait_event_type='Lock' AND query LIKE '%'||$1||'%')`, fragment).Scan(&waiting); err != nil {
+		queryCtx, cancelQuery := context.WithTimeout(ctx, time.Second)
+		err := observer.QueryRow(queryCtx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid<>pg_backend_pid() AND datname=current_database() AND wait_event_type='Lock' AND query LIKE '%'||$1||'%')`, fragment).Scan(&waiting)
+		cancelQuery()
+		if err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
 			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			t.Fatal("expected lock wait was not observed", fragment)
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
-	t.Fatal("expected lock wait was not observed", fragment)
 }
 
 func TestCertificationProviderLeaseRecheckedAfterJobLockWait(t *testing.T) {
@@ -404,6 +432,7 @@ func TestCertificationProviderLeaseRecheckedAfterJobLockWait(t *testing.T) {
 			f.instance(t, "cert-expired-wait", "certification_fixture", "fixture-expired", &certificationProbe{})
 			f.selectInstance(t, "cert-expired-wait", "certification_fixture")
 			out := f.submit(t)
+			observer := certificationLockObserver(t, f.db)
 			job, _, err := f.db.claimCertificationJob(t.Context())
 			if err != nil || job == nil {
 				t.Fatal("could not claim expiry fixture", err)
@@ -428,7 +457,7 @@ func TestCertificationProviderLeaseRecheckedAfterJobLockWait(t *testing.T) {
 					done <- f.db.certificationJobNeedsReview(t.Context(), *job, "provider_unavailable")
 				}
 			}()
-			waitCertificationQueryLock(t, f.db, "SELECT id FROM certification_provider_jobs WHERE id=$1 FOR UPDATE")
+			waitCertificationQueryLock(t, observer, "SELECT id FROM certification_provider_jobs WHERE id=$1 FOR UPDATE")
 			if remaining := time.Until(expires) + 100*time.Millisecond; remaining > 0 {
 				time.Sleep(remaining)
 			}
@@ -462,6 +491,18 @@ func TestCertificationProviderSettingsClaimLockOrder(t *testing.T) {
 	f.instance(t, "cert-lock-order", "certification_fixture", "fixture-lock-order", &certificationProbe{})
 	f.selectInstance(t, "cert-lock-order", "certification_fixture")
 	out := f.submit(t)
+	// Keep this independent of host CPU count: blocker, claim, submission and
+	// settings must occupy every business connection while observation continues.
+	cfg := f.db.Pool.Config().Copy()
+	cfg.MaxConns, cfg.MinConns = 4, 0
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := f.db.Pool
+	f.db.Pool = pool
+	previous.Close()
+	observer := certificationLockObserver(t, f.db)
 	blocker, err := f.db.Pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -475,17 +516,20 @@ func TestCertificationProviderSettingsClaimLockOrder(t *testing.T) {
 		_, _, err := f.db.claimCertificationJob(t.Context())
 		claimDone <- err
 	}()
-	waitCertificationQueryLock(t, f.db, "WHERE j.id=$1 FOR UPDATE OF j")
+	waitCertificationQueryLock(t, observer, "WHERE j.id=$1 FOR UPDATE OF j")
 	go func() {
 		_, err := f.db.SubmitCertification(t.Context(), f.customer, "individual", map[string]any{"name": "并发申请", "id_number": "LOCK-ORDER-PRIVATE"})
 		submitDone <- err
 	}()
-	waitCertificationQueryLock(t, f.db, "INSERT INTO certification_profiles(user_id,certification_type,status,provider_id)")
+	waitCertificationQueryLock(t, observer, "INSERT INTO certification_profiles(user_id,certification_type,status,provider_id)")
 	go func() {
 		_, err := f.db.Pool.Exec(t.Context(), `UPDATE certification_settings SET version=version+1 WHERE id=1`)
 		settingsDone <- err
 	}()
-	waitCertificationQueryLock(t, f.db, "UPDATE certification_settings SET version=version+1 WHERE id=1")
+	waitCertificationQueryLock(t, observer, "UPDATE certification_settings SET version=version+1 WHERE id=1")
+	if acquired := f.db.Pool.Stat().AcquiredConns(); acquired != cfg.MaxConns {
+		t.Fatalf("lock scenario did not fill the small business pool: %d/%d", acquired, cfg.MaxConns)
+	}
 	if err := blocker.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}

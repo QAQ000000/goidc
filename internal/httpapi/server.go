@@ -870,6 +870,19 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23514" {
+		switch pg.Message {
+		case "service_cancellation_approved":
+			writeError(w, 409, pg.Message, "服务取消已获批准，不能继续续费或付款，请联系管理员")
+			return
+		case "service_action_pending":
+			writeError(w, 409, pg.Message, "服务正在处理其他操作，请刷新后重试")
+			return
+		case "invoice_payment_pending":
+			writeError(w, 409, pg.Message, "续费账单存在未核实的在线支付，请先确认支付结果")
+			return
+		}
+	}
 	if errors.As(err, &pg) && pg.Code == "23514" && pg.Message == "renewal_refund_hold" {
 		writeError(w, 409, "renewal_refund_hold", "服务存在待复核续费退款，核实后再操作")
 		return

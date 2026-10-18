@@ -124,6 +124,9 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 	if err = requireInvoiceReviewed(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
+	if err = requireRenewalInvoiceCancellationOpen(ctx, tx, invoiceID); err != nil {
+		return out, err
+	}
 	if err = requireNoPaymentCloseAnomaly(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
@@ -377,6 +380,9 @@ func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider
 			return out, conflict("invoice_not_payable", "账单当前状态不可支付")
 		}
 		if err = requireInvoiceReviewed(ctx, tx, invoiceID); err != nil {
+			return out, err
+		}
+		if err = requireRenewalInvoiceCancellationOpen(ctx, tx, invoiceID); err != nil {
 			return out, err
 		}
 		if topup {

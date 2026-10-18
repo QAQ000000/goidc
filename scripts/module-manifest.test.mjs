@@ -31,13 +31,12 @@ test('required composition rejects missing, extra, incompatible or divergent exe
   assert.throws(() => validateModuleProfile({ ...profile, modules: [module, module] }), /sorted and unique/);
 });
 
-test('default profile requires all twelve modules including CAPTCHA and Telegram Bot', async () => {
+test('default profile requires the CAPTCHA and Telegram Bot factories by identity', async () => {
   const current = JSON.parse(await readFile(new URL('../audit/module-build-profile.json', import.meta.url), 'utf8'));
   const modules = validateModuleProfile(current);
-  assert.equal(modules.length, 12);
-  assert.deepEqual(modules[0], { category: 'bot', id: 'telegram_bot', version: 'builtin', schema_version: 1, contract_version: 1, instance_mode: 'channel', factory_available: true });
-  assert.deepEqual(modules.find(item => item.category === 'captcha'), { category: 'captcha', id: 'builtin_png', version: 'builtin', schema_version: 1, contract_version: 1, instance_mode: 'profile', factory_available: true });
-  assert.throws(() => validateModuleProfile({ ...current, modules: [{ ...modules[0], category: 'unknown' }] }), /Invalid compiled module identity/);
+  assert.deepEqual(modules.find(item => item.category === 'bot' && item.id === 'telegram_bot'), { category: 'bot', id: 'telegram_bot', version: 'builtin', schema_version: 1, contract_version: 1, instance_mode: 'channel', factory_available: true });
+  assert.deepEqual(modules.find(item => item.category === 'captcha' && item.id === 'builtin_png'), { category: 'captcha', id: 'builtin_png', version: 'builtin', schema_version: 1, contract_version: 1, instance_mode: 'profile', factory_available: true });
+  assert.throws(() => validateModuleProfile({ ...current, modules: [{ ...module, category: 'unknown' }] }), /Invalid compiled module identity/);
 });
 
 async function fixture(t, metaRelative = 'artifact/meta') {

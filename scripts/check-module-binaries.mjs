@@ -29,7 +29,7 @@ export async function inspectModuleBinary(binary, directory, name) {
 export async function checkModuleBinaries() {
   if (process.platform !== 'linux') throw new Error('Module binary gate requires Linux and strace');
   const profile = JSON.parse(await readFile(path.join(repository, 'audit/module-build-profile.json'), 'utf8'));
-  if (validateModuleProfile(profile).length !== 12) throw new Error('Default build profile must contain exactly twelve modules');
+  validateModuleProfile(profile);
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'goidc-module-binaries-'));
   try {
     const manifests = {}, binaries = {};

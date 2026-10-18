@@ -125,6 +125,9 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 	if err = requireNoRealPaymentPending(ctx, tx, invoiceID); err != nil {
 		return out, err
 	}
+	if err = requireRenewalInvoiceCancellationOpen(ctx, tx, invoiceID); err != nil {
+		return out, err
+	}
 	if kind == "manual" && len(expectedVersion) != 1 {
 		return out, conflict("invoice_version_required", "人工账单付款必须提交当前账单版本")
 	}
