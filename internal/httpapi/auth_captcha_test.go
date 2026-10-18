@@ -169,7 +169,7 @@ func TestIssuedCaptchaCookieRefreshAndLogin(t *testing.T) {
 	if cookie.Secure || !cookie.HttpOnly || cookie.MaxAge != 300 || !strings.HasPrefix(data(t, first)["image"].(string), "data:image/png;base64,") {
 		t.Fatal("issued response security contract")
 	}
-	if len(data(t, first)) != 4 {
+	if len(data(t, first)) != 5 || data(t, first)["challenge"].(map[string]any)["kind"] != "image" {
 		t.Fatal("challenge response has unexpected fields")
 	}
 	var storedID string

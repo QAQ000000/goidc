@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/codex/zjmfgo/internal/captcha"
 	"net/http"
 	"net/mail"
 	"strconv"
@@ -34,16 +35,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Identifier    string `json:"identifier"`
-		Username      string `json:"username"`
-		Password      string `json:"password"`
-		CaptchaID     string `json:"captcha_id"`
-		CaptchaAnswer string `json:"captcha_answer"`
+		Identifier    string         `json:"identifier"`
+		Username      string         `json:"username"`
+		Password      string         `json:"password"`
+		CaptchaID     string         `json:"captcha_id"`
+		CaptchaAnswer string         `json:"captcha_answer"`
+		CaptchaProof  *captcha.Proof `json:"captcha_proof"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	if err := s.consumeCaptcha(r.Context(), r, "login", input.CaptchaID, input.CaptchaAnswer); err != nil {
+	if err := s.consumeCaptcha(r.Context(), r, "login", input.CaptchaID, input.CaptchaAnswer, input.CaptchaProof); err != nil {
 		if !errors.Is(err, errInvalidCaptcha) {
 			s.captchaUnavailable(w, r)
 			return
@@ -245,6 +247,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		AffiliateCode       string         `json:"affiliate_code"`
 		CaptchaID           string         `json:"captcha_id"`
 		CaptchaAnswer       string         `json:"captcha_answer"`
+		CaptchaProof        *captcha.Proof `json:"captcha_proof"`
 		CustomFields        map[string]any `json:"custom_fields"`
 		CustomFieldsVersion string         `json:"custom_fields_version"`
 	}
@@ -288,7 +291,7 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_custom_fields", "请检查注册自定义字段")
 		return
 	}
-	if err := s.consumeCaptcha(r.Context(), r, "register", input.CaptchaID, input.CaptchaAnswer); err != nil {
+	if err := s.consumeCaptcha(r.Context(), r, "register", input.CaptchaID, input.CaptchaAnswer, input.CaptchaProof); err != nil {
 		if !errors.Is(err, errInvalidCaptcha) {
 			s.captchaUnavailable(w, r)
 			return

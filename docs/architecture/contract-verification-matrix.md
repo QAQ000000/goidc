@@ -14,6 +14,7 @@
 | 领域 | 必须回答的问题 | 测试/审计入口 | 证据边界 |
 | --- | --- | --- | --- |
 | 编译模块与配置 | 二进制实际模块是否匹配声明且不读配置或联网？配置/凭据是否按 schema 校验并隔离？缺失实现能否安全停用？新增同类适配器能否复用运行链路？ | [模块契约与测试](../compiled-module-architecture.md#验证入口与发布边界)、`scripts/check-module-binaries.mjs`、`scripts/test-compiled-notifications.mjs` 的 unit/integration 严格入口、渠道组件测试 | 必需入口缺失或跳过须失败；清单不证明外部健康，组件事件不代表浏览器；新支付协议仍需资金全链路验收 |
+| 验证码与认证 | 图片/点击/widget 是否经服务端验证？动作、浏览器、过期、并发和配置轮换是否拒绝绕过？ | [验证码接入契约](../auth-captcha.md)、`scripts/test-captcha.mjs --unit/--integration`、验证码组件测试 | 严格独立 PG18、零 skip；测试提供方不证明真实厂商；浏览器、SDK 和生产配置另验 |
 | 订单与支付 | 金额是否以整数分计算？幂等是否绑定实例？原快照是否抵抗当前配置轮换/损坏？流水与退款商户是否隔离？外部未知是否继续冻结？ | `scripts/test-compiled-payments.mjs` 的 unit/integration 严格入口；`./scripts/test-all.sh`；[支付契约](../payments.md)与[开发契约](payment-module-development.md) | 第二协议仅测试装配，隔离 PG18 的真实 run/pass 不代表真实商户付款/到账；查询组件与浏览器分开验收 |
 | 余额与发票 | 借贷、冻结、退款、发票版本和审计是否同事务提交？ | `internal/store` 事务/幂等测试；[交易契约](../transactions.md)；[发票](../invoice-applications.md) | 无独立 `_test` 数据库不得声称数据库集成通过 |
 | 应用文件存储 | 历史字节能否继续读取？五类文件是否保留原权限、Range 和审计？对象位置是否固定？未知上传、替换、级联删除与并发回收是否安全？ | [存储契约](file-storage.md)、`scripts/test-file-storage.mjs --unit` / `--integration`，真实 schema166→167 升级及本地 S3 协议模拟 | 必需 run/pass 零 skip；本地模拟不代表真实 S3/MinIO/R2、浏览器或生产切换；HTTP 仍有界整文件缓冲 |

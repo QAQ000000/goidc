@@ -317,6 +317,38 @@
         "required": true,
         "kind": "isolated-pg-and-scheduler-dispatch"
       }
+    },
+    {
+      "id": "captcha",
+      "contract": "docs/auth-captcha.md",
+      "implementation": [
+        "internal/captcha",
+        "internal/httpapi/captcha.go",
+        "internal/config/captcha.go",
+        "db/migrations/168_captcha_providers.sql",
+        "web/src/components/captcha-field.tsx"
+      ],
+      "tests": [
+        "node scripts/test-captcha.mjs --unit",
+        "node scripts/test-captcha.mjs --integration",
+        "node --test scripts/captcha-components.test.mjs"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL 18; actual run/pass and zero skip; legacy PNG, image/click/widget, durable consume before verification, concurrent replay and profile rotation",
+        "local renderer fixtures; real browser, external vendor and production configuration remain separate"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "auth",
+          "module",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-captcha-provider"
+      }
     }
   ]
 }

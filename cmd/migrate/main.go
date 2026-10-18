@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/codex/zjmfgo/internal/config"
+	_ "github.com/codex/zjmfgo/internal/modules/all"
 	"github.com/codex/zjmfgo/internal/store"
 	"log"
 )

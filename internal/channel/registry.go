@@ -22,13 +22,14 @@ const (
 	Certification Category = "certification"
 	Provision     Category = "provision"
 	Storage       Category = "storage"
+	Captcha       Category = "captcha"
 )
 
 // ValidCategory recognizes public module categories. Registry tests may use
 // private categories, while persisted/API contracts use this finite catalogue.
 func ValidCategory(category Category) bool {
 	switch category {
-	case Payment, OAuth, SMS, Mail, Bot, Certification, Provision, Storage:
+	case Payment, OAuth, SMS, Mail, Bot, Certification, Provision, Storage, Captcha:
 		return true
 	default:
 		return false

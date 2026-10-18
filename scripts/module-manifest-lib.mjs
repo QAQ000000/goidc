@@ -30,7 +30,7 @@ function records(modules, withDigest) {
   let previous = '';
   for (const item of modules) {
     keys(item, withDigest ? [...recordKeys, 'descriptor_sha256'] : recordKeys, 'compiled module');
-    requireThat(['payment', 'oauth', 'sms', 'mail', 'bot', 'certification', 'provision', 'storage'].includes(item.category) && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(item.id), 'Invalid compiled module identity');
+    requireThat(['payment', 'oauth', 'sms', 'mail', 'bot', 'certification', 'provision', 'storage', 'captcha'].includes(item.category) && /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(item.id), 'Invalid compiled module identity');
     requireThat(typeof item.version === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.+-]{0,127}$/.test(item.version) && Number.isSafeInteger(item.schema_version) && item.schema_version > 0 && item.contract_version === 1, 'Unsupported compiled module version');
     requireThat(['channel', 'supplier', 'profile'].includes(item.instance_mode) && typeof item.factory_available === 'boolean', 'Invalid compiled module runtime contract');
     if (withDigest) requireThat(hashPattern.test(item.descriptor_sha256 ?? ''), 'Invalid compiled descriptor digest');

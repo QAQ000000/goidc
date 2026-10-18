@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"github.com/codex/zjmfgo/internal/captcha"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -60,12 +61,13 @@ func (s *Server) verificationAvailable(ctx context.Context, channel string) erro
 func storeError(code, message string) error { return &store.Conflict{Code: code, Message: message} }
 
 type verificationInput struct {
-	Purpose       string `json:"purpose"`
-	Channel       string `json:"channel"`
-	Recipient     string `json:"recipient"`
-	Identifier    string `json:"identifier"`
-	CaptchaID     string `json:"captcha_id"`
-	CaptchaAnswer string `json:"captcha_answer"`
+	Purpose       string         `json:"purpose"`
+	Channel       string         `json:"channel"`
+	Recipient     string         `json:"recipient"`
+	Identifier    string         `json:"identifier"`
+	CaptchaID     string         `json:"captcha_id"`
+	CaptchaAnswer string         `json:"captcha_answer"`
+	CaptchaProof  *captcha.Proof `json:"captcha_proof"`
 }
 
 func validVerificationRecipient(channel, value string) bool {
@@ -128,7 +130,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 			writeError(w, 400, "invalid_password_reset", "邮箱或手机号无效")
 			return
 		}
-		if err := s.consumeCaptcha(r.Context(), r, "forgot-password", in.CaptchaID, in.CaptchaAnswer); err != nil {
+		if err := s.consumeCaptcha(r.Context(), r, "forgot-password", in.CaptchaID, in.CaptchaAnswer, in.CaptchaProof); err != nil {
 			if !errors.Is(err, errInvalidCaptcha) {
 				s.captchaUnavailable(w, r)
 				return
@@ -137,7 +139,7 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 			return
 		}
 	} else if flow == "register" {
-		if err := s.consumeCaptcha(r.Context(), r, "register", in.CaptchaID, in.CaptchaAnswer); err != nil {
+		if err := s.consumeCaptcha(r.Context(), r, "register", in.CaptchaID, in.CaptchaAnswer, in.CaptchaProof); err != nil {
 			if !errors.Is(err, errInvalidCaptcha) {
 				s.captchaUnavailable(w, r)
 				return

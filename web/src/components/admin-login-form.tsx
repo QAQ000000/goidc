@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw } from "lucide-react";
-import { api, fetchCaptcha, type CaptchaChallenge, type User } from "@/lib/api";
+import { api, type User } from "@/lib/api";
 import { useSite } from "./site-provider";
+import { CaptchaField, useCaptcha } from "./captcha-field";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -19,61 +19,23 @@ export function AdminLoginForm() {
   const [mfaChallenge, setMfaChallenge] = useState("");
   const [mfaCode, setMfaCode] = useState("");
 
-  // Captcha State
-  const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
-  const [captchaBusy, setCaptchaBusy] = useState(false);
-  const captchaRequest = useRef<AbortController | null>(null);
+  const captcha = useCaptcha({ action: "login", active: !!site?.auth_captcha_enabled && !mfaChallenge, refreshSite });
+  const refreshCaptcha = captcha.refresh;
 
   // Initialize rememberMe from localStorage
   useEffect(() => {
-    try {
-      const savedUser = localStorage.getItem("zjmf_admin_remember_user");
-      if (savedUser) {
-        setUsername(savedUser);
-        setRememberMe(true);
-      }
-    } catch {
-      // ignore storage access errors
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const savedUser = localStorage.getItem("zjmf_admin_remember_user");
+        if (savedUser) { setUsername(savedUser); setRememberMe(true); }
+      } catch { /* Storage may be unavailable in private browsing. */ }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
-
-  const refreshCaptcha = useCallback(async (preserveError = false) => {
-    captchaRequest.current?.abort();
-    const controller = new AbortController();
-    captchaRequest.current = controller;
-    setCaptcha(null);
-    setCaptchaAnswer("");
-    setCaptchaBusy(true);
-    try {
-      const next = await fetchCaptcha("login", controller.signal);
-      if (!controller.signal.aborted) {
-        setCaptcha(next.enabled && next.captcha_id && next.image ? next : null);
-        setCaptchaAnswer("");
-        if (!preserveError) setError("");
-        if (!next.enabled) refreshSite();
-      }
-    } catch (e) {
-      if (!controller.signal.aborted) {
-        setError(current => (preserveError && current ? current : (e as Error).message));
-      }
-    } finally {
-      if (!controller.signal.aborted) setCaptchaBusy(false);
-    }
-  }, [refreshSite]);
-
-  useEffect(() => {
-    const timer = site?.auth_captcha_enabled && !mfaChallenge
-      ? window.setTimeout(() => void refreshCaptcha(true), 0)
-      : undefined;
-    return () => {
-      if (timer) window.clearTimeout(timer);
-      captchaRequest.current?.abort();
-    };
-  }, [site?.auth_captcha_enabled, mfaChallenge, refreshCaptcha]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (busy || !captcha.canSubmit()) return;
     setBusy(true);
     setError("");
 
@@ -102,8 +64,7 @@ export function AdminLoginForm() {
             body: JSON.stringify({
               username,
               password,
-              captcha_id: captcha?.captcha_id,
-              captcha_answer: captchaAnswer,
+              ...captcha.fields,
             }),
           });
 
@@ -112,7 +73,7 @@ export function AdminLoginForm() {
         setMfaChallenge("");
         setMfaCode("");
         setError("需要管理员账户");
-        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha();
         return;
       }
 
@@ -125,7 +86,7 @@ export function AdminLoginForm() {
         setError("");
       } else {
         setError(failure.message);
-        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha();
       }
     } finally {
       setBusy(false);
@@ -207,38 +168,7 @@ export function AdminLoginForm() {
                   />
                 </div>
 
-                {/* Captcha if enabled */}
-                {site?.auth_captcha_enabled && (
-                  <div className="mb-7">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="h-10 w-[140px] border border-[#dcdfe6] rounded-[4px] overflow-hidden bg-slate-50 flex items-center justify-center">
-                        {captcha?.image ? (
-                          <img src={captcha.image} alt="验证码" className="h-full w-full object-cover" />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">加载中...</span>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void refreshCaptcha()}
-                        disabled={captchaBusy}
-                        className="h-10 px-3 border border-[#dcdfe6] rounded-[4px] text-xs text-[#606266] hover:bg-slate-50 transition-colors flex items-center justify-center"
-                        title="刷新验证码"
-                      >
-                        <RefreshCw size={14} className={captchaBusy ? "animate-spin" : ""} />
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="图形验证码"
-                      value={captchaAnswer}
-                      onChange={e => setCaptchaAnswer(e.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g, "").slice(0, 6))}
-                      maxLength={6}
-                      required
-                      className="w-full h-10 px-3.5 text-sm text-[#606266] bg-white border border-[#dcdfe6] rounded-[4px] placeholder-[#c0c4cc] focus:border-[#409eff] focus:outline-none transition-colors"
-                    />
-                  </div>
-                )}
+                {site?.auth_captcha_enabled && <div className="mb-7"><CaptchaField captcha={captcha} disabled={busy} /></div>}
 
                 {/* Auxiliary Row: Remember Password & Forgot Password */}
                 <div className="flex items-center justify-between text-sm mb-9">
@@ -273,7 +203,7 @@ export function AdminLoginForm() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={busy || (!!site?.auth_captcha_enabled && !captchaAnswer)}
+              disabled={busy || !captcha.ready}
               className="w-full h-10 bg-[#007bfc] hover:bg-[#208efd] active:bg-[#006ee0] text-white text-sm font-normal rounded-[4px] transition-colors flex items-center justify-center disabled:opacity-60 cursor-pointer shadow-sm"
             >
               {busy ? "登录中..." : mfaChallenge ? "验证并登录" : "登录"}

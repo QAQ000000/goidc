@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/captcha"
 	"github.com/codex/zjmfgo/internal/filestorage"
 	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/codex/zjmfgo/internal/provision"
@@ -30,6 +31,7 @@ type Config struct {
 	NOKVMProfiles                                                                map[string]*provision.NOKVM
 	ProvisionEncryptionKey                                                       []byte
 	FileStorage                                                                  *filestorage.Manager
+	Captcha                                                                      *captcha.Manager
 }
 
 func Load() (Config, error) {
@@ -65,6 +67,10 @@ func Load() (Config, error) {
 	c.PaymentMockEnabled = mockEnabled
 	c.SMTPFromName = strings.TrimSpace(os.Getenv("SMTP_FROM_NAME"))
 	c.FileStorage, err = loadFileStorage()
+	if err != nil {
+		return c, err
+	}
+	c.Captcha, err = loadCaptcha()
 	if err != nil {
 		return c, err
 	}

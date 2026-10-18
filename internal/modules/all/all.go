@@ -4,6 +4,7 @@
 package all
 
 import (
+	_ "github.com/codex/zjmfgo/internal/captcha"
 	_ "github.com/codex/zjmfgo/internal/certification"
 	_ "github.com/codex/zjmfgo/internal/filestorage"
 	_ "github.com/codex/zjmfgo/internal/notification"

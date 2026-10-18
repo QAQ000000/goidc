@@ -51,7 +51,21 @@ export async function api<T>(
   }
   return body.data as T;
 }
-export type CaptchaChallenge = { enabled: boolean; captcha_id?: string; image?: string; expires_at?: string };
+export type CaptchaPresentation = {
+  kind: "image" | "click" | "widget";
+  renderer?: string;
+  image?: string;
+  width?: number;
+  height?: number;
+  prompt?: string;
+  max_points?: number;
+  public_data?: Record<string, unknown>;
+};
+export type CaptchaProof =
+  | { kind: "image"; answer: string }
+  | { kind: "click"; points: { x: number; y: number }[] }
+  | { kind: "widget"; token: string };
+export type CaptchaChallenge = { enabled: boolean; captcha_id?: string; image?: string; expires_at?: string; challenge?: CaptchaPresentation };
 export function fetchCaptcha(action: "login" | "register" | "forgot-password", signal?: AbortSignal) {
   return api<CaptchaChallenge>(`/auth/captcha?action=${action}`, { signal });
 }

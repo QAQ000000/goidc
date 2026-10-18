@@ -2,13 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, RefreshCw } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { api, ApiError, fetchCaptcha, type CaptchaChallenge, type User } from "@/lib/api";
+import { api, ApiError, type User } from "@/lib/api";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
 import { Failure, Loading } from "./common";
+import { CaptchaField, useCaptcha } from "./captcha-field";
 import { CustomerFieldInputs, customerFieldValues, type CustomerFieldDefinition } from "./customer-field-inputs";
 type RegistrationFields = { items: CustomerFieldDefinition[]; definitions_version: string };
 export function AuthForm({ register = false }: { register?: boolean }) {
@@ -76,45 +77,22 @@ export function AuthForm({ register = false }: { register?: boolean }) {
   const [resendAt, setResendAt] = useState(0);
   const [clock, setClock] = useState(0);
   useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  async function requestVerification() {
-    if (verificationBusy || unknownRegistration || Date.now() < resendAt) return;
-    setVerificationBusy(true); setError(""); setVerificationMessage("");
-    try {
-      const result = await api<{ challenge_id: string; resend_after: number }>("/auth/verification/request", { method: "POST", body: JSON.stringify({ purpose: "register", channel: "email", recipient: email, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
-      setVerificationId(result.challenge_id); setVerificationRecipient(email); setVerificationCode(""); setResendAt(Date.now() + result.resend_after * 1000); setVerificationMessage("验证码已加入发送队列");
-    } catch (e) { setError((e as Error).message); }
-    finally { setVerificationBusy(false); if (site?.auth_captcha_enabled) void refreshCaptcha(true); }
-  }
   const [mfaChallenge, setMfaChallenge] = useState("");
   const [mfaCode, setMfaCode] = useState("");
-  const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
-  const [captchaAnswer, setCaptchaAnswer] = useState("");
-  const [captchaBusy, setCaptchaBusy] = useState(false);
-  const captchaRequest = useRef<AbortController | null>(null);
-  const captchaAction = register ? "register" : "login" as const;
-  const refreshCaptcha = useCallback(async (preserveError = false) => {
-    captchaRequest.current?.abort();
-    const controller = new AbortController();
-    captchaRequest.current = controller;
-    setCaptcha(null);
-    setCaptchaAnswer("");
-    setCaptchaBusy(true);
+  const captcha = useCaptcha({ action: register ? "register" : "login", active: !!site?.auth_captcha_enabled && !mfaChallenge, refreshSite: refresh });
+  const refreshCaptcha = captcha.refresh;
+  async function requestVerification() {
+    if (verificationBusy || unknownRegistration || Date.now() < resendAt || !captcha.canSubmit()) return;
+    setVerificationBusy(true); setError(""); setVerificationMessage("");
     try {
-      const next = await fetchCaptcha(captchaAction, controller.signal);
-      if (!controller.signal.aborted) { setCaptcha(next.enabled && next.captcha_id && next.image ? next : null); setCaptchaAnswer(""); if (!preserveError) setError(""); if (!next.enabled) refresh(); }
-    } catch (e) {
-      if (!controller.signal.aborted) setError(current => preserveError && current ? current : (e as Error).message);
-    } finally {
-      if (!controller.signal.aborted) setCaptchaBusy(false);
-    }
-  }, [captchaAction, refresh]);
-  useEffect(() => {
-    const timer = site?.auth_captcha_enabled && !mfaChallenge ? window.setTimeout(() => void refreshCaptcha(true), 0) : undefined;
-    return () => { if (timer) window.clearTimeout(timer); captchaRequest.current?.abort(); };
-  }, [site?.auth_captcha_enabled, mfaChallenge, refreshCaptcha]);
+      const result = await api<{ challenge_id: string; resend_after: number }>("/auth/verification/request", { method: "POST", body: JSON.stringify({ purpose: "register", channel: "email", recipient: email, ...captcha.fields }) });
+      setVerificationId(result.challenge_id); setVerificationRecipient(email); setVerificationCode(""); setResendAt(Date.now() + result.resend_after * 1000); setVerificationMessage("验证码已加入发送队列");
+    } catch (e) { setError((e as Error).message); }
+    finally { setVerificationBusy(false); if (site?.auth_captcha_enabled) void refreshCaptcha(); }
+  }
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (submitting.current || (register && (!schema || schemaBusy || schemaError || schemaChanged || registrationDisabled || unknownRegistration))) return;
+    if (!captcha.canSubmit() || submitting.current || (register && (!schema || schemaBusy || schemaError || schemaChanged || registrationDisabled || unknownRegistration))) return;
     let customValues: Record<string, unknown> = {};
     if (register) {
       try { customValues = customerFieldValues(schema!.items, customFields); }
@@ -136,8 +114,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
             custom_fields_version: schema!.definitions_version,
             email: form.get("email"),
             display_name: form.get("display_name"),
-            captcha_id: captcha?.captcha_id,
-            captcha_answer: captchaAnswer,
+            ...captcha.fields,
             ...(site?.email_verification_required ? { verification_id: verificationId, verification_code: verificationCode } : {}),
           }),
         });
@@ -147,7 +124,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
       }
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }) })
-        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password, captcha_id: captcha?.captcha_id, captcha_answer: captchaAnswer }) });
+        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password, ...captcha.fields }) });
       router.push(user.role === "customer" ? "/" : "/admin");
       router.refresh();
     } catch (e) {
@@ -163,7 +140,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         setError("");
       } else {
         setError(failure.message);
-        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha(true);
+        if (site?.auth_captcha_enabled && !mfaChallenge) void refreshCaptcha();
       }
     } finally {
       submitting.current = false; setBusy(false);
@@ -185,13 +162,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
           {register ? "云服务客户中心" : "欢迎回来"}
         </p>
         {register && siteError ? <Failure error={siteError} retry={refresh} /> : register && !site ? <Loading /> : register && (!site?.registration_enabled || registrationDisabled) ? <p role="status" className="py-6 text-muted-foreground">本站暂未开放注册，请刷新页面后查看是否重新开放。</p> : <form className="space-y-5" onSubmit={submit}>
-          {site?.auth_captcha_enabled && !mfaChallenge && (
-            <div className="space-y-2">
-              <Label htmlFor="captcha_answer">图形验证码</Label>
-              <div className="flex items-center gap-3"><div className="h-16 w-[190px] overflow-hidden border bg-slate-50"><img src={captcha?.image} alt="图形验证码" className="h-16 w-[190px]" /></div><Button type="button" variant="outline" size="icon" title="刷新验证码" aria-label="刷新验证码" onClick={() => void refreshCaptcha()} disabled={captchaBusy || (register && unknownRegistration)}><RefreshCw className={captchaBusy ? "animate-spin" : ""} /></Button></div>
-              <Input id="captcha_answer" name="captcha_answer" value={captchaAnswer} onChange={event => setCaptchaAnswer(event.target.value.toUpperCase().replace(/[^2-9A-HJ-NP-Z]/g, "").slice(0, 6))} autoComplete="off" maxLength={6} required />
-            </div>
-          )}
+          {site?.auth_captcha_enabled && !mfaChallenge && <CaptchaField captcha={captcha} disabled={busy || (register && unknownRegistration)} />}
           {!register && <div className="space-y-2">
             <Label htmlFor="identifier">邮箱或手机号</Label>
             <Input
@@ -237,7 +208,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
                   onChange={event => { setEmail(event.target.value); setVerificationId(""); setVerificationMessage(""); }}
                 />
               </div>
-              {site?.email_verification_required && <div className="space-y-2"><Label htmlFor="verification_code">邮箱验证码</Label><div className="flex gap-2"><Input id="verification_code" value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required /><Button type="button" variant="outline" disabled={verificationBusy || unknownRegistration || !email || clock < resendAt || (!!site.auth_captcha_enabled && (!captcha?.captcha_id || !captchaAnswer || captchaBusy))} onClick={() => void requestVerification()}>{verificationBusy ? "发送中" : clock < resendAt ? `${Math.ceil((resendAt - clock) / 1000)} 秒` : "发送验证码"}</Button></div>{verificationMessage && <p role="status" className="text-sm text-emerald-700">{verificationMessage}</p>}</div>}
+              {site?.email_verification_required && <div className="space-y-2"><Label htmlFor="verification_code">邮箱验证码</Label><div className="flex gap-2"><Input id="verification_code" value={verificationCode} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="one-time-code" required /><Button type="button" variant="outline" disabled={verificationBusy || unknownRegistration || !email || clock < resendAt || (!!site.auth_captcha_enabled && !captcha.ready)} onClick={() => void requestVerification()}>{verificationBusy ? "发送中" : clock < resendAt ? `${Math.ceil((resendAt - clock) / 1000)} 秒` : "发送验证码"}</Button></div>{verificationMessage && <p role="status" className="text-sm text-emerald-700">{verificationMessage}</p>}</div>}
             </>
           )}
           {register && <>
@@ -263,7 +234,7 @@ export function AuthForm({ register = false }: { register?: boolean }) {
               {error}
             </p>
           )}
-          <Button className="w-full" disabled={busy || (register && (!schema || schemaBusy || !!schemaError || schemaChanged || unknownRegistration)) || (register && !!site?.email_verification_required && (!verificationId || email !== verificationRecipient || verificationCode.length !== 6)) || (!!site?.auth_captcha_enabled && !mfaChallenge && (!captcha?.captcha_id || captchaBusy))}>
+          <Button className="w-full" disabled={busy || (register && (!schema || schemaBusy || !!schemaError || schemaChanged || unknownRegistration)) || (register && !!site?.email_verification_required && (!verificationId || email !== verificationRecipient || verificationCode.length !== 6)) || (!!site?.auth_captcha_enabled && !mfaChallenge && !captcha.ready)}>
             {busy ? "提交中" : mfaChallenge ? "验证并登录" : register ? "创建账户" : "登录"}
             <ArrowRight size={16} />
           </Button>

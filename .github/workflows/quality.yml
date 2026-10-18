@@ -71,6 +71,7 @@ jobs:
           node scripts/test-compiled-suppliers.mjs --unit
           node scripts/test-file-storage.mjs --unit
           node scripts/test-scheduler.mjs --unit
+          node scripts/test-captcha.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
         run: node scripts/check-module-binaries.mjs
@@ -90,6 +91,7 @@ jobs:
           node --test scripts/payment-reconciliation-components.test.mjs
           node --test scripts/supplier-components.test.mjs
           node --test scripts/scheduler-components.test.mjs
+          node --test scripts/captcha-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
@@ -156,6 +158,9 @@ jobs:
       - name: Check public theme and administration boundaries on PostgreSQL 18
         run: |
           ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestSiteContentVersionedCRUDAndPermissions|TestSiteThemeValidationPermissionsAndReplay|TestSiteSettingsPermissionsValidationAndPublicProfile|TestSiteAdminSettingsAreVersionedAndNotPublic|TestMaintenanceCustomerGateAndAdminRecovery|TestMaintenanceSettingsValidation|TestMaintenancePaymentWebhookAndMFALogin|TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery)$'
+
+      - name: Require CAPTCHA provider and authentication boundaries on PostgreSQL 18
+        run: node scripts/test-captcha.mjs --integration
 
       - name: Require certification providers, recovery and eligibility on PostgreSQL 18
         run: node scripts/test-compiled-certification.mjs --integration

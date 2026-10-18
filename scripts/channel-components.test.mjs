@@ -39,7 +39,7 @@ function load(filename) {
 }
 const configuration = load(path.join(web, 'src/lib/channel-configuration.ts'));
 const { ChannelFieldEditor, ChannelDirectoryRow, ChannelConfigurationIssues } = load(path.join(web, 'src/components/channel-instances.tsx'));
-const { AppCard } = load(path.join(web, 'src/components/admin-apps.tsx'));
+const { AppCard, AdminAppsView } = load(path.join(web, 'src/components/admin-apps.tsx'));
 const { SuppliersView } = load(path.join(web, 'src/components/suppliers-admin.tsx'));
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const field = (key, type, extra = {}) => ({ key, label: key, type, required: false, secret: false, ...extra });
@@ -187,4 +187,31 @@ test('supplier orphan controls respect manage permission, block jobs, and never 
   html = render(SuppliersView, {});
   assert.doesNotMatch(html, />停用<\/button>|>启用<\/button>/);
   allowed = false; resources = new Map();
+});
+
+
+test('CAPTCHA catalogue exposes the category and deployment-backed verification settings link', () => {
+  allowed = true;
+  const catalogue = render(AdminAppsView, { view: 'catalogue' });
+  assert.match(catalogue, /<option value="captcha">验证码<\/option>/);
+  allowed = false;
+  const item = { descriptor: { ...descriptor, category: 'captcha', instance_mode: 'profile', capabilities: ['image'] }, factory_available: true, instance_count: 1, enabled_instance_count: 1, secret_configured_count: 0, status: 'enabled', configuration_url: '/admin/auth-settings' };
+  const returnHref = '/admin/apps/store?category=captcha&status=enabled';
+  const html = render(AppCard, { item, returnHref });
+  assert.match(html, /验证码<\/span>/);
+  assert.match(html, /图片验证/);
+  assert.match(html, /部署配置/);
+  assert.match(html, /密钥与提供方由部署配置管理，验证开关在注册登录设置维护/);
+  assert.match(html, /验证设置/);
+  assert.doesNotMatch(html, /href="\/admin\/products/);
+  const href = html.match(/href="([^"]*auth-settings[^"]*)"/)?.[1];
+  assert.ok(href);
+  const destination = new URL(href.replaceAll('&amp;', '&'), 'https://admin.local');
+  assert.equal(destination.pathname, '/admin/auth-settings');
+  assert.equal(destination.searchParams.get('return_to'), returnHref);
+  for (const configuration_url of ['https://evil.invalid/admin/auth-settings', '//evil.invalid/admin/auth-settings', '/admin/users']) {
+    const blocked = render(AppCard, { item: { ...item, configuration_url }, returnHref });
+    assert.doesNotMatch(blocked, /验证设置/);
+    assert.match(blocked, /由部署配置管理/);
+  }
 });

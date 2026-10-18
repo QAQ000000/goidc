@@ -58,7 +58,7 @@ func parseAppListQuery(values url.Values) (appListQuery, error) {
 	}
 	out.Category = strings.TrimSpace(values.Get("category"))
 	switch channel.Category(out.Category) {
-	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision, channel.Bot, channel.Storage:
+	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision, channel.Bot, channel.Storage, channel.Captcha:
 	default:
 		return out, fmt.Errorf("应用类别无效")
 	}
@@ -205,6 +205,9 @@ func compiledAppsPage(query appListQuery, counts []store.AppConfigurationCount) 
 			if descriptor.Category == channel.Storage {
 				item.ConfigurationURL = ""
 			}
+			if descriptor.Category == channel.Captcha {
+				item.ConfigurationURL = "/admin/auth-settings"
+			}
 		}
 		item.Status = status
 		items = append(items, item)
@@ -236,6 +239,28 @@ func (s *Server) apps(w http.ResponseWriter, r *http.Request) {
 	if s.db.FileStorage != nil {
 		for _, profile := range s.db.FileStorage.Summaries() {
 			counts = append(counts, store.AppConfigurationCount{Source: "profile", Category: channel.Storage, ImplementationID: profile.Implementation, InstanceCount: 1, EnabledInstanceCount: 1})
+		}
+	}
+	if query.Category == "" || channel.Category(query.Category) == channel.Captcha {
+		manager, managerErr := s.captchaManager()
+		if managerErr != nil {
+			s.fail(w, r, managerErr)
+			return
+		}
+		enabled, enabledErr := s.captchaEnabled(r.Context())
+		if enabledErr != nil {
+			s.fail(w, r, enabledErr)
+			return
+		}
+		for _, profile := range manager.Summaries() {
+			count := store.AppConfigurationCount{Source: "profile", Category: channel.Captcha, ImplementationID: profile.ImplementationID, InstanceCount: 1}
+			if enabled && profile.Active {
+				count.EnabledInstanceCount = 1
+			}
+			if profile.SecretConfigured {
+				count.SecretConfiguredCount = 1
+			}
+			counts = append(counts, count)
 		}
 	}
 	page := compiledAppsPage(query, counts)

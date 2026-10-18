@@ -4,6 +4,7 @@
   "contract_version": 1,
   "modules": [
     { "category": "bot", "id": "telegram_bot", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "captcha", "id": "builtin_png", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "profile", "factory_available": true },
     { "category": "certification", "id": "manual", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
     { "category": "mail", "id": "smtp", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
     { "category": "payment", "id": "epay", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
