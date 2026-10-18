@@ -125,6 +125,13 @@ func main() {
 		notification.RunNotificationCenter(ctx, db, log)
 	}()
 	defer centerWorker.Wait()
+	var certificationWorker sync.WaitGroup
+	certificationWorker.Add(1)
+	go func() {
+		defer certificationWorker.Done()
+		runCertifications(ctx, db, log)
+	}()
+	defer certificationWorker.Wait()
 	// A full renewal pass can outlast the provisioning poll interval. Run it
 	// independently so one day's renewal work does not delay delivery or mail.
 	var renewalWorker sync.WaitGroup

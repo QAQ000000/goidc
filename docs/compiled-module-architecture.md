@@ -67,7 +67,7 @@
 | sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
 | bot | Telegram 私聊作为通用业务通知渠道，按事件路由、有效绑定和显式订阅范围分发；未知结果停止自动重发 |
 | payment | 类型化 `Gateway`；仍以 mock/epay 资金协议为当前边界，新支付协议必须补回调、快照、查单、退款、对账和权限验收 |
-| certification | 已注册人工审核；新增第三方仍需实名流程与数据保护验收 |
+| certification | 类型化实例工厂、申请配置快照与持久提交/查询；生产只装配人工审核，真实厂商另验，见[实名认证契约](domain/certification.md) |
 | provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
 
 `RuntimeChannelInstance` 使用单行快照解析普通实例，校验启用、工厂、实例来源、schema 和本地配置，再解密凭据。默认渠道保留部署配置和旧 singleton 兼容，但不允许以默认入口绕过 schema 检查。历史支付继续使用交易凭据快照，不因新实例停用而改写既有交易身份。

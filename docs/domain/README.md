@@ -6,6 +6,7 @@
 - 服务生命周期：[配置变更](../service-configuration-changes.md)、[商品变更](../service-product-changes.md)、[续费优惠](../upgrade-promotions.md)、[服务下载](../service-downloads.md)。
 - 外部集成：[供应商协议](../supplier-protocol.md)、[NOKVM 交付](../nokvm-delivery.md)、[返佣](../affiliate-core.md)、[统一通知](../notification-architecture.md)、[工单通知](../ticket-notification-contract.md)。
 - 通知渠道扩展：[机器人渠道开发指南](../architecture/bot-channel-development.md)，用于新增平台适配器、目标授权、路由模板及投递验收。
+- 实名认证：[提供方实例与任务契约](certification.md)，定义实例选择、申请快照、提交/查询恢复、人工审核与下单/API 密钥资格。
 - 合同：[合同设置当前契约](contract-settings.md)；旧批次原文在 [快照](../archive/snapshots/)。
 - 数据与安全：[敏感购买字段](../sensitive-purchase-fields.md)、[认证验证码](../auth-captcha.md)、[原生配置规则](../native-configuration-rules.md)。
 

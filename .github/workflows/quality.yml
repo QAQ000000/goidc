@@ -66,6 +66,7 @@ jobs:
         run: |
           node --test scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
           node scripts/test-compiled-notifications.mjs --unit
+          node scripts/test-compiled-certification.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
         run: node scripts/check-module-binaries.mjs
@@ -81,6 +82,7 @@ jobs:
           node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs
           node --test scripts/download.test.mjs
           node --test scripts/site-theme.test.mjs
+          node --test scripts/certification-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
@@ -147,6 +149,9 @@ jobs:
       - name: Check public theme and administration boundaries on PostgreSQL 18
         run: |
           ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestSiteContentVersionedCRUDAndPermissions|TestSiteThemeValidationPermissionsAndReplay|TestSiteSettingsPermissionsValidationAndPublicProfile|TestSiteAdminSettingsAreVersionedAndNotPublic|TestMaintenanceCustomerGateAndAdminRecovery|TestMaintenanceSettingsValidation|TestMaintenancePaymentWebhookAndMFALogin|TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery)$'
+
+      - name: Require certification providers, recovery and eligibility on PostgreSQL 18
+        run: node scripts/test-compiled-certification.mjs --integration
 
       - name: Remove the dedicated PostgreSQL container and its volumes
         if: always()

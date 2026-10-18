@@ -15,6 +15,7 @@
 | 商品 | `/admin/products` | 目录、价格、配置项、购买字段、交付策略和供应商关联 |
 | 站点与权限 | `/admin/settings`、`/admin/access` | 品牌、注册、维护、验证码、管理员和角色 |
 | 官网主题 | `/admin/theme-settings` | 固定外观预设、主色、Logo 样式与纯文本页脚；官网及客户页面使用，后台保持独立样式 |
+| 实名认证 | `/admin/certification-settings`、`/admin/certifications` | 明确选择默认实例，申请冻结加密配置，提供方持久提交/查询与人工审核共用业务资格；生产仍只有人工提供方，见[认证契约](domain/certification.md) |
 
 ## 官网主题
 

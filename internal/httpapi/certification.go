@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -33,12 +34,50 @@ func (s *Server) submitCertification(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	out, err := s.db.SubmitCertification(r.Context(), identityFrom(r).ID, in.Type, in.Payload)
-	if err != nil {
-		s.fail(w, r, err)
+	key, ok := mutationKey(w, r, "", false)
+	if !ok {
 		return
 	}
-	write(w, http.StatusAccepted, out)
+	actor := identityFrom(r).ID
+	hash := settingMutationHash(in)
+	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
+		ctx := requestFileContext(r)
+		var replay map[string]any
+		var replayed bool
+		var err error
+		if key != "" {
+			replayed, err = store.ReplayOperation(ctx, tx, actor, "certification:submit", key, hash, &replay)
+			if err != nil {
+				return txResponse{}, err
+			}
+		}
+		// A same-key request may have waited for another transaction. Recheck
+		// its credential and the master switch before returning a receipt.
+		if err = store.LockFileCredential(ctx, tx, actor); err != nil {
+			return txResponse{}, err
+		}
+		var enabled bool
+		if err = tx.QueryRow(ctx, "SELECT enabled FROM certification_settings WHERE id=1 FOR SHARE").Scan(&enabled); err != nil && err != pgx.ErrNoRows {
+			return txResponse{}, err
+		}
+		if !enabled {
+			return txResponse{}, &store.Conflict{Code: "certification_disabled", Message: "实名认证已关闭"}
+		}
+		if replayed {
+			replay["replayed"] = true
+			return txResponse{http.StatusOK, replay}, nil
+		}
+		out, err := s.db.SubmitCertificationTx(ctx, tx, actor, in.Type, in.Payload)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if key != "" {
+			if err = store.SaveOperation(ctx, tx, actor, "certification:submit", key, hash, out); err != nil {
+				return txResponse{}, err
+			}
+		}
+		return txResponse{http.StatusAccepted, out}, nil
+	})
 }
 
 func (s *Server) convertCertificationToCompany(w http.ResponseWriter, r *http.Request) {
@@ -71,15 +110,28 @@ func (s *Server) convertCertificationToCompany(w http.ResponseWriter, r *http.Re
 	hash := sha256.Sum256(hashBytes)
 	actor := identityFrom(r).ID
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
+		ctx := requestFileContext(r)
 		operation := "certification.convert_company"
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:])); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
+		replay, replayed, err := loadSettingReplayTx(r, tx, actor, operation, key, hex.EncodeToString(hash[:]))
+		if err != nil {
+			return txResponse{}, err
+		}
+		// Receipt serialization can outlive the request's initial authorization
+		// and master-switch read, for both new conversions and replays.
+		if err = store.LockFileCredential(ctx, tx, actor); err != nil {
+			return txResponse{}, err
+		}
+		var enabled bool
+		if err = tx.QueryRow(ctx, "SELECT enabled FROM certification_settings WHERE id=1 FOR SHARE").Scan(&enabled); err != nil && err != pgx.ErrNoRows {
+			return txResponse{}, err
+		}
+		if !enabled {
+			return txResponse{}, &store.Conflict{Code: "certification_disabled", Message: "实名认证已关闭"}
+		}
+		if replayed {
 			return txResponse{http.StatusOK, replay}, nil
 		}
-		out, err := s.db.ConvertCertificationToCompanyTx(r.Context(), tx, actor, in.Payload, in.ExpectedVersion)
+		out, err := s.db.ConvertCertificationToCompanyTx(ctx, tx, actor, in.Payload, in.ExpectedVersion)
 		if err != nil {
 			return txResponse{}, err
 		}

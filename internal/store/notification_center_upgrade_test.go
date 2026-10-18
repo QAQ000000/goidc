@@ -76,12 +76,14 @@ func applyNotificationUpgradeMigration(t *testing.T, db *Store, name string) {
 	}
 }
 
-func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool) string {
+func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instanceIDs ...string) string {
 	t.Helper()
 	// Remove only the two new columns so this comparison includes every old
 	// column, timestamp and ciphertext byte, without printing sensitive rows.
+	// An explicit ID set protects pre-upgrade rows while later migrations may
+	// add independently verified defaults. Full snapshots retain all instances.
 	query := `SELECT jsonb_build_object(
- 'instances',(SELECT jsonb_agg(to_jsonb(c)-'schema_version'-'secret_fields' ORDER BY id) FROM channel_instances c),
+ 'instances',(SELECT jsonb_agg(to_jsonb(c)-'schema_version'-'secret_fields' ORDER BY id) FROM channel_instances c WHERE $1::text[] IS NULL OR c.id=ANY($1)),
  'payment_settings',(SELECT to_jsonb(p) FROM payment_settings p),
  'smtp_settings',(SELECT to_jsonb(s) FROM smtp_settings s),
  'sms_settings',(SELECT to_jsonb(s) FROM sms_settings s),
@@ -103,7 +105,7 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool) string {
  'preferences',(SELECT jsonb_agg(to_jsonb(p) ORDER BY user_id,channel) FROM user_notification_preferences p))`
 	}
 	var snapshot string
-	if err := db.Pool.QueryRow(t.Context(), `SELECT (`+strings.TrimPrefix(query, "SELECT ")+`)::text`).Scan(&snapshot); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT (`+strings.TrimPrefix(query, "SELECT ")+`)::text`, instanceIDs).Scan(&snapshot); err != nil {
 		t.Fatal(err)
 	}
 	return snapshot
@@ -347,7 +349,11 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 		ctx := t.Context()
 		assertNotificationUpgradeBinaryGate(t, db, "160")
 		customer, invoice, mailID, smsID, receipt := seedNotificationUpgrade160(t, db)
-		before := notificationUpgradeSnapshot(t, db, false)
+		var legacyInstanceIDs []string
+		if err := db.Pool.QueryRow(ctx, `SELECT array_agg(id ORDER BY id) FROM channel_instances`).Scan(&legacyInstanceIDs); err != nil || len(legacyInstanceIDs) == 0 {
+			t.Fatal("legacy channel instance IDs unavailable", err)
+		}
+		before := notificationUpgradeSnapshot(t, db, false, legacyInstanceIDs...)
 		if err := db.CheckSchema(ctx); err == nil || !strings.Contains(err.Error(), "schema unavailable") {
 			t.Fatal("current API/worker schema gate accepted schema 160", err)
 		}
@@ -377,8 +383,20 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 			t.Fatal("current schema gate rejected upgraded database", err)
 		}
 		assertNotificationUpgradeChecksums(t, db)
-		if notificationUpgradeSnapshot(t, db, false) != before {
+		if notificationUpgradeSnapshot(t, db, false, legacyInstanceIDs...) != before {
 			t.Fatal("upgrade changed old settings, ciphertexts, payment facts or pending queues")
+		}
+		var addedInstanceIDs []string
+		var manualDefaultValid bool
+		if err := db.Pool.QueryRow(ctx, `SELECT
+ COALESCE((SELECT array_agg(id ORDER BY id) FROM channel_instances WHERE NOT(id=ANY($1::text[]))),ARRAY[]::text[]),
+ EXISTS(SELECT 1 FROM channel_instances c JOIN certification_settings cfg ON cfg.id=1
+  WHERE c.id='manual-default' AND c.category='certification' AND c.implementation_id='manual'
+  AND c.enabled AND c.schema_version=1 AND c.version=1 AND c.sort_order=0
+  AND c.config='{}'::jsonb AND c.secret_fields='{}'::jsonb
+  AND octet_length(c.secret_ciphertext)=0 AND c.secret_aad=''
+  AND cfg.default_provider_id='manual' AND cfg.default_instance_id=c.id)`, legacyInstanceIDs).Scan(&addedInstanceIDs, &manualDefaultValid); err != nil || !slices.Equal(addedInstanceIDs, []string{"manual-default"}) || !manualDefaultValid {
+			t.Fatal("upgrade did not add exactly the valid manual certification default", err)
 		}
 		assertNotificationUpgradeCredentials(t, db)
 		prefs, err := db.NotificationPreferences(ctx, customer)

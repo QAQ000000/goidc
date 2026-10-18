@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/secure"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type CertificationStore struct{}
@@ -145,18 +145,32 @@ func (s *Store) Certification(ctx context.Context, userID int64) (map[string]any
 		return nil, err
 	}
 	var p CertificationSummary
-	err = s.Pool.QueryRow(ctx, `SELECT id,certification_type,status,provider_id,rejection_reason,version,updated_at FROM certification_profiles WHERE user_id=$1`, userID).Scan(&p.ID, &p.Type, &p.Status, &p.ProviderID, &p.RejectionReason, &p.Version, &p.UpdatedAt)
+	var jobStatus string
+	err = s.Pool.QueryRow(ctx, `SELECT p.id,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,
+ coalesce((SELECT j.status FROM certification_submissions sub LEFT JOIN certification_provider_jobs j ON j.submission_id=sub.id WHERE sub.profile_id=p.id ORDER BY sub.id DESC LIMIT 1),'') FROM certification_profiles p WHERE p.user_id=$1`, userID).Scan(&p.ID, &p.Type, &p.Status, &p.ProviderID, &p.RejectionReason, &p.Version, &p.UpdatedAt, &jobStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return map[string]any{"enabled": enabled, "status": "unverified", "certification_type": "individual", "provider_id": "manual", "version": 0}, nil
+		return map[string]any{"enabled": enabled, "status": "unverified", "certification_type": "individual", "provider_id": "manual", "version": 0, "processing_state": "finished"}, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"enabled": enabled, "id": p.ID, "certification_type": p.Type, "status": p.Status, "provider_id": p.ProviderID, "rejection_reason": p.RejectionReason, "version": p.Version, "updated_at": p.UpdatedAt}, nil
+	return map[string]any{"enabled": enabled, "id": p.ID, "certification_type": p.Type, "status": p.Status, "provider_id": p.ProviderID, "rejection_reason": p.RejectionReason, "version": p.Version, "updated_at": p.UpdatedAt, "processing_state": certificationProcessingState(p.Status, p.ProviderID, jobStatus)}, nil
 }
 
 func (s *Store) SubmitCertification(ctx context.Context, userID int64, kind string, payload map[string]any) (map[string]any, error) {
-	if err := certificationGate(ctx, s.Pool); err != nil {
+	var out map[string]any
+	err := s.WithTx(ctx, func(tx pgx.Tx) (err error) {
+		out, err = s.SubmitCertificationTx(ctx, tx, userID, kind, payload)
+		return err
+	})
+	return out, err
+}
+
+// SubmitCertificationTx also serves HTTP callers that journal an optional
+// idempotency receipt atomically with the application and its durable job.
+func (s *Store) SubmitCertificationTx(ctx context.Context, tx pgx.Tx, userID int64, kind string, payload map[string]any) (map[string]any, error) {
+	selection, err := s.certificationSelectionTx(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
 	if err := validateCertificationPayload(kind, payload); err != nil {
@@ -166,44 +180,31 @@ func (s *Store) SubmitCertification(ctx context.Context, userID int64, kind stri
 	// (personCertifiPost / personRealNameAuth); the company submit path never
 	// checked certifi_isbindphone, so keep that asymmetry.
 	if kind == "individual" {
-		if err := certificationPhoneMatch(ctx, s.Pool, userID, payload); err != nil {
+		if err := certificationPhoneMatch(ctx, tx, userID, payload); err != nil {
 			return nil, err
 		}
 	}
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
 	var profileID, version int64
-	var status string
-	err = tx.QueryRow(ctx, `INSERT INTO certification_profiles(user_id,certification_type,status,provider_id) VALUES($1,$2,'pending','manual') ON CONFLICT(user_id) DO UPDATE SET certification_type=EXCLUDED.certification_type,status='pending',provider_id='manual',rejection_reason='',version=certification_profiles.version+1,updated_at=now() RETURNING id,status,version`, userID, kind).Scan(&profileID, &status, &version)
+	err = tx.QueryRow(ctx, `INSERT INTO certification_profiles(user_id,certification_type,status,provider_id) VALUES($1,$2,'pending',$3) ON CONFLICT(user_id) DO UPDATE SET certification_type=EXCLUDED.certification_type,status='pending',provider_id=EXCLUDED.provider_id,provider_subject='',rejection_reason='',version=certification_profiles.version+1,updated_at=now() RETURNING id,version`, userID, kind, selection.instance.ImplementationID).Scan(&profileID, &version)
 	if err != nil {
 		return nil, err
 	}
-	var submissionID int64
-	sealed, aad, err := sealCertification(s.ProvisionEncryptionKey, fmt.Sprintf("%d", profileID), payload)
-	if err != nil {
-		return nil, conflict("certification_unconfigured", "认证加密尚未配置")
-	}
-	err = tx.QueryRow(ctx, `INSERT INTO certification_submissions(profile_id,user_id,certification_type,provider_id,status,payload_encrypted,payload_aad) VALUES($1,$2,$3,'manual','pending',$4,$5) RETURNING id`, profileID, userID, kind, sealed, aad).Scan(&submissionID)
+	out, err := s.createCertificationSubmissionTx(ctx, tx, userID, profileID, version, kind, payload, selection)
 	if err != nil {
 		return nil, err
 	}
-	if err = Audit(ctx, tx, userID, "certification.submitted", "certification_submission", submissionID, map[string]any{"type": kind}); err != nil {
+	if err = Audit(ctx, tx, userID, "certification.submitted", "certification_submission", out["id"].(int64), map[string]any{"type": kind, "provider_id": selection.instance.ImplementationID, "channel_instance_id": selection.instance.ID}); err != nil {
 		return nil, err
 	}
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return map[string]any{"id": submissionID, "profile_id": profileID, "status": status, "version": version}, nil
+	return out, nil
 }
 
 // ConvertCertificationToCompanyTx converts an approved individual profile to
 // a company submission without deleting the previous personal history.
 // The caller owns the transaction and must journal idempotency atomically.
 func (s *Store) ConvertCertificationToCompanyTx(ctx context.Context, tx pgx.Tx, userID int64, payload map[string]any, expected int64) (map[string]any, error) {
-	if err := certificationGate(ctx, tx); err != nil {
+	selection, err := s.certificationSelectionTx(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
 	if err := validateCertificationPayload("company", payload); err != nil {
@@ -225,21 +226,17 @@ func (s *Store) ConvertCertificationToCompanyTx(ctx context.Context, tx pgx.Tx, 
 	if kind != "individual" || status != "approved" {
 		return nil, conflict("certification_conversion_unavailable", "仅已通过的个人认证可以转为企业认证")
 	}
-	sealed, aad, err := sealCertification(s.ProvisionEncryptionKey, fmt.Sprintf("%d", profileID), payload)
+	out, err := s.createCertificationSubmissionTx(ctx, tx, userID, profileID, version+1, "company", payload, selection)
 	if err != nil {
-		return nil, conflict("certification_unconfigured", "认证加密尚未配置")
-	}
-	var submissionID int64
-	if err = tx.QueryRow(ctx, `INSERT INTO certification_submissions(profile_id,user_id,certification_type,provider_id,status,payload_encrypted,payload_aad) VALUES($1,$2,'company','manual','pending',$3,$4) RETURNING id`, profileID, userID, sealed, aad).Scan(&submissionID); err != nil {
 		return nil, err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE certification_profiles SET certification_type='company',status='pending',provider_id='manual',rejection_reason='',version=version+1,updated_at=now() WHERE id=$1`, profileID); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE certification_profiles SET certification_type='company',status='pending',provider_id=$2,provider_subject='',rejection_reason='',version=version+1,updated_at=now() WHERE id=$1`, profileID, selection.instance.ImplementationID); err != nil {
 		return nil, err
 	}
-	if err = Audit(ctx, tx, userID, "certification.company_conversion_requested", "certification_profile", profileID, map[string]any{"previous_type": kind, "previous_status": status, "submission_id": submissionID, "version": version + 1}); err != nil {
+	if err = Audit(ctx, tx, userID, "certification.company_conversion_requested", "certification_profile", profileID, map[string]any{"previous_type": kind, "previous_status": status, "submission_id": out["id"], "version": version + 1}); err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": submissionID, "profile_id": profileID, "status": "pending", "version": version + 1}, nil
+	return out, nil
 }
 
 // AdminCertifications lists certification profiles visible to the reviewing
@@ -253,7 +250,12 @@ func (s *Store) AdminCertifications(ctx context.Context, actorID int64, status s
 		where += " AND p.status=$4"
 		args = append(args, status)
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT p.id,p.user_id,u.username,u.display_name,u.email,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,(SELECT max(id) FROM certification_submissions x WHERE x.profile_id=p.id) AS submission_id FROM certification_profiles p JOIN users u ON u.id=p.user_id`+where+` ORDER BY p.updated_at DESC,p.id DESC LIMIT $2 OFFSET $3`, args...)
+	rows, err := s.Pool.Query(ctx, `SELECT p.id,p.user_id,u.username,u.display_name,u.email,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,p.updated_at,sub.id AS submission_id,
+ CASE WHEN p.status IN ('unverified','approved','rejected') THEN 'finished'
+ WHEN p.provider_id='manual' THEN 'needs_review' WHEN sub.job_status='queued' THEN 'queued'
+ WHEN sub.job_status IN ('submitting','querying','waiting','uncertain') THEN 'processing' ELSE 'needs_review' END AS processing_state
+ FROM certification_profiles p JOIN users u ON u.id=p.user_id LEFT JOIN LATERAL(
+ SELECT x.id,j.status AS job_status FROM certification_submissions x LEFT JOIN certification_provider_jobs j ON j.submission_id=x.id WHERE x.profile_id=p.id ORDER BY x.id DESC LIMIT 1) sub ON true`+where+` ORDER BY p.updated_at DESC,p.id DESC LIMIT $2 OFFSET $3`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,12 +265,12 @@ func (s *Store) AdminCertifications(ctx context.Context, actorID int64, status s
 
 func (s *Store) AdminCertificationDetail(ctx context.Context, id int64) (map[string]any, error) {
 	var userID, submissionID int64
-	var kind, status, provider, reason string
+	var kind, status, provider, reason, jobStatus string
 	var version int64
 	var sealed []byte
 	var aad string
 	var submitted time.Time
-	err := s.Pool.QueryRow(ctx, `SELECT p.user_id,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,sub.id,sub.payload_encrypted,sub.payload_aad,sub.submitted_at FROM certification_profiles p LEFT JOIN LATERAL (SELECT id,payload_encrypted,payload_aad,submitted_at FROM certification_submissions WHERE profile_id=p.id ORDER BY id DESC LIMIT 1) sub ON true WHERE p.id=$1`, id).Scan(&userID, &kind, &status, &provider, &reason, &version, &submissionID, &sealed, &aad, &submitted)
+	err := s.Pool.QueryRow(ctx, `SELECT p.user_id,p.certification_type,p.status,p.provider_id,p.rejection_reason,p.version,sub.id,sub.payload_encrypted,sub.payload_aad,sub.submitted_at,coalesce(sub.job_status,'') FROM certification_profiles p LEFT JOIN LATERAL (SELECT x.id,x.payload_encrypted,x.payload_aad,x.submitted_at,j.status AS job_status FROM certification_submissions x LEFT JOIN certification_provider_jobs j ON j.submission_id=x.id WHERE x.profile_id=p.id ORDER BY x.id DESC LIMIT 1) sub ON true WHERE p.id=$1`, id).Scan(&userID, &kind, &status, &provider, &reason, &version, &submissionID, &sealed, &aad, &submitted, &jobStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +278,7 @@ func (s *Store) AdminCertificationDetail(ctx context.Context, id int64) (map[str
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": id, "user_id": userID, "certification_type": kind, "status": status, "provider_id": provider, "rejection_reason": reason, "version": version, "submission_id": submissionID, "submitted_at": submitted, "payload": payload}, nil
+	return map[string]any{"id": id, "user_id": userID, "certification_type": kind, "status": status, "provider_id": provider, "rejection_reason": reason, "version": version, "submission_id": submissionID, "submitted_at": submitted, "payload": payload, "processing_state": certificationProcessingState(status, provider, jobStatus)}, nil
 }
 
 func (s *Store) ReviewCertification(ctx context.Context, reviewerID, id int64, decision, note string, expected int64) error {
@@ -351,6 +353,9 @@ func (s *Store) ReviewCertificationTx(ctx context.Context, tx pgx.Tx, reviewerID
 	if _, err = tx.Exec(ctx, `UPDATE certification_profiles SET status=$2,rejection_reason=CASE WHEN $2='rejected' THEN $3 ELSE '' END,version=version+1,updated_at=now() WHERE id=$1`, id, decision, note); err != nil {
 		return err
 	}
+	if err = cancelCertificationJobsTx(ctx, tx, profileID, "manual_decision"); err != nil {
+		return err
+	}
 	if submissionID != nil {
 		if _, err = tx.Exec(ctx, `UPDATE certification_submissions SET status=$2,reviewed_at=now(),reviewed_by=$3,review_note=$4 WHERE id=$1`, *submissionID, decision, reviewerID, note); err != nil {
 			return err
@@ -397,7 +402,11 @@ func (s *Store) applyCertifiedNameTx(ctx context.Context, tx pgx.Tx, reviewerID,
 		return Audit(ctx, tx, reviewerID, "certification.name_update_skipped", "certification", profileID, map[string]any{"user_id": userID, "reason": "invalid_display_name"})
 	}
 	var current string
-	if err = tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id=$1 FOR UPDATE`, userID).Scan(&current); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id=$1 FOR NO KEY UPDATE NOWAIT`, userID).Scan(&current); err != nil {
+		var busy *pgconn.PgError
+		if errors.As(err, &busy) && busy.Code == "55P03" {
+			return conflict("certification_busy", "客户资料正在使用，请稍后重试认证审核")
+		}
 		return err
 	}
 	if current == name {
@@ -414,5 +423,5 @@ func (s *Store) applyCertifiedNameTx(ctx context.Context, tx pgx.Tx, reviewerID,
 	if _, err = tx.Exec(ctx, "UPDATE users SET display_name=$2,updated_at=now() WHERE id=$1", userID, name); err != nil {
 		return err
 	}
-	return Audit(ctx, tx, reviewerID, "certification.name_updated", "certification", profileID, map[string]any{"user_id": userID, "field": "display_name", "before": current, "display_name": name})
+	return Audit(ctx, tx, reviewerID, "certification.name_updated", "certification", profileID, map[string]any{"user_id": userID, "field": "display_name", "submission_id": *submissionID})
 }
