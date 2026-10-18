@@ -56,10 +56,15 @@ func TestTicketMigrationPreservesExistingThreadsAndAttachments(t *testing.T) {
 		if new {
 			common = "-'legacy_source'-'legacy_id'"
 			departments = common + "-'customer_visible'"
-			tickets = common + "-'service_id'-'legacy_status_label'-'legacy_ticket_no'-'created_by'-'cc'-'send_initial_email'-'initial_email_status'"
+			tickets = common + "-'service_id'-'legacy_status_label'-'legacy_ticket_no'-'created_by'-'cc'-'send_initial_email'-'initial_email_status'-'initial_author_kind'"
 			attachments = common + "-'reply_id'-'note_id'"
 		}
-		return `SELECT jsonb_build_object('departments',(SELECT jsonb_agg(to_jsonb(d)` + departments + ` ORDER BY id) FROM ticket_departments d),'tickets',(SELECT jsonb_agg(to_jsonb(t)` + tickets + ` ORDER BY id) FROM tickets t),'replies',(SELECT jsonb_agg(to_jsonb(r)` + common + ` ORDER BY id) FROM ticket_replies r),'notes',(SELECT jsonb_agg(to_jsonb(n)` + common + ` ORDER BY id) FROM ticket_notes n),'files',(SELECT jsonb_agg(to_jsonb(a)` + attachments + ` ORDER BY id) FROM ticket_attachments a),'scope',(SELECT jsonb_agg(to_jsonb(s) ORDER BY user_id,department_id) FROM admin_ticket_departments s))::text`
+		return `SELECT jsonb_build_object('departments',(SELECT jsonb_agg(to_jsonb(d)` + departments + ` ORDER BY id) FROM ticket_departments d),'tickets',(SELECT jsonb_agg(to_jsonb(t)` + tickets + ` ORDER BY id) FROM tickets t),'replies',(SELECT jsonb_agg(to_jsonb(r)` + common + func() string {
+			if new {
+				return "-'author_kind'"
+			}
+			return ""
+		}() + ` ORDER BY id) FROM ticket_replies r),'notes',(SELECT jsonb_agg(to_jsonb(n)` + common + ` ORDER BY id) FROM ticket_notes n),'files',(SELECT jsonb_agg(to_jsonb(a)` + attachments + ` ORDER BY id) FROM ticket_attachments a),'scope',(SELECT jsonb_agg(to_jsonb(s) ORDER BY user_id,department_id) FROM admin_ticket_departments s))::text`
 	}
 	var before, after string
 	if err = db.Pool.QueryRow(t.Context(), query(false)).Scan(&before); err != nil {
@@ -76,6 +81,11 @@ func TestTicketMigrationPreservesExistingThreadsAndAttachments(t *testing.T) {
 	}
 	if err = db.Pool.QueryRow(t.Context(), query(true)).Scan(&after); err != nil || before != after {
 		t.Fatal("upgrade altered threads, files or scope", err)
+	}
+	var replyKind, initialKind string
+	var ratings int
+	if err = db.Pool.QueryRow(t.Context(), `SELECT r.author_kind,t.initial_author_kind,(SELECT count(*) FROM ticket_ratings) FROM ticket_replies r JOIN tickets t ON t.id=r.ticket_id WHERE r.id=$1`, reply).Scan(&replyKind, &initialKind, &ratings); err != nil || replyKind != "unknown" || initialKind != "unknown" || ratings != 0 {
+		t.Fatal("upgrade guessed historical author roles or scores", err)
 	}
 	var visible bool
 	if err = db.Pool.QueryRow(t.Context(), "SELECT customer_visible FROM ticket_departments WHERE id=$1", dept).Scan(&visible); err != nil || !visible {

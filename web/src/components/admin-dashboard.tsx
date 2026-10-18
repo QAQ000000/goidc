@@ -42,13 +42,14 @@ type DashboardSummary = {
 type DailyReport = {
   year: number;
   month: number;
+  ticket_metrics_available: boolean;
   days: {
     date: string;
     new_clients: number;
     new_orders: number;
     paid_orders: number;
-    new_tickets: number;
-    ticket_replies: number;
+    new_tickets: number | null;
+    ticket_replies: number | null;
     cancellation_requests: number;
   }[];
 };

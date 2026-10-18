@@ -281,8 +281,8 @@ WHERE id=$1 AND role='customer' AND status='active' AND admin_ticket_customer_al
 			}
 		}
 		var ticket adminTicketCreateResult
-		err = tx.QueryRow(r.Context(), `INSERT INTO tickets(ticket_no,user_id,department_id,assignee_id,service_id,subject,body,priority,created_by,cc,send_initial_email)
-VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
+		err = tx.QueryRow(r.Context(), `INSERT INTO tickets(ticket_no,user_id,department_id,assignee_id,service_id,subject,body,priority,created_by,cc,send_initial_email,initial_author_kind)
+VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'staff')
 RETURNING id,ticket_no,version`, in.CustomerID, in.DepartmentID, in.AssigneeID, in.ServiceID, in.Subject, in.Body, in.Priority, actor, string(ccJSON), in.SendEmail).Scan(&ticket.ID, &ticket.TicketNo, &ticket.Version)
 		if err != nil {
 			return txResponse{}, err

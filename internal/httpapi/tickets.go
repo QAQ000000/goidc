@@ -128,7 +128,7 @@ func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var id int64
-	err = tx.QueryRow(r.Context(), "INSERT INTO tickets(ticket_no,user_id,department_id,subject,body,priority) VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5) RETURNING id", identityFrom(r).ID, input.DepartmentID, input.Subject, input.Body, input.Priority).Scan(&id)
+	err = tx.QueryRow(r.Context(), "INSERT INTO tickets(ticket_no,user_id,department_id,subject,body,priority,initial_author_kind) VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5,'customer') RETURNING id", identityFrom(r).ID, input.DepartmentID, input.Subject, input.Body, input.Priority).Scan(&id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -176,7 +176,17 @@ func (s *Server) ticketDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "ticket_merged", "该工单已合并到其他工单")
 		return
 	}
-	rows, err = tx.Query(r.Context(), "SELECT r.id,r.body,r.created_at,u.display_name AS author_name,u.role AS author_role FROM ticket_replies r JOIN users u ON u.id=r.author_id WHERE ticket_id=$1 ORDER BY r.created_at,r.id", id)
+	var initialRating map[string]any
+	canRate := identityFrom(r).Role == "customer" && ticket["user_id"] == identityFrom(r).ID
+	if err = tx.QueryRow(r.Context(), `SELECT jsonb_build_object('stars',tr.stars,'provenance',tr.provenance,'can_rate',($2::boolean AND t.initial_author_kind='staff' AND t.created_by IS NOT NULL AND tr.id IS NULL)) FROM tickets t LEFT JOIN ticket_ratings tr ON tr.initial_ticket_id=t.id WHERE t.id=$1`, id, canRate).Scan(&initialRating); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ticket["initial_rating"] = initialRating
+	rows, err = tx.Query(r.Context(), `SELECT r.id,r.body,r.created_at,u.display_name AS author_name,
+CASE r.author_kind WHEN 'staff' THEN 'admin' WHEN 'customer' THEN 'customer' ELSE 'unknown' END AS author_role,
+jsonb_build_object('stars',tr.stars,'provenance',tr.provenance,'can_rate',($2::boolean AND r.author_kind='staff' AND tr.id IS NULL)) AS rating
+FROM ticket_replies r JOIN users u ON u.id=r.author_id LEFT JOIN ticket_ratings tr ON tr.reply_id=r.id WHERE ticket_id=$1 ORDER BY r.created_at,r.id`, id, canRate)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -845,7 +855,11 @@ func (s *Server) changeTicket(w http.ResponseWriter, r *http.Request, close bool
 		if staffAccess {
 			newStatus = "pending"
 		}
-		if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_replies(ticket_id,author_id,body) VALUES($1,$2,$3) RETURNING id", id, identityFrom(r).ID, input.Body).Scan(&replyID); err != nil {
+		authorKind := "customer"
+		if staffAccess {
+			authorKind = "staff"
+		}
+		if err = tx.QueryRow(r.Context(), "INSERT INTO ticket_replies(ticket_id,author_id,body,author_kind) VALUES($1,$2,$3,$4) RETURNING id", id, identityFrom(r).ID, input.Body, authorKind).Scan(&replyID); err != nil {
 			s.fail(w, r, err)
 			return
 		}

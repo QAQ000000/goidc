@@ -353,3 +353,28 @@ func reconcileTicketAttachments(t *testing.T, db *store.Store, s legacy.Snapshot
 		}
 	}
 }
+
+func TestLegacyTicketRatingsKeepSourceStarsAndUnknownRatingTime(t *testing.T) {
+	db := importTestDB(t)
+	admin := navigationAdmin(t, db)
+	snapshot, root := ticketImportFixture(t)
+	snapshot["ticket_replies"][0]["star"] = "5" // A customer reply is not a staff-rating target.
+	snapshot["ticket_replies"][1]["star"] = "4"
+	im := fileImporter(snapshot, root, admin)
+	if err := im.apply(t.Context(), db.Pool); err != nil {
+		t.Fatal(err)
+	}
+	reply := importedID(t, db, "ticket_replies", 212)
+	var stars, count int
+	var provenance, kind string
+	var unknownTime bool
+	if err := db.Pool.QueryRow(t.Context(), `SELECT tr.stars,tr.provenance,tr.rated_at IS NULL,r.author_kind FROM ticket_ratings tr JOIN ticket_replies r ON r.id=tr.reply_id WHERE r.id=$1`, reply).Scan(&stars, &provenance, &unknownTime, &kind); err != nil || stars != 4 || provenance != "legacy" || !unknownTime || kind != "staff" {
+		t.Fatalf("source rating facts: %d %s %v %s %v", stars, provenance, unknownTime, kind, err)
+	}
+	if err := im.apply(t.Context(), db.Pool); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM ticket_ratings`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("source replay duplicated/invented ratings: %d %v", count, err)
+	}
+}

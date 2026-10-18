@@ -2,9 +2,9 @@
 
 来源：`/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md`。
 
-状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面或交互仍缺一部分；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。登记状态不是全量浏览器或生产验收结论。
+状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面、交互或关键验收仍有未闭合项；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。登记状态不是全量浏览器或生产验收结论。
 
-2026-10-16 当前登记：105 项中 **45 项已完成、60 项部分完成、0 项待实现、0 项后端阻塞**。此前按已知能力缺口将36/38/103三项降为部分完成；#36现已补齐并通过[本批验收](archive/README.md#f-11554f6d96b2)。下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](archive/README.md#f-8c06b4a33b88)。
+当前登记：105 项中 **43 项已完成、62 项部分完成、0 项待实现、0 项后端阻塞**。报表复核将 #5 我的业绩、#20 工单统计由已完成改为部分完成；本轮已补业绩明细/趋势/提成、处理人评分、年度现金/费用与产品分类数量，并通过隔离PG18专项与报表综合回归，详见[恢复契约](report-restoration-contract.md)。隔离Next+Chrome+模拟API浏览器已通过43条断言、四恢复页×六宽度共24组布局检查；该证据与独立PG32项竞态回归分开，真实Go API浏览器全链路、旧全量迁移/对账与外部凭证未验收，因此不提升完成数。此前按已知能力缺口将36/38/103三项降为部分完成；#36现已补齐并通过[本批验收](archive/README.md#f-11554f6d96b2)。下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](archive/README.md#f-8c06b4a33b88)。
 
 所有新版路径保持 `/admin/*` 稳定路由。列表页统一使用 `items/total/limit/offset`，设置页统一使用 `version/expected_version`，写操作必须经过权限、审计、幂等和版本冲突校验。
 
@@ -14,7 +14,7 @@
 | 2 | 客户列表 `#/customer-list` | `/admin/customers` | 已完成 | `GET /admin/customers/page` | `customers.view` / 搜索分页返回 |
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications`、`/console/certification` | 已完成 | `GET /admin/certifications/page`、`GET /admin/certifications/{id}`、`GET /admin/certifications/{id}/history`、`POST /admin/certifications/{id}/review`、`POST /account/certification/convert-company` | `certifications.view/manage` / 状态、类型、接口筛选；审批历史；个人转企业事务、幂等和版本冲突 |
 | 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
-| 5 | 我的业绩 `#/sales-statistics` | `/admin/reports?tab=sales` | 已完成 | `GET /admin/reports/sales?year=` | `reports.view` / 年份、URL 标签恢复、真实空态；四尺寸已验收 |
+| 5 | 我的业绩 `#/sales-statistics` | `/admin/reports?tab=sales` | 部分完成 | `GET /admin/reports/sales/details`、`sales/options`；保留sales汇总兼容接口，详情支持CSV | `reports.view`及客户范围 / 默认全部可见销售与所选月，人员/日期/高级筛选、账单分页展开、统计卡/对比/趋势、预计与历史确认已补；净额与历史确认完整账单分摊后筛选，CSV当前账单页；专项PG与六宽度模拟API浏览器通过；真实Go API浏览器全链路与旧账单对账未验收 |
 | 6 | 营销推送 `#/marketing-push` | `/admin/marketing` | 部分完成 | `GET/POST/PATCH /admin/marketing`, `POST /admin/marketing/audience-count`, `POST /admin/marketing/{id}/send` | `notifications.view/manage` / 真实客户与商品受众、邮件短信站内信 outbox；四尺寸验收已通过 |
 | 7 | 推介计划 `#/customer-promotionplan` | `/admin/affiliate` | 部分完成 | `GET /admin/affiliate/*/page` | `affiliates.view/manage` / 归因佣金提现 |
 | 8 | 产品订单 `#/order-list` | `/admin/orders` | 部分完成 | `GET /admin/orders/page` + `POST /admin/orders/commission` + `POST /admin/orders/{id}/notes` + `POST /admin/orders/{id}/cancel` + `POST /admin/orders/{id}/review` + `DELETE /admin/orders/{id}` + `POST /admin/orders/bulk-*` | `orders.view/manage`，提成另需 `sales.view` / 真实分页、客户/日期/付款筛选、IP、URL恢复、创建入口、确认和逐项批量结果；客户资料备注与订单内部备注分列；当前提成组和本月阶梯只读预估，不写结算；四尺寸页面无横向溢出，320px 可滚动访问提成与操作列；[验收](archive/README.md#f-bf9b577744e3) |
@@ -29,11 +29,11 @@
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
 | 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 部分完成 | `GET/POST /admin/contracts` + `GET /admin/contracts/{id}` + `POST /admin/contracts/{id}/review` + `PUT /admin/contracts/{id}/shipping` + `POST /admin/contracts/bulk-void` | `contracts.view/manage` / 真实服务合同快照、客户确认→审核→邮寄→作废、分页筛选、权限范围、版本幂等和审计；列表及邮寄弹窗四尺寸通过；PDF/第三方电子签章、取消邮寄、模板强制签订策略仍待补；[验收](admin-contract-lifecycle-acceptance.md) |
 | 19 | 工单列表 `#/support-ticket` | `/admin/tickets` | 已完成 | `GET /admin/tickets` | `tickets.view/manage` / 部门范围 |
-| 20 | 工单统计 `#/support-statistics` | `/admin/reports?tab=tickets` | 已完成 | `GET /admin/reports/tickets?year=&month=` | `reports.view` / 上海日期、部门范围、真实空态；四尺寸已验收 |
-| 21 | 年度收入统计 `#/annual-statistics` | `/admin/reports?tab=annual` | 部分完成 | `GET /admin/reports/income` | `reports.view` / 年份切换 |
-| 22 | 新客户 `#/new-customer` | `/admin/reports?tab=new-clients` | 部分完成 | `GET /admin/reports/new-clients` | `reports.view` / 日期范围 |
-| 23 | 产品收入 `#/product-revenue` | `/admin/reports?tab=products` | 部分完成 | `GET /admin/reports/product-income` | `reports.view` / 产品排行 |
-| 24 | 收入排名 `#/revenue-ranking` | `/admin/reports?tab=ranking` | 部分完成 | `GET /admin/reports/customer-ranking` | `reports.view` / 范围权限 |
+| 20 | 工单统计 `#/support-statistics` | `/admin/reports?tab=tickets` | 部分完成 | `GET /admin/reports/tickets/handlers`及每日兼容接口，支持CSV；`POST /tickets/{id}/ratings` | `reports.view`及`tickets.view`、当前部门范围 / 处理人/消息原作者统计、星级、筛选排序分页和客户每消息一次评分已补；历史合并量保留，unknown旧身份不倒推，旧评分时间缺失为null；专项PG/导入夹具及模拟API浏览器处理人/评分断言通过，六宽度布局及320评分可操作；真实Go API浏览器全链路与旧全量迁移未验收 |
+| 21 | 年度收入统计 `#/annual-statistics` | `/admin/reports?tab=annual` | 部分完成 | `GET /admin/reports/annual-cash`及income兼容接口，支持CSV；费用GET/POST及void | `reports.view`及客户范围；全局费用另需全部客户范围、写入finance.manage / 真实现金/模拟/待核验分列，退款凭证发生月、12月/上年比较、费用追加登记/撤销已补；source/evidence唯一，撤销重述原月；专项PG及六宽度模拟API浏览器通过，320费用弹窗/未知结果刷新重试通过；不称全部成本或利润，真实Go API浏览器全链路与外部凭证未验收 |
+| 22 | 新客户 `#/new-customer` | `/admin/reports?tab=new-clients` | 部分完成 | `GET /admin/reports/new-clients`，支持 `format=csv` | `reports.view` / 上海自然月序列；商业指标按客户范围，工单指标另需`tickets.view`及部门范围，无权字段为null/“无权限”；独立加载、URL与CSV已补，UTC月界/权限/导出专项PG通过；当前四尺寸浏览器验收单列 |
+| 23 | 产品收入 `#/product-revenue` | `/admin/reports?tab=products` | 部分完成 | `GET /admin/reports/product-income/groups`及产品兼容接口，支持CSV | `reports.view`及客户范围 / 独立商品分类筛选/分组分页/展开、完整筛选汇总、件数/单数并列已补；160扩旧分类身份，旧gid与导航组分离；专项PG/分类导入夹具及六宽度模拟API浏览器布局通过，CSV全部匹配组；真实Go API浏览器全链路与旧全量迁移未验收 |
+| 24 | 收入排名 `#/revenue-ranking` | `/admin/reports?tab=ranking` | 部分完成 | `GET /admin/reports/customer-ranking`，支持 `format=csv` | `reports.view`及客户范围 / 仅有余额流水的活跃客户，全历史净额Top10，年月不影响；无流水不补零，净零/负数有流水仍可入榜，CSV同范围；专项PG通过，当前浏览器验收单列，旧账户收入口径差异保留 |
 | 25 | 定时任务状态 `#/timing-results` | `/admin/jobs` | 部分完成 | `GET /admin/jobs` | `jobs.view` / 实时队列汇总；定时趋势日志待补 |
 | 26 | 任务队列 `#/statistics-taskQueue` | `/admin/jobs/queue` | 部分完成 | `GET /admin/jobs/queue` | `jobs.view` / 客户范围、筛选分页和安全摘要；统一重试待补 |
 | 27 | 数据库状态 `#/database-message` | `/admin/system/database` | 已完成 | `GET /admin/system/database` | `settings.view` / PostgreSQL 连接池、大小和迁移只读健康 |
@@ -121,11 +121,11 @@
 | 批次 | 范围 | 状态 | 证据 |
 |---|---|---|---|
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面的历史验收已收进封存索引；渠道和通知深度仍在补齐 |
-| 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、业绩与等级已交付；营销、返佣和注册字段联动继续补齐 |
+| 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、等级已有能力；业绩明细/趋势/预计及历史确认已有代码、专项PG和模拟API浏览器证据；真实Go API浏览器全链路与旧数据对账未验收；营销、返佣和注册字段联动继续补齐 |
 | 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除、客户资料备注、订单提成只读预估已交付；自动流量交付待补；[订单验收](archive/README.md#f-bf9b577744e3)、[流量包验收](archive/README.md#f-774baca14c7d) |
 | 第四批 | 财务与合同 | 进行中 | 独立授信、信用消费、线下还款和冻结已补；线上还款/已还款退付、授信审批继续补齐；合同基础生命周期已补，PDF/电子签章和高级模板策略待补 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](archive/README.md#f-43a541711de8) |
-| 第六批 | 报表与任务运维 | 进行中 | 报表销售/工单统计、任务配置、系统日志和日志清理已接入真实 API；8 个页面的历史四尺寸证据已收进封存索引；统一重试、投递结果和更多运维报表待补 |
+| 第六批 | 报表与任务运维 | 进行中 | [报表恢复](report-restoration-contract.md)已补销售明细/预计与历史确认、处理人/客户消息评分、年度真实现金与费用、独立商品分类/数量；报表综合PG、CSV/权限与导入夹具通过，编译/vet、Web静态及代理检查通过；独立PG32项竞态回归与模拟API浏览器43条断言、四页×六宽度24组布局分别通过；真实Go API浏览器全链路、旧全量迁移/对账和外部凭证未验收，历史截图只保留原范围。任务/日志已接API，更多运维能力单列 |
 | 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置、商品/阶梯规则和销售结算已补并完成隔离 PG18、四尺寸及冲突/未知结果验收；完整权限页面与真实浏览器退款展示仍待补；[本批验收](archive/README.md#f-ed88b40abed4) |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
 | 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立资源CRUD、上游续费/复杂配置和应用目录待补 |

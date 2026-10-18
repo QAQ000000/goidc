@@ -253,7 +253,11 @@ func (im *importer) apply(ctx context.Context, pool *pgxpool.Pool) error {
 	if err = im.importServiceGroups(ctx, tx, groups, runID); err != nil {
 		return im.fail(ctx, tx, pool, runID, err)
 	}
-	if err = im.importProducts(ctx, tx, products, groups, runID); err != nil {
+	categories, categoryErr := im.importProductCategories(ctx, tx, runID)
+	if categoryErr != nil {
+		return im.fail(ctx, tx, pool, runID, categoryErr)
+	}
+	if err = im.importProducts(ctx, tx, products, groups, categories, runID); err != nil {
 		return im.fail(ctx, tx, pool, runID, err)
 	}
 	if configMaps, err = im.importProductConfiguration(ctx, tx, products, runID); err != nil {
@@ -396,7 +400,7 @@ func mapBoolStatus(raw string) string {
 	return "active"
 }
 
-func (im *importer) importProducts(ctx context.Context, tx pgx.Tx, out, groups map[int64]int64, runID int64) error {
+func (im *importer) importProducts(ctx context.Context, tx pgx.Tx, out, groups, categories map[int64]int64, runID int64) error {
 	prices := map[int64]legacy.Record{}
 	for _, r := range im.source["prices"] {
 		if r["currency"] == im.currencyID() {
@@ -425,6 +429,11 @@ func (im *importer) importProducts(ctx context.Context, tx pgx.Tx, out, groups m
 		err := tx.QueryRow(ctx, `INSERT INTO products(name,slug,description,product_type,billing_cycle,price_cents,setup_fee_cents,stock,active,provision_mode,legacy_source,legacy_id) VALUES($1,$2,$3,$4,$5,$6,$9,NULL,false,'manual',$7,$8) RETURNING id`, r["name"], slug(id), r["description"], r["type"], cycle, price, im.sourceName, id, setup).Scan(&target)
 		if err != nil {
 			return err
+		}
+		if categoryID := categories[referenceID(r, "gid")]; categoryID > 0 {
+			if _, err = tx.Exec(ctx, "UPDATE products SET category_id=$2 WHERE id=$1", target, categoryID); err != nil {
+				return err
+			}
 		}
 		if group := groups[referenceID(r, "groupid")]; group != 0 {
 			if _, err = tx.Exec(ctx, "UPDATE products SET service_group_id=$2 WHERE id=$1", target, group); err != nil {

@@ -5,6 +5,7 @@
 - [配置与站点设置](../admin-configuration.md)：后台配置边界。
 - [RBAC](../admin-rbac.md)：角色、权限、范围和撤权规则。
 - [后台前端设计](../admin-frontend-design.md)：页面交互和响应式约束。
+- 报表：[当前统计与 CSV 口径](../credit-cash-reporting.md)、[旧版完整恢复契约](../report-restoration-contract.md)。API/页面已补，独立PG18竞态回归与Next/Chrome模拟API浏览器分别通过；真实Go API浏览器全链路、旧全量迁移/对账和外部凭证未验收，台账继续部分完成。
 - [合同设置](../domain/contract-settings.md)：合同设置及模板管理的当前规则和验收边界。
 
 旧批次计划、浏览器验收和截图摘要放在 [归档快照](../archive/snapshots/)，不覆盖当前台账。

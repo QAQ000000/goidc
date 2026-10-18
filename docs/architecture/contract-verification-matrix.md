@@ -17,6 +17,7 @@
 | 余额与发票 | 借贷、冻结、退款、发票版本和审计是否同事务提交？ | `internal/store` 事务/幂等测试；[交易契约](../transactions.md)；[发票](../invoice-applications.md) | 无独立 `_test` 数据库不得声称数据库集成通过 |
 | 服务生命周期 | 交付、续费、变更、取消和失败恢复是否保持状态机约束？ | Go 业务回归、worker 恢复脚本、[服务契约](../service-configuration-changes.md) | worker 启动或编译成功不代表恢复和外部交付通过 |
 | RBAC 与后台 | API 与页面是否执行同一角色、资源范围和撤权规则？ | API 权限测试、`node scripts/admin-page-contracts.mjs`、[RBAC](../admin-rbac.md) | 静态登记不等于运行时强制；浏览器验收需单独记录 |
+| 经营报表与评分 | 折扣分摊/期间去重是否守恒？预计与确认是否分离？评分是否按原身份一次写入？真实现金与费用是否可追溯且不越权？ | [报表口径与测试入口](../credit-cash-reporting.md#回归入口)、[恢复契约](../report-restoration-contract.md)、`reports_regression_test.go`、`sales_report_details_test.go`、`ticket_ratings_test.go`、`annual_report_test.go`、`report_expenses_test.go`、`product_report_details_test.go` | 必须强制独立PG18；导入夹具不代表真实旧全量迁移，四尺寸浏览器与外部现金凭证另验 |
 | 供应商与 NOKVM | 超时、重试、凭据、未知结果和人工复核是否安全？ | 适配器测试、隔离运行、[供应商协议](../supplier-protocol.md)、[NOKVM](../nokvm-delivery.md) | 模拟供应商不证明真实商户、配额、网络或生产权限 |
 | 迁移与切换 | 旧数据映射、迁移 checksum、冻结、回退和切回是否可重复？ | 独立 PG 演练、`cmd/migrate`、[迁移入口](../migration/README.md) | 静态盘点和生成报告只能是 E0 |
 | 前端与 API | 加载、空、错误、冲突、响应式和错误码是否可见且一致？ | `npm --prefix web run lint`、`typecheck`、`test:proxy`、组件测试 | lint/typecheck 不等于浏览器或真实 API 验收 |

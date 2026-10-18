@@ -72,8 +72,73 @@ func TestExtraReportsScopeAndEmptyContracts(t *testing.T) {
 	// Report visibility does not imply access to ticket totals.
 	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
 	w = request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, "")
-	expect(t, w, 200)
-	if len(data(t, w)["items"].([]any)) != 0 {
+	expect(t, w, 403)
+	if errorData(t, w)["code"] != "permission_denied" {
 		t.Fatalf("ticket permission: %s", w.Body.String())
 	}
+}
+
+func TestTicketReportRetainsMergedSourceHistory(t *testing.T) {
+	db, h := testServer(t)
+	_, root := user(t, db, h, "ticket-report-root", "super_admin")
+	staffID, staff := user(t, db, h, "ticket-report-staff", "admin")
+	customerID, _ := user(t, db, h, "ticket-report-customer", "customer")
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		if _, err := db.Pool.Exec(t.Context(), sql, args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var visible, hidden int64
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('Visible','ticket-report-visible') RETURNING id").Scan(&visible); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('Hidden','ticket-report-hidden') RETURNING id").Scan(&hidden); err != nil {
+		t.Fatal(err)
+	}
+	exec("UPDATE users SET ticket_scope='departments' WHERE id=$1", staffID)
+	exec("INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, visible)
+	ticket := func(number, date string, department int64) int64 {
+		t.Helper()
+		var id int64
+		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO tickets(ticket_no,user_id,subject,body,department_id,created_at)
+VALUES($1,$2,'Report history','test',$3,$4::timestamptz) RETURNING id`, number, customerID, department, date).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	target := ticket("report-target", "2024-02-01 08:00:00+08", visible)
+	source := ticket("report-source", "2024-02-02 08:00:00+08", visible)
+	hiddenSource := ticket("report-hidden-source", "2024-02-03 08:00:00+08", hidden)
+	assertDay := func(day int, created, open int64) {
+		t.Helper()
+		w := request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, "")
+		expect(t, w, 200)
+		days := data(t, w)["items"].([]any)
+		if len(days) != 29 {
+			t.Fatalf("leap calendar: %s", w.Body.String())
+		}
+		item := days[day-1].(map[string]any)
+		if item["ticket_count"] != float64(created) || item["open_count"] != float64(open) {
+			t.Fatalf("day %d: want created=%d open=%d, got %#v", day, created, open, item)
+		}
+	}
+	assertDay(1, 1, 1)
+	assertDay(2, 1, 1)
+	assertDay(3, 0, 0)
+
+	// Merging closes the sources but must not erase their creation history.
+	expect(t, request(h, "POST", "/api/v1/admin/tickets/merge", map[string]any{"ticket_ids": []int64{target, source, hiddenSource}}, root, ""), 200)
+	assertDay(1, 1, 1)
+	assertDay(2, 1, 0)
+	assertDay(3, 0, 0)
+
+	// Even historical sources use their current department for report visibility.
+	exec("UPDATE tickets SET department_id=$2 WHERE id=$1", source, hidden)
+	exec("UPDATE tickets SET department_id=$2 WHERE id=$1", hiddenSource, visible)
+	assertDay(2, 0, 0)
+	assertDay(3, 1, 0)
+	// A merged source can never become a second actionable ticket in the report.
+	exec("UPDATE tickets SET status='open' WHERE id=$1", hiddenSource)
+	assertDay(3, 1, 0)
 }

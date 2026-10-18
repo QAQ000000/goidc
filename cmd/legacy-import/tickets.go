@@ -21,6 +21,9 @@ func (im *importer) recordTicketMapped(ctx context.Context, tx pgx.Tx, entity st
 	if err := im.recordMapped(ctx, tx, entity, r, id, runID); err != nil {
 		return err
 	}
+	if err := im.syncTicketRatingFacts(ctx, tx, entity, r, id); err != nil {
+		return err
+	}
 	return store.Audit(ctx, tx, im.fileAuthorID, "legacy."+entity+".imported", entity, id, map[string]any{"source": im.sourceName, "legacy_id": sourceID(r), "run_id": runID})
 }
 func optionalTicketRef(r legacy.Record, key string) (int64, error) {
@@ -445,6 +448,33 @@ func (im *importer) importTickets(ctx context.Context, tx pgx.Tx, users, service
 		if err = im.recordTicketMapped(ctx, tx, "ticket_attachments", r, id, runID); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// The source has a per-reply star but no rating time. Keep that distinction.
+func (im *importer) syncTicketRatingFacts(ctx context.Context, tx pgx.Tx, entity string, r legacy.Record, id int64) error {
+	if entity == "tickets" {
+		if admin := referenceID(r, "admin_id"); admin > 0 {
+			_, err := tx.Exec(ctx, `UPDATE tickets SET created_by=(SELECT target_id FROM legacy_id_map WHERE source=$2||':staff' AND entity='staff' AND legacy_id=$3),initial_author_kind='staff' WHERE id=$1`, id, im.sourceName, admin)
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE tickets SET initial_author_kind='customer' WHERE id=$1`, id)
+		return err
+	}
+	if entity != "ticket_replies" {
+		return nil
+	}
+	kind := "customer"
+	if referenceID(r, "admin_id") > 0 {
+		kind = "staff"
+	}
+	if _, err := tx.Exec(ctx, `UPDATE ticket_replies SET author_kind=$2 WHERE id=$1`, id, kind); err != nil {
+		return err
+	}
+	if kind == "staff" && len(r["star"]) == 1 && r["star"] >= "1" && r["star"] <= "5" {
+		_, err := tx.Exec(ctx, `INSERT INTO ticket_ratings(reply_id,customer_id,staff_id,stars,provenance) SELECT r.id,t.user_id,r.author_id,$2,'legacy' FROM ticket_replies r JOIN tickets t ON t.id=r.ticket_id WHERE r.id=$1 ON CONFLICT(reply_id) DO NOTHING`, id, int(r["star"][0]-'0'))
+		return err
 	}
 	return nil
 }

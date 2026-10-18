@@ -18,6 +18,9 @@ func (im *importer) validate() error {
 	if strings.TrimSpace(im.sourceName) == "" || len(im.sourceName) > 120 {
 		return fmt.Errorf("invalid source identity")
 	}
+	if err := im.validateProductCategories(); err != nil {
+		return err
+	}
 	if err := im.validateServiceNavigation(); err != nil {
 		return err
 	}
@@ -241,7 +244,7 @@ func (im *importer) validateProductConfiguration() error {
 }
 
 var targetTables = map[string]string{
-	"users": "users", "products": "products", "orders": "orders", "invoices": "invoices",
+	"users": "users", "product_categories": "product_categories", "products": "products", "orders": "orders", "invoices": "invoices",
 	"services": "services", "invoice_items": "invoice_items", "order_items": "order_items", "orphan_invoices": "invoices",
 	"service_navigation_groups": "service_navigation_groups", "service_navigation_preferences": "service_navigation_preferences",
 	"download_categories": "download_categories", "downloads": "downloads", "download_products": "download_products", "customer_files": "customer_files", "email_templates": "notification_templates",

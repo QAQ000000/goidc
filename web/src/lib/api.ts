@@ -412,7 +412,9 @@ export type Cart = {
     error?: string;
   } | null;
 };
+export type TicketRating = { stars: number | null; provenance?: "native" | "legacy" | null; can_rate: boolean };
 export type Ticket = {
+  initial_rating?: TicketRating;
   created_at: string;
   admin_access: boolean;
   id: number;
@@ -439,6 +441,7 @@ export type Ticket = {
     created_at: string;
     author_name: string;
     author_role: string;
+    rating?: TicketRating;
   }[];
   attachments: TicketAttachment[];
   notes?: TicketNote[];
