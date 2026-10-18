@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codex/zjmfgo/internal/csvexport"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -235,8 +233,7 @@ func (s *Server) salesReportDetails(w http.ResponseWriter, r *http.Request) {
 	if s.reportInputFailure(w, r, e) {
 		return
 	}
-	if format := r.URL.Query().Get("format"); format != "" && format != "json" && format != "csv" {
-		writeError(w, 400, "invalid_report_format", "报表格式只支持 JSON 或 CSV")
+	if !reportJSONFormat(w, r) {
 		return
 	}
 	now := time.Now()
@@ -260,52 +257,5 @@ func (s *Server) salesReportDetails(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, e)
 		return
 	}
-	if r.URL.Query().Get("format") == "csv" {
-		s.writeSalesDetailCSV(w, r, raw)
-		return
-	}
 	write(w, 200, raw)
-}
-
-func (s *Server) writeSalesDetailCSV(w http.ResponseWriter, r *http.Request, raw json.RawMessage) {
-	content, err := encodeSalesDetailCSV(raw)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "report_export_failed", "报表导出失败，请稍后重试")
-		return
-	}
-	writeCSVDownload(w, "report-sales-details.csv", content)
-}
-
-func encodeSalesDetailCSV(raw json.RawMessage) ([]byte, error) {
-	var payload struct {
-		Items []map[string]any `json:"items"`
-	}
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.UseNumber()
-	if e := d.Decode(&payload); e != nil {
-		return nil, e
-	}
-	if payload.Items == nil {
-		return nil, fmt.Errorf("invalid sales report items")
-	}
-	headers := []string{"客户", "销售", "账单编号", "支付时间", "到账时间", "产品", "类型", "金额（分）", "预计提成（分）", "子项历史有效确认提成（分）", "确认状态", "规则版本"}
-	records := [][]any{}
-	for _, invoice := range payload.Items {
-		lines, ok := invoice["items"].([]any)
-		if !ok {
-			return nil, fmt.Errorf("invalid sales report invoice items")
-		}
-		for _, value := range lines {
-			line, ok := value.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("invalid sales report line")
-			}
-			var estimate any = "未配置"
-			if line["estimated_commission_cents"] != nil {
-				estimate = line["estimated_commission_cents"]
-			}
-			records = append(records, []any{invoice["customer_name"], invoice["sales_owner_name"], invoice["invoice_no"], invoice["paid_at"], line["received_at"], line["product_name"], line["kind"], line["amount_cents"], estimate, line["confirmed_commission_cents"], invoice["confirmation_status"], line["rule_version"]})
-		}
-	}
-	return csvexport.Encode(headers, records)
 }

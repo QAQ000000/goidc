@@ -96,7 +96,6 @@ func (s *Server) productIncomeGroups(w http.ResponseWriter, r *http.Request) {
 	options := make([]map[string]any, 0, len(items))
 	categories := map[int64]categoryInfo{}
 	groups := map[int64]*productReportGroup{}
-	filtered := make([]productReportDetail, 0, len(items))
 	summary := productIncome{}
 	for _, item := range items {
 		info := byProduct[item.ProductID]
@@ -106,7 +105,6 @@ func (s *Server) productIncomeGroups(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		detail := productReportDetail{item, info.CategoryID, info.Name}
-		filtered = append(filtered, detail)
 		group := groups[info.CategoryID]
 		if group == nil {
 			group = &productReportGroup{CategoryID: info.CategoryID, CategoryName: info.Name, Products: []productReportDetail{}}
@@ -150,9 +148,6 @@ func (s *Server) productIncomeGroups(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	start := min(offset, len(allGroups))
 	end := min(start+limit, len(allGroups))
-	result := map[string]any{"year": period.Year, "month": period.Month, "groups": allGroups[start:end], "total": len(allGroups), "limit": limit, "offset": offset, "summary": summary, "options": map[string]any{"categories": categoryOptions, "products": options}, "quantity_basis": "purchase_units_and_renewal_items", "refund_basis": "gross_settled_sales_before_separate_refund_cash_outflows", "export_scope": "all_filtered_groups"}
-	if r.URL.Query().Get("format") == "csv" {
-		result["products"] = filtered
-	}
-	writeReport(w, r, "product_groups", result)
+	result := map[string]any{"year": period.Year, "month": period.Month, "groups": allGroups[start:end], "total": len(allGroups), "limit": limit, "offset": offset, "summary": summary, "options": map[string]any{"categories": categoryOptions, "products": options}, "quantity_basis": "purchase_units_and_renewal_items", "refund_basis": "gross_settled_sales_before_separate_refund_cash_outflows"}
+	writeReport(w, r, result)
 }

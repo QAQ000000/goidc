@@ -52,10 +52,8 @@ jobs:
           ./scripts/check-go-toolchain.sh
           ./scripts/go.sh test ./... -run '^$'
 
-      - name: Check CSV encoding and authorized-result export formatting
-        run: |
-          ./scripts/go.sh test -race ./internal/csvexport
-          ./scripts/go.sh test -race ./internal/httpapi -run '^(TestReportCSVReportSchemasAndIntegerPrecision|TestReportCSVEmptyAndMalformedReports|TestWriteReportFormatsAndDownloadHeaders|TestSalesReportDetailsCSVEncodingAndDownload|TestSalesReportDetailsCSVMalformedRowsFailWithoutDownload)$'
+      - name: Check JSON-only report responses
+        run: ./scripts/go.sh test -race ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'
 
       - name: Install binary introspection tracer
         run: |
@@ -158,6 +156,9 @@ jobs:
       - name: Check public theme and administration boundaries on PostgreSQL 18
         run: |
           ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestSiteContentVersionedCRUDAndPermissions|TestSiteThemeValidationPermissionsAndReplay|TestSiteSettingsPermissionsValidationAndPublicProfile|TestSiteAdminSettingsAreVersionedAndNotPublic|TestMaintenanceCustomerGateAndAdminRecovery|TestMaintenanceSettingsValidation|TestMaintenancePaymentWebhookAndMFALogin|TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery)$'
+
+      - name: Check report JSON boundaries and retained business file downloads
+        run: ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestReportEndpointsJSONOnlyFormatsAndPermissions|TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth|TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope|TestSalesReportDetailsAmountsScopeAndSnapshot|TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination|TestDownloadsLifecycleBytesCategoriesAndSources|TestTicketAttachmentsAreOwnedAndBounded|TestNOKVMMonitoringHTTPPermissionsAndRedaction|TestCustomerFilesLifecycleOwnershipAndByteIntegrity|TestInvoiceElectronicFileAndAdjustmentControls|TestContractLifecycleSecurityAndSnapshots)$'
 
       - name: Require CAPTCHA provider and authentication boundaries on PostgreSQL 18
         run: node scripts/test-captcha.mjs --integration

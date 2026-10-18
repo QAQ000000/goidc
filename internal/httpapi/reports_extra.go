@@ -56,7 +56,7 @@ GROUP BY 1,2 ORDER BY income_cents DESC,sales_owner_id`, p.Start, p.End, identit
 	if items == nil {
 		items = []salesReportItem{}
 	}
-	writeReport(w, r, "sales", map[string]any{"year": p.Year, "items": items})
+	writeReport(w, r, map[string]any{"year": p.Year, "items": items})
 }
 func (s *Server) ticketReport(w http.ResponseWriter, r *http.Request) {
 	p, e := parseReportPeriod(r, true)
@@ -91,5 +91,5 @@ GROUP BY d.day ORDER BY d.day`, p.Start, p.End, identityFrom(r).ID)
 	if items == nil {
 		items = []ticketReportItem{}
 	}
-	writeReport(w, r, "tickets", map[string]any{"year": p.Year, "month": p.Month, "items": items})
+	writeReport(w, r, map[string]any{"year": p.Year, "month": p.Month, "items": items})
 }

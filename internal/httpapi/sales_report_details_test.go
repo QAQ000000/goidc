@@ -1,52 +1,11 @@
 package httpapi
 
 import (
-	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 )
-
-func TestSalesReportDetailsCSVEncodingAndDownload(t *testing.T) {
-	raw := json.RawMessage(`{"items":[{"customer_name":"=HYPERLINK(\"https://example.test\")","sales_owner_name":"销售,\"甲\"\n第二行","invoice_no":"00123","paid_at":"2024-02-01","confirmation_status":"confirmed","items":[{"received_at":"2024-02-01","product_name":"商品","kind":"purchase","amount_cents":9007199254740993,"estimated_commission_cents":null,"confirmed_commission_cents":-9007199254740993,"rule_version":9223372036854775807},{"amount_cents":-42,"estimated_commission_cents":9007199254740993}]}]}`)
-	response := httptest.NewRecorder()
-	server := &Server{}
-	server.writeSalesDetailCSV(response, httptest.NewRequest("GET", "/?format=csv", nil), raw)
-	expect(t, response, 200)
-	if response.Header().Get("Content-Type") != "text/csv; charset=utf-8" || response.Header().Get("Content-Disposition") != `attachment; filename="report-sales-details.csv"` || response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
-		t.Fatalf("unsafe/incomplete sales download headers: %#v", response.Header())
-	}
-	records := reportCSVRecords(t, response.Body.Bytes())
-	want := [][]string{
-		{"客户", "销售", "账单编号", "支付时间", "到账时间", "产品", "类型", "金额（分）", "预计提成（分）", "子项历史有效确认提成（分）", "确认状态", "规则版本"},
-		{"'=HYPERLINK(\"https://example.test\")", "销售,\"甲\"\n第二行", "00123", "2024-02-01", "2024-02-01", "商品", "purchase", "9007199254740993", "未配置", "-9007199254740993", "confirmed", "9223372036854775807"},
-		{"'=HYPERLINK(\"https://example.test\")", "销售,\"甲\"\n第二行", "00123", "2024-02-01", "", "", "", "-42", "9007199254740993", "", "confirmed", ""},
-	}
-	if !reflect.DeepEqual(records, want) {
-		t.Fatalf("sales CSV fields/values changed: got=%#v want=%#v", records, want)
-	}
-	content, err := encodeSalesDetailCSV(json.RawMessage(`{"items":[]}`))
-	if err != nil || len(reportCSVRecords(t, content)) != 1 {
-		t.Fatalf("empty CSV err=%v", err)
-	}
-}
-
-func TestSalesReportDetailsCSVMalformedRowsFailWithoutDownload(t *testing.T) {
-	for _, raw := range []string{`{`, `{}`, `null`, `{"items":null}`, `{"items":{}}`, `{"items":[null]}`, `{"items":[{}]}`, `{"items":[{"items":null}]}`, `{"items":[{"items":{}}]}`, `{"items":[{"items":[null]}]}`, `{"items":[{"items":["invalid"]}]}`} {
-		t.Run(raw, func(t *testing.T) {
-			response := httptest.NewRecorder()
-			server := &Server{}
-			server.writeSalesDetailCSV(response, httptest.NewRequest("GET", "/?format=csv", nil), json.RawMessage(raw))
-			expect(t, response, 500)
-			if errorData(t, response)["code"] != "report_export_failed" || response.Header().Get("Content-Disposition") != "" || response.Header().Get("Content-Type") != "application/json; charset=utf-8" {
-				t.Fatalf("malformed sales export advertised as a file: headers=%#v body=%s", response.Header(), response.Body.String())
-			}
-		})
-	}
-}
 
 func TestSalesReportDetailsValidation(t *testing.T) {
 	for _, query := range []string{"sales_owner_id=-1", "customer_id=0", "product_id=x", "kind=unknown", "condition=unknown", "preset=unknown", "from=2024-03-01&to=2024-02-01", "from=no", "to=no", "q=" + strings.Repeat("x", 121)} {
@@ -136,14 +95,10 @@ func TestSalesReportDetailsAmountsScopeAndSnapshot(t *testing.T) {
 	if changed["estimated_commission_cents"] != float64(25) || changed["confirmed_commission_cents"] != float64(7) || changed["confirmation_snapshot"].(map[string]any)["original_rule"] != true {
 		t.Fatalf("snapshot changed: %#v", changed)
 	}
-	csvResponse := request(h, "GET", path+"&format=csv", nil, staff, "")
-	expect(t, csvResponse, 200)
-	records, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(csvResponse.Body.String(), "\xef\xbb\xbf"))).ReadAll()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(records) != 3 || records[1][7] != "33" || records[2][7] != "68" || records[1][9] != "2" || records[2][9] != "5" {
-		t.Fatalf("csv: %#v", records)
+	removedExport := request(h, "GET", path+"&format=csv", nil, staff, "")
+	expect(t, removedExport, 400)
+	if errorData(t, removedExport)["code"] != "invalid_report_format" || removedExport.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("removed export returned a download: %s", removedExport.Body.String())
 	}
 	exec(`INSERT INTO credit_invoice_payments(invoice_id,user_id,amount_cents,remaining_cents,expected_version,idempotency_key) VALUES($1,$2,101,0,1,'snapshot-credit')`, invoice, customer)
 	exec(`INSERT INTO credit_repayments(invoice_id,user_id,actor_id,amount_cents,receipt,received_at,idempotency_key,expected_version,version_after,remaining_after) VALUES($1,$2,$3,40,'snapshot-first','2024-02-02','snapshot-first',1,2,61),($1,$2,$3,61,'snapshot-last','2024-03-02','snapshot-last',2,3,0)`, invoice, customer, owner)

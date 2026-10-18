@@ -8,10 +8,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func init() {
-	reportCSVSchemas["ticket-handlers"] = reportCSVSchema{"items", []reportColumn{{"handler_id", "处理人ID"}, {"handler_name", "处理人"}, {"ticket_count", "创建工单数"}, {"open_count", "当前待处理"}, {"closed_count", "当前已关闭"}, {"reply_count", "公开管理员内容数"}, {"rated_reply_count", "已评分内容数"}, {"total_score", "总评分"}, {"one_star_count", "1星次数"}, {"two_star_count", "2星次数"}, {"three_star_count", "3星次数"}, {"four_star_count", "4星次数"}, {"five_star_count", "5星次数"}}}
-}
-
 const ticketHandlerReportSQL = `WITH ticket_totals AS (
  SELECT coalesce(t.assignee_id,0) handler_id,count(*)::bigint ticket_count,
  count(*) FILTER(WHERE t.merged_ticket_id IS NULL AND t.status IN ('open','pending'))::bigint open_count,
@@ -116,5 +112,5 @@ func (s *Server) ticketHandlerReport(w http.ResponseWriter, r *http.Request) {
 	result["direction"] = direction
 	result["rating_period_basis"] = "public_message_created_at"
 	result["ticket_assignment_basis"] = "current_assignee"
-	writeReport(w, r, "ticket-handlers", result)
+	writeReport(w, r, result)
 }

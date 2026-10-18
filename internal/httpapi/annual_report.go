@@ -214,6 +214,6 @@ func (s *Server) annualCashReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	currentTotal, previousTotal := annualCashTotal(current, global), annualCashTotal(previous, global)
-	writeReport(w, r, "annual-cash", map[string]any{"year": period.Year, "currency": "CNY", "expenses_available": global, "expenses_manageable": manageable, "months": current, "total": currentTotal,
+	writeReport(w, r, map[string]any{"year": period.Year, "currency": "CNY", "expenses_available": global, "expenses_manageable": manageable, "months": current, "total": currentTotal,
 		"previous_year": map[string]any{"year": period.Year - 1, "months": previous, "total": previousTotal}, "comparison": annualCashComparison(currentTotal, previousTotal, global)})
 }

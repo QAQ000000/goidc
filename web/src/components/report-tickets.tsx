@@ -20,7 +20,7 @@ function readTicketFilters(): Filters {
   const sort=params.get("ticket_sort") ?? "ticket_count",offset=Number(params.get("ticket_offset") ?? 0);
   return {handler,from:range?from:"",to:range?to:"",sort:Object.hasOwn(sortLabels,sort)?sort:"ticket_count",direction:params.get("ticket_direction")==="asc"?"asc":"desc",offset:Number.isSafeInteger(offset)&&offset>=0?offset:0};
 }
-export function TicketHandlerReport({ year, month, exportDisabled = false }: { year: number; month: number; exportDisabled?: boolean }) {
+export function TicketHandlerReport({ year, month, filtersChanged = false }: { year: number; month: number; filtersChanged?: boolean }) {
   const permitted = useAdminPermission("tickets.view");
   const [filter,setFilter] = useState<Filters>(readTicketFilters);
   const [draft,setDraft] = useState(()=>{ const value=readTicketFilters(); return {from:value.from,to:value.to}; });
@@ -49,7 +49,7 @@ export function TicketHandlerReport({ year, month, exportDisabled = false }: { y
       <Button type="button" variant="outline" onClick={() => { apply({handler:"",from:"",to:"",sort:"ticket_count",direction:"desc",offset:0}); }}>重置筛选</Button>
     </form>
     <div className="mb-4 flex flex-wrap gap-3"><label className="text-sm">排序 <select aria-label="工单统计排序字段" className="border rounded p-2" value={sort} onChange={event => apply({...filter,sort:event.target.value,offset:0})}>{Object.entries(sortLabels).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label><label className="text-sm">方向 <select aria-label="工单统计排序方向" className="border rounded p-2" value={direction} onChange={event=>apply({...filter,direction:event.target.value,offset:0})}><option value="desc">降序</option><option value="asc">升序</option></select></label></div>
-    <ReportPanel<Page> key={`${path}:${revision}`} path={path} filename={`ticket-handlers-${filter.from || `${year}-${month}`}-page-${offset/25+1}.csv`} title="处理人和评分统计" description="工单按创建期间、当前处理人归属；评分按公开回复或管理员代建初始内容的创建期间、原作者归属。创建量和已关闭量保留合并来源；已关闭仅指当前closed（不含resolved）。按当前部门范围限制，导出为当前页。" exportDisabled={changed || exportDisabled}>
+    <ReportPanel<Page> key={`${path}:${revision}`} path={path} title="处理人和评分统计" description="工单按创建期间、当前处理人归属；评分按公开回复或管理员代建初始内容的创建期间、原作者归属。创建量和已关闭量保留合并来源；已关闭仅指当前closed（不含resolved）。按当前部门范围限制。" filtersChanged={changed || filtersChanged}>
       {data => <><label className="text-sm block mb-4">处理人 <select aria-label="工单统计处理人" className="border rounded p-2" value={handler} onChange={event => apply({...filter,handler:event.target.value,offset:0})}><option value="">全部授权范围内处理人</option>{data.handlers.map(option=><option value={option.handler_id} key={option.handler_id}>{option.handler_name}（{option.handler_id}）</option>)}</select></label><p className="text-sm text-muted-foreground mb-4">期间：{data.from} 至 {data.to}；无明确历史身份的旧回复不计入管理员内容，未评分内容不计为零星。</p><ResourceTable items={data.items} rowKey={item=>item.handler_id} empty="此期间暂无授权范围内的数据" columns={[
         {header:"处理人",render:item=>`${item.handler_name}（${item.handler_id}）`},
         {header:"创建工单",render:item=>item.ticket_count},{header:"当前待处理",render:item=>item.open_count},{header:"当前已关闭",render:item=>item.closed_count},

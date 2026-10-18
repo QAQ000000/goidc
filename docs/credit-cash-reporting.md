@@ -10,9 +10,9 @@
 
 ## 排名、工单权限与空值
 
-客户收入排名只包含当前管理员客户范围内、状态为 `active` 且确有余额流水的客户，按全历史净余额流水降序、客户 ID 升序取前十名。没有流水的客户不以零额补入；有流水但净额为零或负数的客户仍有资格进入排名。此排名不接受年份或月份改变统计期间，页面和导出都明确标为“全历史前十名”。余额事件中的收入、支出不代表公司的经营利润。
+客户收入排名只包含当前管理员客户范围内、状态为 `active` 且确有余额流水的客户，按全历史净余额流水降序、客户 ID 升序取前十名。没有流水的客户不以零额补入；有流水但净额为零或负数的客户仍有资格进入排名。此排名不接受年份或月份改变统计期间，页面明确标为“全历史前十名”。余额事件中的收入、支出不代表公司的经营利润。
 
-六类报表及 CSV 均要求 `reports.view`；收入、销售、产品和排名执行当前客户范围。每日运营的商业指标也执行客户范围，工单指标另要求 `tickets.view` 与当前部门范围：无工单权限时仍返回其他每日指标，`ticket_metrics_available=false`，每日 `new_tickets/ticket_replies` 为 `null`，不能用零表示无权查看。有权限而无事件才返回零。
+各类报表均要求 `reports.view`；收入、销售、产品和排名执行当前客户范围。每日运营的商业指标也执行客户范围，工单指标另要求 `tickets.view` 与当前部门范围：无工单权限时仍返回其他每日指标，`ticket_metrics_available=false`，每日 `new_tickets/ticket_replies` 为 `null`，不能用零表示无权查看。有权限而无事件才返回零。
 
 独立工单统计接口无 `tickets.view` 时返回 `403 permission_denied`，不返回伪装为空表的成功响应。有权限时按上海创建日统计，`ticket_count` 保留合并来源；`open_count` 仅计其中未合并且当前 `open/pending` 的工单。工单部门范围独立于客户销售范围，详见[RBAC](admin-rbac.md)。
 
@@ -26,30 +26,26 @@
 
 余额流水排名依旧反映余额充值/流水，不将信用消费当入账；本轮只收紧有流水的入榜条件，不改变余额指标定义。客户等级的购买指标不转换为现金指标。还款记录属于真实外部到账，后续信用退款须独立处理，不使用整账单 paid/refunded 状态抹除已收到的现金；本轮未引入还款现金撤销流程。
 
-## CSV 导出
+## 查询接口与产品边界
 
-在下列现有 GET 接口上指定 `format=csv`，省略或指定 `format=json` 保持 JSON；其他格式返回 `400 invalid_report_format`。CSV 复用同一请求中已经授权的报表结果，保持当前已查询期间、资源范围、排序和结果上限，不能绕过权限重新查询全库。
+报表仅提供 JSON 查询，不提供 CSV、电子表格或其他数据导出。省略 `format` 或指定 `format=json` 返回 JSON；显式 `format=csv` 及其他非 JSON 格式返回 `400 invalid_report_format`。页面不显示导出按钮，也不保留导出任务或下载状态。
 
-| 类型 | API（省略 `/api/v1` 前缀） | 当前导出范围 |
+各接口继续执行 `reports.view`、当前客户/工单部门范围及原有期间、排序和分页规则；移除导出不改变金额、汇总或业务明细口径。
+
+| 类型 | API（省略 `/api/v1` 前缀） | 查询范围 |
 | --- | --- | --- |
 | 收入 | `/admin/reports/income` | 查询期间的月度行及期间合计，账单总数独立去重；页面按所选年查询 |
-| 年度现金 | `/admin/reports/annual-cash` | 所选年与上年各12个月、年度合计和差额；真实/模拟/待核验收款分列，全局费用不可见时写“无权限” |
-| 每日运营 | `/admin/reports/new-clients` | 所选上海自然月全部日期；无权查看的工单字段写“无权限” |
+| 年度现金 | `/admin/reports/annual-cash` | 所选年与上年各12个月、年度合计和差额；真实/模拟/待核验收款分列，全局费用不可见时为 `null` |
+| 每日运营 | `/admin/reports/new-clients` | 所选上海自然月全部日期；无权查看的工单字段为 `null` |
 | 客户排名 | `/admin/reports/customer-ranking` | 当前客户范围的全历史前十名，不受年月筛选影响 |
 | 产品收入 | `/admin/reports/product-income` | 所选年月的产品新购净额、续费金额及现有订单/账单数量 |
-| 分类产品收入 | `/admin/reports/product-income/groups` | 完整筛选内全部分类下的产品；CSV不受界面分类页码限制 |
+| 分类产品收入 | `/admin/reports/product-income/groups` | 分类分页，汇总覆盖完整筛选结果 |
 | 销售汇总兼容接口 | `/admin/reports/sales` | 当前查询期间的销售归属汇总 |
-| 销售业绩明细 | `/admin/reports/sales/details` | 当前筛选及账单分页内的展开子项；净额、预计与历史有效确认分列，预计规则和历史确认口径见[恢复契约](report-restoration-contract.md#金额提成与归属) |
+| 销售业绩明细 | `/admin/reports/sales/details` | 当前筛选及账单分页内的展开子项；净额、预计与历史有效确认分列，口径见[恢复契约](report-restoration-contract.md#金额提成与归属) |
 | 工单统计 | `/admin/reports/tickets` | 所选上海自然月的创建量和当前待处理量，保留工单权限及部门范围 |
 | 工单处理人 | `/admin/reports/tickets/handlers` | 当前期间、处理人、排序和分页，公开管理员消息评分按消息创建时间归期 |
 
-CSV 使用 UTF-8 BOM 与中文列名，所有金额列明确标注“分”，保持整数分而不经浮点转换；名称等文本转义电子表格公式前缀。空报表保留表头，收入报表另保留零额合计。响应为 `text/csv` 附件，使用 `private, no-store`；导出失败返回错误，不伪装为空 CSV。
-
-普通报表和销售明细共用内部 `internal/csvexport` 编码器与 HTTP 下载响应。编码器仅处理表头、行值、BOM、CSV 引用和字符串公式防护；列定义、明细展开、合计、“无权限/未配置”文案与授权查询继续由报表领域决定。整数金额和 JSON 数字保持精度，不能先转为浮点；销售明细结果形状异常时返回导出错误，不发送部分附件。
-
-前端只加载当前标签，加载失败与重试只影响当前报表；其他报表接口失败不阻塞当前内容。导出使用已查询条件，筛选草稿变更后须先查询；未加载、加载失败或正在导出时按钮禁用。失败保留可重试错误，类别或期间切换后旧导出不得触发下载，详见[前端契约](admin-frontend-design.md#71-报表独立加载与导出)。
-
-浏览器 Blob 保存共用 `web/src/lib/download.ts`；报表仍单独校验 CSV 类型、同步阻止重复点击，并在筛选变化或组件卸载后忽略旧响应。共享保存函数不发起查询，也不决定权限、报表筛选和远程下载地址。
+前端只加载当前标签，加载失败与重试只影响当前报表；其他报表接口失败不阻塞当前内容，旧请求不能覆盖新查询，详见[前端契约](admin-frontend-design.md#71-报表独立加载与查询)。合同、电子发票、工单附件、客户文件及下载中心等业务文件下载继续保留，相关浏览器保存行为见[下载契约](download-resume.md)。
 
 ## 本轮已补代码与边界
 
@@ -58,7 +54,7 @@ CSV 使用 UTF-8 BOM 与中文列名，所有金额列明确标注“分”，�
 | 产品净额 | 完整订单按行 ID 累计整数商分摊，防止优惠后收入高估；bigint 边界保持分币守恒 |
 | 期间账单数 | 月内与全年各自去重；跨月还款不累加为全年多张账单 |
 | 每日运营 | 上海日期序列与分桶统一；无工单权限为 `null`，有权无事件为零 |
-| 排名与导出 | 有余额流水的活跃客户才入全历史Top10；CSV与JSON复用权限和筛选范围 |
+| 排名与查询 | 有余额流水的活跃客户才入全历史Top10；仅提供当前授权范围内的 JSON 查询 |
 | 销售明细 | 当前可见范围、人员/高级筛选、账单分页展开、对比与补零趋势；当前预计和历史确认分列，原确认快照不重算 |
 | 工单处理人 | 当前处理人/工单创建期间、消息原作者/消息创建期间；关闭不含resolved，保留合并历史与当前部门范围 |
 | 客户消息评分 | 原生公开消息身份、一次评分与幂等审计；旧star保留来源，缺失评分时间为null，不用当前角色倒推历史身份 |
@@ -73,9 +69,9 @@ CSV 使用 UTF-8 BOM 与中文列名，所有金额列明确标注“分”，�
 
 ## 回归入口
 
-现金与信用范围对应 `internal/httpapi/credit_cash_reports_test.go`；产品净额、期间账单去重和 UTC 会话月界对应 `internal/httpapi/reports_regression_test.go`；排名入榜条件、工单指标空值和撤权对应 `internal/httpapi/reports_permissions_test.go`；合并来源对应 `internal/httpapi/reports_extra_test.go`；六类CSV字段/整数分/公式转义和权限范围对应 `internal/httpapi/report_export_test.go`。
+现金与信用范围对应 `internal/httpapi/credit_cash_reports_test.go`；产品净额、期间账单去重和 UTC 会话月界对应 `internal/httpapi/reports_regression_test.go`；排名入榜条件、工单指标空值和撤权对应 `internal/httpapi/reports_permissions_test.go`；合并来源对应 `internal/httpapi/reports_extra_test.go`。
 
-纯 CSV 编码行为运行 `./scripts/go.sh test -race ./internal/csvexport`；报表与销售明细的纯导出回归分别见 `internal/httpapi/report_export_test.go`、`internal/httpapi/sales_report_details_test.go`，浏览器文件名、临时 URL 释放与授权下载请求边界运行 `node --test scripts/download.test.mjs`。Node DOM/fetch 夹具不等同于真实浏览器下载验收。
+报表格式回归见 `internal/httpapi/report_response_test.go`：`TestWriteReportJSONOnlyFormats` 验证 JSON 输出及 CSV/未知格式拒绝，`TestReportEndpointsJSONOnlyFormatsAndPermissions` 在独立 PG18 验证十个报表入口及权限边界；业务文件下载的文件名、临时 URL 释放与授权请求边界运行 `node --test scripts/download.test.mjs`。Node DOM/fetch 夹具不等同于真实浏览器下载验收。
 
 销售金额、信用跨月、历史确认与范围对应 `internal/httpapi/sales_report_details_test.go`；工单身份、一次评分/并发/审计和处理人统计对应 `internal/httpapi/ticket_ratings_test.go`；年度现金/退款发生月与费用权限/只追加/幂等对应 `internal/httpapi/annual_report_test.go`、`internal/httpapi/report_expenses_test.go`；分类分页/完整汇总/件数对应 `internal/httpapi/product_report_details_test.go`。旧分类与评分投影对应 `cmd/legacy-import/product_categories_test.go`、`cmd/legacy-import/tickets_test.go`；导入全包夹具通过不能替代真实旧全量迁移。
 

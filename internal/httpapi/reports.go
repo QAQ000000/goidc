@@ -107,7 +107,7 @@ GROUP BY 1 ORDER BY 1 DESC`, period.Start, period.End, identityFrom(r).ID)
 	for _, item := range months {
 		income += item.IncomeCents
 	}
-	writeReport(w, r, "income", map[string]any{
+	writeReport(w, r, map[string]any{
 		"year":   period.Year,
 		"months": months,
 		"total":  map[string]any{"income_cents": income, "invoice_count": invoiceCount},
@@ -179,7 +179,7 @@ ORDER BY days.day`, period.Start, period.End, identityFrom(r).ID, ticketMetricsA
 	if result == nil {
 		result = []dailyClientReport{}
 	}
-	writeReport(w, r, "daily", map[string]any{"year": period.Year, "month": period.Month, "ticket_metrics_available": ticketMetricsAvailable, "days": result})
+	writeReport(w, r, map[string]any{"year": period.Year, "month": period.Month, "ticket_metrics_available": ticketMetricsAvailable, "days": result})
 }
 
 type customerRanking struct {
@@ -213,7 +213,7 @@ LIMIT 10`, identityFrom(r).ID)
 	if result == nil {
 		result = []customerRanking{}
 	}
-	writeReport(w, r, "ranking", result)
+	writeReport(w, r, result)
 }
 
 type productIncome struct {
@@ -238,7 +238,7 @@ func (s *Server) productIncomeReport(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeReport(w, r, "products", map[string]any{"year": period.Year, "month": period.Month, "products": result})
+	writeReport(w, r, map[string]any{"year": period.Year, "month": period.Month, "products": result})
 }
 
 func (s *Server) productIncomeRows(ctx context.Context, period reportPeriod, actor int64) ([]productIncome, error) {

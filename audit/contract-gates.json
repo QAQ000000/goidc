@@ -349,6 +349,42 @@
         "required": true,
         "kind": "isolated-pg-and-captcha-provider"
       }
+    },
+    {
+      "id": "report-json",
+      "contract": "docs/credit-cash-reporting.md",
+      "implementation": [
+        "internal/httpapi/report_response.go",
+        "internal/httpapi/reports.go",
+        "internal/httpapi/reports_extra.go",
+        "internal/httpapi/annual_report.go",
+        "internal/httpapi/product_report_details.go",
+        "internal/httpapi/sales_report_details.go",
+        "internal/httpapi/ticket_report_details.go",
+        "web/src/components/report-shared.tsx",
+        "web/src/components/nokvm-monitoring.tsx"
+      ],
+      "tests": [
+        "./scripts/go.sh test -race ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'",
+        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestReportEndpointsJSONOnlyFormatsAndPermissions|TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth|TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope|TestSalesReportDetailsAmountsScopeAndSnapshot|TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination|TestDownloadsLifecycleBytesCategoriesAndSources|TestTicketAttachmentsAreOwnedAndBounded|TestNOKVMMonitoringHTTPPermissionsAndRedaction|TestCustomerFilesLifecycleOwnershipAndByteIntegrity|TestInvoiceElectronicFileAndAdjustmentControls|TestContractLifecycleSecurityAndSnapshots)$'",
+        "node --test scripts/download.test.mjs"
+      ],
+      "evaluation": [
+        "report APIs accept JSON only and reject CSV/unsupported formats without attachment headers; money, permissions, filters and pagination retained",
+        "isolated PostgreSQL18 with required test run/pass and zero skips; business attachment, contract, invoice and file downloads remain in scope; real browser requires separate verification"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "reports",
+          "httpapi",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-json-report-response"
+      }
     }
   ]
 }

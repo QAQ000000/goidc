@@ -20,7 +20,7 @@ const readFilters=():Filters=>{
   return {category:id("product_category",0),product:id("product_id",1),q:Array.from(query.get("product_q")??"").slice(0,120).join(""),offset:Number.isSafeInteger(offset)&&offset>=0?offset:0};
 };
 
-export function ProductIncomeGroups({year,month,exportDisabled=false}:{year:number;month:number;exportDisabled?:boolean}) {
+export function ProductIncomeGroups({year,month,filtersChanged=false}:{year:number;month:number;filtersChanged?:boolean}) {
   const [filters,setFilters]=useState<Filters>(readFilters);
   const [draft,setDraft]=useState<Filters>(readFilters);
   useEffect(()=>{const restore=()=>{const next=readFilters();setFilters(next);setDraft(next)};window.addEventListener("popstate",restore);return()=>window.removeEventListener("popstate",restore)},[]);
@@ -35,8 +35,8 @@ export function ProductIncomeGroups({year,month,exportDisabled=false}:{year:numb
   if(filters.product) query.set("product_id",filters.product);
   if(filters.q) query.set("q",filters.q);
   const path=`/admin/reports/product-income/groups?${query}`;
-  const changed=exportDisabled||draft.category!==filters.category||draft.product!==filters.product||draft.q!==filters.q;
-  return <><div className="mb-3"><Button type="button" variant="outline" onClick={()=>apply({category:"",product:"",q:"",offset:0})}>重置产品筛选</Button></div><ReportPanel<ProductReport> key={path} path={path} filename={`product-income-${year}-${month}.csv`} exportDisabled={changed} title="产品分类收入" description="折后成交收入按商品分类统计；新购件数取购买快照，续费数量取账单项目。退款现金支出另列于年度收支，成交件数保留历史事实。CSV 导出全部匹配分类。">
+  const changed=filtersChanged||draft.category!==filters.category||draft.product!==filters.product||draft.q!==filters.q;
+  return <><div className="mb-3"><Button type="button" variant="outline" onClick={()=>apply({category:"",product:"",q:"",offset:0})}>重置产品筛选</Button></div><ReportPanel<ProductReport> key={path} path={path} filtersChanged={changed} title="产品分类收入" description="折后成交收入按商品分类统计；新购件数取购买快照，续费数量取账单项目。退款现金支出另列于年度收支，成交件数保留历史事实。">
     {data=><>
       <form className="mb-5 flex flex-wrap items-end gap-3" onSubmit={event=>{event.preventDefault();apply({...draft,offset:0})}}>
         <label className="space-y-1 text-sm">商品分类<select aria-label="商品分类" className="h-9 w-full rounded-md border bg-background px-3" value={draft.category} onChange={event=>setDraft({...draft,category:event.target.value,product:""})}><option value="">全部分类</option>{data.options.categories.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>

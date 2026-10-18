@@ -70,13 +70,13 @@ worker在事务外预读上游电源，只有on/off可发送旧签名GET。明�
 
 ## 资源监控
 
-依据旧模块 `nokvm_ChartData`（156–269行）的签名 GET `/api/virtual_monitoring/{id}`，解析 CreatedAt 及 Cpu/Network/Disk 中的二层 JSON。API 支持 period=1h/6h/24h/7d，省略时为1h，其余值拒绝；供应商没有已确认的范围查询参数，Go 获取后在服务端筛选、排序并去重。相同时间的冲突样本拒绝，最多12000行且沿用1MiB响应上限。CPU保留供应商百分比（含多核合计），网络与磁盘速率沿用旧模块KB/s，仅暴露vda/vdb；缺失值为null，图表断开且CSV留空，不伪造零。
+依据旧模块 `nokvm_ChartData`（156–269行）的签名 GET `/api/virtual_monitoring/{id}`，解析 CreatedAt 及 Cpu/Network/Disk 中的二层 JSON。API 支持 period=1h/6h/24h/7d，省略时为1h，其余值拒绝；供应商没有已确认的范围查询参数，Go 获取后在服务端筛选、排序并去重。相同时间的冲突样本拒绝，最多12000行且沿用1MiB响应上限。CPU保留供应商百分比（含多核合计），网络与磁盘速率沿用旧模块KB/s，仅暴露vda/vdb；缺失值为null，图表断开，不伪造零。
 
-带时区时间按RFC3339解析；无时区时间按profile的 `monitoring_timezone` IANA名称解析，默认Asia/Shanghai。这个默认值是部署约定，接入前需向供应商确认，不能据此认定其实际时区。无效时区使配置加载失败。API统一UTC时间，浏览器按本机时区展示，CSV导出UTC原值。
+带时区时间按RFC3339解析；无时区时间按profile的 `monitoring_timezone` IANA名称解析，默认Asia/Shanghai。这个默认值是部署约定，接入前需向供应商确认，不能据此认定其实际时区。无效时区使配置加载失败。API统一UTC时间，浏览器按本机时区展示。
 
 再按旧 `nokvm_Sync` 的 GET `/api/virtual/{id}` 读取flow累计入站/出站bytes和flow_limit GiB。累计统计周期由供应商决定，与图表选择范围独立；Go不据此收费或自动暂停。计数及限额用十进制字符串返回，前端BigInt换算GiB，避免JavaScript整数精度损失；总和溢出或累计读取失败时usage为null/usage_available=false，已取得的图表仍返回。限额0显示不限，缺失限额显示暂不可用。
 
-客户限本人已审核的active/suspended NOKVM服务；管理员只需services.view并满足客户范围。每分钟30次限制、no-store，网络调用在事务外，结束后重新检查账号、权限、范围、归属、资源/profile和服务状态，HTTP层再检查会话/API key撤销。查询不修改服务、凭据、账期、余额、库存或开通任务。前端提供四种范围、CPU/网络/磁盘切换、vda/vdb选择、提示值、刷新、CSV及加载/错误重试/空数据状态。证据见 [监控验收](archive/README.md#f-0546e04e5252)。
+客户限本人已审核的active/suspended NOKVM服务；管理员只需services.view并满足客户范围。每分钟30次限制、no-store，网络调用在事务外，结束后重新检查账号、权限、范围、归属、资源/profile和服务状态，HTTP层再检查会话/API key撤销。查询不修改服务、凭据、账期、余额、库存或开通任务。前端提供四种范围、CPU/网络/磁盘切换、vda/vdb选择、提示值、刷新及加载/错误重试/空数据状态；不提供监控数据导出。证据见 [监控验收](archive/README.md#f-0546e04e5252)。
 
 ## VNC 与后续范围
 

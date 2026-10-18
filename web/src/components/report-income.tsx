@@ -7,7 +7,6 @@ import { useAdminIdentity } from "./workspace";
 import { Failure, Loading } from "./common";
 import { Stat } from "./resource-page";
 import { ResourcePagination, ResourceTable } from "./resource-table";
-import { ReportExport } from "./report-shared";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
@@ -68,13 +67,13 @@ function CashTrendChart({ title, series }: { title: string; series: CashSeries[]
   </figure>;
 }
 
-export function AnnualIncomeReport({ year, exportDisabled = false }: { year: number; exportDisabled?: boolean }) {
+export function AnnualIncomeReport({ year, filtersChanged = false }: { year: number; filtersChanged?: boolean }) {
   const path = `/admin/reports/annual-cash?year=${year}`;
   const resource = useResource<AnnualCash>(path, false);
   const result = resource.data;
   return <section aria-label="年度现金收支" className="data-surface p-4 space-y-5">
-    <div className="flex flex-wrap justify-between gap-3"><div><h2 className="font-semibold">{year} 年现金收支</h2><p className="mt-1 text-xs text-muted-foreground">现金收入包含网关到账、信用还款和已核验迟到到账；退款按实际凭证日期统计。余额消费单列为业务消费。</p></div><ReportExport key={`${path}:${exportDisabled}:${!!result}:${!!resource.error}`} path={path} filename={`annual-cash-${year}.csv`} disabled={exportDisabled || !result || !!resource.error}/></div>
-    {exportDisabled && <p className="text-sm text-muted-foreground">筛选条件已更改，请先查询后导出。</p>}
+    <div><h2 className="font-semibold">{year} 年现金收支</h2><p className="mt-1 text-xs text-muted-foreground">现金收入包含网关到账、信用还款和已核验迟到到账；退款按实际凭证日期统计。余额消费单列为业务消费。</p></div>
+    {filtersChanged && <p className="text-sm text-muted-foreground">筛选条件已更改，请查询。</p>}
     {resource.error ? <Failure error={resource.error} retry={resource.refresh}/> : !result ? <Loading/> : <>
       <div className="stat-grid"><Stat icon={ArrowDownLeft} label="实际收款" value={money(result.total.received_cents)}/><Stat icon={ArrowUpRight} label="总支出（退款与人工费用）" value={showMoney(result.total.outgoing_cents)}/><Stat icon={Wallet} label="现金净额" value={showMoney(result.total.net_cents)}/><Stat icon={Receipt} label="业务消费（含余额消费）" value={money(result.total.business_consumption_cents)}/></div>
       {!result.expenses_available && <p role="status" className="text-sm text-muted-foreground">当前客户范围不允许查看全局费用，因此人工费用、总支出和现金净额不可见。</p>}

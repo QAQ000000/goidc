@@ -108,10 +108,9 @@ func TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth(t *testing.T) {
 		t.Fatalf("scoped report leaked global expenses/foreign cash: %#v", result)
 	}
 	w = request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024&format=csv", nil, staff, "")
-	expect(t, w, 200)
-	records := reportCSVRecords(t, w.Body.Bytes())
-	if len(records) != 14 || records[1][3] != "无权限" || records[13][1] != "1400" {
-		t.Fatalf("scoped annual CSV: %#v", records)
+	expect(t, w, 400)
+	if errorData(t, w)["code"] != "invalid_report_format" || w.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("removed export returned a download: %s", w.Body.String())
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024&month=2", nil, root, ""), 400)
 	expect(t, request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024", nil, customer, ""), 403)

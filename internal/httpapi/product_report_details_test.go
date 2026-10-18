@@ -69,10 +69,9 @@ func TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope(t *testing.T) {
 		t.Fatal("empty last page lost total")
 	}
 	response = request(h, "GET", path+"&limit=1&format=csv", nil, staff, "")
-	expect(t, response, 200)
-	csv := reportCSVRecords(t, response.Body.Bytes())
-	if len(csv) != 3 {
-		t.Fatalf("CSV must export all filtered products: %#v", csv)
+	expect(t, response, 400)
+	if errorData(t, response)["code"] != "invalid_report_format" || response.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("removed export returned a download: %s", response.Body.String())
 	}
 	for _, filter := range []string{"category_id=-1", "product_id=0", "product_id=nope"} {
 		expect(t, request(h, "GET", path+"&"+filter, nil, staff, ""), 400)

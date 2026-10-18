@@ -15,6 +15,8 @@
 | 年度收入 | 收入、支出、剩余的月度表与合计；完整 12 月趋势及跨年比较 | 外部现金与业务消费分开，新增费用事实、登记/撤销页面与 API，12 月表/趋势和上年比较已补；专项 PG 回归通过，不代表全部成本或经营利润 |
 | 产品收入 | 年月与产品分组查询；分组下产品明细；新购、续费金额与数量及总额；分页 | 复用独立商品分类，迁移160补旧身份映射，分类分页/产品展开/件数与单数并列已补；专项 PG 与导入夹具通过，真实全量旧数据未验收 |
 
+当前产品范围不包含数据导出，报表仅提供 JSON 查询；显式 `format=csv` 及其他非 JSON 格式返回 `400 invalid_report_format`。合同、发票、附件与下载中心等业务文件下载保留。
+
 恢复包括正常、加载、空、错误、重试、无权限、筛选无结果、分页末页和小屏状态；查询条件与当前页写入 URL，刷新和浏览器前进后退可恢复。切换筛选后回到第一页，旧请求晚到不能覆盖新查询。
 
 ## 我的业绩
@@ -39,7 +41,7 @@
 - 正式确认仍经过原预览摘要、幂等、事务、权限和审计流程。若需要正式确认续费或升级，须单独扩展唯一键、来源与退款冲正契约；报表查询不得顺便创建结算。
 - 查询可见性按当前客户范围检查，已确认人员归属按历史快照展示；两者不能混成“以当前销售重写历史提成”。
 
-销售明细接口 `/admin/reports/sales/details` 按账单分页，CSV 导出当前页的展开子项。销售选项 `/admin/reports/sales/options` 仅列出当前可见客户关联的人员，不读取无范围限制的员工目录。高级筛选不改变净额和历史确认佣金的完整账单分摊基数。
+销售明细接口 `/admin/reports/sales/details` 按账单分页，返回当前页账单及展开子项。销售选项 `/admin/reports/sales/options` 仅列出当前可见客户关联的人员，不读取无范围限制的员工目录。高级筛选不改变净额和历史确认佣金的完整账单分摊基数。
 
 预计阶梯以当前客户范围内、当前归属销售的上海月新购真实到账为营业额；不受关键词或产品筛选影响，不计退款或取消订单，不含续费和升级营业额。该值是受可见范围限制的估算，不等于全员正式确认档位。预计按每笔到账、每业务行有效比例四舍五入到分，合计为已配置行之和；任一未配置行会返回未配置计数，不能将部分预计标为完整预计。
 
@@ -66,7 +68,7 @@
 
 迁移158增加 `ticket_replies.author_kind`、`tickets.initial_author_kind` 和 `ticket_ratings`；公开写入时保存当时的管理员/客户身份，不能按账号当前角色倒推。无可靠来源的旧消息保持 `unknown`，不计为管理员内容、不允许客户评分。内部备注独立存储，不进入评分对象。
 
-客户侧消息入口调用 `POST /tickets/{id}/ratings`；处理人统计与 CSV 使用 `/admin/reports/tickets/handlers`：
+客户侧消息入口调用 `POST /tickets/{id}/ratings`；处理人统计使用 `/admin/reports/tickets/handlers`：
 
 - 工单所属客户只能评价该工单中明确记录为管理员公开回复的内容，范围为 1–5 星；内部备注、客户回复、其他客户工单及无权读取的隐藏部门内容不可评分。
 - 每条回复只允许首次成功评分；数据库唯一约束与事务处理并发提交，同一请求重放返回原结果，修改分数须有单独授权规则。
@@ -103,7 +105,7 @@
 - 年月、商品分类/产品筛选，分组与产品明细、新购/续费收入及数量和总额；分组与未分组产品有稳定排序，组内明细支持展开。
 - 分页响应的 `total` 明确是组数或产品数；汇总基于完整筛选结果，不能只汇总当前页。空末页仍返回真实总数，产品停用或改名不抹去已发生收入。
 - 新购净额按完整订单分摊后再筛选和分组，保留当前客户范围；不能先删掉其他产品行再重新分摊整单折扣。
-- 续费、信用到账与无法归属项保留[现有口径](credit-cash-reporting.md)。成交金额与件数保留已发生事实，独立确认的外部退款列于年度现金支出，不在多产品行重复扣整单退款；本指标不是扣退后的净销售额。分类汇总金额取完整筛选结果，CSV 导出全部匹配分类，分页仅切界面组数；同订单跨产品的订单数不能相加冒充分类去重单数。
+- 续费、信用到账与无法归属项保留[现有口径](credit-cash-reporting.md)。成交金额与件数保留已发生事实，独立确认的外部退款列于年度现金支出，不在多产品行重复扣整单退款；本指标不是扣退后的净销售额。分类汇总金额取完整筛选结果，分页仅切界面组数；同订单跨产品的订单数不能相加冒充分类去重单数。
 
 ## 已确认的产品决策
 
@@ -132,7 +134,8 @@
 
 | 验证 | 实际范围与结论 |
 | --- | --- |
-| E1 报表综合 PG18 | 强制 `REQUIRE_INTEGRATION=1` 的隔离库回归通过，覆盖原4项金额/期间/时区/合并修复、排名/权限、CSV、信用现金、工单评分/处理人及销售详情；日志位于 `output/report-validation/reports-suite.log`，不是活动知识文档 |
+| E1 移除数据导出 | 报表改为仅 JSON、监控 CSV 入口移除后，隔离 UTC 会话 PG18 的 31 项 `-race` 必需入口通过且零跳过，覆盖报表金额/权限/格式与业务文件下载；Go 编译/vet、Node 18 项、Web typecheck/lint/隔离构建通过，lint 有 6 条既有警告。证据位于 `output/remove-data-exports/`；本次未重新执行浏览器验收，以下历史浏览器结果不证明本次界面变更 |
+| E1 报表综合 PG18 | 强制 `REQUIRE_INTEGRATION=1` 的隔离库回归通过，覆盖原4项金额/期间/时区/合并修复、排名/权限、信用现金、工单评分/处理人及销售详情；日志位于 `output/report-validation/reports-suite.log`，不是活动知识文档 |
 | E1 最终竞态回归 | 将上述综合项与 `TestAnnualCash`、`TestReportExpense` 合并，使用 `-race -count=1` 在隔离 PG18 执行；32 个顶层测试通过，0 跳过、无数据竞争。日志 `output/report-validation/reports-race.log`；测试后已移除本轮专用数据库、角色及私有环境文件 |
 | E1 销售专项 | `./scripts/go.sh test ./internal/httpapi -run '^TestSalesReportDetails' -count=1` 已真实通过；覆盖完整账单净额/确认分摊、产品筛选、规则变更与退款、重复信用到账确认去重、负折扣/零权重、范围与快照营业额脱敏 |
 | E1 年度、费用与分类 | `annual_report_test.go`、`report_expenses_test.go`、`product_report_details_test.go` 专项已通过；分别覆盖收消费隔离/退款发生月、追加费用/撤销/审计/来源去重及权限、分类分页/完整汇总与件数 |
@@ -142,6 +145,6 @@
 | E2 未知写结果 | 费用500后刷新，原摘要/body/key保留，成功重试清空pending；评分刷新恢复原2星且选择器禁用，重试用原body/key。夹具、Next与浏览器daemon已退出，40385/46021端口无监听，浏览器夹具的临时 `.next` 已清理 |
 | 未验收边界 | 真实Go API浏览器全链路、真实旧全量迁移/对账、外部现金凭证链路仍须分别验收；上述E1/E2不能替代这些证据 |
 
-综合回归的可复现筛选为 `Test(ProductIncome|IncomeReport|NewClientsReport|CustomerRanking|DailyReport|ExtraReport|TicketReportRetains|ReportCSV|WriteReportFormats|CreditCashReports|AdminReportsAggregate|OnlineTopupHTTPCash|TicketRating|TicketHandler|SalesReportDetails)`，命令前设置受控 `_test` DSN 和 `REQUIRE_INTEGRATION=1`。年度与费用另外使用 `TestAnnualCash|TestReportExpense`；完整验证入口见[报表口径](credit-cash-reporting.md#回归入口)。
+综合回归的可复现筛选为 `Test(ProductIncome|IncomeReport|NewClientsReport|CustomerRanking|DailyReport|ExtraReport|TicketReportRetains|ReportEndpointsJSONOnlyFormatsAndPermissions|CreditCashReports|AdminReportsAggregate|OnlineTopupHTTPCash|TicketRating|TicketHandler|SalesReportDetails)`，命令前设置受控 `_test` DSN 和 `REQUIRE_INTEGRATION=1`。年度与费用另外使用 `TestAnnualCash|TestReportExpense`；完整验证入口见[报表口径](credit-cash-reporting.md#回归入口)。
 
 修改本契约后运行 `node scripts/check-doc-governance.mjs` 和 `node scripts/check-doc-links.mjs`。确认后的决策原位更新本文和[报表口径](credit-cash-reporting.md)，不另建日期快照。

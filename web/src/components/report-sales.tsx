@@ -42,7 +42,7 @@ function SalesTrend({ points, unit }: { points: Trend[]; unit: string }) {
   </div>;
 }
 
-export function SalesReportDetails({ year, month, exportDisabled = false }: { year: number; month: number; exportDisabled?: boolean }) {
+export function SalesReportDetails({ year, month, filtersChanged = false }: { year: number; month: number; filtersChanged?: boolean }) {
   const [filters, setFilters] = useState<Filters>(readFilters);
   const [draft, setDraft] = useState<Filters>(readFilters);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -73,7 +73,7 @@ export function SalesReportDetails({ year, month, exportDisabled = false }: { ye
   const queryNames: Record<keyof Omit<Filters, "offset">, string> = { owner: "sales_owner_id", preset: "preset", from: "from", to: "to", q: "q", customer: "customer", product: "product", invoice: "invoice", kind: "kind", condition: "condition" };
   for (const key of keys) if (filters[key]) params.set(queryNames[key], filters[key]);
   const path = `/admin/reports/sales/details?${params}`;
-  const changed = exportDisabled || keys.some(key => draft[key] !== filters[key]);
+  const changed = filtersChanged || keys.some(key => draft[key] !== filters[key]);
   const valid = (!draft.from && !draft.to || !!draft.from && !!draft.to && draft.from <= draft.to) && (draft.owner === "" || /^\d+$/.test(draft.owner));
   function field(key: keyof Omit<Filters, "offset">, value: string) { setDraft(current => ({ ...current, [key]: value })); }
   const selectClass = "h-9 w-full rounded-md border bg-background px-3";
@@ -98,7 +98,7 @@ export function SalesReportDetails({ year, month, exportDisabled = false }: { ye
       {!valid && <p className="text-sm text-destructive" role="alert">请填写完整且有效的起止日期。</p>}
       <div className="flex flex-wrap gap-2"><Button type="submit" disabled={!valid}>查询业绩</Button><Button type="button" variant="outline" onClick={() => apply({ ...defaults })}>重置筛选</Button></div>
     </form>
-    <ReportPanel<SalesPage> key={`${path}:${revision}`} path={path} filename={`sales-${year}-${month}-page-${filters.offset / 25 + 1}.csv`} title="销售业绩与提成" description="按账单分页，展开当前筛选内的业务子项。金额为折后收入，信用按真实到账。CSV 仅导出当前页的展开子项，金额单位为整数分。" exportDisabled={changed}>
+    <ReportPanel<SalesPage> key={`${path}:${revision}`} path={path} title="销售业绩与提成" description="按账单分页，展开当前筛选内的业务子项。金额为折后收入，信用按真实到账。" filtersChanged={changed}>
       {data => <>
         <p className="text-sm text-muted-foreground mb-4">期间：{data.from} 至 {data.to}；计算时间：{dateTime(data.computed_at)}。当前销售归属用于预计；已确认提成保留历史人员和规则快照。</p>
         <div className="stat-grid mb-4"><Stat icon={Wallet} label="筛选结果到账" value={money(data.statistics.selected.amount_cents)} /><Stat icon={Receipt} label="去重账单数" value={data.statistics.selected.invoice_count} /><Stat icon={BadgePercent} label="已配置项目预计提成" value={money(data.statistics.selected.estimated_commission_cents)} /><Stat icon={BadgePercent} label="所选账单历史有效确认" value={money(data.statistics.selected.confirmed_commission_cents)} /></div>

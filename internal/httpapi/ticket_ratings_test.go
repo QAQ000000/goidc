@@ -193,10 +193,10 @@ func TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination(t *testing.T
 	if data(t, date)["items"].([]any)[0].(map[string]any)["total_score"] != float64(2) {
 		t.Fatal("rating counted rated_at instead of reply creation")
 	}
-	csv := request(h, "GET", path+"&format=csv", nil, viewer, "")
-	expect(t, csv, 200)
-	if records := reportCSVRecords(t, csv.Body.Bytes()); len(records) != 3 {
-		t.Fatalf("CSV scope: %q", csv.Body.String())
+	removedExport := request(h, "GET", path+"&format=csv", nil, viewer, "")
+	expect(t, removedExport, 400)
+	if errorData(t, removedExport)["code"] != "invalid_report_format" || removedExport.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("removed export returned a download: %s", removedExport.Body.String())
 	}
 	exec(`UPDATE tickets SET assignee_id=$2 WHERE id=$1`, target, b)
 	w = request(h, "GET", path, nil, viewer, "")

@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 编译全部 Go 测试 | `./scripts/go.sh test ./... -run '^$'` | Go 依赖可用；不执行测试 |
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
-| CSV 编码与报表输出 | `./scripts/go.sh test -race ./internal/csvexport`；HTTP 纯输出入口见 `report_export_test.go`、`sales_report_details_test.go`，由 CI 单独运行 | 编码不依赖数据库；接口权限/范围仍须独立 PG18 回归 |
+| 报表 JSON 查询 | `./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'`；集成入口 `TestReportEndpointsJSONOnlyFormatsAndPermissions`，金额、权限和分页见[报表回归](credit-cash-reporting.md#回归入口) | 格式解析可独立验证；接口权限/范围仍须独立 PG18 回归 |
 | 内部调度任务 | `node scripts/test-scheduler.mjs --unit` / `--integration`、`node --test scripts/scheduler-components.test.mjs` | 集成须显式回环 PG18 `_test` URL，逐项 run/pass 零 skip；目录/取消/审计和日续费回归，真实 worker 与浏览器另验，见[调度契约](architecture/scheduler.md) |
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
@@ -85,7 +85,7 @@ node scripts/test-compiled-notifications.mjs --integration
 
 客户端版本写入可用 `store.LockVersion` 保留原行锁与领域冲突提示，再调用 `store.UpdateVersioned` 执行原子 id/version 比较更新。表名和 SET 片段只能来自代码常量，值使用绑定参数；助手不承担权限、审计或回执。worker、批量状态推进和需要额外业务谓词的 SQL 保持显式。`TestVersionedCASConcurrencyBindingAndRollback` 验证并发仅一次成功、过期/缺失版本冲突、参数隔离和事务回滚。
 
-前端共用 `resource-table.tsx` 的表格、分页、详情字段及 `mutation-dialog.tsx` 的确认框；页面继续管理筛选 URL、授权、请求版本和重试键。`data-pages.tsx` 保留原导出入口，业务分别位于报表、订单、服务、账户和通用列表模块；订单展示及开票资料编辑也各自独立。`node --test scripts/resource-components.test.mjs` 验证实际组件的渲染和事件边界，不代表浏览器端到端验收。
+前端共用 `resource-table.tsx` 的表格、分页、详情字段及 `mutation-dialog.tsx` 的确认框；页面继续管理筛选 URL、授权、请求版本和重试键。`data-pages.tsx` 保留组件重新导出的兼容入口，业务分别位于报表、订单、服务、账户和通用列表模块；订单展示及开票资料编辑也各自独立。`node --test scripts/resource-components.test.mjs` 验证实际组件的渲染和事件边界，不代表浏览器端到端验收。
 
 G09 来源 HTTP/易支付脚本共用 `g09-source-controller.mjs`，保留旧 CLI、证据文件名、结果字段、精确请求计数及未验证标记；私有清单统一拒绝符号链接、多硬链接和宽松权限。`node --test scripts/g09-source-controller.test.mjs` 验证文件边界，显式 `ZJMFGO_G09_SOURCE_API_SMOKE=1 ZJMFGO_G09_EPAY_SOURCE_SMOKE=1` 的 Go 回归验证真实来源处理链路。运行时验收仍由 `accept-g09-runtime.mjs` 控制、`g09-workload-report.mjs` 汇总；来源冒烟不能证明真实商户、worker 或生产容量。
 

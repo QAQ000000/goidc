@@ -75,7 +75,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 ## CI 门禁
 
-`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、CSV 输出、31 项渠道通知单元 race、实名认证提供方与支付运行单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理、下载、主题和实名认证组件测试。独立 PG18 job 的通知 runner 强制执行 57 项集成入口，覆盖通知进程崩溃恢复和旧 schema 升级，并构建 API/worker 验证 160/161/162 启动拒绝；runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断。该 job 另执行 8 项站点公开主题、管理权限与维护隔离回归，以及实名认证严格集成 runner，覆盖实例快照、未知结果查询、租约与人工围栏、业务资格和 163 升级。同库另执行供应商严格 runner，验证账户身份/命名密钥、真实任务、未知写结果、worker SIGKILL 与 schema165 升级；另执行支付严格 runner，覆盖第二测试协议、多实例与历史密钥、查询/关单/退款边界和 164 升级，逐入口要求零 skip。另执行验证码严格 runner，覆盖图片/点击/widget、配置绑定、旧挑战兼容和并发单次消费；真实厂商另验。另执行内部调度严格 runner，覆盖目录权限、真实分发、审计故障和日续费全量去重。数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
+`.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、报表 JSON 格式边界、31 项渠道通知单元 race、实名认证提供方与支付运行单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理、下载、主题和实名认证组件测试。独立 PG18 job 的通知 runner 强制执行 57 项集成入口，覆盖通知进程崩溃恢复和旧 schema 升级，并构建 API/worker 验证 160/161/162 启动拒绝；runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断。该 job 另执行 8 项站点公开主题、管理权限与维护隔离回归，以及实名认证严格集成 runner，覆盖实例快照、未知结果查询、租约与人工围栏、业务资格和 163 升级。同库另执行供应商严格 runner，验证账户身份/命名密钥、真实任务、未知写结果、worker SIGKILL 与 schema165 升级；另执行支付严格 runner，覆盖第二测试协议、多实例与历史密钥、查询/关单/退款边界和 164 升级，逐入口要求零 skip。另执行验证码严格 runner，覆盖图片/点击/widget、配置绑定、旧挑战兼容和并发单次消费；真实厂商另验。另执行内部调度严格 runner，覆盖目录权限、真实分发、审计故障和日续费全量去重。数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
 
 本地等价入口如下：
 
@@ -86,7 +86,7 @@ node scripts/check-contract-gates.mjs
 node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
 ./scripts/check-go-toolchain.sh
 ./scripts/go.sh test ./... -run '^$'
-./scripts/go.sh test -race ./internal/csvexport
+./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'
 node scripts/test-compiled-notifications.mjs --unit
 node scripts/test-compiled-certification.mjs --unit
 node scripts/test-compiled-payments.mjs --unit
