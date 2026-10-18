@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// A completed unsupported-mode check must release its place in the bounded
-// scan, while retaining the audit and leaving the service active.
+// A manual lifecycle task advances the bounded scan without changing the
+// confirmed service status or starving supported services in the next batch.
 func TestOverdueSuspendProgressPastUnsupportedBatch(t *testing.T) {
 	db, h := testServer(t)
 	uid, _ := user(t, db, h, "suspend-progress-customer", "customer")
@@ -23,54 +23,55 @@ func TestOverdueSuspendProgressPastUnsupportedBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	billingSchedulerFixture(t, db, uid, pid, 101, true)
-	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 100 {
 		t.Fatalf("first batch queued=%d err=%v", n, err)
 	}
 	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 2 {
-		t.Fatalf("supported services behind 100 unsupported services did not progress: queued=%d err=%v", n, err)
+		t.Fatalf("supported services behind 100 manual supplier tasks did not progress: queued=%d err=%v", n, err)
 	}
 	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
 		t.Fatalf("repeated scan queued=%d err=%v", n, err)
 	}
 	var audits, jobs, unsupportedActive, unsupportedJobs int
 	if err := db.Pool.QueryRow(t.Context(), `SELECT
-  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
   (SELECT count(*) FROM provision_jobs WHERE action='suspend'),
   (SELECT count(*) FROM services WHERE provision_mode='supplier' AND status='active'),
   (SELECT count(*) FROM provision_jobs j JOIN services s ON s.id=j.service_id WHERE s.provision_mode='supplier')`).Scan(&audits, &jobs, &unsupportedActive, &unsupportedJobs); err != nil {
 		t.Fatal(err)
 	}
-	if audits != 100 || jobs != 2 || unsupportedActive != 100 || unsupportedJobs != 0 {
+	if audits != 100 || jobs != 102 || unsupportedActive != 100 || unsupportedJobs != 100 {
 		t.Fatalf("audits=%d jobs=%d unsupported active=%d jobs=%d", audits, jobs, unsupportedActive, unsupportedJobs)
 	}
 }
 
+// Historical skip audits must not prevent new manual tasks after upgrading.
 func TestOverdueSuspendProgressReconsidersChangedModes(t *testing.T) {
 	db, h := testServer(t)
-	uid, _ := user(t, db, h, "suspend-mode-change-customer", "customer")
+	uid, _ := user(t, db, h, "suspend-history-customer", "customer")
 	pid := product(t, db, 10)
-	var ids []int64
 	for i := 0; i < 2; i++ {
-		sid, _ := billingSchedulerFixture(t, db, uid, pid, i, true)
-		ids = append(ids, sid)
+		sid, iid := billingSchedulerFixture(t, db, uid, pid, i, true)
 		if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", sid); err != nil {
 			t.Fatal(err)
 		}
-	}
-	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
-		t.Fatalf("unsupported scan queued=%d err=%v", n, err)
-	}
-	for i, mode := range []string{"manual", "simulation"} {
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode=$2 WHERE id=$1", ids[i], mode); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `INSERT INTO audit_events(action,entity_type,entity_id,payload)
+VALUES('service.overdue_suspension.unsupported','service',$1,jsonb_build_object('invoice_id',$2::bigint,'provision_mode','supplier'))`, fmt.Sprint(sid), iid); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 2 {
-		t.Fatalf("old supplier audit suppressed changed delivery modes: queued=%d err=%v", n, err)
+		t.Fatalf("old skip audits suppressed manual tasks: n=%d err=%v", n, err)
 	}
-	var audits int
-	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'`).Scan(&audits); err != nil || audits != 2 {
-		t.Fatalf("prior evidence lost or duplicated: audits=%d err=%v", audits, err)
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 100); err != nil || n != 0 {
+		t.Fatalf("repeat n=%d err=%v", n, err)
+	}
+	var historical, manual, jobs int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT
+(SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+(SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
+(SELECT count(*) FROM provision_jobs WHERE status='waiting_manual' AND request_payload->>'manual_lifecycle'='true')`).Scan(&historical, &manual, &jobs); err != nil || historical != 2 || manual != 2 || jobs != 2 {
+		t.Fatalf("history=%d manual=%d jobs=%d err=%v", historical, manual, jobs, err)
 	}
 }
 
@@ -82,15 +83,15 @@ func TestOverdueSuspendProgressEvidenceMatchesCurrentMode(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", sid); err != nil {
 		t.Fatal(err)
 	}
-	// Historical evidence for another mode must neither hide the current
-	// unsupported mode nor suppress its new evidence indefinitely.
+	// Historical evidence for another mode must not suppress the new manual
+	// task or consume the bounded scan indefinitely.
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO audit_events(action,entity_type,entity_id,payload)
 VALUES('service.overdue_suspension.unsupported','service',$1,
   jsonb_build_object('invoice_id',$2::bigint,'provision_mode','legacy-mode'))`, fmt.Sprint(sid), iid); err != nil {
 		t.Fatal(err)
 	}
 	supported, _ := billingSchedulerFixture(t, db, uid, pid, 1, true)
-	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 1); err != nil || n != 0 {
+	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 1); err != nil || n != 1 {
 		t.Fatalf("current mode scan queued=%d err=%v", n, err)
 	}
 	if n, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 1); err != nil || n != 1 {
@@ -98,7 +99,7 @@ VALUES('service.overdue_suspension.unsupported','service',$1,
 	}
 	var audits, jobs int
 	if err := db.Pool.QueryRow(t.Context(), `SELECT
-  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported' AND payload->>'provision_mode'='supplier'),
+  (SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
   (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='suspend')`, supported).Scan(&audits, &jobs); err != nil || audits != 1 || jobs != 1 {
 		t.Fatalf("current mode audits=%d supported jobs=%d err=%v", audits, jobs, err)
 	}
@@ -112,8 +113,8 @@ func TestOverdueSuspendProgressConcurrentInvoices(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE services SET provision_mode='supplier' WHERE id=$1", unsupported); err != nil {
 		t.Fatal(err)
 	}
-	// Several invoices for one service must each advance, without duplicate
-	// evidence under concurrent scans or starving the following service.
+	// Several invoices for one service share one pending manual task, without
+	// duplicate evidence or starving the following service under concurrent scans.
 	for i := 0; i < 5; i++ {
 		var iid int64
 		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO invoices(invoice_no,user_id,status,amount_cents,due_at)
@@ -158,19 +159,19 @@ VALUES($1,'交叉服务账单','renew',1234,$2)`, supportedInvoice, unsupported)
 	}
 	var audits, distinctInvoices, jobs, unsupportedJobs int
 	if err := db.Pool.QueryRow(t.Context(), `SELECT
-  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
-  (SELECT count(DISTINCT payload->>'invoice_id') FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
+  (SELECT count(DISTINCT payload->>'invoice_id') FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
   (SELECT count(*) FROM provision_jobs WHERE service_id=$1 AND action='suspend'),
   (SELECT count(*) FROM provision_jobs WHERE service_id=$2)`, supported, unsupported).Scan(&audits, &distinctInvoices, &jobs, &unsupportedJobs); err != nil {
 		t.Fatal(err)
 	}
-	if audits != 7 || distinctInvoices != 7 || jobs != 1 || unsupportedJobs != 0 {
+	if audits != 1 || distinctInvoices != 1 || jobs != 1 || unsupportedJobs != 1 {
 		t.Fatalf("concurrent drain audits=%d distinct invoices=%d supported jobs=%d unsupported jobs=%d", audits, distinctInvoices, jobs, unsupportedJobs)
 	}
 }
 
 // Candidate selection and audit/job creation are one transaction. If a later
-// candidate fails after an earlier unsupported candidate has recorded evidence,
+// candidate fails after an earlier manual candidate has recorded evidence,
 // neither the evidence nor a partial suspend job may escape the rollback.
 func TestOverdueSuspendProgressRollsBackOnQueueFailure(t *testing.T) {
 	db, h := testServer(t)
@@ -183,7 +184,7 @@ func TestOverdueSuspendProgressRollsBackOnQueueFailure(t *testing.T) {
 	supported, _ := billingSchedulerFixture(t, db, uid, pid, 1, true)
 
 	// Fail only the later, supported candidate. The first candidate must have
-	// reached the unsupported audit branch before this trigger runs.
+	// reached the manual-task audit branch before this trigger runs.
 	functionName := fmt.Sprintf("test_scheduler_queue_failure_%d", supported)
 	triggerName := fmt.Sprintf("test_scheduler_queue_failure_trigger_%d", supported)
 	if _, err := db.Pool.Exec(t.Context(), fmt.Sprintf(`
@@ -214,7 +215,7 @@ FOR EACH ROW EXECUTE FUNCTION %s()`, triggerName, functionName)); err != nil {
 	}
 	var audits, jobs int
 	if err := db.Pool.QueryRow(t.Context(), `SELECT
-  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
   (SELECT count(*) FROM provision_jobs WHERE action='suspend')`).Scan(&audits, &jobs); err != nil {
 		t.Fatal(err)
 	}
@@ -228,15 +229,15 @@ FOR EACH ROW EXECUTE FUNCTION %s()`, triggerName, functionName)); err != nil {
 	if _, err := db.Pool.Exec(t.Context(), "DROP FUNCTION "+functionName+"()"); err != nil {
 		t.Fatal(err)
 	}
-	if queued, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 2); err != nil || queued != 1 {
+	if queued, err := db.EnqueueOverdueServiceSuspensions(t.Context(), 2); err != nil || queued != 2 {
 		t.Fatalf("retry after rollback queued=%d err=%v", queued, err)
 	}
 	if err := db.Pool.QueryRow(t.Context(), `SELECT
-  (SELECT count(*) FROM audit_events WHERE action='service.overdue_suspension.unsupported'),
+  (SELECT count(*) FROM audit_events WHERE action='supplier.lifecycle.manual_requested'),
   (SELECT count(*) FROM provision_jobs WHERE action='suspend')`).Scan(&audits, &jobs); err != nil {
 		t.Fatal(err)
 	}
-	if audits != 1 || jobs != 1 {
+	if audits != 1 || jobs != 2 {
 		t.Fatalf("retry did not apply complete batch: audits=%d jobs=%d", audits, jobs)
 	}
 }

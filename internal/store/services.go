@@ -70,6 +70,9 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
+	if strings.HasPrefix(key, "overdue-suspend-service-") || strings.HasPrefix(key, "paid-resume-service-") {
+		return out, conflict("reserved_idempotency_key", "此幂等键前缀仅供系统调度使用")
+	}
 	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && action != "rescue_system" && action != "exit_rescue_system" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {
 		return out, conflict("unsupported_service_action", "不支持该服务动作")
 	}
@@ -103,11 +106,13 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !admin && ownerID != actorID {
 		return out, pgx.ErrNoRows
 	}
-	if !admin && mode == "supplier" && (action == "create" || action == "sync") {
+	if !admin && mode == "supplier" && (action == "create" || action == "sync" || isSupplierLifecycleAction(action)) {
 		return out, conflict("permission_denied", "该服务动作仅限管理员")
 	}
-	if !modeSupportsServiceAction(mode, action) {
-		return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
+	if admin && mode == "supplier" && isSupplierLifecycleAction(action) {
+		if err = requireDeliveryManage(ctx, tx, actorID); err != nil {
+			return out, err
+		}
 	}
 	if storage != nil || nat != nil || cdrom != nil || (mode == "supplier" && action == "reinstall") {
 		if err = lockStorageCredential(ctx, tx, actorID); err != nil {
@@ -222,8 +227,24 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return out, err
 	}
+	manualLifecycle := false
+	if mode == "supplier" {
+		caps, e := s.supplierServiceActionCapabilities(ctx, tx, serviceID)
+		if e != nil {
+			return out, e
+		}
+		if !caps.SupportsAction(action) {
+			if !isSupplierLifecycleAction(action) {
+				return out, conflict("unsupported_supplier_action", "该上游适配器暂不支持此操作")
+			}
+			manualLifecycle = true
+		}
+	}
 	var pendingCredentials []byte
 	requestPayload := []byte(`{}`)
+	if manualLifecycle {
+		requestPayload = []byte(`{"manual_lifecycle":true}`)
+	}
 	if cdrom != nil {
 		if mode != "nokvm" || power == "processing" || power == "suspended" || power == "network_limited" {
 			return out, conflict("cdrom_unavailable", "服务当前不允许光驱操作")
@@ -552,52 +573,25 @@ WHERE service_id=$1 AND status IN ('pending','running','waiting_manual','waiting
 	if pendingAction {
 		return out, conflict("service_action_pending", "相同服务动作正在处理中")
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,request_credentials_encrypted,request_fingerprint,request_payload)
-VALUES($1,$2,$3,$4,$5,$6) RETURNING id,status`, serviceID, action, key, pendingCredentials, fingerprint, requestPayload).Scan(&out.JobID, &out.Status)
+	jobState, message := "pending", ""
+	if manualLifecycle {
+		jobState, message = "waiting_manual", supplierLifecycleManualMessage
+	}
+	err = tx.QueryRow(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,request_credentials_encrypted,request_fingerprint,request_payload,status,last_error)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,status`, serviceID, action, key, pendingCredentials, fingerprint, requestPayload, jobState, message).Scan(&out.JobID, &out.Status)
 	if err != nil {
 		return out, err
 	}
 	out.ServiceID, out.Action = serviceID, action
+	if manualLifecycle {
+		if err = Audit(ctx, tx, actorID, "supplier.lifecycle.manual_requested", "service", serviceID, map[string]any{"action": action, "job_id": out.JobID, "reason": "provider_unsupported"}); err != nil {
+			return out, err
+		}
+	}
 	if err = Audit(ctx, tx, actorID, "service.action.queued", "service", serviceID, map[string]any{"action": action, "job_id": out.JobID}); err != nil {
 		return out, err
 	}
 	return out, tx.Commit(ctx)
-}
-
-// modeSupportsServiceAction mirrors the delivery-mode capability gate used by
-// the manual service-action API. A provisioning scheduler must apply the same
-// gate: queueing an action the delivery mode cannot perform only produces a job
-// that keeps failing until its lease attempts are exhausted while the local
-// service stays unchanged. Only the supplier mode restricts actions today; the
-// supplier adapter advertises create/sync/power/reset/rescue/reinstall but not
-// suspend, resume or terminate.
-func modeSupportsServiceAction(mode, action string) bool {
-	gate, restricted := serviceModeActionGates[mode]
-	return !restricted || gate(action)
-}
-
-// Keep the manual API and scheduler candidate filtering on the same capability
-// rules. Modes without a gate retain their existing unrestricted behavior.
-var serviceModeActionGates = map[string]func(string) bool{
-	"supplier": supplierSupportsServiceAction,
-}
-
-func unsupportedServiceActionModes(action string) []string {
-	modes := make([]string, 0, len(serviceModeActionGates))
-	for mode, gate := range serviceModeActionGates {
-		if !gate(action) {
-			modes = append(modes, mode)
-		}
-	}
-	return modes
-}
-
-func supplierSupportsServiceAction(action string) bool {
-	switch action {
-	case "create", "sync", "reset_password", "rescue_system", "exit_rescue_system", "reinstall":
-		return true
-	}
-	return provision.IsPowerAction(action)
 }
 
 func allowedServiceAction(status, action string) bool {

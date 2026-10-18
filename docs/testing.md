@@ -28,7 +28,7 @@
 | 支付运行单元门禁 | `node scripts/test-compiled-payments.mjs --unit` | 注册/协议/历史流水身份、无网络链接生成、快照加密与版本拒绝；race，不继承业务配置 |
 | 支付运行集成门禁 | `node scripts/test-compiled-payments.mjs --integration` | 显式回环 PG18 `_test` URL；第二测试协议、双实例/历史凭据、资金/退款/关单边界及真实 schema164 升级；逐入口 run/pass，零 skip |
 | 供应商单元门禁 | `node scripts/test-compiled-suppliers.mjs --unit` | 配置/身份/能力声明、命名凭据及旧协议本地校验，race |
-| 供应商集成门禁 | `node scripts/test-compiled-suppliers.mjs --integration` | 显式回环 PG18 `_test` URL；第二测试提供方、账户隔离、真实交付/续费/未知结果、worker SIGKILL 和 schema165 升级；逐入口 run/pass，零 skip |
+| 供应商集成门禁 | `node scripts/test-compiled-suppliers.mjs --integration` | 显式回环 PG18 `_test` URL；第二测试提供方、账户隔离、真实交付/续费/未知结果、worker SIGKILL、生命周期能力/人工核验/付清恢复及 schema165/169 升级；逐入口 run/pass，零 skip |
 | 支付查询组件 | `node --test scripts/payment-reconciliation-components.test.mjs` | 通用方法能力、权限、查询状态及失败重试；组件事件夹具不代替浏览器 |
 | worker 强杀恢复 | `./scripts/test-worker-recovery.sh` | 回环 PG18 测试库；实际执行两套 SIGKILL 用例 |
 | 浏览器夹具 | `go test` 的具体 `Test…BrowserFixture` | 测试 DSN、新的 ready/finish 路径和外部浏览器驱动 |
@@ -45,7 +45,7 @@
 
 支付接入规则见[支付模块开发契约](architecture/payment-module-development.md)。支付 runner 覆盖第二个仅测试装配的独立协议、两项命名密钥、指定实例与跨实例幂等、轮换/停用后的原交易、手动/worker 查询、可信关单及独立只读核验、迟到资金事实、退款商户与共享 payout claim、审计回滚和 164 升级。时间与查询计划可由测试 SQL 加速；没有真实商户扣款或退款网络请求，也没有远程预下单实现。能力组件验收不证明浏览器视觉，远端 CI、真实渠道和候选切换继续单列。
 
-供应商接入规则见[供应商模块开发契约](architecture/supplier-module-development.md)。`scripts/test-compiled-suppliers.mjs` 强制设置 worker 崩溃恢复开关，验证第二测试提供方双账户/双密钥、身份冻结与重复身份、schema/CAS、审计回滚、原魔方密文兼容、真实 store 任务与生产 worker 子进程。上游为本地模拟器，真实资源/扣费/网络没有因此获得外部验收。`node --test scripts/supplier-components.test.mjs` 验证 schema 表单、密钥保留/清除、权限与数量型规格成本，不代表真实浏览器。
+供应商接入规则见[供应商模块开发契约](architecture/supplier-module-development.md)。`scripts/test-compiled-suppliers.mjs` 强制设置 worker 崩溃恢复开关，验证第二测试提供方双账户/双密钥、身份冻结与重复身份、schema/CAS、审计回滚、原魔方密文兼容、真实 store 任务与生产 worker 子进程。上游为本地模拟器，真实资源/扣费/网络没有因此获得外部验收。`node --test scripts/supplier-components.test.mjs` 验证 schema 表单、密钥保留/清除、权限与数量型规格成本，以及人工生命周期确认、未知响应原键重试和等待状态隔离，不代表真实浏览器。
 
 ## 编译渠道与通知运行验收
 

@@ -173,6 +173,7 @@ func (s *Store) ServiceSupplierCapabilitiesTx(ctx context.Context, tx pgx.Tx, se
 	}
 	if !admin {
 		caps.Create, caps.Sync = false, false
+		caps.Suspend, caps.Resume, caps.Terminate = false, false, false
 	}
 	return caps, nil
 }

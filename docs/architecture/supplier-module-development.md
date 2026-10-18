@@ -32,7 +32,7 @@ supplier.Register(supplier.Provider{
 })
 ```
 
-`Provider.ID` 是持久身份，`Descriptor.ID` 是编译目录身份。能力从 `Provider.Capabilities` 生成，显式描述符能力必须完全一致；运行工厂的能力也必须一致。声明续费须实现 `RenewalAdapter`，声明控制台或重装须实现 `ConsoleAdapter`。能力声明不开放尚无完整宿主工作流的操作。
+`Provider.ID` 是持久身份，`Descriptor.ID` 是编译目录身份。能力从 `Provider.Capabilities` 生成，显式描述符能力必须完全一致；运行工厂的能力也必须一致。声明续费须实现 `RenewalAdapter`，声明控制台或重装须实现 `ConsoleAdapter`。暂停、恢复和终止使用共享宿主生命周期工作流；声明能力须实现 `Execute` 并返回可证明的目标状态，不得仅返回接收成功。
 
 `IdentityFields` 必须显式选择真实上游账户的必填普通字段，不能含凭据或可选传输配置。身份哈希不包含凭据、schema 版本和非身份字段；修改超时不能创建一条平行账户来绕过账户租约。提供方可在 `Provider.NormalizeConfig` 注册纯本地普通字段归一化函数，输出会再次通过 schema 检查，用于统一该协议等价的上游身份；它不接收凭据。内置魔方统一主机大小写、默认端口、路径转义与尾部斜杠。URL 别名、共享真实账户或多部署仍需运营保证使用专用上游客户。
 
@@ -62,6 +62,14 @@ supplier.Register(supplier.Provider{
 
 商品固定映射继续使用 `ValidateSelection`；数量型规格只支持一个选项及非阶梯单价，输入受 `min_qty/max_qty` 约束，成本为单价和初装费分别乘数量。件数不是选项 ID，前后端都必须核算；金额上限以服务端整数分校验为准。
 
+## 生命周期动作
+
+`Capabilities.SupportsAction` 统一入队和派发映射；服务使用不可变绑定的编译能力，worker 另查实际账户适配器。`Suspend/Resume/Terminate` 各自独立，默认魔方提供方仍全部为 false。支持者执行 `Execute`，未知写保留账户租约和 `waiting_verification`，禁止自动重发。适配器须返回原资源/原商品以及 Suspended、Active 或 Deleted/Terminated/Cancelled 目标状态；上游受理和资源不存在不代表执行成功。
+
+不支持的管理员动作和逾期调度生成 `waiting_manual`、`manual_lifecycle:true` 的未派发待办，保留原服务状态，不提前发送暂停通知。人工接口只回读原资源并核验，前后重查真实会话、权限、客户范围、账户/服务版本及任务身份；不通过通用人工交付接口，不保留只读账户租约。相同核验回执可重放，客户详情不返回管理员依据。客户生命周期入口及供应商取消申请保持未开放。
+
+付清自动恢复只使用成功系统暂停的固定账单/任务来源和服务标记；管理员动作或观察到新的上游暂停原因会失效该标记。仅凭 suspended 状态、幂等键或旧快照不得推断来源。自动任务派发前取消已失效的账务动作；人工待办须核验真实结果或明确确认未生效，不能因平台未派发或账单变化推断人员尚未在上游处理。已确认的晚到暂停或恢复分别交回后续恢复/逾期扫描，已派发未知结果继续保留核验。完整规则见[供应商协议](../supplier-protocol.md#billing-suspension-and-paid-recovery)。
+
 ## 验收与发布
 
 ```bash
@@ -73,6 +81,6 @@ node scripts/check-doc-governance.mjs
 node scripts/check-doc-links.mjs
 ```
 
-严格集成仅允许显式回环 `_test` PG18，逐入口要求真实 run/pass、零 skip。至少覆盖第二协议双账户、双密钥 AAD、普通配置不可重定向、重复身份、schema/CAS、权限撤销、审计回滚、创建/同步/续费、未知结果、真实 worker 崩溃恢复及 schema165 正向升级保留。
+严格集成仅允许显式回环 `_test` PG18，逐入口要求真实 run/pass、零 skip。至少覆盖第二协议双账户、双密钥 AAD、普通配置不可重定向、重复身份、schema/CAS、权限撤销、审计回滚、创建/同步/续费、未知结果、真实 worker 崩溃恢复、暂停/恢复/终止目标确认、人工待办/并发/撤权及注销、付清恢复强来源、账单变化期间人工外部事实保留，以及 schema165 和 schema169→170 正向升级保留。
 
 本地适配器与隔离数据库属于 E1，组件夹具不能替代 E2 浏览器；真实供应商购买、扣款、续费、回调、网络和配额属于 E3，生产发布属于 E4。升级前备份并同包部署匹配 schema 的 API/worker；写入命名账户后，旧二进制不能读取该格式，回退必须保留兼容运行程序，不得通过抹去在途服务与任务恢复旧程序。

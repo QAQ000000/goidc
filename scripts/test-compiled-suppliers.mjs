@@ -8,6 +8,7 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 
 export const unitSuites = {
   "internal/supplier": [
+    "TestSupplierLifecycleCapabilitiesAndTargetProof",
     "TestSupplierConfigurationFactoryAndStableIdentity",
     "TestSupplierRegistrationRejectsUnsafeIdentityAndCapabilityMetadata",
     "TestSupplierFactoryRejectsNilDriftAndSecretBearingErrors",
@@ -43,8 +44,33 @@ export const unitSuites = {
 };
 
 export const integrationSuites = {
-  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity"],
+  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards"],
   "internal/httpapi": [
+    "TestSupplierLifecycleFailedResourceTerminationReleasesInventoryOnce",
+    "TestSupplierLifecycleManualPausePaidBeforeConfirmationPreservesFact",
+    "TestSupplierLifecycleSupportedActionsConfirmTarget",
+    "TestSupplierLifecycleRejectsUnconfirmedTargetAndIdentity",
+    "TestSupplierLifecycleUnknownRetainsLeaseAndVerifiesWithoutResend",
+    "TestSupplierLifecycleManualActionsRequireTrustedSync",
+    "TestSupplierLifecycleNotAppliedRequiresAcknowledgement",
+    "TestSupplierLifecycleLegacyPendingUnsupportedBecomesManual",
+    "TestSupplierLifecyclePermissionAndAuditRollback",
+    "TestSupplierLifecycleVerificationRechecksPermissionAfterSync",
+    "TestSupplierLifecycleConcurrentVerificationAppliesOnce",
+    "TestSupplierLifecycleVerificationRechecksSessionAfterSync",
+    "TestSupplierLifecycleRejectsForgedSystemActionKeys",
+    "TestSupplierLifecyclePaidOverdueSuspensionRecoversByCapability",
+    "TestSupplierLifecyclePaidRecoveryPreservesOtherSuspensionReasons",
+    "TestSupplierLifecyclePaidRecoveryDispatchRechecksNewDebt",
+    "TestSupplierLifecyclePaidRecoveryConcurrentScansQueueOnce",
+    "TestOverdueSuspendSkipsUnsupportedModesWithAudit",
+    "TestOverdueSuspendStillQueuesSupportedModes",
+    "TestOverdueSuspendSupplierMatchesManualActionConstraint",
+    "TestOverdueSuspendProgressPastUnsupportedBatch",
+    "TestOverdueSuspendProgressReconsidersChangedModes",
+    "TestOverdueSuspendProgressEvidenceMatchesCurrentMode",
+    "TestOverdueSuspendProgressConcurrentInvoices",
+    "TestOverdueSuspendProgressRollsBackOnQueueFailure",
     "TestSupplierAPISettingsSchemaPermissionsAndConnectionProbe",
     "TestResourceAPISettingsVersionIdempotencyAndBearerGate",
     "TestResourceAPIKeyEligibilityGates",

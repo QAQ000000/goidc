@@ -27,7 +27,7 @@ WITH candidates AS (
    AND NOT EXISTS (
      SELECT 1 FROM provision_jobs j
      WHERE j.service_id=s.id
-       AND j.status IN ('pending','running','waiting_verification')
+       AND j.status IN ('pending','running','waiting_manual','waiting_verification')
    )
 )
 INSERT INTO provision_jobs(service_id,action,idempotency_key,available_at)
@@ -103,10 +103,24 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	if state != "running" || attempts != claimed.Attempts || !valid || dispatched {
 		return conflict("job_lease_lost", "任务租约失效，禁止重复发送")
 	}
+	// The first check established invoice -> service lock order. Recheck the
+	// provenance after waiting for service/job locks: a concurrent sync or
+	// administrator action may have superseded this automatic recovery.
+	overdueDue, err = lockOverdueSuspensionInvoice(ctx, tx, claimed)
+	if err != nil {
+		return err
+	}
 	if !overdueDue {
 		if err = cancelObsoleteOverdueSuspension(ctx, tx, claimed); err != nil {
 			return err
 		}
+		return tx.Commit(ctx)
+	}
+	proceed, err := reviewCancellationJob(ctx, tx, claimed)
+	if err != nil {
+		return err
+	}
+	if !proceed {
 		return tx.Commit(ctx)
 	}
 	var accountVersion int64
@@ -130,15 +144,23 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 		}
 		return tx.Commit(ctx)
 	}
-	caps := adapter.Capabilities()
-	supported := (claimed.Action == "create" && caps.Create) || (claimed.Action == "sync" && caps.Sync) ||
-		(claimed.Action == "renew" && caps.Renew) ||
-		(claimed.Action == "suspend" && caps.Suspend) || (claimed.Action == "resume" && caps.Resume) ||
-		(provision.IsPowerAction(claimed.Action) && caps.Power) ||
-		(claimed.Action == "reset_password" && caps.ResetPassword) ||
-		((claimed.Action == "rescue_system" || claimed.Action == "exit_rescue_system") && caps.Rescue) ||
-		(claimed.Action == "reinstall" && caps.Reinstall)
-	if !supported {
+	if !adapter.Capabilities().SupportsAction(claimed.Action) {
+		if supplierLifecycleAction(claimed.Action) {
+			// Old pending jobs may outlive the provider implementation that
+			// originally supported them. Preserve a visible manual responsibility
+			// without a dispatch marker, account lease or invented local state.
+			if _, err = tx.Exec(ctx, `UPDATE provision_jobs SET status='waiting_manual',
+request_payload=request_payload||'{"manual_lifecycle":true}'::jsonb,
+last_error='供应商不支持自动执行此动作，请在上游人工处理后核验实际状态',
+locked_at=NULL,completed_at=NULL,updated_at=clock_timestamp() WHERE id=$1`, claimed.ID); err != nil {
+				return err
+			}
+			if err = Audit(ctx, tx, 0, "supplier.lifecycle.manual_requested", "service", claimed.ServiceID,
+				map[string]any{"job_id": claimed.ID, "supplier_id": b.SupplierID, "action": claimed.Action, "reason": "provider_capability_unsupported"}); err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		}
 		return conflict("unsupported_supplier_action", "该适配器不支持该动作")
 	}
 	upstreamID, _ := strconv.ParseInt(upstream, 10, 64)
@@ -306,6 +328,9 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 		} else {
 			if remote.ProductID != b.UpstreamProductID || strconv.FormatInt(remote.UpstreamID, 10) != existing {
 				outcome, message = "waiting_verification", "上游资源商品归属不匹配，请核验"
+			} else if supplierLifecycleAction(j.Action) && (!supplier.LifecycleTargetConfirmed(j.Action, remote.Status) ||
+				(!allowedServiceAction(current, j.Action) && !supplier.LifecycleTargetConfirmed(j.Action, current))) {
+				outcome, message = "waiting_verification", "上游尚未确认动作目标状态，请核验实际资源，禁止直接重试"
 			} else {
 				if err = applySupplierRemoteSafely(ctx, tx, j, remote, s.ProvisionEncryptionKey); err != nil {
 					outcome, message = "waiting_verification", "上游资源无法绑定或同步，请核验资源状态和归属"
@@ -382,14 +407,14 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 		return conflict("supplier_resource_missing", "供应商未返回有效资源")
 	}
 	state := "provisioning"
-	switch remote.Status {
-	case "Active", "active":
+	switch strings.ToLower(strings.TrimSpace(remote.Status)) {
+	case "active":
 		state = "active"
-	case "Suspended", "suspended":
+	case "suspended":
 		state = "suspended"
-	case "Terminated", "terminated", "Cancelled", "cancelled", "Deleted", "deleted":
+	case "terminated", "cancelled", "deleted":
 		state = "terminated"
-	case "Pending", "pending", "provisioning":
+	case "pending", "provisioning":
 	default:
 		return conflict("supplier_status_unknown", "上游资源状态不可识别，请核验")
 	}
@@ -397,8 +422,9 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 	// queued/provisioning for Pending and cancelled/terminated for its terminal
 	// states. Lock here so callbacks, in-flight jobs and manual verification all
 	// merge against the latest committed state, rather than an earlier snapshot.
-	var current, existing string
-	if err := tx.QueryRow(ctx, "SELECT status,upstream_id FROM services WHERE id=$1 FOR UPDATE", j.ServiceID).Scan(&current, &existing); err != nil {
+	var current, existing, previousReason string
+	if err := tx.QueryRow(ctx, `SELECT status,upstream_id,coalesce(resource_info->>'suspend_reason','')
+FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &previousReason); err != nil {
 		return err
 	}
 	if existing != "" && existing != strconv.FormatInt(remote.UpstreamID, 10) {
@@ -408,7 +434,11 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 	switch current {
 	case "queued", "provisioning":
 	case "active", "suspended":
-		applyLifecycle = state != "provisioning" && !(current == "suspended" && state == "active")
+		applyLifecycle = state != "provisioning" && !(current == "suspended" && state == "active" && j.Action != "resume")
+	case "failed":
+		// An explicitly requested termination may close a failed delivery whose
+		// resource was identified later. Other observations never revive it.
+		applyLifecycle = j.Action == "terminate" && state == "terminated"
 	default:
 		// In particular, cancelled and terminated must never be revived.
 		applyLifecycle = false
@@ -435,6 +465,7 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 	resourceFields := map[string]any{
 		"dedicated_ip": remote.DedicatedIP, "assigned_ips": remote.AssignedIPs, "port": remote.Port,
 	}
+	clearBillingOrigin := j.Action == "suspend" || j.Action == "resume" || j.Action == "terminate"
 	if applyLifecycle {
 		reason := remote.SuspendReason
 		if state == "active" {
@@ -445,6 +476,24 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
 		// An omitted reason preserves the local reason; Active clears it.
 		if reason != "" || state == "active" {
 			resourceFields["suspend_reason"] = reason
+			if j.Action != "suspend" && current == "suspended" && state == "suspended" && reason != previousReason {
+				// A new observed upstream reason supersedes the earlier billing
+				// suspension, even when the coarse local state stayed suspended.
+				clearBillingOrigin = true
+			}
+		}
+	}
+	if j.Action == "suspend" && j.ID > 0 && current == "active" && state == "suspended" && applyLifecycle {
+		var payload []byte
+		if err = tx.QueryRow(ctx, `SELECT request_payload FROM provision_jobs WHERE id=$1 AND service_id=$2`, j.ID, j.ServiceID).Scan(&payload); err != nil {
+			return err
+		}
+		var billing struct {
+			SystemOverdueSuspension bool  `json:"system_overdue_suspension"`
+			InvoiceID               int64 `json:"billing_invoice_id"`
+		}
+		if json.Unmarshal(payload, &billing) == nil && billing.SystemOverdueSuspension && billing.InvoiceID > 0 {
+			resourceFields["system_billing_suspension_job_id"] = j.ID
 		}
 	}
 	resource, _ := json.Marshal(resourceFields)
@@ -457,9 +506,9 @@ func applySupplierRemote(ctx context.Context, tx pgx.Tx, j ProvisionJob, remote 
  domain=CASE WHEN $4<>'' THEN $4 ELSE domain END,
  username=CASE WHEN $5<>'' THEN $5 ELSE username END,
  credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
- resource_info=resource_info||$7::jsonb,
+ resource_info=(CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END)||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due)
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin)
 	if err != nil {
 		return err
 	}

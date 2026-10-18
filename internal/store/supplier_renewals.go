@@ -67,7 +67,7 @@ func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID
 		return nil, out, conflict("supplier_resource_missing", "缺少供应商资源标识")
 	}
 	var pending bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action<>'sync' AND status IN ('pending','running','waiting_verification'))
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1 AND action<>'sync' AND status IN ('pending','running','waiting_manual','waiting_verification'))
  OR EXISTS(SELECT 1 FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id LEFT JOIN provision_jobs j ON j.idempotency_key='supplier-renew-'||i.id::text
  WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='paid' AND coalesce(j.status,'')<>'succeeded')`, serviceID).Scan(&pending); err != nil {
 		return nil, out, err

@@ -82,6 +82,7 @@ function load(filename) {
 const { SupplierAccountEditor, SuppliersView, ImportProduct } = load(path.join(web, 'src/components/suppliers-admin.tsx'));
 const { SupplierCatalogView } = load(path.join(web, 'src/components/supplier-catalog.tsx'));
 const { SupplierAPISettingsView } = load(path.join(web, 'src/components/supplier-api-settings.tsx'));
+const { SupplierServiceDelivery, SupplierLifecycle } = load(path.join(web, 'src/components/supplier-delivery.tsx'));
 const { ChannelFieldEditor } = load(path.join(web, 'src/components/channel-instances.tsx'));
 const { Button } = load(path.join(web, 'src/components/ui/button.tsx'));
 const { Input } = load(path.join(web, 'src/components/ui/input.tsx'));
@@ -99,7 +100,7 @@ function reset() {
   permissions = new Set(['products.manage']); requests = []; refreshes = []; navigations = []; timers = [];
   respond = async () => ({ id: 12 });
   resources = new Map([['/admin/supplier-providers', { data: [provider] }], ['/admin/suppliers', { data: [account] }], ['/admin/catalog-groups/category', { data: [] }]]);
-  pending = { ready: true, unknown: false, pending: { current: null }, remember() {}, resolve() {}, setUnknown() {} };
+  pending = { ready: true, unknown: false, pending: { current: null }, remember: value => { pending.pending.current = value; }, resolve: () => { pending.pending.current = null; pending.unknown = false; }, setUnknown: value => { pending.unknown = value; } };
   globalThis.window = { setTimeout: callback => { timers.push(callback); return callback; }, clearTimeout: callback => { timers = timers.filter(value => value !== callback); }, confirm: () => true, addEventListener() {}, removeEventListener() {} };
   globalThis.sessionStorage = { getItem: () => null, setItem() {}, removeItem() {} };
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
@@ -390,4 +391,148 @@ test('account errors preserve escaped messages and the edited credential for an 
   assert.doesNotMatch(html, /<账户已被其他管理员更新>/);
   assert.equal(button(render(), '保存更改').props.disabled, false);
   assert.deepEqual(refreshes, []);
+});
+
+const lifecycleService = extra => ({ id: 41, name: '测试上游服务', provision_mode: 'supplier', upstream_id: '701', status: 'active', supplier_capabilities: { ...capabilities, sync: true, power: true, vnc: true }, jobs: [], ...extra });
+const lifecycleJob = (action = 'suspend') => ({ id: 91, action, status: 'waiting_manual', attempts: 0, manual_lifecycle: true });
+function lifecycle(service = lifecycleService()) {
+  return mount(SupplierLifecycle, { service, refresh: () => refreshes.push('service') });
+}
+function verificationOutcome(tree, value) {
+  find(tree, item => item.type === 'select' && item.props['aria-label'] === '人工生命周期核验结果').props.onChange({ target: { value } });
+}
+
+test('manual supplier lifecycle requests retain the confirmed status and termination requires explicit risk acknowledgement', async () => {
+  reset(); permissions.add('services.manage');
+  const service = lifecycleService();
+  const render = lifecycle(service);
+  assert.match(text(render()), /其他动作只登记待人工任务/);
+  button(render(), '登记上游终止').props.onClick();
+  assert.equal(button(render(), '确认提交').props.disabled, true);
+  await button(render(), '确认提交').props.onClick();
+  assert.equal(requests.length, 0);
+  check(render(), '确认终止风险').props.onCheckedChange(true);
+  respond = async () => ({ job_id: 91, service_id: 41, action: 'terminate', status: 'waiting_manual' });
+  await button(render(), '确认提交').props.onClick();
+  assert.deepEqual(requests[0].body, { action: 'terminate' });
+  assert.equal(requests[0].url, '/admin/services/41/actions');
+  assert.ok(requests[0].headers['Idempotency-Key']);
+  assert.match(text(render()), /等待在上游实际处理及核验；当前服务状态保留/);
+  assert.equal(service.status, 'active');
+});
+
+test('manual lifecycle verification fixes the original resource, supports zero attempts, and requires absence acknowledgement', async () => {
+  reset(); permissions.add('services.manage');
+  const render = lifecycle(lifecycleService({ jobs: [lifecycleJob()] }));
+  verificationOutcome(render(), 'delivered');
+  input(render(), '人工生命周期核验依据').props.onChange({ target: { value: '已在上游核对暂停状态' } });
+  respond = async () => ({ verified: true });
+  await form(render()).props.onSubmit(event);
+  assert.equal(requests[0].url, '/admin/services/41/supplier-lifecycle/verify');
+  assert.deepEqual(requests[0].body, { job_id: 91, expected_attempts: 0, upstream_id: 701, outcome: 'delivered', note: '已在上游核对暂停状态', absence_acknowledged: false });
+  reset(); permissions.add('services.manage');
+  const notApplied = lifecycle(lifecycleService({ jobs: [lifecycleJob('resume')], status: 'suspended' }));
+  verificationOutcome(notApplied(), 'not_applied');
+  input(notApplied(), '人工生命周期核验依据').props.onChange({ target: { value: '已核对本次恢复操作没有执行' } });
+  assert.equal(button(notApplied(), '提交并核验本次结果').props.disabled, true);
+  await form(notApplied()).props.onSubmit(event);
+  assert.equal(requests.length, 0);
+  assert.match(text(notApplied()), /保留既存资源及当前服务状态/);
+  check(notApplied(), '确认本次生命周期操作未生效').props.onCheckedChange(true);
+  respond = async () => ({ verified: true });
+  await form(notApplied()).props.onSubmit(event);
+  assert.equal(requests[0].body.upstream_id, 0);
+  assert.equal(requests[0].body.absence_acknowledged, true);
+});
+
+test('unknown lifecycle results survive remount and refresh while retries preserve the exact request identity', async () => {
+  reset(); permissions.add('services.manage');
+  const service = lifecycleService();
+  let render = lifecycle(service);
+  button(render(), '登记上游暂停').props.onClick();
+  respond = async () => { throw new Error('连接中断'); };
+  await button(render(), '确认提交').props.onClick();
+  const original = structuredClone(requests[0]);
+  assert.equal(pending.unknown, true);
+  assert.equal(button(render(), '登记上游暂停').props.disabled, true);
+  render = lifecycle(service);
+  assert.match(text(render()), /刷新页面后仍保留原请求/);
+  respond = async () => lifecycleService({ jobs: [lifecycleJob()] });
+  await button(render(), '读取最新服务状态').props.onClick();
+  assert.equal(requests[1].method, 'GET');
+  assert.equal(pending.unknown, true);
+  respond = async () => ({ job_id: 91, service_id: 41, action: 'suspend', status: 'waiting_manual', replayed: true });
+  await button(render(), '重试原请求').props.onClick();
+  assert.deepEqual(requests[2], original);
+  assert.equal(pending.unknown, false);
+  assert.equal(pending.pending.current, null);
+});
+
+test('read-only staff and customers cannot manage lifecycle tasks and waiting manual blocks operational commands', async () => {
+  reset();
+  const service = lifecycleService({ jobs: [lifecycleJob()] });
+  const reader = lifecycle(service);
+  assert.match(text(reader()), /登记和核验需要服务管理权限/);
+  assert.equal(nodes(reader()).some(item => item.type === 'form'), false);
+  const customer = mount(SupplierServiceDelivery, { service, admin: false, refresh() {} });
+  assert.match(text(customer()), /等待管理员处理及核验/);
+  assert.equal(nodes(customer()).some(item => item.type === SupplierLifecycle), false);
+  assert.equal(button(customer(), '开机').props.disabled, true);
+  assert.equal(button(customer(), 'VNC').props.disabled, true);
+  await button(customer(), '开机').props.onClick();
+  assert.deepEqual(requests, []);
+});
+
+test('lifecycle sends do not duplicate on rapid submit or accept malformed recovery requests', async () => {
+  reset(); permissions.add('services.manage');
+  const render = lifecycle();
+  button(render(), '登记上游暂停').props.onClick();
+  let finish;
+  respond = () => new Promise(resolve => { finish = resolve; });
+  const submit = button(render(), '确认提交').props.onClick;
+  const first = submit();
+  await submit();
+  assert.equal(requests.length, 1);
+  finish({ job_id: 91, service_id: 41, action: 'suspend', status: 'waiting_manual' });
+  await first;
+  reset(); permissions.add('services.manage');
+  pending.unknown = true;
+  pending.pending.current = { path: '/admin/services/999/actions', body: '{"action":"terminate"}', key: 'foreign-service-key' };
+  const malformed = lifecycle();
+  assert.match(text(malformed()), /原请求恢复资料不完整/);
+  assert.equal(nodes(malformed()).some(item => item.type === Button && text(item) === '重试原请求'), false);
+  assert.equal(button(malformed(), '登记上游暂停').props.disabled, true);
+});
+
+test('unknown lifecycle verification keeps the original resource and explicitly confirms termination or an unapplied action', async () => {
+  reset(); permissions.add('services.manage');
+  const service = lifecycleService({ jobs: [{ ...lifecycleJob('terminate'), status: 'waiting_verification', attempts: 1, manual_lifecycle: false }] });
+  const parent = mount(SupplierServiceDelivery, { service, admin: true, refresh: () => refreshes.push('service') });
+  const child = find(parent(), item => item.type?.name === 'SupplierVerification');
+  const render = mount(child.type, child.props);
+  const choose = value => find(render(), item => item.type === 'select' && item.props['aria-label'] === '未知上游结果核验').props.onChange({ target: { value } });
+  assert.match(text(render()), /原动作可能已发送/);
+  choose('delivered');
+  const resource = find(render(), item => item.type === Input && item.props.type === 'number');
+  assert.equal(resource.props.readOnly, true);
+  assert.equal(resource.props.value, '701');
+  // Even an injected change event cannot retarget a lifecycle confirmation.
+  resource.props.onChange({ target: { value: '999' } });
+  find(render(), item => item.type === Textarea).props.onChange({ target: { value: '已在原供应商核对资源实际终止' } });
+  await form(render()).props.onSubmit(event);
+  assert.equal(requests.length, 0);
+  check(render(), '确认未知终止结果风险').props.onCheckedChange(true);
+  await form(render()).props.onSubmit(event);
+  assert.equal(requests[0].url, '/admin/services/41/supplier-verification');
+  assert.equal(requests[0].body.upstream_id, 701);
+  assert.equal(requests[0].body.expected_attempts, 1);
+  choose('not_applied');
+  assert.match(text(render()), /原资源可以继续存在/);
+  const acknowledgement = find(render(), item => item.type === Checkbox);
+  await form(render()).props.onSubmit(event);
+  assert.equal(requests.length, 1);
+  acknowledgement.props.onCheckedChange(true);
+  await form(render()).props.onSubmit(event);
+  assert.equal(requests[1].body.upstream_id, 0);
+  assert.equal(requests[1].body.absence_acknowledged, true);
 });

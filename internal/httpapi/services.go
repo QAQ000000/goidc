@@ -127,7 +127,9 @@ WHERE s.id=$1 AND (($2::boolean AND admin_customer_allowed($3,s.user_id)) OR (NO
 				service[key] = value
 			}
 		}
-		jobs, err := tx.Query(r.Context(), `SELECT id,action,status,attempts,available_at,locked_at,completed_at,last_error,result,request_payload,created_at
+		jobs, err := tx.Query(r.Context(), `SELECT id,action,status,attempts,available_at,locked_at,completed_at,last_error,
+ result-'manual_lifecycle_verification' AS result,request_payload,created_at,
+ (request_payload->>'manual_lifecycle'='true' AND action IN ('suspend','resume','terminate')) IS TRUE AS manual_lifecycle
 FROM provision_jobs WHERE service_id=$1 ORDER BY id DESC LIMIT 50`, id)
 		if err != nil {
 			return txResponse{}, err

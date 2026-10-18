@@ -109,7 +109,7 @@ func (s *Server) supplierJobs(w http.ResponseWriter, r *http.Request) {
 
 func validSupplierJobAction(action string) bool {
 	switch action {
-	case "create", "suspend", "resume", "terminate", "sync", "upgrade", "reinstall", "reset_password", "reboot", "power_on", "power_off", "force_off", "force_reboot", "rescue_system", "exit_rescue_system", "snapshot_create", "snapshot_delete", "snapshot_restore", "backup_create", "backup_delete", "backup_restore", "nat_acl_create", "nat_acl_delete", "nat_web_create", "nat_web_delete", "cdrom_mount", "cdrom_unmount":
+	case "create", "suspend", "resume", "terminate", "sync", "renew", "upgrade", "reinstall", "reset_password", "reboot", "power_on", "power_off", "force_off", "force_reboot", "rescue_system", "exit_rescue_system", "snapshot_create", "snapshot_delete", "snapshot_restore", "backup_create", "backup_delete", "backup_restore", "nat_acl_create", "nat_acl_delete", "nat_web_create", "nat_web_delete", "cdrom_mount", "cdrom_unmount":
 		return true
 	default:
 		return false

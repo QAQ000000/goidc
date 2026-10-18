@@ -206,7 +206,19 @@
         "internal/store/suppliers.go",
         "internal/httpapi/suppliers.go",
         "db/migrations/166_supplier_configuration_contract.sql",
-        "web/src/components/suppliers-admin.tsx"
+        "web/src/components/suppliers-admin.tsx",
+        "internal/store/supplier_lifecycle.go",
+        "internal/store/supplier_lifecycle_verification.go",
+        "internal/store/supplier_billing_lifecycle.go",
+        "internal/store/notification_scheduler.go",
+        "internal/store/services.go",
+        "internal/store/supplier_delivery.go",
+        "internal/store/supplier_verification.go",
+        "internal/httpapi/supplier_lifecycle.go",
+        "internal/httpapi/services.go",
+        "db/migrations/170_supplier_lifecycle.sql",
+        "web/src/components/supplier-delivery.tsx",
+        "web/src/components/supplier-jobs.tsx"
       ],
       "tests": [
         "node scripts/test-compiled-suppliers.mjs --unit",
@@ -215,6 +227,7 @@
       ],
       "evaluation": [
         "isolated PostgreSQL 18 with exact required run/pass and zero skips; test-only second provider, immutable identity, named credentials, real delivery/renewal/unknown outcomes, production worker SIGKILL and genuine schema165 upgrade",
+        "capability-based suspend/resume/terminate, exact target/resource/product proof, unsupported waiting_manual without dispatch, repeated session/permission checks, unknown write lease retention, system billing suspension provenance and bounded paid recovery, billing changes preserve operator-applied upstream facts, genuine schema169 to 170 preservation and immutable credential-free request guards",
         "real browser and external supplier account, financial settlement, callback and deployment require separate acceptance"
       ],
       "review": {

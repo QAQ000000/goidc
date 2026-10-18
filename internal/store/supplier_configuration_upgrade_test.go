@@ -80,7 +80,7 @@ func TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity(t *testing.T) 
  'bindings',(SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM supplier_product_bindings b),
  'products',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM products p),
  'services',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM services s),
- 'jobs',(SELECT jsonb_agg(to_jsonb(j) ORDER BY id) FROM provision_jobs j),
+ 'jobs',(SELECT jsonb_agg(to_jsonb(j)-'cancellation_request_id' ORDER BY id) FROM provision_jobs j),
  'orders',(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM orders o),
  'items',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM order_items i),
  'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM invoices i),
@@ -96,6 +96,10 @@ func TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity(t *testing.T) 
 	}
 	if err := db.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+	var unexpectedCancellationLinks int
+	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM provision_jobs WHERE cancellation_request_id IS NOT NULL").Scan(&unexpectedCancellationLinks); err != nil || unexpectedCancellationLinks != 0 {
+		t.Fatal("unrelated legacy supplier jobs acquired cancellation links", unexpectedCancellationLinks, err)
 	}
 	if snapshot() != before {
 		t.Fatal("supplier migration changed historical ciphertext, identities or in-flight delivery facts")

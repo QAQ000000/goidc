@@ -39,6 +39,7 @@ const activityActions = [
   ["snapshot_restore", "恢复快照"], ["backup_create", "创建备份"], ["backup_delete", "删除备份"], ["backup_restore", "恢复备份"], ["nat_acl_create", "创建端口转发"],
   ["nat_acl_delete", "删除端口转发"], ["nat_web_create", "创建 NAT 建站"], ["nat_web_delete", "删除 NAT 建站"], ["cdrom_mount", "挂载光驱"], ["cdrom_unmount", "卸载光驱"],
   ["service.manual.completed", "人工交付完成"], ["service.nokvm.verified", "资源核验结果"], ["service.nokvm.completed", "资源操作完成"],
+  ["supplier.lifecycle.manual_requested", "上游人工操作已登记"], ["supplier.lifecycle.manual_verified", "上游人工操作已核验"], ["supplier.lifecycle.manual_cancelled", "上游人工操作已取消"],
   ["service.nokvm.pending", "资源任务待处理"], ["service.nokvm.running", "资源任务执行中"], ["service.nokvm.failed", "资源任务失败"], ["service.nokvm.waiting_verification", "资源任务待核验"],
   ["service.renewal.created", "创建续费账单"], ["service.auto_renew.updated", "更新自动续费"], ["service.configuration.submitted", "提交配置变更"],
   ["service.configuration.cancelled", "取消配置变更"], ["service.configuration.retried", "重试配置变更"], ["service.billing_cycle.completed", "账期变更完成"],

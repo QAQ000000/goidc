@@ -72,6 +72,19 @@ is resent when that read cannot confirm the outcome. Pending resources proceed
 through the existing sync queue. See [real unattended acceptance](archive/README.md#f-1fa4fed8401c)
 for the 2026-10-13 CDN experience product result and deployment boundary.
 
+On 2026-10-19, the current API/store/worker path passed another isolated PG18
+acceptance against the real CDN experience product 391. Resource 4089 was
+created and renewed once; original invoices 811026 and 811027 were Paid with
+one resource-owned host/renew line respectively. Each operation cost one CNY
+cent, the account balance decreased by two cents, and the confirmed due date
+advanced from November 19 to December 19. Polling, manual suspend/terminate
+target rejection while the resource remained Active, and explicit not-applied
+closure passed without false lifecycle notifications or inventory release.
+The isolated database was destroyed and the upstream resource retained. This
+does not establish resident automatic renewal, successful real lifecycle
+changes, public callbacks or deployment. Sanitized evidence remains under
+the ignored `output/supplier-real/current/` directory.
+
 `Sync` first uses GET `/host/header?host_id=...&source=API`, which is the
 endpoint used by the legacy PHP implementation, and falls back to
 `/cart/hostinfo?hostid[0]=...` for older upstream installations.
@@ -94,7 +107,8 @@ Following the 2026-10-13 legacy review, the working tree now uses the maintained
 PHP project's lifecycle merge rules in the shared application path. Local
 `cancelled`/`terminated` remain terminal; `active`/`suspended` cannot regress to
 provisioning; upstream `Active` cannot release a local suspension. This applies
-to callbacks, polling and manual verification under a service row lock.
+to callbacks and polling under a service row lock. Only an explicit, verified
+`resume` job can accept suspended→active; ordinary sync never does.
 Accepted `Active` clears the suspension reason; accepted `Suspended` preserves
 its type prefix without duplication. Ignored states do not overwrite the local
 suspension reason. A stale `Pending` response only schedules a follow-up when
@@ -177,13 +191,74 @@ reconcile: stale recovery releases its account lease, clears the dispatch marker
 and retries it rather than routing it to manual verification. Every other action
 keeps the conservative contract: it enters `waiting_verification`, retains the
 account lease and is never resent automatically. Automated overdue suspension
-applies the same delivery-mode capability gate as the manual action API, so a
-mode that cannot suspend is not queued at all; the skipped suspension is recorded
-as durable `service.overdue_suspension.unsupported` audit evidence so operators
-can act on the missed local suspension.
+resolves the immutable service binding and compiled provider capability. Supported
+lifecycle actions use the existing durable dispatch/account lease; unsupported
+supplier actions create visible `waiting_manual` work without a dispatch marker,
+account lease or premature status/notification change. Upgrades remain unsupported
+for the default provider. A remote refund request alone does not unlock local
+refunds; actual resource termination must first be confirmed.
 
-Upgrades and suspend/resume writes remain blocked for this provider. A remote refund request alone does not unlock local
-refunds; the actual resource deletion must first be synchronized.
+### Lifecycle execution and manual reconciliation
+
+Administrators with `services.view` / `services.manage` and customer scope may
+queue `suspend`, `resume` and `terminate`. The API and worker share capability
+mapping, and dispatch rechecks the configured runtime adapter. The default
+`zjmf_finance_v1` still declares none of these write capabilities: its operator
+performs the action upstream, then uses
+`POST /api/v1/admin/services/{id}/supplier-lifecycle/verify`. Customer lifecycle
+and cancellation requests remain unsupported.
+
+An untouched manual task records `manual_lifecycle:true`, the original resource,
+job ID and attempts (normally zero). Verification reads that fixed resource,
+requires the original product and exact requested target: Suspended for suspend,
+Active for resume, or Deleted/Terminated/Cancelled for terminate. A missing host
+is insufficient evidence of termination. Permissions, customer scope, live
+session, service version/snapshot, account version and task identity are checked
+before and after the read. This read takes no persistent account lease, so a
+crash can be retried safely. Conflicting work remains blocked. Completion and
+audit commit atomically; identical receipts replay safely and are hidden from
+customer job results. `not_applied` requires an explicit acknowledgement and
+note, closes the task as failed and preserves the resource state.
+
+A sent write with an uncertain result remains `waiting_verification`, keeps the
+account lease and uses the existing verification endpoint. It is never resent
+automatically. Reconciliation also requires the exact target status. Only a
+positively confirmed termination releases inventory, once. Pending/manual
+requests produce no false lifecycle notification.
+
+### Billing suspension and paid recovery
+
+The bounded scheduler queues overdue suspensions after the existing 24-hour
+grace period. Unsupported or locally misconfigured supplier bindings become
+manual tasks; old skip audits do not hide them. Invoice locks precede service
+locks; duplicate invoices, concurrent scans and audit failures retain the
+in-flight/idempotency/transaction boundaries.
+
+A successful system suspension carries immutable `system_overdue_suspension`
+and original invoice identity, plus a service marker referencing that exact job.
+Only this latest successful lifecycle action permits automatic recovery after
+the original bill is paid and no other qualifying overdue debt remains. Any
+explicit non-system lifecycle change, or newly observed upstream suspension
+reason, invalidates the marker. API callers cannot use reserved scheduler key
+prefixes. Historical successful pauses lacking this provenance require manual
+handling and are not guessed or backfilled.
+
+Recovery is one task per source suspension: supported Resume executes normally;
+otherwise it is an explicit manual resume task. Automatic dispatch rechecks payment/source eligibility and cancels obsolete
+unsent automatic jobs. A manual task represents operator responsibility: no
+platform dispatch marker can prove that a person has not already acted upstream.
+Billing changes therefore never discard a manual result. The operator verifies
+the actual target or explicitly acknowledges that the action was not applied.
+A confirmed late suspension can enter paid recovery; a confirmed late recovery
+with new debt can be suspended again by the next scan. Unknown/dispatched work
+retains its original verification boundary. No local credit, refund or service
+extension is inferred from these operations.
+
+Migration 170 preserves old requests and adds credential-free payload checks
+and immutable lifecycle action/service/key/source identity. Stop old writers
+before applying the migration and deploying matching API/worker binaries; direct
+old-binary downgrade on the new schema is unsupported. Isolated tests and local
+browser fixtures do not establish real provider execution or production rollout.
 
 Use a dedicated upstream customer account for automated orders: this lease
 coordinates local workers, not people or other deployments sharing that account.
@@ -202,9 +277,9 @@ IDs needs a durable provider-to-handle mapping rather than lossy parsing or
 hashing. Additional credentials use the account's explicit named format and
 per-field AAD; the current first provider retains username/password aliases.
 
-Capabilities reserve suspend/resume/terminate, but advertising a flag alone
-does not enable those workflows. Implement and verify the matching store,
-queue, finance and UI contracts before opening a new lifecycle capability.
+A new lifecycle capability must implement and test `Execute` with normalized
+resource/product identity and a positive target status. Advertising a flag alone
+cannot bypass runtime capability, permissions, account lease or reconciliation.
 Future interactive quantities, staged pricing and other configurations likewise
 require normalized schema support and checkout validation. Protocol fixtures and isolated databases prove
 the local contracts; a real supplier account remains required for external

@@ -15,6 +15,7 @@ var serviceActivityAuditActions = []string{
 	"service.renewal.created", "service.auto_renew.updated", "service.configuration.submitted", "service.configuration.cancelled",
 	"service.configuration.retried", "service.billing_cycle.completed", "service.simulation.completed",
 	"service.cancellation.requested", "service.cancellation.withdrawn", "service.cancellation.approved", "service.cancellation.rejected",
+	"supplier.lifecycle.manual_requested", "supplier.lifecycle.manual_verified", "supplier.lifecycle.manual_cancelled",
 }
 
 var serviceActivityJobActions = []string{
@@ -107,11 +108,14 @@ SELECT 'audit'::text AS source,
          WHEN a.action LIKE 'service.cancellation.%' THEN 'cancellation'
          WHEN a.action IN ('service.renewal.created','service.auto_renew.updated') THEN 'billing'
          WHEN a.action LIKE 'service.configuration.%' OR a.action='service.billing_cycle.completed' THEN 'configuration'
-         WHEN a.action='service.action.queued' OR a.action='service.manual.completed' OR a.action LIKE 'service.nokvm.%' THEN 'operation'
+         WHEN a.action='service.action.queued' OR a.action='service.manual.completed' OR a.action LIKE 'service.nokvm.%' OR a.action LIKE 'supplier.lifecycle.%' THEN 'operation'
          ELSE 'lifecycle'
        END AS category,
        CASE
          WHEN a.action='service.action.queued' THEN 'queued'
+         WHEN a.action='supplier.lifecycle.manual_requested' THEN 'waiting_manual'
+         WHEN a.action='supplier.lifecycle.manual_verified' THEN CASE a.payload->>'outcome' WHEN 'delivered' THEN 'verified' WHEN 'not_applied' THEN 'failed' ELSE 'recorded' END
+         WHEN a.action='supplier.lifecycle.manual_cancelled' THEN 'cancelled'
          WHEN a.action='service.nokvm.verified' THEN CASE a.payload->>'resolution' WHEN 'applied' THEN 'verified' WHEN 'not_applied' THEN 'failed' ELSE 'recorded' END
          WHEN a.action='service.manual.completed' OR a.action IN ('service.nokvm.completed','service.simulation.completed','service.billing_cycle.completed') THEN 'completed'
          WHEN a.action LIKE 'service.nokvm.%' THEN split_part(a.action,'.',3)
@@ -127,7 +131,8 @@ SELECT 'audit'::text AS source,
        jsonb_strip_nulls(jsonb_build_object(
          'audit_id',a.id,
          'job_id',aj.id,
-         'action',CASE WHEN a.action='service.action.queued' AND a.payload->>'action'=ANY($5::text[]) THEN a.payload->>'action' END
+         'action',CASE WHEN a.action IN ('service.action.queued','supplier.lifecycle.manual_requested','supplier.lifecycle.manual_verified','supplier.lifecycle.manual_cancelled') AND a.payload->>'action'=ANY($5::text[]) THEN a.payload->>'action' END,
+         'outcome',CASE WHEN a.action='supplier.lifecycle.manual_verified' AND a.payload->>'outcome' IN ('delivered','not_applied') THEN a.payload->>'outcome' END
        )) AS metadata,
        NULL::integer AS attempts,
        a.id AS sequence

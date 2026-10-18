@@ -82,6 +82,49 @@ type Capabilities struct {
 	Terminate     bool `json:"terminate"`
 	Renew         bool `json:"renew"`
 }
+
+// SupportsAction is shared by admission and dispatch. Metadata never substitutes
+// for the worker's account, resource and runtime capability checks.
+func (c Capabilities) SupportsAction(action string) bool {
+	switch action {
+	case "create":
+		return c.Create
+	case "sync":
+		return c.Sync
+	case "renew":
+		return c.Renew
+	case "suspend":
+		return c.Suspend
+	case "resume":
+		return c.Resume
+	case "terminate":
+		return c.Terminate
+	case "power_on", "power_off", "reboot", "force_off", "force_reboot":
+		return c.Power
+	case "reset_password":
+		return c.ResetPassword
+	case "rescue_system", "exit_rescue_system":
+		return c.Rescue
+	case "reinstall":
+		return c.Reinstall
+	}
+	return false
+}
+
+// LifecycleTargetConfirmed accepts only a positive observation of the requested
+// end state. A successful command response or a missing host is insufficient.
+func LifecycleTargetConfirmed(action, status string) bool {
+	switch strings.ToLower(status) {
+	case "suspended":
+		return action == "suspend"
+	case "active":
+		return action == "resume"
+	case "terminated", "cancelled", "deleted":
+		return action == "terminate"
+	}
+	return false
+}
+
 type Provider struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`

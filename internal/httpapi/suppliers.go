@@ -198,6 +198,12 @@ func (s *Server) supplierVerification(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
+	}
+	in.SessionHash = tokenHash(cookie.Value)
 	if err := s.db.VerifySupplierJob(r.Context(), identityFrom(r).ID, id, in); err != nil {
 		s.fail(w, r, err)
 		return

@@ -16,6 +16,7 @@ type SupplierVerificationInput struct {
 	Outcome             string `json:"outcome"`
 	Note                string `json:"note"`
 	AbsenceAcknowledged bool   `json:"absence_acknowledged"`
+	SessionHash         string `json:"-"`
 }
 
 // Operator reconciliation is intentionally explicit: absence cannot be inferred
@@ -31,13 +32,16 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		return err
 	}
 	defer authTx.Rollback(ctx)
-	if err = requireDeliveryManage(ctx, authTx, actor); err != nil {
+	if err = requireSupplierLifecycleManage(ctx, authTx, actor); err != nil {
+		return err
+	}
+	if err = requireSupplierLifecycleSession(ctx, authTx, actor, in.SessionHash); err != nil {
 		return err
 	}
 	if err = LockAdminResourceCustomer(ctx, authTx, actor, "service", serviceID); err != nil {
 		return err
 	}
-	if err = authTx.Commit(ctx); err != nil {
+	if err = commitSupplierLifecycleTx(ctx, authTx, actor, in.SessionHash); err != nil {
 		return err
 	}
 	var raw []byte
@@ -49,6 +53,7 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		return conflict("supplier_snapshot_invalid", "交付快照无效")
 	}
 	var remote supplier.Service
+	var verifiedAction string
 	binding, err := s.supplierBinding(ctx, snap.BindingID, false)
 	if err != nil {
 		return err
@@ -61,13 +66,12 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		if e != nil {
 			return e
 		}
-		var action string
 		var payload []byte
 		var invoiceID int64
-		if e = s.Pool.QueryRow(ctx, `SELECT action,request_payload,coalesce((result->>'invoice_id')::bigint,0) FROM provision_jobs WHERE id=$1 AND service_id=$2 AND status='waiting_verification' AND attempts=$3`, in.JobID, serviceID, in.ExpectedAttempts).Scan(&action, &payload, &invoiceID); e != nil {
+		if e = s.Pool.QueryRow(ctx, `SELECT action,request_payload,coalesce((result->>'invoice_id')::bigint,0) FROM provision_jobs WHERE id=$1 AND service_id=$2 AND status='waiting_verification' AND attempts=$3`, in.JobID, serviceID, in.ExpectedAttempts).Scan(&verifiedAction, &payload, &invoiceID); e != nil {
 			return e
 		}
-		if action == "renew" {
+		if verifiedAction == "renew" {
 			var snap supplierRenewalSnapshot
 			renew, ok := adapter.(supplier.RenewalAdapter)
 			if !ok || json.Unmarshal(payload, &snap) != nil || snap.UpstreamID != in.UpstreamID || invoiceID < 1 {
@@ -80,8 +84,12 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		if e != nil {
 			return supplierReadError(e)
 		}
-		if remote.UpstreamID != in.UpstreamID || remote.ProductID != binding.UpstreamProductID || (remote.Status != "Active" && remote.Status != "active" && remote.Status != "Suspended" && remote.Status != "suspended") {
-			return conflict("supplier_resource_unconfirmed", "上游资源尚未激活或暂停，请继续核验")
+		confirmed := remote.Status == "Active" || remote.Status == "active" || remote.Status == "Suspended" || remote.Status == "suspended"
+		if supplierLifecycleAction(verifiedAction) {
+			confirmed = supplier.LifecycleTargetConfirmed(verifiedAction, remote.Status)
+		}
+		if remote.UpstreamID != in.UpstreamID || remote.ProductID != binding.UpstreamProductID || !confirmed {
+			return conflict("supplier_resource_unconfirmed", "上游资源归属或动作目标状态尚未确认，请继续核验")
 		}
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -89,7 +97,10 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if err = requireDeliveryManage(ctx, tx, actor); err != nil {
+	if err = requireSupplierLifecycleManage(ctx, tx, actor); err != nil {
+		return err
+	}
+	if err = requireSupplierLifecycleSession(ctx, tx, actor, in.SessionHash); err != nil {
 		return err
 	}
 	if err = LockAdminResourceCustomer(ctx, tx, actor, "service", serviceID); err != nil {
@@ -106,6 +117,10 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 	}
 	if state != "waiting_verification" || j.Attempts != in.ExpectedAttempts {
 		return conflict("version_conflict", "交付任务已变更，请重新加载")
+	}
+	if in.Outcome == "delivered" && (j.Action != verifiedAction ||
+		(supplierLifecycleAction(j.Action) && !allowedServiceAction(current, j.Action) && !supplier.LifecycleTargetConfirmed(j.Action, current))) {
+		return conflict("version_conflict", "动作或服务状态已变更，请重新核验")
 	}
 	if in.Outcome == "delivered" && existing != "" && existing != strconv.FormatInt(in.UpstreamID, 10) {
 		return conflict("supplier_resource_exists", "核验结果不能替换服务已有上游资源")
@@ -165,5 +180,5 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 	if err = Audit(ctx, tx, actor, "supplier.delivery.verified", "service", serviceID, map[string]any{"job_id": j.ID, "outcome": in.Outcome, "upstream_id": in.UpstreamID, "note": in.Note, "absence_acknowledged": in.AbsenceAcknowledged}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return commitSupplierLifecycleTx(ctx, tx, actor, in.SessionHash)
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -551,7 +552,8 @@ func (s *Store) enqueueUnifiedBillingReminders(ctx context.Context, tx pgx.Tx, l
 }
 
 // EnqueueOverdueServiceSuspensions applies the billing grace period and only
-// creates suspend jobs. The service status and customer notification are left
+// creates lifecycle jobs, including recovery of proven system suspensions.
+// The service status and customer notification are left
 // to ProcessProvisionJob, preserving the existing external-call boundary.
 func (s *Store) EnqueueOverdueServiceSuspensions(ctx context.Context, limit int) (int, error) {
 	if limit < 1 || limit > 500 {
@@ -564,10 +566,6 @@ func (s *Store) EnqueueOverdueServiceSuspensions(ctx context.Context, limit int)
 	defer tx.Rollback(ctx)
 	// Keep the batch atomic. Lock every invoice before any service, matching
 	// payment settlement and avoiding invoice/service lock inversions.
-	// A recorded unsupported check is completed work for the current mode, so
-	// exclude it before LIMIT to let later services advance on the next scan.
-	// Derive restricted modes from the live capability rules: changing a mode
-	// or adding suspend support must make old audit evidence non-blocking.
 	rows, err := tx.Query(ctx, `
 SELECT s.id,i.id FROM services s
 JOIN invoices i ON i.status='unpaid' AND NOT i.import_review_required
@@ -580,12 +578,7 @@ WHERE s.status='active' AND NOT s.import_review_required
                   AND j.status IN ('pending','running','waiting_manual','waiting_verification'))
   AND NOT EXISTS (SELECT 1 FROM provision_jobs j WHERE j.idempotency_key=
       'overdue-suspend-service-'||s.id::text||'-invoice-'||i.id::text)
-  AND NOT (s.provision_mode=ANY($2::text[]) AND EXISTS (
-      SELECT 1 FROM audit_events a
-      WHERE a.action='service.overdue_suspension.unsupported' AND a.entity_type='service'
-        AND a.entity_id=s.id::text AND a.payload->>'invoice_id'=i.id::text
-        AND a.payload->>'provision_mode'=s.provision_mode))
-ORDER BY i.id,s.id LIMIT $1`, limit, unsupportedServiceActionModes("suspend"))
+ORDER BY i.id,s.id LIMIT $1`, limit)
 	if err != nil {
 		return 0, err
 	}
@@ -623,6 +616,13 @@ ORDER BY i.id,s.id LIMIT $1`, limit, unsupportedServiceActionModes("suspend"))
 	if err = tx.Commit(ctx); err != nil {
 		return 0, err
 	}
+	if queued < limit {
+		recovered, recoveryErr := s.enqueuePaidSupplierRecoveries(ctx, limit-queued)
+		if recoveryErr != nil {
+			return queued, recoveryErr
+		}
+		queued += recovered
+	}
 	return queued, nil
 }
 
@@ -651,27 +651,18 @@ func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, 
 	if !eligible {
 		return false, nil
 	}
-	// A mode that cannot suspend must not queue a job that is guaranteed to
-	// fail: the job would exhaust its attempts while the service stayed active
-	// and unpaid, and an operator would never learn about it. Record durable
-	// evidence instead so the missed suspension is discoverable, then leave the
-	// service untouched. Evidence is deduplicated per service/invoice/mode so the
-	// minute-level scheduler does not pile up identical rows.
-	if !modeSupportsServiceAction(mode, "suspend") {
-		var recorded bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM audit_events
- WHERE action='service.overdue_suspension.unsupported' AND entity_type='service' AND entity_id=$1
-   AND payload->>'invoice_id'=$2 AND payload->>'provision_mode'=$3)`, fmt.Sprint(serviceID), fmt.Sprint(invoiceID), mode).Scan(&recorded); err != nil {
-			return false, err
+	manualLifecycle := false
+	if mode == "supplier" {
+		caps, capErr := s.supplierServiceActionCapabilities(ctx, tx, serviceID)
+		if capErr != nil {
+			// A missing or disabled binding must become visible work, while an SQL
+			// failure still rolls back the entire batch rather than being swallowed.
+			var businessErr *Conflict
+			if !errors.As(capErr, &businessErr) && !errors.Is(capErr, pgx.ErrNoRows) {
+				return false, capErr
+			}
 		}
-		if recorded {
-			return false, nil
-		}
-		if err := Audit(ctx, tx, 0, "service.overdue_suspension.unsupported", "service", serviceID,
-			map[string]any{"invoice_id": invoiceID, "action": "suspend", "provision_mode": mode, "reason": "delivery_mode_unsupported"}); err != nil {
-			return false, err
-		}
-		return false, nil
+		manualLifecycle = capErr != nil || !caps.Suspend
 	}
 	// Re-read after the service lock: another scheduler may have inserted a
 	// job while this transaction waited, without changing the service row.
@@ -684,10 +675,26 @@ func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, 
 		return false, nil
 	}
 	key := fmt.Sprintf("overdue-suspend-service-%d-invoice-%d", serviceID, invoiceID)
-	command, err := tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key)
-      VALUES($1,'suspend',$2) ON CONFLICT (idempotency_key) DO NOTHING`, serviceID, key)
+	status, message := "pending", ""
+	payloadMap := map[string]any{}
+	if mode == "supplier" {
+		payloadMap["system_overdue_suspension"] = true
+		payloadMap["billing_invoice_id"] = invoiceID
+	}
+	if manualLifecycle {
+		status, message = "waiting_manual", supplierLifecycleManualMessage
+		payloadMap["manual_lifecycle"] = true
+	}
+	payload, _ := json.Marshal(payloadMap)
+	command, err := tx.Exec(ctx, `INSERT INTO provision_jobs(service_id,action,idempotency_key,status,last_error,request_payload)
+      VALUES($1,'suspend',$2,$3,$4,$5::jsonb) ON CONFLICT (idempotency_key) DO NOTHING`, serviceID, key, status, message, payload)
 	if err != nil {
 		return false, err
+	}
+	if command.RowsAffected() > 0 && manualLifecycle {
+		if err = Audit(ctx, tx, 0, "supplier.lifecycle.manual_requested", "service", serviceID, map[string]any{"invoice_id": invoiceID, "action": "suspend", "source": "overdue"}); err != nil {
+			return false, err
+		}
 	}
 	return command.RowsAffected() > 0, nil
 }
@@ -697,8 +704,12 @@ func (s *Store) enqueueOverdueServiceSuspension(ctx context.Context, tx pgx.Tx, 
 // External requests remain outside the existing dispatch transaction.
 func lockOverdueSuspensionInvoice(ctx context.Context, tx pgx.Tx, job ProvisionJob) (bool, error) {
 	var key, action string
-	if err := tx.QueryRow(ctx, "SELECT idempotency_key,action FROM provision_jobs WHERE id=$1", job.ID).Scan(&key, &action); err != nil {
+	var payload []byte
+	if err := tx.QueryRow(ctx, "SELECT idempotency_key,action,request_payload FROM provision_jobs WHERE id=$1", job.ID).Scan(&key, &action, &payload); err != nil {
 		return false, err
+	}
+	if action == "resume" && strings.HasPrefix(key, "paid-resume-service-") {
+		return lockPaidSupplierRecoveryInvoice(ctx, tx, job, key, payload)
 	}
 	if action != "suspend" || !strings.HasPrefix(key, "overdue-suspend-service-") {
 		return true, nil
@@ -723,7 +734,7 @@ func lockOverdueSuspensionInvoice(ctx context.Context, tx pgx.Tx, job ProvisionJ
 // Called only after the normal service/job lease checks under their row locks.
 func cancelObsoleteOverdueSuspension(ctx context.Context, tx pgx.Tx, job ProvisionJob) error {
 	if _, err := tx.Exec(ctx, `UPDATE provision_jobs SET status='cancelled',locked_at=NULL,
-      completed_at=now(),updated_at=now(),last_error='账单已支付或不再符合逾期暂停条件'
+      completed_at=now(),updated_at=now(),last_error='账单或暂停来源已变化，不再符合自动生命周期条件'
       WHERE id=$1 AND status='running' AND attempts=$2 AND external_started_at IS NULL`, job.ID, job.Attempts); err != nil {
 		return err
 	}

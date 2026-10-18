@@ -592,6 +592,7 @@ export type Service = {
   created_at: string;
   updated_at: string;
   jobs?: {
+    manual_lifecycle?: boolean;
     request_payload?:Partial<NOKVMTemplate> & {kind?:"snapshot"|"backup";operation?:string;point_id?:string;point?:NOKVMStoragePoint;limit?:number};
     id: number;
     action: string;

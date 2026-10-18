@@ -298,6 +298,30 @@ func (f *supplierFixture) state(t *testing.T, j *store.ProvisionJob) (string, st
 	return state, svc, running
 }
 
+func (f *supplierFixture) manualTerminationNotApplied(t *testing.T, serviceID int64, key string) {
+	t.Helper()
+	beforeWrites := f.actions.Load()
+	path := fmt.Sprintf("/api/v1/admin/services/%d", serviceID)
+	w := request(f.h, "POST", path+"/actions", map[string]any{"action": "terminate"}, f.root, key)
+	expect(t, w, 202)
+	j := store.ProvisionJob{ID: int64(data(t, w)["job_id"].(float64)), ServiceID: serviceID, Action: "terminate"}
+	var manual, started bool
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT attempts,request_payload->>'manual_lifecycle'='true',external_started_at IS NOT NULL FROM provision_jobs WHERE id=$1", j.ID).Scan(&j.Attempts, &manual, &started); err != nil {
+		t.Fatal(err)
+	}
+	state, service, lease := f.state(t, &j)
+	if state != "waiting_manual" || service != "active" || lease != nil || j.Attempts != 0 || !manual || started {
+		t.Fatalf("manual fallback state=%s service=%s lease=%v attempts=%d marker=%v dispatched=%v", state, service, lease, j.Attempts, manual, started)
+	}
+	// Closing an unperformed manual task is an explicit operator action; it
+	// does not send termination or block the later periodic read-only sync.
+	expect(t, request(f.h, "POST", path+"/supplier-lifecycle/verify", store.SupplierVerificationInput{JobID: j.ID, ExpectedAttempts: j.Attempts, Outcome: "not_applied", Note: "核验本次终止未执行且上游资源仍正常", AbsenceAcknowledged: true}, f.root, ""), 200)
+	state, service, lease = f.state(t, &j)
+	if state != "failed" || service != "active" || lease != nil || f.actions.Load() != beforeWrites {
+		t.Fatalf("manual not-applied state=%s service=%s lease=%v upstream writes=%d", state, service, lease, f.actions.Load()-beforeWrites)
+	}
+}
+
 func TestSupplierManagementImportCheckoutAndDelivery(t *testing.T) {
 	f := supplierSetup(t)
 	catalog := request(f.h, "GET", "/api/v1/catalog", nil, "", "")
@@ -353,7 +377,7 @@ func TestSupplierManagementImportCheckoutAndDelivery(t *testing.T) {
 	}
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", sid), map[string]any{}, f.customer, "supplier-renew"), 201)
 	expect(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", sid), map[string]any{"enabled": true}, f.customer, ""), 200)
-	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/services/%d/actions", sid), map[string]any{"action": "terminate"}, f.root, "supplier-terminate"), 409)
+	f.manualTerminationNotApplied(t, sid, "supplier-terminate")
 	_, err := f.db.Pool.Exec(t.Context(), "UPDATE supplier_product_bindings SET upstream_product_id=8 WHERE product_id=$1", f.pid)
 	if err == nil {
 		t.Fatal("binding mutable")
@@ -545,8 +569,9 @@ FROM services s JOIN products p ON p.id=s.product_id JOIN invoices i ON i.id=$2 
 					t.Fatal(state, stock, released, invoiceStatus)
 				}
 			}
-			// Refund/cancellation is handled remotely; no local termination is sent.
-			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/services/%d/actions", sid), map[string]any{"action": "terminate"}, f.root, "remote-delete-no-local-terminate"), 409)
+			// The default provider creates a manual responsibility and leaves
+			// the actual resource active until an operator records its result.
+			f.manualTerminationNotApplied(t, sid, "remote-delete-no-local-terminate")
 			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/invoices/%d/refund", invoice), map[string]any{}, f.root, "remote-delete-active-refund"), 409)
 			check("active", 0, false)
 			// A refund still being processed leaves the actual resource active.
