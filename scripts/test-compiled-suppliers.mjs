@@ -44,8 +44,23 @@ export const unitSuites = {
 };
 
 export const integrationSuites = {
-  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource"],
+  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryUpgrade171PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryRequestDatabaseGuards"],
   "internal/httpapi": [
+    "TestSupplierExpirySuspendsWithoutCreatingDebtByCapability",
+    "TestSupplierExpiryHonorsGraceAndServiceEligibility",
+    "TestSupplierExpiryConcurrentScansQueueOnce",
+    "TestSupplierExpiryRejectsForgedSystemActionKey",
+    "TestSupplierExpiryDispatchRechecksExtendedDeadline",
+    "TestSupplierExpiryFreshReadProtectsUpstreamEntitlement",
+    "TestSupplierExpiryFreshReadRequeuesChangedExpiredDeadline",
+    "TestSupplierExpiryEarlierUpstreamDeadlineRequiresManualReview",
+    "TestSupplierExpiryManualConfirmationPreservesPauseAfterDeadlineExtension",
+    "TestSupplierExpiryManualCallbackBeforeVerificationStillRecovers",
+    "TestSupplierExpiryMicrosecondSourceSurvivesSecondPrecisionRenewal",
+    "TestSupplierExpiryPolicyCallbackBeforeVerificationCannotGainRecoveryAuthority",
+    "TestSupplierExpiryBillingPolicyCallbackBeforeVerificationCannotGainRecoveryAuthority",
+    "TestSupplierExpiryPaidRenewalRefreshesSystemPause",
+    "TestSupplierExpiryPaidRenewalPreservesNewManualOrPolicyHold",
     "TestSupplierLifecycleFailedResourceTerminationReleasesInventoryOnce",
     "TestSupplierLifecycleManualPausePaidBeforeConfirmationPreservesFact",
     "TestSupplierLifecycleSupportedActionsConfirmTarget",

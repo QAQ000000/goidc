@@ -70,7 +70,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
 	}
-	if strings.HasPrefix(key, "overdue-suspend-service-") || strings.HasPrefix(key, "paid-resume-service-") {
+	if strings.HasPrefix(key, "overdue-suspend-service-") || strings.HasPrefix(key, "paid-resume-service-") || strings.HasPrefix(key, "expiry-suspend-service-") {
 		return out, conflict("reserved_idempotency_key", "此幂等键前缀仅供系统调度使用")
 	}
 	if action != "create" && action != "suspend" && action != "resume" && action != "terminate" && action != "sync" && action != "reset_password" && action != "reinstall" && action != "rescue_system" && action != "exit_rescue_system" && !provision.IsPowerAction(action) && !provision.IsStorageAction(action) && !provision.IsNATAction(action) && !provision.IsCDROMAction(action) {

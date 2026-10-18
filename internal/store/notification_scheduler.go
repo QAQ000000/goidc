@@ -617,6 +617,13 @@ ORDER BY i.id,s.id LIMIT $1`, limit)
 		return 0, err
 	}
 	if queued < limit {
+		expired, expiryErr := s.enqueueExpiredSupplierSuspensions(ctx, limit-queued)
+		if expiryErr != nil {
+			return queued, expiryErr
+		}
+		queued += expired
+	}
+	if queued < limit {
 		recovered, recoveryErr := s.enqueuePaidSupplierRecoveries(ctx, limit-queued)
 		if recoveryErr != nil {
 			return queued, recoveryErr
@@ -710,6 +717,9 @@ func lockOverdueSuspensionInvoice(ctx context.Context, tx pgx.Tx, job ProvisionJ
 	}
 	if action == "resume" && strings.HasPrefix(key, "paid-resume-service-") {
 		return lockPaidSupplierRecoveryInvoice(ctx, tx, job, key, payload)
+	}
+	if action == "suspend" && strings.HasPrefix(key, "expiry-suspend-service-") {
+		return supplierExpirySuspensionEligible(ctx, tx, job, key, payload)
 	}
 	if action != "suspend" || !strings.HasPrefix(key, "overdue-suspend-service-") {
 		return true, nil

@@ -328,7 +328,10 @@ mapping, and dispatch rechecks the configured runtime adapter. The default
 `zjmf_finance_v1` still declares none of these write capabilities: its operator
 performs the action upstream, then uses
 `POST /api/v1/admin/services/{id}/supplier-lifecycle/verify`. Customer lifecycle
-and cancellation requests remain unsupported.
+and supplier cancellation requests remain unsupported. Customers request refunds
+or service suspension through a support ticket. An administrator verifies the
+request and uses the existing invoice refund or service action workflow; a ticket
+alone never refunds money, changes service state or authorizes an upstream write.
 
 An untouched manual task records `manual_lifecycle:true`, the original resource,
 job ID and attempts (normally zero). Verification reads that fixed resource,
@@ -356,6 +359,31 @@ manual tasks; old skip audits do not hide them. Invoice locks precede service
 locks; duplicate invoices, concurrent scans and audit failures retain the
 in-flight/idempotency/transaction boundaries.
 
+The same `overdue_service_suspensions` task also scans recurring supplier
+services whose local `next_due_at` is at least 24 hours past, even without an
+unpaid renewal invoice. Only Active services outside import review qualify;
+one-time services, approved cancellations and any unresolved service task are
+excluded. The service lock, a fresh conflict check and a key bound to the exact
+microsecond deadline prevent concurrent or repeated work. Enqueueing does not
+create an invoice, debit money, change the observed service state or emit a
+suspension notification.
+
+Automatic expiry suspension requires both Suspend and Sync capabilities. Before
+any write, the worker freshly reads the original upstream resource and product,
+then rechecks the task, local deadline and account/binding configuration. A read
+failure or unparseable/mismatched identity cannot authorize a write. A changed
+upstream deadline that is later than the local promise, retained entitlement or
+non-Active state is merged as a normal sync observation and cancels the unsent
+task; a later still-expired deadline is reconsidered by the next scan under its
+new source. An Active resource with an earlier upstream deadline enters
+`waiting_manual` without a write or shortening the local entitlement. Protocol
+dates within the same second represent the same term; the local source retains
+its immutable microsecond precision. An existing remote suspension is not
+attributed to the unsent task. Unsupported capabilities create `waiting_manual`
+work instead. The default Magic Cube provider remains manual: its customer
+pause endpoint uses `self` semantics and is not an automatic due-suspension
+contract, and an accepted request does not prove the physical resource stopped.
+
 A successful system suspension carries immutable `system_overdue_suspension`
 and original invoice identity, plus a service marker referencing that exact job.
 Only this latest successful lifecycle action permits automatic recovery after
@@ -365,7 +393,17 @@ reason, invalidates the marker. API callers cannot use reserved scheduler key
 prefixes. Historical successful pauses lacking this provenance require manual
 handling and are not guessed or backfilled.
 
-Recovery is one task per source suspension: supported Resume executes normally;
+Service-expiry suspensions instead carry immutable `system_expiry_suspension`
+and `expiry_due_unix_micro`, plus a service marker pointing to the exact
+successful system task. This source can authorize only the same deadline's
+confirmed, paid, full-period renewal recovery described below; it is not a
+substitute for a paid invoice or a fresh Active upstream observation. A callback
+cannot establish this source or consume deferred recovery. A task confirmed
+after an earlier callback may establish its source only through the full
+successful lifecycle confirmation. Manual, `self`, abuse/policy suspensions,
+changed sources and terminal states retain their protections.
+
+Invoice-based recovery is one task per source suspension: supported Resume executes normally;
 otherwise it is an explicit manual resume task. Automatic dispatch rechecks payment/source eligibility and cancels obsolete
 unsent automatic jobs. A manual task represents operator responsibility: no
 platform dispatch marker can prove that a person has not already acted upstream.
@@ -381,6 +419,21 @@ and immutable lifecycle action/service/key/source identity. Stop old writers
 before applying the migration and deploying matching API/worker binaries; direct
 old-binary downgrade on the new schema is unsupported. Isolated tests and local
 browser fixtures do not establish real provider execution or production rollout.
+
+Migration 172 extends the immutable credential-free request envelope for service
+expiry tasks. It retains old requests, checksums and financial facts, and does
+not infer expiry authority from historical tasks. Stop old writers, apply the
+migration and deploy its matching API/worker together; mixed old/new writers and
+direct old-binary downgrade are unsupported. The new expiry branch requires its
+own isolated regression evidence; earlier lifecycle or live renewal acceptance
+does not prove it has run against a real provider or been deployed.
+
+The expiry branch passed the strict supplier gates on an owned loopback
+PostgreSQL 18.6 with UTC sessions: 30 unit and 109 integration entry points,
+race enabled and zero skips. The integration gate includes 17 new expiry and
+schema171-to-172 entries; their targeted run passed 71 tests including subcases.
+This is E1 evidence from local protocol fixtures, not real lifecycle execution
+or a production rollout. Evidence is kept under `output/supplier-expiry-lifecycle/`.
 
 Use a dedicated upstream customer account for automated orders: this lease
 coordinates local workers, not people or other deployments sharing that account.
@@ -465,6 +518,12 @@ continue to use their separate invoice-proven recovery flow. Failed, unknown
 or incomplete-period renewals cannot restore service or emit a renewal-success
 event. A confirmed renewal and an actual suspended→active transition each emit
 their own notification once, including when recovery happens on a later sync.
+
+A confirmed system service-expiry suspension may join this renewal flow only
+when its exact successful job, service marker and original deadline match the
+renewal dispatch source. A manual lifecycle action, changed reason, later
+conflicting work or missing history prevents recovery authority. The original
+unpaid-invoice suspension path continues to require its own paid-bill source.
 
 The correction passed the strict supplier gates on an owned loopback PG18.6:
 30 unit and 92 integration entry points, plus 19 cancellation/renewal entries,

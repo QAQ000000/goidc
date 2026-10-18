@@ -34,15 +34,17 @@ func supplierDueSuspension(reason string) bool {
 func snapshotSupplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJob, b SupplierBinding) error {
 	var current, reason, latestAction string
 	var latestID int64
-	var systemBilling bool
+	var systemBilling, expirySource bool
 	if err := tx.QueryRow(ctx, `SELECT s.status,coalesce(s.resource_info->>'suspend_reason',''),
- s.resource_info ? 'system_billing_suspension_job_id',coalesce(source.id,0),coalesce(source.action,'')
+ s.resource_info ? 'system_billing_suspension_job_id',coalesce(source.id,0),coalesce(source.action,''),
+ coalesce(`+supplierExpiryRecoverySourceSQL+` AND source.request_payload->>'expiry_due_unix_micro'=
+  (extract(epoch FROM s.next_due_at)*1000000)::bigint::text,false)
  FROM services s LEFT JOIN LATERAL (`+latestSupplierLifecycleSQL+`) source ON true WHERE s.id=$1`, j.ServiceID).
-		Scan(&current, &reason, &systemBilling, &latestID, &latestAction); err != nil {
+		Scan(&current, &reason, &systemBilling, &latestID, &latestAction, &expirySource); err != nil {
 		return err
 	}
 	evidence := map[string]any{}
-	if (current == "active" || (current == "suspended" && supplierDueSuspension(reason))) && !systemBilling && latestAction != "suspend" {
+	if (current == "active" || (current == "suspended" && supplierDueSuspension(reason))) && !systemBilling && (latestAction != "suspend" || expirySource) {
 		if current == "active" {
 			reason = ""
 		}
@@ -120,7 +122,9 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
  WHERE s.id=$1 AND s.provision_mode='supplier' AND s.status='suspended' AND NOT s.import_review_required
  AND s.resource_info->>'suspend_reason'=$16
  AND NOT s.resource_info ? 'system_billing_suspension_job_id'
- AND coalesce(source.id,0)=$12 AND coalesce(source.action,'')<>'suspend'
+ AND coalesce(source.id,0)=$12 AND (coalesce(source.action,'')<>'suspend' OR
+  (`+supplierExpiryRecoverySourceSQL+` AND (source.request_payload->>'expiry_due_unix_micro')::bigint/1000000=
+   floor(extract(epoch FROM $14::timestamptz))::bigint))
  AND s.delivery_snapshot->>'binding_id'=b.id::text
  AND s.delivery_snapshot->>'supplier_id'=a.id::text AND s.delivery_snapshot->>'provider'=$4
  AND a.active AND a.version=$6 AND a.provider=$4

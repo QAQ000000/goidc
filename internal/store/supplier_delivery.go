@@ -62,6 +62,10 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	if err != nil {
 		return s.failUndispatchedSupplierJob(ctx, claimed, err)
 	}
+	expiryRemote, err := s.readSupplierExpiryBeforeDispatch(ctx, claimed, b, adapter)
+	if err != nil {
+		return s.failUndispatchedSupplierJob(ctx, claimed, err)
+	}
 	var reinstallItems []supplier.Template
 	if claimed.Action == "reinstall" {
 		var upstream string
@@ -143,6 +147,15 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 			return err
 		}
 		return tx.Commit(ctx)
+	}
+	if expiryRemote != nil {
+		deferred, deferErr := s.deferSupplierExpiryFromRemote(ctx, tx, claimed, *expiryRemote)
+		if deferErr != nil {
+			return deferErr
+		}
+		if deferred {
+			return tx.Commit(ctx)
+		}
 	}
 	if !adapter.Capabilities().SupportsAction(claimed.Action) {
 		if supplierLifecycleAction(claimed.Action) {
@@ -481,6 +494,7 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 		reason := remote.SuspendReason
 		if state == "active" {
 			reason = ""
+			clearBillingOrigin = true
 		} else if state == "suspended" && remote.SuspendReasonType != "" && !strings.HasPrefix(reason, remote.SuspendReasonType+"-") {
 			reason = remote.SuspendReasonType + "-" + reason
 		}
@@ -502,7 +516,7 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 		// runs. A later read may consume only this confirmed renewal's authority.
 		resourceFields["supplier_renewal_recovery_job_id"] = renewalRecoveryID
 	}
-	if j.Action == "suspend" && j.ID > 0 && current == "active" && state == "suspended" && applyLifecycle {
+	if j.Action == "suspend" && j.ID > 0 && (current == "active" || current == "suspended") && state == "suspended" && applyLifecycle {
 		var payload []byte
 		if err = tx.QueryRow(ctx, `SELECT request_payload FROM provision_jobs WHERE id=$1 AND service_id=$2`, j.ID, j.ServiceID).Scan(&payload); err != nil {
 			return err
@@ -511,8 +525,21 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 			SystemOverdueSuspension bool  `json:"system_overdue_suspension"`
 			InvoiceID               int64 `json:"billing_invoice_id"`
 		}
-		if json.Unmarshal(payload, &billing) == nil && billing.SystemOverdueSuspension && billing.InvoiceID > 0 {
+		if current == "active" && json.Unmarshal(payload, &billing) == nil && billing.SystemOverdueSuspension && billing.InvoiceID > 0 {
 			resourceFields["system_billing_suspension_job_id"] = j.ID
+		}
+		var expiry supplierExpirySuspension
+		reason := remote.SuspendReason
+		if remote.SuspendReasonType != "" && !strings.HasPrefix(reason, remote.SuspendReasonType+"-") {
+			reason = remote.SuspendReasonType + "-" + reason
+		}
+		// A callback can precede confirmation of the same expiry action. Only
+		// a due suspension can establish that source from an already suspended
+		// service; never reclassify an independent policy/manual pause.
+		canAttributeExpiry := (current == "active" && (reason == "" || supplierDueSuspension(reason))) ||
+			(current == "suspended" && supplierDueSuspension(previousReason) && supplierDueSuspension(reason))
+		if canAttributeExpiry && json.Unmarshal(payload, &expiry) == nil && expiry.System && expiry.Due > 0 {
+			resourceFields["system_expiry_suspension_job_id"] = j.ID
 		}
 	}
 	resource, _ := json.Marshal(resourceFields)
@@ -530,8 +557,8 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
  username=CASE WHEN $5<>'' THEN $5 ELSE username END,
  credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
  resource_info=(CASE WHEN $12::boolean THEN
-  (CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END)-'supplier_renewal_recovery_job_id'
-  ELSE (CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END) END)||$7::jsonb,
+  (CASE WHEN $10::boolean THEN resource_info-ARRAY['system_billing_suspension_job_id','system_expiry_suspension_job_id'] ELSE resource_info END)-'supplier_renewal_recovery_job_id'
+  ELSE (CASE WHEN $10::boolean THEN resource_info-ARRAY['system_billing_suspension_job_id','system_expiry_suspension_job_id'] ELSE resource_info END) END)||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
  next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin, j.Action == "renew", clearRenewalRecovery)
 	if err != nil {

@@ -210,6 +210,8 @@
         "internal/store/supplier_lifecycle.go",
         "internal/store/supplier_lifecycle_verification.go",
         "internal/store/supplier_billing_lifecycle.go",
+        "internal/store/supplier_expiry_lifecycle.go",
+        "internal/store/supplier_renewal_recovery.go",
         "internal/store/notification_scheduler.go",
         "internal/store/services.go",
         "internal/store/supplier_delivery.go",
@@ -218,6 +220,7 @@
         "internal/httpapi/services.go",
         "db/migrations/170_supplier_lifecycle.sql",
         "db/migrations/171_automatic_renewal_sources.sql",
+        "db/migrations/172_supplier_expiry_lifecycle.sql",
         "internal/store/auto_renew_payment.go",
         "internal/store/auto_renew.go",
         "internal/store/renewals.go",
@@ -235,6 +238,7 @@
         "isolated PostgreSQL 18 with exact required run/pass and zero skips; test-only second provider, immutable identity, named credentials, real delivery/renewal/unknown outcomes, production worker SIGKILL and genuine schema165 upgrade",
         "capability-based suspend/resume/terminate, exact target/resource/product proof, unsupported waiting_manual without dispatch, repeated session/permission checks, unknown write lease retention, system billing suspension provenance and bounded paid recovery, billing changes preserve operator-applied upstream facts, genuine schema169 to 170 preservation and immutable credential-free request guards",
         "automatic renewal checks actual upstream due window, immutable source and payment-time intent; no automatic collection of retained unpaid invoices; genuine schema170 to 171 upgrade without inferring sources from historical keys; real worker SIGKILL before renewal checkpoint and after upstream payment; notification only after full period confirmation",
+        "expiry suspension after 24 hours without creating an invoice or collecting funds; fresh upstream identity, deadline and state proof before automatic dispatch; immutable expiry source, concurrent scans, callback-first manual confirmation and paid full-period recovery preserve manual or abuse suspensions; schema171 to 172 preserves history without inferring sources",
         "real browser and external supplier account, financial settlement, callback and deployment require separate acceptance"
       ],
       "review": {
