@@ -13,15 +13,15 @@
 
 | 领域 | 必须回答的问题 | 测试/审计入口 | 证据边界 |
 | --- | --- | --- | --- |
-| 编译模块与配置 | 二进制实际模块是否匹配声明？配置/凭据是否按 schema 校验并隔离？缺失实现能否安全停用？新增同类适配器能否复用运行链路？ | [模块契约与测试](../compiled-module-architecture.md#验证入口与发布边界)、`scripts/module-manifest.test.mjs`、`scripts/channel-components.test.mjs`、独立 PG18 的 `TestChannelConfiguration` / `TestCompiledMail` / `TestCompiledSMS` / `TestMissingSupplierDisable` | 清单不证明外部健康；组件事件不代表浏览器；新支付协议仍需资金全链路验收 |
+| 编译模块与配置 | 二进制实际模块是否匹配声明且不读配置或联网？配置/凭据是否按 schema 校验并隔离？缺失实现能否安全停用？新增同类适配器能否复用运行链路？ | [模块契约与测试](../compiled-module-architecture.md#验证入口与发布边界)、`scripts/check-module-binaries.mjs`、`scripts/test-compiled-notifications.mjs` 的 unit/integration 严格入口、渠道组件测试 | 必需入口缺失或跳过须失败；清单不证明外部健康，组件事件不代表浏览器；新支付协议仍需资金全链路验收 |
 | 订单与支付 | 金额是否以整数分计算？重复键是否重放同一结果？外部未知是否停止重发？ | `./scripts/go.sh test ./...`；独立 PG18 使用 `./scripts/test-all.sh`；[支付契约](../payments.md) | 模拟支付只能证明适配器和状态处理，不能证明真实渠道可用 |
 | 余额与发票 | 借贷、冻结、退款、发票版本和审计是否同事务提交？ | `internal/store` 事务/幂等测试；[交易契约](../transactions.md)；[发票](../invoice-applications.md) | 无独立 `_test` 数据库不得声称数据库集成通过 |
 | 服务生命周期 | 交付、续费、变更、取消和失败恢复是否保持状态机约束？ | Go 业务回归、worker 恢复脚本、[服务契约](../service-configuration-changes.md) | worker 启动或编译成功不代表恢复和外部交付通过 |
 | RBAC 与后台 | API 与页面是否执行同一角色、资源范围和撤权规则？ | API 权限测试、`node scripts/admin-page-contracts.mjs`、[RBAC](../admin-rbac.md) | 静态登记不等于运行时强制；浏览器验收需单独记录 |
 | 经营报表与评分 | 折扣分摊/期间去重是否守恒？预计与确认是否分离？评分是否按原身份一次写入？真实现金与费用是否可追溯且不越权？ | [报表口径与测试入口](../credit-cash-reporting.md#回归入口)、[恢复契约](../report-restoration-contract.md)、`reports_regression_test.go`、`sales_report_details_test.go`、`ticket_ratings_test.go`、`annual_report_test.go`、`report_expenses_test.go`、`product_report_details_test.go` | 必须强制独立PG18；导入夹具不代表真实旧全量迁移，四尺寸浏览器与外部现金凭证另验 |
 | 供应商与 NOKVM | 超时、重试、凭据、未知结果和人工复核是否安全？ | 适配器测试、隔离运行、[供应商协议](../supplier-protocol.md)、[NOKVM](../nokvm-delivery.md) | 模拟供应商不证明真实商户、配额、网络或生产权限 |
-| 统一通知 | 绑定是否验证且自愿订阅？撤权/退订/解绑是否阻止旧任务？未知外部结果是否停止重发？ | [通知契约](../notification-architecture.md)、独立 PG18 的 `TestNotificationCenter`、`internal/notification` 的 Telegram/worker 测试、`scripts/notification-center-components.test.mjs` | 本地 Bot 模拟器与浏览器只到 E1/E2；真实 Telegram 凭据、回调可达性和客户接收需另验 |
-| 迁移与切换 | 旧数据映射、迁移 checksum、冻结、回退和切回是否可重复？ | 独立 PG 演练、`cmd/migrate`、[迁移入口](../migration/README.md) | 静态盘点和生成报告只能是 E0 |
+| 统一通知 | 绑定是否验证且自愿订阅？撤权/退订/解绑是否阻止旧任务？平台接受后进程崩溃是否冻结未知结果且不重发？ | [通知契约](../notification-architecture.md)、PG18 严格 integration 门禁、`TestNotificationCenterProcessRecovery`、通知组件测试 | SIGKILL 是生产循环的测试子进程，HTTP 为本地模拟器、租约 SQL 加速；完整 worker、真实回调及客户接收另验 |
+| 迁移与切换 | 旧数据、密文、队列及 checksum 是否保留？旧 schema 是否被当前候选拒绝？冻结、回退和切回是否可重复？ | 独立 PG 的 `TestNotificationCenterUpgradeFrom160`；CI 提供实际双二进制强制启动门禁；`cmd/migrate`、[迁移入口](../migration/README.md) | 合成旧夹具和正向升级不证明旧二进制降级或生产备份恢复；静态盘点只能是 E0 |
 | 前端与 API | 加载、空、错误、冲突、响应式和错误码是否可见且一致？ | `npm --prefix web run lint`、`typecheck`、`test:proxy`、组件测试 | lint/typecheck 不等于浏览器或真实 API 验收 |
 | worker 与容量 | 强杀、重启、队列、锁、延迟和资源预算是否有边界？ | `./scripts/test-worker-recovery.sh`、[容量验证](../capacity.md) | 只读负载不能证明支付、写入或生产容量 |
 

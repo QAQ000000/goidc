@@ -5,7 +5,7 @@ import { fileHash, noLinks, safeRelative, sha256 } from './release-candidate-lib
 
 // The same complete transitive runtime module set is pinned and copied into
 // /control. Keep the inner import closure independent from the candidate source.
-export const controllerFiles = ['scripts/accept-release-runtime.mjs', 'scripts/release-runtime-acceptance-lib.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs'];
+export const controllerFiles = ['scripts/accept-release-runtime.mjs', 'scripts/release-runtime-acceptance-lib.mjs', 'scripts/release-candidate-lib.mjs', 'scripts/module-manifest-lib.mjs', 'scripts/release-runtime-builder-lib.mjs', 'scripts/release-runtime-trace-selection.mjs'];
 export const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 export function requireThat(condition, message) { if (!condition) throw new Error(message); }
 export async function jsonFile(filename) {

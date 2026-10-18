@@ -6,8 +6,9 @@
 ## 当前状态
 
 - 业务：商品/配置、购物车、订单、余额与在线支付、服务交付、续费/变更/取消、工单、文件、通知、信用及返佣。
-- 后台：105 项旧版能力映射中，45 项完成、60 项部分完成。登记不等于全量浏览器或生产验收。
-- 数据库：迁移按完整文件名及 checksum 管理；当前有 158 个 SQL 文件，最大编号 156，存在历史重复前缀。
+- 后台：105 项旧版能力映射中，43 项完成、62 项部分完成。登记不等于全量浏览器或生产验收。
+- 数据库：迁移按完整文件名及 checksum 管理；当前有 163 个 SQL 文件，最大编号 162，存在历史重复前缀。
+- 通知：`invoice.paid` 已接入 Telegram 私聊、本人站内收件箱、绑定及主动订阅；既有隔离与浏览器验收见[通知契约](notification-architecture.md)。邮件、短信保持原队列和模板；当前没有公网 HTTPS 地址，Telegram 真实回调与消息收发未验收。
 - 发布：已有隔离候选构建、启动、切换及部分恢复证据；正式 HTTPS、真实渠道、业务快照和容量仍需验收。
 - 运行状态必须现场核验；文档中的历史 schema、BUILD_ID 和 active 不能当作当前运行状态。
 
@@ -19,6 +20,7 @@
 | 当前替代差距与外部条件 | [最新差距审计](replacement-gap-audit.md) |
 | 后台逐项状态与 API/权限 | [105 项台账](admin-full-ui-restore-ledger.md)、[页面契约](admin-page-contracts.md) |
 | 测试入口和范围 | [测试说明](testing.md) |
+| 通知、本人收件箱与渠道边界 | [统一通知契约](notification-architecture.md)、[工单通知契约](ticket-notification-contract.md) |
 | 实际可执行的负载与 worker 验证 | [容量验证](capacity.md) |
 | 发布和回退 | [切换手册](cutover-runbook.md)、[发布契约](release-readiness-next-contract.md) |
 | 历史记录与原始证据 | [封存索引](archive/README.md) |

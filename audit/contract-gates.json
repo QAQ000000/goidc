@@ -11,16 +11,20 @@
         "internal/store/channel_configuration.go",
         "audit/module-build-profile.json",
         "scripts/module-manifest-lib.mjs",
-        "web/src/components/channel-instances.tsx"
+        "web/src/components/channel-instances.tsx",
+        "scripts/check-module-binaries.mjs",
+        "scripts/test-compiled-notifications.mjs"
       ],
       "tests": [
-        "./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/...",
-        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/httpapi -run 'TestChannelConfiguration|TestCompiledMail|TestCompiledSMS|TestNotificationEnable|TestDefaultIDCSmartSMS|TestPaymentSchemaMismatch|TestDefaultPaymentContract|TestMissingSupplierDisable'",
-        "node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs scripts/release-candidate.test.mjs scripts/release-runtime.test.mjs"
+        "node scripts/check-module-binaries.mjs",
+        "node scripts/test-compiled-notifications.mjs --unit",
+        "node scripts/test-compiled-notifications.mjs --integration",
+        "node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-candidate.test.mjs scripts/release-runtime.test.mjs scripts/release-runtime-acceptance.test.mjs"
       ],
       "evaluation": [
-        "isolated PostgreSQL 18 credentials, audit rollback and historical payment compatibility",
-        "browser configuration and deployment-specific external channel verification"
+        "isolated PostgreSQL 18 credentials, audit rollback, historical payment compatibility and genuine schema160 upgrade; exact required Go run/pass with zero skips",
+        "browser configuration and deployment-specific external channel verification",
+        "sealed candidate runtime with complete independently copied controller import closure; local simulation and TERM/restart only"
       ],
       "review": {
         "required": true,
@@ -49,12 +53,13 @@
         "web/src/components/notification-preferences.tsx"
       ],
       "tests": [
-        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/store ./internal/httpapi -run TestNotificationCenter",
-        "./scripts/go.sh test ./internal/notification -run \"Telegram|NotificationCenter\"",
-        "node --test scripts/notification-center-components.test.mjs"
+        "node scripts/test-compiled-notifications.mjs --unit",
+        "node scripts/test-compiled-notifications.mjs --integration",
+        "node --test scripts/notification-center-components.test.mjs scripts/compiled-notification-gates.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18 consent, binding, scope, transactional rollback and lease recovery",
+        "owned production-loop subprocess SIGKILL after local acceptance and before durable completion; unknown never resends; full worker binary crash and real channels remain separate",
         "real browser with local Telegram protocol simulator; live Telegram verification remains separate"
       ],
       "review": {
@@ -178,10 +183,12 @@
         "docs/cutover-runbook.md"
       ],
       "tests": [
-        "./scripts/go.sh test ./... -run 'Migration|Checksum'"
+        "./scripts/go.sh test ./... -run 'Migration|Checksum'",
+        "REQUIRE_INTEGRATION=1 ./scripts/go.sh test ./internal/store -run ^TestNotificationCenterUpgradeFrom160$ -count=1"
       ],
       "evaluation": [
-        "isolated PostgreSQL migration and rollback rehearsal"
+        "isolated PostgreSQL migration and rollback rehearsal",
+        "schema160 to 161/162 legacy ciphertext and pending queues; actual API/worker startup rejection requires both candidate paths and ZJMFGO_UPGRADE_BINARY_ACCEPTANCE=1"
       ],
       "review": {
         "required": true,

@@ -12,10 +12,30 @@
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
+| 实际模块二进制 | `node scripts/check-module-binaries.mjs` | Linux、strace；真实构建 API/worker，在空应用配置下拒绝并检查全部网络 syscall |
+| 渠道与通知单元门禁 | `node scripts/test-compiled-notifications.mjs --unit` | 31 个指定入口，race；不继承应用配置或测试 DSN |
+| 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；42 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |
 | worker 强杀恢复 | `./scripts/test-worker-recovery.sh` | 回环 PG18 测试库；实际执行两套 SIGKILL 用例 |
 | 浏览器夹具 | `go test` 的具体 `Test…BrowserFixture` | 测试 DSN、新的 ready/finish 路径和外部浏览器驱动 |
 
 浏览器夹具是供浏览器连接的临时 API 环境，单独启动或编译夹具不代表浏览器验收。未显式配置的浏览器、真实外部渠道、旧库及常驻进程专项仍可能跳过。
+
+## 编译渠道与通知运行验收
+
+`.github/workflows/quality.yml` 的独立 PG18 job 使用任务自有容器及测试库，强制执行上述 42 个入口。runner 固定 `-race -count=1 -p=1 -parallel=1`，逐项核对 Go JSON 的 run、pass 和包结果；无 DSN、非法连接覆盖参数、测试改名或任何 skip 都会失败。普通 CI 不启动等待人工操作的浏览器夹具或子进程 helper。
+
+`TestNotificationCenterProcessRecovery` 在父测试拥有的子进程中运行生产 `RunNotificationCenter`、Store 和适配器，仅将 Telegram HTTP 传输重定向到回环模拟器。它在平台接受响应后确认生产完成事务正在等待真实行锁，再 SIGKILL，验证重启后 unknown 不重发、站内信一次性、双进程领取及慢 Telegram 期间旧邮件/短信链独立推进。旧链由伴随测试循环驱动；这不等于强杀完整 `cmd/worker`。租约由 SQL 加速，不证明实际租约等待耗时或生产 RTO。
+
+`TestNotificationCenterUpgradeFrom160` 从从未创建过 161/162 对象的真实迁移 160 起点写入合成旧密文、付款回执和待发邮件/短信，再由生产 `Migrate` 升级。它检查 checksum、幂等、旧值及凭据 AAD、待发任务重试元数据、默认关闭和历史付款回放不补发。普通运行只验证 `Store.CheckSchema`；实际候选启动门禁需要同时设置以下变量，CI PG18 job 会构建并强制提供：
+
+```bash
+ZJMFGO_UPGRADE_BINARY_ACCEPTANCE=1 \
+ZJMFGO_UPGRADE_API_BINARY=/absolute/candidate/bin/api \
+ZJMFGO_UPGRADE_WORKER_BINARY=/absolute/candidate/bin/worker \
+node scripts/test-compiled-notifications.mjs --integration
+```
+
+同时配置 `ZJMFGO_TEST_DATABASE_URL`。实际进程必须因 160/161 schema 不满足而退出，配置错误或连接失败不能替代该断言。此验证不证明旧二进制降级、生产备份恢复、真实外发或正式切流；候选完整运行仍按发布手册单独验收。
 
 `internal/httpapi/browser_helpers_test.go` 统一 ready/finish 校验、私有 JSON 写入、等待期限及 worker 退出；各业务文件只维护场景和断言。`stop` 会取消并等待 goroutine，可在断言前调用，也可在清理中重复调用。NOKVM 的测试时钟调整保留在具体场景中。
 

@@ -1,10 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { chmod, copyFile, lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { assetArtifact, auditProcesses, auditTraceLine, pageAssets, validateTestDSN, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
+import { fileURLToPath } from 'node:url';
+import { assetArtifact, auditProcesses, auditTraceLine, controllerFiles, pageAssets, validateTestDSN, waitFor, writeJSON } from './release-runtime-acceptance-lib.mjs';
 import { copyIndependent, launch, liveProcessGroup, namespaceArgs, stop } from './accept-release-runtime.mjs';
+
+test('controller imports from only its pinned copied files without source or application environment', async t => {
+  const control = await mkdtemp(path.join(os.tmpdir(), 'runtime-control-import-'));
+  t.after(() => rm(control, { recursive: true, force: true }));
+  for (const filename of controllerFiles) await copyFile(fileURLToPath(new URL(`../${filename}`, import.meta.url)), path.join(control, path.basename(filename)));
+  const inspect = () => spawnSync(process.execPath, ['--input-type=module', '--eval', 'const controller = await import("./accept-release-runtime.mjs"); if (typeof controller.acceptRuntime !== "function") throw new Error("controller entry missing"); process.stdout.write("controller-import-ok\\n");'], {
+    cwd: control, env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, encoding: 'utf8', timeout: 5000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024,
+  });
+  const result = inspect();
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, 'controller-import-ok\n');
+  assert.equal(result.stderr, '');
+  // A fresh child must refuse a missing transitive dependency instead of
+  // resolving it from this test's already imported source modules or NODE_PATH.
+  await rm(path.join(control, 'module-manifest-lib.mjs'));
+  const missing = inspect();
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /ERR_MODULE_NOT_FOUND/);
+  assert.ok(missing.stderr.includes(path.join(control, 'module-manifest-lib.mjs')));
+});
 
 test('acceptance controller accepts only explicit isolated test DSNs', () => {
   const schema = 'release_runtime_0123456789abcdef0123456789abcdef';

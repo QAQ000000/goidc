@@ -12,6 +12,7 @@ jobs:
   static-quality:
     name: Static quality and contract gates
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       DOC_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || 'HEAD^' }}
     steps:
@@ -51,10 +52,18 @@ jobs:
           ./scripts/check-go-toolchain.sh
           ./scripts/go.sh test ./... -run '^$'
 
+      - name: Install binary introspection tracer
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends strace
+
       - name: Check compiled module contracts
         run: |
-          ./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/...
-          node --test scripts/module-manifest.test.mjs
+          node --test scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
+          node scripts/test-compiled-notifications.mjs --unit
+
+      - name: Check actual API and worker module manifests without runtime configuration
+        run: node scripts/check-module-binaries.mjs
 
       - name: Install web dependencies
         run: npm ci --prefix web
@@ -65,3 +74,86 @@ jobs:
           npm --prefix web run typecheck
           npm --prefix web run test:proxy
           node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs
+
+  compiled-notification-pg18:
+    name: Compiled channels and notifications on isolated PG18
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # Disposable CI-only credentials. No repository or production secrets.
+      ZJMFGO_TEST_DATABASE_URL: postgres://goidc_ci:goidc_ci_fixture@127.0.0.1:15432/goidc_ci_test?sslmode=disable
+      REQUIRE_INTEGRATION: '1'
+      ZJMFGO_WORKER_CRASH_ACCEPTANCE: '1'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+
+      - name: Build actual upgrade-check API and worker binaries
+        timeout-minutes: 10
+        run: |
+          ci_upgrade_bin_dir="$(mktemp -d "$RUNNER_TEMP/goidc-upgrade-binaries.XXXXXXXX")"
+          printf 'GOIDC_CI_UPGRADE_BIN_DIR=%s\n' "$ci_upgrade_bin_dir" >> "$GITHUB_ENV"
+          ./scripts/go.sh build -mod=readonly -trimpath -buildvcs=true -o "$ci_upgrade_bin_dir/api" ./cmd/api
+          ./scripts/go.sh build -mod=readonly -trimpath -buildvcs=true -o "$ci_upgrade_bin_dir/worker" ./cmd/worker
+
+      - name: Start dedicated PostgreSQL 18 on host loopback
+        timeout-minutes: 5
+        run: |
+          ci_pg_container="goidc-pg18-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          # Host networking preserves server-side inet_server_addr()=127.0.0.1;
+          # a bridge-mapped services container violates the fixture boundary.
+          docker run --detach --rm --name "$ci_pg_container" --network host \
+            --env POSTGRES_USER=goidc_ci \
+            --env POSTGRES_PASSWORD=goidc_ci_fixture \
+            --env POSTGRES_DB=goidc_ci_test \
+            postgres:18 postgres -c listen_addresses=127.0.0.1 -c port=15432
+          for attempt in $(seq 1 60); do
+            if docker exec "$ci_pg_container" pg_isready -h 127.0.0.1 -p 15432 -U goidc_ci -d goidc_ci_test; then
+              docker exec --env PGPASSWORD=goidc_ci_fixture "$ci_pg_container" psql -X -h 127.0.0.1 -p 15432 -U goidc_ci -d goidc_ci_test \
+                -c "SELECT current_database(),current_setting('server_version_num'),host(inet_server_addr());"
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs --tail 40 "$ci_pg_container"
+          exit 1
+
+      - name: Require channel, notification, upgrade and process recovery tests
+        env:
+          ZJMFGO_UPGRADE_API_BINARY: ${{ env.GOIDC_CI_UPGRADE_BIN_DIR }}/api
+          ZJMFGO_UPGRADE_WORKER_BINARY: ${{ env.GOIDC_CI_UPGRADE_BIN_DIR }}/worker
+          ZJMFGO_UPGRADE_BINARY_ACCEPTANCE: '1'
+        run: |
+          ./scripts/check-go-toolchain.sh
+          node scripts/test-compiled-notifications.mjs --integration
+
+      - name: Remove the dedicated PostgreSQL container and its volumes
+        if: always()
+        run: |
+          ci_pg_container="goidc-pg18-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
+          if docker container inspect "$ci_pg_container" >/dev/null 2>&1; then
+            docker rm --force --volumes "$ci_pg_container"
+          fi
+
+      - name: Remove only this job's upgrade-check binaries
+        if: always()
+        run: |
+          if [[ -n "${GOIDC_CI_UPGRADE_BIN_DIR:-}" ]]; then
+            case "$GOIDC_CI_UPGRADE_BIN_DIR" in
+              "$RUNNER_TEMP"/goidc-upgrade-binaries.*)
+                [[ -d "$GOIDC_CI_UPGRADE_BIN_DIR" && ! -L "$GOIDC_CI_UPGRADE_BIN_DIR" ]]
+                rm -rf -- "$GOIDC_CI_UPGRADE_BIN_DIR"
+                ;;
+              *) exit 1 ;;
+            esac
+          fi

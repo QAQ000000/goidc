@@ -17,6 +17,10 @@
 
 两个候选构建器都会执行刚构建的二进制，核对预期清单、实际注册清单和 API/worker 描述符一致性。产物保存预期 profile、两个实际清单及其与源码、二进制的哈希绑定。离线验证重验这些证据，不执行候选目录中的应用代码。当前只实现明确的 default 组合，尚未提供任意 build tags 裁剪工具。
 
+`node scripts/check-module-binaries.mjs` 是 CI 的实际二进制门禁：真实构建 API/worker，在没有应用配置的最小环境执行上述命令，使用 strace 拒绝网络 syscall 并要求零尝试；同时核对 9 模块 profile、描述符和两二进制一致性。构建、执行、输出及进程组清理均有上限。它证明清单入口不启动数据库或网络，不证明正常启动健康和外部渠道可用。
+
+当前 `c25d3bf` 已完成一次独立 v2 候选真实构建与运行：同包两次迁移、API/Web/worker、3 个公开页及 21 份资源、原生依赖与 worker TERM/重启通过。实际运行发现验收控制器漏复制 `module-manifest-lib.mjs`，已补齐并以“仅复制清单文件后独立导入”的回归接入 CI；使用修正的独立控制器重跑同一候选通过，未重建业务包。构建输入、控制器源码锚、首次失败和重跑证据保存于忽略的 `output/notification-runtime/`。这仍是隔离准备，真实渠道和生产切换另验。
+
 新增模块必须同步装配和预期清单；发布前检查现有实例、在途任务、历史支付回调与服务绑定。不能因为新清单没有某实现就删除数据库记录。
 
 ## 配置定义与前端契约
@@ -59,6 +63,7 @@
 | --- | --- |
 | mail | 类型化 `MailProvider`；默认选择、实例解析、验证码、业务通知、试发和 worker 统一按实现 ID 分发 |
 | sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
+| bot | 首批 Telegram 私聊，按通知路由、有效绑定和主动订阅分发；未知结果停止自动重发 |
 | payment | 类型化 `Gateway`；仍以 mock/epay 资金协议为当前边界，新支付协议必须补回调、快照、查单、退款、对账和权限验收 |
 | certification | 已注册人工审核；新增第三方仍需实名流程与数据保护验收 |
 | provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
@@ -84,11 +89,13 @@
 ## 验证入口与发布边界
 
 ```bash
-./scripts/go.sh test ./internal/channel ./internal/module ./internal/modules/... ./internal/notification ./internal/payment ./internal/supplier
-node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs
+node scripts/check-module-binaries.mjs
+node scripts/test-compiled-notifications.mjs --unit
+node scripts/test-compiled-notifications.mjs --integration
+node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
 ```
 
-配置隔离 PG18、设置 `REQUIRE_INTEGRATION=1` 后，运行 `internal/httpapi` 中的 `TestChannelConfiguration`、`TestChannelInstances`、`TestCompiledMail`、`TestCompiledSMS`、`TestMissingSupplierDisable`、SMTP/SMS 及支付实例 schema/快照回归。覆盖类型/default、逐字段凭据、AAD、审计回滚、孤儿停用、旧 schema 拒绝、默认渠道兼容和新增适配器分发。
+集成入口必须配置隔离 PG18 `ZJMFGO_TEST_DATABASE_URL`，内部强制数据库与进程恢复开关，串行 race 并拒绝跳过。覆盖类型/default、逐字段凭据、AAD、审计回滚、孤儿停用、旧 schema 拒绝、默认渠道兼容和新增适配器分发；还覆盖 160→161/162 的旧密文、待发任务和历史事件回放。CI 提供实际 API/worker 强制验证 160/161 启动拒绝；本地候选路径和证据边界见[测试入口](testing.md#编译渠道与通知运行验收)。
 
 前端还需 lint/typecheck；构建证据需候选和离线验证测试。数据库、组件事件、浏览器、实际外部渠道和生产发布分别记录证据，不能互相替代。迁移与新 API/worker 应在同一发布包使用；回退前检查旧二进制能否理解已有模块、配置版本和命名凭据。
 
