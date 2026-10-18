@@ -48,6 +48,14 @@ func TestReportCSVReportSchemasAndIntegerPrecision(t *testing.T) {
 			[][]string{{"销售ID", "销售", "订单数", "收入（分）"}, {"9", "'=HYPERLINK(\"https://example.test\")", "2", "9007199254740993"}}},
 		{"tickets", map[string]any{"items": []ticketReportItem{{"2024-02-01", 5, 2}}},
 			[][]string{{"日期", "工单创建量", "当前待处理量"}, {"2024-02-01", "5", "2"}}},
+		{"annual-cash", map[string]any{
+			"months": []map[string]any{{"month": "2024-02", "received_cents": amount, "refund_cents": int64(7), "manual_expense_cents": nil, "outgoing_cents": nil, "net_cents": nil, "business_consumption_cents": amount + 1, "unverified_anomaly_cents": int64(2), "simulated_received_cents": int64(3), "simulated_refund_cents": int64(4)}},
+			"total":  map[string]any{"received_cents": amount, "refund_cents": int64(7), "manual_expense_cents": nil, "outgoing_cents": nil, "net_cents": nil, "business_consumption_cents": amount + 1, "unverified_anomaly_cents": int64(2), "simulated_received_cents": int64(3), "simulated_refund_cents": int64(4)},
+		}, [][]string{
+			{"月份", "现金收入（分）", "现金退款（分）", "人工费用（分）", "现金支出（分）", "现金净额（分）", "业务消费（分）", "未核验迟到收款（分）", "模拟收款（分）", "模拟退款（分）"},
+			{"2024-02", "9007199254740993", "7", "无权限", "无权限", "无权限", "9007199254740994", "2", "3", "4"},
+			{"合计", "9007199254740993", "7", "无权限", "无权限", "无权限", "9007199254740994", "2", "3", "4"},
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			content, err := encodeReportCSV(tc.name, tc.data)
@@ -101,27 +109,6 @@ func TestReportCSVEmptyAndMalformedReports(t *testing.T) {
 	} {
 		if _, err := encodeReportCSV(tc.name, tc.data); err == nil {
 			t.Fatalf("malformed %s export was accepted: %#v", tc.name, tc.data)
-		}
-	}
-}
-
-func TestReportCSVFormulaInjectionAndNumericCells(t *testing.T) {
-	for _, input := range []string{"=1+1", "+1+1", "-1+1", "@SUM(1)", "  =1", " \t+1", "\ttext", "\rtext", "\ntext", " \r\n@SUM(1)"} {
-		if got := reportCSVCell(input); got != "'"+input {
-			t.Errorf("spreadsheet formula/control prefix must be quoted: input=%q got=%q", input, got)
-		}
-	}
-	for _, input := range []string{"", "客户甲", "00123", "a=b", "'quoted", "two,columns"} {
-		if got := reportCSVCell(input); got != input {
-			t.Errorf("plain text changed: input=%q got=%q", input, got)
-		}
-	}
-	for _, tc := range []struct {
-		input any
-		want  string
-	}{{nil, ""}, {json.Number("9007199254740993"), "9007199254740993"}, {json.Number("-9007199254740993"), "-9007199254740993"}, {int64(-42), "-42"}} {
-		if got := reportCSVCell(tc.input); got != tc.want {
-			t.Errorf("numeric cells must remain exact numbers: got=%q want=%q", got, tc.want)
 		}
 	}
 }

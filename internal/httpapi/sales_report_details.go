@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/csvexport"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -268,45 +268,44 @@ func (s *Server) salesReportDetails(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) writeSalesDetailCSV(w http.ResponseWriter, r *http.Request, raw json.RawMessage) {
+	content, err := encodeSalesDetailCSV(raw)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "report_export_failed", "报表导出失败，请稍后重试")
+		return
+	}
+	writeCSVDownload(w, "report-sales-details.csv", content)
+}
+
+func encodeSalesDetailCSV(raw json.RawMessage) ([]byte, error) {
 	var payload struct {
 		Items []map[string]any `json:"items"`
 	}
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.UseNumber()
 	if e := d.Decode(&payload); e != nil {
-		s.fail(w, r, e)
-		return
+		return nil, e
 	}
-	var content bytes.Buffer
-	content.WriteString("\xef\xbb\xbf")
-	writer := csv.NewWriter(&content)
-	if e := writer.Write([]string{"客户", "销售", "账单编号", "支付时间", "到账时间", "产品", "类型", "金额（分）", "预计提成（分）", "子项历史有效确认提成（分）", "确认状态", "规则版本"}); e != nil {
-		s.fail(w, r, e)
-		return
+	if payload.Items == nil {
+		return nil, fmt.Errorf("invalid sales report items")
 	}
+	headers := []string{"客户", "销售", "账单编号", "支付时间", "到账时间", "产品", "类型", "金额（分）", "预计提成（分）", "子项历史有效确认提成（分）", "确认状态", "规则版本"}
+	records := [][]any{}
 	for _, invoice := range payload.Items {
-		for _, value := range invoice["items"].([]any) {
-			line := value.(map[string]any)
-			estimate := "未配置"
+		lines, ok := invoice["items"].([]any)
+		if !ok {
+			return nil, fmt.Errorf("invalid sales report invoice items")
+		}
+		for _, value := range lines {
+			line, ok := value.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("invalid sales report line")
+			}
+			var estimate any = "未配置"
 			if line["estimated_commission_cents"] != nil {
-				estimate = reportCSVCell(line["estimated_commission_cents"])
+				estimate = line["estimated_commission_cents"]
 			}
-			cells := []string{reportCSVCell(invoice["customer_name"]), reportCSVCell(invoice["sales_owner_name"]), reportCSVCell(invoice["invoice_no"]), reportCSVCell(invoice["paid_at"]), reportCSVCell(line["received_at"]), reportCSVCell(line["product_name"]), reportCSVCell(line["kind"]), reportCSVCell(line["amount_cents"]), estimate, reportCSVCell(line["confirmed_commission_cents"]), reportCSVCell(invoice["confirmation_status"]), reportCSVCell(line["rule_version"])}
-			if e := writer.Write(cells); e != nil {
-				s.fail(w, r, e)
-				return
-			}
+			records = append(records, []any{invoice["customer_name"], invoice["sales_owner_name"], invoice["invoice_no"], invoice["paid_at"], line["received_at"], line["product_name"], line["kind"], line["amount_cents"], estimate, line["confirmed_commission_cents"], invoice["confirmation_status"], line["rule_version"]})
 		}
 	}
-	writer.Flush()
-	if e := writer.Error(); e != nil {
-		s.fail(w, r, e)
-		return
-	}
-	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", `attachment; filename="report-sales-details.csv"`)
-	w.Header().Set("Cache-Control", "private, no-store")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.WriteHeader(200)
-	_, _ = w.Write(content.Bytes())
+	return csvexport.Encode(headers, records)
 }

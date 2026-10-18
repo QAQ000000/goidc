@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, download } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { Failure, Loading } from "./common";
 
 export function ReportExport({ path, filename, disabled }: { path: string; filename: string; disabled: boolean }) {
@@ -24,14 +25,7 @@ export function ReportExport({ path, filename, disabled }: { path: string; filen
       // A category, period or filter change invalidates this download.
       if (!active.current) return;
       if (!blob.type.toLowerCase().includes("text/csv")) throw new Error("服务器未返回 CSV 文件，请重新加载后重试");
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+      saveBlob(blob, filename);
     } catch (cause) {
       if (active.current) setError(cause instanceof Error ? cause.message : "导出失败，请重试");
     } finally {

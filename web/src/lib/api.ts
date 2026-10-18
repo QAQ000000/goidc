@@ -1,3 +1,5 @@
+import { downloadFilename, saveBlob } from "./download";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -305,12 +307,8 @@ export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, pa
     if (!["http:","https:"].includes(target.protocol) || target.username || target.password) throw new Error("外部下载地址无效");
     window.location.assign(target.href); return;
   }
-  const blob = await response.blob(); const href = URL.createObjectURL(blob); const link = document.createElement("a");
-  const encodedName = response.headers.get("Content-Disposition")?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-  let filename = item.filename || "download";
-  if (encodedName) { try { filename = decodeURIComponent(encodedName); } catch {} }
-  link.href=href; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(href),1000);
+  const blob = await response.blob();
+  saveBlob(blob, downloadFilename(response.headers.get("Content-Disposition"), item.filename));
 }
 export type CatalogSection = { id: number; name: string; slug: string; description: string; sort_order: number; active: boolean; version: number; member_count: number };
 export type CatalogCategory = CatalogSection & { section_id: number | null; section_name: string | null; section_active: boolean; headline: string; tagline: string };

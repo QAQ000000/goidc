@@ -2,11 +2,11 @@ package httpapi
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+
+	"github.com/codex/zjmfgo/internal/csvexport"
 )
 
 type reportColumn struct {
@@ -46,8 +46,13 @@ func writeReport(w http.ResponseWriter, r *http.Request, name string, data any) 
 		writeError(w, http.StatusInternalServerError, "report_export_failed", "报表导出失败，请稍后重试")
 		return
 	}
+	writeCSVDownload(w, "report-"+name+".csv", content)
+}
+
+// Only server-owned filenames reach this helper, after encoding has succeeded.
+func writeCSVDownload(w http.ResponseWriter, filename string, content []byte) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"report-%s.csv\"", name))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
@@ -87,22 +92,17 @@ func encodeReportCSV(name string, data any) ([]byte, error) {
 			rows = append(rows, total)
 		}
 	}
-	var content bytes.Buffer
-	content.WriteString("\xef\xbb\xbf")
-	writer := csv.NewWriter(&content)
 	headers := make([]string, len(schema.columns))
 	for index, column := range schema.columns {
 		headers[index] = column.label
 	}
-	if err = writer.Write(headers); err != nil {
-		return nil, err
-	}
+	records := make([][]any, 0, len(rows))
 	for _, row := range rows {
 		item, ok := row.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("invalid report row")
 		}
-		cells := make([]string, len(schema.columns))
+		cells := make([]any, len(schema.columns))
 		for index, column := range schema.columns {
 			cell := item[column.key]
 			if cell == nil && name == "daily" && (column.key == "new_tickets" || column.key == "ticket_replies") {
@@ -110,28 +110,10 @@ func encodeReportCSV(name string, data any) ([]byte, error) {
 			} else if cell == nil && name == "annual-cash" && (column.key == "manual_expense_cents" || column.key == "outgoing_cents" || column.key == "net_cents") {
 				cells[index] = "无权限"
 			} else {
-				cells[index] = reportCSVCell(cell)
+				cells[index] = cell
 			}
 		}
-		if err = writer.Write(cells); err != nil {
-			return nil, err
-		}
+		records = append(records, cells)
 	}
-	writer.Flush()
-	return content.Bytes(), writer.Error()
-}
-
-func reportCSVCell(value any) string {
-	if value == nil {
-		return ""
-	}
-	if text, ok := value.(string); ok {
-		// Spreadsheet software must treat user-controlled names as text.
-		trimmed := strings.TrimLeft(text, " \t\r\n")
-		if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) || strings.HasPrefix(text, "\t") || strings.HasPrefix(text, "\r") || strings.HasPrefix(text, "\n") {
-			return "'" + text
-		}
-		return text
-	}
-	return fmt.Sprint(value)
+	return csvexport.Encode(headers, records)
 }

@@ -84,6 +84,7 @@ node scripts/check-contract-gates.mjs
 node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
 ./scripts/check-go-toolchain.sh
 ./scripts/go.sh test ./... -run '^$'
+./scripts/go.sh test -race ./internal/csvexport
 node scripts/test-compiled-notifications.mjs --unit
 node scripts/check-module-binaries.mjs
 node --test scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
@@ -92,6 +93,7 @@ npm --prefix web run lint
 npm --prefix web run typecheck
 npm --prefix web run test:proxy
 node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs
+node --test scripts/download.test.mjs
 ```
 
 配置独立 PG18 测试 URL 后运行 `node scripts/test-compiled-notifications.mjs --integration`；候选路径与强制启动检查变量见[测试说明](../testing.md#编译渠道与通知运行验收)。全量回归、浏览器夹具、真实外部渠道和候选发布验证仍按[领域验收矩阵](contract-verification-matrix.md)和发布手册单独执行，并将结果写入 `output/` 或外部制品存储。

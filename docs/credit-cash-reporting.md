@@ -45,7 +45,11 @@
 
 CSV 使用 UTF-8 BOM 与中文列名，所有金额列明确标注“分”，保持整数分而不经浮点转换；名称等文本转义电子表格公式前缀。空报表保留表头，收入报表另保留零额合计。响应为 `text/csv` 附件，使用 `private, no-store`；导出失败返回错误，不伪装为空 CSV。
 
+普通报表和销售明细共用内部 `internal/csvexport` 编码器与 HTTP 下载响应。编码器仅处理表头、行值、BOM、CSV 引用和字符串公式防护；列定义、明细展开、合计、“无权限/未配置”文案与授权查询继续由报表领域决定。整数金额和 JSON 数字保持精度，不能先转为浮点；销售明细结果形状异常时返回导出错误，不发送部分附件。
+
 前端只加载当前标签，加载失败与重试只影响当前报表；其他报表接口失败不阻塞当前内容。导出使用已查询条件，筛选草稿变更后须先查询；未加载、加载失败或正在导出时按钮禁用。失败保留可重试错误，类别或期间切换后旧导出不得触发下载，详见[前端契约](admin-frontend-design.md#71-报表独立加载与导出)。
+
+浏览器 Blob 保存共用 `web/src/lib/download.ts`；报表仍单独校验 CSV 类型、同步阻止重复点击，并在筛选变化或组件卸载后忽略旧响应。共享保存函数不发起查询，也不决定权限、报表筛选和远程下载地址。
 
 ## 本轮已补代码与边界
 
@@ -70,6 +74,8 @@ CSV 使用 UTF-8 BOM 与中文列名，所有金额列明确标注“分”，�
 ## 回归入口
 
 现金与信用范围对应 `internal/httpapi/credit_cash_reports_test.go`；产品净额、期间账单去重和 UTC 会话月界对应 `internal/httpapi/reports_regression_test.go`；排名入榜条件、工单指标空值和撤权对应 `internal/httpapi/reports_permissions_test.go`；合并来源对应 `internal/httpapi/reports_extra_test.go`；六类CSV字段/整数分/公式转义和权限范围对应 `internal/httpapi/report_export_test.go`。
+
+纯 CSV 编码行为运行 `./scripts/go.sh test -race ./internal/csvexport`；报表与销售明细的纯导出回归分别见 `internal/httpapi/report_export_test.go`、`internal/httpapi/sales_report_details_test.go`，浏览器文件名、临时 URL 释放与授权下载请求边界运行 `node --test scripts/download.test.mjs`。Node DOM/fetch 夹具不等同于真实浏览器下载验收。
 
 销售金额、信用跨月、历史确认与范围对应 `internal/httpapi/sales_report_details_test.go`；工单身份、一次评分/并发/审计和处理人统计对应 `internal/httpapi/ticket_ratings_test.go`；年度现金/退款发生月与费用权限/只追加/幂等对应 `internal/httpapi/annual_report_test.go`、`internal/httpapi/report_expenses_test.go`；分类分页/完整汇总/件数对应 `internal/httpapi/product_report_details_test.go`。旧分类与评分投影对应 `cmd/legacy-import/product_categories_test.go`、`cmd/legacy-import/tickets_test.go`；导入全包夹具通过不能替代真实旧全量迁移。
 

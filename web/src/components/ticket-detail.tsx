@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { api, ApiError, date, download, type Ticket, type TicketAssignee, type TicketAttachment, type TicketDepartment, type TicketReplyPreset, type User, upload } from "@/lib/api";
+import { saveBlob } from "@/lib/download";
 import { can } from "@/lib/admin-navigation";
 import { useResource } from "@/hooks/use-resource";
 import { Workspace, PermissionGate } from "./workspace";
@@ -33,14 +34,7 @@ function AttachmentRow({ attachment, ticketID, onDelete, admin }: { attachment: 
     setMessage("");
     try {
       const blob = await download(`/tickets/${ticketID}/attachments/${attachment.id}`);
-      const href = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = href;
-      link.download = attachment.filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(href);
+      saveBlob(blob, attachment.filename);
     } catch (error) {
       setMessage((error as Error).message);
     } finally {

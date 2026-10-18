@@ -2,11 +2,51 @@ package httpapi
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSalesReportDetailsCSVEncodingAndDownload(t *testing.T) {
+	raw := json.RawMessage(`{"items":[{"customer_name":"=HYPERLINK(\"https://example.test\")","sales_owner_name":"销售,\"甲\"\n第二行","invoice_no":"00123","paid_at":"2024-02-01","confirmation_status":"confirmed","items":[{"received_at":"2024-02-01","product_name":"商品","kind":"purchase","amount_cents":9007199254740993,"estimated_commission_cents":null,"confirmed_commission_cents":-9007199254740993,"rule_version":9223372036854775807},{"amount_cents":-42,"estimated_commission_cents":9007199254740993}]}]}`)
+	response := httptest.NewRecorder()
+	server := &Server{}
+	server.writeSalesDetailCSV(response, httptest.NewRequest("GET", "/?format=csv", nil), raw)
+	expect(t, response, 200)
+	if response.Header().Get("Content-Type") != "text/csv; charset=utf-8" || response.Header().Get("Content-Disposition") != `attachment; filename="report-sales-details.csv"` || response.Header().Get("Cache-Control") != "private, no-store" || response.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("unsafe/incomplete sales download headers: %#v", response.Header())
+	}
+	records := reportCSVRecords(t, response.Body.Bytes())
+	want := [][]string{
+		{"客户", "销售", "账单编号", "支付时间", "到账时间", "产品", "类型", "金额（分）", "预计提成（分）", "子项历史有效确认提成（分）", "确认状态", "规则版本"},
+		{"'=HYPERLINK(\"https://example.test\")", "销售,\"甲\"\n第二行", "00123", "2024-02-01", "2024-02-01", "商品", "purchase", "9007199254740993", "未配置", "-9007199254740993", "confirmed", "9223372036854775807"},
+		{"'=HYPERLINK(\"https://example.test\")", "销售,\"甲\"\n第二行", "00123", "2024-02-01", "", "", "", "-42", "9007199254740993", "", "confirmed", ""},
+	}
+	if !reflect.DeepEqual(records, want) {
+		t.Fatalf("sales CSV fields/values changed: got=%#v want=%#v", records, want)
+	}
+	content, err := encodeSalesDetailCSV(json.RawMessage(`{"items":[]}`))
+	if err != nil || len(reportCSVRecords(t, content)) != 1 {
+		t.Fatalf("empty CSV err=%v", err)
+	}
+}
+
+func TestSalesReportDetailsCSVMalformedRowsFailWithoutDownload(t *testing.T) {
+	for _, raw := range []string{`{`, `{}`, `null`, `{"items":null}`, `{"items":{}}`, `{"items":[null]}`, `{"items":[{}]}`, `{"items":[{"items":null}]}`, `{"items":[{"items":{}}]}`, `{"items":[{"items":[null]}]}`, `{"items":[{"items":["invalid"]}]}`} {
+		t.Run(raw, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			server := &Server{}
+			server.writeSalesDetailCSV(response, httptest.NewRequest("GET", "/?format=csv", nil), json.RawMessage(raw))
+			expect(t, response, 500)
+			if errorData(t, response)["code"] != "report_export_failed" || response.Header().Get("Content-Disposition") != "" || response.Header().Get("Content-Type") != "application/json; charset=utf-8" {
+				t.Fatalf("malformed sales export advertised as a file: headers=%#v body=%s", response.Header(), response.Body.String())
+			}
+		})
+	}
+}
 
 func TestSalesReportDetailsValidation(t *testing.T) {
 	for _, query := range []string{"sales_owner_id=-1", "customer_id=0", "product_id=x", "kind=unknown", "condition=unknown", "preset=unknown", "from=2024-03-01&to=2024-02-01", "from=no", "to=no", "q=" + strings.Repeat("x", 121)} {

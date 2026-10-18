@@ -52,6 +52,11 @@ jobs:
           ./scripts/check-go-toolchain.sh
           ./scripts/go.sh test ./... -run '^$'
 
+      - name: Check CSV encoding and authorized-result export formatting
+        run: |
+          ./scripts/go.sh test -race ./internal/csvexport
+          ./scripts/go.sh test -race ./internal/httpapi -run '^(TestReportCSVReportSchemasAndIntegerPrecision|TestReportCSVEmptyAndMalformedReports|TestWriteReportFormatsAndDownloadHeaders|TestSalesReportDetailsCSVEncodingAndDownload|TestSalesReportDetailsCSVMalformedRowsFailWithoutDownload)$'
+
       - name: Install binary introspection tracer
         run: |
           sudo apt-get update
@@ -74,6 +79,7 @@ jobs:
           npm --prefix web run typecheck
           npm --prefix web run test:proxy
           node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs
+          node --test scripts/download.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18

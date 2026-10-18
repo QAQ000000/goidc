@@ -1,4 +1,5 @@
 "use client";
+import { saveBlob } from "@/lib/download";
 
 import { useState } from "react";
 import { RefreshCw, Download, Activity } from "lucide-react";
@@ -29,8 +30,7 @@ export function NOKVMMonitoringPanel({service,admin}:{service:Service;admin:bool
  function download(){
   if(!data)return;
   const rows=[["time_utc","cpu_percent","network_in_KB_s","network_out_KB_s","vda_read_KB_s","vda_write_KB_s","vdb_read_KB_s","vdb_write_KB_s"],...data.samples.map(p=>[p.at,p.cpu_percent,p.network_in_kbps,p.network_out_kbps,p.disks.vda?.read_kbps,p.disks.vda?.write_kbps,p.disks.vdb?.read_kbps,p.disks.vdb?.write_kbps])];
-  const url=URL.createObjectURL(new Blob(["\uFEFF"+rows.map(row=>row.map(value=>value??"").join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}));
-  const link=document.createElement("a");link.href=url;link.download=`service-${service.id}-monitoring-${period}.csv`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  saveBlob(new Blob(["\uFEFF"+rows.map(row=>row.map(value=>value??"").join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"}),`service-${service.id}-monitoring-${period}.csv`);
  }
  return <section aria-label="资源监控" className="mb-6 min-w-0 border-y py-6 space-y-5">
   <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold flex items-center gap-2"><Activity size={18}/>资源监控</h2><div className="flex gap-2"><Button variant="ghost" size="icon" aria-label="导出监控 CSV" title="导出监控 CSV" disabled={!data?.samples.length} onClick={download}><Download size={16}/></Button><Button variant="outline" size="icon" aria-label="刷新监控" title="刷新监控" onClick={monitoring.refresh}><RefreshCw size={16}/></Button></div></div>
