@@ -80,9 +80,10 @@ cent, the account balance decreased by two cents, and the confirmed due date
 advanced from November 19 to December 19. Polling, manual suspend/terminate
 target rejection while the resource remained Active, and explicit not-applied
 closure passed without false lifecycle notifications or inventory release.
-The isolated database was destroyed and the upstream resource retained. This
-does not establish resident automatic renewal, successful real lifecycle
-changes, public callbacks or deployment. Sanitized evidence remains under
+The isolated database was destroyed and the upstream resource retained. That
+earlier run did not establish resident automatic renewal; the later due-period
+acceptance is recorded below. Successful explicit lifecycle actions, public
+callbacks and deployment remain separate. Sanitized evidence remains under
 the ignored `output/supplier-real/current/` directory.
 
 `Sync` first uses GET `/host/header?host_id=...&source=API`, which is the
@@ -106,9 +107,11 @@ yet been deployed to the resident Go processes.
 Following the 2026-10-13 legacy review, the working tree now uses the maintained
 PHP project's lifecycle merge rules in the shared application path. Local
 `cancelled`/`terminated` remain terminal; `active`/`suspended` cannot regress to
-provisioning; upstream `Active` cannot release a local suspension. This applies
-to callbacks and polling under a service row lock. Only an explicit, verified
-`resume` job can accept suspended→active; ordinary sync never does.
+provisioning. An upstream `Active` observation alone cannot release a local
+suspension. This applies to callbacks and polling under a service row lock.
+An explicit, verified `resume` job may accept suspended→active. A confirmed
+paid renewal has the narrow expiry-recovery exception described below;
+ordinary sync without that source never acquires recovery authority.
 Accepted `Active` clears the suspension reason; accepted `Suspended` preserves
 its type prefix without duplication. Ignored states do not overwrite the local
 suspension reason. A stale `Pending` response only schedules a follow-up when
@@ -159,8 +162,9 @@ before the invoice checkpoint must not be guessed from an unrelated invoice.
 Release migration 171 together with the matching API and worker after stopping
 old writers. Keep the original migration checksums and financial history;
 mixed old/new automatic writers are unsupported. Independent PostgreSQL and
-fake-provider fault tests establish these code boundaries; actual due-period
-purchase, public callbacks and production rollout require separate evidence.
+fake-provider fault tests establish these code boundaries; real supplier
+acceptance is limited to the resources and operations recorded below. Public
+callbacks and production rollout require separate evidence.
 
 The real resource 4089 passed a zero-write negative acceptance with four
 current worker processes, TERM/restart and a real 65-second minute tick. A
@@ -169,8 +173,72 @@ deadline, with exactly one skip audit and daily full pass, zero invoices,
 renewal jobs, debits, credit payments or renewal notifications. The remote
 balance remained CNY 9.96 before and after. The guarded disposable schema was
 dropped and the resource retained. This proves early-renewal prevention and
-resident scheduling against that provider; a genuinely due automatic purchase
-remains unverified. Sanitized evidence is in `output/supplier-autorenew/`.
+resident scheduling against that provider. Sanitized evidence is in
+`output/supplier-autorenew/`.
+
+After the user changed upstream resource 4089's due date, a real due-period
+automatic renewal passed on 2026-10-19 in an isolated PG18 fixture. The first
+preflight stopped before arming or collection when the upstream changed from
+Active to Suspended with reason `due`; it created no invoice or renewal job.
+The temporary runner was then aligned with production's existing support for
+renewing Active/Suspended resources, and a production read-only sync updated
+the pristine local fixture before enabling automatic renewal. No production
+business logic or upstream dates were changed by the test.
+
+The real worker collected one CNY cent from a local test balance of 100 cents,
+leaving 99, and completed one renewal job with one attempt and one immutable
+automatic source. Independently reread upstream invoice 811028 was Paid,
+contained one renewal item for 4089, and used CNY 0.01 account credit; the remote
+balance decreased from CNY 9.96 to 9.95. Both deadlines advanced from
+2026-10-19 01:39:52 to 2026-11-19 01:39:52 Asia/Shanghai. One `invoice.paid` and
+one `service.renewed` event each reached the local inbox; no credit-limit
+payment or external notification was used. Restarting the worker and observing
+three seconds produced no duplicate invoice, debit, job or notification. This
+run does not establish a minute tick or concurrent-worker positive acceptance.
+
+The upstream returned Active after payment, while the local service remained
+Suspended: this run exposed the earlier merge rule's missing renewal-recovery
+transition. The subsequent code correction is described below and requires its
+own evidence; it was not the worker used for this first real charge. The later
+state-refresh acceptance below validates the corrected worker against the same
+resource. Explicit real resume and other lifecycle actions, public callbacks and
+production deployment remain unverified.
+The fixture schema was dropped after financial and remote confirmation; both
+workers, the credential bridge and the owned PG process exited. Its port,
+temporary data and runtime key were cleaned up; upstream 4089 was retained
+Active. Sanitized evidence and cleanup records are under
+`output/supplier-autorenew/positive-local-run/`.
+
+The corrected worker then passed real state-refresh acceptance on 2026-10-19,
+after the user again made upstream 4089 expired and Suspended. Before dispatch,
+production Sync recorded `due-服务已到期` and the original deadline
+2026-10-19 02:17:45 Asia/Shanghai. One automatic local invoice, one one-cent debit
+and one renewal job with one attempt were created; the local balance changed
+from 100 to 99 cents. Independent upstream reads confirmed invoice 811029 Paid,
+CNY 0.01, with exactly one renewal item belonging to resource 4089, and the
+remote balance changed from CNY 9.95 to 9.94. Both local and upstream state
+became Active, both deadlines advanced to 2026-11-19 02:17:45 Asia/Shanghai,
+the suspension reason and recovery marker cleared, and exactly one matching
+dispatch recovery source was retained in the successful job.
+
+One `invoice.paid`, one `service.renewed` and one `service.resumed` event each
+reached the local inbox. Two workers ran sequentially and exited cleanly on
+TERM; the second was observed for 65 seconds without another invoice, debit,
+renewal or notification. This includes a normal minute interval but does not
+claim concurrent-worker coverage. No purchase, upstream date change or explicit
+resume write was performed by the test. Sanitized evidence is under
+`output/supplier-autorenew/state-refresh-real-run/`. The tested worker was built
+from base `bce918e` plus the working-tree correction, with SHA256
+`39f7d363e972638597b38d7ef95aa7087e84ef21b74137e0f8e0481c69fd5740`,
+and both corrected production source files match the SHA256 fingerprints
+recorded by the isolated tests. This closes E3 for renewal
+state recovery on this resource; delayed upstream recovery retains its isolated
+test boundary. Public callbacks, explicit lifecycle writes and production
+deployment still need independent evidence.
+After independent financial and state checks, the fixture schema and owned
+PG18 were removed, its port closed, both test workers and the credential bridge
+exited, and the temporary runtime key was deleted. Upstream 4089 was retained
+Active with its renewed deadline; cleanup made no further upstream writes.
 
 The downstream exposes the legacy callback `POST /api/host/sync` (and the
 versioned alias `/api/v1/host/sync`). The upstream sends `id` as the local
@@ -374,4 +442,38 @@ rejections or cost/ownership mismatches fail explicitly and release the lease.
 Manual successful reconciliation also confirms the original invoice and extended
 due date, rather than accepting an already-active resource as proof of renewal.
 Late polling/callback responses cannot shorten a confirmed supplier due date.
+
+After the original upstream invoice is confirmed Paid, `ConfirmRenewal` reads
+the resource again; this fresh response updates local status, due date and
+resource details. A due-related suspension may recover to Active only with the
+same renewal's dispatch evidence, a complete purchased period, a still-paid
+local invoice, unchanged resource/product/binding/account identity, a current
+valid term, and no superseding lifecycle action, unresolved write or overdue
+service debt. The previous deadline must be within the 24-hour due window.
+Dispatch evidence is normalized and contains no credentials; historical jobs
+without this evidence do not gain recovery authority.
+It also records an Active dispatch origin, so an expiry suspension observed
+while the same payment is in progress can recover under the same checks.
+
+If payment extends the term while the upstream still reports Suspended, keep
+the local suspension and retain a reference to that confirmed renewal. A later
+real sync job may accept Active using the same source and eligibility checks.
+An Active callback cannot consume this reference. A changed suspension reason
+or explicit lifecycle action invalidates it; accepted Active clears it. Manual,
+abuse and policy suspensions remain protected, and system billing suspensions
+continue to use their separate invoice-proven recovery flow. Failed, unknown
+or incomplete-period renewals cannot restore service or emit a renewal-success
+event. A confirmed renewal and an actual suspended→active transition each emit
+their own notification once, including when recovery happens on a later sync.
+
+The correction passed the strict supplier gates on an owned loopback PG18.6:
+30 unit and 92 integration entry points, plus 19 cancellation/renewal entries,
+race enabled and zero skips. Four new
+integration entries contain 18 scenarios for fresh state/details, operator
+confirmation, delayed recovery, suspension during payment, changed provenance,
+terminal/manual/abuse protections, failed or incomplete renewal and notification
+idempotency. Logs are under `output/supplier-renewal-state/`. These are E1
+boundaries. The later live state-refresh acceptance above adds E3 for this
+resource's successful due-suspension recovery; the first live renewal's local
+Suspended result remains recorded as the defect that prompted the correction.
 See [renewal acceptance and runbook](archive/README.md#f-f2eac220df6f).

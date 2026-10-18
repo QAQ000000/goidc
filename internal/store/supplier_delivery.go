@@ -182,6 +182,9 @@ locked_at=NULL,completed_at=NULL,updated_at=clock_timestamp() WHERE id=$1`, clai
 		if !paid {
 			return s.failUndispatchedRenewal(ctx, tx, claimed, "本地续费账单未支付或已退款")
 		}
+		if err = snapshotSupplierRenewalExpiryRecovery(ctx, tx, claimed, b); err != nil {
+			return err
+		}
 	}
 	actionRequest := supplier.ActionRequest{Action: claimed.Action, UpstreamID: upstreamID}
 	if claimed.Action == "reinstall" {
@@ -252,7 +255,7 @@ locked_at=NULL,completed_at=NULL,updated_at=clock_timestamp() WHERE id=$1`, clai
 		} else {
 			result, remote, callErr = renew.Renew(callCtx, renewal.RenewalRequest, func(checkpoint supplier.CreateResult) error {
 				payload, _ := json.Marshal(map[string]any{"upstream_id": checkpoint.UpstreamID, "invoice_id": checkpoint.InvoiceID, "cost_cents": checkpoint.CostCents, "currency": checkpoint.Currency, "product_id": checkpoint.ProductID})
-				tag, e := s.Pool.Exec(callCtx, `UPDATE provision_jobs SET result=$2,updated_at=now() WHERE id=$1 AND status='running' AND attempts=$3 AND locked_at>clock_timestamp()-interval '5 minutes'`, claimed.ID, payload, claimed.Attempts)
+				tag, e := s.Pool.Exec(callCtx, `UPDATE provision_jobs SET result=result||$2::jsonb,updated_at=now() WHERE id=$1 AND status='running' AND attempts=$3 AND locked_at>clock_timestamp()-interval '5 minutes'`, claimed.ID, payload, claimed.Attempts)
 				if e == nil && tag.RowsAffected() != 1 {
 					return conflict("job_lease_lost", "续费任务租约失效")
 				}
@@ -430,11 +433,22 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 	if existing != "" && existing != strconv.FormatInt(remote.UpstreamID, 10) {
 		return conflict("supplier_resource_mismatch", "供应商资源与本地服务不匹配")
 	}
+	due, err := supplierDueDate(remote.NextDueDate)
+	if err != nil {
+		return err
+	}
+	var renewalRecoveryID int64
+	if current == "suspended" && (state == "active" || state == "suspended") {
+		renewalRecoveryID, err = supplierRenewalExpiryRecovery(ctx, tx, j, remote, due, previousReason)
+		if err != nil {
+			return err
+		}
+	}
 	applyLifecycle := true
 	switch current {
 	case "queued", "provisioning":
 	case "active", "suspended":
-		applyLifecycle = state != "provisioning" && !(current == "suspended" && state == "active" && j.Action != "resume")
+		applyLifecycle = state != "provisioning" && !(current == "suspended" && state == "active" && j.Action != "resume" && renewalRecoveryID == 0)
 	case "failed":
 		// An explicitly requested termination may close a failed delivery whose
 		// resource was identified later. Other observations never revive it.
@@ -445,10 +459,6 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 	}
 	if !applyLifecycle {
 		state = current
-	}
-	due, err := supplierDueDate(remote.NextDueDate)
-	if err != nil {
-		return err
 	}
 	var credentials []byte
 	if remote.Password != "" {
@@ -466,6 +476,7 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 		"dedicated_ip": remote.DedicatedIP, "assigned_ips": remote.AssignedIPs, "port": remote.Port,
 	}
 	clearBillingOrigin := j.Action == "suspend" || j.Action == "resume" || j.Action == "terminate"
+	clearRenewalRecovery := clearBillingOrigin
 	if applyLifecycle {
 		reason := remote.SuspendReason
 		if state == "active" {
@@ -476,12 +487,20 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 		// An omitted reason preserves the local reason; Active clears it.
 		if reason != "" || state == "active" {
 			resourceFields["suspend_reason"] = reason
+			if state == "active" || reason != previousReason {
+				clearRenewalRecovery = true
+			}
 			if j.Action != "suspend" && current == "suspended" && state == "suspended" && reason != previousReason {
 				// A new observed upstream reason supersedes the earlier billing
 				// suspension, even when the coarse local state stayed suspended.
 				clearBillingOrigin = true
 			}
 		}
+	}
+	if j.Action == "renew" && renewalRecoveryID > 0 && state == "suspended" && applyLifecycle && !clearRenewalRecovery {
+		// Some upstreams extend the term before their separate unsuspend worker
+		// runs. A later read may consume only this confirmed renewal's authority.
+		resourceFields["supplier_renewal_recovery_job_id"] = renewalRecoveryID
 	}
 	if j.Action == "suspend" && j.ID > 0 && current == "active" && state == "suspended" && applyLifecycle {
 		var payload []byte
@@ -510,9 +529,11 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
  domain=CASE WHEN $4<>'' THEN $4 ELSE domain END,
  username=CASE WHEN $5<>'' THEN $5 ELSE username END,
  credentials_encrypted=CASE WHEN $6::bytea IS NULL THEN credentials_encrypted ELSE $6 END,
- resource_info=(CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END)||$7::jsonb,
+ resource_info=(CASE WHEN $12::boolean THEN
+  (CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END)-'supplier_renewal_recovery_job_id'
+  ELSE (CASE WHEN $10::boolean THEN resource_info-'system_billing_suspension_job_id' ELSE resource_info END) END)||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin, j.Action == "renew")
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin, j.Action == "renew", clearRenewalRecovery)
 	if err != nil {
 		return err
 	}
