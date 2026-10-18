@@ -26,6 +26,7 @@
 | 迁移与切换 | 旧数据、密文、队列及 checksum 是否保留？旧 schema 是否被当前候选拒绝？既有付款订阅是否保持原范围？冻结、回退和切回是否可重复？ | 独立 PG 的 `TestNotificationCenterUpgradeFrom160`、`TestNotificationLifecycleUpgradeFrom162`；CI 提供实际双二进制强制启动门禁；`cmd/migrate`、[迁移入口](../migration/README.md) | 合成旧夹具和正向升级不证明旧二进制降级或生产备份恢复；静态盘点只能是 E0 |
 | 前端与 API | 加载、空、错误、冲突、响应式和错误码是否可见且一致？下载是否保留同源认证、错误语义、失效响应检查及临时资源清理？ | `npm --prefix web run lint`、`typecheck`、`test:proxy`、组件测试、`node --test scripts/download.test.mjs`；CSV 精度/引用/公式防护对应 `internal/csvexport` 与报表导出测试 | lint/typecheck 与 DOM/fetch 夹具不等于浏览器或真实 API 验收 |
 | 站点主题 | 匿名接口是否只公开展示字段？保存后 SSR/客户端能否消费？亮色主色可读、页脚转义和后台隔离是否保持？ | [主题契约](../admin-configuration.md#官网主题)、`TestSiteContentVersionedCRUDAndPermissions`、`TestSiteThemeValidationPermissionsAndReplay`、`node --test scripts/site-theme.test.mjs` | API 写入和权限使用隔离 PG18；渲染夹具不代替实际浏览器视觉/Portal/刷新验证 |
+| 内部调度 | 任务目录、API 筛选与页面名称是否一致？既有循环频率和顺序是否保留？审计失败会否重跑？日续费是否保留锁和全量完成标记？ | [调度契约](scheduler.md)、`scripts/test-scheduler.mjs --unit` / `--integration`、调度组件测试 | 必需 run/pass 零 skip；独立 PG18 和组件夹具不代表真实 worker 进程、浏览器或生产调度 |
 | worker 与容量 | 强杀、重启、队列、锁、延迟和资源预算是否有边界？ | `./scripts/test-worker-recovery.sh`、[容量验证](../capacity.md) | 只读负载不能证明支付、写入或生产容量 |
 
 ## 证据记录模板

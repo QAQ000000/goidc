@@ -5,11 +5,16 @@ import (
 	"errors"
 	"log/slog"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/scheduler"
 )
 
 // RunScheduled records one invocation without retrying business work when audit
 // writes fail. A crash leaves running evidence; no synthetic history is added.
 func (s *Store) RunScheduled(ctx context.Context, log *slog.Logger, key string, run func(context.Context) (int, error)) (int, error) {
+	if _, found := scheduler.Lookup(key); !found {
+		return 0, scheduler.ErrUnknownTask
+	}
 	return s.runScheduled(ctx, log, key, false, run)
 }
 

@@ -13,6 +13,7 @@
 | 编译全部 Go 测试 | `./scripts/go.sh test ./... -run '^$'` | Go 依赖可用；不执行测试 |
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
 | CSV 编码与报表输出 | `./scripts/go.sh test -race ./internal/csvexport`；HTTP 纯输出入口见 `report_export_test.go`、`sales_report_details_test.go`，由 CI 单独运行 | 编码不依赖数据库；接口权限/范围仍须独立 PG18 回归 |
+| 内部调度任务 | `node scripts/test-scheduler.mjs --unit` / `--integration`、`node --test scripts/scheduler-components.test.mjs` | 集成须显式回环 PG18 `_test` URL，逐项 run/pass 零 skip；目录/取消/审计和日续费回归，真实 worker 与浏览器另验，见[调度契约](architecture/scheduler.md) |
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
 | 浏览器文件保存与下载请求 | `node --test scripts/download.test.mjs` | Node 与 Web 依赖；执行真实 helper/组件及 DOM/fetch 夹具，不启动浏览器 |

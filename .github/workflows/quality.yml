@@ -70,6 +70,7 @@ jobs:
           node scripts/test-compiled-payments.mjs --unit
           node scripts/test-compiled-suppliers.mjs --unit
           node scripts/test-file-storage.mjs --unit
+          node scripts/test-scheduler.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
         run: node scripts/check-module-binaries.mjs
@@ -88,6 +89,7 @@ jobs:
           node --test scripts/certification-components.test.mjs
           node --test scripts/payment-reconciliation-components.test.mjs
           node --test scripts/supplier-components.test.mjs
+          node --test scripts/scheduler-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
@@ -166,6 +168,9 @@ jobs:
 
       - name: Require file storage compatibility, authorization and recovery on PostgreSQL 18
         run: node scripts/test-file-storage.mjs --integration
+
+      - name: Require internal scheduler catalog, audit and business compatibility on PostgreSQL 18
+        run: node scripts/test-scheduler.mjs --integration
 
       - name: Remove the dedicated PostgreSQL container and its volumes
         if: always()

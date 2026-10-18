@@ -13,6 +13,7 @@ import (
 	"github.com/codex/zjmfgo/internal/config"
 	"github.com/codex/zjmfgo/internal/modules/manifest"
 	"github.com/codex/zjmfgo/internal/notification"
+	"github.com/codex/zjmfgo/internal/scheduler"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 )
@@ -56,31 +57,21 @@ func main() {
 		os.Exit(1)
 	}
 	smtpFallback := store.SMTPRuntimeConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode, FromName: cfg.SMTPFromName}
+	paymentFallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: cfg.PaymentMockEnabled, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
+	scheduled := store.NewScheduledTaskRunner(db, log, paymentFallback)
+	paymentSchedule, _ := scheduler.Lookup(string(scheduler.AutomaticPaymentReconciliation))
+	notificationSchedule, _ := scheduler.Lookup(string(scheduler.AffiliateSettlement))
+	renewalSchedule, _ := scheduler.Lookup(string(scheduler.AutomaticRenewals))
 	var paymentWorker sync.WaitGroup
 	{
 		paymentWorker.Add(1)
 		go func() {
 			defer paymentWorker.Done()
-			timer := time.NewTicker(10 * time.Second)
-			defer timer.Stop()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case <-timer.C:
-					fallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: cfg.PaymentMockEnabled, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
-					_, checkErr := db.RunScheduled(ctx, log, "automatic_payment_reconciliation", func(c context.Context) (int, error) {
-						changed, err := db.ProcessConfiguredAutomaticPaymentCheck(c, fallback)
-						if changed {
-							return 1, err
-						}
-						return 0, err
-					})
-					if checkErr != nil && ctx.Err() == nil {
-						log.Error("automatic payment reconciliation failed", "error", checkErr)
-					}
+			runScheduledLane(ctx, paymentSchedule, func() {
+				if _, checkErr := scheduled.Run(ctx, scheduler.AutomaticPaymentReconciliation); checkErr != nil && ctx.Err() == nil {
+					log.Error("automatic payment reconciliation failed", "error", checkErr)
 				}
-			}
+			})
 		}()
 	}
 	defer paymentWorker.Wait()
@@ -106,35 +97,7 @@ func main() {
 	notificationWorker.Add(1)
 	go func() {
 		defer notificationWorker.Done()
-		timer := time.NewTicker(time.Minute)
-		defer timer.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-				if released, settleErr := db.RunScheduled(ctx, log, "affiliate_settlement", func(c context.Context) (int, error) { return db.SettleAffiliateCommissions(c, 100) }); settleErr != nil && ctx.Err() == nil {
-					log.Error("affiliate commission settlement failed", "error", settleErr)
-				} else if released > 0 {
-					log.Info("affiliate commissions released", "count", released)
-				}
-				if queued, scheduleErr := db.RunScheduled(ctx, log, "service_expiry_notifications", func(c context.Context) (int, error) { return db.EnqueueServiceExpiryReminders(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
-					log.Error("service expiry notification scheduling failed", "error", scheduleErr)
-				} else if queued > 0 {
-					log.Info("service expiry notifications queued", "count", queued)
-				}
-				if queued, scheduleErr := db.RunScheduled(ctx, log, "billing_notifications", func(c context.Context) (int, error) { return db.EnqueueBillingNotifications(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
-					log.Error("billing notification scheduling failed", "error", scheduleErr)
-				} else if queued > 0 {
-					log.Info("billing notifications queued", "count", queued)
-				}
-				if queued, scheduleErr := db.RunScheduled(ctx, log, "overdue_service_suspensions", func(c context.Context) (int, error) { return db.EnqueueOverdueServiceSuspensions(c, 100) }); scheduleErr != nil && ctx.Err() == nil {
-					log.Error("overdue suspension scheduling failed", "error", scheduleErr)
-				} else if queued > 0 {
-					log.Info("overdue service suspensions queued", "count", queued)
-				}
-			}
-		}
+		runScheduledLane(ctx, notificationSchedule, func() { runNotificationSchedules(ctx, scheduled, log) })
 	}()
 	defer notificationWorker.Wait()
 	var centerWorker sync.WaitGroup
@@ -157,22 +120,16 @@ func main() {
 	renewalWorker.Add(1)
 	go func() {
 		defer renewalWorker.Done()
-		timer := time.NewTicker(time.Minute)
-		defer timer.Stop()
-		for {
-			if _, renewErr := db.RunDailyAutoRenewals(ctx, log); renewErr != nil && ctx.Err() == nil {
+		runScheduledLane(ctx, renewalSchedule, func() {
+			if _, renewErr := scheduled.Run(ctx, scheduler.AutomaticRenewals); renewErr != nil && ctx.Err() == nil {
 				log.Error("auto renewal processing failed", "error", renewErr)
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-timer.C:
-			}
-		}
+		})
 	}()
 	defer renewalWorker.Wait()
 	log.Info("provision worker started")
-	ticker := time.NewTicker(2 * time.Second)
+	provisionSchedule, _ := scheduler.Lookup(string(scheduler.SupplierSyncSchedule))
+	ticker := time.NewTicker(provisionSchedule.Interval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -254,7 +211,7 @@ func main() {
 				log.Error("stale job recovery failed", "error", err)
 				continue
 			}
-			if _, err = db.RunScheduled(ctx, log, "supplier_sync_schedule", func(c context.Context) (int, error) { n, e := db.EnqueuePeriodicSupplierSyncs(c); return int(n), e }); err != nil {
+			if _, err = scheduled.Run(ctx, scheduler.SupplierSyncSchedule); err != nil {
 				log.Error("periodic supplier sync enqueue failed", "error", err)
 			}
 			for i := 0; i < 20; i++ {
@@ -271,5 +228,51 @@ func main() {
 				}
 			}
 		}
+	}
+}
+
+func runScheduledLane(ctx context.Context, task scheduler.Descriptor, run func()) {
+	timer := time.NewTicker(task.Interval)
+	defer timer.Stop()
+	runScheduledTicks(ctx, task.Startup, timer.C, run)
+}
+
+func runScheduledTicks(ctx context.Context, startup bool, ticks <-chan time.Time, run func()) {
+	if startup && ctx.Err() == nil {
+		run()
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case _, open := <-ticks:
+			if !open || ctx.Err() != nil {
+				return
+			}
+			run()
+		}
+	}
+}
+
+func runNotificationSchedules(ctx context.Context, scheduled *scheduler.Runner, log *slog.Logger) {
+	if released, settleErr := scheduled.Run(ctx, scheduler.AffiliateSettlement); settleErr != nil && ctx.Err() == nil {
+		log.Error("affiliate commission settlement failed", "error", settleErr)
+	} else if released > 0 {
+		log.Info("affiliate commissions released", "count", released)
+	}
+	if queued, scheduleErr := scheduled.Run(ctx, scheduler.ServiceExpiryNotifications); scheduleErr != nil && ctx.Err() == nil {
+		log.Error("service expiry notification scheduling failed", "error", scheduleErr)
+	} else if queued > 0 {
+		log.Info("service expiry notifications queued", "count", queued)
+	}
+	if queued, scheduleErr := scheduled.Run(ctx, scheduler.BillingNotifications); scheduleErr != nil && ctx.Err() == nil {
+		log.Error("billing notification scheduling failed", "error", scheduleErr)
+	} else if queued > 0 {
+		log.Info("billing notifications queued", "count", queued)
+	}
+	if queued, scheduleErr := scheduled.Run(ctx, scheduler.OverdueServiceSuspensions); scheduleErr != nil && ctx.Err() == nil {
+		log.Error("overdue suspension scheduling failed", "error", scheduleErr)
+	} else if queued > 0 {
+		log.Info("overdue service suspensions queued", "count", queued)
 	}
 }

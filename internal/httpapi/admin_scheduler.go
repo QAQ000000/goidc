@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/scheduler"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,9 +14,7 @@ func schedulerFilter(r *http.Request) (string, []any, bool) {
 	where := []string{"TRUE"}
 	args := []any{}
 	if key := r.URL.Query().Get("task"); key != "" {
-		switch key {
-		case "affiliate_settlement", "service_expiry_notifications", "billing_notifications", "supplier_sync_schedule", "overdue_service_suspensions", "automatic_renewals", "automatic_payment_reconciliation":
-		default:
+		if _, exists := scheduler.Lookup(key); !exists {
 			return "", nil, false
 		}
 		args = append(args, key)
@@ -58,8 +57,14 @@ func (s *Server) adminJobExecutionLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_scheduler_filter", "日志筛选参数无效")
 		return
 	}
-	s.writeListPage(w, r, "SELECT count(*) FROM scheduler_runs WHERE "+where,
-		"SELECT id,task_key,started_at,finished_at,duration_ms,status,affected_count,error_code FROM scheduler_runs WHERE "+where+" ORDER BY started_at DESC,id DESC", args, limit, offset)
+	page, err := listPage(r.Context(), s.db.Pool, "SELECT count(*) FROM scheduler_runs WHERE "+where,
+		"SELECT id,task_key,started_at,finished_at,duration_ms,status,affected_count,error_code FROM scheduler_runs WHERE "+where+" ORDER BY started_at DESC,id DESC", args, limit, offset, pgx.RowToMap)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	page["tasks"] = scheduler.Descriptors()
+	write(w, http.StatusOK, page)
 }
 func (s *Server) adminSchedulerTrend(w http.ResponseWriter, r *http.Request) {
 	where, args, ok := schedulerFilter(r)

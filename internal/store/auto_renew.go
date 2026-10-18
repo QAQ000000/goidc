@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/scheduler"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -94,10 +95,10 @@ func (s *Store) RunDailyAutoRenewals(ctx context.Context, log *slog.Logger) (int
 		if err = tx.QueryRow(ctx, "SELECT pg_try_advisory_xact_lock(hashtextextended('automatic-renewals-daily',0))").Scan(&claimed); err != nil || !claimed {
 			return 0, err
 		}
-		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM scheduler_runs WHERE task_key='automatic_renewals' AND status='succeeded' AND is_full_pass AND started_at>=date_trunc('day',now()))").Scan(&completed); err != nil || completed {
+		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM scheduler_runs WHERE task_key=$1 AND status='succeeded' AND is_full_pass AND started_at>=date_trunc('day',now()))", string(scheduler.AutomaticRenewals)).Scan(&completed); err != nil || completed {
 			return 0, err
 		}
-		count, err := s.runScheduled(ctx, log, "automatic_renewals", true, func(c context.Context) (int, error) {
+		count, err := s.runScheduled(ctx, log, string(scheduler.AutomaticRenewals), true, func(c context.Context) (int, error) {
 			return s.ProcessAutoRenewals(c, 100)
 		})
 		if err != nil {

@@ -283,6 +283,40 @@
         "required": true,
         "kind": "candidate-and-rollback"
       }
+    },
+    {
+      "id": "internal-scheduler",
+      "contract": "docs/architecture/scheduler.md",
+      "implementation": [
+        "internal/scheduler",
+        "internal/store/scheduled_tasks.go",
+        "cmd/worker/main.go",
+        "internal/httpapi/admin_scheduler.go",
+        "web/src/components/admin-scheduler-logs.tsx"
+      ],
+      "tests": [
+        "node scripts/test-scheduler.mjs --unit",
+        "node scripts/test-scheduler.mjs --integration",
+        "node --test scripts/scheduler-components.test.mjs"
+      ],
+      "evaluation": [
+        "fixed compiled task catalog, typed dispatch, existing lane ordering and cancellation without retry",
+        "isolated PostgreSQL 18 real dispatch, super-admin metadata, audit failures, daily full-pass gating and business compatibility; required run/pass with zero skips",
+        "component fixtures and two real workers with local supplier simulator, minute ticks, restart and TERM; browser and production scheduling remain separate"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "scheduler",
+          "store",
+          "httpapi",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-scheduler-dispatch"
+      }
     }
   ]
 }
