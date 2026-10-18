@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,18 +26,27 @@ type Intent struct {
 }
 
 type Webhook struct {
-	EventID           string `json:"event_id"`
-	ProviderPaymentID string `json:"payment_id"`
-	InvoiceID         int64  `json:"invoice_id"`
-	AmountCents       int64  `json:"amount_cents"`
-	Status            string `json:"status"`
+	EventID               string `json:"event_id"`
+	ProviderPaymentID     string `json:"payment_id"`
+	InvoiceID             int64  `json:"invoice_id"`
+	AmountCents           int64  `json:"amount_cents"`
+	Status                string `json:"status"`
+	ExternalTransactionID string `json:"external_transaction_id,omitempty"`
 }
 
 type Gateway interface {
 	Name() string
+	// CreateIntent is a pure local operation. It may generate a reference and
+	// sign a checkout URL, but must not create an upstream payment or use network I/O.
 	CreateIntent(IntentRequest) (Intent, error)
 	VerifySignature(body []byte, signature string) bool
 	DecodeWebhook(body []byte) (Webhook, error)
+}
+
+// MerchantScopeGateway provides a stable, non-secret identity for refund and
+// reporting boundaries. It must depend only on the frozen merchant identity.
+type MerchantScopeGateway interface {
+	MerchantScope() (string, error)
 }
 
 // CloseGateway is intentionally stricter than QueryGateway. Implementations
@@ -64,51 +72,45 @@ type CloseGateway interface {
 	Close(context.Context, CloseRequest) (CloseResult, error)
 }
 
-// gatewayRegistry is the payment-specific typed view over the common
-// compiled-in module registry. Database channel instances select an ID, while
-// this registry supplies the executable implementation.
-var gatewayRegistry = module.NewRegistry[Gateway](channel.Payment)
-
-// FactoryConfig is kept as a typed compatibility boundary for existing
-// payment callers. New adapters may use Values/Secret from module.Config and
-// leave Epay empty.
+// FactoryConfig retains the existing payment constructor signature. Adapters
+// receive common instance values and credentials; legacy typed payloads stay
+// inside their own adapter factory.
 type FactoryConfig = module.Config
-
-type epayFactoryConfig struct {
-	Config EpayConfig
-	Type   string
-}
 
 func New(name string, config FactoryConfig) (Gateway, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("payment gateway ID is empty")
 	}
-	implementation := name
-	if strings.HasPrefix(name, "epay_") {
-		implementation = "epay"
-		cfg, ok := config.Payload.(EpayConfig)
-		if !ok {
-			return nil, errors.New("invalid epay factory configuration")
-		}
-		config.Payload = epayFactoryConfig{Config: cfg, Type: strings.TrimPrefix(name, "epay_")}
+	implementation, ok := MethodOwner(name)
+	if !ok {
+		return nil, errors.New("payment gateway is not registered")
 	}
-	return gatewayRegistry.New(implementation, config)
+	return NewFor(implementation, name, config)
 }
 
 func init() {
-	gatewayRegistry.MustRegister(channel.Descriptor{
+	err := registerFactory(channel.Descriptor{
 		ID: "mock", Name: "模拟支付", Category: channel.Payment,
 		Capabilities: []string{"create_intent", "verify_webhook", "query", "close_intent", "lookup_close"},
 		Fields:       []channel.Field{{Key: "secret_source", Label: "签名密钥来源", Type: channel.Select, Options: []string{"deployment"}}},
-	}, func(config FactoryConfig) (Gateway, error) {
-		return MockGateway{Secret: []byte(config.Secret)}, nil
-	})
+	}, []Method{{ID: "mock", Label: "模拟支付", Simulation: true}}, mockWebhookProtocol{}, func(_ string, config FactoryConfig) (Gateway, error) {
+		secret := config.Secrets["secret"]
+		if secret == "" {
+			secret = config.Secret
+		}
+		return MockGateway{Secret: []byte(secret)}, nil
+	}, true)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type MockGateway struct{ Secret []byte }
 
 func (g MockGateway) Name() string { return "mock" }
+
+func (g MockGateway) MerchantScope() (string, error) { return "mock:test-only", nil }
 
 func (g MockGateway) CreateIntent(req IntentRequest) (Intent, error) {
 	if req.InvoiceNo == "" || req.AmountCents < 0 {
@@ -133,10 +135,8 @@ func (g MockGateway) VerifySignature(body []byte, signature string) bool {
 }
 
 func (g MockGateway) DecodeWebhook(body []byte) (Webhook, error) {
-	var event Webhook
-	dec := json.NewDecoder(strings.NewReader(string(body)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&event); err != nil {
+	event, err := decodeMockWebhook(body)
+	if err != nil {
 		return event, fmt.Errorf("invalid webhook: %w", err)
 	}
 	if event.EventID == "" || event.ProviderPaymentID == "" || event.InvoiceID < 1 || event.AmountCents < 0 {

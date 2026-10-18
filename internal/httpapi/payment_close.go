@@ -83,13 +83,7 @@ func (s *Server) closePayment(w http.ResponseWriter, r *http.Request) {
 			s.log.Error("payment close failure record failed", "operation_id", op.OperationID, "error", finishErr)
 		}
 	}
-	configuration, configurationErr := s.paymentConfiguration(ctx)
-	if configurationErr != nil {
-		failClose("provider_unavailable")
-		writeError(w, http.StatusConflict, "payment_close_unavailable", "当前支付渠道不支持可信关单，原支付单继续保留")
-		return
-	}
-	gateway, enabled, gatewayErr := s.db.PaymentTransactionGateway(ctx, op.Provider, op.ProviderPaymentID, configuration)
+	gateway, enabled, gatewayErr := s.db.PaymentTransactionGateway(ctx, op.Provider, op.ProviderPaymentID, s.paymentFallback())
 	closeGateway, supported := gateway.(payment.CloseGateway)
 	if gatewayErr != nil || !enabled || !supported {
 		failClose("provider_unavailable")
@@ -177,9 +171,8 @@ func (s *Server) paymentCloseStatus(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	cfg, cfgErr := s.paymentConfiguration(r.Context())
-	g, enabled, gErr := s.db.PaymentTransactionGateway(r.Context(), provider, reference, cfg)
+	g, enabled, gErr := s.db.PaymentTransactionGateway(r.Context(), provider, reference, s.paymentFallback())
 	_, supported := g.(payment.CloseGateway)
-	out["close_supported"] = cfgErr == nil && gErr == nil && enabled && supported
+	out["close_supported"] = gErr == nil && enabled && supported
 	write(w, 200, out)
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/payment"
@@ -31,9 +30,12 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 	if input.Provider == "" {
 		input.Provider = "mock"
 	}
-	configuration, err := s.paymentConfiguration(r.Context())
+	var configuration store.PaymentConfiguration
+	var err error
 	if strings.TrimSpace(input.ChannelInstanceID) != "" {
 		configuration, err = s.db.PaymentConfigurationForInstance(r.Context(), strings.TrimSpace(input.ChannelInstanceID), s.paymentFallback())
+	} else {
+		configuration, err = s.paymentConfiguration(r.Context())
 	}
 	if err != nil {
 		s.fail(w, r, err)
@@ -87,55 +89,94 @@ func (s *Server) createPayment(w http.ResponseWriter, r *http.Request) {
 	write(w, status, result)
 }
 
+// A callback locator is untrusted. It can only select an existing transaction;
+// signature verification and decoding always use that transaction's snapshot.
 func (s *Server) paymentWebhook(w http.ResponseWriter, r *http.Request) {
 	provider := strings.TrimSpace(strings.ToLower(r.PathValue("provider")))
-	configuration, err := s.paymentConfiguration(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if strings.HasPrefix(provider, "epay_") {
-		s.epayWebhook(w, r, provider, configuration)
-		return
-	}
-	gateway, ok := configuration.Gateway(provider, true)
+	protocol, ok := payment.LookupProtocol(provider)
 	if !ok {
 		writeError(w, 404, "payment_provider_not_found", "支付渠道不存在")
 		return
 	}
-	if r.Method != http.MethodPost {
-		writeError(w, 405, "method_not_allowed", "回调需要 POST")
+	reply := func(status int, value any) {
+		body, _ := json.Marshal(value)
+		response := protocol.Reply(status, append(body, '\n'))
+		w.Header().Set("Content-Type", response.ContentType)
+		w.WriteHeader(response.Status)
+		_, _ = w.Write(response.Body)
+	}
+	fail := func(status int, code, message string) {
+		reply(status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+	}
+	if len(r.URL.RawQuery) > 64<<10 {
+		fail(400, "invalid_webhook", "回调内容无效")
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil {
-		writeError(w, 400, "invalid_webhook", "回调内容无效")
+		fail(400, "invalid_webhook", "回调内容无效")
 		return
 	}
-	if !gateway.VerifySignature(body, r.Header.Get("X-Payment-Signature")) {
-		writeError(w, 401, "invalid_payment_signature", "支付回调签名无效")
+	payload, err := protocol.Parse(payment.CallbackRequest{Method: r.Method, Header: r.Header, RawQuery: r.URL.RawQuery, Body: body})
+	if err != nil || payload.Reference == "" || len(payload.Reference) > 512 || len(payload.Body) > 64<<10 || len(payload.CanonicalBody) == 0 || len(payload.CanonicalBody) > 256<<10 {
+		status := http.StatusBadRequest
+		var callbackError *payment.CallbackError
+		if errors.As(err, &callbackError) && callbackError.Status == http.StatusMethodNotAllowed {
+			status = http.StatusMethodNotAllowed
+		}
+		fail(status, "invalid_webhook", "回调内容无效")
 		return
 	}
-	event, err := gateway.DecodeWebhook(body)
+	var canonical map[string]json.RawMessage
+	if err := json.Unmarshal(payload.CanonicalBody, &canonical); err != nil || canonical == nil {
+		fail(400, "invalid_webhook", "回调证据格式无效")
+		return
+	}
+	gateway, ok, err := s.db.PaymentTransactionGateway(r.Context(), provider, payload.Reference, s.paymentFallback())
+	if err != nil || !ok || gateway == nil || gateway.Name() != provider || !gateway.VerifySignature(payload.Body, payload.Signature) {
+		fail(401, "invalid_payment_signature", "支付回调签名无效")
+		return
+	}
+	event, err := gateway.DecodeWebhook(payload.Body)
+	if err != nil || event.ProviderPaymentID != payload.Reference {
+		fail(400, "invalid_webhook", "回调内容无效")
+		return
+	}
+	method, _ := payment.MethodInfo(provider)
+	// Every real payment needs an independently identified, merchant-scoped
+	// external transaction. Event IDs identify delivery, not financial identity.
+	if !method.Simulation && event.ExternalTransactionID == "" {
+		fail(400, "invalid_webhook", "回调缺少渠道流水号")
+		return
+	}
+	var external []string
+	if event.ExternalTransactionID != "" {
+		external = append(external, event.ExternalTransactionID)
+	}
+	result, err := s.db.ProcessPaymentWebhook(r.Context(), provider, event.EventID, event.ProviderPaymentID, event.InvoiceID, event.AmountCents, event.Status, payload.CanonicalBody, external...)
 	if err != nil {
-		writeError(w, 400, "invalid_webhook", "回调内容无效")
+		var conflict *store.Conflict
+		var pg *pgconn.PgError
+		switch {
+		case errors.As(err, &conflict):
+			fail(409, conflict.Code, conflict.Message)
+		case errors.Is(err, pgx.ErrNoRows), errors.As(err, &pg) && (pg.Code == "23505" || pg.Code == "23503" || pg.Code == "23514"):
+			fail(409, "payment_callback_conflict", "支付回调与交易记录不匹配")
+		default:
+			s.log.Error("payment callback settlement failed", "provider", provider, "invoice_id", event.InvoiceID, "error", err)
+			fail(500, "internal_error", "请求处理失败")
+		}
 		return
 	}
-	result, err := s.db.ProcessPaymentWebhook(r.Context(), provider, event.EventID, event.ProviderPaymentID, event.InvoiceID, event.AmountCents, event.Status, body)
-	if err != nil {
-		s.fail(w, r, err)
-		return
+	status := http.StatusCreated
+	if result.Replayed {
+		status = http.StatusOK
 	}
-	status := http.StatusOK
-	if !result.Replayed {
-		status = http.StatusCreated
-	}
-	write(w, status, result)
+	reply(status, map[string]any{"data": result})
 }
 
 func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
-	labels := map[string]string{"alipay": "支付宝", "wxpay": "微信支付", "qqpay": "QQ 钱包", "bank": "网银支付"}
 	instances, err := s.db.ListChannelInstances(r.Context(), "payment")
 	if err != nil {
 		s.fail(w, r, err)
@@ -149,70 +190,16 @@ func (s *Server) paymentProviders(w http.ResponseWriter, r *http.Request) {
 		if resolveErr != nil {
 			continue
 		}
-		if instance.ImplementationID == "mock" {
-			if _, ok := configuration.Gateway("mock", false); ok {
-				items = append(items, map[string]any{"name": "mock", "label": instance.DisplayName, "instance_id": instance.ID, "simulation": true})
+		for _, method := range payment.Methods(instance.ImplementationID) {
+			if _, ok := configuration.Gateway(method.ID, false); !ok {
+				continue
 			}
-			continue
-		}
-		for _, value := range configuration.Types {
-			if _, ok := configuration.Gateway("epay_"+value, false); ok {
-				items = append(items, map[string]any{"name": "epay_" + value, "label": labels[value] + " · " + instance.DisplayName, "instance_id": instance.ID, "simulation": false})
+			label := method.Label + " · " + instance.DisplayName
+			if method.Simulation {
+				label = instance.DisplayName
 			}
+			items = append(items, map[string]any{"name": method.ID, "label": label, "instance_id": instance.ID, "simulation": method.Simulation})
 		}
 	}
 	write(w, 200, items)
-}
-
-func (s *Server) epayWebhook(w http.ResponseWriter, r *http.Request, provider string, configuration store.PaymentConfiguration) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fail := func(status int) { w.WriteHeader(status); _, _ = io.WriteString(w, "fail") }
-	var payload []byte
-	if r.Method == http.MethodGet {
-		payload = []byte(r.URL.RawQuery)
-	} else {
-		if len(r.URL.RawQuery) > 0 || !strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
-			fail(400)
-			return
-		}
-		var err error
-		payload, err = io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
-		if err != nil {
-			fail(400)
-			return
-		}
-	}
-	values, err := url.ParseQuery(string(payload))
-	if err != nil || len(payload) > 64<<10 || len(values["out_trade_no"]) != 1 {
-		fail(400)
-		return
-	}
-	gateway, ok, err := s.db.PaymentTransactionGateway(r.Context(), provider, values.Get("out_trade_no"), configuration)
-	if err != nil || !ok {
-		fail(401)
-		return
-	}
-	if !gateway.VerifySignature(payload, "") {
-		fail(401)
-		return
-	}
-	event, err := gateway.DecodeWebhook(payload)
-	if err != nil {
-		fail(400)
-		return
-	}
-	// Canonical decoded parameters make retries independent of form ordering.
-	raw, _ := json.Marshal(values)
-	if _, err = s.db.ProcessPaymentWebhook(r.Context(), gateway.Name(), event.EventID, event.ProviderPaymentID, event.InvoiceID, event.AmountCents, event.Status, raw, event.EventID); err != nil {
-		var conflict *store.Conflict
-		var pg *pgconn.PgError
-		if errors.As(err, &conflict) || errors.Is(err, pgx.ErrNoRows) || (errors.As(err, &pg) && pg.Code == "23505") {
-			fail(409)
-		} else {
-			s.log.Error("payment callback settlement failed", "provider", gateway.Name(), "invoice_id", event.InvoiceID, "error", err)
-			fail(500)
-		}
-		return
-	}
-	_, _ = io.WriteString(w, "success")
 }

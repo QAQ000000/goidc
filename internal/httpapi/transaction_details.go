@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	paymentapi "github.com/codex/zjmfgo/internal/payment"
@@ -186,20 +187,18 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
  EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.payment_id=pt.id AND payment_close_anomaly_unresolved(a.id)) AS close_anomaly,
  EXISTS(SELECT 1 FROM payment_close_operations c WHERE c.payment_id=pt.id AND payment_close_operation_unresolved(c.id)) AS close_frozen,
  pt.next_reconcile_at,pt.auto_reconcile_attempts,
- pt.status IN ('pending','expired') AND pt.provider LIKE 'epay_%' AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
- FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE i.id=$1 ORDER BY pt.id DESC LIMIT 50`, id, admin))
+ pt.status IN ('pending','expired') AND pt.provider=ANY($3::text[]) AND pt.auto_reconcile_attempts>=32 AND pt.next_reconcile_at IS NULL AS reconciliation_exhausted
+ FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE i.id=$1 ORDER BY pt.id DESC LIMIT 50`, id, admin, paymentapi.QueryMethods()))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	configuration, err := s.db.PaymentConfigurationTx(ctx, tx, s.paymentFallback())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
+
+	queryMethods := paymentapi.QueryMethods()
 	for _, payment := range payments {
-		gateway, enabled, gatewayErr := s.db.PaymentTransactionGatewayTx(ctx, tx, payment["provider"].(string), payment["provider_payment_id"].(string), configuration)
-		payment["query_enabled"] = gatewayErr == nil && enabled
+		gateway, enabled, gatewayErr := s.db.PaymentTransactionGatewayTx(ctx, tx, payment["provider"].(string), payment["provider_payment_id"].(string), s.paymentFallback())
+		_, querySupported := gateway.(paymentapi.QueryGateway)
+		payment["query_enabled"] = gatewayErr == nil && enabled && querySupported && slices.Contains(queryMethods, payment["provider"].(string))
 		_, closeSupported := gateway.(paymentapi.CloseGateway)
 		payment["close_supported"] = gatewayErr == nil && enabled && closeSupported
 		_, lookupSupported := gateway.(paymentapi.CloseStatusGateway)
@@ -221,9 +220,6 @@ func (s *Server) invoiceDetail(w http.ResponseWriter, r *http.Request) {
 			payment["effective_close_status"] = resolution.PaymentStatus
 		}
 		payment["close_enabled"] = admin && identityFrom(r).can("payments.close") && gatewayErr == nil && enabled && closeSupported && (payment["status"] == "pending" || payment["status"] == "expired") && payment["close_frozen"] != true && invoice["payment_close_anomaly"] != true
-		if payment["provider"] == "mock" {
-			payment["query_enabled"] = false
-		}
 	}
 	ledger, err := collectTransactionRows(tx.Query(ctx, `SELECT l.id,l.entry_type,l.delta_cents,l.balance_after,l.created_at
  FROM balance_ledger l JOIN invoices i ON i.id=l.reference_id AND i.user_id=l.user_id

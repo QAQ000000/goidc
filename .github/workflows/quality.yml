@@ -67,6 +67,7 @@ jobs:
           node --test scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
           node scripts/test-compiled-notifications.mjs --unit
           node scripts/test-compiled-certification.mjs --unit
+          node scripts/test-compiled-payments.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
         run: node scripts/check-module-binaries.mjs
@@ -83,6 +84,7 @@ jobs:
           node --test scripts/download.test.mjs
           node --test scripts/site-theme.test.mjs
           node --test scripts/certification-components.test.mjs
+          node --test scripts/payment-reconciliation-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
@@ -152,6 +154,9 @@ jobs:
 
       - name: Require certification providers, recovery and eligibility on PostgreSQL 18
         run: node scripts/test-compiled-certification.mjs --integration
+
+      - name: Require payment runtime and historical financial compatibility on PostgreSQL 18
+        run: node scripts/test-compiled-payments.mjs --integration
 
       - name: Remove the dedicated PostgreSQL container and its volumes
         if: always()

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/jackc/pgx/v5"
@@ -89,7 +88,7 @@ func (s *Store) BeginPaymentCheck(ctx context.Context, actorID, invoiceID, payme
 	if closing {
 		return check, conflict("payment_close_in_progress", "支付单正在核验关单，请稍后重试")
 	}
-	if (state != "pending" && state != "expired") || !strings.HasPrefix(check.Provider, "epay_") {
+	if (state != "pending" && state != "expired") || !registeredPaymentQuery(check.Provider) {
 		return check, conflict("payment_not_queryable", "只有待处理的在线支付可以查询")
 	}
 	if _, err = tx.Exec(ctx, "UPDATE payment_reconciliation_checks SET status='error',result_code='lease_expired',completed_at=clock_timestamp() WHERE payment_id=$1 AND status='checking' AND lease_until<=clock_timestamp()", paymentID); err != nil {

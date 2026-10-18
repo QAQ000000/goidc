@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"regexp"
 	"sort"
@@ -15,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/channel"
-	"github.com/codex/zjmfgo/internal/module"
 )
 
 type EpayConfig struct {
@@ -29,7 +29,7 @@ type EpayGateway struct {
 }
 
 func init() {
-	gatewayRegistry.MustRegister(channel.Descriptor{
+	MustRegisterFactory(channel.Descriptor{
 		ID: "epay", Name: "易支付", Category: channel.Payment,
 		Capabilities: []string{"create_intent", "verify_webhook", "query"},
 		Fields: []channel.Field{
@@ -38,12 +38,15 @@ func init() {
 			{Key: "types", Label: "支付类型", Type: channel.MultiSelect, Options: []string{"alipay", "wxpay", "qqpay", "bank"}, Default: []string{"alipay"}},
 			{Key: "key", Label: "商户密钥", Type: channel.Text, Required: true, Secret: true},
 		},
-	}, func(config module.Config) (Gateway, error) {
-		factoryConfig, ok := config.Payload.(epayFactoryConfig)
-		if !ok {
-			return nil, errors.New("invalid epay factory configuration")
+	}, []Method{
+		{ID: "epay_alipay", Label: "支付宝"}, {ID: "epay_wxpay", Label: "微信支付"},
+		{ID: "epay_qqpay", Label: "QQ 钱包"}, {ID: "epay_bank", Label: "网银支付"},
+	}, epayWebhookProtocol{}, func(method string, config FactoryConfig) (Gateway, error) {
+		cfg, err := epayFactoryConfiguration(config)
+		if err != nil {
+			return nil, err
 		}
-		g := EpayGateway{EpayConfig: factoryConfig.Config, Type: factoryConfig.Type}
+		g := EpayGateway{EpayConfig: cfg, Type: strings.TrimPrefix(method, "epay_")}
 		if err := g.Validate(); err != nil {
 			return nil, err
 		}
@@ -52,6 +55,78 @@ func init() {
 }
 
 func (g EpayGateway) Name() string { return "epay_" + g.Type }
+
+func epayFactoryConfiguration(config FactoryConfig) (EpayConfig, error) {
+	invalid := func() (EpayConfig, error) { return EpayConfig{}, errors.New("invalid epay factory configuration") }
+	if config.Payload != nil {
+		cfg, ok := config.Payload.(EpayConfig)
+		if !ok {
+			return invalid()
+		}
+		cfg.Types = append([]string(nil), cfg.Types...)
+		return cfg, nil
+	}
+	cfg := EpayConfig{PublicOrigin: config.PublicOrigin, Key: config.Secrets["key"]}
+	if cfg.Key == "" {
+		cfg.Key = config.Secret
+	}
+	var ok bool
+	if cfg.APIURL, ok = config.Values["api_url"].(string); !ok {
+		return invalid()
+	}
+	if cfg.PID, ok = config.Values["pid"].(string); !ok {
+		return invalid()
+	}
+	switch types := config.Values["types"].(type) {
+	case []string:
+		cfg.Types = append([]string(nil), types...)
+	case []any:
+		for _, value := range types {
+			typ, ok := value.(string)
+			if !ok {
+				return invalid()
+			}
+			cfg.Types = append(cfg.Types, typ)
+		}
+	default:
+		return invalid()
+	}
+	if namespace, exists := config.Values["transaction_namespace"]; exists {
+		if cfg.TransactionNamespace, ok = namespace.(string); !ok {
+			return invalid()
+		}
+	} else {
+		cfg.TransactionNamespace = EpayMerchantNamespace(cfg.APIURL, cfg.PID)
+	}
+	return cfg, nil
+}
+
+func (g EpayGateway) MerchantScope() (string, error) {
+	unavailable := func() (string, error) { return "", errors.New("payment merchant identity unavailable") }
+	if strings.TrimSpace(g.PID) == "" {
+		return unavailable()
+	}
+	u, err := url.Parse(strings.TrimSpace(g.APIURL))
+	if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Hostname() == "" {
+		return unavailable()
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != "http" {
+		return unavailable()
+	}
+	host, port := strings.ToLower(u.Hostname()), u.Port()
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	canonical := scheme + "://" + host + strings.TrimRight(u.EscapedPath(), "/")
+	sum := sha256.Sum256([]byte("epay\x00" + canonical + "\x00" + strings.TrimSpace(g.PID)))
+	return "epay:" + hex.EncodeToString(sum[:]), nil
+}
 
 // New payment snapshots distinguish independent gateways with overlapping IDs.
 // Empty namespaces preserve the IDs of payments created before snapshots.
@@ -182,5 +257,6 @@ func (g EpayGateway) DecodeWebhook(body []byte) (Webhook, error) {
 	if err != nil || invoiceID < 1 || cents < 1 || cents > 10000000000 {
 		return Webhook{}, errors.New("invalid epay amount or invoice")
 	}
-	return Webhook{EventID: g.transactionID(values.Get("trade_no")), ProviderPaymentID: values.Get("out_trade_no"), InvoiceID: invoiceID, AmountCents: cents, Status: "succeeded"}, nil
+	transaction := g.transactionID(values.Get("trade_no"))
+	return Webhook{EventID: transaction, ProviderPaymentID: values.Get("out_trade_no"), InvoiceID: invoiceID, AmountCents: cents, Status: "succeeded", ExternalTransactionID: transaction}, nil
 }

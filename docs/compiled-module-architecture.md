@@ -66,7 +66,7 @@
 | mail | 类型化 `MailProvider`；默认选择、实例解析、验证码、业务通知、试发和 worker 统一按实现 ID 分发 |
 | sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
 | bot | Telegram 私聊作为通用业务通知渠道，按事件路由、有效绑定和显式订阅范围分发；未知结果停止自动重发 |
-| payment | 类型化 `Gateway`；仍以 mock/epay 资金协议为当前边界，新支付协议必须补回调、快照、查单、退款、对账和权限验收 |
+| payment | 方式/类型化工厂与回调协议统一注册，实例配置和交易凭据快照驱动运行；生产仍为 mock/epay，接入规则见[支付模块开发契约](architecture/payment-module-development.md) |
 | certification | 类型化实例工厂、申请配置快照与持久提交/查询；生产只装配人工审核，真实厂商另验，见[实名认证契约](domain/certification.md) |
 | provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
 

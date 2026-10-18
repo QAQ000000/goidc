@@ -21,14 +21,14 @@ import (
 var externalRefundEvidenceHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // merchantScope uses only immutable, non-secret original merchant identity.
-func (s *Store) externalRefundMerchantScope(provider, reference string, sealed []byte) (string, error) {
+func (s *Store) externalRefundMerchantScope(provider, reference string, sealed []byte, expectedInstance ...string) (string, error) {
 	if provider == "mock" {
 		return "mock:test-only", nil
 	}
 	unavailable := func() (string, error) {
 		return "", conflict("external_refund_merchant_unavailable", "原支付商户身份不可核验，不能登记或确认退款")
 	}
-	if !strings.HasPrefix(provider, "epay_") || len(sealed) == 0 {
+	if len(sealed) == 0 {
 		return unavailable()
 	}
 	raw, err := s.paymentCredentials(reference, sealed, false)
@@ -37,9 +37,26 @@ func (s *Store) externalRefundMerchantScope(provider, reference string, sealed [
 	}
 	var cfg struct {
 		payment.EpayConfig
-		Unavailable bool `json:"unavailable"`
+		Unavailable     bool `json:"unavailable"`
+		SnapshotVersion int  `json:"snapshot_version"`
 	}
-	if json.Unmarshal(raw, &cfg) != nil || cfg.Unavailable || strings.TrimSpace(cfg.PID) == "" {
+	if json.Unmarshal(raw, &cfg) != nil || cfg.Unavailable {
+		return unavailable()
+	}
+	if cfg.SnapshotVersion != 0 {
+		var saved paymentRuntimeSnapshot
+		if json.Unmarshal(raw, &saved) != nil || saved.MerchantScope == "" || saved.MerchantScope == "mock:test-only" {
+			return unavailable()
+		}
+		if len(expectedInstance) > 0 && saved.InstanceID != expectedInstance[0] {
+			return unavailable()
+		}
+		if _, available, err := runtimePaymentGateway(raw, provider, saved.InstanceID); err != nil || !available {
+			return unavailable()
+		}
+		return saved.MerchantScope, nil
+	}
+	if !strings.HasPrefix(provider, "epay_") || strings.TrimSpace(cfg.PID) == "" {
 		return unavailable()
 	}
 	u, err := url.Parse(strings.TrimSpace(cfg.APIURL))
@@ -417,7 +434,7 @@ func (s *Store) externalRefundWrite(ctx context.Context, actor, invoice, id int6
 	// Rejection closes a pending record without money movement; changed business
 	// eligibility must never prevent an independent reviewer from rejecting it.
 	if id == 0 || confirm {
-		if merchantScope, err = s.externalRefundMerchantScope(provider, original, sealed); err != nil {
+		if merchantScope, err = s.externalRefundMerchantScope(provider, original, sealed, channel); err != nil {
 			return out, err
 		}
 		if id > 0 {

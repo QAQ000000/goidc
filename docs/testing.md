@@ -21,12 +21,17 @@
 | 实名认证提供方单元门禁 | `node scripts/test-compiled-certification.mjs --unit` | 提供方工厂、旧人工兼容、独立 worker 取消与日志隐私；race |
 | 实名认证提供方集成门禁 | `node scripts/test-compiled-certification.mjs --integration` | 回环 PG18 `_test` URL；串行 race，指定入口任一 skip、缺失或失败均阻断 |
 | 实名认证前端 | `node --test scripts/certification-components.test.mjs` | 实例选择、不可用原因、处理状态及稳定幂等键；组件夹具不代替浏览器验收 |
+| 支付运行单元门禁 | `node scripts/test-compiled-payments.mjs --unit` | 注册/协议/历史流水身份、无网络链接生成、快照加密与版本拒绝；race，不继承业务配置 |
+| 支付运行集成门禁 | `node scripts/test-compiled-payments.mjs --integration` | 显式回环 PG18 `_test` URL；第二测试协议、双实例/历史凭据、资金/退款/关单边界及真实 schema164 升级；逐入口 run/pass，零 skip |
+| 支付查询组件 | `node --test scripts/payment-reconciliation-components.test.mjs` | 通用方法能力、权限、查询状态及失败重试；组件事件夹具不代替浏览器 |
 | worker 强杀恢复 | `./scripts/test-worker-recovery.sh` | 回环 PG18 测试库；实际执行两套 SIGKILL 用例 |
 | 浏览器夹具 | `go test` 的具体 `Test…BrowserFixture` | 测试 DSN、新的 ready/finish 路径和外部浏览器驱动 |
 
 浏览器夹具是供浏览器连接的临时 API 环境，单独启动或编译夹具不代表浏览器验收。未显式配置的浏览器、真实外部渠道、旧库及常驻进程专项仍可能跳过。
 
 实名认证规则见[领域契约](domain/certification.md)。认证 runner 核对实际执行的 Go JSON 事件和包结果，覆盖实例及密钥快照、未知提交只查询、过期租约与人工决定围栏、查询上限、审核事务、设置锁顺序、回执等待后撤权、提供方通过后的下单/API 密钥资格，以及从真实 163 起点升级。测试提供方只在测试中注册；默认发布清单仍只有人工提供方。租约和查询间隔可由测试 SQL 加速，不证明实际恢复耗时或真实认证厂商的协议。worker 单元夹具验证独立循环及取消，未强杀完整生产认证进程。
+
+支付接入规则见[支付模块开发契约](architecture/payment-module-development.md)。支付 runner 覆盖第二个仅测试装配的独立协议、两项命名密钥、指定实例与跨实例幂等、轮换/停用后的原交易、手动/worker 查询、可信关单及独立只读核验、迟到资金事实、退款商户与共享 payout claim、审计回滚和 164 升级。时间与查询计划可由测试 SQL 加速；没有真实商户扣款或退款网络请求，也没有远程预下单实现。能力组件验收不证明浏览器视觉，远端 CI、真实渠道和候选切换继续单列。
 
 ## 编译渠道与通知运行验收
 

@@ -35,13 +35,7 @@ func (s *Server) reconcilePayment(w http.ResponseWriter, r *http.Request) {
 			s.log.Error("payment query failure record failed", "check_id", check.ID, "error", err)
 		}
 	}
-	configuration, configurationErr := s.paymentConfiguration(ctx)
-	if configurationErr != nil {
-		failCheck("provider_unavailable")
-		s.fail(w, r, configurationErr)
-		return
-	}
-	gateway, enabled, gatewayErr := s.db.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, configuration)
+	gateway, enabled, gatewayErr := s.db.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, s.paymentFallback())
 	queryGateway, supported := gateway.(payment.QueryGateway)
 	if gatewayErr != nil || !enabled || !supported {
 		failCheck("provider_unavailable")

@@ -88,12 +88,17 @@
       "contract": "docs/payments.md",
       "implementation": [
         "internal/payment",
-        "internal/store"
+        "internal/store",
+        "internal/httpapi/payments.go"
       ],
       "tests": [
-        "./scripts/go.sh test ./... -run 'Payment|MutationOperation'"
+        "node scripts/test-compiled-payments.mjs --unit",
+        "node scripts/test-compiled-payments.mjs --integration"
       ],
-      "evaluation": [],
+      "evaluation": [
+        "isolated PostgreSQL 18: required run/pass with zero skips, second test-only protocol, historical credentials, settlement/expiry/query/close/refund boundaries and genuine schema164 upgrade",
+        "real merchants, remote pre-orders, public callback and production deployment require independent acceptance"
+      ],
       "review": {
         "required": true,
         "owners": [

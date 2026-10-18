@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -393,60 +394,22 @@ func (s *Store) checkAdminOrderPayment(ctx context.Context, tx pgx.Tx, in AdminO
 			return "", err
 		}
 	}
-	var category, implementation string
-	var enabled bool
-	var raw, sealed []byte
-	var version int64
-	query := "SELECT category,implementation_id,enabled,config,secret_ciphertext,version FROM channel_instances WHERE id=$1"
-	if !legacyInstance {
-		query += " FOR SHARE"
-	}
-	if err := tx.QueryRow(ctx, query, in.ChannelInstanceID).Scan(&category, &implementation, &enabled, &raw, &sealed, &version); err != nil {
+	configuration, err := s.PaymentConfigurationForInstanceTx(ctx, tx, in.ChannelInstanceID, fallback)
+	if err != nil {
 		return "", err
 	}
-	if category != "payment" || !enabled && in.ChannelInstanceID != "payment-mock-default" {
-		return "", conflict("payment_provider_disabled", "支付渠道已停用")
-	}
-	configuration := PaymentConfiguration{PaymentSettings: PaymentSettings{Enabled: true, Version: version}, MockSecret: fallback.MockSecret, PublicOrigin: fallback.PublicOrigin}
 	singletonVersion := int64(0)
-	if legacyInstance {
-		var err error
-		configuration, err = s.PaymentConfigurationTx(ctx, tx, fallback)
-		if err != nil {
-			return "", err
-		}
-		singletonVersion = configuration.Version
-		if in.ChannelInstanceID == "payment-mock-default" {
-			configuration.Enabled = true
-			implementation = "mock"
-		}
-	} else {
-		var config map[string]any
-		if err := json.Unmarshal(raw, &config); err != nil {
-			return "", err
-		}
-		switch implementation {
-		case "mock":
-			configuration.MockEnabled = true
-		case "epay":
-			configuration.APIURL = configString(config, "api_url")
-			configuration.PID = configString(config, "pid")
-			configuration.Types = configStrings(config, "types")
-			plain, err := channelSeal(s.ProvisionEncryptionKey, in.ChannelInstanceID, string(sealed), false)
-			if err != nil {
-				return "", conflict("payment_credentials_unavailable", "支付渠道凭据不可用")
-			}
-			configuration.Key = string(plain)
-		default:
-			return "", conflict("unsupported_payment_provider", "不支持此支付渠道")
-		}
+	if configuration.Runtime != nil && configuration.Runtime.Legacy {
+		singletonVersion = configuration.Runtime.SingletonVersion
 	}
-	if implementation == "mock" && in.PaymentProvider != "mock" || implementation == "epay" && !strings.HasPrefix(in.PaymentProvider, "epay_") {
+	owner, known := payment.MethodOwner(in.PaymentProvider)
+	if !known || owner != configuration.ImplementationID() {
 		return "", conflict("invalid_order_payment", "付款方式与渠道不匹配")
 	}
 	if _, ok := configuration.Gateway(in.PaymentProvider, false); !ok {
 		return "", conflict("payment_provider_disabled", "付款方式已停用或配置不完整")
 	}
+	version := configuration.Version
 	return fmt.Sprintf("%d:%d", version, singletonVersion), nil
 }
 

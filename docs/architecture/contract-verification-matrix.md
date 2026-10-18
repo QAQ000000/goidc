@@ -14,7 +14,7 @@
 | 领域 | 必须回答的问题 | 测试/审计入口 | 证据边界 |
 | --- | --- | --- | --- |
 | 编译模块与配置 | 二进制实际模块是否匹配声明且不读配置或联网？配置/凭据是否按 schema 校验并隔离？缺失实现能否安全停用？新增同类适配器能否复用运行链路？ | [模块契约与测试](../compiled-module-architecture.md#验证入口与发布边界)、`scripts/check-module-binaries.mjs`、`scripts/test-compiled-notifications.mjs` 的 unit/integration 严格入口、渠道组件测试 | 必需入口缺失或跳过须失败；清单不证明外部健康，组件事件不代表浏览器；新支付协议仍需资金全链路验收 |
-| 订单与支付 | 金额是否以整数分计算？重复键是否重放同一结果？外部未知是否停止重发？ | `./scripts/go.sh test ./...`；独立 PG18 使用 `./scripts/test-all.sh`；[支付契约](../payments.md) | 模拟支付只能证明适配器和状态处理，不能证明真实渠道可用 |
+| 订单与支付 | 金额是否以整数分计算？幂等是否绑定实例？原快照是否抵抗当前配置轮换/损坏？流水与退款商户是否隔离？外部未知是否继续冻结？ | `scripts/test-compiled-payments.mjs` 的 unit/integration 严格入口；`./scripts/test-all.sh`；[支付契约](../payments.md)与[开发契约](payment-module-development.md) | 第二协议仅测试装配，隔离 PG18 的真实 run/pass 不代表真实商户付款/到账；查询组件与浏览器分开验收 |
 | 余额与发票 | 借贷、冻结、退款、发票版本和审计是否同事务提交？ | `internal/store` 事务/幂等测试；[交易契约](../transactions.md)；[发票](../invoice-applications.md) | 无独立 `_test` 数据库不得声称数据库集成通过 |
 | 服务生命周期 | 交付、续费、变更、取消和失败恢复是否保持状态机约束？ | Go 业务回归、worker 恢复脚本、[服务契约](../service-configuration-changes.md) | worker 启动或编译成功不代表恢复和外部交付通过 |
 | RBAC 与后台 | API 与页面是否执行同一角色、资源范围和撤权规则？ | API 权限测试、`node scripts/admin-page-contracts.mjs`、[RBAC](../admin-rbac.md) | 静态登记不等于运行时强制；浏览器验收需单独记录 |

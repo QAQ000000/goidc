@@ -141,14 +141,15 @@ func anomalyTransactionTrusted(v string) bool {
 func (s *Store) readPaymentAnomalyGroup(ctx context.Context, tx pgx.Tx, anchor, actor int64, create, review bool) (PaymentAnomalyGroup, error) {
 	var g PaymentAnomalyGroup
 	var sealed []byte
+	var instanceID string
 	err := tx.QueryRow(ctx, `SELECT g.anchor_anomaly_id,g.group_version,g.payment_id,g.invoice_id,g.user_id,g.provider,p.provider_payment_id,
- g.external_transaction_id,g.amount_cents,g.event_count,g.first_seen,g.last_seen,g.amount_consistent,g.credential_sha256,p.credential_snapshot,p.status,p.created_at,
+ g.external_transaction_id,g.amount_cents,g.event_count,g.first_seen,g.last_seen,g.amount_consistent,g.credential_sha256,p.credential_snapshot,p.status,p.created_at,coalesce(p.channel_instance_id,''),
  EXISTS(SELECT 1 FROM payment_close_anomalies a WHERE a.payment_id=g.payment_id AND a.external_transaction_id=g.external_transaction_id AND payment_close_anomaly_unresolved(a.id))
- FROM payment_close_anomaly_groups g JOIN payment_transactions p ON p.id=g.payment_id WHERE g.anchor_anomaly_id=$1`, anchor).Scan(&g.AnchorAnomalyID, &g.GroupVersion, &g.PaymentID, &g.InvoiceID, &g.UserID, &g.Provider, &g.ProviderPaymentID, &g.ExternalTransactionID, &g.AmountCents, &g.EventCount, &g.FirstSeen, &g.LastSeen, &g.amountConsistent, &g.credentialHash, &sealed, &g.paymentStatus, &g.paymentCreatedAt, &g.Unresolved)
+ FROM payment_close_anomaly_groups g JOIN payment_transactions p ON p.id=g.payment_id WHERE g.anchor_anomaly_id=$1`, anchor).Scan(&g.AnchorAnomalyID, &g.GroupVersion, &g.PaymentID, &g.InvoiceID, &g.UserID, &g.Provider, &g.ProviderPaymentID, &g.ExternalTransactionID, &g.AmountCents, &g.EventCount, &g.FirstSeen, &g.LastSeen, &g.amountConsistent, &g.credentialHash, &sealed, &g.paymentStatus, &g.paymentCreatedAt, &instanceID, &g.Unresolved)
 	if err != nil {
 		return g, err
 	}
-	g.merchantScope, err = s.externalRefundMerchantScope(g.Provider, g.ProviderPaymentID, sealed)
+	g.merchantScope, err = s.externalRefundMerchantScope(g.Provider, g.ProviderPaymentID, sealed, instanceID)
 	g.MerchantVerified = err == nil && anomalyTransactionTrusted(g.ExternalTransactionID) && g.amountConsistent && g.paymentStatus == "closed"
 	g.Refunds = []PaymentAnomalyRefund{}
 	rows, err := tx.Query(ctx, `SELECT to_jsonb(r)-'merchant_scope'-'credential_sha256' FROM payment_close_anomaly_refunds r WHERE anchor_anomaly_id=$1 ORDER BY id DESC`, anchor)

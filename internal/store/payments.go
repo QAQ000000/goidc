@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/codex/zjmfgo/internal/payment"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -77,12 +78,21 @@ func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64
 	if err = lockOperationKey(ctx, tx, "payment-intent", fmt.Sprintf("%d:%s", userID, key)); err != nil {
 		return out, err
 	}
-	err = tx.QueryRow(ctx, `SELECT pt.id,pt.provider,pt.provider_payment_id,pt.invoice_id,i.invoice_no,pt.amount_cents,pt.status,pt.checkout_url
+	instanceID := paymentChannelInstance(ctx)
+	explicitInstance := instanceID != ""
+	if instanceID == "" {
+		instanceID = "payment-default"
+		if provider == "mock" {
+			instanceID = "payment-mock-default"
+		}
+	}
+	var savedInstance string
+	err = tx.QueryRow(ctx, `SELECT pt.id,pt.provider,pt.provider_payment_id,pt.invoice_id,i.invoice_no,pt.amount_cents,pt.status,pt.checkout_url,coalesce(pt.channel_instance_id,'')
 FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id
 WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
-		Scan(&out.PaymentID, &out.Provider, &out.ProviderPaymentID, &out.InvoiceID, &out.InvoiceNo, &out.AmountCents, &out.Status, &out.CheckoutURL)
+		Scan(&out.PaymentID, &out.Provider, &out.ProviderPaymentID, &out.InvoiceID, &out.InvoiceNo, &out.AmountCents, &out.Status, &out.CheckoutURL, &savedInstance)
 	if err == nil {
-		if out.InvoiceID != invoiceID || out.Provider != provider {
+		if out.InvoiceID != invoiceID || out.Provider != provider || (savedInstance != instanceID && (explicitInstance || savedInstance != "")) {
 			return out, conflict("idempotency_conflict", "相同幂等键对应不同支付")
 		}
 		out.Replayed = true
@@ -133,17 +143,24 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 		}
 	}
 	var sealed []byte
-	if provider == "mock" {
-		if cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration); ok && cfg.MockSecret != "" {
+	cfg, configured := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration)
+	querySupported := false
+	if configured && cfg.Runtime != nil && !cfg.Runtime.Legacy {
+		if sealed, err = s.snapshotRuntimePayment(providerPaymentID, provider, cfg.Runtime); err != nil {
+			return out, err
+		}
+		gateway, available := cfg.Gateway(provider, false)
+		_, querySupported = gateway.(payment.QueryGateway)
+		querySupported = querySupported && available && registeredPaymentQuery(provider)
+	} else if provider == "mock" {
+		if configured && cfg.MockSecret != "" {
 			raw, _ := json.Marshal(map[string]string{"implementation": "mock", "mock_secret": cfg.MockSecret})
 			if sealed, err = s.paymentCredentials(providerPaymentID, raw, true); err != nil {
 				return out, err
 			}
 		}
-	}
-	if realPaymentProvider(provider) {
-		cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration)
-		if !ok {
+	} else if realPaymentProvider(provider) {
+		if !configured {
 			cfg, _, err = s.paymentConfiguration(tx.QueryRow(ctx, "SELECT "+paymentSettingsColumns+" FROM payment_settings WHERE id=1"), PaymentConfiguration{})
 			if err != nil {
 				return out, err
@@ -152,10 +169,10 @@ WHERE pt.user_id=$1 AND pt.idempotency_key=$2`, userID, key).
 		if sealed, err = s.snapshotPaymentCredentials(providerPaymentID, cfg, false); err != nil {
 			return out, err
 		}
+		querySupported = registeredPaymentQuery(provider)
 	}
-	instanceID := paymentChannelInstance(ctx)
-	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url,credential_snapshot)
-VALUES($1,$2,COALESCE(NULLIF($9,''),(SELECT id FROM channel_instances WHERE category='payment' AND implementation_id=CASE WHEN $1='mock' THEN 'mock' ELSE 'epay' END AND enabled=true ORDER BY sort_order,id LIMIT 1)),$3,$4,$5,$6,$7,$8) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL, append([]byte{}, sealed...), instanceID).Scan(&out.PaymentID); err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,idempotency_key,checkout_url,credential_snapshot,next_reconcile_at)
+VALUES($1,$2,(SELECT id FROM channel_instances WHERE id=$9),$3,$4,$5,$6,$7,$8,CASE WHEN $10::boolean THEN clock_timestamp()+interval '2 minutes' ELSE NULL END) RETURNING id`, provider, providerPaymentID, invoiceID, userID, out.AmountCents, key, checkoutURL, append([]byte{}, sealed...), instanceID, querySupported).Scan(&out.PaymentID); err != nil {
 		return out, err
 	}
 	out.Provider, out.ProviderPaymentID, out.InvoiceID, out.CheckoutURL, out.Status = provider, providerPaymentID, invoiceID, checkoutURL, "pending"

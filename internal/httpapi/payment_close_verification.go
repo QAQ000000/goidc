@@ -81,32 +81,26 @@ func (s *Server) closeVerificationWrite(w http.ResponseWriter, r *http.Request) 
 		s.writeCloseVerification(w, r, v)
 		return
 	}
-	cfg, cfgErr := s.paymentConfiguration(ctx)
 	var result payment.CloseStatusResult
 	code := "verified"
 	result.Status = "unsupported"
-	if cfgErr != nil {
+	gateway, gErr := s.db.PaymentCloseVerificationGateway(ctx, v, s.paymentFallback())
+	if gErr != nil {
 		result.Status = "error"
 		code = "credentials_unavailable"
+	} else if lookup, supported := gateway.(payment.CloseStatusGateway); !supported {
+		code = "provider_unavailable"
 	} else {
-		gateway, gErr := s.db.PaymentCloseVerificationGateway(ctx, v, cfg)
-		if gErr != nil {
-			result.Status = "error"
-			code = "credentials_unavailable"
-		} else if lookup, supported := gateway.(payment.CloseStatusGateway); !supported {
-			code = "provider_unavailable"
-		} else {
-			result, err = lookup.LookupClose(ctx, payment.CloseStatusRequest{OperationID: v.OperationID, ProviderPaymentID: v.ProviderPaymentID, AmountCents: v.AmountCents})
-			if err != nil {
-				// No response is not a stored business result. Leave the immutable request
-				// in flight/expired and preserve the browser's original recovery key.
-				if !errors.Is(err, payment.ErrCloseInvalid) {
-					writeError(w, 502, "close_verification_transport_unknown", "渠道核验未收到可信回执，请保留请求并读取原记录")
-					return
-				}
-				result = payment.CloseStatusResult{Status: "error"}
-				code = "provider_invalid"
+		result, err = lookup.LookupClose(ctx, payment.CloseStatusRequest{OperationID: v.OperationID, ProviderPaymentID: v.ProviderPaymentID, AmountCents: v.AmountCents})
+		if err != nil {
+			// No response is not a stored business result. Leave the immutable request
+			// in flight/expired and preserve the browser's original recovery key.
+			if !errors.Is(err, payment.ErrCloseInvalid) {
+				writeError(w, 502, "close_verification_transport_unknown", "渠道核验未收到可信回执，请保留请求并读取原记录")
+				return
 			}
+			result = payment.CloseStatusResult{Status: "error"}
+			code = "provider_invalid"
 		}
 	}
 	if result.Status == "closed" || result.Status == "succeeded" || result.Status == "unknown" {

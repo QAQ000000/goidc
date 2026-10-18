@@ -16,6 +16,9 @@ type paymentConfigurationKey struct{}
 type paymentChannelInstanceKey struct{}
 
 func WithPaymentConfiguration(ctx context.Context, configuration PaymentConfiguration) context.Context {
+	if configuration.Runtime != nil {
+		ctx = WithPaymentChannelInstance(ctx, configuration.Runtime.InstanceID)
+	}
 	return context.WithValue(WithPaymentConfigurationVersion(ctx, configuration.Version), paymentConfigurationKey{}, configuration)
 }
 
@@ -69,17 +72,28 @@ func (s *Store) PaymentTransactionGateway(ctx context.Context, provider, referen
 // callers such as invoice detail rendering.
 func (s *Store) PaymentTransactionGatewayTx(ctx context.Context, tx pgx.Tx, provider, reference string, fallback PaymentConfiguration) (payment.Gateway, bool, error) {
 	var sealed []byte
+	var instanceID string
 	var err error
 	if tx != nil {
-		err = tx.QueryRow(ctx, "SELECT credential_snapshot FROM payment_transactions WHERE provider=$1 AND provider_payment_id=$2", provider, reference).Scan(&sealed)
+		err = tx.QueryRow(ctx, "SELECT credential_snapshot,coalesce(channel_instance_id,'') FROM payment_transactions WHERE provider=$1 AND provider_payment_id=$2", provider, reference).Scan(&sealed, &instanceID)
 	} else {
-		err = s.Pool.QueryRow(ctx, "SELECT credential_snapshot FROM payment_transactions WHERE provider=$1 AND provider_payment_id=$2", provider, reference).Scan(&sealed)
+		err = s.Pool.QueryRow(ctx, "SELECT credential_snapshot,coalesce(channel_instance_id,'') FROM payment_transactions WHERE provider=$1 AND provider_payment_id=$2", provider, reference).Scan(&sealed, &instanceID)
 	}
 	if err != nil {
 		return nil, false, err
 	}
 	if len(sealed) == 0 {
-		gateway, ok := fallback.Gateway(provider, true)
+		// Only the pre-snapshot compatibility protocols may consult current
+		// settings. A new module must never borrow a replacement merchant.
+		owner, known := payment.MethodOwner(provider)
+		if !known || (owner != "mock" && owner != "epay") || (instanceID != "" && instanceID != "payment-default" && instanceID != "payment-mock-default") {
+			return nil, false, nil
+		}
+		configuration, err := s.PaymentConfigurationTx(ctx, tx, fallback)
+		if err != nil {
+			return nil, false, err
+		}
+		gateway, ok := configuration.Gateway(provider, true)
 		return gateway, ok, nil
 	}
 	raw, err := s.paymentCredentials(reference, sealed, false)
@@ -88,17 +102,28 @@ func (s *Store) PaymentTransactionGatewayTx(ctx context.Context, tx pgx.Tx, prov
 	}
 	var cfg struct {
 		payment.EpayConfig
-		Unavailable    bool   `json:"unavailable"`
-		Implementation string `json:"implementation"`
-		MockSecret     string `json:"mock_secret"`
+		SnapshotVersion int    `json:"snapshot_version"`
+		Unavailable     bool   `json:"unavailable"`
+		Implementation  string `json:"implementation"`
+		MockSecret      string `json:"mock_secret"`
 	}
 	if json.Unmarshal(raw, &cfg) != nil {
 		return nil, false, fmt.Errorf("payment credentials unavailable")
 	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return nil, false, fmt.Errorf("payment credentials unavailable")
+	}
+	if _, versioned := fields["snapshot_version"]; versioned {
+		return runtimePaymentGateway(raw, provider, instanceID)
+	}
 	if cfg.Unavailable {
 		return nil, false, nil
 	}
-	if provider == "mock" && cfg.Implementation == "mock" && cfg.MockSecret != "" {
+	if provider == "mock" {
+		if cfg.Implementation != "mock" || cfg.MockSecret == "" {
+			return nil, false, fmt.Errorf("payment credentials unavailable")
+		}
 		gateway, ok := payment.For(provider, cfg.MockSecret)
 		return gateway, ok, nil
 	}
@@ -165,9 +190,9 @@ func (s *Store) ExpirePaymentIntents(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	rows, err := tx.Query(ctx, `UPDATE payment_transactions SET status='expired',updated_at=clock_timestamp(),
- next_reconcile_at=CASE WHEN provider LIKE 'epay_%' THEN clock_timestamp() ELSE NULL END,
- auto_reconcile_attempts=CASE WHEN provider LIKE 'epay_%' THEN 0 ELSE auto_reconcile_attempts END
- WHERE status='pending' AND provider LIKE 'epay_%' AND expires_at<=clock_timestamp() RETURNING id,invoice_id,provider`)
+ next_reconcile_at=CASE WHEN provider=ANY($1::text[]) THEN clock_timestamp() ELSE NULL END,
+ auto_reconcile_attempts=CASE WHEN provider=ANY($1::text[]) THEN 0 ELSE auto_reconcile_attempts END
+ WHERE status='pending' AND provider<>'mock' AND expires_at<=clock_timestamp() RETURNING id,invoice_id,provider`, payment.QueryMethods())
 	if err != nil {
 		return 0, err
 	}
@@ -200,4 +225,7 @@ func (s *Store) ExpirePaymentIntents(ctx context.Context) (int64, error) {
 	return int64(len(list)), nil
 }
 
-func realPaymentProvider(provider string) bool { return strings.HasPrefix(provider, "epay_") }
+func realPaymentProvider(provider string) bool {
+	method, registered := payment.MethodInfo(provider)
+	return registered && !method.Simulation
+}

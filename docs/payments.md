@@ -4,6 +4,12 @@
 
 Go API 原生实现易支付标准 MD5 协议，支持易支付的支付宝、微信、QQ 钱包和网银渠道。旧 PHP 插件仅用于核对协议；没有读取旧商户密钥或依赖 PHP。Next.js 负责选渠道、创建支付单和跳转网关，Go 只提供 API。模拟支付默认关闭，未配置商户时不列出在线渠道。旧系统的官方支付宝和官方微信插件暂不接入：当前没有可用的真实接口或商户资料，等测试条件具备后再作为独立渠道批次实现。
 
+## 编译期扩展与历史交易
+
+支付方式、实例工厂、回调定位/应答协议通过支付注册入口统一装配，开发规则见[支付模块开发契约](architecture/payment-module-development.md)。新实例使用完整普通配置和命名密钥；普通实例新交易冻结版本化加密快照，历史回调、查单、关单按原快照解析，避免停用、轮换或当前配置损坏改变已有商户身份。旧 Epay/Mock 快照、退款商户范围及关单凭据哈希继续兼容。
+
+客户目录按实现声明的固定方式与实际配置生成，创建支持 `channel_instance_id`，同幂等键不能跨实例重放。过期和查单调度不再依赖 Epay 前缀；真实渠道的外部流水继续由核心执行唯一性约束。生产仍只有 Mock/Epay，第二通用支付协议只在隔离测试装配。CreateIntent 只能本地构建链接；远程预下单需要先建立持久命令和未知结果协议。
+
 ## 配置与接口
 
 部署环境配置 `EPAY_API_URL`（网关根地址）、`EPAY_PID`（数字商户号）、`EPAY_KEY`（商户密钥）和 `EPAY_TYPES`（逗号分隔 `alipay,wxpay,qqpay,bank`，配置商户后默认 `alipay`）。部分配置、重复或未知渠道会令启动失败。密钥至少8字符，不返回给浏览器，不从旧库自动提取。
@@ -13,7 +19,7 @@ Go API 原生实现易支付标准 MD5 协议，支持易支付的支付宝、�
 | 接口 | 行为 |
 | --- | --- |
 | `GET /api/v1/payment-providers` | 已登录客户读取已启用渠道名称、标签及模拟标记，不含配置或密钥 |
-| `POST /api/v1/invoices/{id}/payments` | 本人账单创建付款意图；提交 `provider`、`expected_version` 和 `Idempotency-Key` |
+| `POST /api/v1/invoices/{id}/payments` | 本人账单创建付款意图；提交 `provider`、`channel_instance_id`、`expected_version` 和 `Idempotency-Key` |
 | `GET/POST /api/v1/payments/epay_{type}/webhook` | 商户异步通知，GET 查询参数或 POST form，提交成功后返回纯文本 `success` |
 | `GET /api/v1/invoices/{id}` | 本人读取待处理支付的跳转链接，刷新后可继续原付款 |
 | `POST /api/v1/invoices/{id}/payments/{payment_id}/reconcile` | 本人主动查询待处理在线支付，确认已付款后补结算 |

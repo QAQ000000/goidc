@@ -29,9 +29,10 @@ type PaymentSettings struct {
 
 type PaymentConfiguration struct {
 	PaymentSettings
-	Key          string `json:"-"`
-	MockSecret   string `json:"-"`
-	PublicOrigin string `json:"-"`
+	Key          string          `json:"-"`
+	MockSecret   string          `json:"-"`
+	PublicOrigin string          `json:"-"`
+	Runtime      *PaymentRuntime `json:"-"`
 }
 
 type PaymentSettingsInput struct {
@@ -46,8 +47,16 @@ type PaymentSettingsInput struct {
 }
 
 func (c PaymentConfiguration) Gateway(name string, existing bool) (payment.Gateway, bool) {
+	owner, registered := payment.MethodOwner(name)
+	if !registered || (c.Runtime != nil && owner != c.Runtime.Implementation) {
+		return nil, false
+	}
 	if !existing && (!c.Enabled || (name == "mock" && !c.MockEnabled)) {
 		return nil, false
+	}
+	if c.Runtime != nil && !c.Runtime.Legacy {
+		gateway, err := payment.NewFor(c.Runtime.Implementation, name, c.Runtime.Config)
+		return gateway, err == nil
 	}
 	types := c.Types
 	if existing && c.Configured {
@@ -107,57 +116,7 @@ func (s *Store) PaymentConfigurationTx(ctx context.Context, tx pgx.Tx, fallback 
 // instance. The legacy singleton remains the fallback for old callers and
 // historical transactions, while new intents can bind an exact instance.
 func (s *Store) PaymentConfigurationForInstance(ctx context.Context, id string, fallback PaymentConfiguration) (PaymentConfiguration, error) {
-	var category, implementation string
-	var enabled bool
-	var version int64
-	var schemaVersion int
-	if err := s.Pool.QueryRow(ctx, `SELECT category,implementation_id,enabled,version,schema_version FROM channel_instances WHERE id=$1`, id).Scan(&category, &implementation, &enabled, &version, &schemaVersion); err != nil {
-		return PaymentConfiguration{}, err
-	}
-	if category != string(channel.Payment) || (id != "payment-mock-default" && !enabled) {
-		return PaymentConfiguration{}, conflict("payment_provider_disabled", "支付渠道已关闭")
-	}
-	if err := validatePaymentModuleContract(implementation, schemaVersion); err != nil {
-		return PaymentConfiguration{}, err
-	}
-	if id == "payment-default" || id == "payment-mock-default" {
-		legacy, err := s.PaymentConfiguration(ctx, fallback)
-		if err != nil {
-			return PaymentConfiguration{}, err
-		}
-		// Keep the migrated default rows compatible with deployment settings and
-		// test fixtures that seed the legacy singleton directly.
-		legacy.Version = version
-		if id == "payment-mock-default" {
-			if !legacy.MockEnabled {
-				return PaymentConfiguration{}, conflict("payment_provider_disabled", "支付渠道已关闭")
-			}
-			legacy.Enabled = true
-		}
-		return legacy, nil
-	}
-	runtime, resolvedImplementation, err := s.RuntimeChannelInstance(ctx, id, channel.Payment)
-	if err != nil {
-		return PaymentConfiguration{}, err
-	}
-	out := PaymentConfiguration{PaymentSettings: PaymentSettings{Configured: true, Enabled: true, Version: version}, MockSecret: fallback.MockSecret, PublicOrigin: fallback.PublicOrigin}
-	switch resolvedImplementation {
-	case "mock":
-		out.MockEnabled = true
-	case "epay":
-		out.APIURL = configString(runtime.Values, "api_url")
-		out.PID = configString(runtime.Values, "pid")
-		out.Types = configStrings(runtime.Values, "types")
-		out.Key = runtime.Secrets["key"]
-		if out.Key == "" {
-			out.Key = runtime.Secret
-		}
-		out.KeyConfigured = out.Key != ""
-	default:
-		return PaymentConfiguration{}, conflict("channel_not_registered", "支付渠道实现未注册")
-	}
-	out.EncryptionConfigured = len(s.ProvisionEncryptionKey) == 32
-	return out, nil
+	return s.PaymentConfigurationForInstanceTx(ctx, nil, id, fallback)
 }
 
 func validatePaymentModuleContract(implementation string, schemaVersion int) error {
@@ -307,6 +266,10 @@ func WithPaymentConfigurationVersion(ctx context.Context, version int64) context
 	return context.WithValue(ctx, paymentConfigVersionKey{}, version)
 }
 func checkPaymentConfigurationVersion(ctx context.Context, tx pgx.Tx, provider string) error {
+	owner, registered := payment.MethodOwner(provider)
+	if !registered {
+		return conflict("unsupported_payment_provider", "支付渠道实现未注册")
+	}
 	expected, ok := ctx.Value(paymentConfigVersionKey{}).(int64)
 	if instanceID := paymentChannelInstance(ctx); instanceID != "" {
 		var version int64
@@ -323,10 +286,30 @@ func checkPaymentConfigurationVersion(ctx context.Context, tx pgx.Tx, provider s
 		if cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration); ok {
 			deploymentMock = instanceID == "payment-mock-default" && !cfg.Configured && cfg.MockEnabled
 		}
-		if category != string(channel.Payment) || (!enabled && !deploymentMock) || (provider == "mock" && implementation != "mock") || (strings.HasPrefix(provider, "epay_") && implementation != "epay") {
+		if category != string(channel.Payment) || (!enabled && !deploymentMock) || implementation != owner {
 			return conflict("payment_provider_disabled", "支付渠道已关闭")
 		}
+		if cfg, ok := ctx.Value(paymentConfigurationKey{}).(PaymentConfiguration); ok && cfg.Runtime != nil {
+			runtime := cfg.Runtime
+			if runtime.InstanceID != instanceID || runtime.Implementation != implementation || runtime.Version != version || runtime.SchemaVersion != schemaVersion {
+				return conflict("version_conflict", "支付渠道已变更，请重新加载")
+			}
+			if runtime.Legacy {
+				var singletonVersion int64
+				if err := tx.QueryRow(ctx, "SELECT version FROM payment_settings WHERE id=1").Scan(&singletonVersion); err != nil {
+					return err
+				}
+				if singletonVersion != runtime.SingletonVersion {
+					return conflict("version_conflict", "支付设置已变更，请重新加载")
+				}
+			}
+		} else if owner != "mock" && owner != "epay" {
+			return conflict("payment_credentials_unavailable", "支付渠道实例快照缺失")
+		}
 		return validatePaymentModuleContract(implementation, schemaVersion)
+	}
+	if owner != "mock" && owner != "epay" {
+		return conflict("payment_instance_required", "请选择明确的支付渠道实例")
 	}
 	if err := lockPaymentConfiguration(ctx, tx); err != nil {
 		return err
@@ -393,18 +376,14 @@ func (s *Store) ProcessConfiguredAutomaticPaymentCheck(ctx context.Context, fall
 	if _, err := s.ExpirePaymentIntents(ctx); err != nil {
 		return false, err
 	}
-	cfg, err := s.PaymentConfiguration(ctx, fallback)
-	if err != nil {
-		return false, err
-	}
-	check, err := s.ClaimAutomaticPaymentCheck(WithPaymentConfigurationVersion(ctx, cfg.Version), []string{"epay_alipay", "epay_wxpay", "epay_qqpay", "epay_bank"})
+	check, err := s.ClaimAutomaticPaymentCheck(ctx, payment.QueryMethods())
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	gateway, ok, err := s.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, cfg)
+	gateway, ok, err := s.PaymentTransactionGateway(ctx, check.Provider, check.ProviderPaymentID, fallback)
 	query, supported := gateway.(payment.QueryGateway)
 	if err != nil || !ok || !supported {
 		if failErr := s.FailPaymentCheck(ctx, check, "provider_unavailable"); failErr != nil {
