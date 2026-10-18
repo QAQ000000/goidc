@@ -14,7 +14,7 @@
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
 | 实际模块二进制 | `node scripts/check-module-binaries.mjs` | Linux、strace；真实构建 API/worker，在空应用配置下拒绝并检查全部网络 syscall |
 | 渠道与通知单元门禁 | `node scripts/test-compiled-notifications.mjs --unit` | 31 个指定入口，race；不继承应用配置或测试 DSN |
-| 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；42 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |
+| 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；57 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |
 | worker 强杀恢复 | `./scripts/test-worker-recovery.sh` | 回环 PG18 测试库；实际执行两套 SIGKILL 用例 |
 | 浏览器夹具 | `go test` 的具体 `Test…BrowserFixture` | 测试 DSN、新的 ready/finish 路径和外部浏览器驱动 |
 
@@ -22,7 +22,7 @@
 
 ## 编译渠道与通知运行验收
 
-`.github/workflows/quality.yml` 的独立 PG18 job 使用任务自有容器及测试库，强制执行上述 42 个入口。runner 固定 `-race -count=1 -p=1 -parallel=1`，逐项核对 Go JSON 的 run、pass 和包结果；无 DSN、非法连接覆盖参数、测试改名或任何 skip 都会失败。普通 CI 不启动等待人工操作的浏览器夹具或子进程 helper。
+`.github/workflows/quality.yml` 的独立 PG18 job 使用任务自有容器及测试库，强制执行上述 57 个入口。runner 固定 `-race -count=1 -p=1 -parallel=1`，逐项核对 Go JSON 的 run、pass 和包结果；无 DSN、非法连接覆盖参数、测试改名或任何 skip 都会失败。普通 CI 不启动等待人工操作的浏览器夹具或子进程 helper。
 
 `TestNotificationCenterProcessRecovery` 在父测试拥有的子进程中运行生产 `RunNotificationCenter`、Store 和适配器，仅将 Telegram HTTP 传输重定向到回环模拟器。它在平台接受响应后确认生产完成事务正在等待真实行锁，再 SIGKILL，验证重启后 unknown 不重发、站内信一次性、双进程领取及慢 Telegram 期间旧邮件/短信链独立推进。旧链由伴随测试循环驱动；这不等于强杀完整 `cmd/worker`。租约由 SQL 加速，不证明实际租约等待耗时或生产 RTO。
 
@@ -35,7 +35,9 @@ ZJMFGO_UPGRADE_WORKER_BINARY=/absolute/candidate/bin/worker \
 node scripts/test-compiled-notifications.mjs --integration
 ```
 
-同时配置 `ZJMFGO_TEST_DATABASE_URL`。实际进程必须因 160/161 schema 不满足而退出，配置错误或连接失败不能替代该断言。此验证不证明旧二进制降级、生产备份恢复、真实外发或正式切流；候选完整运行仍按发布手册单独验收。
+同时配置 `ZJMFGO_TEST_DATABASE_URL`。实际进程必须因 160/161/162 schema 不满足而退出，配置错误或连接失败不能替代该断言。此验证不证明旧二进制降级、生产备份恢复、真实外发或正式切流；候选完整运行仍按发布手册单独验收。
+
+`TestNotificationLifecycleUpgradeFrom162` 从实际 162 保留已启用路由、已编辑模板、付款订阅版本和待发正文，再升到 163；旧偏好仍仅付款，原消息仍能写入收件箱，新增事件默认关闭且不补历史。`TestNotificationLifecycle*` 与 `TestLifecycleBusiness*` 还覆盖 11 事件目录、事件变量白名单、显式业务订阅、Telegram-only 提醒、真实下单及确认状态、精确截止点变化、上海日期、关闭路由、限量并发排空和事务回滚。NOKVM 覆盖结果写入与人工核验，协议和供应商回调使用本地夹具，不证明真实平台交付。
 
 `internal/httpapi/browser_helpers_test.go` 统一 ready/finish 校验、私有 JSON 写入、等待期限及 worker 退出；各业务文件只维护场景和断言。`stop` 会取消并等待 goroutine，可在断言前调用，也可在清理中重复调用。NOKVM 的测试时钟调整保留在具体场景中。
 

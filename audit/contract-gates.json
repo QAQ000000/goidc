@@ -48,6 +48,12 @@
         "internal/notification",
         "internal/store/notification_center.go",
         "internal/httpapi/notification_center.go",
+        "internal/store/notification_catalog.go",
+        "internal/store/notification_center_events.go",
+        "internal/store/notification_center_worker.go",
+        "internal/store/notification_business.go",
+        "internal/store/notification_scheduler.go",
+        "db/migrations/163_notification_lifecycle.sql",
         "db/migrations/162_unified_notifications.sql",
         "web/src/components/notification-center.tsx",
         "web/src/components/notification-preferences.tsx"
@@ -59,6 +65,7 @@
       ],
       "evaluation": [
         "isolated PostgreSQL 18 consent, binding, scope, transactional rollback and lease recovery",
+        "eleven channel-independent lifecycle events, Telegram-only reminder candidates, explicit expansion of payment-only consent, exact due-time invalidation, actual business transitions and genuine schema162 preservation",
         "owned production-loop subprocess SIGKILL after local acceptance and before durable completion; unknown never resends; full worker binary crash and real channels remain separate",
         "real browser with local Telegram protocol simulator; live Telegram verification remains separate"
       ],

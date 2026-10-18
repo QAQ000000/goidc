@@ -4,6 +4,7 @@
 - [领域验收矩阵](contract-verification-matrix.md)：契约到测试、审计入口和证据边界。
 - [项目状态与开发入口](../reconstruction.md)：当前实现、边界和入口。
 - [编译期模块架构](../compiled-module-architecture.md)：适配器和模块注册约束。
+- [机器人渠道开发指南](bot-channel-development.md)：新增平台的实现步骤、接口骨架、身份授权、迁移接线和验收清单。
 - [测试说明](../testing.md)：Go、前端、数据库、浏览器和外部依赖的验证边界。
 - [容量验证](../capacity.md)：只读负载、worker 和资源预算。
 - [重构准备度](../rewrite-readiness.md)：旧系统静态基线与替换限制。

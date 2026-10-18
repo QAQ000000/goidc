@@ -327,6 +327,11 @@ func (s *Store) finishSupplierJob(ctx context.Context, j ProvisionJob, b Supplie
 				return err
 			}
 		}
+		if outcome == "succeeded" {
+			if err = s.queueServiceLifecycleResult(ctx, tx, j.ServiceID, current, j.Action, j.ID); err != nil {
+				return err
+			}
+		}
 		if outcome == "failed" && j.Action == "create" {
 			if _, err = tx.Exec(ctx, "UPDATE services SET status='failed',last_error=$2,version=version+1,updated_at=now() WHERE id=$1", j.ServiceID, message); err != nil {
 				return err

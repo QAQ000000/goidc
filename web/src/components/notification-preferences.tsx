@@ -20,7 +20,10 @@ export function NotificationPreferences() {
   const [forbidden, setForbidden] = useState(false);
   const [message, setMessage] = useState("");
   const data = resource.data;
-  const dirty = Object.keys(drafts).some(channel => drafts[channel].enabled !== data?.channels.find(item => item.channel === channel)?.enabled);
+  const dirty = Object.keys(drafts).some(channel => {
+    const current = data?.channels.find(item => item.channel === channel);
+    return drafts[channel].enabled !== current?.enabled || (drafts[channel].event_scope ?? "invoice.paid") !== (current?.event_scope ?? "invoice.paid");
+  });
   useAdminFormLeave(dirty || busy);
 
   function failure(error: unknown, fallback: string) {
@@ -34,7 +37,7 @@ export function NotificationPreferences() {
     if (busy || forbidden) return;
     setBusy(true); setMessage("");
     try {
-      await api("/me/notification-preferences", { method: "PATCH", body: JSON.stringify({ channel: preference.channel, enabled: preference.enabled, expected_version: preference.version }) });
+      await api("/me/notification-preferences", { method: "PATCH", body: JSON.stringify({ channel: preference.channel, enabled: preference.enabled, event_scope: preference.event_scope ?? "invoice.paid", expected_version: preference.version }) });
       setDrafts(current => { const next = { ...current }; delete next[preference.channel]; return next; });
       setConflicts(current => ({ ...current, [preference.channel]: false }));
       setMessage(`${preference.name}通知偏好已保存`); resource.refresh();
@@ -88,15 +91,21 @@ export function NotificationPreferences() {
   }
 
   return <section className="data-surface mb-6 min-w-0 p-4 sm:p-6">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">付款成功通知</h2><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setForbidden(false); resource.refresh(); }}><RefreshCw className="size-4" />刷新绑定状态</Button></div>
-    <p className="mt-2 text-sm text-muted-foreground">机器人和站内信默认关闭。绑定机器人后仍需主动开启付款成功通知；邮件、短信沿用现有设置，工单订阅和验证码单独管理。</p>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">业务通知渠道</h2><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => { setForbidden(false); resource.refresh(); }}><RefreshCw className="size-4" />刷新绑定状态</Button></div>
+    <p className="mt-2 text-sm text-muted-foreground">机器人和站内信默认关闭。绑定机器人后仍需主动开启业务通知；开启后接收管理员已启用的各类业务事件，包括下单、付款、服务状态和到期提醒。既有“仅付款成功”订阅需主动扩展，扩展后不补发历史通知。邮件、短信沿用现有设置，工单订阅和验证码单独管理。</p>
     {resource.error instanceof ApiError && resource.error.status === 403 ? <p role="alert" className="mt-4 text-sm text-destructive">当前账户无权查看通知设置。</p> : resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !data ? <Loading /> : <>
       <div className="mt-5 divide-y">{data.channels.map(preference => {
         const form = drafts[preference.channel] ?? preference;
         const available = canEnableNotification(preference, data.targets, data.instances);
+        const business = form.event_scope === "business";
+        const unchanged = form.enabled === preference.enabled && (form.event_scope ?? "invoice.paid") === (preference.event_scope ?? "invoice.paid");
         return <div key={preference.channel} className="space-y-3 py-4">
-          <label className="flex items-start gap-3 text-sm"><Checkbox disabled={busy || forbidden || (!available && !form.enabled)} checked={form.enabled} onCheckedChange={value => setDrafts(current => ({ ...current, [preference.channel]: { ...form, enabled: value === true } }))} /><span>接收{preference.name}付款成功通知{preference.requires_binding && !available && <span className="mt-1 block text-xs text-muted-foreground">暂无可用的已验证绑定；请先完成可用机器人的私聊绑定。</span>}</span></label>
-          <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" disabled={busy || forbidden || !!conflicts[preference.channel] || form.enabled === preference.enabled || (form.enabled && !available)} onClick={() => void save(form)}>保存{preference.name}偏好</Button>{drafts[preference.channel] && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setDrafts(current => { const next = { ...current }; delete next[preference.channel]; return next; }); setConflicts(current => ({ ...current, [preference.channel]: false })); }}>取消草稿</Button>}{conflicts[preference.channel] && <Button type="button" size="sm" variant="outline" disabled={busy || forbidden} onClick={() => void rebase(preference.channel)}>加载最新版本并保留草稿</Button>}</div>
+          <label className="flex items-start gap-3 text-sm"><Checkbox disabled={busy || forbidden || (!available && !form.enabled)} checked={form.enabled} onCheckedChange={value => setDrafts(current => ({ ...current, [preference.channel]: { ...form, enabled: value === true } }))} /><span>通过{preference.name}{business ? "接收业务通知" : "仅接收付款成功通知"}{preference.requires_binding && !available && <span className="mt-1 block text-xs text-muted-foreground">暂无可用的已验证绑定；请先完成可用机器人的私聊绑定。</span>}</span></label>
+          <div className="flex flex-wrap items-center gap-2"><Button type="button" size="sm" disabled={busy || forbidden || !!conflicts[preference.channel] || unchanged || (form.enabled && !available)} onClick={() => void save(form)}>保存{preference.name}偏好</Button>{!business && <Button type="button" size="sm" variant="outline" disabled={busy || forbidden || !available || !!conflicts[preference.channel]} onClick={() => {
+            const expanded = { ...form, enabled: true, event_scope: "business" as const };
+            setDrafts(current => ({ ...current, [preference.channel]: expanded }));
+            void save(expanded);
+          }}>扩展为业务通知</Button>}{drafts[preference.channel] && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { setDrafts(current => { const next = { ...current }; delete next[preference.channel]; return next; }); setConflicts(current => ({ ...current, [preference.channel]: false })); }}>取消草稿</Button>}{conflicts[preference.channel] && <Button type="button" size="sm" variant="outline" disabled={busy || forbidden} onClick={() => void rebase(preference.channel)}>加载最新版本并保留草稿</Button>}</div>
         </div>;
       })}</div>
       <div className="mt-3 space-y-3 border-t pt-5"><h3 className="text-sm font-medium">已验证的通知身份</h3>{!data.targets.length ? <p className="text-sm text-muted-foreground">尚未绑定机器人。</p> : data.targets.map(target => <div key={target.id} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border p-3"><div className="min-w-0 text-sm"><p className="break-all">{target.label}</p><p className="mt-1 text-xs text-muted-foreground">{data.channels.find(item => item.channel === target.channel)?.name ?? target.channel}{!data.instances.some(item => item.id === target.instance_id) && " · 通知实例当前不可用"}</p></div><Button type="button" size="sm" variant="outline" disabled={busy || forbidden} onClick={() => void unbind(target.id, target.channel, target.version)}>解除绑定</Button></div>)}</div>

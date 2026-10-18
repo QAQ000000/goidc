@@ -114,6 +114,7 @@ func (s *Server) notificationPreferences(w http.ResponseWriter, r *http.Request)
 		Channel         string `json:"channel"`
 		Enabled         *bool  `json:"enabled"`
 		ExpectedVersion *int64 `json:"expected_version"`
+		EventScope      string `json:"event_scope"`
 	}
 	if !decode(w, r, &in) {
 		return
@@ -122,15 +123,19 @@ func (s *Server) notificationPreferences(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "invalid_notification_preference", "请提供有效渠道、偏好和版本")
 		return
 	}
+	if in.EventScope != "" && in.EventScope != "invoice.paid" && in.EventScope != "business" {
+		writeError(w, 400, "invalid_notification_preference", "请选择有效的通知订阅范围")
+		return
+	}
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
 		if err := store.LockFileCredential(requestFileContext(r), tx, uid); err != nil {
 			return txResponse{}, err
 		}
-		out, err := s.db.UpdateNotificationPreference(r.Context(), tx, uid, in.Channel, *in.Enabled, *in.ExpectedVersion)
+		out, err := s.db.UpdateNotificationPreference(r.Context(), tx, uid, in.Channel, *in.Enabled, *in.ExpectedVersion, in.EventScope)
 		if err != nil {
 			return txResponse{}, err
 		}
-		if err = store.Audit(r.Context(), tx, uid, "notification.preference.updated", "user", uid, map[string]any{"channel": in.Channel, "enabled": out.Enabled, "version": out.Version}); err != nil {
+		if err = store.Audit(r.Context(), tx, uid, "notification.preference.updated", "user", uid, map[string]any{"channel": in.Channel, "enabled": out.Enabled, "event_scope": out.EventScope, "version": out.Version}); err != nil {
 			return txResponse{}, err
 		}
 		return txResponse{200, out}, nil
@@ -231,6 +236,18 @@ func (s *Server) readNotificationInbox(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) notificationCenter(w http.ResponseWriter, r *http.Request) {
+	eventKind := r.URL.Query().Get("event_kind")
+	events := store.NotificationEventCatalog()
+	if eventKind != "" {
+		known := false
+		for _, event := range events {
+			known = known || event.Kind == eventKind
+		}
+		if !known {
+			writeError(w, 400, "invalid_notification_event", "请选择有效的通知事件")
+			return
+		}
+	}
 	rules, err := s.db.NotificationRoutes(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
@@ -247,7 +264,7 @@ func (s *Server) notificationCenter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pagination(r)
-	deliveries, err := s.db.NotificationDeliveriesForAdmin(r.Context(), identityFrom(r).ID, limit+1, offset)
+	deliveries, err := s.db.NotificationDeliveriesForAdmin(r.Context(), identityFrom(r).ID, limit+1, offset, eventKind)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -257,7 +274,7 @@ func (s *Server) notificationCenter(w http.ResponseWriter, r *http.Request) {
 		deliveries = deliveries[:limit]
 	}
 	channels := []map[string]any{{"channel": "email", "name": "邮件（兼容队列）"}, {"channel": "sms", "name": "短信（兼容队列）"}, {"channel": "telegram", "name": "Telegram", "requires_binding": true}, {"channel": "inbox", "name": "站内通知"}}
-	write(w, 200, map[string]any{"channels": channels, "rules": rules, "templates": templates, "instances": instances, "deliveries": deliveries, "has_more": hasMore, "limit": limit, "offset": offset})
+	write(w, 200, map[string]any{"events": events, "event_kind": eventKind, "channels": channels, "rules": rules, "templates": templates, "instances": instances, "deliveries": deliveries, "has_more": hasMore, "limit": limit, "offset": offset})
 }
 
 func (s *Server) updateNotificationCenterRule(w http.ResponseWriter, r *http.Request) {

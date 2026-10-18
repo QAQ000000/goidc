@@ -2,6 +2,8 @@
 
 本项目采用“Go 编译适配器、数据库保存实例、前端按元数据渲染”的扩展模型。代码在编译时进入 API/worker，启动时注册描述符与类型化工厂；配置不能引入可执行代码。当前供应商、支付、邮件、短信、实名需要分别遵守各自的业务契约。
 
+新增机器人平台按[机器人渠道开发指南](architecture/bot-channel-development.md)实施；其中明确现有通用接口、Telegram 专用接点、配置骨架和完整验收要求。
+
 ## 当前装配与构建核验
 
 `internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification 和 supplier。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 9 个模块，含 Telegram Bot；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)。
@@ -63,7 +65,7 @@
 | --- | --- |
 | mail | 类型化 `MailProvider`；默认选择、实例解析、验证码、业务通知、试发和 worker 统一按实现 ID 分发 |
 | sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
-| bot | 首批 Telegram 私聊，按通知路由、有效绑定和主动订阅分发；未知结果停止自动重发 |
+| bot | Telegram 私聊作为通用业务通知渠道，按事件路由、有效绑定和显式订阅范围分发；未知结果停止自动重发 |
 | payment | 类型化 `Gateway`；仍以 mock/epay 资金协议为当前边界，新支付协议必须补回调、快照、查单、退款、对账和权限验收 |
 | certification | 已注册人工审核；新增第三方仍需实名流程与数据保护验收 |
 | provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
@@ -95,7 +97,7 @@ node scripts/test-compiled-notifications.mjs --integration
 node --test scripts/channel-components.test.mjs scripts/module-manifest.test.mjs scripts/compiled-notification-gates.test.mjs scripts/release-runtime-acceptance.test.mjs
 ```
 
-集成入口必须配置隔离 PG18 `ZJMFGO_TEST_DATABASE_URL`，内部强制数据库与进程恢复开关，串行 race 并拒绝跳过。覆盖类型/default、逐字段凭据、AAD、审计回滚、孤儿停用、旧 schema 拒绝、默认渠道兼容和新增适配器分发；还覆盖 160→161/162 的旧密文、待发任务和历史事件回放。CI 提供实际 API/worker 强制验证 160/161 启动拒绝；本地候选路径和证据边界见[测试入口](testing.md#编译渠道与通知运行验收)。
+集成入口必须配置隔离 PG18 `ZJMFGO_TEST_DATABASE_URL`，内部强制数据库与进程恢复开关，串行 race 并拒绝跳过。覆盖类型/default、逐字段凭据、AAD、审计回滚、孤儿停用、旧 schema 拒绝、默认渠道兼容和新增适配器分发；还覆盖 160→当前版本的旧密文、待发任务和历史事件回放，以及 162→163 的既有订阅、路由和待发正文保留。CI 提供实际 API/worker 强制验证 160/161/162 启动拒绝；本地候选路径和证据边界见[测试入口](testing.md#编译渠道与通知运行验收)。
 
 前端还需 lint/typecheck；构建证据需候选和离线验证测试。数据库、组件事件、浏览器、实际外部渠道和生产发布分别记录证据，不能互相替代。迁移与新 API/worker 应在同一发布包使用；回退前检查旧二进制能否理解已有模块、配置版本和命名凭据。
 

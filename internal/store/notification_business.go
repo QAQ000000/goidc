@@ -32,7 +32,79 @@ FROM invoices i JOIN users u ON u.id=i.user_id WHERE i.id=$1`, invoiceID).
 			return err
 		}
 	}
-	return s.queueUnifiedInvoicePaid(ctx, tx, invoiceID, userID, invoiceNo, amount)
+	if err := s.queueUnifiedInvoicePaid(ctx, tx, invoiceID, userID, invoiceNo, amount); err != nil {
+		return err
+	}
+	// Local renewals become effective in the unpaid -> paid database trigger.
+	// Receiving money alone is insufficient for supplier renewals, whose job
+	// emits its own event only after the upstream entitlement is confirmed.
+	var serviceID int64
+	err := tx.QueryRow(ctx, `SELECT service_id FROM service_renewal_effects WHERE invoice_id=$1`, invoiceID).Scan(&serviceID)
+	if err == pgx.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return s.QueueLifecycleNotification(ctx, tx, "service.renewed", invoiceID, 0, serviceID, fmt.Sprintf("service.renewed:invoice:%d", invoiceID), nil)
+}
+
+// queueServiceLifecycleResult observes a confirmed resource update inside the
+// same transaction. Repeated syncs and unrelated updates never become another
+// lifecycle transition. The resource version identifies repeated suspend/resume
+// cycles, while first provisioning remains one fact for the service lifetime.
+func (s *Store) queueServiceLifecycleResult(ctx context.Context, tx pgx.Tx, serviceID int64, previous, action string, jobID int64) error {
+	var current string
+	var version int64
+	if err := tx.QueryRow(ctx, `SELECT status,version FROM services WHERE id=$1`, serviceID).Scan(&current, &version); err != nil {
+		return err
+	}
+	kind := ""
+	if current != previous {
+		switch current {
+		case "active":
+			if previous == "suspended" {
+				kind = "service.resumed"
+			} else if previous == "queued" || previous == "provisioning" || previous == "failed" {
+				kind = "service.provisioned"
+			}
+		case "suspended":
+			if previous == "active" {
+				kind = "service.suspended"
+			}
+		case "terminated":
+			if previous != "terminated" && previous != "cancelled" {
+				kind = "service.terminated"
+			}
+		}
+	}
+	if kind != "" {
+		key := fmt.Sprintf("%s:%d:%d", kind, serviceID, version)
+		if kind == "service.provisioned" {
+			key = fmt.Sprintf("%s:%d", kind, serviceID)
+		}
+		if err := s.QueueLifecycleNotification(ctx, tx, kind, 0, 0, serviceID, key, nil); err != nil {
+			return err
+		}
+	}
+	if action != "renew" || jobID == 0 {
+		return nil
+	}
+	var invoiceID int64
+	var advanced bool
+	// The snapshot belongs to this paid renewal and captures the previous
+	// upstream deadline. A completed response without an extension cannot be
+	// described as a renewal success to the customer.
+	if err := tx.QueryRow(ctx, `SELECT (j.request_payload->>'local_invoice_id')::bigint,
+ s.next_due_at > (j.request_payload->>'previous_due')::timestamptz
+ FROM provision_jobs j JOIN services s ON s.id=j.service_id
+ WHERE j.id=$1 AND j.service_id=$2 AND j.action='renew'`, jobID, serviceID).Scan(&invoiceID, &advanced); err != nil {
+		return err
+	}
+	if !advanced {
+		return nil
+	}
+	return s.QueueLifecycleNotification(ctx, tx, "service.renewed", invoiceID, 0, serviceID, fmt.Sprintf("service.renewed:invoice:%d", invoiceID), nil)
 }
 
 func (s *Store) queuePaymentSuccessEmail(ctx context.Context, tx pgx.Tx, invoiceID, userID int64, invoiceNo, amount, recipient string) error {

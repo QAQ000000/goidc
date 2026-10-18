@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -218,6 +219,9 @@ FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, 
 		payload["item_ids"] = options.ItemIDs
 	}
 	if err = Audit(ctx, tx, options.ActorID, "order.created", "order", result.OrderID, payload); err != nil {
+		return result, err
+	}
+	if err = s.QueueLifecycleNotification(ctx, tx, "order.created", result.InvoiceID, result.OrderID, 0, fmt.Sprintf("order.created:%d", result.OrderID), nil); err != nil {
 		return result, err
 	}
 	return result, nil

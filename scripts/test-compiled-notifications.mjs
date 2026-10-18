@@ -26,6 +26,10 @@ export const integrationSuites = {
   'internal/store': [
     'TestNotificationCenterDefaultsAndNoHistoricalBackfill', 'TestNotificationCenterBindingIsPrivateSingleUseAndNotConsent', 'TestNotificationCenterChallengesRevocationAndCurrentAuthority', 'TestNotificationCenterConsentCASAndNoTargetOwnershipTransfer', 'TestNotificationCenterLegacyLinksNeverEnterNewWorker', 'TestNotificationCenterInboxAtomicDeliveryFrozenTemplateAndOwnership', 'TestNotificationCenterClaimRechecksCurrentConsentAndOwnership', 'TestNotificationCenterActiveRecheckLeaseRecoveryAndUnknownNeverRetry', 'TestNotificationCenterRetriesOnlyExplicitRateLimitAndStopsAtFive', 'TestNotificationCenterConcurrentClaimsExactlyOnce', 'TestNotificationCenterOversizedRenderedTemplateCannotPoisonQueue', 'TestNotificationCenterCompletionWaitingPastLeaseIsFenced', 'TestNotificationCenterRollbackAndAdminMetadataScope',
     'TestNotificationCenterUpgradeFrom160',
+    'TestNotificationLifecycleUpgradeFrom162',
+    'TestNotificationLifecycleCatalogAndTemplateVocabulary', 'TestNotificationLifecycleDefaultsScopeAndNoHistoricalBackfill', 'TestNotificationLifecycleResourcesAndTemplates', 'TestNotificationLifecycleSuppressesStaleRemindersAndOwnership', 'TestNotificationLifecycleTelegramOnlyAndRechecksScope', 'TestNotificationLifecycleLegacyLinksOnlyCurrentTransaction',
+    'TestLifecycleBusinessCheckoutAndConfirmedServiceTransitions', 'TestLifecycleBusinessDeadlineAndBillingScansWithoutLegacyChannels', 'TestLifecycleBusinessNotificationFailureRollsBackCheckout', 'TestLifecycleBusinessManualDeliveryAndNOKVMResults', 'TestLifecycleBusinessSupplierCallbackConfirmsActualStateOnce',
+    'TestLifecycleBusinessReminderPolicyAndBatchDrain',
   ],
   'internal/httpapi': [
     'TestChannelConfigurationNamedCredentialsAndRollback', 'TestChannelConfigurationRejectsPollutionAndMissingContracts', 'TestChannelConfigurationMissingAndIncompatibleInstancesRemainManageable', 'TestChannelInstancesCatalogueAndSecretLifecycle', 'TestPaymentIntentBindsSelectedChannelInstance',
@@ -34,6 +38,7 @@ export const integrationSuites = {
     'TestMissingSupplierDisablePreservesIdentityCredentialsAndCAS', 'TestMissingSupplierDisableAuditFailureAndPermission', 'TestMissingSupplierDisableKeepsRunningJobGuard', 'TestMissingSupplierDisableRechecksRevocationAfterLock',
     'TestSMTPSettingsSecurityAndDynamicResolution', 'TestSMTPInstanceOptionalFieldsReachRealTransport', 'TestSMSSettingsAndEncryptedOutbox',
     'TestNotificationCenterBindingPrivacyAndConsent', 'TestNotificationCenterBindingRequiresLiveOriginatingSession', 'TestNotificationCenterWebhookRotationDuringBindingRollsBack', 'TestNotificationCenterActualAdapterWorkerAndInbox', 'TestNotificationCenterAdminScopeAndAuditRollback', 'TestNotificationCenterInvalidSecretRejectedAtSave',
+    'TestNotificationLifecycleCatalogFilteringAndScope', 'TestNotificationLifecycleExplicitConsentAndAuditRollback',
   ],
   'internal/notification': ['TestTelegramProtocolResultsPersistThroughNotificationStore', 'TestNotificationCenterProcessRecovery'],
 };

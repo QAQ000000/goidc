@@ -30,9 +30,6 @@ func (s *Store) EnqueueServiceExpiryReminders(ctx context.Context, limit int) (i
 	if err := json.Unmarshal(raw, &expiryDays); err != nil || len(expiryDays) == 0 {
 		expiryDays = []int{}
 	}
-	if len(expiryDays) == 0 {
-		return 0, nil
-	}
 	args := []any{limit}
 	placeholders := make([]string, len(expiryDays))
 	for i, d := range expiryDays {
@@ -69,10 +66,6 @@ LIMIT $1`, args...)
 		return 0, err
 	}
 	rows.Close()
-	if len(items) == 0 {
-		return 0, nil
-	}
-
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -99,6 +92,9 @@ LIMIT $1`, args...)
 				queued++
 			}
 		}
+	}
+	if err = s.enqueueUnifiedServiceDeadlines(ctx, tx, limit, expiryDays); err != nil {
+		return 0, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return 0, err
@@ -274,10 +270,6 @@ LIMIT $1`, limit, onlyKind, settings.BillingGraceDays)
 		return 0, err
 	}
 	rows.Close()
-	if len(items) == 0 {
-		return 0, nil
-	}
-
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return 0, err
@@ -304,6 +296,9 @@ LIMIT $1`, limit, onlyKind, settings.BillingGraceDays)
 				queued++
 			}
 		}
+	}
+	if err = s.enqueueUnifiedBillingReminders(ctx, tx, limit, onlyKind, settings.BillingGraceDays); err != nil {
+		return 0, err
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return 0, err
@@ -454,6 +449,105 @@ func renderBillingTemplate(body string, item billingNotificationCandidate) strin
 	body = strings.ReplaceAll(body, "{{invoice_no}}", item.invoiceNo)
 	body = strings.ReplaceAll(body, "{{amount}}", amount)
 	return strings.ReplaceAll(body, "{{due_date}}", item.dueAt.Format("2006-01-02"))
+}
+
+// The unified scans are intentionally independent of legacy address, template
+// and channel availability. A Telegram-only customer must not disappear from
+// the candidate set. Legacy outboxes and their affected counts remain intact.
+func (s *Store) enqueueUnifiedServiceDeadlines(ctx context.Context, tx pgx.Tx, limit int, stages []int) error {
+	rows, err := tx.Query(ctx, `WITH candidates AS (
+ SELECT s.id,s.next_due_at,
+  ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)::int AS stage,
+  CASE WHEN s.next_due_at<=now() THEN 'service.expired' ELSE 'service.expiry_reminder' END AS kind
+ FROM services s WHERE s.status IN ('active','suspended') AND NOT s.import_review_required
+ AND s.billing_cycle<>'once' AND s.next_due_at IS NOT NULL
+ AND (((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)=ANY($2::int[])
+      OR (s.next_due_at<=now() AND (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date=(now() AT TIME ZONE 'Asia/Shanghai')::date))
+ ) SELECT s.id,c.next_due_at,c.stage,c.kind,
+ (c.next_due_at AT TIME ZONE 'Asia/Shanghai')::date::text
+ FROM candidates c JOIN services s ON s.id=c.id
+ WHERE EXISTS(SELECT 1 FROM notification_routes r JOIN notification_message_templates m ON m.id=r.template_id
+  WHERE r.event_kind=c.kind AND r.enabled AND m.active)
+ AND NOT EXISTS(SELECT 1 FROM notification_events e WHERE e.dedupe_key=
+  c.kind||':'||s.id::text||':'||(extract(epoch FROM c.next_due_at)*1000000)::bigint::text||':'||c.stage::text)
+ ORDER BY s.id FOR UPDATE OF s SKIP LOCKED LIMIT $1`, limit, stages)
+	if err != nil {
+		return err
+	}
+	type deadline struct {
+		id            int64
+		due           time.Time
+		stage         int
+		kind, dueDate string
+	}
+	items := []deadline{}
+	for rows.Next() {
+		var item deadline
+		if err = rows.Scan(&item.id, &item.due, &item.stage, &item.kind, &item.dueDate); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, item := range items {
+		key := fmt.Sprintf("%s:%d:%d:%d", item.kind, item.id, item.due.UnixMicro(), item.stage)
+		if err = s.QueueLifecycleNotification(ctx, tx, item.kind, 0, 0, item.id, key, map[string]string{"stage": fmt.Sprint(item.stage), "due_date": item.dueDate}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) enqueueUnifiedBillingReminders(ctx context.Context, tx pgx.Tx, limit int, onlyKind string, graceDays int) error {
+	rows, err := tx.Query(ctx, `WITH candidates AS (
+ SELECT i.id,i.due_at,coalesce(i.order_id,0) AS order_id,
+ CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
+ THEN 'order.payment_reminder' ELSE 'invoice.overdue' END AS kind,
+ (now() AT TIME ZONE 'Asia/Shanghai')::date::text AS reminder_date
+ FROM invoices i LEFT JOIN orders o ON o.id=i.order_id
+ WHERE i.status='unpaid' AND NOT i.import_review_required
+ AND ((o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now())
+      OR i.due_at<now()-($3::int*interval '1 day'))
+ ) SELECT i.id,c.order_id,c.kind,c.reminder_date,c.due_at
+ FROM candidates c JOIN invoices i ON i.id=c.id
+ WHERE ($2='' OR ($2='order_payment_reminder' AND c.kind='order.payment_reminder')
+                 OR ($2='invoice_overdue_reminder' AND c.kind='invoice.overdue'))
+ AND EXISTS(SELECT 1 FROM notification_routes r JOIN notification_message_templates m ON m.id=r.template_id
+  WHERE r.event_kind=c.kind AND r.enabled AND m.active)
+ AND NOT EXISTS(SELECT 1 FROM notification_events e WHERE e.dedupe_key=c.kind||':'||i.id::text||':'||(extract(epoch FROM c.due_at)*1000000)::bigint::text||':'||c.reminder_date)
+ ORDER BY i.id FOR UPDATE OF i SKIP LOCKED LIMIT $1`, limit, onlyKind, graceDays)
+	if err != nil {
+		return err
+	}
+	type reminder struct {
+		invoiceID, orderID int64
+		kind, date         string
+		due                time.Time
+	}
+	items := []reminder{}
+	for rows.Next() {
+		var item reminder
+		if err = rows.Scan(&item.invoiceID, &item.orderID, &item.kind, &item.date, &item.due); err != nil {
+			rows.Close()
+			return err
+		}
+		items = append(items, item)
+	}
+	rows.Close()
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	for _, item := range items {
+		key := fmt.Sprintf("%s:%d:%d:%s", item.kind, item.invoiceID, item.due.UnixMicro(), item.date)
+		if err = s.QueueLifecycleNotification(ctx, tx, item.kind, item.invoiceID, item.orderID, 0, key, map[string]string{"stage": "0", "due_date": item.date}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // EnqueueOverdueServiceSuspensions applies the billing grace period and only

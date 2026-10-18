@@ -3,7 +3,10 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
@@ -12,36 +15,136 @@ import (
 // queueUnifiedInvoicePaid observes the exact same committed payment event as
 // the legacy outboxes. It links existing mail/SMS jobs and never resends them.
 func (s *Store) queueUnifiedInvoicePaid(ctx context.Context, tx pgx.Tx, invoiceID, userID int64, invoiceNo string, amount int64) error {
-	payload := map[string]string{"invoice_no": invoiceNo, "amount": notificationAmount(amount)}
+	return s.QueueLifecycleNotification(ctx, tx, "invoice.paid", invoiceID, 0, 0, "invoice.paid:"+strconv.FormatInt(invoiceID, 10), nil)
+}
+
+// QueueLifecycleNotification observes a business fact inside its transaction.
+// The referenced resources determine the recipient and all message variables;
+// callers cannot override ownership, amounts, identifiers or service metadata.
+// Routes and consent are sampled once, even when all routes are disabled.
+func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind string, invoiceID, orderID, serviceID int64, dedupeKey string, input map[string]string) error {
+	event, ok := notificationEventDescriptor(kind)
+	if !ok || strings.TrimSpace(dedupeKey) == "" || len(dedupeKey) > 256 || strings.ContainsRune(dedupeKey, 0) || invoiceID < 0 || orderID < 0 || serviceID < 0 {
+		return conflict("invalid_notification_event", "通知事件无效")
+	}
+	for key, value := range input {
+		if !event.Reminder || (key != "stage" && key != "due_date") || strings.ContainsRune(value, 0) {
+			return conflict("invalid_notification_payload", "通知事件变量无效")
+		}
+	}
+	if due := input["due_date"]; due != "" {
+		if _, err := time.Parse("2006-01-02", due); err != nil {
+			return conflict("invalid_notification_payload", "通知提醒日期无效")
+		}
+	}
+	stage := 0
+	if value := input["stage"]; value != "" {
+		var err error
+		stage, err = strconv.Atoi(value)
+		if err != nil || stage < 0 || stage > 365 {
+			return conflict("invalid_notification_payload", "通知提醒阶段无效")
+		}
+	}
+	if (event.Resource == "invoice" && invoiceID == 0) || (event.Resource == "order" && orderID == 0) || (event.Resource == "service" && serviceID == 0) {
+		return conflict("invalid_notification_resource", "通知资源无效")
+	}
+	values := map[string]string{}
+	var userID, invoiceUser, serviceUser, invoiceOrder int64
+	var due *time.Time
+	if invoiceID > 0 {
+		var number string
+		var amount int64
+		if err := tx.QueryRow(ctx, `SELECT user_id,coalesce(order_id,0),invoice_no,amount_cents,due_at FROM invoices WHERE id=$1`, invoiceID).Scan(&invoiceUser, &invoiceOrder, &number, &amount, &due); err != nil {
+			return err
+		}
+		userID = invoiceUser
+		values["invoice_no"], values["amount"] = number, notificationAmount(amount)
+		if orderID == 0 && serviceID == 0 {
+			orderID = invoiceOrder
+		}
+	}
+	if serviceID > 0 {
+		var serviceOrder int64
+		var id, name, product, domain string
+		if err := tx.QueryRow(ctx, `SELECT s.user_id,s.order_id,s.id::text,s.name,p.name,s.domain,s.next_due_at FROM services s JOIN products p ON p.id=s.product_id WHERE s.id=$1`, serviceID).Scan(&serviceUser, &serviceOrder, &id, &name, &product, &domain, &due); err != nil {
+			return err
+		}
+		if (userID > 0 && userID != serviceUser) || (orderID > 0 && orderID != serviceOrder) {
+			return conflict("invalid_notification_resource", "通知资源归属不一致")
+		}
+		userID, orderID = serviceUser, serviceOrder
+		values["service_id"], values["service_name"], values["product_name"], values["domain"] = id, name, product, domain
+		if invoiceID > 0 && invoiceOrder != serviceOrder {
+			var linked bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=$1 AND service_id=$2)`, invoiceID, serviceID).Scan(&linked); err != nil {
+				return err
+			}
+			if !linked {
+				return conflict("invalid_notification_resource", "账单与服务不关联")
+			}
+		}
+	}
+	if orderID > 0 {
+		var owner, amount int64
+		var number string
+		if err := tx.QueryRow(ctx, `SELECT user_id,order_no,total_cents FROM orders WHERE id=$1`, orderID).Scan(&owner, &number, &amount); err != nil {
+			return err
+		}
+		if (userID > 0 && owner != userID) || (invoiceID > 0 && serviceID == 0 && invoiceOrder != orderID) {
+			return conflict("invalid_notification_resource", "通知资源归属不一致")
+		}
+		userID = owner
+		values["order_no"] = number
+		if invoiceID == 0 {
+			values["amount"] = notificationAmount(amount)
+		}
+	}
+	// Keep exact instants separate from human dates. A renewal within the same
+	// Shanghai calendar day must invalidate an already queued reminder as well.
+	payload := map[string]string{}
+	if due != nil {
+		values["due_date"] = due.In(notificationShanghai).Format("2006-01-02")
+		payload["resource_due_at"] = due.UTC().Format(time.RFC3339Nano)
+	}
+	values["days_left"] = strconv.Itoa(stage)
+	for _, variable := range event.Variables {
+		payload[variable.Key] = values[variable.Key]
+	}
+	if event.Reminder {
+		payload["stage"] = strconv.Itoa(stage)
+		payload["reminder_date"] = input["due_date"]
+		if payload["reminder_date"] == "" {
+			payload["reminder_date"] = time.Now().In(notificationShanghai).Format("2006-01-02")
+		}
+	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
 	var eventID int64
-	if err = tx.QueryRow(ctx, `INSERT INTO notification_events(kind,dedupe_key,user_id,invoice_id,payload) VALUES('invoice.paid',$1,$2,$3,$4) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`, "invoice.paid:"+strconv.FormatInt(invoiceID, 10), userID, invoiceID, raw).Scan(&eventID); err == pgx.ErrNoRows {
+	if err = tx.QueryRow(ctx, `INSERT INTO notification_events(kind,dedupe_key,user_id,invoice_id,order_id,service_id,payload) VALUES($1,$2,$3,NULLIF($4::bigint,0),NULLIF($5::bigint,0),NULLIF($6::bigint,0),$7) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`, kind, dedupeKey, userID, invoiceID, orderID, serviceID, raw).Scan(&eventID); err == pgx.ErrNoRows {
 		// Routes and consent are sampled exactly once. Replaying a payment hook
 		// must not backfill an old event after a route or subscription is enabled.
 		return nil
 	} else if err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO notification_deliveries(event_id,route_key,channel,instance_id,status,code,legacy_email_outbox_id,legacy_sms_outbox_id)
- SELECT $1,'legacy-'||n.channel,CASE WHEN n.channel='email' THEN 'mail' ELSE n.channel END,coalesce(m.channel_instance_id,s.channel_instance_id),'pending','legacy_outbox',n.email_outbox_id,n.sms_outbox_id FROM notification_delivery_events n LEFT JOIN email_outbox m ON m.id=n.email_outbox_id LEFT JOIN sms_outbox s ON s.id=n.sms_outbox_id WHERE n.invoice_id=$2 AND n.kind='payment_success' AND (n.email_outbox_id IS NOT NULL OR n.sms_outbox_id IS NOT NULL) ON CONFLICT(event_id,route_key) DO NOTHING`, eventID, invoiceID); err != nil {
+	if err = s.linkLifecycleLegacyOutboxes(ctx, tx, eventID, kind, invoiceID, serviceID, stage); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `SELECT r.id,r.channel,coalesce(r.instance_id,''),r.version,t.subject,t.body,t.version,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(b.id,0),coalesce(b.target,''),coalesce(b.version,0) FROM notification_routes r JOIN notification_message_templates t ON t.id=r.template_id LEFT JOIN user_notification_preferences p ON p.user_id=$1 AND p.channel=r.channel LEFT JOIN notification_targets b ON b.user_id=$1 AND b.instance_id=r.instance_id AND b.active WHERE r.event_kind='invoice.paid' AND r.enabled AND t.active ORDER BY r.id`, userID)
+	rows, err := tx.Query(ctx, `SELECT r.id,r.channel,coalesce(r.instance_id,''),r.version,t.subject,t.body,t.version,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(b.id,0),coalesce(b.target,''),coalesce(b.version,0),coalesce(p.event_scope,'invoice.paid') FROM notification_routes r JOIN notification_message_templates t ON t.id=r.template_id LEFT JOIN user_notification_preferences p ON p.user_id=$1 AND p.channel=r.channel LEFT JOIN notification_targets b ON b.user_id=$1 AND b.instance_id=r.instance_id AND b.active WHERE r.event_kind=$2 AND r.enabled AND t.active ORDER BY r.id`, userID, kind)
 	if err != nil {
 		return err
 	}
 	type routeSnapshot struct {
-		id, channel, instance, subject, body, target                        string
+		id, channel, instance, subject, body, target, scope                 string
 		routeVersion, templateVersion, prefVersion, targetID, targetVersion int64
 		enabled                                                             bool
 	}
 	snapshots := []routeSnapshot{}
 	for rows.Next() {
 		var r routeSnapshot
-		if err = rows.Scan(&r.id, &r.channel, &r.instance, &r.routeVersion, &r.subject, &r.body, &r.templateVersion, &r.enabled, &r.prefVersion, &r.targetID, &r.target, &r.targetVersion); err != nil {
+		if err = rows.Scan(&r.id, &r.channel, &r.instance, &r.routeVersion, &r.subject, &r.body, &r.templateVersion, &r.enabled, &r.prefVersion, &r.targetID, &r.target, &r.targetVersion, &r.scope); err != nil {
 			rows.Close()
 			return err
 		}
@@ -53,10 +156,12 @@ func (s *Store) queueUnifiedInvoicePaid(ctx context.Context, tx pgx.Tx, invoiceI
 	}
 	for _, r := range snapshots {
 		status, code := "pending", ""
-		subject := notificationRender(r.subject, payload)
-		body := notificationRender(r.body, payload)
+		subject := notificationLifecycleRender(r.subject, payload)
+		body := notificationLifecycleRender(r.body, payload)
 		if !r.enabled {
 			status, code = "skipped", "not_subscribed"
+		} else if kind != "invoice.paid" && r.scope != "business" {
+			status, code = "skipped", "event_scope_not_subscribed"
 		} else if r.channel == "telegram" && r.targetID == 0 {
 			status, code = "skipped", "target_unbound"
 		}
@@ -74,6 +179,37 @@ func (s *Store) queueUnifiedInvoicePaid(ctx context.Context, tx pgx.Tx, invoiceI
 		}
 	}
 	return nil
+}
+
+var notificationShanghai = time.FixedZone("Asia/Shanghai", 8*60*60)
+var notificationPlaceholder = regexp.MustCompile(`\{\{[a-z_]+\}\}`)
+
+// Expand once: a resource name containing template syntax remains plain text.
+func notificationLifecycleRender(value string, payload map[string]string) string {
+	return notificationPlaceholder.ReplaceAllStringFunc(value, func(token string) string {
+		return payload[strings.TrimSuffix(strings.TrimPrefix(token, "{{"), "}}")]
+	})
+}
+
+func (s *Store) linkLifecycleLegacyOutboxes(ctx context.Context, tx pgx.Tx, eventID int64, kind string, invoiceID, serviceID int64, stage int) error {
+	legacy := map[string]string{"invoice.paid": "payment_success", "service.provisioned": "service_provision_success", "service.suspended": "service_suspended", "service.expiry_reminder": "service_expiry_reminder", "order.payment_reminder": "order_payment_reminder", "invoice.overdue": "invoice_overdue_reminder"}[kind]
+	if legacy == "" {
+		return nil
+	}
+	// Both records use DEFAULT now(), PostgreSQL's exact transaction start
+	// timestamp. Linking only records from this transaction identifies the old
+	// outbox actually produced by this fact, without guessing a legacy date:
+	// legacy CURRENT_DATE/Go dates may differ from the new Shanghai business day.
+	// In particular, an old unlinked suspension cannot steal a new transition.
+	_, err := tx.Exec(ctx, `INSERT INTO notification_deliveries(event_id,route_key,channel,instance_id,status,code,legacy_email_outbox_id,legacy_sms_outbox_id)
+ SELECT $1,'legacy-'||n.channel,CASE WHEN n.channel='email' THEN 'mail' ELSE n.channel END,coalesce(m.channel_instance_id,s.channel_instance_id),'pending','legacy_outbox',n.email_outbox_id,n.sms_outbox_id
+ FROM notification_delivery_events n LEFT JOIN email_outbox m ON m.id=n.email_outbox_id LEFT JOIN sms_outbox s ON s.id=n.sms_outbox_id
+ WHERE n.kind=$2 AND (($3::bigint>0 AND n.invoice_id=$3) OR ($3=0 AND $4::bigint>0 AND n.service_id=$4))
+ AND n.stage=$5 AND n.created_at=(SELECT e.created_at FROM notification_events e WHERE e.id=$1)
+ AND (n.email_outbox_id IS NOT NULL OR n.sms_outbox_id IS NOT NULL)
+ AND NOT EXISTS(SELECT 1 FROM notification_deliveries d WHERE (n.email_outbox_id IS NOT NULL AND d.legacy_email_outbox_id=n.email_outbox_id) OR (n.sms_outbox_id IS NOT NULL AND d.legacy_sms_outbox_id=n.sms_outbox_id))
+ ON CONFLICT DO NOTHING`, eventID, legacy, invoiceID, serviceID, stage)
+	return err
 }
 
 func notificationMessageValid(channelName, subject, body string) bool {

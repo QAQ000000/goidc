@@ -13,7 +13,39 @@ import (
 // enqueue snapshot. Version checks prevent an opt-out/rebind cycle reviving
 // messages created before the change. External adapters still resolve their
 // compiled factory and credentials immediately before sending.
-const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e JOIN invoices i ON i.id=e.invoice_id JOIN users u ON u.id=e.user_id JOIN notification_routes r ON r.id=d.route_id JOIN notification_message_templates m ON m.id=r.template_id JOIN user_notification_preferences p ON p.user_id=e.user_id AND p.channel=d.channel WHERE e.id=d.event_id AND i.user_id=e.user_id AND i.status='paid' AND u.status='active' AND r.enabled AND r.version=d.route_version AND m.active AND p.enabled AND p.version=d.preference_version AND (d.channel='inbox' OR (d.channel='telegram' AND EXISTS(SELECT 1 FROM notification_targets t JOIN channel_instances c ON c.id=t.instance_id WHERE t.id=d.target_id AND t.user_id=e.user_id AND t.active AND t.version=d.target_version AND t.target=d.target AND t.instance_id=d.instance_id AND c.category='bot' AND c.implementation_id='telegram_bot' AND c.enabled AND r.instance_id=c.id))))`
+const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e
+ JOIN users u ON u.id=e.user_id JOIN notification_routes r ON r.id=d.route_id
+ JOIN notification_message_templates m ON m.id=r.template_id
+ JOIN user_notification_preferences p ON p.user_id=e.user_id AND p.channel=d.channel
+ WHERE e.id=d.event_id AND u.status='active' AND r.enabled AND r.version=d.route_version
+ AND m.active AND p.enabled AND p.version=d.preference_version
+ AND (e.kind='invoice.paid' OR p.event_scope='business')
+ AND (e.invoice_id IS NULL OR EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.user_id=e.user_id))
+ AND (e.order_id IS NULL OR EXISTS(SELECT 1 FROM orders o WHERE o.id=e.order_id AND o.user_id=e.user_id))
+ AND (e.service_id IS NULL OR EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=e.user_id))
+ AND CASE
+ WHEN e.kind='invoice.paid' THEN EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.status='paid')
+ WHEN e.kind IN ('order.payment_reminder','invoice.overdue') THEN EXISTS(
+  SELECT 1 FROM invoices i LEFT JOIN orders o ON o.id=i.order_id
+  WHERE i.id=e.invoice_id AND i.status='unpaid' AND NOT i.import_review_required
+  AND i.due_at=(e.payload->>'resource_due_at')::timestamptz
+  AND e.payload->>'reminder_date'=to_char(clock_timestamp() AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD')
+  AND ((e.kind='order.payment_reminder' AND o.status='pending' AND i.due_at>=clock_timestamp())
+    OR (e.kind='invoice.overdue' AND i.due_at<clock_timestamp())))
+ WHEN e.kind='service.suspended' THEN EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.status='suspended')
+ WHEN e.kind IN ('service.expiry_reminder','service.expired') THEN EXISTS(
+  SELECT 1 FROM services s WHERE s.id=e.service_id AND s.status IN ('active','suspended')
+  AND NOT s.import_review_required AND s.billing_cycle<>'once'
+  AND s.next_due_at=(e.payload->>'resource_due_at')::timestamptz
+  AND ((e.kind='service.expired' AND s.next_due_at<=clock_timestamp())
+    OR (e.kind='service.expiry_reminder' AND s.next_due_at>clock_timestamp()
+      AND (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(clock_timestamp() AT TIME ZONE 'Asia/Shanghai')::date=(e.payload->>'stage')::integer)))
+ ELSE e.kind IN ('order.created','service.provisioned','service.resumed','service.renewed','service.terminated') END
+ AND (d.channel='inbox' OR (d.channel='telegram' AND EXISTS(
+  SELECT 1 FROM notification_targets t JOIN channel_instances c ON c.id=t.instance_id
+  WHERE t.id=d.target_id AND t.user_id=e.user_id AND t.active AND t.version=d.target_version
+  AND t.target=d.target AND t.instance_id=d.instance_id AND c.category='bot'
+  AND c.implementation_id='telegram_bot' AND c.enabled AND r.instance_id=c.id))))`
 
 func (s *Store) ClaimNotificationJob(ctx context.Context) (*notify.Job, error) {
 	for n := 0; n < 32; n++ {

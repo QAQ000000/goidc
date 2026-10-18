@@ -28,6 +28,7 @@ test('required Go suites refuse skipped, missing, incomplete or malformed execut
   assert.ok(required.includes('TestNotificationCenterUpgradeFrom160'));
   assert.ok(required.includes('TestNotificationCenterProcessRecovery'));
   assert.ok(required.includes('TestTelegramProtocolResultsPersistThroughNotificationStore'));
+  for (const name of ['TestNotificationLifecycleUpgradeFrom162', 'TestNotificationLifecycleTelegramOnlyAndRechecksScope', 'TestNotificationLifecycleLegacyLinksOnlyCurrentTransaction', 'TestNotificationLifecycleCatalogFilteringAndScope', 'TestLifecycleBusinessCheckoutAndConfirmedServiceTransitions', 'TestLifecycleBusinessDeadlineAndBillingScansWithoutLegacyChannels', 'TestLifecycleBusinessNotificationFailureRollsBackCheckout', 'TestLifecycleBusinessManualDeliveryAndNOKVMResults', 'TestLifecycleBusinessSupplierCallbackConfirmsActualStateOnce', 'TestLifecycleBusinessReminderPolicyAndBatchDrain']) assert.ok(required.includes(name), `${name} must remain a required integration gate`);
   assert.equal([...required, ...Object.values(unitSuites).flat()].some(name => /BrowserFixture|ProcessHelper/.test(name)), false);
 });
 

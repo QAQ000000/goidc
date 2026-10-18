@@ -122,10 +122,14 @@ func (s *Store) UpdateNotificationTemplate(ctx context.Context, tx pgx.Tx, id st
 	if len([]rune(strings.TrimSpace(in.Subject))) < 1 || len([]rune(in.Subject)) > 240 || len([]rune(strings.TrimSpace(in.Body))) < 1 || len([]rune(in.Body)) > 4000 || strings.ContainsAny(in.Subject+in.Body, "\x00") {
 		return out, conflict("invalid_notification_template", "通知模板内容无效")
 	}
-	// Invoice templates have a deliberately small, non-executable vocabulary.
+	// Each event has its own small, non-executable vocabulary. Read the event
+	// from the stored template rather than accepting a caller-supplied kind.
+	var kind string
+	if err := tx.QueryRow(ctx, `SELECT event_kind FROM notification_message_templates WHERE id=$1 FOR UPDATE`, id).Scan(&kind); err != nil {
+		return out, err
+	}
 	for _, value := range []string{in.Subject, in.Body} {
-		clean := strings.ReplaceAll(strings.ReplaceAll(value, "{{invoice_no}}", ""), "{{amount}}", "")
-		if strings.Contains(clean, "{{") || strings.Contains(clean, "}}") {
+		if !notificationTemplateValid(kind, value) {
 			return out, conflict("invalid_notification_template", "通知模板含不支持的变量")
 		}
 	}
@@ -196,13 +200,23 @@ type NotificationDelivery struct {
 	ExpiresAt         time.Time `json:"expires_at"`
 }
 
-func (s *Store) NotificationDeliveriesForAdmin(ctx context.Context, actorID int64, limit, offset int) ([]NotificationDelivery, error) {
-	return s.notificationDeliveries(ctx, actorID, 0, limit, offset)
+func (s *Store) NotificationDeliveriesForAdmin(ctx context.Context, actorID int64, limit, offset int, eventKinds ...string) ([]NotificationDelivery, error) {
+	kind := ""
+	if len(eventKinds) > 1 {
+		return nil, conflict("invalid_notification_event", "通知事件无效")
+	}
+	if len(eventKinds) == 1 {
+		kind = eventKinds[0]
+		if _, ok := notificationEventDescriptor(kind); kind != "" && !ok {
+			return nil, conflict("invalid_notification_event", "通知事件无效")
+		}
+	}
+	return s.notificationDeliveries(ctx, actorID, 0, limit, offset, kind)
 }
 func (s *Store) NotificationDeliveries(ctx context.Context, userID int64, limit, offset int) ([]NotificationDelivery, error) {
-	return s.notificationDeliveries(ctx, 0, userID, limit, offset)
+	return s.notificationDeliveries(ctx, 0, userID, limit, offset, "")
 }
-func (s *Store) notificationDeliveries(ctx context.Context, actorID, userID int64, limit, offset int) ([]NotificationDelivery, error) {
+func (s *Store) notificationDeliveries(ctx context.Context, actorID, userID int64, limit, offset int, kind string) ([]NotificationDelivery, error) {
 	if limit < 1 || limit > 101 {
 		limit = 20
 	}
@@ -219,7 +233,7 @@ func (s *Store) notificationDeliveries(ctx context.Context, actorID, userID int6
  d.provider_message_id,d.created_at,d.expires_at
  FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
  LEFT JOIN email_outbox m ON m.id=d.legacy_email_outbox_id LEFT JOIN sms_outbox s ON s.id=d.legacy_sms_outbox_id
- WHERE ($1>0 AND admin_customer_allowed($1,e.user_id)) OR ($2>0 AND e.user_id=$2 AND EXISTS(SELECT 1 FROM users u WHERE u.id=$2 AND u.status='active')) ORDER BY d.id DESC LIMIT $3 OFFSET $4`, actorID, userID, limit, offset)
+ WHERE (($1>0 AND admin_customer_allowed($1,e.user_id)) OR ($2>0 AND e.user_id=$2 AND EXISTS(SELECT 1 FROM users u WHERE u.id=$2 AND u.status='active'))) AND ($5='' OR e.kind=$5) ORDER BY d.id DESC LIMIT $3 OFFSET $4`, actorID, userID, limit, offset, kind)
 	if err != nil {
 		return nil, err
 	}

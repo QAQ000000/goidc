@@ -18,6 +18,7 @@ type NotificationPreference struct {
 	Channel         string `json:"channel"`
 	Name            string `json:"name"`
 	Enabled         bool   `json:"enabled"`
+	EventScope      string `json:"event_scope"`
 	Version         int64  `json:"version"`
 	RequiresBinding bool   `json:"requires_binding"`
 }
@@ -54,7 +55,7 @@ func activeNotificationUser(ctx context.Context, tx pgx.Tx, userID int64) error 
 }
 
 func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]NotificationPreference, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0) FROM users u CROSS JOIN (VALUES('telegram'),('inbox')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
+	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(p.event_scope,'invoice.paid') FROM users u CROSS JOIN (VALUES('telegram'),('inbox')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +63,7 @@ func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]No
 	out := []NotificationPreference{}
 	for rows.Next() {
 		var p NotificationPreference
-		if err = rows.Scan(&p.Channel, &p.Enabled, &p.Version); err != nil {
+		if err = rows.Scan(&p.Channel, &p.Enabled, &p.Version, &p.EventScope); err != nil {
 			return nil, err
 		}
 		p.Name = notificationChannelName(p.Channel)
@@ -72,21 +73,24 @@ func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]No
 	return out, rows.Err()
 }
 
-func (s *Store) UpdateNotificationPreference(ctx context.Context, tx pgx.Tx, userID int64, channelName string, enabled bool, expectedVersion int64) (NotificationPreference, error) {
-	out := NotificationPreference{Channel: channelName, Name: notificationChannelName(channelName), RequiresBinding: channelName == "telegram"}
-	if channelName != "telegram" && channelName != "inbox" || expectedVersion < 0 {
+func (s *Store) UpdateNotificationPreference(ctx context.Context, tx pgx.Tx, userID int64, channelName string, enabled bool, expectedVersion int64, eventScope ...string) (NotificationPreference, error) {
+	out := NotificationPreference{Channel: channelName, Name: notificationChannelName(channelName), RequiresBinding: channelName == "telegram", EventScope: "invoice.paid"}
+	if channelName != "telegram" && channelName != "inbox" || expectedVersion < 0 || len(eventScope) > 1 || (len(eventScope) == 1 && eventScope[0] != "" && eventScope[0] != "invoice.paid" && eventScope[0] != "business") {
 		return out, conflict("invalid_notification_preference", "通知偏好无效")
 	}
 	if err := activeNotificationUser(ctx, tx, userID); err != nil {
 		return out, err
 	}
 	var version int64
-	err := tx.QueryRow(ctx, `SELECT version FROM user_notification_preferences WHERE user_id=$1 AND channel=$2 FOR UPDATE`, userID, channelName).Scan(&version)
+	err := tx.QueryRow(ctx, `SELECT version,event_scope FROM user_notification_preferences WHERE user_id=$1 AND channel=$2 FOR UPDATE`, userID, channelName).Scan(&version, &out.EventScope)
 	if err != nil && err != pgx.ErrNoRows {
 		return out, err
 	}
 	if version != expectedVersion {
 		return out, conflict("version_conflict", "通知偏好已变更，请重新加载")
+	}
+	if len(eventScope) == 1 && eventScope[0] != "" {
+		out.EventScope = eventScope[0]
 	}
 	if enabled && channelName == "telegram" {
 		rows, queryErr := tx.Query(ctx, `SELECT t.instance_id FROM notification_targets t WHERE t.user_id=$1 AND t.active ORDER BY t.instance_id`, userID)
@@ -117,7 +121,7 @@ func (s *Store) UpdateNotificationPreference(ctx context.Context, tx pgx.Tx, use
 			return out, conflict("notification_binding_required", "请先绑定通知目标")
 		}
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO user_notification_preferences(user_id,channel,enabled) VALUES($1,$2,$3) ON CONFLICT(user_id,channel) DO UPDATE SET enabled=excluded.enabled,version=user_notification_preferences.version+1,updated_at=now() RETURNING enabled,version`, userID, channelName, enabled).Scan(&out.Enabled, &out.Version)
+	err = tx.QueryRow(ctx, `INSERT INTO user_notification_preferences(user_id,channel,enabled,event_scope) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,channel) DO UPDATE SET enabled=excluded.enabled,event_scope=excluded.event_scope,version=user_notification_preferences.version+1,updated_at=now() RETURNING enabled,version,event_scope`, userID, channelName, enabled, out.EventScope).Scan(&out.Enabled, &out.Version, &out.EventScope)
 	return out, err
 }
 

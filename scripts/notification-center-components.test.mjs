@@ -16,6 +16,7 @@ let resources = new Map();
 let permissions = new Set();
 let requests = [];
 let refreshes = [];
+let resourcePaths = [];
 let respond;
 class ApiError extends Error { constructor(status, code = 'test', message = '请求失败') { super(message); this.status = status; this.code = code; } }
 const react = { ...React, useEffect() {}, useState(initial) {
@@ -35,7 +36,7 @@ function load(filename) {
     if (specifier === 'react') return react;
     if (specifier === './workspace') return { useAdminPermission: permission => permissions.has(permission) };
     if (specifier === '@/hooks/use-admin-form-leave') return { useAdminFormLeave() {} };
-    if (specifier === '@/hooks/use-resource') return { useResource: resourcePath => ({ data: resources.get(resourcePath)?.data ?? null, error: resources.get(resourcePath)?.error ?? null, refresh: () => refreshes.push(resourcePath) }) };
+    if (specifier === '@/hooks/use-resource') return { useResource: resourcePath => { resourcePaths.push(resourcePath); return { data: resources.get(resourcePath)?.data ?? null, error: resources.get(resourcePath)?.error ?? null, refresh: () => refreshes.push(resourcePath) }; } };
     if (specifier === '@/lib/api') return { ApiError, date: value => value, api: async (requestPath, options = {}) => { const request = { path: requestPath, method: options.method ?? 'GET', body: options.body ? JSON.parse(options.body) : undefined }; requests.push(request); return respond(request); } };
     if (specifier.startsWith('.') || specifier.startsWith('@/')) {
       const base = specifier.startsWith('@/') ? path.join(web, 'src', specifier.slice(2)) : path.resolve(path.dirname(filename), specifier);
@@ -57,7 +58,7 @@ const { Checkbox } = load(path.join(web, 'src/components/ui/checkbox.tsx'));
 const { Button } = load(path.join(web, 'src/components/ui/button.tsx'));
 
 async function settle() { await new Promise(resolve => setImmediate(resolve)); }
-function reset() { resources = new Map(); permissions = new Set(); requests = []; refreshes = []; respond = async () => ({}); globalThis.window = { confirm: () => true }; }
+function reset() { resources = new Map(); permissions = new Set(); requests = []; refreshes = []; resourcePaths = []; respond = async () => ({}); globalThis.window = { confirm: () => true }; }
 function mount(component, props = {}) {
   const state = { cursor: 0, values: [] };
   return () => { state.cursor = 0; current = state; try { return component(props); } finally { current = undefined; } };
@@ -73,13 +74,14 @@ function checkbox(tree, index = 0) { const item = nodes(tree).filter(item => ite
 const prefPath = '/me/notification-preferences';
 const inboxPath = '/me/notification-inbox?limit=20&offset=0';
 const centerPath = '/admin/notification-center?limit=50&offset=0';
-const preference = { channel: 'telegram', name: 'Telegram Bot', enabled: false, version: 0, requires_binding: true };
+const preference = { channel: 'telegram', name: 'Telegram Bot', enabled: false, version: 0, requires_binding: true, event_scope: 'business' };
 const target = { id: 'target-1', channel: 'telegram', instance_id: 'bot-1', label: '机器人用户 · **42', version: 3 };
 const instance = { id: 'bot-1', name: '账单机器人', channel: 'telegram', bot_username: 'invoice_bot' };
 function setPreferences(overrides = {}) { resources.set(prefPath, { data: { channels: [preference], targets: [], instances: [instance], ...overrides } }); }
 const template = { id: 'invoice-paid-telegram', event_kind: 'invoice.paid', channel: 'telegram', subject: '付款成功', body: '账单 {{invoice_no}} 已付款 {{amount}}', active: true, version: 1 };
+const eventCatalog = [{ kind: 'invoice.paid', name: '账单已结清', description: '来自服务端的付款事件说明', variables: [{ key: 'invoice_no', label: '账单号' }, { key: 'amount', label: '金额' }] }, { kind: 'service.suspended', name: '服务已暂停', description: '来自服务端的暂停事件说明', variables: [{ key: 'service_name', label: '服务名称' }] }];
 const rule = { id: 'invoice-paid-telegram', event_kind: 'invoice.paid', channel: 'telegram', enabled: false, version: 2, instance_id: 'bot-1', template_id: template.id };
-function setCenter(overrides = {}) { permissions = new Set(['notifications.view', 'notifications.manage']); resources.set(centerPath, { data: { channels: [{ channel: 'telegram', name: 'Telegram Bot', requires_binding: true }], rules: [rule], templates: [template], deliveries: [], instances: [instance], has_more: false, ...overrides } }); }
+function setCenter(overrides = {}) { permissions = new Set(['notifications.view', 'notifications.manage']); resources.set(centerPath, { data: { events: eventCatalog, channels: [{ channel: 'telegram', name: 'Telegram Bot', requires_binding: true }], rules: [rule], templates: [template], deliveries: [], instances: [instance], has_more: false, ...overrides } }); }
 
 test('delivery rendering distinguishes accepted, unknown and legacy queues without offering retries', () => {
   const deliveries = ['accepted', 'unknown', 'legacy_queued'].map((status, id) => ({ id, event_kind: 'invoice.paid', channel: 'telegram', user_id: 7, status, code: '<safe>', attempt_count: 1, created_at: '2026-10-18', provider_message_id: 'provider-1' }));
@@ -130,13 +132,13 @@ test('preference opt-in sends version zero only after binding; CAS reload retain
   const render = mount(NotificationPreferences);
   checkbox(render()).props.onCheckedChange(true);
   await button(render(), '保存Telegram Bot偏好').props.onClick(); await settle();
-  assert.deepEqual(requests[0].body, { channel: 'telegram', enabled: true, expected_version: 0 });
+  assert.deepEqual(requests[0].body, { channel: 'telegram', enabled: true, event_scope: 'business', expected_version: 0 });
   assert.equal(checkbox(render()).props.checked, true);
   assert.equal(button(render(), '保存Telegram Bot偏好').props.disabled, true);
   await button(render(), '加载最新版本并保留草稿').props.onClick(); await settle();
   assert.equal(checkbox(render()).props.checked, true);
   conflict = false; await button(render(), '保存Telegram Bot偏好').props.onClick(); await settle();
-  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: true, expected_version: 4 });
+  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: true, event_scope: 'business', expected_version: 4 });
 });
 
 test('permission revocation locks preference writes while retaining the current draft', async () => {
@@ -224,4 +226,121 @@ test('personal inbox marks the owned message read and has bounded independent pa
   assert.deepEqual(requests[0], { path: '/me/notification-inbox/9/read', method: 'POST', body: {} });
   assert.deepEqual(refreshes, [inboxPath]);
   assert.ok(!nodes(render()).some(item => item.props?.dangerouslySetInnerHTML));
+});
+
+test('server event catalog owns labels and unknown persisted kinds remain discoverable', () => {
+  const unknown = { ...rule, event_kind: 'custom.future-event' };
+  const options = helpers.notificationEventOptions({ events: eventCatalog, rules: [rule, unknown], templates: [template], deliveries: [] });
+  assert.deepEqual(options, [{ kind: 'invoice.paid', name: '账单已结清' }, { kind: 'service.suspended', name: '服务已暂停' }, { kind: 'custom.future-event', name: 'custom.future-event' }]);
+  assert.equal(helpers.notificationEventName('invoice.paid'), 'invoice.paid');
+  assert.equal(helpers.notificationEventName('service.suspended', eventCatalog), '服务已暂停');
+  assert.deepEqual(helpers.notificationEventOptions({ rules: [unknown], templates: [], deliveries: [] }), [{ kind: 'custom.future-event', name: 'custom.future-event' }]);
+});
+
+test('event selection shows only its routes and retains drafts while moving between business events', () => {
+  reset();
+  const manyEvents = [...eventCatalog, ...Array.from({ length: 9 }, (_, i) => ({ kind: `future.event-${i}`, name: `未来事件 ${i}`, variables: [] }))];
+  const rules = manyEvents.flatMap(event => ['telegram', 'inbox'].map(channel => ({ ...rule, id: `${event.kind}-${channel}`, event_kind: event.kind, channel })));
+  setCenter({ events: manyEvents, rules });
+  const render = mount(NotificationCenter);
+  assert.equal(nodes(render()).filter(item => item.type === 'form').length, 2);
+  checkbox(render()).props.onCheckedChange(true);
+  const select = () => nodes(render()).find(item => item.type === 'select' && item.props['aria-label'] === '筛选通知事件');
+  select().props.onChange({ target: { value: 'service.suspended' } });
+  assert.equal(nodes(render()).filter(item => item.type === 'form').length, 2);
+  assert.match(text(render()), /来自服务端的暂停事件说明/);
+  assert.equal(checkbox(render()).props.checked, false);
+  assert.match(text(render()), /切换事件会保留未保存的草稿/);
+  select().props.onChange({ target: { value: 'invoice.paid' } });
+  assert.equal(checkbox(render()).props.checked, true);
+  assert.equal(button(render(), '保存规则').props.disabled, false);
+});
+
+test('template help uses only the selected event variables and missing catalog does not invent invoice variables', () => {
+  reset();
+  const serviceTemplate = { ...template, id: 'service-suspended-telegram', event_kind: 'service.suspended', subject: '暂停', body: '{{service_name}}已暂停' };
+  setCenter({ templates: [template, serviceTemplate] });
+  const render = mount(NotificationCenter);
+  nodes(render()).find(item => item.type === 'button' && text(item) === '渠道模板').props.onClick();
+  nodes(render()).find(item => item.type === 'select' && item.props['aria-label'] === '筛选通知事件').props.onChange({ target: { value: 'service.suspended' } });
+  assert.equal(nodes(render()).filter(item => item.type === 'form').length, 1);
+  const help = nodes(render()).find(item => item.type?.name === 'NotificationTemplateHelp');
+  const helpText = text(help.type(help.props));
+  assert.match(helpText, /\{\{service_name\}\}（服务名称）/);
+  assert.doesNotMatch(helpText, /invoice_no|amount/);
+  setCenter({ events: undefined, rules: [{ ...rule, event_kind: 'service.suspended' }], templates: [serviceTemplate] });
+  const fallback = nodes(render()).find(item => item.type?.name === 'NotificationTemplateHelp');
+  assert.match(text(fallback.type(fallback.props)), /变量说明不可用/);
+  assert.doesNotMatch(text(fallback.type(fallback.props)), /invoice_no|amount/);
+});
+
+test('delivery event filtering requests server pagination, encodes kind and resets the page', () => {
+  reset(); setCenter({ has_more: true });
+  const render = mount(NotificationCenter);
+  nodes(render()).find(item => item.type === 'button' && text(item) === '投递记录').props.onClick();
+  button(render(), '下一页').props.onClick(); render();
+  assert.equal(resourcePaths.at(-1), '/admin/notification-center?limit=50&offset=50');
+  resources.set('/admin/notification-center?limit=50&offset=50', resources.get(centerPath));
+  nodes(render()).find(item => item.type === 'select' && item.props['aria-label'] === '筛选通知事件').props.onChange({ target: { value: 'custom/event ?' } }); render();
+  assert.equal(resourcePaths.at(-1), '/admin/notification-center?limit=50&offset=0&event_kind=custom%2Fevent%20%3F');
+  resources.set(resourcePaths.at(-1), { data: { ...resources.get(centerPath).data, has_more: false } });
+  assert.equal(button(render(), '上一页').props.disabled, true);
+  assert.equal(button(render(), '下一页').props.disabled, true);
+});
+
+test('delivery rows use server names and safely display unknown events', () => {
+  const deliveries = ['service.suspended', 'custom.future-event'].map((event_kind, id) => ({ id, event_kind, channel: 'telegram', user_id: 7, status: 'pending', created_at: '2026-10-18' }));
+  const html = renderToStaticMarkup(React.createElement(NotificationDeliveryTable, { deliveries, channels: [], events: eventCatalog }));
+  assert.match(html, /服务已暂停/); assert.match(html, /custom.future-event/);
+});
+
+test('legacy subscriptions keep invoice scope on normal saves and require explicit business expansion', async () => {
+  reset(); setPreferences({ targets: [target], channels: [{ ...preference, enabled: true, event_scope: 'invoice.paid', version: 3 }] });
+  const render = mount(NotificationPreferences);
+  assert.match(text(render()), /仅接收付款成功通知/);
+  assert.match(text(render()), /扩展后不补发历史通知/);
+  checkbox(render()).props.onCheckedChange(false);
+  await button(render(), '保存Telegram Bot偏好').props.onClick(); await settle();
+  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: false, event_scope: 'invoice.paid', expected_version: 3 });
+  await button(render(), '扩展为业务通知').props.onClick(); await settle();
+  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: true, event_scope: 'business', expected_version: 3 });
+  assert.match(text(render()), /工单订阅和验证码单独管理/);
+});
+
+test('business expansion conflict preserves scope and opt-in on explicit CAS rebase', async () => {
+  reset(); setPreferences({ targets: [target], channels: [{ ...preference, enabled: true, event_scope: 'invoice.paid', version: 3 }] });
+  let conflict = true;
+  respond = async request => {
+    if (request.method === 'GET') return { channels: [{ ...preference, enabled: false, event_scope: 'invoice.paid', version: 9 }], targets: [target], instances: [instance] };
+    if (conflict) throw new ApiError(409, 'version_conflict');
+    return {};
+  };
+  const render = mount(NotificationPreferences);
+  await button(render(), '扩展为业务通知').props.onClick(); await settle();
+  assert.match(text(render()), /通过Telegram Bot接收业务通知/);
+  assert.equal(button(render(), '保存Telegram Bot偏好').props.disabled, true);
+  await button(render(), '加载最新版本并保留草稿').props.onClick(); await settle();
+  conflict = false;
+  await button(render(), '保存Telegram Bot偏好').props.onClick(); await settle();
+  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: true, event_scope: 'business', expected_version: 9 });
+});
+
+test('missing preference scope remains conservative even when toggled back on', async () => {
+  reset(); setPreferences({ targets: [target], channels: [{ ...preference, event_scope: undefined }] });
+  const render = mount(NotificationPreferences);
+  assert.match(text(render()), /仅接收付款成功通知/);
+  checkbox(render()).props.onCheckedChange(true);
+  await button(render(), '保存Telegram Bot偏好').props.onClick(); await settle();
+  assert.deepEqual(requests.at(-1).body, { channel: 'telegram', enabled: true, event_scope: 'invoice.paid', expected_version: 0 });
+});
+
+test('a failed filtered delivery request still allows clearing the event filter', () => {
+  reset(); setCenter(); const render = mount(NotificationCenter);
+  nodes(render()).find(item => item.type === 'button' && text(item) === '投递记录').props.onClick();
+  nodes(render()).find(item => item.type === 'select' && item.props['aria-label'] === '筛选通知事件').props.onChange({ target: { value: 'service.suspended' } });
+  resources.set('/admin/notification-center?limit=50&offset=0&event_kind=service.suspended', { error: new ApiError(500) });
+  const filter = nodes(render()).find(item => item.type === 'select' && item.props['aria-label'] === '筛选通知事件');
+  assert.ok(filter); assert.match(text(filter), /全部事件/);
+  filter.props.onChange({ target: { value: '' } }); render();
+  assert.equal(resourcePaths.at(-1), centerPath);
 });

@@ -95,8 +95,8 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 	if err = LockAdminResourceCustomer(ctx, tx, actor, "service", serviceID); err != nil {
 		return err
 	}
-	var existing string
-	if err = tx.QueryRow(ctx, "SELECT upstream_id FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&existing); err != nil {
+	var existing, current string
+	if err = tx.QueryRow(ctx, "SELECT upstream_id,status FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&existing, &current); err != nil {
 		return err
 	}
 	var j ProvisionJob
@@ -146,6 +146,9 @@ func (s *Store) VerifySupplierJob(ctx context.Context, actor, serviceID int64, i
 			if err = s.QueueServiceSuspendedNotifications(ctx, tx, serviceID); err != nil {
 				return err
 			}
+		}
+		if err = s.queueServiceLifecycleResult(ctx, tx, serviceID, current, j.Action, j.ID); err != nil {
+			return err
 		}
 		state = "succeeded"
 	} else if j.Action == "create" {

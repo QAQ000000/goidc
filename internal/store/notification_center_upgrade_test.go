@@ -27,6 +27,7 @@ import (
 
 const notificationUpgrade160 = "160_product_category_legacy_mapping.sql"
 const notificationUpgrade161 = "161_channel_configuration_contract.sql"
+const notificationUpgrade162 = "162_unified_notifications.sql"
 
 // Start with the existing genuine pre-upgrade migration helper and apply only
 // the actual remaining SQL through 160. No 161 column or 162 table has existed
@@ -390,7 +391,7 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 			}
 		}
 		var routes, enabled, events, deliveries, attempts, storedPreferences int
-		if err = db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM notification_routes),(SELECT count(*) FROM notification_routes WHERE enabled),(SELECT count(*) FROM notification_events),(SELECT count(*) FROM notification_deliveries),(SELECT count(*) FROM notification_delivery_attempts),(SELECT count(*) FROM user_notification_preferences)`).Scan(&routes, &enabled, &events, &deliveries, &attempts, &storedPreferences); err != nil || routes != 2 || enabled+events+deliveries+attempts+storedPreferences != 0 {
+		if err = db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM notification_routes),(SELECT count(*) FROM notification_routes WHERE enabled),(SELECT count(*) FROM notification_events),(SELECT count(*) FROM notification_deliveries),(SELECT count(*) FROM notification_delivery_attempts),(SELECT count(*) FROM user_notification_preferences)`).Scan(&routes, &enabled, &events, &deliveries, &attempts, &storedPreferences); err != nil || routes != 2*len(NotificationEventCatalog()) || enabled+events+deliveries+attempts+storedPreferences != 0 {
 			t.Fatal("upgrade enabled routes, invented consent or backfilled historical notifications", err)
 		}
 		upgraded := notificationUpgradeSnapshot(t, db, true)
@@ -432,7 +433,7 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 		if err != nil || sms.ID != smsID || sms.Attempts != 2 || sms.Kind != "payment_success" || sms.ChannelInstanceID != "sms-default" || !strings.Contains(sms.Body, "UPGRADE160-PAID") {
 			t.Fatal("pre-upgrade encrypted SMS job no longer claimable with its original identity", err)
 		}
-		t.Log("PASS actual 160 to 161/162 upgrade; unchanged legacy ciphertext/settings/receipts/pending IDs; checksum refusal and idempotent Migrate; disabled new routes/consent; old payment replay without backfill; original jobs claimable without external delivery")
+		t.Log("PASS actual 160 to current upgrade; unchanged legacy ciphertext/settings/receipts/pending IDs; checksum refusal and idempotent Migrate; disabled new routes/consent; old payment replay without backfill; original jobs claimable without external delivery")
 	})
 	t.Run("schema161_is_not_current", func(t *testing.T) {
 		db := notificationSchema160(t)
@@ -449,4 +450,53 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 		}
 		assertNotificationUpgradeChecksums(t, db)
 	})
+}
+
+func TestNotificationLifecycleUpgradeFrom162(t *testing.T) {
+	db := notificationSchema160(t)
+	ctx := t.Context()
+	customer, invoice, _, _, _ := seedNotificationUpgrade160(t, db)
+	applyNotificationUpgradeMigration(t, db, notificationUpgrade161)
+	applyNotificationUpgradeMigration(t, db, notificationUpgrade162)
+	assertNotificationUpgradeBinaryGate(t, db, "162")
+	if _, err := db.Pool.Exec(ctx, `UPDATE notification_routes SET enabled=true,version=7 WHERE id='invoice-paid-inbox'; UPDATE notification_message_templates SET subject='旧版付款主题',body='旧版账单 {{invoice_no}}',version=5 WHERE id='invoice-paid-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO user_notification_preferences(user_id,channel,enabled,version) VALUES($1,'inbox',true,4)`, customer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `WITH e AS(INSERT INTO notification_events(kind,dedupe_key,user_id,invoice_id,payload) VALUES('invoice.paid','invoice.paid:'||$1::bigint::text,$2::bigint,$1::bigint,'{"invoice_no":"UPGRADE160-PAID","amount":"¥123.45"}') RETURNING id) INSERT INTO notification_deliveries(event_id,route_key,route_id,route_version,template_version,preference_version,channel,target,subject,body) SELECT id,'invoice-paid-inbox','invoice-paid-inbox',7,5,4,'inbox',$2::bigint::text,'升级前待发主题','升级前待发内容' FROM e`, invoice, customer); err != nil {
+		t.Fatal(err)
+	}
+	var before string
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM notification_deliveries d))::text`).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var after, scope string
+	var enabled bool
+	var version, enabledRoutes, events int
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM notification_deliveries d))::text`).Scan(&after); err != nil || before != after {
+		t.Fatal("lifecycle migration altered existing route, template or pending delivery", err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT event_scope,enabled,version FROM user_notification_preferences WHERE user_id=$1 AND channel='inbox'`, customer).Scan(&scope, &enabled, &version); err != nil || scope != "invoice.paid" || !enabled || version != 4 {
+		t.Fatal("upgrade widened or reset existing payment-only consent", err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM notification_routes WHERE enabled),(SELECT count(*) FROM notification_events)`).Scan(&enabledRoutes, &events); err != nil || enabledRoutes != 1 || events != 1 {
+		t.Fatal("migration enabled new routes or invented historical events", err)
+	}
+	upgraded := notificationUpgradeSnapshot(t, db, true)
+	if err := db.Migrate(ctx); err != nil || notificationUpgradeSnapshot(t, db, true) != upgraded {
+		t.Fatal("repeated lifecycle migration changed existing data", err)
+	}
+	if job, err := db.ClaimNotificationJob(ctx); !errors.Is(err, pgx.ErrNoRows) || job != nil {
+		t.Fatal("inbox-only upgraded queue returned an external job", err)
+	}
+	var messages int
+	if err := db.Pool.QueryRow(ctx, `SELECT count(*) FROM admin_inbox_messages WHERE user_id=$1 AND subject='升级前待发主题' AND body='升级前待发内容'`, customer).Scan(&messages); err != nil || messages != 1 {
+		t.Fatal("pre-upgrade payment-only delivery no longer accepted", messages, err)
+	}
+	assertNotificationUpgradeChecksums(t, db)
 }

@@ -235,6 +235,9 @@ func (s *Store) finishNOKVMJob(ctx context.Context, job ProvisionJob, result pro
 				return err
 			}
 		}
+		if err = s.queueServiceLifecycleResult(ctx, tx, job.ServiceID, current, job.Action, job.ID); err != nil {
+			return err
+		}
 		raw, _ := json.Marshal(result)
 		if _, err = tx.Exec(ctx, "UPDATE provision_jobs SET status='succeeded',result=$2,last_error='',locked_at=NULL,completed_at=now(),updated_at=now() WHERE id=$1", job.ID, raw); err != nil {
 			return err
@@ -480,6 +483,9 @@ func (s *Store) VerifyNOKVMJob(ctx context.Context, actorID, serviceID int64, in
 			err = s.applyNOKVMResult(ctx, tx, job, current, verifiedResult)
 		}
 		if err != nil {
+			return out, err
+		}
+		if err = s.queueServiceLifecycleResult(ctx, tx, job.ServiceID, current, job.Action, job.ID); err != nil {
 			return out, err
 		}
 		out.Status = "succeeded"

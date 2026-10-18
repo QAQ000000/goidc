@@ -1,12 +1,13 @@
 export type NotificationChannel = { channel: string; name: string; requires_binding?: boolean };
+export type NotificationEvent = { kind: string; name: string; description?: string; resource?: string; variables: { key: string; label: string }[]; reminder?: boolean };
 export type NotificationInstance = { id: string; name: string; channel: string; bot_username?: string };
-export type NotificationPreference = NotificationChannel & { enabled: boolean; version: number; requires_binding: boolean };
+export type NotificationPreference = NotificationChannel & { enabled: boolean; version: number; requires_binding: boolean; event_scope?: "invoice.paid" | "business" };
 export type NotificationTarget = { id: string | number; channel: string; instance_id: string; label: string; version: number };
 export type NotificationPreferences = { channels: NotificationPreference[]; targets: NotificationTarget[]; instances: NotificationInstance[] };
 export type NotificationRule = { id: string; event_kind: string; channel: string; enabled: boolean; version: number; instance_id: string | null; template_id: string | null };
 export type NotificationTemplate = { id: string; event_kind: string; channel: string; subject: string; body: string; active: boolean; version: number };
 export type NotificationDelivery = { id: string | number; event_kind: string; user_id: number; channel: string; instance_id: string | null; status: string; code: string; attempt_count?: number; attempts?: number; created_at: string; provider_message_id: string; legacy_outbox_id?: number | null };
-export type NotificationCenterData = { channels: NotificationChannel[]; rules: NotificationRule[]; templates: NotificationTemplate[]; deliveries: NotificationDelivery[]; instances: NotificationInstance[]; has_more?: boolean };
+export type NotificationCenterData = { events?: NotificationEvent[]; channels: NotificationChannel[]; rules: NotificationRule[]; templates: NotificationTemplate[]; deliveries: NotificationDelivery[]; instances: NotificationInstance[]; has_more?: boolean };
 
 const deliveryStates: Record<string, { label: string; detail?: string }> = {
   pending: { label: "等待发送" },
@@ -29,8 +30,16 @@ export function notificationChannelName(channels: NotificationChannel[], channel
   return channels.find(item => item.channel === channel)?.name ?? channel;
 }
 
-export function notificationEventName(event: string) {
-  return event === "invoice.paid" ? "付款成功" : event;
+export function notificationEventName(event: string, events: NotificationEvent[] = []) {
+  return events.find(item => item.kind === event)?.name ?? event;
+}
+
+export function notificationEventOptions(data: NotificationCenterData) {
+  // Retain unknown kinds from saved configuration during rolling upgrades;
+  // labels and variable definitions remain owned by the server catalog.
+  const kinds = new Set((data.events ?? []).map(item => item.kind));
+  for (const item of [...data.rules, ...data.templates, ...data.deliveries]) kinds.add(item.event_kind);
+  return [...kinds].map(kind => ({ kind, name: notificationEventName(kind, data.events) }));
 }
 
 export function canEnableNotification(preference: NotificationPreference, targets: NotificationTarget[], instances: NotificationInstance[]) {
@@ -53,5 +62,5 @@ export function safeNotificationBindingURL(raw: string) {
 }
 
 export function rebaseNotificationPreference(draft: NotificationPreference, latest: NotificationPreference): NotificationPreference {
-  return { ...latest, enabled: draft.enabled };
+  return { ...latest, enabled: draft.enabled, event_scope: draft.event_scope ?? "invoice.paid" };
 }

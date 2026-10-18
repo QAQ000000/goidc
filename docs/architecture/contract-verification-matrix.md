@@ -20,8 +20,8 @@
 | RBAC 与后台 | API 与页面是否执行同一角色、资源范围和撤权规则？ | API 权限测试、`node scripts/admin-page-contracts.mjs`、[RBAC](../admin-rbac.md) | 静态登记不等于运行时强制；浏览器验收需单独记录 |
 | 经营报表与评分 | 折扣分摊/期间去重是否守恒？预计与确认是否分离？评分是否按原身份一次写入？真实现金与费用是否可追溯且不越权？ | [报表口径与测试入口](../credit-cash-reporting.md#回归入口)、[恢复契约](../report-restoration-contract.md)、`reports_regression_test.go`、`sales_report_details_test.go`、`ticket_ratings_test.go`、`annual_report_test.go`、`report_expenses_test.go`、`product_report_details_test.go` | 必须强制独立PG18；导入夹具不代表真实旧全量迁移，四尺寸浏览器与外部现金凭证另验 |
 | 供应商与 NOKVM | 超时、重试、凭据、未知结果和人工复核是否安全？ | 适配器测试、隔离运行、[供应商协议](../supplier-protocol.md)、[NOKVM](../nokvm-delivery.md) | 模拟供应商不证明真实商户、配额、网络或生产权限 |
-| 统一通知 | 绑定是否验证且自愿订阅？撤权/退订/解绑是否阻止旧任务？平台接受后进程崩溃是否冻结未知结果且不重发？ | [通知契约](../notification-architecture.md)、PG18 严格 integration 门禁、`TestNotificationCenterProcessRecovery`、通知组件测试 | SIGKILL 是生产循环的测试子进程，HTTP 为本地模拟器、租约 SQL 加速；完整 worker、真实回调及客户接收另验 |
-| 迁移与切换 | 旧数据、密文、队列及 checksum 是否保留？旧 schema 是否被当前候选拒绝？冻结、回退和切回是否可重复？ | 独立 PG 的 `TestNotificationCenterUpgradeFrom160`；CI 提供实际双二进制强制启动门禁；`cmd/migrate`、[迁移入口](../migration/README.md) | 合成旧夹具和正向升级不证明旧二进制降级或生产备份恢复；静态盘点只能是 E0 |
+| 统一通知 | 渠道是否独立于事件？仅绑定 Telegram 能否收到实际业务转换和提醒？扩大付款订阅是否须主动确认？付款/续费后旧提醒是否失效？退订/解绑是否阻止旧任务，未知结果是否停止重发？ | [通知契约](../notification-architecture.md)、PG18 严格 integration 门禁、`TestNotificationLifecycle*`、`TestLifecycleBusiness*`、`TestNotificationCenterProcessRecovery`、通知组件测试 | SIGKILL 是生产循环的测试子进程，HTTP 为本地模拟器、租约 SQL 加速；供应商与 NOKVM 测试边界不能替代真实交付，真实回调及客户接收另验 |
+| 迁移与切换 | 旧数据、密文、队列及 checksum 是否保留？旧 schema 是否被当前候选拒绝？既有付款订阅是否保持原范围？冻结、回退和切回是否可重复？ | 独立 PG 的 `TestNotificationCenterUpgradeFrom160`、`TestNotificationLifecycleUpgradeFrom162`；CI 提供实际双二进制强制启动门禁；`cmd/migrate`、[迁移入口](../migration/README.md) | 合成旧夹具和正向升级不证明旧二进制降级或生产备份恢复；静态盘点只能是 E0 |
 | 前端与 API | 加载、空、错误、冲突、响应式和错误码是否可见且一致？ | `npm --prefix web run lint`、`typecheck`、`test:proxy`、组件测试 | lint/typecheck 不等于浏览器或真实 API 验收 |
 | worker 与容量 | 强杀、重启、队列、锁、延迟和资源预算是否有边界？ | `./scripts/test-worker-recovery.sh`、[容量验证](../capacity.md) | 只读负载不能证明支付、写入或生产容量 |
 
