@@ -1,5 +1,7 @@
 # Supplier protocol: 魔方财务 legacy v1
 
+新增提供方按[供应商模块开发契约](architecture/supplier-module-development.md)接入。迁移 166 为专用供应商账户增加完整普通配置、schema 和逐字段命名凭据；旧魔方 API 与密文格式保留。账户身份及普通配置不可重定向，凭据仅在没有进行中或待核验任务时轮换。列表的配置状态只表示本地检查，不代表真实连接成功。待派发任务使用派发时账户配置，未知写结果保留原账户租约。
+
 `internal/supplier` exposes `Adapter` and `New(Account)`. The provider key is
 `zjmf_finance_v1`. Product identity, revision, price and upstream configuration
 remain server-side. The caller must hold a durable, per-account lease across
@@ -197,8 +199,8 @@ and sanitized errors inside that adapter. The UI reads provider metadata from
 `GET /api/v1/admin/supplier-providers`; business code has no magic provider-name
 switch. IDs currently use positive numeric handles. A provider with opaque/UUID
 IDs needs a durable provider-to-handle mapping rather than lossy parsing or
-hashing. Additional credentials require a versioned encrypted account payload;
-the current first provider uses username/password.
+hashing. Additional credentials use the account's explicit named format and
+per-field AAD; the current first provider retains username/password aliases.
 
 Capabilities reserve suspend/resume/terminate, but advertising a flag alone
 does not enable those workflows. Implement and verify the matching store,

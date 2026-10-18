@@ -58,7 +58,7 @@ func parseAppListQuery(values url.Values) (appListQuery, error) {
 	}
 	out.Category = strings.TrimSpace(values.Get("category"))
 	switch channel.Category(out.Category) {
-	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision, channel.Bot:
+	case "", channel.Payment, channel.OAuth, channel.SMS, channel.Mail, channel.Certification, channel.Provision, channel.Bot, channel.Storage:
 	default:
 		return out, fmt.Errorf("应用类别无效")
 	}
@@ -161,6 +161,9 @@ func compiledAppsPage(query appListQuery, counts []store.AppConfigurationCount) 
 			switch count.Source {
 			case "supplier":
 				item.SupplierAccountCount += count.InstanceCount
+				if compiled[k] && count.SchemaVersion > 0 && count.SchemaVersion != descriptor.SchemaVersion {
+					item.SchemaIncompatibleCount += count.InstanceCount
+				}
 			case "profile":
 				item.ProfileCount += count.InstanceCount
 			default:
@@ -199,6 +202,9 @@ func compiledAppsPage(query appListQuery, counts []store.AppConfigurationCount) 
 			item.ConfigurationURL = "/admin/suppliers"
 		case "profile":
 			item.ConfigurationURL = "/admin/products"
+			if descriptor.Category == channel.Storage {
+				item.ConfigurationURL = ""
+			}
 		}
 		item.Status = status
 		items = append(items, item)
@@ -226,6 +232,11 @@ func (s *Server) apps(w http.ResponseWriter, r *http.Request) {
 	}
 	if profiles := len(s.cfg.NOKVMProfiles); profiles > 0 {
 		counts = append(counts, store.AppConfigurationCount{Source: "profile", Category: channel.Provision, ImplementationID: "nokvm", InstanceCount: int64(profiles), EnabledInstanceCount: int64(profiles)})
+	}
+	if s.db.FileStorage != nil {
+		for _, profile := range s.db.FileStorage.Summaries() {
+			counts = append(counts, store.AppConfigurationCount{Source: "profile", Category: channel.Storage, ImplementationID: profile.Implementation, InstanceCount: 1, EnabledInstanceCount: 1})
+		}
 	}
 	page := compiledAppsPage(query, counts)
 	info, _ := debug.ReadBuildInfo()

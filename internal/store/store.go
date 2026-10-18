@@ -9,8 +9,10 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/codex/zjmfgo/db/migrations"
+	"github.com/codex/zjmfgo/internal/filestorage"
 	"github.com/codex/zjmfgo/internal/provision"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +24,10 @@ type Store struct {
 	Provisioners               map[string]*provision.NOKVM
 	ProvisionEncryptionKey     []byte
 	PurchaseFieldEncryptionKey []byte
+	FileStorage                *filestorage.Manager
+	fileJournalMu              sync.Mutex
+	fileJournalPool            *pgxpool.Pool
+	fileJournalClosed          bool
 }
 
 func Open(ctx context.Context, dsn string) (*Store, error) {
@@ -49,7 +55,19 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	}
 	return &Store{Pool: p}, nil
 }
-func (s *Store) Close() { s.Pool.Close() }
+func (s *Store) Close() {
+	s.fileJournalMu.Lock()
+	s.fileJournalClosed = true
+	journal := s.fileJournalPool
+	s.fileJournalPool = nil
+	s.fileJournalMu.Unlock()
+	if journal != nil {
+		journal.Close()
+	}
+	if s.Pool != nil {
+		s.Pool.Close()
+	}
+}
 
 func (s *Store) Migrate(ctx context.Context) error {
 	return s.WithTx(ctx, func(tx pgx.Tx) error {

@@ -85,15 +85,19 @@ func (s *Store) SyncSupplierHost(ctx context.Context, in SupplierHostSyncInput) 
 	}
 	return s.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		var mode, existing, current, snapshotSupplier string
+		var mode, existing, current, accountProvider, bindingProvider string
+		var snapshot []byte
+		var saved supplierSnapshot
 		var supplierID, upstreamProductID int64
-		if err = tx.QueryRow(ctx, `SELECT s.provision_mode,s.upstream_id,s.status,coalesce(s.delivery_snapshot->>'supplier_id',''),
- b.supplier_id,b.upstream_product_id
- FROM services s JOIN supplier_product_bindings b ON b.product_id=s.product_id
- WHERE s.id=$1 FOR UPDATE`, serviceID).Scan(&mode, &existing, &current, &snapshotSupplier, &supplierID, &upstreamProductID); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT s.provision_mode,s.upstream_id,s.status,s.delivery_snapshot,
+ b.supplier_id,b.upstream_product_id,a.provider,b.provider
+ FROM services s JOIN supplier_product_bindings b ON b.id::text=s.delivery_snapshot->>'binding_id'
+ AND b.supplier_id::text=s.delivery_snapshot->>'supplier_id'
+ JOIN supplier_accounts a ON a.id=b.supplier_id
+ WHERE s.id=$1 FOR UPDATE OF s FOR SHARE OF a,b`, serviceID).Scan(&mode, &existing, &current, &snapshot, &supplierID, &upstreamProductID, &accountProvider, &bindingProvider); err != nil {
 			return err
 		}
-		if mode != "supplier" || snapshotSupplier != strconv.FormatInt(supplierID, 10) {
+		if json.Unmarshal(snapshot, &saved) != nil || mode != "supplier" || saved.SupplierID != supplierID || saved.BindingID < 1 || saved.Provider != supplier.ProviderZJMF || accountProvider != saved.Provider || bindingProvider != saved.Provider {
 			return conflict("supplier_callback_invalid", "服务供应商绑定无效")
 		}
 		if existing != "" && existing != strconv.FormatInt(hostID, 10) {

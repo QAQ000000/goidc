@@ -187,6 +187,76 @@
       }
     },
     {
+      "id": "supplier-runtime",
+      "contract": "docs/architecture/supplier-module-development.md",
+      "implementation": [
+        "internal/supplier",
+        "internal/store/supplier_configuration.go",
+        "internal/store/suppliers.go",
+        "internal/httpapi/suppliers.go",
+        "db/migrations/166_supplier_configuration_contract.sql",
+        "web/src/components/suppliers-admin.tsx"
+      ],
+      "tests": [
+        "node scripts/test-compiled-suppliers.mjs --unit",
+        "node scripts/test-compiled-suppliers.mjs --integration",
+        "node --test scripts/supplier-components.test.mjs"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL 18 with exact required run/pass and zero skips; test-only second provider, immutable identity, named credentials, real delivery/renewal/unknown outcomes, production worker SIGKILL and genuine schema165 upgrade",
+        "real browser and external supplier account, financial settlement, callback and deployment require separate acceptance"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "supplier",
+          "store",
+          "httpapi",
+          "web"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-supplier-protocol"
+      }
+    },
+    {
+      "id": "file-storage",
+      "contract": "docs/architecture/file-storage.md",
+      "implementation": [
+        "internal/filestorage",
+        "internal/config/file_storage.go",
+        "internal/store/file_storage.go",
+        "db/migrations/167_file_storage.sql",
+        "internal/httpapi/downloads.go",
+        "internal/httpapi/customer_files.go",
+        "internal/httpapi/tickets.go",
+        "internal/httpapi/content_images.go",
+        "internal/httpapi/invoice_applications.go"
+      ],
+      "tests": [
+        "node scripts/test-file-storage.mjs --unit",
+        "node scripts/test-file-storage.mjs --integration"
+      ],
+      "evaluation": [
+        "isolated PostgreSQL 18 with exact required run/pass and zero skips; private local/S3 protocol simulation, five API domains, historical inline bytes, authorization, Range, durable unknown uploads, journal pool isolation, cascade release, deletion fencing and genuine schema166 upgrade",
+        "real browser, real S3/MinIO/R2 and production configuration/backup/cutover require independent acceptance; HTTP still buffers bounded complete files"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "storage",
+          "store",
+          "httpapi",
+          "worker"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-private-object-protocol"
+      }
+    },
+    {
       "id": "migration-cutover",
       "contract": "docs/legacy-migration.md",
       "implementation": [

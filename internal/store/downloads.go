@@ -98,6 +98,9 @@ func (s *Store) SaveDownload(ctx context.Context, actorID, id int64, in Download
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	if err = LockFileCredential(ctx, tx, actorID); err != nil {
+		return 0, err
+	}
 	var current int64
 	var oldSource string
 	if id != 0 {
@@ -125,21 +128,31 @@ func (s *Store) SaveDownload(ctx context.Context, actorID, id int64, in Download
 	}
 	var hash, name, mime string
 	var payload []byte
+	var objectID *string
+	var size int
 	if file != nil {
 		digest := sha256.Sum256(file.Content)
 		hash = hex.EncodeToString(digest[:])
 		name = file.Filename
 		mime = file.MIME
-		payload = file.Content
+		size = len(file.Content)
+		stored, saveErr := s.PersistFile(ctx, tx, "downloads", file.Content)
+		if saveErr != nil {
+			return 0, saveErr
+		}
+		payload, objectID = stored.Content, stored.ObjectID
+		if err = LockFileCredential(ctx, tx, actorID); err != nil {
+			return 0, err
+		}
 	}
 	if id == 0 {
-		err = tx.QueryRow(ctx, `INSERT INTO downloads(category_id,title,description,active,access_level,source_type,remote_url,filename,mime_type,size_bytes,sha256,content,author_id)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`, in.CategoryID, in.Title, in.Description, in.Active, in.AccessLevel, in.SourceType, in.RemoteURL, name, mime, len(payload), hash, payload, actorID).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO downloads(category_id,title,description,active,access_level,source_type,remote_url,filename,mime_type,size_bytes,sha256,content,author_id,storage_object_id)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`, in.CategoryID, in.Title, in.Description, in.Active, in.AccessLevel, in.SourceType, in.RemoteURL, name, mime, size, hash, payload, actorID, objectID).Scan(&id)
 	} else {
 		if in.SourceType == "local" && file == nil {
 			_, err = tx.Exec(ctx, `UPDATE downloads SET category_id=$2,title=$3,description=$4,active=$5,access_level=$6,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Description, in.Active, in.AccessLevel)
 		} else {
-			_, err = tx.Exec(ctx, `UPDATE downloads SET category_id=$2,title=$3,description=$4,active=$5,access_level=$6,source_type=$7,remote_url=$8,filename=$9,mime_type=$10,size_bytes=$11,sha256=$12,content=$13,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Description, in.Active, in.AccessLevel, in.SourceType, in.RemoteURL, name, mime, len(payload), hash, payload)
+			_, err = tx.Exec(ctx, `UPDATE downloads SET category_id=$2,title=$3,description=$4,active=$5,access_level=$6,source_type=$7,remote_url=$8,filename=$9,mime_type=$10,size_bytes=$11,sha256=$12,content=$13,storage_object_id=$14,version=version+1,updated_at=now() WHERE id=$1`, id, in.CategoryID, in.Title, in.Description, in.Active, in.AccessLevel, in.SourceType, in.RemoteURL, name, mime, size, hash, payload, objectID)
 		}
 	}
 	if err != nil {

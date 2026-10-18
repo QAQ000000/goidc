@@ -566,10 +566,11 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 	} else {
 		err = tx.QueryRow(ctx, "SELECT id FROM invoice_application_documents WHERE application_id=$1 AND adjustment_id=$2 FOR UPDATE", applicationID, adjustmentID).Scan(&id)
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id)
- VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8) RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
-	} else if err == nil {
+	creating := errors.Is(err, pgx.ErrNoRows)
+	if err != nil && !creating {
+		return 0, err
+	}
+	if !creating {
 		var currentHash string
 		if err = tx.QueryRow(ctx, "SELECT sha256 FROM invoice_application_documents WHERE id=$1", id).Scan(&currentHash); err != nil {
 			return 0, err
@@ -577,7 +578,19 @@ func (s *Store) SaveInvoiceApplicationDocument(ctx context.Context, actorID, app
 		if file.ExpectedSHA256 != currentHash {
 			return 0, conflict("stale_invoice_document", "文件已存在或已被替换，请刷新后确认覆盖")
 		}
-		_, err = tx.Exec(ctx, `UPDATE invoice_application_documents SET filename=$2,mime_type=$3,size_bytes=$4,sha256=$5,content=$6,uploader_id=$7,created_at=now() WHERE id=$1`, id, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, file.Content, actorID)
+	}
+	stored, err := s.PersistFile(ctx, tx, "invoice_application_documents", file.Content)
+	if err != nil {
+		return 0, err
+	}
+	if err = invoiceDocumentAuthorize(ctx, tx, actorID); err != nil {
+		return 0, err
+	}
+	if creating {
+		err = tx.QueryRow(ctx, `INSERT INTO invoice_application_documents(application_id,adjustment_id,filename,mime_type,size_bytes,sha256,content,uploader_id,storage_object_id)
+ VALUES($1,NULLIF($2,0),$3,$4,$5,$6,$7,$8,$9) RETURNING id`, applicationID, adjustmentID, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, stored.Content, actorID, stored.ObjectID).Scan(&id)
+	} else {
+		_, err = tx.Exec(ctx, `UPDATE invoice_application_documents SET filename=$2,mime_type=$3,size_bytes=$4,sha256=$5,content=$6,uploader_id=$7,storage_object_id=$8,created_at=now() WHERE id=$1`, id, strings.TrimSpace(file.Filename), file.MIME, len(file.Content), hash, stored.Content, actorID, stored.ObjectID)
 	}
 	if err != nil {
 		return 0, err

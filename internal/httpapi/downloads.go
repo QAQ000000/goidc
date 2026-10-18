@@ -140,7 +140,7 @@ func (s *Server) saveDownload(w http.ResponseWriter, r *http.Request) {
 	if !valid {
 		return
 	}
-	saved, err := s.db.SaveDownload(r.Context(), identityFrom(r).ID, id, in, file)
+	saved, err := s.db.SaveDownload(requestFileContext(r), identityFrom(r).ID, id, in, file)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -384,8 +384,33 @@ func (s *Server) serveDownloadFile(w http.ResponseWriter, r *http.Request, id, s
 		return
 	}
 	if source == "local" {
-		if err = tx.QueryRow(r.Context(), "SELECT content FROM downloads WHERE id=$1", id).Scan(&content); err != nil {
+		var objectID *string
+		if err = tx.QueryRow(r.Context(), "SELECT content,storage_object_id FROM downloads WHERE id=$1", id).Scan(&content, &objectID); err != nil {
 			s.fail(w, r, err)
+			return
+		}
+		content, err = s.db.ReadFileContent(r.Context(), tx, "downloads", content, objectID)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		fresh, authErr := s.publicDownloadIdentity(r, tx)
+		if authErr != nil {
+			s.fail(w, r, authErr)
+			return
+		}
+		if fresh != uid {
+			writeError(w, 401, "unauthorized", "登录已失效")
+			return
+		}
+		// Service eligibility can change while an external object read waits.
+		// Catalog locks serialize file changes, but do not lock service status.
+		if err = tx.QueryRow(r.Context(), "SELECT download_allowed($1,$2)", id, uid).Scan(&allowed); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if !allowed {
+			writeError(w, 403, "download_product_required", "需要持有指定产品的有效服务")
 			return
 		}
 	}

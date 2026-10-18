@@ -168,7 +168,7 @@ func (s *Server) saveCustomerFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-	saved, err := store.SaveCustomerFile(r.Context(), tx, uid, id, in, file)
+	saved, err := s.db.SaveCustomerFile(requestFileContext(r), tx, uid, id, in, file)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -255,8 +255,17 @@ func (s *Server) downloadCustomerFile(w http.ResponseWriter, r *http.Request) {
 	}
 	var content []byte
 	var size int64
-	if err := tx.QueryRow(r.Context(), "SELECT filename,mime_type,size_bytes,sha256,content FROM customer_files WHERE id=$1", id).Scan(&name, &mt, &size, &hash, &content); err != nil {
+	var objectID *string
+	if err := tx.QueryRow(r.Context(), "SELECT filename,mime_type,size_bytes,sha256,content,storage_object_id FROM customer_files WHERE id=$1", id).Scan(&name, &mt, &size, &hash, &content, &objectID); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	content, err := s.db.ReadFileContent(r.Context(), tx, "customer_files", content, objectID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.customerFileCredentialCurrent(w, r, tx, uid) {
 		return
 	}
 	if r.Method != "HEAD" && storedFileTransfersBytes(r, name, mt, hash, content) {

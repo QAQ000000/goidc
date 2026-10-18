@@ -5,6 +5,7 @@ package all
 
 import (
 	_ "github.com/codex/zjmfgo/internal/certification"
+	_ "github.com/codex/zjmfgo/internal/filestorage"
 	_ "github.com/codex/zjmfgo/internal/notification"
 	_ "github.com/codex/zjmfgo/internal/payment"
 	_ "github.com/codex/zjmfgo/internal/supplier"

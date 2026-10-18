@@ -11,6 +11,8 @@
     { "category": "provision", "id": "nokvm", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "profile", "factory_available": false },
     { "category": "provision", "id": "zjmf", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "supplier", "factory_available": true },
     { "category": "sms", "id": "generic_http_json", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
-    { "category": "sms", "id": "idcsmart", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true }
+    { "category": "sms", "id": "idcsmart", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "channel", "factory_available": true },
+    { "category": "storage", "id": "local", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "profile", "factory_available": true },
+    { "category": "storage", "id": "s3", "version": "builtin", "schema_version": 1, "contract_version": 1, "instance_mode": "profile", "factory_available": true }
   ]
 }

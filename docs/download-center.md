@@ -34,7 +34,7 @@
 
 本地文件限制 50 MiB，支持 txt/vcf、png/jpg/jpeg/gif、pdf、zip/rar、doc/docx/xls/xlsx/ppt/pptx、rtf、key/numbers/pages。拒绝空文件、路径型名称、控制字符、未知扩展名及内容类型不符。文本、图片、PDF 检查探测 MIME；ZIP、RAR、OLE 和 RTF 检查文件签名，不能等同于杀毒或文档结构完整性验证。
 
-文件字节保存到 PostgreSQL `bytea`，记录字节长度、SHA-256 与原始文件名。上传替换、元数据和产品关联原子提交，失败无残留文件，也没有独立暂存上传 ID。更新本地文件时不传 file 可保留原字节；远程改本地必须上传，本地改远程清空原字节/校验值/名称。替换保留下载次数。PG 备份包含文件内容；API 一次读入最大 50 MiB，当前未做大量并发下载容量验收、分段或断点续传。
+文件记录字节长度、SHA-256 与原始文件名。默认保存 PostgreSQL `bytea`；部署配置可将新上传或明确替换的文件写入私有本地目录或 S3，按固定对象引用读取，历史字节不自动搬迁。完整配置、未知上传和延迟回收规则见[应用文件存储](architecture/file-storage.md)。文件绑定、元数据、产品关联和审计原子提交；外部上传后业务失败时保留 journal，由安全回收流程处理。不传 file 保留原内容；远程改本地必须上传，本地改远程解除原内容引用，替换保留下载次数。外置后备份须包含数据库和对象。API 仍一次有界读取最大 50 MiB，保留 HEAD、条件请求及受限多段 Range；大量并发下载容量尚未验收。
 
 附件响应强制 `Content-Disposition: attachment`、UTF-8 文件名、nosniff 和 no-store，不在前端内联执行。浏览器按实际响应文件名保存，避免列表加载后被替换时继续使用旧名称。Next 配置请求缓冲上限 52 MiB；API 总 multipart 上限 50 MiB+256 KiB，metadata 最大 128 KiB。实际 11 MiB 文件已经通过 Next 生产预览上传和下载校验。
 

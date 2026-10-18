@@ -64,6 +64,10 @@ func LockCustomerFileOwners(ctx context.Context, tx pgx.Tx, actorID int64, owner
 	return nil
 }
 func SaveCustomerFile(ctx context.Context, tx pgx.Tx, actorID, id int64, in CustomerFileInput, file *DownloadFile) (int64, error) {
+	return (&Store{}).SaveCustomerFile(ctx, tx, actorID, id, in, file)
+}
+
+func (s *Store) SaveCustomerFile(ctx context.Context, tx pgx.Tx, actorID, id int64, in CustomerFileInput, file *DownloadFile) (int64, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Remarks = strings.TrimSpace(in.Remarks)
 	if in.CustomerID < 1 || in.Title == "" || !contentTextValid(in.Title, 255, false) || !contentTextValid(in.Remarks, 10000, true) {
@@ -92,21 +96,30 @@ func SaveCustomerFile(ctx context.Context, tx pgx.Tx, actorID, id int64, in Cust
 		return 0, conflict("download_file_required", "请选择上传文件")
 	}
 	var hash string
+	var stored FilePayload
 	if file != nil {
 		digest := sha256.Sum256(file.Content)
 		hash = hex.EncodeToString(digest[:])
+		var err error
+		stored, err = s.PersistFile(ctx, tx, "customer_files", file.Content)
+		if err != nil {
+			return 0, err
+		}
+		if err = LockFileCredential(ctx, tx, actorID); err != nil {
+			return 0, err
+		}
 	}
 	var err error
 	action := "customer_file.created"
 	if id == 0 {
-		err = tx.QueryRow(ctx, `INSERT INTO customer_files(customer_id,title,remarks,filename,mime_type,size_bytes,sha256,content,uploader_id)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, in.CustomerID, in.Title, in.Remarks, file.Filename, file.MIME, len(file.Content), hash, file.Content, actorID).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO customer_files(customer_id,title,remarks,filename,mime_type,size_bytes,sha256,content,uploader_id,storage_object_id)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, in.CustomerID, in.Title, in.Remarks, file.Filename, file.MIME, len(file.Content), hash, stored.Content, actorID, stored.ObjectID).Scan(&id)
 	} else {
 		action = "customer_file.updated"
 		if file == nil {
 			_, err = tx.Exec(ctx, "UPDATE customer_files SET customer_id=$2,title=$3,remarks=$4,version=version+1,updated_at=now() WHERE id=$1", id, in.CustomerID, in.Title, in.Remarks)
 		} else {
-			_, err = tx.Exec(ctx, `UPDATE customer_files SET customer_id=$2,title=$3,remarks=$4,filename=$5,mime_type=$6,size_bytes=$7,sha256=$8,content=$9,uploader_id=$10,version=version+1,updated_at=now() WHERE id=$1`, id, in.CustomerID, in.Title, in.Remarks, file.Filename, file.MIME, len(file.Content), hash, file.Content, actorID)
+			_, err = tx.Exec(ctx, `UPDATE customer_files SET customer_id=$2,title=$3,remarks=$4,filename=$5,mime_type=$6,size_bytes=$7,sha256=$8,content=$9,uploader_id=$10,storage_object_id=$11,version=version+1,updated_at=now() WHERE id=$1`, id, in.CustomerID, in.Title, in.Remarks, file.Filename, file.MIME, len(file.Content), hash, stored.Content, actorID, stored.ObjectID)
 		}
 	}
 	if err != nil {

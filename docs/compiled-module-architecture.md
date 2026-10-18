@@ -6,7 +6,7 @@
 
 ## 当前装配与构建核验
 
-`internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification 和 supplier。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 9 个模块，含 Telegram Bot；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)。
+`internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification、supplier 和 filestorage。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 11 个模块，含 Telegram Bot 和本地/S3 文件存储；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)，文件存储见[应用文件存储契约](architecture/file-storage.md)。
 
 程序可在读取环境变量、连接数据库之前输出公共模块清单：
 
@@ -68,7 +68,7 @@
 | bot | Telegram 私聊作为通用业务通知渠道，按事件路由、有效绑定和显式订阅范围分发；未知结果停止自动重发 |
 | payment | 方式/类型化工厂与回调协议统一注册，实例配置和交易凭据快照驱动运行；生产仍为 mock/epay，接入规则见[支付模块开发契约](architecture/payment-module-development.md) |
 | certification | 类型化实例工厂、申请配置快照与持久提交/查询；生产只装配人工审核，真实厂商另验，见[实名认证契约](domain/certification.md) |
-| provision | 魔方使用 `supplier_accounts`；NOKVM 使用部署 profile，不能在通用渠道目录创建平行账户 |
+| provision | 供应商使用 `supplier_accounts` 的完整普通配置、命名凭据与 schema，运行解析和后台字段共享定义；NOKVM 保留部署 profile，接入见[供应商模块开发契约](architecture/supplier-module-development.md) |
 
 `RuntimeChannelInstance` 使用单行快照解析普通实例，校验启用、工厂、实例来源、schema 和本地配置，再解密凭据。默认渠道保留部署配置和旧 singleton 兼容，但不允许以默认入口绕过 schema 检查。历史支付继续使用交易凭据快照，不因新实例停用而改写既有交易身份。
 

@@ -109,9 +109,9 @@ func TestSupplierWorkerSIGKILLRecovery(t *testing.T) {
 			}))
 			t.Cleanup(remote.Close)
 			t.Cleanup(func() { close(release) })
-			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE supplier_accounts SET base_url=$2 WHERE id=$1", f.supplierID, remote.URL); err != nil {
-				t.Fatal(err)
-			}
+			// Route this disposable fixture through the response-withholding proxy;
+			// the ordinary configuration API cannot retarget an existing account.
+			supplierFixtureIdentityWrite(t, f.db, "UPDATE supplier_accounts SET base_url=$2,config=jsonb_set(config,'{endpoint}',to_jsonb($2::text)),identity_key='' WHERE id=$1", f.supplierID, remote.URL)
 			scoped := *base
 			q := scoped.Query()
 			schema := f.db.Pool.Config().ConnConfig.RuntimeParams["search_path"]

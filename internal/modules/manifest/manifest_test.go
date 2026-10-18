@@ -23,7 +23,7 @@ func TestDefaultProfileMatchesCompiledModules(t *testing.T) {
 		t.Fatal(err)
 	}
 	api, worker := Current("api"), Current("worker")
-	if len(api.Modules) != 9 || api.Modules[0].Category != "bot" || api.Modules[0].ID != "telegram_bot" || !api.Modules[0].FactoryAvailable {
+	if len(api.Modules) != 11 || api.Modules[0].Category != "bot" || api.Modules[0].ID != "telegram_bot" || !api.Modules[0].FactoryAvailable {
 		t.Fatalf("default Telegram assembly missing: %+v", api.Modules)
 	}
 	if api.Profile != profile.Profile || api.ContractVersion != profile.ContractVersion || !reflect.DeepEqual(api.Modules, worker.Modules) {

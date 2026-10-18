@@ -16,6 +16,10 @@ type Account struct {
 	BaseURL  string `json:"base_url"`
 	Username string `json:"username"`
 	Password string `json:"-"`
+	// Values and Secrets are runtime configuration, never public account DTOs.
+	Values        map[string]any    `json:"-"`
+	Secrets       map[string]string `json:"-"`
+	SchemaVersion int               `json:"-"`
 }
 
 type Price struct {
@@ -82,6 +86,13 @@ type Provider struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"`
 	Capabilities Capabilities `json:"capabilities"`
+	// IdentityFields identify the upstream account independently of rotating
+	// credentials and optional transport settings. They must be required,
+	// non-secret configuration fields.
+	IdentityFields []string `json:"identity_fields,omitempty"`
+	// NormalizeConfig canonicalizes equivalent public account identities. It
+	// must be pure local code and receives no credentials.
+	NormalizeConfig func(map[string]any) (map[string]any, error) `json:"-"`
 }
 
 type CreateRequest struct {

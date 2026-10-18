@@ -320,19 +320,52 @@ func (s *Server) uploadTicketAttachment(w http.ResponseWriter, r *http.Request) 
 	digest := sha256.Sum256(content)
 	hash := hex.EncodeToString(digest[:])
 	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		var ownerID int64
-		var status string
-		if err = tx.QueryRow(r.Context(), "SELECT user_id,status FROM tickets WHERE id=$1 AND merged_ticket_id IS NULL AND (($2::boolean AND admin_ticket_department_allowed($3,department_id)) OR (user_id=$3 AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=department_id),true))) FOR UPDATE", id, isAdmin(r), identityFrom(r).ID).Scan(&ownerID, &status); err != nil {
+		if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
 			return txResponse{}, err
 		}
-		if status == "closed" {
-			return txResponse{}, &txHTTPError{409, "ticket_closed", "工单已关闭"}
+		actorID := identityFrom(r).ID
+		var ownerID int64
+		var status string
+		const scope = `SELECT t.user_id,t.status FROM tickets t JOIN users u ON u.id=$2 LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id
+WHERE t.id=$1 AND t.merged_ticket_id IS NULL AND u.status='active' AND (
+ ((u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions) AND 'tickets.manage'=ANY(ar.permissions)))
+  AND admin_ticket_department_allowed(u.id,t.department_id)) OR
+ (u.role='customer' AND t.user_id=u.id AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true))) FOR UPDATE OF t`
+		authorize := func() error {
+			current, err := s.publicDownloadIdentity(r, tx)
+			if err != nil {
+				return err
+			}
+			if current != actorID {
+				return &txHTTPError{401, "unauthorized", "登录已失效，请重新登录"}
+			}
+			if err = tx.QueryRow(r.Context(), scope, id, actorID).Scan(&ownerID, &status); err != nil {
+				return err
+			}
+			if status == "closed" {
+				return &txHTTPError{409, "ticket_closed", "工单已关闭"}
+			}
+			return nil
+		}
+		if err := authorize(); err != nil {
+			return txResponse{}, err
 		}
 		var attachmentID int64
 		var createdAt any
-		if err = tx.QueryRow(r.Context(), `INSERT INTO ticket_attachments(ticket_id,uploader_id,filename,mime_type,size_bytes,sha256,content)
-VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,created_at`, id, identityFrom(r).ID, name, mimeType, len(content), hash, content).Scan(&attachmentID, &createdAt); err != nil {
+		stored, err := s.db.PersistFile(requestFileContext(r), tx, "ticket_attachments", content)
+		if err != nil {
+			return txResponse{}, err
+		}
+		if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
+			return txResponse{}, err
+		}
+		// PersistFile can wait on local or remote I/O. Recheck the current actor
+		// and ticket scope instead of reusing the middleware's role snapshot.
+		if err = authorize(); err != nil {
+			return txResponse{}, err
+		}
+		if err = tx.QueryRow(r.Context(), `INSERT INTO ticket_attachments(ticket_id,uploader_id,filename,mime_type,size_bytes,sha256,content,storage_object_id)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,created_at`, id, identityFrom(r).ID, name, mimeType, len(content), hash, stored.Content, stored.ObjectID).Scan(&attachmentID, &createdAt); err != nil {
 			return txResponse{}, err
 		}
 		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.attachment.uploaded", "ticket_attachment", attachmentID, map[string]any{"ticket_id": id, "filename": name, "mime_type": mimeType, "size_bytes": len(content), "sha256": hash, "customer_id": ownerID}); err != nil {
@@ -344,6 +377,7 @@ VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,created_at`, id, identityFrom(r).ID, n
 }
 
 func (s *Server) downloadTicketAttachment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, no-store")
 	ticketID, ok := pathID(w, r)
 	if !ok {
 		return
@@ -355,16 +389,53 @@ func (s *Server) downloadTicketAttachment(w http.ResponseWriter, r *http.Request
 	var name, mimeType string
 	var size int64
 	var content []byte
+	var objectID *string
 	tx, err := s.db.Pool.Begin(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	defer tx.Rollback(r.Context())
-	err = tx.QueryRow(r.Context(), `SELECT a.filename,a.mime_type,a.size_bytes,a.content FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id
-WHERE a.id=$1 AND a.ticket_id=$2 AND t.merged_ticket_id IS NULL AND (($3::boolean AND admin_ticket_department_allowed($4,t.department_id)) OR (t.user_id=$4 AND a.note_id IS NULL AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true)))`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&name, &mimeType, &size, &content)
+	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	const scope = ` FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id
+WHERE a.id=$1 AND a.ticket_id=$2 AND t.merged_ticket_id IS NULL AND (($3::boolean AND admin_ticket_department_allowed($4,t.department_id)
+ AND EXISTS(SELECT 1 FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id WHERE u.id=$4 AND u.status='active'
+ AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions)))))
+ OR (t.user_id=$4 AND a.note_id IS NULL AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true)))`
+	// Merge and upload lock the parent first. Do not let a joined row-lock
+	// plan acquire an attachment before its parent and invert that order.
+	var parentID int64
+	if err = tx.QueryRow(r.Context(), `SELECT t.id`+scope+` FOR SHARE OF t`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&parentID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	err = tx.QueryRow(r.Context(), `SELECT a.filename,a.mime_type,a.size_bytes,a.content,a.storage_object_id`+scope+` FOR SHARE OF a`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&name, &mimeType, &size, &content, &objectID)
 	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	content, err = s.db.ReadFileContent(r.Context(), tx, "ticket_attachments", content, objectID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.customerFileCredentialCurrent(w, r, tx, identityFrom(r).ID) {
+		return
+	}
+	var allowed bool
+	if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1`+scope+`)`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&allowed); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !allowed {
+		writeError(w, 404, "not_found", "附件不存在或当前账户无法访问")
 		return
 	}
 	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.attachment.downloaded", "ticket_attachment", attachment, map[string]any{"ticket_id": ticketID, "filename": name, "size_bytes": size}); err != nil {
@@ -396,8 +467,12 @@ func (s *Server) deleteTicketAttachment(w http.ResponseWriter, r *http.Request) 
 		var err error
 		var ownerID, uploaderID int64
 		var name string
-		if err = tx.QueryRow(r.Context(), `SELECT t.user_id,a.uploader_id,a.filename FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id
-WHERE a.id=$1 AND a.ticket_id=$2 AND t.merged_ticket_id IS NULL AND (($3::boolean AND admin_ticket_department_allowed($4,t.department_id)) OR (t.user_id=$4 AND a.note_id IS NULL AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true))) FOR UPDATE`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&ownerID, &uploaderID, &name); err != nil {
+		const scope = ` FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id
+WHERE a.id=$1 AND a.ticket_id=$2 AND t.merged_ticket_id IS NULL AND (($3::boolean AND admin_ticket_department_allowed($4,t.department_id)) OR (t.user_id=$4 AND a.note_id IS NULL AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true)))`
+		if err = tx.QueryRow(r.Context(), `SELECT t.user_id`+scope+` FOR UPDATE OF t`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&ownerID); err != nil {
+			return txResponse{}, err
+		}
+		if err = tx.QueryRow(r.Context(), `SELECT t.user_id,a.uploader_id,a.filename`+scope+` FOR UPDATE OF a`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&ownerID, &uploaderID, &name); err != nil {
 			return txResponse{}, err
 		}
 		if _, err = tx.Exec(r.Context(), "DELETE FROM ticket_attachments WHERE id=$1", attachment); err != nil {

@@ -1,11 +1,13 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
 
+	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -30,7 +32,7 @@ func lifecycleBusinessFixture(t *testing.T) notificationFixture {
 
 func lifecycleCheckout(t *testing.T, f notificationFixture, quantity int, deliverySnapshot ...string) (CheckoutResult, int64) {
 	t.Helper()
-	var product, item int64
+	var product int64
 	f.exec(t, `INSERT INTO products(name,slug,price_cents,billing_cycle,provision_mode,approval_required)
  VALUES('Lifecycle product','lifecycle-product',1000,'monthly','simulation',false)`)
 	if err := f.db.Pool.QueryRow(f.ctx, `SELECT id FROM products WHERE slug='lifecycle-product'`).Scan(&product); err != nil {
@@ -39,6 +41,12 @@ func lifecycleCheckout(t *testing.T, f notificationFixture, quantity int, delive
 	if len(deliverySnapshot) > 0 {
 		f.exec(t, `UPDATE products SET delivery_config=$2::jsonb WHERE id=$1`, product, deliverySnapshot[0])
 	}
+	return lifecycleCheckoutProduct(t, f, quantity, product)
+}
+
+func lifecycleCheckoutProduct(t *testing.T, f notificationFixture, quantity int, product int64) (CheckoutResult, int64) {
+	t.Helper()
+	var item int64
 	f.exec(t, `INSERT INTO carts(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING`, f.customer)
 	if err := f.db.Pool.QueryRow(f.ctx, `INSERT INTO cart_items(cart_id,product_id,quantity,product_revision,billing_cycle)
  SELECT c.id,p.id,$3,p.revision,'monthly' FROM carts c CROSS JOIN products p WHERE c.user_id=$1 AND p.id=$2 RETURNING id`, f.customer, product, quantity).Scan(&item); err != nil {
@@ -283,16 +291,34 @@ func TestLifecycleBusinessManualDeliveryAndNOKVMResults(t *testing.T) {
 
 func TestLifecycleBusinessSupplierCallbackConfirmsActualStateOnce(t *testing.T) {
 	f := lifecycleBusinessFixture(t)
-	var supplierID, productID int64
-	if err := f.db.Pool.QueryRow(f.ctx, `INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted) VALUES('Lifecycle fixture','fixture','https://supplier.example.test','fixture',''::bytea) RETURNING id`).Scan(&supplierID); err != nil {
+	var supplierID, productID, bindingID int64
+	if err := f.db.Pool.QueryRow(f.ctx, `INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,config) VALUES('Lifecycle fixture',$1,'https://supplier.example.test','fixture',''::bytea,'{"endpoint":"https://supplier.example.test","username":"fixture"}') RETURNING id`, supplier.ProviderZJMF).Scan(&supplierID); err != nil {
 		t.Fatal(err)
 	}
-	_, service := lifecycleCheckout(t, f, 1, fmt.Sprintf(`{"supplier_id":"%d"}`, supplierID))
-	if err := f.db.Pool.QueryRow(f.ctx, `SELECT product_id FROM services WHERE id=$1`, service).Scan(&productID); err != nil {
+	sealed, err := supplierSeal(f.db.ProvisionEncryptionKey, "account", supplierID, "lifecycle-fixture-private")
+	if err != nil {
 		t.Fatal(err)
 	}
-	f.exec(t, `INSERT INTO supplier_product_bindings(product_id,supplier_id,provider,upstream_product_id,upstream_revision,billing_cycle,currency,maximum_cost_cents,custom_fields_encrypted) VALUES($1,$2,'fixture',7,'fixture','monthly','CNY',1000,''::bytea)`, productID, supplierID)
-	f.exec(t, `UPDATE services SET provision_mode='supplier',status='provisioning' WHERE id=$1`, service)
+	f.exec(t, `UPDATE supplier_accounts SET credentials_encrypted=$2 WHERE id=$1`, supplierID, sealed)
+	if err = f.db.Pool.QueryRow(f.ctx, `INSERT INTO products(name,slug,price_cents,billing_cycle,provision_mode,approval_required) VALUES('Lifecycle supplier product','lifecycle-supplier-product',1000,'monthly','manual',false) RETURNING id`).Scan(&productID); err != nil {
+		t.Fatal(err)
+	}
+	fields, err := supplierSeal(f.db.ProvisionEncryptionKey, "binding-fields", productID, map[int64]string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.db.Pool.QueryRow(f.ctx, `INSERT INTO supplier_product_bindings(product_id,supplier_id,provider,upstream_product_id,upstream_revision,billing_cycle,currency,maximum_cost_cents,custom_fields_encrypted) VALUES($1,$2,$3,7,'fixture','monthly','CNY',1000,$4) RETURNING id`, productID, supplierID, supplier.ProviderZJMF, fields).Scan(&bindingID); err != nil {
+		t.Fatal(err)
+	}
+	// The callback protocol is owned by ZJMF and resolves the immutable checkout
+	// snapshot, including its exact binding, rather than the current product.
+	snapshot, err := json.Marshal(supplierSnapshot{SupplierID: supplierID, BindingID: bindingID, Provider: supplier.ProviderZJMF})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.exec(t, `UPDATE products SET provision_mode='supplier',delivery_config=$2::jsonb WHERE id=$1`, productID, snapshot)
+	_, service := lifecycleCheckoutProduct(t, f, 1, productID)
+	f.exec(t, `UPDATE services SET status='provisioning' WHERE id=$1`, service)
 	for _, status := range []string{"Active", "Active", "Suspended", "Suspended", "Active", "Terminated", "Terminated"} {
 		input := SupplierHostSyncInput{ID: fmt.Sprint(service), HostID: "42", DomainStatus: status, RandStr: "fixture-random"}
 		input.Signature = supplierCallbackSignature(input.ID, supplierDownstreamToken(f.db.ProvisionEncryptionKey, service), input.RandStr)

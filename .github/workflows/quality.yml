@@ -68,6 +68,8 @@ jobs:
           node scripts/test-compiled-notifications.mjs --unit
           node scripts/test-compiled-certification.mjs --unit
           node scripts/test-compiled-payments.mjs --unit
+          node scripts/test-compiled-suppliers.mjs --unit
+          node scripts/test-file-storage.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
         run: node scripts/check-module-binaries.mjs
@@ -85,6 +87,7 @@ jobs:
           node --test scripts/site-theme.test.mjs
           node --test scripts/certification-components.test.mjs
           node --test scripts/payment-reconciliation-components.test.mjs
+          node --test scripts/supplier-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
@@ -127,7 +130,7 @@ jobs:
             --env POSTGRES_USER=goidc_ci \
             --env POSTGRES_PASSWORD=goidc_ci_fixture \
             --env POSTGRES_DB=goidc_ci_test \
-            postgres:18 postgres -c listen_addresses=127.0.0.1 -c port=15432
+            postgres:18 postgres -c listen_addresses=127.0.0.1 -c port=15432 -c max_locks_per_transaction=1024
           for attempt in $(seq 1 60); do
             if docker exec "$ci_pg_container" pg_isready -h 127.0.0.1 -p 15432 -U goidc_ci -d goidc_ci_test; then
               docker exec --env PGPASSWORD=goidc_ci_fixture "$ci_pg_container" psql -X -h 127.0.0.1 -p 15432 -U goidc_ci -d goidc_ci_test \
@@ -157,6 +160,12 @@ jobs:
 
       - name: Require payment runtime and historical financial compatibility on PostgreSQL 18
         run: node scripts/test-compiled-payments.mjs --integration
+
+      - name: Require supplier configuration, delivery and recovery on PostgreSQL 18
+        run: node scripts/test-compiled-suppliers.mjs --integration
+
+      - name: Require file storage compatibility, authorization and recovery on PostgreSQL 18
+        run: node scripts/test-file-storage.mjs --integration
 
       - name: Remove the dedicated PostgreSQL container and its volumes
         if: always()

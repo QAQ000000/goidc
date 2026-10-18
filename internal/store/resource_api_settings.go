@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
@@ -173,21 +174,27 @@ RETURNING enabled,require_certification,require_verified_phone,version,updated_a
 }
 
 type SupplierAccountSummary struct {
-	ID                    int64  `json:"id"`
-	Name                  string `json:"name"`
-	Provider              string `json:"provider"`
-	BaseURL               string `json:"base_url"`
-	Username              string `json:"username"`
-	Active                bool   `json:"active"`
-	Version               int64  `json:"version"`
-	CredentialsConfigured bool   `json:"credentials_configured"`
-	ProductCount          int64  `json:"product_count"`
-	RunningJobID          *int64 `json:"running_job_id,omitempty"`
+	ID                    int64                     `json:"id"`
+	Name                  string                    `json:"name"`
+	Provider              string                    `json:"provider"`
+	BaseURL               string                    `json:"base_url"`
+	Username              string                    `json:"username"`
+	Active                bool                      `json:"active"`
+	Version               int64                     `json:"version"`
+	CredentialsConfigured bool                      `json:"credentials_configured"`
+	ProductCount          int64                     `json:"product_count"`
+	RunningJobID          *int64                    `json:"running_job_id,omitempty"`
+	BlockedJobID          *int64                    `json:"blocked_job_id"`
+	Config                map[string]any            `json:"config"`
+	SchemaVersion         int                       `json:"schema_version"`
+	SecureFields          map[string]bool           `json:"secure_fields"`
+	FactoryAvailable      bool                      `json:"factory_available"`
+	ConfigurationStatus   string                    `json:"configuration_status"`
+	ConfigurationErrors   []channel.ValidationError `json:"configuration_errors,omitempty"`
 }
 
 func (s *Store) SupplierAccountSummaries(ctx context.Context) ([]SupplierAccountSummary, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT a.id,a.name,a.provider,a.base_url,a.username,a.active,a.version,
-octet_length(a.credentials_encrypted)>0,(SELECT count(*) FROM supplier_product_bindings b WHERE b.supplier_id=a.id),a.running_job_id
+	rows, err := s.Pool.Query(ctx, "SELECT "+supplierAccountColumns+`,(SELECT count(*) FROM supplier_product_bindings b WHERE b.supplier_id=a.id)
 FROM supplier_accounts a ORDER BY a.id`)
 	if err != nil {
 		return nil, err
@@ -195,10 +202,13 @@ FROM supplier_accounts a ORDER BY a.id`)
 	defer rows.Close()
 	result := []SupplierAccountSummary{}
 	for rows.Next() {
-		var item SupplierAccountSummary
-		if err = rows.Scan(&item.ID, &item.Name, &item.Provider, &item.BaseURL, &item.Username, &item.Active, &item.Version, &item.CredentialsConfigured, &item.ProductCount, &item.RunningJobID); err != nil {
-			return nil, err
+		var count int64
+		rec, e := scanSupplierAccount(rows, &count)
+		if e != nil {
+			return nil, e
 		}
+		item := describeSupplierAccount(rec)
+		item.ProductCount = count
 		result = append(result, item)
 	}
 	return result, rows.Err()
@@ -219,10 +229,14 @@ type SupplierConnectionResult struct {
 // TestSupplierConnection performs a read-only upstream catalogue request. No
 // database transaction remains open while the remote supplier is contacted.
 func (s *Store) TestSupplierConnection(ctx context.Context, actor int64, sessionHash string, supplierID, expectedVersion int64, key string) (SupplierConnectionResult, error) {
+	return s.TestSupplierConnectionSchema(ctx, actor, sessionHash, supplierID, expectedVersion, 0, key)
+}
+
+func (s *Store) TestSupplierConnectionSchema(ctx context.Context, actor int64, sessionHash string, supplierID, expectedVersion int64, expectedSchemaVersion int, key string) (SupplierConnectionResult, error) {
 	if supplierID < 1 || expectedVersion < 1 || len(key) < 8 || len(key) > 128 {
 		return SupplierConnectionResult{}, conflict("invalid_supplier_test", "供应商编号、版本或幂等键无效")
 	}
-	requestHashBytes := sha256.Sum256([]byte(fmt.Sprintf("supplier.connection_test:%d:%d", supplierID, expectedVersion)))
+	requestHashBytes := sha256.Sum256([]byte(fmt.Sprintf("supplier.connection_test:%d:%d:%d", supplierID, expectedVersion, expectedSchemaVersion)))
 	requestHash := hex.EncodeToString(requestHashBytes[:])
 	// Verify the write-capable admin grant before reading encrypted credentials
 	// or contacting the upstream. The reservation transaction rechecks it again;
@@ -257,28 +271,28 @@ func (s *Store) TestSupplierConnection(ctx context.Context, actor int64, session
 		result.Replayed = true
 		return result, tx.Commit(ctx)
 	}
-	var account supplier.Account
-	var sealed []byte
-	var active bool
-	var version int64
-	if err = tx.QueryRow(ctx, `SELECT id,provider,base_url,username,credentials_encrypted,active,version
-FROM supplier_accounts WHERE id=$1 FOR SHARE`, supplierID).Scan(&account.ID, &account.Provider, &account.BaseURL, &account.Username, &sealed, &active, &version); err != nil {
+	rec, err := scanSupplierAccount(tx.QueryRow(ctx, "SELECT "+supplierAccountColumns+" FROM supplier_accounts a WHERE a.id=$1 FOR SHARE", supplierID))
+	if err != nil {
 		return SupplierConnectionResult{}, err
 	}
+	if err = resourceAPIManagerCheck(ctx, tx, actor, sessionHash); err != nil {
+		return SupplierConnectionResult{}, err
+	}
+	version := rec.item.Version
 	if version != expectedVersion {
 		return SupplierConnectionResult{}, conflict("version_conflict", "供应商配置已变更，请重新加载")
 	}
-	if !active {
-		return SupplierConnectionResult{}, conflict("supplier_disabled", "供应商已停用")
+	if expectedSchemaVersion != 0 && expectedSchemaVersion != rec.item.SchemaVersion {
+		return SupplierConnectionResult{}, conflict("supplier_schema_incompatible", "供应商配置定义已变更，请重新加载")
 	}
-	if err = supplierUnseal(s.ProvisionEncryptionKey, "account", supplierID, sealed, &account.Password); err != nil {
-		return SupplierConnectionResult{}, err
-	}
-	adapter, adapterErr := supplier.New(account)
+	adapter, adapterErr := s.supplierAdapterRecord(ctx, tx, rec)
 	if adapterErr != nil {
-		return SupplierConnectionResult{}, conflict("invalid_supplier", "供应商配置无效，请检查接口配置")
+		return SupplierConnectionResult{}, adapterErr
 	}
-	pending := SupplierConnectionResult{SupplierID: supplierID, Provider: account.Provider, Message: "测试进行中"}
+	if !adapter.Capabilities().Catalog {
+		return SupplierConnectionResult{}, conflict("supplier_capability_unsupported", "此供应商不提供只读商品目录连接测试")
+	}
+	pending := SupplierConnectionResult{SupplierID: supplierID, Provider: rec.item.Provider, Message: "测试进行中"}
 	if err = SaveOperation(ctx, tx, actor, "admin:supplier.connection_test", key, requestHash, pending); err != nil {
 		return SupplierConnectionResult{}, err
 	}
@@ -293,7 +307,7 @@ FROM supplier_accounts WHERE id=$1 FOR SHARE`, supplierID).Scan(&account.ID, &ac
 	probeCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	products, probeErr := adapter.Catalog(probeCtx)
 	cancel()
-	result = SupplierConnectionResult{SupplierID: supplierID, Provider: account.Provider, ProductCount: len(products), Capabilities: adapter.Capabilities(), CheckedAt: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds()}
+	result = SupplierConnectionResult{SupplierID: supplierID, Provider: rec.item.Provider, ProductCount: len(products), Capabilities: adapter.Capabilities(), CheckedAt: time.Now().UTC(), DurationMS: time.Since(started).Milliseconds()}
 	if probeErr == nil {
 		result.OK, result.Message = true, "连接成功"
 	} else {

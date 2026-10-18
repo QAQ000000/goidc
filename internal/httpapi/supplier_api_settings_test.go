@@ -18,8 +18,19 @@ func TestSupplierAPISettingsSchemaPermissionsAndConnectionProbe(t *testing.T) {
 	expect(t, settings, 200)
 	body := data(t, settings)
 	providers, ok := body["providers"].([]any)
-	if !ok || len(providers) != 1 {
+	if !ok || len(providers) == 0 {
 		t.Fatalf("compiled supplier descriptors missing: %#v", body["providers"])
+	}
+	foundBuiltin := false
+	for _, value := range providers {
+		definition := value.(map[string]any)
+		if definition["provider"].(map[string]any)["id"] == supplier.ProviderZJMF {
+			descriptor := definition["descriptor"].(map[string]any)
+			foundBuiltin = descriptor["instance_mode"] == "supplier" && descriptor["schema_version"] == float64(1) && len(descriptor["fields"].([]any)) == 3
+		}
+	}
+	if !foundBuiltin {
+		t.Fatal("builtin supplier schema missing or changed")
 	}
 	accounts, ok := body["accounts"].([]any)
 	if !ok || len(accounts) != 1 {

@@ -408,7 +408,13 @@ func (s *Server) invoiceApplicationDocumentFile(w http.ResponseWriter, r *http.R
 		return
 	}
 	// Load the currently stored file after authorization-related waits.
-	if err = tx.QueryRow(r.Context(), "SELECT filename,mime_type,sha256,content FROM invoice_application_documents WHERE id=$1 AND application_id=$2 FOR UPDATE", docID, appID).Scan(&name, &mt, &hash, &content); err != nil {
+	var objectID *string
+	if err = tx.QueryRow(r.Context(), "SELECT filename,mime_type,sha256,content,storage_object_id FROM invoice_application_documents WHERE id=$1 AND application_id=$2 FOR UPDATE", docID, appID).Scan(&name, &mt, &hash, &content, &objectID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	content, err = s.db.ReadFileContent(r.Context(), tx, "invoice_application_documents", content, objectID)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}

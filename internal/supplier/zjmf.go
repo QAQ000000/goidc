@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -25,18 +27,58 @@ func newZJMF(account Account) (Adapter, error) {
 	if account.Provider != ProviderZJMF || account.Username == "" || account.Password == "" {
 		return nil, &Error{Code: "invalid_account"}
 	}
-	u, err := url.Parse(account.BaseURL)
-	if err != nil || u == nil {
-		return nil, &Error{Code: "invalid_url"}
-	}
-	ip, isIP := netip.ParseAddr(u.Hostname())
-	localHTTP := u.Hostname() == "localhost" || (isIP == nil && (ip.IsLoopback() || ip.IsPrivate()))
-	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && localHTTP)) || strings.Contains(u.Path, "..") || strings.ContainsAny(u.Path, "\\\r\n") {
-		return nil, &Error{Code: "invalid_url"}
+	u, err := zjmfBaseURL(account.BaseURL)
+	if err != nil {
+		return nil, err
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
 	return &zjmf{account: account, base: u, client: &http.Client{Transport: tr, Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+}
+
+func zjmfBaseURL(base string) (*url.URL, error) {
+	u, err := url.Parse(base)
+	if err != nil || u == nil {
+		return nil, &Error{Code: "invalid_url"}
+	}
+	ip, isIP := netip.ParseAddr(u.Hostname())
+	if isIP == nil {
+		ip = ip.Unmap()
+	}
+	localHTTP := u.Hostname() == "localhost" || (isIP == nil && (ip.IsLoopback() || ip.IsPrivate()))
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && localHTTP)) || strings.Contains(u.Path, "..") || strings.ContainsAny(u.Path, "\\\r\n") {
+		return nil, &Error{Code: "invalid_url"}
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if isIP == nil {
+		host = ip.String()
+	}
+	port := u.Port()
+	if port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return nil, &Error{Code: "invalid_url"}
+		}
+		port = strconv.Itoa(number)
+	}
+	if (u.Scheme == "https" && port == "443") || (u.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	if port != "" {
+		u.Host = net.JoinHostPort(host, port)
+	} else if strings.Contains(host, ":") {
+		u.Host = "[" + host + "]"
+	} else {
+		u.Host = host
+	}
+	// endpoint() appends a fixed path to Path, so raw escaping and trailing
+	// slashes cannot create a distinct upstream account for lease purposes.
+	if u.Path != "" {
+		u.Path = path.Clean(u.Path)
+	}
+	u.Path = strings.TrimRight(u.Path, "/")
+	u.RawPath, u.ForceQuery = "", false
+	return u, nil
 }
 func (z *zjmf) Capabilities() Capabilities {
 	return Capabilities{Catalog: true, Product: true, Create: true, Sync: true, Power: true, ResetPassword: true, Rescue: true, VNC: true, Reinstall: true, Renew: true}

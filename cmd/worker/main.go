@@ -42,6 +42,7 @@ func main() {
 	db.SupplierDownstreamURL = cfg.PublicOrigin
 	db.Provisioners = cfg.NOKVMProfiles
 	db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
+	db.FileStorage = cfg.FileStorage
 	if err = db.CheckSchema(ctx); err != nil {
 		log.Error("schema invalid", "error", err)
 		os.Exit(1)
@@ -83,6 +84,24 @@ func main() {
 		}()
 	}
 	defer paymentWorker.Wait()
+	var fileWorker sync.WaitGroup
+	fileWorker.Add(1)
+	go func() {
+		defer fileWorker.Done()
+		timer := time.NewTicker(time.Minute)
+		defer timer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-timer.C:
+				if _, cleanupErr := db.CollectFileObjects(ctx, 20); cleanupErr != nil && ctx.Err() == nil {
+					log.Error("file object cleanup failed", "error", cleanupErr)
+				}
+			}
+		}
+	}()
+	defer fileWorker.Wait()
 	var notificationWorker sync.WaitGroup
 	notificationWorker.Add(1)
 	go func() {

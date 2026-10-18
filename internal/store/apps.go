@@ -29,9 +29,9 @@ SELECT 'channel',category,implementation_id,schema_version,count(*),
  count(*) FILTER (WHERE enabled),count(*) FILTER (WHERE octet_length(secret_ciphertext)>0 OR secret_fields<>'{}'::jsonb)
 FROM channel_instances GROUP BY category,implementation_id,schema_version
 UNION ALL
-SELECT 'supplier','provision',provider,0,count(*),
- count(*) FILTER (WHERE active),count(*) FILTER (WHERE octet_length(credentials_encrypted)>0)
-FROM supplier_accounts GROUP BY provider`)
+SELECT 'supplier','provision',provider,schema_version,count(*),
+ count(*) FILTER (WHERE active),count(*) FILTER (WHERE (credential_format=0 AND octet_length(credentials_encrypted)>0) OR (credential_format=1 AND secure_fields<>'{}'::jsonb))
+FROM supplier_accounts GROUP BY provider,schema_version`)
 	if err != nil {
 		return nil, err
 	}

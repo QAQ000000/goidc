@@ -5,12 +5,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/codex/zjmfgo/internal/supplier"
 )
 
 func (s *Server) supplierProviders(w http.ResponseWriter, r *http.Request) {
-	write(w, 200, supplier.Providers())
+	type provider struct {
+		supplier.Provider
+		Descriptor channel.Descriptor `json:"descriptor"`
+	}
+	providers := []provider{}
+	for _, definition := range supplier.Definitions() {
+		providers = append(providers, provider{Provider: definition.Provider, Descriptor: definition.Descriptor})
+	}
+	write(w, 200, providers)
 }
 
 func (s *Server) supplierAPISettings(w http.ResponseWriter, r *http.Request) {
@@ -67,12 +76,13 @@ func (s *Server) testSupplierConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var in struct {
-		ExpectedVersion int64 `json:"expected_version"`
+		ExpectedVersion       int64 `json:"expected_version"`
+		ExpectedSchemaVersion int   `json:"expected_schema_version"`
 	}
 	if !decode(w, r, &in) {
 		return
 	}
-	out, err := s.db.TestSupplierConnection(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), id, in.ExpectedVersion, key)
+	out, err := s.db.TestSupplierConnectionSchema(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), id, in.ExpectedVersion, in.ExpectedSchemaVersion, key)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -82,7 +92,12 @@ func (s *Server) testSupplierConnection(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) suppliers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	s.list(w, r, `SELECT a.id,a.name,a.provider,a.base_url,a.username,a.active,a.version,octet_length(a.credentials_encrypted)>0 AS credentials_configured,a.running_job_id AS blocked_job_id,(SELECT count(*) FROM supplier_product_bindings b WHERE b.supplier_id=a.id) AS product_count FROM supplier_accounts a ORDER BY a.id`)
+	accounts, err := s.db.SupplierAccountSummaries(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, accounts)
 }
 func (s *Server) saveSupplier(w http.ResponseWriter, r *http.Request) {
 	var id int64
@@ -97,14 +112,12 @@ func (s *Server) saveSupplier(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	if in.DisableOnly {
-		cookie, err := r.Cookie("zjmfgo_session")
-		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
-			return
-		}
-		in.SessionHash = tokenHash(cookie.Value)
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
 	}
+	in.SessionHash = tokenHash(cookie.Value)
 	saved, err := s.db.SaveSupplier(r.Context(), identityFrom(r).ID, id, in)
 	if err != nil {
 		s.fail(w, r, err)

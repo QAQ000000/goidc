@@ -6,20 +6,26 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/channel"
 	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
 type SupplierInput struct {
-	Name            string `json:"name"`
-	Provider        string `json:"provider"`
-	BaseURL         string `json:"base_url"`
-	Username        string `json:"username"`
-	Password        string `json:"password"`
-	Active          *bool  `json:"active"`
-	ExpectedVersion int64  `json:"expected_version"`
-	DisableOnly     bool   `json:"disable_only"`
-	SessionHash     string `json:"-"`
+	Name                  string            `json:"name"`
+	Provider              string            `json:"provider"`
+	BaseURL               string            `json:"base_url"`
+	Username              string            `json:"username"`
+	Password              string            `json:"password"`
+	Active                *bool             `json:"active"`
+	ExpectedVersion       int64             `json:"expected_version"`
+	DisableOnly           bool              `json:"disable_only"`
+	SessionHash           string            `json:"-"`
+	Config                map[string]any    `json:"config"`
+	SecureConfig          map[string]string `json:"secure_config"`
+	ClearSecureFields     []string          `json:"clear_secure_fields"`
+	SchemaVersion         int               `json:"schema_version"`
+	ExpectedSchemaVersion int               `json:"expected_schema_version"`
 }
 
 type SupplierImportInput struct {
@@ -62,63 +68,94 @@ type supplierSnapshot struct {
 
 func (s *Store) SaveSupplier(ctx context.Context, actor, id int64, in SupplierInput) (int64, error) {
 	if in.DisableOnly {
-		if id < 1 || in.ExpectedVersion < 1 || in.Active == nil || *in.Active || in.Name != "" || in.Provider != "" || in.BaseURL != "" || in.Username != "" || in.Password != "" {
+		if id < 1 || in.ExpectedVersion < 1 || in.Active == nil || *in.Active || in.Name != "" || in.Provider != "" || in.BaseURL != "" || in.Username != "" || in.Password != "" || in.Config != nil || len(in.SecureConfig) != 0 || len(in.ClearSecureFields) != 0 || in.SchemaVersion != 0 {
 			return 0, conflict("invalid_supplier_disable", "仅停用请求必须指定现有供应商和版本，不能修改其他字段")
 		}
 		return s.disableSupplier(ctx, actor, id, in.ExpectedVersion, in.SessionHash)
 	}
-	in.Name, in.BaseURL, in.Username = strings.TrimSpace(in.Name), strings.TrimRight(strings.TrimSpace(in.BaseURL), "/"), strings.TrimSpace(in.Username)
-	if !contentTextValid(in.Name, 180, false) || in.Name == "" || len(in.Username) > 255 || in.Username == "" || len(in.Password) > 4096 || in.Active == nil || len(s.ProvisionEncryptionKey) != 32 {
+	in.Name, in.Provider = strings.TrimSpace(in.Name), strings.TrimSpace(in.Provider)
+	if !contentTextValid(in.Name, 180, false) || in.Name == "" || len(in.Password) > 4096 || in.Active == nil || id < 0 || id > 0 && in.ExpectedVersion < 1 || id == 0 && in.ExpectedVersion != 0 {
 		return 0, conflict("invalid_supplier", "名称、账户、状态或加密配置无效")
 	}
-	// The registry rejects unsupported providers and malformed URLs before persistence.
-	if _, err := supplier.New(supplier.Account{Provider: in.Provider, BaseURL: in.BaseURL, Username: in.Username, Password: "validation"}); err != nil {
-		return 0, conflict("invalid_supplier", "供应商类型或接口地址无效")
+	if in.SessionHash == "" {
+		return 0, conflict("unauthorized", "登录已失效")
 	}
 	tx, err := s.CatalogTx(ctx, actor)
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
-	if id == 0 {
-		if in.Password == "" {
-			return 0, conflict("supplier_password_required", "请填写供应商账户密码")
-		}
-		err = tx.QueryRow(ctx, `INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,active) VALUES($1,$2,$3,$4,''::bytea,$5) RETURNING id`, in.Name, in.Provider, in.BaseURL, in.Username, *in.Active).Scan(&id)
-		if err != nil {
-			return 0, err
-		}
-	} else {
-		var version int64
-		var provider, base, username string
-		var running *int64
-		err = tx.QueryRow(ctx, `SELECT version,provider,base_url,username,running_job_id FROM supplier_accounts WHERE id=$1 FOR UPDATE`, id).Scan(&version, &provider, &base, &username, &running)
-		if err != nil {
-			return 0, err
-		}
-		if version != in.ExpectedVersion {
-			return 0, conflict("version_conflict", "供应商已变更，请重新加载")
-		}
-		if provider != in.Provider || base != in.BaseURL || username != in.Username {
-			return 0, conflict("supplier_identity_locked", "供应商来源及账户身份不可更改，请新建供应商")
-		}
-		if running != nil {
-			return 0, conflict("supplier_busy", "供应商存在进行中或待核验的交付任务，请先处理")
-		}
+	if err = resourceAPIManagerCheck(ctx, tx, actor, in.SessionHash); err != nil {
+		return 0, err
 	}
-	if in.Password != "" {
-		sealed, e := supplierSeal(s.ProvisionEncryptionKey, "account", id, in.Password)
+	var old *supplierAccountRecord
+	if id > 0 {
+		rec, e := scanSupplierAccount(tx.QueryRow(ctx, "SELECT "+supplierAccountColumns+" FROM supplier_accounts a WHERE a.id=$1 FOR UPDATE", id))
 		if e != nil {
 			return 0, e
 		}
-		if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET credentials_encrypted=$2 WHERE id=$1`, id, sealed); err != nil {
+		old = &rec
+		if err = resourceAPIManagerCheck(ctx, tx, actor, in.SessionHash); err != nil {
+			return 0, err
+		}
+		if rec.item.Version != in.ExpectedVersion {
+			return 0, conflict("version_conflict", "供应商已变更，请重新加载")
+		}
+		if rec.item.Provider != in.Provider {
+			return 0, conflict("supplier_identity_locked", "供应商来源及账户身份不可更改，请新建供应商")
+		}
+		if rec.item.RunningJobID != nil {
+			return 0, conflict("supplier_busy", "供应商存在进行中或待核验的交付任务，请先处理")
+		}
+	}
+	account, desc, config, identity, err := validateSupplierInput(in, old)
+	if err != nil {
+		return 0, err
+	}
+	if err = checkSupplierIdentity(ctx, tx, account, id, identity, false); err != nil {
+		return 0, err
+	}
+	if id == 0 {
+		err = tx.QueryRow(ctx, `INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,active,config,schema_version,credential_format,identity_key) VALUES($1,$2,$3,$4,''::bytea,$5,$6,$7,1,$8) RETURNING id`, in.Name, in.Provider, account.BaseURL, account.Username, *in.Active, config, desc.SchemaVersion, identity).Scan(&id)
+		if err != nil {
 			return 0, err
 		}
 	}
-	if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET name=$2,active=$3,version=CASE WHEN $4::bigint=0 THEN version ELSE version+1 END,updated_at=now() WHERE id=$1`, id, in.Name, *in.Active, in.ExpectedVersion); err != nil {
+	rec := supplierAccountRecord{item: SupplierAccountSummary{ID: id, Provider: in.Provider, SchemaVersion: desc.SchemaVersion}, credentialFormat: 1, fields: map[string][]byte{}}
+	if old != nil {
+		rec = *old
+	}
+	fields, format, secrets, changed, err := s.mergeSupplierCredentials(rec, desc, in)
+	if err != nil {
 		return 0, err
 	}
-	if err = Audit(ctx, tx, actor, "supplier.saved", "supplier", id, map[string]any{"provider": in.Provider, "active": *in.Active, "password_changed": in.Password != ""}); err != nil {
+	account.ID, account.Secrets = id, secrets
+	flags := map[string]bool{}
+	for field, value := range secrets {
+		flags[field] = value != ""
+	}
+	if _, issues := channel.ValidateConfiguration(desc, account.Values, flags, *in.Active); len(issues) > 0 {
+		return 0, conflict("invalid_supplier_config", "供应商配置或凭据无效")
+	}
+	if *in.Active {
+		if _, err = supplier.New(account); err != nil {
+			return 0, conflict("invalid_supplier_config", "供应商配置或凭据无效")
+		}
+	}
+	var legacyCiphertext []byte
+	if legacySupplierRequest(in) && (old == nil || old.credentialFormat == 0) {
+		format, fields = 0, []byte("{}")
+		if old == nil || in.Password != "" {
+			legacyCiphertext, err = supplierSeal(s.ProvisionEncryptionKey, "account", id, secrets["secret"])
+			if err != nil {
+				return 0, err
+			}
+		}
+	}
+	if _, err = tx.Exec(ctx, `UPDATE supplier_accounts SET name=$2,active=$3,secure_fields=$4,credential_format=$5,identity_key=$6,version=CASE WHEN $7::bigint=0 THEN version ELSE version+1 END,updated_at=now(),credentials_encrypted=CASE WHEN $8::bytea IS NULL THEN credentials_encrypted ELSE $8 END WHERE id=$1`, id, in.Name, *in.Active, fields, format, identity, in.ExpectedVersion, legacyCiphertext); err != nil {
+		return 0, err
+	}
+	if err = Audit(ctx, tx, actor, "supplier.saved", "supplier", id, map[string]any{"provider": in.Provider, "active": *in.Active, "schema_version": desc.SchemaVersion, "password_changed": changed, "secure_fields_changed": supplierChangedFields(in)}); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)
@@ -147,6 +184,9 @@ func (s *Store) disableSupplier(ctx context.Context, actor, id, expected int64, 
 	if err = tx.QueryRow(ctx, `SELECT version,provider,active,running_job_id FROM supplier_accounts WHERE id=$1 FOR UPDATE`, id).Scan(&version, &provider, &active, &running); err != nil {
 		return 0, err
 	}
+	if err = resourceAPIManagerCheck(ctx, tx, actor, sessionHash); err != nil {
+		return 0, err
+	}
 	if version != expected {
 		return 0, conflict("version_conflict", "供应商已变更，请重新加载")
 	}
@@ -170,22 +210,12 @@ func (s *Store) supplierAdapter(ctx context.Context, id int64) (supplier.Adapter
 }
 
 func (s *Store) supplierAdapterWith(ctx context.Context, q sqlQueryer, id int64) (supplier.Adapter, int64, error) {
-	var a supplier.Account
-	var sealed []byte
-	var version int64
-	var active bool
-	err := q.QueryRow(ctx, `SELECT id,provider,base_url,username,credentials_encrypted,version,active FROM supplier_accounts WHERE id=$1`, id).Scan(&a.ID, &a.Provider, &a.BaseURL, &a.Username, &sealed, &version, &active)
+	rec, err := scanSupplierAccount(q.QueryRow(ctx, "SELECT "+supplierAccountColumns+" FROM supplier_accounts a WHERE a.id=$1", id))
 	if err != nil {
 		return nil, 0, err
 	}
-	if !active {
-		return nil, 0, conflict("supplier_disabled", "供应商已停用")
-	}
-	if err = supplierUnseal(s.ProvisionEncryptionKey, "account", id, sealed, &a.Password); err != nil {
-		return nil, 0, err
-	}
-	adapter, err := supplier.New(a)
-	return adapter, version, err
+	adapter, err := s.supplierAdapterRecord(ctx, q, rec)
+	return adapter, rec.item.Version, err
 }
 func supplierReadError(err error) error {
 	var e *supplier.Error
@@ -199,6 +229,9 @@ func (s *Store) SupplierCatalog(ctx context.Context, id int64) ([]supplier.Produ
 	if err != nil {
 		return nil, err
 	}
+	if !a.Capabilities().Catalog {
+		return nil, conflict("supplier_capability_unsupported", "供应商不支持商品目录")
+	}
 	p, err := a.Catalog(ctx)
 	return p, supplierReadError(err)
 }
@@ -206,6 +239,9 @@ func (s *Store) SupplierProduct(ctx context.Context, id, pid int64) (supplier.Pr
 	a, _, err := s.supplierAdapter(ctx, id)
 	if err != nil {
 		return supplier.Product{}, err
+	}
+	if !a.Capabilities().Product {
+		return supplier.Product{}, conflict("supplier_capability_unsupported", "供应商不支持商品预览")
 	}
 	p, err := a.Product(ctx, pid)
 	return p, supplierReadError(err)
@@ -230,6 +266,9 @@ func (s *Store) ImportSupplierProduct(ctx context.Context, actor, supplierID int
 	}
 	if version != in.ExpectedSupplierVersion {
 		return 0, conflict("version_conflict", "供应商已变更")
+	}
+	if !a.Capabilities().Product || !a.Capabilities().Create {
+		return 0, conflict("supplier_capability_unsupported", "供应商不支持商品导入与交付")
 	}
 	p, err := a.Product(ctx, in.UpstreamProductID)
 	if err != nil {

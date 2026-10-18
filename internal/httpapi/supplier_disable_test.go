@@ -25,6 +25,29 @@ func supplierDisableInput(version int64) map[string]any {
 	return map[string]any{"disable_only": true, "active": false, "expected_version": version}
 }
 
+// Fault injection is restricted to each test's disposable schema. Production
+// APIs and SQL must keep the same identity guard enabled at all times.
+func supplierFixtureIdentityWrite(t *testing.T, db *store.Store, query string, args ...any) {
+	t.Helper()
+	tx, err := db.Pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	if _, err = tx.Exec(t.Context(), "ALTER TABLE supplier_accounts DISABLE TRIGGER supplier_account_identity_immutable"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(t.Context(), query, args...); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(t.Context(), "ALTER TABLE supplier_accounts ENABLE TRIGGER supplier_account_identity_immutable"); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func assertMissingSupplierUnchanged(t *testing.T, db *store.Store, id, version int64, active bool) {
 	t.Helper()
 	var unchanged bool
@@ -101,9 +124,7 @@ func TestMissingSupplierDisableKeepsRunningJobGuard(t *testing.T) {
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM provision_jobs WHERE service_id=$1 ORDER BY id LIMIT 1", sid).Scan(&job); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE supplier_accounts SET provider='removed_compiled_supplier',running_job_id=$2 WHERE id=$1", f.supplierID, job); err != nil {
-		t.Fatal(err)
-	}
+	supplierFixtureIdentityWrite(t, f.db, "UPDATE supplier_accounts SET provider='removed_compiled_supplier',running_job_id=$2 WHERE id=$1", f.supplierID, job)
 	response := request(f.h, "PUT", fmt.Sprintf("/api/v1/admin/suppliers/%d", f.supplierID), supplierDisableInput(1), f.root, "")
 	expect(t, response, http.StatusConflict)
 	if !strings.Contains(response.Body.String(), "supplier_busy") {

@@ -30,6 +30,9 @@ func New(db *store.Store, cfg config.Config, log *slog.Logger) *Server {
 	db.Provisioners = cfg.NOKVMProfiles
 	db.ProvisionEncryptionKey = cfg.ProvisionEncryptionKey
 	db.PurchaseFieldEncryptionKey = cfg.PurchaseFieldEncryptionKey
+	if cfg.FileStorage != nil {
+		db.FileStorage = cfg.FileStorage
+	}
 	return &Server{db, cfg, log}
 }
 

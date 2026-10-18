@@ -106,21 +106,61 @@ func (s *Server) contentImage(w http.ResponseWriter, r *http.Request) {
 	}
 	var name, mimeType string
 	var content []byte
+	var objectID *string
 	visible := strings.ReplaceAll(publicArticleWhere, "$2", "coalesce(v.access,0)")
-	err := s.db.Pool.QueryRow(r.Context(), `WITH viewer AS (
+	tx, err := s.db.Pool.Begin(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err == nil {
+		_, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108196)")
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	query := `WITH viewer AS (
  SELECT u.id,u.role,r.active AS role_active,r.permissions,
  CASE WHEN EXISTS(SELECT 1 FROM services WHERE user_id=u.id AND status='active' AND NOT import_review_required) THEN 2 ELSE 1 END AS access
  FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.status='active' AND (
- ($3='session' AND EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.token_hash=$2 AND s.expires_at>statement_timestamp())) OR
- ($3='key' AND EXISTS(SELECT 1 FROM api_keys k WHERE k.user_id=u.id AND k.secret_hash=$2 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>statement_timestamp()))))
- ) SELECT i.filename,i.mime_type,i.content FROM content_images i JOIN content_articles a ON a.id=i.article_id
- LEFT JOIN content_categories c ON c.id=a.category_id LEFT JOIN viewer v ON true WHERE i.id=$1 AND ((`+visible+`) OR
- v.role='super_admin' OR (v.role='admin' AND v.role_active AND 'content.view'=ANY(v.permissions)))`, id, hash, credential).Scan(&name, &mimeType, &content)
+ ($3='session' AND EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.token_hash=$2 AND s.expires_at>clock_timestamp())) OR
+ ($3='key' AND EXISTS(SELECT 1 FROM api_keys k WHERE k.user_id=u.id AND k.secret_hash=$2 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))))
+ ) SELECT i.filename,i.mime_type,i.content,i.storage_object_id FROM content_images i JOIN content_articles a ON a.id=i.article_id
+ LEFT JOIN content_categories c ON c.id=a.category_id LEFT JOIN viewer v ON true WHERE i.id=$1 AND ((` + visible + `) OR
+ v.role='super_admin' OR (v.role='admin' AND v.role_active AND 'content.view'=ANY(v.permissions))) FOR SHARE OF i,a`
+	err = tx.QueryRow(r.Context(), query, id, hash, credential).Scan(&name, &mimeType, &content, &objectID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, 404, "not_found", "图片不存在或当前账户无法访问")
 			return
 		}
+		s.fail(w, r, err)
+		return
+	}
+	content, err = s.db.ReadFileContent(r.Context(), tx, "content_images", content, objectID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// Object reads may wait on a remote backend. Re-evaluate the credential and
+	// article visibility in a fresh statement before publishing any image bytes.
+	var currentInline []byte
+	var currentObjectID *string
+	if err = tx.QueryRow(r.Context(), query, id, hash, credential).Scan(&name, &mimeType, &currentInline, &currentObjectID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, 404, "not_found", "图片不存在或当前账户无法访问")
+			return
+		}
+		s.fail(w, r, err)
+		return
+	}
+	if (objectID == nil) != (currentObjectID == nil) || (objectID != nil && *objectID != *currentObjectID) {
+		writeError(w, 404, "not_found", "图片不存在或当前账户无法访问")
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
 		s.fail(w, r, err)
 		return
 	}

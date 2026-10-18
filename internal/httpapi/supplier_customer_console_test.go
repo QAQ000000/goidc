@@ -145,9 +145,7 @@ func TestSupplierCapabilitiesWithoutCredentials(t *testing.T) {
 					t.Fatal(err)
 				}
 			case "unknown_provider":
-				if _, err := f.db.Pool.Exec(t.Context(), `UPDATE supplier_accounts SET provider='unknown-compiled-provider' WHERE id=$1`, f.supplierID); err != nil {
-					t.Fatal(err)
-				}
+				supplierFixtureIdentityWrite(t, f.db, `UPDATE supplier_accounts SET provider='unknown-compiled-provider' WHERE id=$1`, f.supplierID)
 			}
 			path := fmt.Sprintf("/api/v1/services/%d", sid)
 			for _, caller := range []struct{ path, token string }{{path, f.customer}, {fmt.Sprintf("/api/v1/admin/services/%d", sid), f.root}} {
