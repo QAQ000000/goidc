@@ -147,7 +147,7 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
  FROM notification_routes r JOIN notification_message_templates t ON t.id=r.template_id
  LEFT JOIN user_notification_preferences p ON p.user_id=$1 AND p.channel=r.channel
  LEFT JOIN notification_targets b ON b.user_id=$1 AND b.instance_id=r.instance_id AND b.active
- WHERE r.event_kind=$2 AND r.enabled AND t.active ORDER BY r.id`, userID, kind, due)
+ WHERE r.event_kind=$2 AND r.channel<>'web_push' AND r.enabled AND t.active ORDER BY r.id`, userID, kind, due)
 	if err != nil {
 		return err
 	}
@@ -195,7 +195,7 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 			return err
 		}
 	}
-	return nil
+	return s.queueWebPushNotifications(ctx, tx, eventID, userID, kind, due)
 }
 
 var notificationShanghai = time.FixedZone("Asia/Shanghai", 8*60*60)

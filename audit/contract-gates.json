@@ -58,19 +58,30 @@
         "db/migrations/163_notification_lifecycle.sql",
         "db/migrations/162_unified_notifications.sql",
         "web/src/components/notification-center.tsx",
-        "web/src/components/notification-preferences.tsx"
+        "web/src/components/notification-preferences.tsx",
+        "internal/store/notification_web_push.go",
+        "internal/store/notification_web_push_events.go",
+        "internal/httpapi/notification_web_push.go",
+        "db/migrations/174_web_push.sql",
+        "web/src/components/web-push-preferences.tsx",
+        "web/src/lib/web-push.ts",
+        "web/public/notification-sw.js",
+        "scripts/generate-web-push-vapid.mjs",
+        "internal/store/notification_web_push_history.go",
+        "web/src/components/web-push-history.tsx"
       ],
       "tests": [
         "node scripts/test-compiled-notifications.mjs --unit",
         "node scripts/test-compiled-notifications.mjs --integration",
-        "node --test scripts/notification-center-components.test.mjs scripts/compiled-notification-gates.test.mjs"
+        "node --test scripts/notification-center-components.test.mjs scripts/web-push-components.test.mjs scripts/web-push-proxy.test.mjs scripts/compiled-notification-gates.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18 consent, binding, scope, transactional rollback and lease recovery",
         "eleven channel-independent lifecycle events, Telegram-only reminder candidates, explicit expansion of payment-only consent, exact due-time invalidation, actual business transitions and genuine schema162 preservation",
         "bounded 72-hour expiry recovery with stable exact-deadline identity, Shanghai dates under UTC sessions, no historical consent backfill, stale legacy reminders fenced at claim/send/recovery and genuine schema172 preservation",
         "owned production-loop subprocess SIGKILL after local acceptance and before durable completion; unknown never resends; full worker binary crash and real channels remain separate",
-        "real browser with local Telegram protocol simulator; live Telegram verification remains separate"
+        "real browser with local Telegram protocol simulator; live Telegram verification remains separate",
+        "Web Push encrypted multi-device fanout and VAPID signature verified by a local TLS push simulator; session-bound consent, key rotation, 404/410, CAS, unknown and schema173 preservation; real browser-vendor background receipt remains separate"
       ],
       "review": {
         "required": true,

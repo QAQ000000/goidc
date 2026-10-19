@@ -38,6 +38,8 @@ test('required Go suites refuse skipped, missing, incomplete or malformed execut
     'TestNotificationLegacyDeadlineUpgrade172PreservesFacts',
     'TestNotificationLegacyDeadlineRejectsElapsedStage',
   ]) assert.ok(required.includes(name), `${name} must remain a required recovery gate`);
+  for (const name of ['TestNotificationWebPushMultipleDevicesAreEncryptedAndNeverBackfill', 'TestNotificationWebPushUpgrade173PreservesExistingConsentAndQueuedFacts', 'TestWebPushAPIConsentIsolationAndPrivacy', 'TestWebPushProtocolResultsPersistThroughNotificationWorkerAndStore']) assert.ok(required.includes(name), `${name} must remain a required Web Push gate`);
+  assert.ok(unitSuites['internal/notify'].includes('TestWebPushSubscriptionRejectsUntrustedDestinationsAndMalformedKeys'));
   assert.equal([...required, ...Object.values(unitSuites).flat()].some(name => /BrowserFixture|ProcessHelper/.test(name)), false);
 });
 

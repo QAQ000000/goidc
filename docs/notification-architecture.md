@@ -1,6 +1,6 @@
 # 统一通知契约
 
-本契约规定通知编排与编译渠道的边界。Telegram 是通用业务通知渠道，与站内信共用事件目录、路由和投递状态；邮件、短信继续使用原队列。第三批将首批的付款成功扩展到订单与服务生命周期。工单专项规则见[工单通知契约](ticket-notification-contract.md)，验证码见[认证验证码](auth-captcha.md)。
+本契约规定通知编排与编译渠道的边界。Telegram、站内信与浏览器 Web Push 共用业务事件目录、路由和投递状态；邮件、短信继续使用原队列。工单专项规则见[工单通知契约](ticket-notification-contract.md)，验证码见[认证验证码](auth-captcha.md)。
 
 新增平台的实现步骤、代码骨架与验收清单见[机器人渠道开发指南](architecture/bot-channel-development.md)。当前只有 Telegram 完成机器人接线；其他平台还需补齐目标授权、数据库约束及分发接点。
 
@@ -59,6 +59,37 @@ Telegram 回调入口为 `POST /api/v1/notifications/telegram/{instance_id}/webh
 
 启用顺序：先以 `getMe` 核验身份并以 `getWebhookInfo` 检查既有回调，再通过后台渠道实例保存 `bot_username` 与加密凭据 `bot_token`、`webhook_secret`；配置服务器的公网 `PUBLIC_ORIGIN` 后，由具备设置权限的管理员配置 webhook。随后用户完成绑定和主动订阅，管理员开启路由，再以真实业务事件验收。没有公网 HTTPS 地址时只能完成本地模拟验收，首批不提供轮询绑定。API 和 worker 若无法直连 Telegram，可在各自进程环境设置 `HTTPS_PROXY`；代理地址属于部署配置，不写入渠道或源码。
 
+## 浏览器 Web Push
+
+Web Push 是独立的 `web_push` 通知渠道，技术类别为 `push`，编译实现为 `web_push`，不归入机器人类别。复用现有 11 个事件和同一个通知 worker；工单仍使用原专项通知链，本批不迁移。每个浏览器订阅产生独立投递，以“事件＋路由＋订阅 ID”去重；新渠道全部路由及用户偏好初始关闭，不补发历史事件。
+
+### 配置与启用
+
+1. 在受控目录离线生成 VAPID 密钥：`node scripts/generate-web-push-vapid.mjs --out output/web-push-vapid.private.json`。文件以 0600 独占创建，不覆盖现有文件、不把密钥打印到终端；勿提交或分享该文件。
+2. 管理员在接口设置的“浏览器推送”分类新增实例，填写 `public_key`、联系地址 `subject`（`mailto:` 或 HTTPS）及加密字段 `private_key`。公钥为 Base64URL 的 65 字节未压缩 P-256 点，私钥为 32 字节；启用保存须验证配对。联系地址不要求项目已有公网域名。
+3. 在统一通知中心选择该实例并启用所需事件路由。用户在 `/console/account` 主动点击开启当前浏览器通知，允许浏览器权限并完成服务端订阅，再开启并保存通知偏好或明确扩展为业务通知。浏览器授权、账号订阅和业务偏好是三层独立状态，任一未就绪均不能声称已开启。
+4. 正式站点需要 HTTPS；localhost 可用于开发。iOS/iPadOS 需系统支持并先添加到主屏幕后在安装的应用中授权。浏览器或系统关闭通知、网络不可达及平台限制会影响收件；关闭页面后收件仍受浏览器和系统支持约束。
+
+公私钥不匹配时不能启用保存。轮换公钥后，原浏览器订阅失效，需要用户主动按新密钥重新订阅；旧待发任务不迁移到新身份或新设备。停用实例或路由阻止后续派发，不能撤回已经进入外部请求的消息。前端公钥来自本人配置接口，不编译进静态包、不接触 VAPID 私钥。
+
+### 身份、隐私与撤销
+
+订阅绑定账户、实例、原登录会话和 VAPID 公钥。发送前重新验证账户、当前资源归属、偏好/路由版本、订阅版本、实例与公钥，以及该会话仍存在且未过期。退出登录、撤销会话、账户停用或更换密钥后停止后续发送；再次登录需要用户主动重新确认当前浏览器，旧任务不因此复活。相同 endpoint 不允许跨账户抢绑，共享浏览器切换账号时应主动重置本地订阅再绑定。
+
+每个账户最多保留 20 个未撤销浏览器订阅；个人页面可撤销其他设备或已失效会话的订阅。状态接口返回最多 20 个未撤销和最近 20 个已撤销订阅的元数据，便于响应丢失后核对和重新订阅 CAS；endpoint、P256DH、auth 和会话标识均不返回。订阅原文使用现有部署加密密钥及账户/endpoint hash 关联数据加密保存；投递记录不复制 endpoint 或加密凭据。
+
+系统通知固定显示“账户通知 / 您有新的账户通知，请登录查看。”，不传账单金额、服务标识、业务正文、客户 ID 或访问令牌。Web Push 模板仅保留通用文案，不输出业务变量，只允许修改启停状态及版本。账户页另有独立的浏览器通知记录：从已接受或结果未知的 Web Push 事件按事件去重读取白名单详情，不需要开启站内信；每次读取重新检查账户及订单、账单、服务的当前归属。待发和跳过事件不显示为已尝试推送，结果未知的业务事实也不代表已收件。Service Worker 不解析推送中的跳转地址或正文，点击只访问同源 `/console/account`，详情仍须当前会话授权；不缓存业务 API、不增加离线读数据功能。OS 已显示的提醒无法因退出登录被远程撤回，通用文案用于限制这一边界的信息暴露。
+
+用户点击操作后才请求权限，页面加载不弹出授权。界面须区分不安全上下文、不支持、被拒绝、尚未授权、服务器未配置、订阅失败/失效和版本冲突；主动退订先撤销服务器资格，再尝试浏览器 unsubscribe，即使本地操作失败也不继续发送。
+
+### 协议、恢复与安全
+
+适配器使用 RFC 8291 的 `aes128gcm` 消息加密及 RFC 8292 的 VAPID 签名，默认只支持 FCM、Mozilla Push、Apple Web Push 和 Windows WNS 的明确服务主机。endpoint 只能为这些服务的 HTTPS URL，禁止凭据、显式端口与重定向；解析后检查所有地址并固定公共 IP 拨号，TLS 验证原主机，禁止私网与 DNS 重绑定。该渠道不继承环境 HTTP 代理；需要支持新服务时，应修改编译实现及测试，不开放任意用户 webhook。
+
+请求最长 15 秒，TTL 不超过当前投递剩余有效期及 24 小时。平台明确接受只记为 `accepted`，不代表浏览器已显示或客户已读。404/410 使当前版本的对应浏览器订阅失效，不撤销其他设备；有效 429 `Retry-After` 沿用最多五次及有效期约束。网络错误、5xx、持久化失败或过期发送租约进入 `unknown`，不盲目重发。响应正文、endpoint、密钥和外部错误原文不进入日志、审计或管理页面。
+
+跨上海日界的到期补偿同样要求该浏览器订阅、会话及实例在精确期限前已经就绪；事后新增浏览器、重新确认会话或轮换密钥都不取得历史消息的收件资格。
+
 ## 状态与恢复
 
 | 状态 | 含义 | 后续处理 |
@@ -80,6 +111,10 @@ Telegram 仅明确 429 且含有效 `retry_after` 时自动重试，最多五次
 
 | 接口 | 权限与用途 |
 | --- | --- |
+| `GET /me/notification-web-push/history` | 本人业务事实分页，按事件去重；复查全部资源归属，仅返回目录允许的变量，不改变站内信偏好 |
+| `GET /me/notification-web-push` | 本人可用实例公钥及有界订阅元数据；不返回目标/密钥/会话原文 |
+| `POST /me/notification-web-push/subscriptions` | 本人当前会话；标准 `subscription.endpoint/keys.p256dh/keys.auth`、实例及 `expected_version`；不自动开启偏好 |
+| `DELETE /me/notification-web-push/subscriptions/{id}` | 本人订阅及 `expected_version`；可撤销其他设备 |
 | `GET/PATCH /me/notification-preferences` | 本人设置；按渠道返回偏好、订阅范围、目标和可绑定实例；首次版本为 0 |
 | `POST /me/notification-bindings/challenges` | 本人创建短效绑定链接，频率受限 |
 | `DELETE /me/notification-bindings/{id}` | 仅本人目标，版本检查，不允许提交外部身份 |
@@ -104,11 +139,15 @@ Telegram 仅明确 429 且含有效 `retry_after` 时自动重试，最多五次
 
 验证覆盖独立 PG18 的事件去重、旧队列兼容、绑定 TTL/重放/错实例/失效会话、跨用户与撤权、审计回滚、CAS、退订、解绑、429、未知结果、lease fencing；协议测试只连本地模拟器。浏览器与真实 Telegram 验证分别记录，不把模拟接受当成平台实收。
 
+迁移 174 新增浏览器订阅及独立投递引用，扩展通知渠道但不重写旧事件、偏好、投递或迁移 checksum。需停旧 API、worker 及其他 writer 后，数据库、API、worker 和 Web 成套升级；未处理的浏览器任务不能交给旧 worker。无反向迁移，不能直接以旧二进制接管新 schema。
+
 ## 当前验收状态
 
 | 层级 | 已验证范围 | 边界 |
 | --- | --- | --- |
-| E1 | 本轮通知 31 项单元、69 项集成及调度 7 项单元、41 项集成严格 race 通过，零跳过；Node 43 项、全仓 Go 测试编译及 vet 通过。覆盖 72 小时补偿、期限前渠道资格、旧链上海日界和发送前失效；同源候选 API/worker 实际拒绝160/161/162/172，另补验 schema172 升级与账单并发排空 2 个入口，不累加计数 | 自有 UTC PG18、本地协议模拟器；历史时间及资格由 SQL 控制，不证明实际停机时长；未使用业务库，未新增浏览器或真实渠道验收，未部署 |
+| E1 | Web Push 合入后的完整通知门禁：38 项单元、86 项集成严格 race 通过，零跳过；68 项 Node 测试、全仓 Go 测试编译、相关包 vet、Web lint/typecheck 和独立生产构建通过。覆盖本地 TLS 加密/签名与响应分类、多浏览器、权限/CAS/会话、公钥轮换、未知结果、仅推送提醒扫描、173→174 保留升级及旧链回归；实际 API/worker 清单均含 13 模块且零网络 syscall | 自有 UTC PG18、本地协议模拟器；lint 有 6 个既有 warning。首轮旧路由数断言随新增渠道失效，改为按事件目录计算后完整重跑通过；未使用业务库，未部署或验收真实厂商收件 |
+| E2 | Web Push 在 Linux Chrome、真实隔离 API 与独立生产构建前端走通默认不弹权限、拒绝权限、Service Worker 激活、订阅不自动开启业务偏好、显式业务订阅、独立详情及撤销；1440×1000 桌面和 390×844 手机无横向溢出、无页面异常 | PushManager 由本地模拟替代；详情的已接受事实由隔离夹具写入。未请求厂商订阅或发送真实推送，不证明关闭页面后的系统实际收件 |
+| E1 | 上一批通知 31 项单元、69 项集成及调度 7 项单元、41 项集成严格 race 通过，零跳过；Node 43 项、全仓 Go 测试编译及 vet 通过。覆盖 72 小时补偿、期限前渠道资格、旧链上海日界和发送前失效；同源候选 API/worker 实际拒绝160/161/162/172，另补验 schema172 升级与账单并发排空 2 个入口，不累加计数 | 自有 UTC PG18、本地协议模拟器；历史时间及资格由 SQL 控制，不证明实际停机时长；未使用业务库，当批未新增浏览器或真实渠道验收，未部署 |
 | E1 | 通知生产循环子进程实际 SIGKILL 后恢复 unknown 且不重发，站内信一次性；双进程竞争 8 条各一次，慢 Telegram 不阻塞独立旧邮件/短信链 | 外部仅回环协议模拟器；未强杀完整 worker 二进制，租约由 SQL 加速，旧链使用测试伴随循环 |
 | E1 | 实际 schema 160 旧密文、待发任务与付款回执经生产迁移升级到 163；实际 162 升级保留订阅范围、版本、路由、模板及待发正文，新增事件默认关闭且不补历史；checksum 与幂等通过；同一候选 API/worker 分别拒绝 160、161 和 162 启动 | 合成旧数据夹具；不代表旧二进制降级或生产恢复 |
 | E1 | `c25d3bf` 同包迁移两次、API/Web/worker 启停、3 个公开页及 21 份资源、原生依赖加载、模拟服务任务和 worker TERM/重启通过；产物不变、进程及 schema 清理通过 | 验收控制器补齐依赖闭包后重跑通过，首轮失败保留；未强杀完整候选通知 worker，未做新的浏览器或真实渠道验收 |
@@ -118,6 +157,6 @@ Telegram 仅明确 429 且含有效 `retry_after` 时自动重试，最多五次
 | E2 | 第三批真实隔离 API 与 Next 开发模式完成 11 事件下钻、按事件变量、切换保留草稿、管理员与用户两条 409→重基→保存、50/7 分页与事件筛选、故障恢复、只读及撤权；1440 桌面与 390×844 手机通过 | 浏览器投递列表使用合成已接受记录，不代替实际业务投递；旧付款订阅仅显式扩展后变为 business，无历史补发；生产构建另验 |
 | E3 | 真实 Telegram `getMe` 与 `getWebhookInfo` 经部署代理核验通过，既有 webhook 为空 | 当前没有公网 HTTPS 地址；未配置真实 webhook，未验收真实消息收发 |
 
-本轮汇总位于被忽略的 `output/notification-catchup/summary.json`，包含严格回归、候选及源码标识。既有运行日志、截图和清理结果仍在 `output/notification-center/`、`output/notification-runtime/`、`output/notification-lifecycle/` 与 `output/playwright/notification-center/`。可重复执行的严格门禁与候选变量见[测试入口](testing.md#编译渠道与通知运行验收)。上述结果不代表已经部署或具备生产渠道可用性。
+Web Push 的回归、源码与候选标识保存于被忽略的 `output/web-push/`，浏览器脚本、截图及模拟边界保存于 `output/playwright/web-push/`。上一批跨日补偿汇总位于 `output/notification-catchup/summary.json`。既有运行日志、截图和清理结果仍在 `output/notification-center/`、`output/notification-runtime/`、`output/notification-lifecycle/` 与 `output/playwright/notification-center/`。可重复执行的严格门禁与候选变量见[测试入口](testing.md#编译渠道与通知运行验收)。上述结果不代表已经部署或具备生产渠道可用性。
 
 平台协议参考：[Telegram Bot API](https://core.telegram.org/bots/api#sendmessage)、[Webhook](https://core.telegram.org/bots/api#setwebhook)、[深链绑定](https://core.telegram.org/bots/features#deep-linking)。平台文档的在线可达性与真实凭据验证必须在启用前单独检查。

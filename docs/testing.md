@@ -20,8 +20,8 @@
 | 浏览器文件保存与下载请求 | `node --test scripts/download.test.mjs` | Node 与 Web 依赖；执行真实 helper/组件及 DOM/fetch 夹具，不启动浏览器 |
 | 站点主题展示 | `node --test scripts/site-theme.test.mjs`；后端 `TestSiteContentVersionedCRUDAndPermissions`、`TestSiteThemeValidationPermissionsAndReplay` | Node/Web 依赖；后端用例须隔离 PG18；SSR/组件夹具不等于真实浏览器视觉验收 |
 | 实际模块二进制 | `node scripts/check-module-binaries.mjs` | Linux、strace；真实构建 API/worker，在空应用配置下拒绝并检查全部网络 syscall |
-| 渠道与通知单元门禁 | `node scripts/test-compiled-notifications.mjs --unit` | 31 个指定入口，race；不继承应用配置或测试 DSN |
-| 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；69 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |
+| 渠道与通知单元门禁 | `node scripts/test-compiled-notifications.mjs --unit` | 38 个指定入口，race；不继承应用配置或测试 DSN |
+| 渠道与通知集成门禁 | `node scripts/test-compiled-notifications.mjs --integration` | 回环 PG18 `_test` URL；86 个指定入口，串行 race，任一 skip、缺失或失败均阻断 |
 | 实名认证提供方单元门禁 | `node scripts/test-compiled-certification.mjs --unit` | 提供方工厂、旧人工兼容、独立 worker 取消与日志隐私；race |
 | 实名认证提供方集成门禁 | `node scripts/test-compiled-certification.mjs --integration` | 回环 PG18 `_test` URL；串行 race，指定入口任一 skip、缺失或失败均阻断 |
 | 实名认证前端 | `node --test scripts/certification-components.test.mjs` | 实例选择、不可用原因、处理状态及稳定幂等键；组件夹具不代替浏览器验收 |
@@ -51,7 +51,9 @@
 
 ## 编译渠道与通知运行验收
 
-`.github/workflows/quality.yml` 的独立 PG18 job 使用任务自有容器及测试库，强制执行上述 69 个入口。runner 固定 `-race -count=1 -p=1 -parallel=1`，逐项核对 Go JSON 的 run、pass 和包结果；无 DSN、非法连接覆盖参数、测试改名或任何 skip 都会失败。普通 CI 不启动等待人工操作的浏览器夹具或子进程 helper。
+Web Push 归同一严格通知 runner：RFC8291 解密与 VAPID 验签使用本地 TLS 模拟器，独立 PG18 覆盖多浏览器去重、加密、当前会话/公钥及资源归属、410 定向失效、显式 429、未知结果不重发、173→174 保留升级和仅 Web Push 的真实提醒扫描。只读详情无需开启站内信，按事件及当前资源权限过滤。前端另执行 `node --test scripts/web-push-components.test.mjs scripts/web-push-proxy.test.mjs`；真实浏览器的系统后台收件仍需 HTTPS、厂商网络与独立证据。
+
+`.github/workflows/quality.yml` 的独立 PG18 job 使用任务自有容器及测试库，强制执行上述 86 个入口。runner 固定 `-race -count=1 -p=1 -parallel=1`，逐项核对 Go JSON 的 run、pass 和包结果；无 DSN、非法连接覆盖参数、测试改名或任何 skip 都会失败。普通 CI 不启动等待人工操作的浏览器夹具或子进程 helper。
 
 `TestNotificationCenterProcessRecovery` 在父测试拥有的子进程中运行生产 `RunNotificationCenter`、Store 和适配器，仅将 Telegram HTTP 传输重定向到回环模拟器。它在平台接受响应后确认生产完成事务正在等待真实行锁，再 SIGKILL，验证重启后 unknown 不重发、站内信一次性、双进程领取及慢 Telegram 期间旧邮件/短信链独立推进。旧链由伴随测试循环驱动；这不等于强杀完整 `cmd/worker`。租约由 SQL 加速，不证明实际租约等待耗时或生产 RTO。
 

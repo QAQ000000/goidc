@@ -147,7 +147,7 @@ func TestNotificationCenterDefaultsAndNoHistoricalBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	prefs, err := f.db.NotificationPreferences(f.ctx, f.customer)
-	if err != nil || len(prefs) != 2 {
+	if err != nil || len(prefs) != 3 {
 		t.Fatalf("preferences=%+v err=%v", prefs, err)
 	}
 	for _, p := range prefs {

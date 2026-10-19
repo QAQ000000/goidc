@@ -6,6 +6,14 @@ const runtimeBuild = process.env.ZJMFGO_RUNTIME_BUILD === "1";
 const config: NextConfig = {
   ...(runtimeBuild ? { output: "standalone", outputFileTracingRoot: path.resolve(process.cwd(), "..") } : {}),
   experimental: { proxyClientMaxBodySize: 52 * 1024 * 1024 },
+  async headers() {
+    return [{ source: "/notification-sw.js", headers: [
+      { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+      { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+    ] }];
+  },
   async rewrites() {
     return [
       {

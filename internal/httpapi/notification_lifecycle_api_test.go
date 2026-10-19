@@ -22,7 +22,7 @@ func TestNotificationLifecycleCatalogFilteringAndScope(t *testing.T) {
 	initial := request(h, "GET", "/api/v1/admin/notification-center", nil, admin, "")
 	expect(t, initial, 200)
 	catalog := data(t, initial)["events"].([]any)
-	if len(catalog) != 11 || len(data(t, initial)["rules"].([]any)) != 22 {
+	if len(catalog) != 11 || len(data(t, initial)["rules"].([]any)) != 3*len(catalog) {
 		t.Fatal("incomplete lifecycle catalog or routes")
 	}
 	for _, raw := range catalog {

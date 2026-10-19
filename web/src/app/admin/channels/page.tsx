@@ -4,7 +4,7 @@ import { adminEntry } from "@/lib/admin-navigation";
 import { ChannelInstancesView, type ChannelCategory } from "@/components/channel-instances";
 import { adminAppsReturnHref } from "@/lib/admin-app-navigation";
 
-const categories: readonly ChannelCategory[] = ["payment", "oauth", "sms", "mail", "bot", "certification", "provision"];
+const categories: readonly ChannelCategory[] = ["payment", "oauth", "sms", "mail", "bot", "push", "certification", "provision"];
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ category?: string | string[]; return_to?: string | string[] }> }) {
   const user = await requireUser(true);

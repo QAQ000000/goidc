@@ -101,7 +101,7 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instance
  'routes',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM notification_routes r),
  'templates',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM notification_message_templates m),
  'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM notification_events e),
- 'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM notification_deliveries d),
+ 'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d),
  'preferences',(SELECT jsonb_agg(to_jsonb(p) ORDER BY user_id,channel) FROM user_notification_preferences p))`
 	}
 	var snapshot string
@@ -400,7 +400,7 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 		}
 		assertNotificationUpgradeCredentials(t, db)
 		prefs, err := db.NotificationPreferences(ctx, customer)
-		if err != nil || len(prefs) != 2 {
+		if err != nil || len(prefs) != 3 {
 			t.Fatal("new preferences unavailable", err)
 		}
 		for _, p := range prefs {
@@ -409,7 +409,7 @@ func TestNotificationCenterUpgradeFrom160(t *testing.T) {
 			}
 		}
 		var routes, enabled, events, deliveries, attempts, storedPreferences int
-		if err = db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM notification_routes),(SELECT count(*) FROM notification_routes WHERE enabled),(SELECT count(*) FROM notification_events),(SELECT count(*) FROM notification_deliveries),(SELECT count(*) FROM notification_delivery_attempts),(SELECT count(*) FROM user_notification_preferences)`).Scan(&routes, &enabled, &events, &deliveries, &attempts, &storedPreferences); err != nil || routes != 2*len(NotificationEventCatalog()) || enabled+events+deliveries+attempts+storedPreferences != 0 {
+		if err = db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM notification_routes),(SELECT count(*) FROM notification_routes WHERE enabled),(SELECT count(*) FROM notification_events),(SELECT count(*) FROM notification_deliveries),(SELECT count(*) FROM notification_delivery_attempts),(SELECT count(*) FROM user_notification_preferences)`).Scan(&routes, &enabled, &events, &deliveries, &attempts, &storedPreferences); err != nil || routes != 3*len(NotificationEventCatalog()) || enabled+events+deliveries+attempts+storedPreferences != 0 {
 			t.Fatal("upgrade enabled routes, invented consent or backfilled historical notifications", err)
 		}
 		upgraded := notificationUpgradeSnapshot(t, db, true)
@@ -487,7 +487,7 @@ func TestNotificationLifecycleUpgradeFrom162(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before string
-	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM notification_deliveries d))::text`).Scan(&before); err != nil {
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Migrate(ctx); err != nil {
@@ -496,7 +496,7 @@ func TestNotificationLifecycleUpgradeFrom162(t *testing.T) {
 	var after, scope string
 	var enabled bool
 	var version, enabledRoutes, events int
-	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d) ORDER BY id) FROM notification_deliveries d))::text`).Scan(&after); err != nil || before != after {
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&after); err != nil || before != after {
 		t.Fatal("lifecycle migration altered existing route, template or pending delivery", err)
 	}
 	if err := db.Pool.QueryRow(ctx, `SELECT event_scope,enabled,version FROM user_notification_preferences WHERE user_id=$1 AND channel='inbox'`, customer).Scan(&scope, &enabled, &version); err != nil || scope != "invoice.paid" || !enabled || version != 4 {

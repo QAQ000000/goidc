@@ -89,6 +89,11 @@ func (s *Store) UpdateNotificationRoute(ctx context.Context, tx pgx.Tx, id strin
 			return out, conflict("notification_bot_unavailable", "通知机器人配置无效")
 		}
 	}
+	if in.Enabled && out.Channel == "web_push" {
+		if _, err = s.webPushInstance(ctx, tx, in.InstanceID); err != nil {
+			return out, err
+		}
+	}
 	var valid bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM notification_message_templates WHERE id=$1 AND event_kind=$2 AND channel=$3 AND (active OR NOT $4))`, in.TemplateID, out.EventKind, out.Channel, in.Enabled).Scan(&valid); err != nil {
 		return out, err
@@ -124,9 +129,12 @@ func (s *Store) UpdateNotificationTemplate(ctx context.Context, tx pgx.Tx, id st
 	}
 	// Each event has its own small, non-executable vocabulary. Read the event
 	// from the stored template rather than accepting a caller-supplied kind.
-	var kind string
-	if err := tx.QueryRow(ctx, `SELECT event_kind FROM notification_message_templates WHERE id=$1 FOR UPDATE`, id).Scan(&kind); err != nil {
+	var kind, channelName string
+	if err := tx.QueryRow(ctx, `SELECT event_kind,channel FROM notification_message_templates WHERE id=$1 FOR UPDATE`, id).Scan(&kind, &channelName); err != nil {
 		return out, err
+	}
+	if channelName == "web_push" && (in.Subject != notificationWebPushSubject || in.Body != notificationWebPushBody) {
+		return out, conflict("invalid_notification_template", "浏览器锁屏通知使用固定通用提示，请只调整启用状态")
 	}
 	for _, value := range []string{in.Subject, in.Body} {
 		if !notificationTemplateValid(kind, value) {

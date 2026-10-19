@@ -46,7 +46,13 @@ const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e
   SELECT 1 FROM notification_targets t JOIN channel_instances c ON c.id=t.instance_id
   WHERE t.id=d.target_id AND t.user_id=e.user_id AND t.active AND t.version=d.target_version
   AND t.target=d.target AND t.instance_id=d.instance_id AND c.category='bot'
-  AND c.implementation_id='telegram_bot' AND c.enabled AND r.instance_id=c.id))))`
+  AND c.implementation_id='telegram_bot' AND c.enabled AND r.instance_id=c.id))
+ OR (d.channel='web_push' AND EXISTS(
+  SELECT 1 FROM notification_web_push_subscriptions s JOIN channel_instances c ON c.id=s.instance_id
+  JOIN sessions ss ON ss.token_hash=s.session_token_hash AND ss.user_id=s.user_id
+  WHERE s.id=d.push_subscription_id AND s.user_id=e.user_id AND s.active AND s.version=d.target_version
+  AND s.instance_id=d.instance_id AND c.category='push' AND c.implementation_id='web_push' AND c.enabled
+  AND c.config->>'public_key'=s.vapid_public_key AND ss.expires_at>clock_timestamp() AND r.instance_id=c.id))))`
 
 func (s *Store) ClaimNotificationJob(ctx context.Context) (*notify.Job, error) {
 	for n := 0; n < 32; n++ {
@@ -74,7 +80,7 @@ func (s *Store) claimNotificationJobTx(ctx context.Context, tx pgx.Tx) (*notify.
 	var userID int64
 	var attempts int
 	var eligible bool
-	err := tx.QueryRow(ctx, `SELECT d.id,d.channel,coalesce(d.instance_id,''),d.target,d.subject,d.body,d.expires_at,e.user_id,d.attempts,`+notificationEligible+` FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id WHERE d.status='pending' AND d.channel IN ('telegram','inbox') AND d.next_attempt_at<=clock_timestamp() ORDER BY d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&job.ID, &job.Channel, &job.InstanceID, &job.Target, &job.Subject, &job.Body, &job.ExpiresAt, &userID, &attempts, &eligible)
+	err := tx.QueryRow(ctx, `SELECT d.id,d.channel,coalesce(d.instance_id,''),d.target,d.subject,d.body,d.expires_at,e.user_id,d.attempts,`+notificationEligible+` FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id WHERE d.status='pending' AND d.channel IN ('telegram','inbox','web_push') AND d.next_attempt_at<=clock_timestamp() ORDER BY d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&job.ID, &job.Channel, &job.InstanceID, &job.Target, &job.Subject, &job.Body, &job.ExpiresAt, &userID, &attempts, &eligible)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +109,30 @@ func (s *Store) claimNotificationJobTx(ctx context.Context, tx pgx.Tx) (*notify.
 			return nil, err
 		}
 	}
+	if job.Channel == "web_push" {
+		if _, err = tx.Exec(ctx, `SELECT s.id FROM notification_web_push_subscriptions s JOIN notification_deliveries d ON d.push_subscription_id=s.id WHERE d.id=$1 FOR SHARE OF s`, job.ID); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `SELECT ss.token_hash FROM sessions ss JOIN notification_web_push_subscriptions s ON s.session_token_hash=ss.token_hash JOIN notification_deliveries d ON d.push_subscription_id=s.id WHERE d.id=$1 FOR SHARE OF ss`, job.ID); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(ctx, `SELECT id FROM channel_instances WHERE id=$1 FOR SHARE`, job.InstanceID); err != nil {
+			return nil, err
+		}
+	}
 	if err = tx.QueryRow(ctx, `SELECT `+notificationEligible+` FROM notification_deliveries d WHERE d.id=$1`, job.ID).Scan(&eligible); err != nil {
 		return nil, err
 	}
 	if !eligible {
 		_, err = tx.Exec(ctx, `UPDATE notification_deliveries SET status='skipped',code='eligibility_changed',updated_at=now() WHERE id=$1`, job.ID)
 		return nil, err
+	}
+	if job.Channel == "web_push" {
+		job.PushSubscription, err = s.loadWebPushSubscription(ctx, tx, job.ID)
+		if err != nil {
+			_, err = tx.Exec(ctx, `UPDATE notification_deliveries SET status='failed',code='push_subscription_unavailable',updated_at=now() WHERE id=$1`, job.ID)
+			return nil, err
+		}
 	}
 	job.LeaseToken, err = notificationToken()
 	if err != nil {
@@ -186,6 +210,16 @@ func (s *Store) CompleteNotificationJob(ctx context.Context, job notify.Job, res
 	if tag.RowsAffected() != 1 {
 		return conflict("notification_lease_lost", "通知处理租约已失效")
 	}
+	if status == "failed" && code == "push_subscription_gone" {
+		// Fence revocation to the exact browser/version claimed by this lease;
+		// an old 410 must not disable a later re-subscription or another device.
+		if _, err = tx.Exec(ctx, `UPDATE notification_web_push_subscriptions s SET active=false,version=s.version+1,updated_at=now()
+ FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
+ WHERE d.id=$1 AND d.channel='web_push' AND d.push_subscription_id=s.id AND d.target_version=s.version
+ AND d.instance_id=s.instance_id AND e.user_id=s.user_id AND s.active`, job.ID); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.Exec(ctx, `UPDATE notification_delivery_attempts SET status=$2,code=$3,provider_message_id=$4,finished_at=now() WHERE lease_token=$1 AND status='sending'`, job.LeaseToken, attemptStatus, code, messageID); err != nil {
 		return err
 	}
@@ -201,7 +235,7 @@ func (s *Store) RecoverStaleNotificationJobs(ctx context.Context) error {
 	if _, err = tx.Exec(ctx, `WITH stale AS(UPDATE notification_deliveries SET status='unknown',code='lease_expired',lease_token=NULL,lease_until=NULL,updated_at=now() WHERE status='sending' AND lease_until<=clock_timestamp() RETURNING id) UPDATE notification_delivery_attempts a SET status='unknown',code='lease_expired',finished_at=now() FROM stale s WHERE a.delivery_id=s.id AND a.status='sending'`); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE notification_deliveries SET status='skipped',code='expired',updated_at=now() WHERE status='pending' AND channel IN ('telegram','inbox') AND expires_at<=clock_timestamp()`); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE notification_deliveries SET status='skipped',code='expired',updated_at=now() WHERE status='pending' AND channel IN ('telegram','inbox','web_push') AND expires_at<=clock_timestamp()`); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

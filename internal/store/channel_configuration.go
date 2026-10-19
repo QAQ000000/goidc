@@ -303,6 +303,18 @@ func (s *Store) mergeChannelCredentials(rec channelRecord, desc channel.Descript
 	if _, errs := channel.ValidateConfiguration(desc, in.Config, flags, in.Enabled); len(errs) > 0 {
 		return nil, "", nil, conflict("invalid_channel_config", "启用前配置校验失败")
 	}
+	// VAPID keys form one identity. Validate the complete proposed pair locally,
+	// including an unchanged encrypted private key during a public-key edit.
+	if in.Enabled && desc.Category == channel.Push && desc.ID == "web_push" {
+		proposed := channelRecord{item: rec.item, secret: sealed, aad: aad, fields: fields}
+		secrets, err := s.openChannelSecrets(proposed, desc)
+		if err != nil {
+			return nil, "", nil, conflict("invalid_channel_secret", "浏览器推送凭据不可用")
+		}
+		if _, err = channel.New(channel.Push, desc.ID, module.Config{Values: in.Config, Secrets: secrets}); err != nil {
+			return nil, "", nil, conflict("invalid_channel_config", "浏览器推送公私钥不匹配或配置无效")
+		}
+	}
 	encoded, err := json.Marshal(fields)
 	return sealed, aad, encoded, err
 }

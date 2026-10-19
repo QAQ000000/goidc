@@ -13,7 +13,7 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-type Category = "payment" | "oauth" | "sms" | "mail" | "bot" | "certification" | "provision" | "storage" | "captcha";
+type Category = "payment" | "oauth" | "sms" | "mail" | "bot" | "push" | "certification" | "provision" | "storage" | "captcha";
 type AppItem = {
   descriptor: ChannelDescriptor;
   factory_available: boolean;
@@ -42,6 +42,7 @@ const categories: { id: Category; label: string }[] = [
   { id: "sms", label: "短信" },
   { id: "mail", label: "邮件" },
   { id: "bot", label: "机器人通知" },
+  { id: "push", label: "浏览器通知" },
   { id: "certification", label: "实名认证" },
   { id: "provision", label: "供应商开通" },
   { id: "storage", label: "文件存储" },

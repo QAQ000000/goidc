@@ -26,7 +26,7 @@ func TestDefaultProfileMatchesCompiledModules(t *testing.T) {
 	if api.Profile != profile.Profile || api.ContractVersion != profile.ContractVersion || worker.Profile != api.Profile || worker.ContractVersion != api.ContractVersion || !reflect.DeepEqual(api.Modules, worker.Modules) {
 		t.Fatalf("API/worker assembly contract differs: %+v / %+v", api, worker)
 	}
-	required := map[string]bool{"bot/telegram_bot": false, "captcha/builtin_png": false}
+	required := map[string]bool{"bot/telegram_bot": false, "captcha/builtin_png": false, "push/web_push": false}
 	for i := range api.Modules {
 		key := string(api.Modules[i].Category) + "/" + api.Modules[i].ID
 		if _, needed := required[key]; needed {

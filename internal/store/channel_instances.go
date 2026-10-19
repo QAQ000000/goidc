@@ -282,7 +282,7 @@ func (s *Store) DeleteChannelInstance(ctx context.Context, actor int64, sessionH
 		return err
 	}
 	var referenced bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM email_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM sms_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM notification_routes WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_targets WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_binding_challenges WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_deliveries WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM certification_settings WHERE default_instance_id=$1) OR EXISTS(SELECT 1 FROM certification_submissions WHERE channel_instance_id=$1)`, id).Scan(&referenced); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM payment_transactions WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM email_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM sms_outbox WHERE channel_instance_id=$1) OR EXISTS(SELECT 1 FROM notification_routes WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_targets WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_web_push_subscriptions WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_binding_challenges WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM notification_deliveries WHERE instance_id=$1) OR EXISTS(SELECT 1 FROM certification_settings WHERE default_instance_id=$1) OR EXISTS(SELECT 1 FROM certification_submissions WHERE channel_instance_id=$1)`, id).Scan(&referenced); err != nil {
 		return err
 	}
 	if referenced {

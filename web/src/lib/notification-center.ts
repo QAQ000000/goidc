@@ -42,7 +42,8 @@ export function notificationEventOptions(data: NotificationCenterData) {
   return [...kinds].map(kind => ({ kind, name: notificationEventName(kind, data.events) }));
 }
 
-export function canEnableNotification(preference: NotificationPreference, targets: NotificationTarget[], instances: NotificationInstance[]) {
+export function canEnableNotification(preference: NotificationPreference, targets: NotificationTarget[], instances: NotificationInstance[], webPushAvailable = false) {
+  if (preference.channel === "web_push") return webPushAvailable;
   return !preference.requires_binding || targets.some(target => target.channel === preference.channel && instances.some(instance => instance.id === target.instance_id && instance.channel === target.channel));
 }
 

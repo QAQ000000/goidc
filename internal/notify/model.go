@@ -12,6 +12,15 @@ type Job struct {
 	Body       string
 	Subject    string
 	ExpiresAt  time.Time
+	// PushSubscription is decrypted only for the active leased Web Push job.
+	// Endpoint and browser keys must never appear in logs or delivery metadata.
+	PushSubscription *PushSubscription
+}
+
+type PushSubscription struct {
+	Endpoint string
+	P256DH   string
+	Auth     string
 }
 
 // Accepted means the provider acknowledged delivery, not that a human read it.

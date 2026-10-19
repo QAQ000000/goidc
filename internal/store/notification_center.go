@@ -43,6 +43,9 @@ func notificationChannelName(channelName string) string {
 	if channelName == "telegram" {
 		return "Telegram"
 	}
+	if channelName == "web_push" {
+		return "浏览器通知"
+	}
 	return "站内通知"
 }
 
@@ -55,7 +58,7 @@ func activeNotificationUser(ctx context.Context, tx pgx.Tx, userID int64) error 
 }
 
 func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]NotificationPreference, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(p.event_scope,'invoice.paid') FROM users u CROSS JOIN (VALUES('telegram'),('inbox')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
+	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(p.event_scope,'invoice.paid') FROM users u CROSS JOIN (VALUES('telegram'),('inbox'),('web_push')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,15 +70,15 @@ func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]No
 			return nil, err
 		}
 		p.Name = notificationChannelName(p.Channel)
-		p.RequiresBinding = p.Channel == "telegram"
+		p.RequiresBinding = p.Channel == "telegram" || p.Channel == "web_push"
 		out = append(out, p)
 	}
 	return out, rows.Err()
 }
 
 func (s *Store) UpdateNotificationPreference(ctx context.Context, tx pgx.Tx, userID int64, channelName string, enabled bool, expectedVersion int64, eventScope ...string) (NotificationPreference, error) {
-	out := NotificationPreference{Channel: channelName, Name: notificationChannelName(channelName), RequiresBinding: channelName == "telegram", EventScope: "invoice.paid"}
-	if channelName != "telegram" && channelName != "inbox" || expectedVersion < 0 || len(eventScope) > 1 || (len(eventScope) == 1 && eventScope[0] != "" && eventScope[0] != "invoice.paid" && eventScope[0] != "business") {
+	out := NotificationPreference{Channel: channelName, Name: notificationChannelName(channelName), RequiresBinding: channelName == "telegram" || channelName == "web_push", EventScope: "invoice.paid"}
+	if channelName != "telegram" && channelName != "inbox" && channelName != "web_push" || expectedVersion < 0 || len(eventScope) > 1 || (len(eventScope) == 1 && eventScope[0] != "" && eventScope[0] != "invoice.paid" && eventScope[0] != "business") {
 		return out, conflict("invalid_notification_preference", "通知偏好无效")
 	}
 	if err := activeNotificationUser(ctx, tx, userID); err != nil {
@@ -119,6 +122,15 @@ func (s *Store) UpdateNotificationPreference(ctx context.Context, tx pgx.Tx, use
 		}
 		if !exists {
 			return out, conflict("notification_binding_required", "请先绑定通知目标")
+		}
+	}
+	if enabled && channelName == "web_push" {
+		var exists bool
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM notification_web_push_subscriptions s WHERE s.user_id=$1 AND `+webPushSubscriptionCurrent+`)`, userID).Scan(&exists); err != nil {
+			return out, err
+		}
+		if !exists {
+			return out, conflict("notification_binding_required", "请先在浏览器订阅通知")
 		}
 	}
 	err = tx.QueryRow(ctx, `INSERT INTO user_notification_preferences(user_id,channel,enabled,event_scope) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,channel) DO UPDATE SET enabled=excluded.enabled,event_scope=excluded.event_scope,version=user_notification_preferences.version+1,updated_at=now() RETURNING enabled,version,event_scope`, userID, channelName, enabled, out.EventScope).Scan(&out.Enabled, &out.Version, &out.EventScope)

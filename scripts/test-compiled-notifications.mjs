@@ -10,6 +10,7 @@ const modulePrefix = 'github.com/codex/zjmfgo/';
 
 // Exact names make removal, renaming and accidental -run mismatches fail.
 export const unitSuites = {
+  'internal/notify': ['TestWebPushSubscriptionRejectsUntrustedDestinationsAndMalformedKeys'],
   'internal/channel': ['TestRegistryRejectsDuplicateAndListsSorted', 'TestNormalizeConfigEnforcesContractWithoutEchoingValues', 'TestDescriptorRejectsInvalidSchemasAndDefensivelyCopiesDefaults', 'TestSecretSyntaxValidatorsRequireFactoriesAndProtectInputMap'],
   'internal/module': ['TestRegistryRegistersDescriptorAndBuildsTypedImplementation', 'TestRegistryRejectsDuplicateDescriptor'],
   'internal/modules/manifest': ['TestDefaultProfileMatchesCompiledModules', 'TestManifestCLIIsConfigurationIndependentAndStrict'],
@@ -18,12 +19,14 @@ export const unitSuites = {
     'TestMailDispatchUsesRegisteredFactoryAndIndependentSecrets', 'TestSMSDispatchUsesRegisteredFactoryWithoutEndpointAssumptions', 'TestSMTPFactoryValidatesBeforeConnectingAndUsesNamedPassword',
     'TestSMSGatewayEvidencePreservesOriginalBody', 'TestSMSWithEvidenceFailuresRemainPrivate', 'TestSMSWithEvidenceGenericAcceptanceSurvivesLargeBody', 'TestSMSGatewayEvidenceRetainsPartialRead', 'TestSMSIgnoresDefaultTransportProxy', 'TestSMSProtocolAndFailurePrivacy', 'TestIdcsmartSMSProtocol', 'TestIdcsmartSMSLegacyResponseVariants', 'TestIdcsmartSMSFailureDoesNotExposeResponse', 'TestIdcsmartSign', 'TestIdcsmartStatusOK',
     'TestTelegramCompiledRegistryAndLocalValidation', 'TestTelegramSendPlainTextAndStrictAcceptance', 'TestTelegramDeadlineLengthRedirectAndTransportSafety', 'TestTelegramWebhookExplicitConfigurationContract',
+    'TestWebPushProtocolEncryptsPrivatePayloadAndSignsVAPID', 'TestWebPushProviderPreservesDeliveryKnowledgeAndBoundedRetry', 'TestWebPushProviderRejectsExpiredOrInvalidSubscriptionsBeforeNetwork', 'TestWebPushRegistryAndConfigurationKeepCredentialsLocal', 'TestWebPushTransportRejectsPrivateDNSAndPinsPublicDestinations', 'TestWebPushCenterDispatchRechecksEligibilityAndDoesNotReplayUnknown',
     'TestNotificationCenterDispatchPreservesProviderKnowledge', 'TestNotificationCenterRejectsUnavailableOrChangedEligibilityBeforeSending', 'TestNotificationCenterPersistenceAndLeaseFailuresNeverResendOrExposeErrors',
   ],
 };
 
 export const integrationSuites = {
   'internal/store': [
+    'TestNotificationWebPushMultipleDevicesAreEncryptedAndNeverBackfill', 'TestNotificationWebPushAccountOwnershipCASAndSessionRebind', 'TestNotificationWebPushCurrentSessionKeyAndConsentEligibility', 'TestNotificationWebPushProviderGoneRevokesOnlyMatchingBrowserVersion', 'TestNotificationWebPushLogoutAfterClaimAndUnknownAreTerminal', 'TestNotificationWebPushCrossDayCatchupRequiresExistingBrowserConsent', 'TestNotificationWebPushInvalidSubscriptionsAndUnboundConsentAreRejected', 'TestNotificationWebPushUpgrade173PreservesExistingConsentAndQueuedFacts', 'TestNotificationWebPushTemplatesKeepLockScreenPrivateAndStateUsesCAS', 'TestNotificationWebPushHistoryDeduplicatesPushOnlyFactsAndWhitelistsPayload', 'TestNotificationWebPushHistoryRechecksCurrentOwnershipOfEveryResource', 'TestNotificationWebPushOnlyScheduledReminders',
     'TestNotificationCenterDefaultsAndNoHistoricalBackfill', 'TestNotificationCenterBindingIsPrivateSingleUseAndNotConsent', 'TestNotificationCenterChallengesRevocationAndCurrentAuthority', 'TestNotificationCenterConsentCASAndNoTargetOwnershipTransfer', 'TestNotificationCenterLegacyLinksNeverEnterNewWorker', 'TestNotificationCenterInboxAtomicDeliveryFrozenTemplateAndOwnership', 'TestNotificationCenterClaimRechecksCurrentConsentAndOwnership', 'TestNotificationCenterActiveRecheckLeaseRecoveryAndUnknownNeverRetry', 'TestNotificationCenterRetriesOnlyExplicitRateLimitAndStopsAtFive', 'TestNotificationCenterConcurrentClaimsExactlyOnce', 'TestNotificationCenterOversizedRenderedTemplateCannotPoisonQueue', 'TestNotificationCenterCompletionWaitingPastLeaseIsFenced', 'TestNotificationCenterRollbackAndAdminMetadataScope',
     'TestNotificationCenterUpgradeFrom160',
     'TestNotificationLifecycleUpgradeFrom162',
@@ -34,6 +37,7 @@ export const integrationSuites = {
     'TestNotificationLegacyDeadlineShanghaiAndExactRenewal', 'TestNotificationLegacyDeadlinePaginationAndHistory', 'TestNotificationLegacyDeadlineInvalidationBeforeSending', 'TestNotificationLegacyBillingShanghaiAndInvalidation', 'TestNotificationLegacyDeadlineRejectsElapsedStage', 'TestNotificationLegacyDeadlineUpgrade172PreservesFacts',
   ],
   'internal/httpapi': [
+    'TestWebPushAPIConsentIsolationAndPrivacy', 'TestWebPushAPIAuditRollbackAndRevokedSession', 'TestWebPushAPIRejectsUnsafeSubscriptionAndMissingCAS', 'TestWebPushAPIHistoryWorksWithoutInboxAndRechecksOwnership',
     'TestChannelConfigurationNamedCredentialsAndRollback', 'TestChannelConfigurationRejectsPollutionAndMissingContracts', 'TestChannelConfigurationMissingAndIncompatibleInstancesRemainManageable', 'TestChannelInstancesCatalogueAndSecretLifecycle', 'TestPaymentIntentBindsSelectedChannelInstance',
     'TestCompiledMailAdapterRunsThroughInstanceOutbox', 'TestCompiledSMSAdapterRunsThroughInstanceOutbox', 'TestNotificationEnableValidatesLocalTransportConfiguration', 'TestDefaultIDCSmartSMSUsesInstanceConfiguration', 'TestLegacySMTPResolversCannotBypassInstanceSchema', 'TestCompiledInstancesCanStartWithoutCredentials',
     'TestPaymentSchemaMismatchRejectsNewIntentAndPreservesSnapshot', 'TestDefaultPaymentContractRejectsSchemaWithoutRequiringFallbackFields',
@@ -42,7 +46,7 @@ export const integrationSuites = {
     'TestNotificationCenterBindingPrivacyAndConsent', 'TestNotificationCenterBindingRequiresLiveOriginatingSession', 'TestNotificationCenterWebhookRotationDuringBindingRollsBack', 'TestNotificationCenterActualAdapterWorkerAndInbox', 'TestNotificationCenterAdminScopeAndAuditRollback', 'TestNotificationCenterInvalidSecretRejectedAtSave',
     'TestNotificationLifecycleCatalogFilteringAndScope', 'TestNotificationLifecycleExplicitConsentAndAuditRollback',
   ],
-  'internal/notification': ['TestTelegramProtocolResultsPersistThroughNotificationStore', 'TestNotificationCenterProcessRecovery'],
+  'internal/notification': ['TestWebPushProtocolResultsPersistThroughNotificationWorkerAndStore', 'TestTelegramProtocolResultsPersistThroughNotificationStore', 'TestNotificationCenterProcessRecovery'],
 };
 
 export function validateIntegrationURL(raw) {

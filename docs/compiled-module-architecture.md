@@ -6,7 +6,7 @@
 
 ## 当前装配与构建核验
 
-`internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification、supplier、filestorage 和 captcha。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 12 个模块，含 Telegram Bot 和本地/S3 文件存储；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)，文件存储见[应用文件存储契约](architecture/file-storage.md)，验证码见[验证码接入契约](auth-captcha.md)。
+`internal/modules/all` 是 API 和 worker 的默认装配入口，显式引入 payment、notification、certification、supplier、filestorage 和 captcha。`audit/module-build-profile.json` 是受控的预期构建声明，不是审计数据转储。默认组合有 13 个模块，含 Telegram Bot、Web Push 和本地/S3 文件存储；OAuth 目前只有类别定义，没有正式实现。通知事件与渠道边界见[统一通知契约](notification-architecture.md)，文件存储见[应用文件存储契约](architecture/file-storage.md)，验证码见[验证码接入契约](auth-captcha.md)。
 
 程序可在读取环境变量、连接数据库之前输出公共模块清单：
 
@@ -19,7 +19,7 @@
 
 两个候选构建器都会执行刚构建的二进制，核对预期清单、实际注册清单和 API/worker 描述符一致性。产物保存预期 profile、两个实际清单及其与源码、二进制的哈希绑定。离线验证重验这些证据，不执行候选目录中的应用代码。当前只实现明确的 default 组合，尚未提供任意 build tags 裁剪工具。
 
-`node scripts/check-module-binaries.mjs` 是 CI 的实际二进制门禁：真实构建 API/worker，在没有应用配置的最小环境执行上述命令，使用 strace 拒绝网络 syscall 并要求零尝试；同时核对 12 模块 profile、描述符和两二进制一致性。构建、执行、输出及进程组清理均有上限。它证明清单入口不启动数据库或网络，不证明正常启动健康和外部渠道可用。
+`node scripts/check-module-binaries.mjs` 是 CI 的实际二进制门禁：真实构建 API/worker，在没有应用配置的最小环境执行上述命令，使用 strace 拒绝网络 syscall 并要求零尝试；同时核对 13 模块 profile、描述符和两二进制一致性。构建、执行、输出及进程组清理均有上限。它证明清单入口不启动数据库或网络，不证明正常启动健康和外部渠道可用。
 
 当前 `c25d3bf` 已完成一次独立 v2 候选真实构建与运行：同包两次迁移、API/Web/worker、3 个公开页及 21 份资源、原生依赖与 worker TERM/重启通过。实际运行发现验收控制器漏复制 `module-manifest-lib.mjs`，已补齐并以“仅复制清单文件后独立导入”的回归接入 CI；使用修正的独立控制器重跑同一候选通过，未重建业务包。构建输入、控制器源码锚、首次失败和重跑证据保存于忽略的 `output/notification-runtime/`。这仍是隔离准备，真实渠道和生产切换另验。
 
@@ -67,6 +67,7 @@
 | mail | 类型化 `MailProvider`；默认选择、实例解析、验证码、业务通知、试发和 worker 统一按实现 ID 分发 |
 | sms | 类型化 `SMSProvider`；工厂接收完整普通值与命名凭据；内置传输校验留在各自实现 |
 | bot | Telegram 私聊作为通用业务通知渠道，按事件路由、有效绑定和显式订阅范围分发；未知结果停止自动重发 |
+| push | 类型化 `PushProvider`；Web Push 按浏览器订阅独立投递，发送前复查会话、VAPID 公钥与业务资格；通用文案及登录后详情、撤销与未知结果边界见[统一通知契约](notification-architecture.md#浏览器-web-push) |
 | payment | 方式/类型化工厂与回调协议统一注册，实例配置和交易凭据快照驱动运行；生产仍为 mock/epay，接入规则见[支付模块开发契约](architecture/payment-module-development.md) |
 | certification | 类型化实例工厂、申请配置快照与持久提交/查询；生产只装配人工审核，真实厂商另验，见[实名认证契约](domain/certification.md) |
 | provision | 供应商使用 `supplier_accounts` 的完整普通配置、命名凭据与 schema，运行解析和后台字段共享定义；NOKVM 保留部署 profile，接入见[供应商模块开发契约](architecture/supplier-module-development.md) |

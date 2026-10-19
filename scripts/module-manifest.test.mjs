@@ -95,3 +95,10 @@ test('legacy sources retain their previous scope and cannot claim unanchored mod
   await verifyModuleBuildEvidence({ sourceFiles: [], evidence: undefined });
   await assert.rejects(verifyModuleBuildEvidence({ sourceFiles: [], evidence: {} }), /no source profile/);
 });
+
+// This profile is also consumed by both release builders, independently of Go.
+test('current default release profile admits the compiled Web Push factory', async () => {
+  const current = JSON.parse(await readFile(new URL('../audit/module-build-profile.json', import.meta.url), 'utf8'));
+  const modules = validateModuleProfile(current);
+  assert.ok(modules.some(item => item.category === 'push' && item.id === 'web_push' && item.factory_available));
+});

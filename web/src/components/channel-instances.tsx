@@ -21,19 +21,20 @@ import { Badge } from "./ui/badge";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
-export type ChannelCategory = "payment" | "mail" | "sms" | "bot" | "oauth" | "certification" | "provision";
+export type ChannelCategory = "payment" | "mail" | "sms" | "bot" | "push" | "oauth" | "certification" | "provision";
 
 const categories: { id: ChannelCategory; label: string }[] = [
   { id: "payment", label: "支付接口" }, { id: "mail", label: "邮件接口" },
   { id: "sms", label: "短信接口" }, { id: "oauth", label: "第三方登录" },
-  { id: "bot", label: "机器人通知" },
+  { id: "bot", label: "机器人通知" }, { id: "push", label: "浏览器通知" },
   { id: "certification", label: "实名认证接口" }, { id: "provision", label: "开通接口" },
 ];
 const categoryText: Record<string, { title: string; description: string; empty: string }> = {
   payment: { title: "支付接口", description: "选择支付接口并完成商户配置，客户即可在结算时选择支付方式。", empty: "当前没有可配置的支付接口" },
   mail: { title: "邮件接口", description: "填写邮件接口配置后，系统可以发送验证码、账单和业务通知。", empty: "当前没有可配置的邮件接口" },
   sms: { title: "短信接口", description: "填写短信接口配置后，系统可以发送注册、登录和安全验证码。", empty: "当前没有可配置的短信接口" },
-  bot: { title: "机器人通知", description: "配置机器人通知渠道后，在通知中心配置付款成功规则。用户须先验证绑定并主动开启通知。", empty: "当前没有可配置的机器人通知模块" },
+  bot: { title: "机器人通知", description: "配置机器人通知渠道后，在通知中心配置业务通知规则。用户须先验证绑定并主动开启通知。", empty: "当前没有可配置的机器人通知模块" },
+  push: { title: "浏览器通知", description: "配置 Web Push 公钥和私钥，再到通知中心启用业务规则。用户需主动授权并订阅每个浏览器。正式使用需要 HTTPS。", empty: "当前没有可配置的浏览器通知模块" },
   oauth: { title: "第三方登录", description: "选择开启第三方登录方式，并配置相应的接口凭据。", empty: "当前没有可配置的第三方登录接口" },
   certification: { title: "实名认证接口", description: "管理实名认证服务商配置和启用状态。", empty: "当前没有可配置的实名认证接口" },
   provision: { title: "开通接口", description: "查看开通能力；供应商账户和预置连接请在各自的业务入口管理。", empty: "当前没有可用的开通接口" },

@@ -55,29 +55,44 @@ func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, li
 			continue
 		}
 		result := notify.Result{Outcome: "failed", Code: "notification_channel_unavailable"}
-		if job.Channel == "telegram" {
-			config, implementation, resolveErr := db.RuntimeChannelInstance(ctx, job.InstanceID, channel.Bot)
+		var provider interface {
+			Send(context.Context, notify.Job) notify.Result
+		}
+		var category channel.Category
+		switch job.Channel {
+		case "telegram":
+			category = channel.Bot
+		case "web_push":
+			category = channel.Push
+		}
+		if category != "" {
+			config, implementation, resolveErr := db.RuntimeChannelInstance(ctx, job.InstanceID, category)
 			if resolveErr == nil {
-				provider, factoryErr := NewBotProvider(implementation, config)
-				if factoryErr == nil {
-					// Check again after resolving credentials, before any external write.
-					active, err = db.NotificationJobActive(ctx, *job)
-					if err != nil {
-						return completed, errors.New("notification lease check failed")
-					}
-					if !active {
-						if err = db.CompleteNotificationJob(ctx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
-							return completed, errors.New("notification completion failed")
-						}
-						completed++
-						continue
-					}
-					if ctx.Err() != nil {
-						return completed, errors.New("notification worker interrupted")
-					}
-					result = provider.Send(ctx, *job)
+				switch category {
+				case channel.Bot:
+					provider, _ = NewBotProvider(implementation, config)
+				case channel.Push:
+					provider, _ = NewPushProvider(implementation, config)
 				}
 			}
+		}
+		if provider != nil {
+			// Check again after resolving credentials, before any external write.
+			active, err = db.NotificationJobActive(ctx, *job)
+			if err != nil {
+				return completed, errors.New("notification lease check failed")
+			}
+			if !active {
+				if err = db.CompleteNotificationJob(ctx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
+					return completed, errors.New("notification completion failed")
+				}
+				completed++
+				continue
+			}
+			if ctx.Err() != nil {
+				return completed, errors.New("notification worker interrupted")
+			}
+			result = provider.Send(ctx, *job)
 		}
 		if err = db.CompleteNotificationJob(ctx, *job, result); err != nil {
 			// After an external result, never resend on persistence failure. Its

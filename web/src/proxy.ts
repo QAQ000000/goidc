@@ -3,6 +3,9 @@ import type { SiteProfile, User } from "./lib/api";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  // These fixed public resources must stay installable/updatable while the
+  // business API is unavailable or pages are in maintenance mode.
+  if (path === "/notification-sw.js" || path === "/manifest.webmanifest") return NextResponse.next();
   const authRedirect = (target: string) => {
     const base = new URL(process.env.PUBLIC_ORIGIN ?? request.url);
     if (!["http:", "https:"].includes(base.protocol) || base.username || base.password || (process.env.PUBLIC_ORIGIN !== undefined && (base.pathname !== "/" || base.search || base.hash))) throw new Error("Invalid public redirect origin");
@@ -87,4 +90,4 @@ export async function proxy(request: NextRequest) {
   return new NextResponse("站点暂时不可用，请稍后再试。", { status: 503, headers: { ...headers, "Content-Type": "text/plain; charset=utf-8" } });
 }
 
-export const config = { matcher: ["/api/:path*", "/((?!api/|_next/|assets/|favicon.ico).*)"] };
+export const config = { matcher: ["/api/:path*", "/((?!api/|_next/|assets/|favicon.ico|notification-sw\\.js$|manifest\\.webmanifest$).*)"] };

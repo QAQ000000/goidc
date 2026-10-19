@@ -19,6 +19,7 @@ const (
 	SMS           Category = "sms"
 	Mail          Category = "mail"
 	Bot           Category = "bot"
+	Push          Category = "push"
 	Certification Category = "certification"
 	Provision     Category = "provision"
 	Storage       Category = "storage"
@@ -29,7 +30,7 @@ const (
 // private categories, while persisted/API contracts use this finite catalogue.
 func ValidCategory(category Category) bool {
 	switch category {
-	case Payment, OAuth, SMS, Mail, Bot, Certification, Provision, Storage, Captcha:
+	case Payment, OAuth, SMS, Mail, Bot, Push, Certification, Provision, Storage, Captcha:
 		return true
 	default:
 		return false

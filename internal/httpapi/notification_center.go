@@ -25,6 +25,10 @@ func (s *Server) registerNotificationCenterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/me/notification-bindings/{id}", s.sessionAuth(s.deleteNotificationBinding, false))
 	mux.HandleFunc("GET /api/v1/me/notification-inbox", s.sessionAuth(s.notificationInbox, false))
 	mux.HandleFunc("POST /api/v1/me/notification-inbox/{id}/read", s.sessionAuth(s.readNotificationInbox, false))
+	mux.HandleFunc("GET /api/v1/me/notification-web-push", s.sessionAuth(s.webPushState, false))
+	mux.HandleFunc("GET /api/v1/me/notification-web-push/history", s.sessionAuth(s.webPushHistory, false))
+	mux.HandleFunc("POST /api/v1/me/notification-web-push/subscriptions", s.sessionAuth(s.saveWebPushSubscription, false))
+	mux.HandleFunc("DELETE /api/v1/me/notification-web-push/subscriptions/{id}", s.sessionAuth(s.deleteWebPushSubscription, false))
 	mux.HandleFunc("GET /api/v1/admin/notification-center", s.sessionAuth(s.notificationCenter, true))
 	mux.HandleFunc("PATCH /api/v1/admin/notification-center/rules/{id}", s.sessionAuth(s.updateNotificationCenterRule, true))
 	mux.HandleFunc("PATCH /api/v1/admin/notification-center/templates/{id}", s.sessionAuth(s.updateNotificationCenterTemplate, true))
@@ -51,18 +55,22 @@ type notificationInstance struct {
 }
 
 func (s *Server) notificationInstances(ctx context.Context) ([]notificationInstance, error) {
-	rows, err := s.db.Pool.Query(ctx, `SELECT id,display_name,coalesce(config->>'bot_username',''),version FROM channel_instances WHERE category='bot' AND enabled ORDER BY sort_order,id`)
+	rows, err := s.db.Pool.Query(ctx, `SELECT id,display_name,coalesce(config->>'bot_username',''),version,category FROM channel_instances WHERE category IN ('bot','push') AND enabled ORDER BY sort_order,id`)
 	if err != nil {
 		return nil, err
 	}
 	items := []notificationInstance{}
 	for rows.Next() {
 		var item notificationInstance
-		if err = rows.Scan(&item.ID, &item.Name, &item.BotUsername, &item.Version); err != nil {
+		var category string
+		if err = rows.Scan(&item.ID, &item.Name, &item.BotUsername, &item.Version, &category); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		item.Channel = "telegram"
+		if category == "push" {
+			item.Channel = "web_push"
+		}
 		items = append(items, item)
 	}
 	err = rows.Err()
@@ -72,11 +80,20 @@ func (s *Server) notificationInstances(ctx context.Context) ([]notificationInsta
 	}
 	valid := []notificationInstance{}
 	for _, item := range items {
-		config, implementation, resolveErr := s.db.RuntimeChannelInstance(ctx, item.ID, channel.Bot)
-		if resolveErr != nil || implementation != "telegram_bot" {
+		category, expected := channel.Bot, "telegram_bot"
+		if item.Channel == "web_push" {
+			category, expected = channel.Push, "web_push"
+		}
+		config, implementation, resolveErr := s.db.RuntimeChannelInstance(ctx, item.ID, category)
+		if resolveErr != nil || implementation != expected {
 			continue
 		}
-		if _, resolveErr = notification.NewBotProvider(implementation, config); resolveErr == nil {
+		if item.Channel == "web_push" {
+			_, resolveErr = notification.NewPushProvider(implementation, config)
+		} else {
+			_, resolveErr = notification.NewBotProvider(implementation, config)
+		}
+		if resolveErr == nil {
 			valid = append(valid, item)
 		}
 	}
@@ -119,7 +136,7 @@ func (s *Server) notificationPreferences(w http.ResponseWriter, r *http.Request)
 	if !decode(w, r, &in) {
 		return
 	}
-	if (in.Channel != "telegram" && in.Channel != "inbox") || in.Enabled == nil || in.ExpectedVersion == nil || *in.ExpectedVersion < 0 {
+	if (in.Channel != "telegram" && in.Channel != "inbox" && in.Channel != "web_push") || in.Enabled == nil || in.ExpectedVersion == nil || *in.ExpectedVersion < 0 {
 		writeError(w, 400, "invalid_notification_preference", "请提供有效渠道、偏好和版本")
 		return
 	}
@@ -273,7 +290,7 @@ func (s *Server) notificationCenter(w http.ResponseWriter, r *http.Request) {
 	if hasMore {
 		deliveries = deliveries[:limit]
 	}
-	channels := []map[string]any{{"channel": "email", "name": "邮件（兼容队列）"}, {"channel": "sms", "name": "短信（兼容队列）"}, {"channel": "telegram", "name": "Telegram", "requires_binding": true}, {"channel": "inbox", "name": "站内通知"}}
+	channels := []map[string]any{{"channel": "email", "name": "邮件（兼容队列）"}, {"channel": "sms", "name": "短信（兼容队列）"}, {"channel": "telegram", "name": "Telegram", "requires_binding": true}, {"channel": "inbox", "name": "站内通知"}, {"channel": "web_push", "name": "浏览器推送", "requires_binding": true}}
 	write(w, 200, map[string]any{"events": events, "event_kind": eventKind, "channels": channels, "rules": rules, "templates": templates, "instances": instances, "deliveries": deliveries, "has_more": hasMore, "limit": limit, "offset": offset})
 }
 

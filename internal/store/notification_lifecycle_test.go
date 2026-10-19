@@ -105,7 +105,7 @@ func lifecycleBusinessPreference(t *testing.T, f notificationFixture, ch string,
 func TestNotificationLifecycleDefaultsScopeAndNoHistoricalBackfill(t *testing.T) {
 	f := notificationCenterFixture(t)
 	r := lifecycleFixtureResources(t, f, f.customer, "scope")
-	if n := f.count(t, `SELECT count(*) FROM notification_routes`); n != 2*len(NotificationEventCatalog()) {
+	if n := f.count(t, `SELECT count(*) FROM notification_routes`); n != 3*len(NotificationEventCatalog()) {
 		t.Fatalf("routes=%d", n)
 	}
 	if n := f.count(t, `SELECT count(*) FROM notification_routes WHERE enabled`); n != 0 {
