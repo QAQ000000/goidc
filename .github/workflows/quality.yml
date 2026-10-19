@@ -187,6 +187,9 @@ jobs:
       - name: Require cancellation, renewal and historical payment safety on PostgreSQL 18
         run: node scripts/test-service-cancellations.mjs --integration
 
+      - name: Require admin order receipts, historical replay and mutation safety on PostgreSQL 18
+        run: node scripts/test-admin-orders.mjs --integration
+
       - name: Require payment runtime and historical financial compatibility on PostgreSQL 18
         run: node scripts/test-compiled-payments.mjs --integration
 

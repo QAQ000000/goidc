@@ -135,16 +135,23 @@
         "internal/store/cancellations.go",
         "internal/store/cancellation_renewal.go",
         "internal/store/cancellation_jobs.go",
-        "scripts/test-service-cancellations.mjs"
+        "scripts/test-service-cancellations.mjs",
+        "internal/store/admin_order_create.go",
+        "internal/store/mutation_operations.go",
+        "db/migrations/179_admin_order_mutation_receipts.sql",
+        "scripts/test-admin-orders.mjs"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'",
-        "node scripts/test-service-cancellations.mjs --integration"
+        "node scripts/test-service-cancellations.mjs --integration",
+        "node scripts/test-admin-orders.mjs --integration"
       ],
       "evaluation": [
         "isolated loopback PostgreSQL 18 test database; required Go JSON run/pass and package results with zero skips under serial race",
         "pending cancellation permits renewal and payment; approved cancellation rejects new renewal and unpaid renewal balance, credit and online admission; real pending/expired or unresolved close/anomaly blocks approval under serialized service locks and NOWAIT finance admission",
         "actual schema168 to 169 preserves money, intents, receipts, entitlement and old job/audit; only undispatched pending conflicts reopen; ambiguous history rejects upgrade atomically; reapproval creates a new generation and execution rechecks entitlement while manual termination preserves service state",
+        "admin order creation uses actor-scoped admin:order.create receipts without changing request hashes or responses; eight concurrent submissions produce one order, stock reservation, coupon use, invoice, email, notification and audit; different requests conflict, permission revocation and customer transfer prevent replay, and audit failures roll back every effect",
+        "genuine schema178 to 179 preserves historical receipt timestamps, hashes, results and business facts, removes the legacy receipt table and allows authorized replay; conflicting target receipts or ambiguous actor/customer/order references reject the complete upgrade; order notes, review, cancel, deferred invoices, deletion, bulk operations and customer admission retain their boundaries",
         "stop old API, workers and other writers before upgrading paired migration and binaries; no direct old-binary downgrade on new schema; remote CI, browser, real merchants/providers and production cutover require separate evidence"
       ],
       "review": {

@@ -12,19 +12,22 @@ import (
 // A mutation must then lock/read that role inside its own transaction, waiting
 // for the revocation and rejecting before it changes business state or replays.
 func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
-	for _, action := range []string{"notes", "cancel", "delete", "review", "invoice", "create", "quote"} {
+	for _, action := range []string{"notes", "cancel", "delete", "review", "invoice", "create", "create_replay", "quote"} {
 		t.Run(action, func(t *testing.T) {
 			f := newMutationOrderFixture(t)
 			method := "POST"
 			path := ""
 			var body any
 			switch action {
-			case "create", "quote":
+			case "create", "create_replay", "quote":
 				in := adminOrderQuoted(t, f, adminOrderDraft(t, f), f.staff)
 				body = in
 				path = "/api/v1/admin/orders"
 				if action == "quote" {
 					path += "/quote"
+				}
+				if action == "create_replay" {
+					expect(t, request(f.h, "POST", path, in, f.staff, "revoke-after-auth-key"), 201)
 				}
 			case "invoice":
 				in := adminOrderDraft(t, f)
@@ -61,7 +64,7 @@ func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
 				body = payload
 			}
 			var beforeOrders, beforeInvoices, beforeReceipts, beforeAudits int
-			if err := f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%')+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&beforeOrders, &beforeInvoices, &beforeReceipts, &beforeAudits); err != nil {
+			if err := f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%' OR scope='admin:order.create'),(SELECT count(*) FROM audit_events)`).Scan(&beforeOrders, &beforeInvoices, &beforeReceipts, &beforeAudits); err != nil {
 				t.Fatal(err)
 			}
 			tx, err := f.db.Pool.Begin(t.Context())
@@ -108,7 +111,7 @@ func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
 				t.Fatal("wrong rejection", response.Body.String())
 			}
 			var orders, invoices, receipts, audits int
-			if err = f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%')+(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM audit_events)`).Scan(&orders, &invoices, &receipts, &audits); err != nil {
+			if err = f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM invoices),(SELECT count(*) FROM mutation_operations WHERE scope LIKE 'order:%' OR scope='admin:order.create'),(SELECT count(*) FROM audit_events)`).Scan(&orders, &invoices, &receipts, &audits); err != nil {
 				t.Fatal(err)
 			}
 			if orders != beforeOrders || invoices != beforeInvoices || receipts != beforeReceipts || audits != beforeAudits {

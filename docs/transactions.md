@@ -43,6 +43,18 @@
 
 购物车结算成功直接进入返回的订单详情；订单详情可进入账单和服务；服务续费生成账单后直接链接该账单详情；未付款配置/商品升级账单也直接链接详情。
 
+## 管理员代下单与回执
+
+`POST /api/v1/admin/orders/quote` 报价后，`POST /api/v1/admin/orders` 使用原请求、`quote_hash` 和 8–128 字节的稳定幂等键提交。首次成功返回 201；相同管理员、相同键和相同规范化请求返回原结果及 `replayed=true`，状态为 200。更换客户、备注或其他请求字段后复用该键返回 `idempotency_conflict`。不同管理员、不同业务 scope 的同名键互不覆盖。
+
+代下单统一使用 `ReplayOperation` / `SaveOperation`，scope 固定为 `admin:order.create`。事务先锁定并校验当前管理员的 `orders.manage`、客户销售范围及客户启用状态，再读取回执。撤权、客户转交或客户停用不能通过历史回执绕过；重放保持原报价结果，不重新扣库存、使用优惠码、创建订单/服务/账单或追加邮件、通知和审计。首次创建的这些副作用与回执同事务提交；审计失败整笔回滚，同键可以安全重试。付款方式仅是后续付款偏好，代下单不调用支付网关扣款或开通供应商资源。
+
+迁移 `179_admin_order_mutation_receipts.sql` 将旧 `admin_order_creation_receipts` 归入统一表，原样保留请求 hash、JSON 结果、创建时间及 actor/customer/order 关联。统一表新增可空 `customer_id/order_id` 外键：只有该 scope 必须填写并与结果中的订单 ID 一致，其他 scope 必须为空。业务保存时通过 `OperationReferences` 传入这两项，保留旧记录对客户与订单的物理删除保护。
+
+升级前停止旧 API、worker 和其他 writer，再执行迁移并启用配套二进制。迁移先排他锁旧表；历史客户与订单归属或保存结果不一致时返回 `admin_order_receipt_requires_reconciliation`；统一 scope 冲突、无效 hash/结果等也会拒绝升级，不覆盖任一回执。整次迁移失败会保留旧表、原记录及 schema178；先核实歧义数据再重试。成功后旧表移除，不支持混跑旧 writer 或在新 schema 直接降级旧二进制；回退需要恢复配套升级前备份。
+
+`node scripts/test-admin-orders.mjs --integration` 在独立回环 PG18 测试库逐项要求 run/pass 且零 skip，覆盖原键历史重放、actor/scope 隔离、八请求并发、异参冲突、撤权竞态、客户范围、库存/优惠/邮件/通知单次、审计回滚及真实 schema178 起点升级。合成旧 writer 夹具只证明代码和迁移兼容；浏览器、真实邮件/供应商、远端 CI 和生产升级须独立验收。
+
 ## 服务取消与续费互斥
 
 取消申请为 `pending` 时，客户仍可创建续费账单并付款；续费不自动批准或撤回取消申请。管理员随后批准按账期取消时，终止任务使用服务当时最新的 `next_due_at`。`approved` 后禁止新建续费账单，也禁止已有未付续费账单通过余额、信用或在线意图继续付款，返回 `service_cancellation_approved`。相同幂等请求仍可读取已有结果，不产生新付款或新权益。

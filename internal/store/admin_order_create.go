@@ -270,9 +270,6 @@ func (s *Store) CreateAdminOrder(ctx context.Context, actor int64, key string, i
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "admin-order-create", fmt.Sprintf("%d:%s", actor, key)); err != nil {
-		return out, err
-	}
 	if err = requireAdminOrdersManager(ctx, tx, actor); err != nil {
 		return out, err
 	}
@@ -280,22 +277,11 @@ func (s *Store) CreateAdminOrder(ctx context.Context, actor int64, key string, i
 		return out, err
 	}
 	requestHash := adminOrderHash(in)
-	var savedHash string
-	var savedCustomer int64
-	var raw []byte
-	err = tx.QueryRow(ctx, "SELECT customer_id,request_hash,result FROM admin_order_creation_receipts WHERE actor_id=$1 AND idempotency_key=$2", actor, key).Scan(&savedCustomer, &savedHash, &raw)
-	if err == nil {
-		if savedHash != requestHash || savedCustomer != in.CustomerID {
-			return out, conflict("idempotency_conflict", "相同幂等键对应不同订单")
-		}
-		if err = json.Unmarshal(raw, &out); err != nil {
-			return out, err
-		}
+	if replayed, err := ReplayOperation(ctx, tx, actor, "admin:order.create", key, requestHash, &out); err != nil {
+		return out, err
+	} else if replayed {
 		out.Replayed = true
 		return out, tx.Commit(ctx)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return out, err
 	}
 	in.paymentVersion, err = s.checkAdminOrderPayment(ctx, tx, in, fallback)
 	if err != nil {
@@ -328,8 +314,7 @@ func (s *Store) CreateAdminOrder(ctx context.Context, actor int64, key string, i
 	if err != nil {
 		return out, err
 	}
-	raw, _ = json.Marshal(out)
-	if _, err = tx.Exec(ctx, "INSERT INTO admin_order_creation_receipts(actor_id,idempotency_key,customer_id,order_id,request_hash,result) VALUES($1,$2,$3,$4,$5,$6)", actor, key, in.CustomerID, out.OrderID, requestHash, raw); err != nil {
+	if err = SaveOperation(ctx, tx, actor, "admin:order.create", key, requestHash, out, OperationReferences{CustomerID: in.CustomerID, OrderID: out.OrderID}); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, actor, "order.admin_created", "order", out.OrderID, map[string]any{"customer_id": in.CustomerID, "invoice_deferred": out.InvoiceDeferred, "payment_provider": in.PaymentProvider, "channel_instance_id": in.ChannelInstanceID, "confirmed": in.Confirmed, "send_email": in.SendEmail, "email_status": out.EmailStatus}); err != nil {

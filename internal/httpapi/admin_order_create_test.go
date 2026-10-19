@@ -46,7 +46,20 @@ func TestAdminOrderCreateIndependentCartQuoteAndReplay(t *testing.T) {
 	}
 	changed := in
 	changed.Notes = "changed"
-	expect(t, request(f.h, "POST", "/api/v1/admin/orders", changed, f.root, "admin-create-independent"), 409)
+	conflict := request(f.h, "POST", "/api/v1/admin/orders", changed, f.root, "admin-create-independent")
+	expect(t, conflict, 409)
+	if !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
+		t.Fatal("different request did not conflict with the committed receipt", conflict.Body.String())
+	}
+	otherCustomer, _ := user(t, f.db, f.h, "admin-create-other-customer", "customer")
+	changed = in
+	changed.CustomerID = otherCustomer
+	changed = adminOrderQuoted(t, f, changed, f.root)
+	conflict = request(f.h, "POST", "/api/v1/admin/orders", changed, f.root, "admin-create-independent")
+	expect(t, conflict, 409)
+	if !strings.Contains(conflict.Body.String(), "idempotency_conflict") {
+		t.Fatal("same actor/key replayed another customer's order", conflict.Body.String())
+	}
 	v, item := cart(t, f.h, f.customer)
 	if v != cartVersion || item != cartItem {
 		t.Fatal("admin changed customer cart", v, item)
@@ -57,7 +70,7 @@ func TestAdminOrderCreateIndependentCartQuoteAndReplay(t *testing.T) {
  (SELECT count(*) FROM services WHERE order_id=o.id),
  (SELECT min(status) FROM services WHERE order_id=o.id),
  (SELECT count(*) FROM provision_jobs), (SELECT count(*) FROM payment_transactions),
- (SELECT count(*) FROM admin_order_creation_receipts),
+ (SELECT count(*) FROM mutation_operations WHERE scope='admin:order.create'),
  (SELECT count(*) FROM audit_events WHERE action='order.admin_created') FROM orders o CROSS JOIN products p WHERE o.id=$1 AND p.id=$2`, id, f.productID).Scan(&stock, &status, &notes, &provider, &instance, &services, &serviceStatus, &jobs, &payments, &receipts, &audits)
 	if err != nil {
 		t.Fatal(err)
@@ -165,6 +178,10 @@ func TestAdminOrderCreatePermissionsScopeAndActiveCustomer(t *testing.T) {
 	in = adminOrderQuoted(t, f, in, f.staff)
 	created := request(f.h, "POST", "/api/v1/admin/orders", in, f.staff, "admin-scope-create")
 	expect(t, created, 201)
+	contentRole(t, f.db, f.staffID, "orders.view")
+	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.staff, "admin-scope-create"), 403)
+	contentRole(t, f.db, f.staffID, "orders.manage")
+	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.staff, "admin-scope-create"), 200)
 	salesAssignment(t, f.h, f.root, f.customerID, nil, 2)
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.staff, "admin-scope-create"), 404)
 	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", f.customerID); err != nil {
@@ -172,6 +189,10 @@ func TestAdminOrderCreatePermissionsScopeAndActiveCustomer(t *testing.T) {
 	}
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders/quote", in, f.root, ""), 409)
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.root, "admin-inactive-create"), 409)
+	var orders, receipts int
+	if err := f.db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM orders),(SELECT count(*) FROM mutation_operations WHERE scope='admin:order.create')`).Scan(&orders, &receipts); err != nil || orders != 1 || receipts != 1 {
+		t.Fatal("rejected or restored-authority replays changed committed state", orders, receipts, err)
+	}
 }
 
 func TestAdminOrderCreateStaleQuoteStockAndPaymentConfiguration(t *testing.T) {
@@ -274,12 +295,12 @@ func TestAdminOrderCreateEmailQueueAndAuditRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.root, "admin-email-audit"), 500)
-	var stock, orders, outbox, receipts, services, invoices int
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT stock,(SELECT count(*) FROM orders),(SELECT count(*) FROM email_outbox),(SELECT count(*) FROM admin_order_creation_receipts),(SELECT count(*) FROM services),(SELECT count(*) FROM invoices) FROM products WHERE id=$1", f.productID).Scan(&stock, &orders, &outbox, &receipts, &services, &invoices); err != nil {
+	var stock, orders, outbox, receipts, services, invoices, items, events int
+	if err := f.db.Pool.QueryRow(t.Context(), `SELECT stock,(SELECT count(*) FROM orders),(SELECT count(*) FROM email_outbox),(SELECT count(*) FROM mutation_operations WHERE scope='admin:order.create'),(SELECT count(*) FROM services),(SELECT count(*) FROM invoices),(SELECT count(*) FROM order_items),(SELECT count(*) FROM notification_events WHERE kind='order.created') FROM products WHERE id=$1`, f.productID).Scan(&stock, &orders, &outbox, &receipts, &services, &invoices, &items, &events); err != nil {
 		t.Fatal(err)
 	}
-	if stock != 11 || orders != 1 || outbox != 0 || receipts != 1 || services != 1 || invoices != 1 {
-		t.Fatal("audit failure left partial create", stock, orders, outbox, receipts, services, invoices)
+	if stock != 11 || orders != 1 || outbox != 0 || receipts != 1 || services != 1 || invoices != 1 || items != 1 || events != 1 {
+		t.Fatal("audit failure left partial create", stock, orders, outbox, receipts, services, invoices, items, events)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), "DROP TRIGGER reject_admin_create_audit ON audit_events"); err != nil {
 		t.Fatal(err)
@@ -301,21 +322,35 @@ func TestAdminOrderCreateEmailQueueAndAuditRollback(t *testing.T) {
 
 func TestAdminOrderCreateConcurrentIdempotencyAndStock(t *testing.T) {
 	f := newMutationOrderFixture(t)
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET email_verified=true WHERE id=$1", f.customerID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE channel_instances SET enabled=true WHERE id='mail-smtp-default'"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(f.h, "POST", "/api/v1/admin/promo-codes", map[string]any{"code": "ADMINCONCURRENT", "discount_type": "percent", "value": 10, "max_uses": 1}, f.root, ""), 201)
 	in := adminOrderDraft(t, f)
 	in.Items[0].Quantity = 7
+	in.PromoCode = "ADMINCONCURRENT"
+	in.SendEmail = true
 	in = adminOrderQuoted(t, f, in, f.root)
-	responses := make(chan *httptest.ResponseRecorder, 2)
+	const requestCount = 8
+	responses := make(chan *httptest.ResponseRecorder, requestCount)
+	start := make(chan struct{})
 	var wg sync.WaitGroup
-	for range 2 {
+	for range requestCount {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			<-start
 			responses <- request(f.h, "POST", "/api/v1/admin/orders", in, f.root, "admin-concurrent-same")
 		}()
 	}
+	close(start)
 	wg.Wait()
 	close(responses)
 	created, replayed := 0, 0
+	var orderID float64
 	for w := range responses {
 		switch w.Code {
 		case 201:
@@ -325,15 +360,33 @@ func TestAdminOrderCreateConcurrentIdempotencyAndStock(t *testing.T) {
 		default:
 			t.Fatal(w.Code, w.Body.String())
 		}
+		result := data(t, w)
+		if orderID == 0 {
+			orderID = result["order_id"].(float64)
+		}
+		if result["order_id"] != orderID || result["email_status"] != "queued" || result["promo_code"] != "ADMINCONCURRENT" || (w.Code == 200 && result["replayed"] != true) {
+			t.Fatal("concurrent requests did not receive the same committed result", result)
+		}
 	}
-	if created != 1 || replayed != 1 {
+	if created != 1 || replayed != requestCount-1 {
 		t.Fatal("duplicate submission", created, replayed)
 	}
 	// A distinct request cannot oversell after the first reservation.
+	in.PromoCode = ""
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders", in, f.root, "admin-concurrent-other"), 409)
-	var stock, count int
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT stock,(SELECT count(*) FROM orders) FROM products WHERE id=$1", f.productID).Scan(&stock, &count); err != nil || stock != 5 || count != 1 {
-		t.Fatal("oversell", stock, count, err)
+	var stock, orders, items, services, invoices, outbox, receipts, audits, events, used int
+	if err := f.db.Pool.QueryRow(t.Context(), `SELECT stock,
+ (SELECT count(*) FROM orders),(SELECT count(*) FROM order_items),(SELECT count(*) FROM services),
+ (SELECT count(*) FROM invoices),(SELECT count(*) FROM email_outbox WHERE kind='order_created'),
+ (SELECT count(*) FROM mutation_operations WHERE scope='admin:order.create'),
+ (SELECT count(*) FROM audit_events WHERE action='order.admin_created'),
+ (SELECT count(*) FROM notification_events WHERE kind='order.created'),
+ (SELECT used_count FROM promo_codes WHERE code='ADMINCONCURRENT')
+ FROM products WHERE id=$1`, f.productID).Scan(&stock, &orders, &items, &services, &invoices, &outbox, &receipts, &audits, &events, &used); err != nil {
+		t.Fatal(err)
+	}
+	if stock != 5 || orders != 1 || items != 1 || services != 7 || invoices != 1 || outbox != 1 || receipts != 1 || audits != 1 || events != 1 || used != 1 {
+		t.Fatal("concurrent replay duplicated business effects", stock, orders, items, services, invoices, outbox, receipts, audits, events, used)
 	}
 }
 

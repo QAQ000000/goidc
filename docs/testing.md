@@ -86,6 +86,8 @@ node scripts/test-compiled-notifications.mjs --integration
 
 幂等回执由 `mutation_operations(actor_id, scope, idempotency_key)` 统一保存。迁移 156 原样搬运旧请求 hash/JSON 结果及已有时间戳，信用冻结从原字段生成等价 hash；原充值操作表没有时间戳，使用迁移时间。13 张回执/批量请求绑定表被移除，关单操作、关单核验请求、服务取消申请继续保存业务状态与外键。
 
+管理员代下单由迁移 179 继续收敛到 `admin:order.create`，保留旧 hash、JSON 结果、创建时间及客户/订单外键。`SaveOperation` 的可选 `OperationReferences` 只用于该 scope；其他 scope 不绑定这两列。`node scripts/test-admin-orders.mjs --integration` 通过现有 PG18 CI job 严格核对每个必需入口，拒绝缺失、失败及任何 skip；覆盖八请求单次副作用、异参冲突、权限撤回与客户范围、审计失败整笔回滚，以及真实 schema178 起点原键重放、跨 actor/scope 隔离、歧义/冲突升级拒绝。连接要求沿用独立回环 `_test` 数据库，运行证据写 `output/`。发布和回退边界见[交易契约](transactions.md#管理员代下单与回执)。
+
 新增写路径在业务事务内先调用 `store.ReplayOperation`，再执行业务和 `store.SaveOperation`；回放前仍须检查当前权限及客户范围。scope 沿用旧表的幂等键域：如 `admin:<operation>`、`affiliate:<operation>`、`order:<action>`，发票申请的创建/审核/调整仍共享 `invoice-application`，不能按 API 动作拆开以绕过旧键冲突。供应商连接测试保留“进行中→完成”的两阶段结果更新。表合并须随对应二进制一起升级；不支持旧二进制继续访问已删除表。
 
 独立 PG18 可运行 `./scripts/go.sh test -race ./internal/store -run '^TestMutationOperation'`，覆盖旧 schema 升级、跨 scope/actor 隔离、首次并发请求、取消等待及回执与审计共同回滚；业务权限/资金回归仍由原测试负责。

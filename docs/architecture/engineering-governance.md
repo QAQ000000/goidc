@@ -94,7 +94,7 @@ CI 的 `GOIDC_ARCH_BASE_REF` 与文档校验的 `DOC_BASE` 使用同一提交：
 
 模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
 
-独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 177 个 SQL 迁移文件、最大编号 176；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及取消续费界面、真实渠道和部署，均不得标为通过。
+独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。同一契约的 `node scripts/test-admin-orders.mjs --integration` 验证代下单的统一回执、单次副作用、撤权与客户范围、审计回滚及 schema178→179 历史兼容。仓库共有 180 个 SQL 迁移文件、最大编号 179；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及相关界面、真实渠道和部署，均不得标为通过。
 
 本地等价入口如下：
 
@@ -137,6 +137,8 @@ node --test scripts/captcha-components.test.mjs
 供应商无账单到期扫描使用迁移 172，扩展既有不可变生命周期请求封套，不改旧 checksum、不回填历史任务或推断系统暂停来源。旧 writer 停止后配套升级数据库、API 和 worker；新增任务不允许旧 writer 混跑或直接降级旧程序。该分支仍归供应商契约与严格 runner，不新增平行调度或领域门禁，真实上游动作及生产发布另行提供证据。
 
 通知迁移 173 增加旧提醒的不可变精确期限来源，停止来源不明的旧待发、发送中和死信提醒，不从当前资源反推历史。跨日到期补偿、上海日界、发送前失效和真实 schema172 升级归已有通知严格门禁；须停旧 writer 后成套发布，不能将旧验收直接用于新增行为或真实渠道收件。
+
+代下单回执迁移 179 须与对应 API/worker 成套发布，先停止旧 writer。它原样迁移旧请求 hash、结果、时间戳及资源外键；历史关联歧义或统一 scope 冲突会拒绝整次升级，须核实后重试，不覆盖既有结果。成功后旧回执表移除，不能在新 schema 混跑或直接回退旧二进制，详见[交易契约](../transactions.md#管理员代下单与回执)。
 
 ## 变更清单
 

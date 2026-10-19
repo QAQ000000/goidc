@@ -38,14 +38,30 @@ func ReplayOperation(ctx context.Context, tx pgx.Tx, actor int64, scope, key, ha
 	return true, nil
 }
 
+// OperationReferences retains the resource foreign keys of consolidated
+// receipts. The database requires these bindings for admin:order.create only.
+type OperationReferences struct {
+	CustomerID int64
+	OrderID    int64
+}
+
 // SaveOperation deliberately rejects duplicate inserts; ReplayOperation must be
 // called first. Never overwrite a committed result on an idempotency conflict.
-func SaveOperation(ctx context.Context, tx pgx.Tx, actor int64, scope, key, hash string, result any) error {
+func SaveOperation(ctx context.Context, tx pgx.Tx, actor int64, scope, key, hash string, result any, references ...OperationReferences) error {
+	if len(references) > 1 {
+		return fmt.Errorf("operation receipt accepts at most one resource binding")
+	}
 	raw, err := json.Marshal(result)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO mutation_operations(actor_id,scope,idempotency_key,request_hash,result)
+	if len(references) == 0 {
+		_, err = tx.Exec(ctx, `INSERT INTO mutation_operations(actor_id,scope,idempotency_key,request_hash,result)
  VALUES($1,$2,$3,$4,$5)`, actor, scope, key, hash, raw)
+	} else {
+		refs := references[0]
+		_, err = tx.Exec(ctx, `INSERT INTO mutation_operations(actor_id,scope,idempotency_key,request_hash,result,customer_id,order_id)
+ VALUES($1,$2,$3,$4,$5,NULLIF($6::bigint,0),NULLIF($7::bigint,0))`, actor, scope, key, hash, raw, refs.CustomerID, refs.OrderID)
+	}
 	return err
 }
