@@ -33,7 +33,7 @@ func TestAdminAffiliatePagesSearchStatusCountAndOffset(t *testing.T) {
 	}
 	_, customer := user(t, db, h, "affiliate-page-customer", "customer")
 	for _, kind := range []string{"accounts", "attributions", "withdrawals"} {
-		expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/"+kind+"/page", nil, customer, ""), 403)
+		expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/"+kind+"/page", nil, customer, ""), 401)
 		response := request(h, http.MethodGet, "/api/v1/admin/affiliate/"+kind+"/page?search=missing", nil, admin, "")
 		expect(t, response, 200)
 		result := data(t, response)

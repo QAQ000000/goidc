@@ -127,7 +127,7 @@ func TestCertificationSubmissionReplayRechecksCredentialAfterWait(t *testing.T) 
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- request(h, http.MethodPost, path, body, customer, key) }()
 	waitQueryLock(t, db, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))")
-	if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(customer, "zjmfgo_session="))); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(customer))); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {

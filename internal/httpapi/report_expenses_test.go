@@ -35,7 +35,7 @@ func TestReportExpensesPermissionsAppendOnlyReplayAndAudit(t *testing.T) {
 	path := "/api/v1/admin/reports/expenses"
 	in := map[string]any{"amount_cents": 1234, "occurred_on": "2024-02-01", "category": "机房", "source": "银行", "evidence_ref": "test://expense-receipt", "note": "manual cost"}
 	expect(t, request(h, "POST", path, in, "", "expense-no-session"), 401)
-	expect(t, request(h, "POST", path, in, customer, "expense-customer"), 403)
+	expect(t, request(h, "POST", path, in, customer, "expense-customer"), 401)
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['reports.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}

@@ -68,7 +68,7 @@ func TestOptionTierChangesCommitWithMetadataAndRollbackTogether(t *testing.T) {
 	assertRejected(in, admin, 409)
 	in.ExpectedRevision = configRevision(t, h, admin, pid)
 	assertRejected(in, reader, 403)
-	assertRejected(in, customer, 403)
+	assertRejected(in, customer, 401)
 	in.PriceTierChanges = map[string][]store.OptionPriceTier{"weekly": {tier(1, 10, 200)}}
 	assertRejected(in, admin, 409)
 	in.PriceTierChanges = map[string][]store.OptionPriceTier{"monthly": {tier(1, 10, -1)}}

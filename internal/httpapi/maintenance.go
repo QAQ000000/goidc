@@ -34,9 +34,8 @@ func (s *Server) maintenanceAllowed(w http.ResponseWriter, r *http.Request) bool
 	if !strings.HasPrefix(r.URL.Path, "/api/v1/") || maintenanceExempt(r) {
 		return true
 	}
-	var enabled bool
-	var message, target string
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT maintenance_enabled,maintenance_message,maintenance_url FROM site_settings WHERE id=1").Scan(&enabled, &message, &target)
+	settings, err := s.db.HTTPMaintenanceSettings(r.Context())
+	enabled, message, target := settings.Enabled, settings.Message, settings.URL
 	if errors.Is(err, pgx.ErrNoRows) {
 		s.log.Error("site maintenance configuration missing", "path", r.URL.Path)
 		w.Header().Set("Cache-Control", "no-store")
@@ -51,18 +50,10 @@ func (s *Server) maintenanceAllowed(w http.ResponseWriter, r *http.Request) bool
 	if !enabled {
 		return true
 	}
-	// A browser session can preview the client site. A bearer key cannot borrow this bypass.
-	if cookie, cookieErr := r.Cookie("zjmfgo_session"); cookieErr == nil && bearerCredential(r) == "" {
-		var admin bool
-		err = s.db.Pool.QueryRow(r.Context(), `SELECT u.role IN ('admin','super_admin') FROM sessions s JOIN users u ON u.id=s.user_id
- WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&admin)
-		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			s.fail(w, r, err)
-			return false
-		}
-		if admin {
-			return true
-		}
+	// Only explicitly selected shared administrator-account operations bypass
+	// the client gate. An administrator cookie never previews customer business.
+	if bearerCredential(r) == "" && requestPortal(r) == "admin" && sharedAccountPath(r.URL.Path) && browserSessionMatches(r, "admin") {
+		return true
 	}
 	if message == "" {
 		message = "站点维护中，请稍后再试。"

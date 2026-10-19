@@ -14,7 +14,7 @@ func TestSiteContentVersionedCRUDAndPermissions(t *testing.T) {
 	_, root := user(t, db, h, "site-content-root", "super_admin")
 	_, customer := user(t, db, h, "site-content-customer", "customer")
 	for _, path := range []string{"/api/v1/admin/theme-settings", "/api/v1/admin/site-fields", "/api/v1/admin/navigation", "/api/v1/admin/friendly-links", "/api/v1/admin/file-groups"} {
-		expect(t, request(h, "GET", path, nil, customer, ""), 403)
+		expect(t, request(h, "GET", path, nil, customer, ""), 401)
 	}
 	publicResponse := request(h, "GET", "/api/v1/site", nil, "", "")
 	expect(t, publicResponse, 200)
@@ -92,7 +92,11 @@ func TestSiteThemeValidationPermissionsAndReplay(t *testing.T) {
 	expect(t, request(h, "PUT", path, valid, "", "anonymous-theme"), 401)
 	expect(t, request(h, "GET", path, nil, viewer, ""), 200)
 	for _, cookie := range []string{viewer, customer} {
-		expect(t, request(h, "PUT", path, valid, cookie, "forbidden-theme"), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "PUT", path, valid, cookie, "forbidden-theme"), expected)
 	}
 	expect(t, request(h, "PUT", path, valid, root, ""), 400)
 	for _, fieldValue := range []struct{ field, value string }{

@@ -90,7 +90,7 @@ func TestLegacyReviewPermissionsArchiveAndVersions(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/admin/migrations/reviews/invoices/%d", iid)
 	body := map[string]any{"version": 1, "decision": "archive", "evidence": "财务核对后保留历史账单"}
 	expect(t, request(h, "GET", "/api/v1/admin/migrations/reviews", nil, "", ""), 401)
-	expect(t, request(h, "GET", "/api/v1/admin/migrations/reviews", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/migrations/reviews", nil, customer, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/migrations/runs", nil, admin, ""), 200)
 	expect(t, request(h, "POST", path, body, admin, "review-archive-1"), 403)
 	expect(t, requestBearer(h, "POST", path, body, "zjmfgo_"+strings.Repeat("a", 64)), 403)

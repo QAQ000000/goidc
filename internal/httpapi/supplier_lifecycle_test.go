@@ -499,7 +499,11 @@ func TestSupplierLifecyclePermissionAndAuditRollback(t *testing.T) {
 	f.remote(func(s *supplier.Service) { s.Status = "Terminated" })
 	expect(t, f.verify(t, j, ""), 401)
 	for _, cookie := range []string{f.customer, f.reader} {
-		expect(t, f.verify(t, j, cookie), 403)
+		expected := 403
+		if cookie == f.customer {
+			expected = 401
+		}
+		expect(t, f.verify(t, j, cookie), expected)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_supplier_lifecycle_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.entity_type='service' AND NEW.action LIKE 'supplier.%verified%' THEN RAISE EXCEPTION 'injected supplier lifecycle audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER reject_supplier_lifecycle_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_supplier_lifecycle_audit()`); err != nil {

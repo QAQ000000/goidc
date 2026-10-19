@@ -143,7 +143,7 @@ func TestTransactionEntriesCustomerScopePermissionsAndReadOnly(t *testing.T) {
 	f := setupTransactionEntries(t, db, h)
 	path := "/api/v1/admin/transactions/page"
 	expect(t, request(h, "GET", path, nil, "", ""), 401)
-	expect(t, request(h, "GET", path, nil, f.customer, ""), 403)
+	expect(t, request(h, "GET", path, nil, f.customer, ""), 401)
 	var before int64
 	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events").Scan(&before); err != nil {
 		t.Fatal(err)

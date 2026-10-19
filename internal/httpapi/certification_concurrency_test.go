@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -51,7 +50,7 @@ func TestCertificationScopeAndCredentialRecheckedAfterProfileWait(t *testing.T) 
 				expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/sales-owner", uid), map[string]any{"sales_owner_id": nil, "expected_version": 2}, root, ""), 200)
 			} else {
 				want = 401
-				if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(staff, "zjmfgo_session="))); err != nil {
+				if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(staff))); err != nil {
 					t.Fatal(err)
 				}
 			}

@@ -185,7 +185,7 @@ func TestCustomerFilesAdministratorSalesScopeAndBulkAtomicity(t *testing.T) {
 	expect(t, request(h, "GET", path+"/file", nil, reader, ""), 200)
 	expect(t, customerFileUpload(h, "PUT", path, reader, "", nil, input), 403)
 	expect(t, request(h, "DELETE", path, map[string]int{"expected_version": 2}, reader, ""), 403)
-	expect(t, request(h, "GET", "/api/v1/admin/customer-files", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/customer-files", nil, customer, ""), 401)
 	// Atomic batch must not partially delete an authorized file when another item is out of scope.
 	bulk := map[string]any{"items": []store.CustomerFileVersion{{ID: ids[second], ExpectedVersion: 1}, {ID: ids[foreign], ExpectedVersion: 1}}}
 	expect(t, request(h, "POST", "/api/v1/admin/customer-files/bulk-delete", bulk, staff, ""), 404)

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -63,7 +62,7 @@ func testCertificationConversionReceiptWaitFence(t *testing.T, revokeSession boo
 			wantHTTP, wantCode := http.StatusConflict, "certification_disabled"
 			if revokeSession {
 				wantHTTP, wantCode = http.StatusUnauthorized, "unauthorized"
-				if _, err = db.Pool.Exec(ctx, "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(customer, "zjmfgo_session="))); err != nil {
+				if _, err = db.Pool.Exec(ctx, "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(customer))); err != nil {
 					t.Fatal(err)
 				}
 			} else if _, err = db.Pool.Exec(ctx, "UPDATE certification_settings SET enabled=false WHERE id=1"); err != nil {

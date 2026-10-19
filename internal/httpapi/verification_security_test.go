@@ -77,7 +77,7 @@ func TestVerificationSecurityBindingAccountAndRevokedSession(t *testing.T) {
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- request(h, "POST", "/api/v1/account/verification/confirm", input, owner, "") }()
 	waitQueryLock(t, db, "SELECT email,status FROM users WHERE id=$1 FOR UPDATE")
-	if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(owner, "zjmfgo_session="))); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(owner))); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {

@@ -258,7 +258,7 @@ func TestCancellationRenewalApprovalRejectsUnresolvedPayment(t *testing.T) {
 				if strings.HasPrefix(paymentState, "close_") {
 					// Mock intents alone do not block approval. Reserve a real
 					// close operation to isolate the unresolved-close admission.
-					hash := tokenHash(strings.TrimPrefix(f.admin, "zjmfgo_session="))
+					hash := tokenHash(cookieValue(f.admin))
 					op, err := f.db.BeginPaymentClose(t.Context(), f.adminID, invoiceID, paymentID, 1, "cancel-renew-close-reservation", hash)
 					if err != nil {
 						t.Fatal(err)

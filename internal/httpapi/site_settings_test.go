@@ -37,8 +37,12 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	path := "/api/v1/admin/site-settings"
 	expect(t, request(h, "GET", path, nil, "", ""), 401)
 	for _, cookie := range []string{staff, customer} {
-		expect(t, request(h, "GET", path, nil, cookie, ""), 403)
-		expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, 1), cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "GET", path, nil, cookie, ""), expected)
+		expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, 1), cookie, ""), expected)
 	}
 	key := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "site-key"}, root, "")
 	expect(t, key, 201)

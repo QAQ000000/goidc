@@ -119,7 +119,11 @@ func TestNativeHierarchyManagementIsAtomicAndCopiesRelationships(t *testing.T) {
 	}
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/products/%d", pid), nil, reader, ""), 200)
 	for _, cookie := range []string{reader, customer} {
-		expect(t, request(h, "PUT", path(child), groupInput("zone", root), cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "PUT", path(child), groupInput("zone", root), cookie, ""), expected)
 	}
 	_, buyer := user(t, db, h, "native-hierarchy-buyer", "customer")
 	configuredCart(t, h, buyer, pid, []int64{a, a1, small}, 1)

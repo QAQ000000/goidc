@@ -19,7 +19,7 @@ func closePath(invoice, paymentID int64) string {
 }
 func closeActor(t *testing.T, f upgradeFixture, cookie string) (int64, string) {
 	t.Helper()
-	hash := tokenHash(strings.TrimPrefix(cookie, "zjmfgo_session="))
+	hash := tokenHash(cookieValue(cookie))
 	var id int64
 	if err := f.db.Pool.QueryRow(t.Context(), `SELECT user_id FROM sessions WHERE token_hash=$1`, hash).Scan(&id); err != nil {
 		t.Fatal(err)
@@ -60,7 +60,7 @@ func TestPaymentCloseHTTPClosedReplayAndNewIntent(t *testing.T) {
 	if unauthenticated.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("unauthenticated close response is cacheable")
 	}
-	expect(t, request(f.h, "POST", path, body, f.customer, "close-customer-denied"), 403)
+	expect(t, request(f.h, "POST", path, body, f.customer, "close-customer-denied"), 401)
 	expect(t, request(f.h, "POST", path, map[string]any{"expected_version": 99}, f.root, "close-stale-invoice"), 409)
 	expect(t, request(f.h, "POST", path, map[string]any{"expected_version": 1, "amount_cents": 1}, f.root, "close-extra-amount"), 400)
 	w := request(f.h, "POST", path, body, f.root, "close-terminal-request")
@@ -145,7 +145,7 @@ func TestPaymentCloseUnknownBlocksFundsAndCancelledLateAnomalyBlocksDelete(t *te
 			expect(t, w, 201)
 			pid := int64(data(t, w)["payment_id"].(float64))
 			reference := data(t, w)["provider_payment_id"].(string)
-			hash := tokenHash(strings.TrimPrefix(f.root, "zjmfgo_session="))
+			hash := tokenHash(cookieValue(f.root))
 			var actor int64
 			if err := f.db.Pool.QueryRow(t.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1", hash).Scan(&actor); err != nil {
 				t.Fatal(err)

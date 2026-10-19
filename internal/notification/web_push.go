@@ -193,6 +193,7 @@ func webPushPublicAddress(address netip.Addr) bool {
 }
 
 const webPushPrivatePayload = `{"title":"账户通知","body":"您有新的账户通知，请登录查看。","url":"/console/account"}`
+const webPushAdminPayload = `{"title":"账户通知","body":"您有新的账户通知，请登录查看。","url":"/admin/account"}`
 
 func (p *webPushProvider) Send(ctx context.Context, job notify.Job) notify.Result {
 	if job.PushSubscription == nil || !notify.ValidWebPushSubscription(*job.PushSubscription) {
@@ -213,7 +214,11 @@ func (p *webPushProvider) Send(ctx context.Context, job notify.Job) notify.Resul
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	sub := job.PushSubscription
-	response, err := webpush.SendNotificationWithContext(ctx, []byte(webPushPrivatePayload), &webpush.Subscription{
+	payload := webPushPrivatePayload
+	if job.AccountPortal == "admin" {
+		payload = webPushAdminPayload
+	}
+	response, err := webpush.SendNotificationWithContext(ctx, []byte(payload), &webpush.Subscription{
 		Endpoint: sub.Endpoint, Keys: webpush.Keys{P256dh: sub.P256DH, Auth: sub.Auth},
 	}, &webpush.Options{
 		HTTPClient: p.client, Subscriber: p.subject, TTL: ttl,

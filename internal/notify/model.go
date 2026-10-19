@@ -13,6 +13,9 @@ type Job struct {
 	Body          string
 	Subject       string
 	ExpiresAt     time.Time
+	// AccountPortal is resolved from the recipient's current role under the
+	// claim lock. It selects a fixed account page, never an arbitrary URL.
+	AccountPortal string
 	// PushSubscription is decrypted only for the active leased Web Push job.
 	// Endpoint and browser keys must never appear in logs or delivery metadata.
 	PushSubscription *PushSubscription

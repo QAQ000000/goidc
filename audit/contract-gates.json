@@ -144,14 +144,19 @@
         "internal/store/purchase_pricing.go",
         "internal/store/cart_purchase_quote.go",
         "docs/domain/customer-group-pricing.md",
-        "scripts/test-customer-group-pricing.mjs"
+        "scripts/test-customer-group-pricing.mjs",
+        "web/src/components/catalog-view.tsx",
+        "web/src/components/product-purchase-view.tsx",
+        "web/src/components/product-purchase-form.tsx",
+        "web/src/lib/product-purchase.ts",
+        "docs/catalog-management.md"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'",
         "node scripts/test-service-cancellations.mjs --integration",
         "node scripts/test-admin-orders.mjs --integration",
         "node scripts/test-customer-group-pricing.mjs --integration",
-        "node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs"
+        "node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs scripts/product-purchase-components.test.mjs"
       ],
       "evaluation": [
         "isolated loopback PostgreSQL 18 test database; required Go JSON run/pass and package results with zero skips under serial race",
@@ -160,6 +165,7 @@
         "admin order creation uses actor-scoped admin:order.create receipts without changing request hashes or responses; eight concurrent submissions produce one order, stock reservation, coupon use, invoice, email, notification and audit; different requests conflict, permission revocation and customer transfer prevent replay, and audit failures roll back every effect",
         "genuine schema178 to 179 preserves historical receipt timestamps, hashes, results and business facts, removes the legacy receipt table and allows authorized replay; conflicting target receipts or ambiguous actor/customer/order references reject the complete upgrade; order notes, review, cancel, deferred invoices, deletion, bulk operations and customer admission retain their boundaries",
         "schema179 to 180 leaves refund row evidence, receipts and old purchases intact; immutable per-line net pricing, scoped coupon stacking, fixed per unit reductions, stale quote rejection, preserved recurring contract prices, cumulative credit allocations and pricing lock order under concurrent group edits",
+        "catalog cards link to dedicated numeric product pages without inline option forms; configuration estimates preserve tier/cycle/quantity rules and customer-only writes; cart retains exact selected quote and order snapshots; real browser uses isolated TestProductPurchaseBrowserFixture",
         "stop old API, workers and other writers before upgrading paired migration and binaries; no direct old-binary downgrade on new schema; remote CI, browser, real merchants/providers and production cutover require separate evidence"
       ],
       "review": {
@@ -296,14 +302,20 @@
         "internal/httpapi/customer_files.go",
         "internal/httpapi/tickets.go",
         "internal/httpapi/content_images.go",
-        "internal/httpapi/invoice_applications.go"
+        "internal/httpapi/invoice_applications.go",
+        "internal/store/content_images.go",
+        "web/src/components/admin-content-image-preview.tsx",
+        "web/src/components/content-admin.tsx",
+        "docs/content-management.md"
       ],
       "tests": [
         "node scripts/test-file-storage.mjs --unit",
-        "node scripts/test-file-storage.mjs --integration"
+        "node scripts/test-file-storage.mjs --integration",
+        "node --test scripts/content-image-preview-components.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18 with exact required run/pass and zero skips; private local/S3 protocol simulation, five API domains, historical inline bytes, authorization, Range, durable unknown uploads, journal pool isolation, cascade release, deletion fencing and genuine schema166 upgrade",
+        "fixed administrator image preview route, current content.view and object-read authority recheck; canonical public image URLs select only customer cookies, preserve valid Bearer access to eligible published content and never expose drafts; dual cookies and absent portal headers never cause fallback",
         "real browser, real S3/MinIO/R2 and production configuration/backup/cutover require independent acceptance; HTTP still buffers bounded complete files"
       ],
       "review": {
@@ -397,7 +409,11 @@
         "internal/store/auth_login.go",
         "db/migrations/181_auth_login_portal.sql",
         "web/src/app/admin/account",
-        "web/src/proxy.ts"
+        "web/src/proxy.ts",
+        "internal/httpapi/session_portals.go",
+        "internal/store/auth_impersonation.go",
+        "web/src/lib/session.ts",
+        "web/src/hooks/use-resource.ts"
       ],
       "tests": [
         "node scripts/test-captcha.mjs --unit",
@@ -406,7 +422,7 @@
       ],
       "evaluation": [
         "isolated PostgreSQL 18; actual run/pass and zero skip; legacy PNG, image/click/widget, durable consume before verification, concurrent replay and profile rotation",
-        "customer-only commerce for session and API keys; shared personal security, notifications and staff ticket operations; role-bound login/MFA, legacy-client compatibility and explicit customer impersonation; real schema180 upgrade preserves accounts and sessions",
+        "independent customer and administrator cookies, explicit shared API portal, no cross-cookie fallback, role-bound login/MFA and independent logout; shared personal security, scoped staff tickets and verifiably bound customer impersonation; real schema180 upgrade preserves accounts and sessions",
         "local renderer fixtures; real browser, external vendor and production configuration remain separate"
       ],
       "review": {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { CatalogView } from "@/components/catalog-view";
+import { ProductPurchaseView } from "@/components/product-purchase-view";
 import { getPublicProduct, publicID, publicOrigin, safeJSONLD } from "@/lib/site-server";
 
 type Props = { params: Promise<{ id: string }> };
@@ -31,5 +31,5 @@ export default async function Page({ params }: Props) {
     description: product.description,
     url: `${publicOrigin()}/products/${id}`,
   });
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLD }} /><CatalogView initialProduct={product} /></>;
+  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLD }} /><ProductPurchaseView initialProduct={product} /></>;
 }

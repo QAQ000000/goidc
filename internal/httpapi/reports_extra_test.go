@@ -32,7 +32,7 @@ func TestExtraReportsScopeAndEmptyContracts(t *testing.T) {
 	exec("UPDATE users SET customer_scope='owned',customer_ownerless=false,ticket_scope='departments' WHERE id=$1", staffID)
 	exec("UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, allowedID)
 	for _, path := range []string{"/api/v1/admin/reports/sales?year=2024", "/api/v1/admin/reports/tickets?year=2024&month=2"} {
-		expect(t, request(h, "GET", path, nil, customer, ""), 403)
+		expect(t, request(h, "GET", path, nil, customer, ""), 401)
 	}
 	salesPath := "/api/v1/admin/reports/sales?year=2024"
 	w := request(h, "GET", salesPath, nil, staff, "")

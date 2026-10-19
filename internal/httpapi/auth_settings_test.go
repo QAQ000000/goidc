@@ -31,7 +31,7 @@ func TestAuthSettingsContractAndEnforcement(t *testing.T) {
 	}
 	path := "/api/v1/admin/auth-settings"
 	expect(t, request(h, "GET", path, nil, "", ""), 401)
-	expect(t, request(h, "GET", path, nil, customer, ""), 403)
+	expect(t, request(h, "GET", path, nil, customer, ""), 401)
 	expect(t, request(h, "GET", path, nil, staff, ""), 200)
 	in := authSettingsInput(t, h, root)
 	in["login_enabled"] = false
@@ -118,7 +118,7 @@ func TestMFASettingsPolicyAndSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/security/mfa"
-	expect(t, request(h, "GET", path, nil, customer, ""), 403)
+	expect(t, request(h, "GET", path, nil, customer, ""), 401)
 	view := request(h, "GET", path, nil, staff, "")
 	expect(t, view, 200)
 	if strings.Contains(view.Body.String(), "secret") || strings.Contains(view.Body.String(), "recovery") {
@@ -208,7 +208,12 @@ func TestMFAConfirmRechecksCurrentRolePolicy(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='super_admin' WHERE id=$1", userID); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 403)
+	// The previous customer cookie cannot turn into an administrator login.
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 401)
+	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "mfa-confirm-policy", "password": "integration-password", "portal": "admin"}, "", "")
+	expect(t, login, 200)
+	current := login.Result().Cookies()[0]
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, current.Name+"="+current.Value, ""), 403)
 	var enabled bool
 	if err := db.Pool.QueryRow(t.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", userID).Scan(&enabled); err != nil || enabled {
 		t.Fatal("MFA was enabled despite disabled role policy", enabled, err)

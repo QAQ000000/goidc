@@ -32,7 +32,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 		return err
 	}
 	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
-	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieForRole(id.Role), Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	return nil
 }
 
@@ -97,7 +97,7 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.authAudit(r.Context(), result.User.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
-	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookieForRole(result.User.Role), Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
 	u := result.User
 	write(w, http.StatusOK, identity{ID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name, Role: u.Role})
 }

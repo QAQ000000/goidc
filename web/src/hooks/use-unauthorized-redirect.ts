@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { currentAuthPortal, type AuthPortal } from "@/lib/api";
 
 // 需要登录的页面；在这些页面上收到 401 说明会话已失效，应跳转登录页。
 // 公开页面（例如匿名访问时对 /me 的探测）不会触发跳转。
 function privateRoute(path: string) {
-  return path === "/admin" || path.startsWith("/admin/") || path.startsWith("/console/") || path === "/cart" || path.startsWith("/cart/");
+  return path === "/admin" || path.startsWith("/admin/") || path === "/console" || path.startsWith("/console/") || path === "/cart" || path.startsWith("/cart/");
 }
 
 // 监听 api 层派发的 zjmfgo:unauthorized 事件，统一跳转到对应登录页：
@@ -18,7 +19,9 @@ export function useUnauthorizedRedirect() {
   useEffect(() => {
     redirecting.current = false;
     if (!privateRoute(path)) return;
-    const handler = () => {
+    const handler = (event: Event) => {
+      const portal = (event as CustomEvent<{ portal?: AuthPortal }>).detail?.portal;
+      if (portal && portal !== currentAuthPortal(path)) return;
       if (redirecting.current) return;
       redirecting.current = true;
       router.replace(loginHref(path));

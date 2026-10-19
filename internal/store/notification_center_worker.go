@@ -95,9 +95,11 @@ func (s *Store) claimNotificationJobTx(ctx context.Context, tx pgx.Tx) (*notify.
 	// Consent updates lock the user before preferences/targets; taking the
 	// same locks here serializes claim against those changes.
 	var id int64
-	if err = tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 AND status='active' FOR SHARE`, userID).Scan(&id); err != nil {
+	var role string
+	if err = tx.QueryRow(ctx, `SELECT id,role FROM users WHERE id=$1 AND status='active' FOR SHARE`, userID).Scan(&id, &role); err != nil {
 		return nil, err
 	}
+	job.AccountPortal = LoginPortalForRole(role)
 	if _, err = tx.Exec(ctx, `SELECT user_id FROM user_notification_preferences WHERE user_id=$1 AND channel=$2 FOR SHARE`, userID, job.Channel); err != nil {
 		return nil, err
 	}

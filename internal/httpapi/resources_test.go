@@ -15,7 +15,7 @@ func TestAdminResourcesPageContractAndPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/resources", nil, "", ""), 401)
-	expect(t, request(h, "GET", "/api/v1/admin/resources", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/resources", nil, customer, ""), 401)
 	for _, path := range []string{"/api/v1/admin/resources?supplier_id=bad", "/api/v1/admin/resources?status=unknown"} {
 		expect(t, request(h, "GET", path, nil, root, ""), 400)
 	}

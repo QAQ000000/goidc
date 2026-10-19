@@ -41,7 +41,11 @@ func TestCustomerBusinessRejectsAdministratorCredentials(t *testing.T) {
 					} else {
 						response = request(h, tc.method, tc.path, body, cookie, "boundary-order-key")
 					}
-					if response.Code != 403 || errorData(t, response)["code"] != "customer_required" {
+					wantStatus, wantCode := 401, "unauthorized"
+					if bearer {
+						wantStatus, wantCode = 403, "customer_required"
+					}
+					if response.Code != wantStatus || (tc.method != "HEAD" && errorData(t, response)["code"] != wantCode) {
 						t.Fatalf("%s %s bearer=%t admitted an administrator: %d %s", tc.method, tc.path, bearer, response.Code, response.Body.String())
 					}
 				}
@@ -51,8 +55,8 @@ func TestCustomerBusinessRejectsAdministratorCredentials(t *testing.T) {
 				{"GET", "/api/v1/contracts"}, {"POST", "/api/v1/contracts"}, {"POST", "/api/v1/account/verification/request"},
 			} {
 				response := request(h, tc.method, tc.path, map[string]any{}, cookie, "boundary-session-key")
-				expect(t, response, 403)
-				if errorData(t, response)["code"] != "customer_required" {
+				expect(t, response, 401)
+				if errorData(t, response)["code"] != "unauthorized" {
 					t.Fatalf("session-only customer path admitted staff: %s", response.Body.String())
 				}
 			}
@@ -97,25 +101,25 @@ func TestCustomerCheckoutAndImpersonationUseCustomerIdentity(t *testing.T) {
 	customerID, customer := user(t, db, h, "isolated-buyer", "customer")
 	pid := product(t, db, 3)
 	version, item := add(t, h, customer, pid, 1)
-	expect(t, request(h, "POST", "/api/v1/orders", map[string]any{"cart_version": version, "item_ids": []int64{item}}, admin, "isolated-admin-attempt"), 403)
+	expect(t, request(h, "POST", "/api/v1/orders", map[string]any{"cart_version": version, "item_ids": []int64{item}}, admin, "isolated-admin-attempt"), 401)
 	started := request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/impersonate", customerID), nil, admin, "")
 	expect(t, started, 200)
-	var parts []string
+	parts := []string{admin}
 	for _, c := range started.Result().Cookies() {
 		parts = append(parts, c.Name+"="+c.Value)
 	}
 	impersonated := strings.Join(parts, "; ")
 	expect(t, request(h, "GET", "/api/v1/cart", nil, impersonated, ""), 200)
-	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, impersonated, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, impersonated, ""), 200)
 	created := request(h, "POST", "/api/v1/orders", map[string]any{"cart_version": version, "item_ids": []int64{item}}, impersonated, "isolated-customer-order")
 	expect(t, created, 201)
 	var owner int64
 	if err := db.Pool.QueryRow(t.Context(), "SELECT user_id FROM orders WHERE id=$1", int64(data(t, created)["order_id"].(float64))).Scan(&owner); err != nil || owner != customerID || owner == adminID {
 		t.Fatalf("explicit customer session created an administrator-owned order: %d %v", owner, err)
 	}
-	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, customer, ""), 401)
 	expect(t, request(h, "POST", "/api/v1/auth/impersonation/exit", nil, impersonated, ""), 200)
-	expect(t, request(h, "GET", "/api/v1/cart", nil, admin, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/cart", nil, admin, ""), 401)
 	// No authenticated role is needed to read the public catalog.
 	for _, cookie := range []string{"", admin, customer} {
 		expect(t, request(h, http.MethodGet, "/api/v1/catalog", nil, cookie, ""), 200)

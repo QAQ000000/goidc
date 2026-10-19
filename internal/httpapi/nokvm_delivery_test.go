@@ -237,7 +237,7 @@ func TestNOKVMUnknownLeaseFencingAndManualVerification(t *testing.T) {
 	}
 	verify := fmt.Sprintf("/api/v1/admin/services/%d/delivery-verification", f.sid)
 	input := store.DeliveryVerification{JobID: job.ID, Resolution: "applied", UpstreamID: "42", Note: "供应商控制台核验资源 42 已开通"}
-	expect(t, request(f.h, "POST", verify, input, f.customer, ""), 403)
+	expect(t, request(f.h, "POST", verify, input, f.customer, ""), 401)
 	expect(t, request(f.h, "POST", verify, input, f.root, ""), 200)
 	replayed := request(f.h, "POST", verify, input, f.root, "")
 	expect(t, replayed, 200)

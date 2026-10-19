@@ -187,7 +187,7 @@ export function CartView() {
                       />
                     </TableCell>
                     <TableCell>
-                      <span className="font-medium">{item.name}</span>
+                      <Link href={`/products/${item.product_id}`} className="font-medium hover:text-primary">{item.name}</Link>
                       <div className="text-xs text-muted-foreground mt-1">
                         {cycles[item.billing_cycle]}付
                       </div>
@@ -358,7 +358,7 @@ function CartItemEditor({
           <Pencil size={15} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>修改 {item.name}</DialogTitle>
           <DialogDescription>修改后的价格会在购物车中重新计算。</DialogDescription>

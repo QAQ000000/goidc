@@ -17,7 +17,7 @@ func TestAffiliatePolicyPermissionsVersionIdempotencyAndSnapshots(t *testing.T) 
 	managerID, manager := user(t, db, h, "affiliate-policy-manager", "admin")
 	contentRole(t, db, managerID, "affiliates.manage")
 	path := "/api/v1/admin/affiliate/policy"
-	expect(t, request(h, "GET", path, nil, customer, ""), 403)
+	expect(t, request(h, "GET", path, nil, customer, ""), 401)
 	expect(t, request(h, "GET", path, nil, reader, ""), 403)
 	expect(t, request(h, "GET", path, nil, manager, ""), 200)
 	initial := data(t, request(h, "GET", path, nil, root, ""))

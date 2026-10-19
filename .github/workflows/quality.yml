@@ -107,8 +107,8 @@ jobs:
           node --test scripts/supplier-components.test.mjs
           node --test scripts/scheduler-components.test.mjs
           node --test scripts/runtime-observability-components.test.mjs
-          node --test scripts/captcha-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs
-          node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs
+          node --test scripts/captcha-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs scripts/content-image-preview-components.test.mjs
+          node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs scripts/product-purchase-components.test.mjs
 
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18

@@ -45,7 +45,7 @@ func TestOnlineTopupHTTPAuthReplayAndCancel(t *testing.T) {
 	expect(t, requestBearer(f.h, "GET", "/api/v1/balance/topup-options", nil, secret), 403)
 	expect(t, requestBearer(f.h, "POST", path, in, secret), 403)
 	expect(t, requestBearer(f.h, "GET", "/api/v1/balance/topup-options", nil, "invalid-api-key"), 401)
-	expect(t, request(f.h, "GET", "/api/v1/balance/topup-options", nil, f.root, ""), 403)
+	expect(t, request(f.h, "GET", "/api/v1/balance/topup-options", nil, f.root, ""), 401)
 	expect(t, request(f.h, "POST", path, in, f.customer, ""), 409)
 	expect(t, request(f.h, "POST", path, map[string]any{"amount_cents": 12.34, "expected_version": in["expected_version"]}, f.customer, "fractional"), 400)
 	expect(t, request(f.h, "POST", path, map[string]any{"amount_cents": 1234, "expected_version": 999999}, f.customer, "topup-stale"), 409)

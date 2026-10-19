@@ -298,7 +298,7 @@ func TestFileStorageAPIWaitingReadRechecksCredentials(t *testing.T) {
 			done := make(chan *httptest.ResponseRecorder, 1)
 			go func() { done <- request(f.h, "GET", file.path, nil, f.customer, "") }()
 			waitQueryLock(t, f.db, `SELECT profile_id,location_sha256,kind,object_key,size_bytes,sha256,state FROM file_storage_objects WHERE id=$1 FOR SHARE`)
-			if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(f.customer, "zjmfgo_session="))); err != nil {
+			if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(f.customer))); err != nil {
 				t.Fatal(err)
 			}
 			if err = tx.Commit(t.Context()); err != nil {

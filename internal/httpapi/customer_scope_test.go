@@ -184,7 +184,7 @@ func TestCustomerSalesAssignmentAndStaffRevocation(t *testing.T) {
 	input := map[string]any{"sales_owner_id": staffID, "expected_version": 1}
 	expect(t, request(h, "PUT", path, map[string]any{"expected_version": 1}, root, ""), 400)
 	expect(t, request(h, "PUT", path, input, staff, ""), 403)
-	expect(t, request(h, "PUT", path, input, customer, ""), 403)
+	expect(t, request(h, "PUT", path, input, customer, ""), 401)
 	expect(t, request(h, "PUT", path, input, root, ""), 409)
 	for _, id := range []int64{rootID, customerID, 99999} {
 		expect(t, request(h, "PUT", path, map[string]any{"sales_owner_id": id, "expected_version": 1}, root, ""), 409)

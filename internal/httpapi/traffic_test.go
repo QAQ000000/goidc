@@ -152,7 +152,7 @@ func TestTrafficOrdersPurchaseListCancelAndPermissions(t *testing.T) {
 	purchasePath := fmt.Sprintf("/api/v1/services/%d/traffic-orders", sid)
 	in := map[string]any{"traffic_product_id": tid, "expected_version": 1}
 	expect(t, request(h, "POST", purchasePath, in, other, "traffic-other-purchase"), 404)
-	expect(t, request(h, "GET", "/api/v1/admin/traffic-orders", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/traffic-orders", nil, customer, ""), 401)
 	buy := request(h, "POST", purchasePath, in, customer, "traffic-real-purchase")
 	expect(t, buy, 201)
 	expect(t, request(h, "POST", purchasePath, in, customer, "traffic-real-purchase"), 200)

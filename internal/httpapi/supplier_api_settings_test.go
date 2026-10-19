@@ -43,7 +43,7 @@ func TestSupplierAPISettingsSchemaPermissionsAndConnectionProbe(t *testing.T) {
 	}
 	readerSettings := request(f.h, "GET", "/api/v1/admin/supplier-api-settings", nil, f.reader, "")
 	expect(t, readerSettings, 200)
-	expect(t, request(f.h, "GET", "/api/v1/admin/supplier-api-settings", nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", "/api/v1/admin/supplier-api-settings", nil, f.customer, ""), 401)
 	expect(t, request(f.h, "PUT", "/api/v1/admin/supplier-api-settings", store.ResourceAPISettingsInput{Enabled: enabled(), RequireCertification: enabled(), RequireVerifiedPhone: enabled(), ExpectedVersion: 1}, f.reader, "resource-api-reader-denied"), 403)
 
 	testPath := fmt.Sprintf("/api/v1/admin/suppliers/%d/test-connection", f.supplierID)

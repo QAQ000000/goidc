@@ -34,7 +34,11 @@ func TestSchedulerCatalogResponsePermissionsAndFiltering(t *testing.T) {
 	_, customer := user(t, db, h, "scheduler-catalog-customer", "customer")
 	path := "/api/v1/admin/logs/jobs"
 	for _, cookie := range []string{staff, customer} {
-		expect(t, request(h, "GET", path, nil, cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "GET", path, nil, cookie, ""), expected)
 	}
 	w := request(h, "GET", path, nil, root, "")
 	expect(t, w, 200)

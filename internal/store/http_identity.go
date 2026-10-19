@@ -2,9 +2,11 @@ package store
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/codex/zjmfgo/internal/correlation"
+	"github.com/jackc/pgx/v5"
 )
 
 // HTTPIdentity is the active account resolved from an opaque credential hash.
@@ -21,6 +23,19 @@ func (s *Store) SessionIdentity(ctx context.Context, hash string) (HTTPIdentity,
 	var id HTTPIdentity
 	err := s.Pool.QueryRow(ctx, `SELECT u.id,u.username,u.email,u.display_name,u.role FROM sessions s JOIN users u ON u.id=s.user_id
  WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, hash).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+	if err == nil && id.Role == "customer" {
+		binding, bindingErr := readImpersonationBinding(ctx, s.Pool, hash)
+		if bindingErr == nil {
+			if binding.CustomerID != id.ID {
+				return HTTPIdentity{}, pgx.ErrNoRows
+			}
+			if err = impersonationBindingAllowed(ctx, s.Pool, binding); err != nil {
+				return HTTPIdentity{}, err
+			}
+		} else if !errors.Is(bindingErr, pgx.ErrNoRows) {
+			return HTTPIdentity{}, bindingErr
+		}
+	}
 	return id, err
 }
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, currentAuthPortal, type AuthPortal } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { isNotificationVersionConflict } from "@/lib/notification-center";
 import { serializedWebPushSubscription, webPushAvailable, webPushCapability, webPushEndpointHash, webPushExpectedVersion, webPushKey, webPushKeyMatches, type WebPushCapability, type WebPushState, type WebPushSubscriptionRecord } from "@/lib/web-push";
@@ -20,7 +20,10 @@ const capabilityText: Record<WebPushCapability, string> = {
 };
 
 export function WebPushPreferences({ onAvailabilityChange }: { onAvailabilityChange?: (available: boolean) => void }) {
-  const resource = useResource<WebPushState>("/me/notification-web-push", false);
+  // Browser permission and subscription calls can outlive this page. Keep the
+  // initiating portal instead of reading a later navigation's identity.
+  const portal = currentAuthPortal();
+  const resource = useResource<WebPushState>("/me/notification-web-push", false, portal);
   const [capability, setCapability] = useState<WebPushCapability>("checking");
   const [subscription, setSubscription] = useState<PushSubscription | null>(null);
   const [endpointHash, setEndpointHash] = useState("");
@@ -52,10 +55,14 @@ export function WebPushPreferences({ onAvailabilityChange }: { onAvailabilityCha
     const frame = window.requestAnimationFrame(() => {
       void inspectBrowser().catch(() => setMessage("无法读取浏览器订阅；请刷新后重试。"));
     });
-    const expired = () => { setSessionExpired(true); setMessage("登录会话已失效，请重新登录后管理浏览器通知。该会话绑定的订阅将停止投递。"); };
+    const expired = (event: Event) => {
+      const expiredPortal = (event as CustomEvent<{ portal?: AuthPortal }>).detail?.portal;
+      if (expiredPortal && expiredPortal !== portal) return;
+      setSessionExpired(true); setMessage("登录会话已失效，请重新登录后管理浏览器通知。该会话绑定的订阅将停止投递。");
+    };
     window.addEventListener("zjmfgo:unauthorized", expired);
     return () => { window.cancelAnimationFrame(frame); window.removeEventListener("zjmfgo:unauthorized", expired); };
-  }, [inspectBrowser]);
+  }, [inspectBrowser, portal]);
 
   function failure(error: unknown) {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403 || error.code === "notification_session_expired")) {
@@ -86,7 +93,7 @@ export function WebPushPreferences({ onAvailabilityChange }: { onAvailabilityCha
       local ??= await ready.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: webPushKey(selected.public_key) });
       setSubscription(local);
       const hash = await webPushEndpointHash(local.endpoint); setEndpointHash(hash);
-      await api("/me/notification-web-push/subscriptions", { method: "POST", body: JSON.stringify({ instance_id: selected.id, subscription: serializedWebPushSubscription(local), expected_version: webPushExpectedVersion(data, hash) }) });
+      await api("/me/notification-web-push/subscriptions", { portal, method: "POST", body: JSON.stringify({ instance_id: selected.id, subscription: serializedWebPushSubscription(local), expected_version: webPushExpectedVersion(data, hash) }) });
       setResetRequired(false); setMessage("此浏览器已订阅。请在业务通知渠道中主动开启浏览器通知偏好，并选择通知范围；订阅本身不会开启业务通知。");
       resource.refresh();
     } catch (error) {
@@ -101,7 +108,7 @@ export function WebPushPreferences({ onAvailabilityChange }: { onAvailabilityCha
     if (busy || sessionExpired || !window.confirm("撤销此浏览器的通知订阅？此设备将停止接收后续通知。")) return;
     setBusy(true); setMessage("");
     try {
-      await api(`/me/notification-web-push/subscriptions/${encodeURIComponent(String(item.id))}`, { method: "DELETE", body: JSON.stringify({ expected_version: item.version }) });
+      await api(`/me/notification-web-push/subscriptions/${encodeURIComponent(String(item.id))}`, { portal, method: "DELETE", body: JSON.stringify({ expected_version: item.version }) });
       resource.refresh();
       if (item.endpoint_hash === endpointHash && subscription) {
         if (!(await subscription.unsubscribe())) throw new Error("服务器订阅已撤销；浏览器本地订阅未能移除，请重置或检查浏览器设置。");

@@ -56,7 +56,7 @@ func TestOrderSettingsAdmissionAndReceipts(t *testing.T) {
 	_, root := user(t, db, h, "order-settings-root", "super_admin")
 	customerID, customer := user(t, db, h, "order-settings-customer", "customer")
 	input := map[string]any{"require_verified_phone": true, "require_certification": false, "expected_version": 1}
-	expect(t, request(h, "GET", "/api/v1/admin/order-settings", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/order-settings", nil, customer, ""), 401)
 	expect(t, request(h, "PUT", "/api/v1/admin/order-settings", input, root, ""), 409)
 	expect(t, request(h, "PUT", "/api/v1/admin/order-settings", input, root, "order-settings-update-one"), 200)
 	expect(t, request(h, "PUT", "/api/v1/admin/order-settings", input, root, "order-settings-update-one"), 200)

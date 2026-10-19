@@ -117,7 +117,7 @@ func TestTransactionDetailsPrivacyOwnershipAndScope(t *testing.T) {
 	adminPath := fmt.Sprintf("/api/v1/admin/invoices/%d", invoiceID)
 	expect(t, request(h, "GET", adminPath, nil, staff, ""), 200)
 	expect(t, request(h, "POST", adminPath+"/refund", map[string]any{}, staff, "transaction-reader-refund"), 403)
-	expect(t, request(h, "GET", adminPath, nil, f.customer, ""), 403)
+	expect(t, request(h, "GET", adminPath, nil, f.customer, ""), 401)
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}

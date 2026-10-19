@@ -113,7 +113,7 @@ func TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth(t *testing.T) {
 		t.Fatalf("removed export returned a download: %s", w.Body.String())
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024&month=2", nil, root, ""), 400)
-	expect(t, request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/reports/annual-cash?year=2024", nil, customer, ""), 401)
 }
 
 func TestAnnualCashIncludesConfirmedAnomalyRefundOnce(t *testing.T) {

@@ -366,7 +366,7 @@ func TestConfigurationPermissionsValidationAndDeletion(t *testing.T) {
 	option := store.ProductOptionInput{Label: "配置项 😀", Value: "value", PriceDeltaCents: -500, Active: enabled(), ExpectedRevision: configRevision(t, h, root, pid)}
 	for _, cookie := range []string{reader, customer, ""} {
 		expected := 403
-		if cookie == "" {
+		if cookie == "" || cookie == customer {
 			expected = 401
 		}
 		expect(t, request(h, "POST", base+"/options", option, cookie, ""), expected)
@@ -376,8 +376,12 @@ func TestConfigurationPermissionsValidationAndDeletion(t *testing.T) {
 	oid := int64(data(t, created)["id"].(float64))
 	op := fmt.Sprintf("%s/options/%d", base, oid)
 	for _, cookie := range []string{reader, customer} {
-		expect(t, request(h, "PUT", op, option, cookie, ""), 403)
-		expect(t, request(h, "DELETE", op, map[string]any{"expected_revision": configRevision(t, h, root, pid)}, cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "PUT", op, option, cookie, ""), expected)
+		expect(t, request(h, "DELETE", op, map[string]any{"expected_revision": configRevision(t, h, root, pid)}, cookie, ""), expected)
 	}
 	expect(t, request(h, "POST", base+"/options", option, writer, ""), 409) // stale revision
 	option.ExpectedRevision = configRevision(t, h, root, pid)

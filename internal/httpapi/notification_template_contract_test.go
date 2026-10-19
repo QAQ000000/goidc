@@ -15,8 +15,12 @@ func TestNotificationTemplateVersionAndPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cookie := range []string{customer, restricted} {
-		expect(t, request(h, "GET", "/api/v1/admin/notification-templates/page", nil, cookie, ""), 403)
-		expect(t, request(h, "GET", "/api/v1/admin/notification-templates", nil, cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "GET", "/api/v1/admin/notification-templates/page", nil, cookie, ""), expected)
+		expect(t, request(h, "GET", "/api/v1/admin/notification-templates", nil, cookie, ""), expected)
 	}
 	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", restrictedID); err != nil {
 		t.Fatal(err)

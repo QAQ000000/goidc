@@ -38,7 +38,7 @@ func TestSupplierOrdersSnapshotScopeAndPagination(t *testing.T) {
 	}
 	for _, path := range []string{"/api/v1/admin/supplier-orders", "/api/v1/admin/supplier-renewals"} {
 		expect(t, request(h, "GET", path, nil, "", ""), 401)
-		expect(t, request(h, "GET", path, nil, customer, ""), 403)
+		expect(t, request(h, "GET", path, nil, customer, ""), 401)
 		for _, tc := range []struct {
 			cookie, query string
 			total, count  int

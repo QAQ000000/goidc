@@ -13,7 +13,11 @@ func TestSchedulerSettingsContract(t *testing.T) {
 	path := "/api/v1/admin/scheduler-settings"
 	in := map[string]any{"expected_version": 1, "enabled": false, "settings": map[string]any{"expiry_days": []int{}, "billing_grace_days": 3}}
 	for _, cookie := range []string{staff, customer} {
-		if w := request(h, http.MethodPut, path, in, cookie, "scheduler-denied"); w.Code != 403 {
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		if w := request(h, http.MethodPut, path, in, cookie, "scheduler-denied"); w.Code != expected {
 			t.Fatalf("permission %d %s", w.Code, w.Body.String())
 		}
 	}

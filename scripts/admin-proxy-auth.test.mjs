@@ -15,7 +15,7 @@ class NextResponse extends Response {
   static redirect(url, options) { return new NextResponse(null, { ...options, headers: { ...options?.headers, Location: String(url) } }); }
 }
 function harness(options = {}) {
-  const { maintenance = false, maintenanceURL = '', role = 'customer', meStatus = 200, meError = false, malformed = false, siteError = false } = options;
+  const { maintenance = false, maintenanceURL = '', role = 'customer', adminRole = 'admin', meStatus = 200, meError = false, malformed = false, siteError = false } = options;
   const configuredOrigin = Object.hasOwn(options, 'configuredOrigin') ? options.configuredOrigin : publicOrigin;
   const calls = [], module = { exports: {} };
   const fetch = async (url, options) => {
@@ -26,14 +26,18 @@ function harness(options = {}) {
     }
     if (url.endsWith('/api/v1/me')) {
       if (meError) throw new Error('account unavailable');
-      return Response.json({ data: malformed ? null : { id: 7, role } }, { status: meStatus });
+      const portal = new Headers(options.headers).get('X-Auth-Portal');
+      return Response.json({ data: malformed ? null : { id: portal === 'admin' ? 9 : 7, role: portal === 'admin' ? adminRole : role } }, { status: meStatus });
     }
     if (url === 'http://127.0.0.1:53088/maintenance') return new Response('<main>maintenance</main>');
     throw new Error('Unexpected fetch destination');
   };
   const env = { API_INTERNAL_URL: 'http://127.0.0.1:58088', WEB_INTERNAL_URL: 'http://127.0.0.1:53088', ...(configuredOrigin === undefined ? {} : { PUBLIC_ORIGIN: configuredOrigin }) };
   vm.runInNewContext(outputText, { module, exports: module.exports, require: name => { assert.equal(name, 'next/server'); return { NextResponse }; }, process: { env }, fetch, Headers, URL, AbortSignal }, { filename: 'proxy.js' });
-  const invoke = (path, cookie, headers = {}, requestOrigin = publicOrigin) => module.exports.proxy({ nextUrl: new URL(path, requestOrigin), url: new URL(path, requestOrigin).href, headers: new Headers(headers), cookies: { get: name => name === 'zjmfgo_session' && cookie ? { value: cookie } : undefined } });
+  const invoke = (path, cookie, headers = {}, requestOrigin = publicOrigin) => {
+    const jar = typeof cookie === 'string' ? { zjmfgo_session: cookie } : cookie ?? {};
+    return module.exports.proxy({ nextUrl: new URL(path, requestOrigin), url: new URL(path, requestOrigin).href, headers: new Headers(headers), cookies: { get: name => jar[name] ? { value: jar[name] } : undefined } });
+  };
   return { invoke, calls };
 }
 function redirect(response, destination, origin = publicOrigin) {
@@ -47,37 +51,44 @@ test('console missing/invalid sessions receive HTTP login redirects before rende
     const invalid = harness({ meStatus: 401 }); redirect(await invalid.invoke(path, 'invalid'), '/login');
   }
 });
-test('customer workspaces admit only customers after a real no-store session lookup', async () => {
+test('customer workspaces use the customer cookie even when the browser also has an administrator cookie', async () => {
   for (const path of ['/console/contracts', '/cart']) {
     const role = 'customer';
-    const h = harness({ role }); assert.equal((await h.invoke(path, 'session')).next, true);
+    const h = harness({ role }); assert.equal((await h.invoke(path, { zjmfgo_session: 'session', zjmfgo_admin_session: 'other-admin' })).next, true);
     const call = h.calls.find(row => row.url.endsWith('/me'));
-    assert.equal(call.options.headers.Cookie, 'zjmfgo_session=session'); assert.equal(call.options.cache, 'no-store'); assert(call.options.signal instanceof AbortSignal);
+    const headers = new Headers(call.options.headers);
+    assert.equal(headers.get('Cookie'), 'zjmfgo_session=session'); assert.equal(headers.get('X-Auth-Portal'), 'customer');
+    assert.equal(call.options.cache, 'no-store'); assert(call.options.signal instanceof AbortSignal);
   }
 });
-test('staff customer workspaces and customer auth forms redirect to the admin portal even during maintenance', async () => {
-  for (const maintenance of [false, true]) for (const role of ['admin', 'super_admin']) for (const path of ['/console', '/console/orders', '/cart', '/cart/', '/login', '/register']) {
-    const h = harness({ maintenance, role });
-    redirect(await h.invoke(path, 'staff'), '/admin');
-    assert.equal(h.calls.filter(row => row.url.endsWith('/me')).length, 1);
+test('administrator-only browsers remain anonymous in customer workspaces and may open customer login forms', async () => {
+  for (const path of ['/console', '/console/orders', '/console/account', '/cart', '/cart/']) {
+    const h = harness();
+    redirect(await h.invoke(path, { zjmfgo_admin_session: 'staff' }), '/login');
+    assert.equal(h.calls.filter(row => row.url.endsWith('/me')).length, 0);
+  }
+  for (const path of ['/login', '/register']) {
+    const h = harness();
+    assert.equal((await h.invoke(path, { zjmfgo_admin_session: 'staff' })).next, true);
+    assert.equal(h.calls.some(row => row.url.endsWith('/me')), false);
   }
 });
-test('fixed notification account links take staff to their own personal account during normal operation and maintenance', async () => {
-  for (const maintenance of [false, true]) for (const role of ['admin', 'super_admin']) {
-    const h = harness({ maintenance, role });
-    redirect(await h.invoke('/console/account', 'staff'), '/admin/account');
-    assert.equal(h.calls.filter(row => row.url.endsWith('/me')).length, 1);
+test('a wrong-role customer cookie is rejected in its own portal without borrowing the admin identity', async () => {
+  for (const role of ['admin', 'super_admin', 'unexpected']) for (const path of ['/console/account', '/cart']) {
+    const h = harness({ role });
+    redirect(await h.invoke(path, { zjmfgo_session: 'wrong-role', zjmfgo_admin_session: 'staff' }), '/login');
+    const calls = h.calls.filter(row => row.url.endsWith('/me'));
+    assert.equal(calls.length, 1);
+    assert.equal(new Headers(calls[0].options.headers).get('Cookie'), 'zjmfgo_session=wrong-role');
   }
-  const customer = harness({ role: 'customer' });
-  assert.equal((await customer.invoke('/console/account', 'customer')).next, true);
 });
 test('console account failures return uncached 503 rather than render or masquerade as logout', async () => {
-  for (const options of [{ meStatus: 500 }, { meStatus: 403 }, { meError: true }, { malformed: true }, { role: 'unexpected' }]) {
+  for (const options of [{ meStatus: 500 }, { meStatus: 403 }, { meError: true }, { malformed: true }]) {
     const response = await harness(options).invoke('/console/contracts', 'session');
     assert.equal(response.status, 503); assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.equal(response.headers.get('Retry-After'), '60'); assert.equal(response.next, undefined);
   }
 });
-test('maintenance retains customer/anonymous/invalid 503 or external maintenance URL and admin preview', async () => {
+test('maintenance blocks every public portal even with an administrator cookie while retaining the external maintenance URL', async () => {
   for (const [cookie, options] of [[undefined, {}], ['customer', {}], ['invalid', { meStatus: 401 }]]) {
     const h = harness({ maintenance: true, ...options }); const response = await h.invoke('/console/contracts', cookie);
     assert.equal(response.status, 503); assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.match(await response.text(), /maintenance/);
@@ -85,18 +96,32 @@ test('maintenance retains customer/anonymous/invalid 503 or external maintenance
     const external = await harness({ maintenance: true, maintenanceURL: target, ...options }).invoke('/console/contracts', cookie);
     assert.equal(external.status, 307); assert.equal(external.headers.get('Location'), target); assert.equal(external.headers.get('Cache-Control'), 'no-store');
   }
-  for (const role of ['admin', 'super_admin']) for (const path of ['/', '/products/1', '/news', '/knowledgebase', '/downloads']) assert.equal((await harness({ maintenance: true, role }).invoke(path, 'staff')).next, true);
+  for (const adminRole of ['admin', 'super_admin']) for (const path of ['/', '/products/1', '/news', '/knowledgebase', '/downloads']) for (const cookies of [undefined, { zjmfgo_session: 'customer' }, { zjmfgo_admin_session: 'staff' }, { zjmfgo_session: 'customer', zjmfgo_admin_session: 'staff' }]) {
+    const h = harness({ maintenance: true, adminRole });
+    const response = await h.invoke(path, cookies);
+    assert.equal(response.status, 503); assert.equal(response.next, undefined);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.equal(response.headers.get('Retry-After'), '60');
+    assert.match(await response.text(), /maintenance/);
+    assert.equal(h.calls.some(row => row.url.endsWith('/me')), false, 'public maintenance pages must not inspect or borrow an administrator identity');
+    const target = 'https://status.example.test/window';
+    const external = await harness({ maintenance: true, maintenanceURL: target, adminRole }).invoke(path, cookies);
+    assert.equal(external.status, 307); assert.equal(external.headers.get('Location'), target);
+    assert.equal(external.headers.get('Cache-Control'), 'no-store');
+  }
   assert.equal((await harness({ siteError: true }).invoke('/console/contracts')).status, 503);
   for (const options of [{ meStatus: 500 }, { meError: true }]) assert.equal((await harness({ maintenance: true, ...options }).invoke('/console/contracts', 'session')).status, 503);
 });
 test('admin guard keeps staff bypass and existing customer/missing/401/500/network outcomes', async () => {
   for (const maintenance of [false, true]) {
-    for (const role of ['admin', 'super_admin']) {
-      const h = harness({ maintenance, role }); assert.equal((await h.invoke('/admin', 'staff')).next, true); assert.equal(h.calls.length, 1);
+    for (const adminRole of ['admin', 'super_admin']) {
+      const h = harness({ maintenance, adminRole }); assert.equal((await h.invoke('/admin', { zjmfgo_admin_session: 'staff', zjmfgo_session: 'customer' })).next, true); assert.equal(h.calls.length, 1);
+      const headers = new Headers(h.calls[0].options.headers);
+      assert.equal(headers.get('Cookie'), 'zjmfgo_admin_session=staff'); assert.equal(headers.get('X-Auth-Portal'), 'admin');
     }
     redirect(await harness({ maintenance }).invoke('/admin'), '/admin-login');
-    redirect(await harness({ maintenance, role: 'customer' }).invoke('/admin', 'customer'), '/');
-    for (const options of [{ meStatus: 401 }, { meStatus: 500 }, { meError: true }]) redirect(await harness({ maintenance, ...options }).invoke('/admin/site-settings', 'invalid'), '/admin-login');
+    const customerOnly = harness({ maintenance }); redirect(await customerOnly.invoke('/admin', 'customer'), '/admin-login'); assert.equal(customerOnly.calls.length, 0);
+    redirect(await harness({ maintenance, adminRole: 'customer' }).invoke('/admin', { zjmfgo_admin_session: 'wrong-role' }), '/admin-login');
+    for (const options of [{ meStatus: 401 }, { meStatus: 500 }, { meError: true }]) redirect(await harness({ maintenance, ...options }).invoke('/admin/site-settings', { zjmfgo_admin_session: 'invalid' }), '/admin-login');
   }
 });
 test('auth redirects use configured public origin despite hostile forwarding/Host and request origin', async () => {

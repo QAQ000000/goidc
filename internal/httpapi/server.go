@@ -482,6 +482,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/content/{id}", s.auth(s.adminContentDetail, true))
 	mux.HandleFunc("PUT /api/v1/admin/content/{id}", s.auth(s.adminCreateContent, true))
 	mux.HandleFunc("POST /api/v1/admin/content/{id}/images", s.auth(s.uploadContentImage, true))
+	mux.HandleFunc("GET /api/v1/admin/content-images/{id}", s.auth(s.contentImage, true))
 	mux.HandleFunc("DELETE /api/v1/admin/content/{id}", s.auth(s.adminDeleteContent, true))
 	mux.HandleFunc("GET /api/v1/admin/content-categories", s.auth(s.adminContentCategories, true))
 	mux.HandleFunc("POST /api/v1/admin/content-categories", s.auth(s.adminSaveContentCategory, true))
@@ -670,6 +671,11 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
+		if portal := r.Header.Get(authPortalHeader); portal != "" && portal != "customer" && portal != "admin" {
+			writeError(w, http.StatusBadRequest, "invalid_portal", "登录入口无效")
+			return
+		}
+		r = s.projectBrowserSession(r, selectedBrowserPortal(r))
 		if s.maintenanceAllowed(w, r) {
 			mux.ServeHTTP(w, r)
 		}
@@ -730,12 +736,14 @@ func (s *Server) authenticate(next http.HandlerFunc, audience authAudience, sess
 		if bearer != "" {
 			resolved, err = s.db.APIKeyIdentity(r.Context(), tokenHash(bearer))
 		} else {
-			cookie, cookieErr := r.Cookie("zjmfgo_session")
-			if cookieErr != nil {
-				writeError(w, 401, "unauthorized", "请先登录")
-				return
+			portal := requestPortal(r)
+			if audience == customerAudience {
+				portal = "customer"
+			} else if audience == adminAudience {
+				portal = "admin"
 			}
-			resolved, err = s.db.SessionIdentity(r.Context(), tokenHash(cookie.Value))
+			r = s.projectBrowserSession(r, portal)
+			resolved, err = browserIdentity(r)
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, 401, "unauthorized", "登录已失效")

@@ -1,6 +1,6 @@
 # 新闻与知识库
 
-源行为来自 `app/admin/controller/NewsController.php`、`KnowledgeBaseController.php`、`app/admin/validate/KnowledgeBaseValidate.php` 和 `app/home/controller/KnowledgeBaseController.php`。本批迁移文章与分类 CRUD、草稿/发布/归档、发布时间和知识库访问范围。多分类、标签和文章排序见 [content-taxonomy.md](content-taxonomy.md)；富文本/图片、SEO/自定义字段另行处理。按用户2026-10-06要求，不开发评论或文章评价互动。
+源行为来自 `app/admin/controller/NewsController.php`、`KnowledgeBaseController.php`、`app/admin/validate/KnowledgeBaseValidate.php` 和 `app/home/controller/KnowledgeBaseController.php`。当前支持文章与分类 CRUD、草稿/发布/归档、发布时间、知识库访问范围、安全白名单 HTML、正文图片和 SEO 元数据。多分类、标签和文章排序见 [content-taxonomy.md](content-taxonomy.md)。按用户2026-10-06要求，不开发评论或文章评价互动。
 
 ## 管理入口与权限
 
@@ -22,7 +22,9 @@
 
 文章字段为 `content_type/category_id/title/slug/excerpt/body/status/access_level/published_at/expected_version`。分类字段为 `content_type/name/slug/description/sort_order/active/expected_version`。保存响应不作为最新详情；再次 GET 取得当前版本。并发变更返回 409 `version_conflict`，界面提供重新加载；等待后的权限不足为 403，缺失对象为 404，重复标识或关联约束冲突为 409。
 
-标题最多 240 字符、摘要 1000、正文 20000；分类名称 120、说明 500，排序 0–1000000。同类型标识唯一，使用小写字母开头及字母、数字、短横线，最长 120。正文按纯文本显示，换行/制表符保留，其他控制字符拒绝。文章 JSON 上限 256 KiB，支持四字节 Unicode 正文和 JSON 转义；其他普通 JSON 接口仍为 64 KiB。
+标题最多 240 字符、摘要 1000、纯文本正文 20000；分类名称 120、说明 500，排序 0–1000000。同类型标识唯一，使用小写字母开头及字母、数字、短横线，最长 120。有安全 HTML 正文时按服务端白名单渲染，否则显示纯文本；纯文本换行/制表符保留，其他控制字符拒绝。文章 JSON 上限 256 KiB，支持四字节 Unicode 正文和 JSON 转义；其他普通 JSON 接口仍为 64 KiB。
+
+正文图片上传与持久化 HTML 使用规范地址 `/api/v1/content-images/{id}`。公开图片读取的浏览器身份只取客户 Cookie，不回退到后台 Cookie；既有有效 Bearer 保留已发布内容的阅读资格，仍受发布时间、分类可见性和访问等级约束。草稿图片只能通过独立 `/api/v1/admin/content-images/{id}` 预览，要求后台会话或管理员 API 密钥及 `content.view`，并在存储读取后复核权限；只在预览渲染时映射规范图片地址，不将后台路径保存到文章或发布给客户。后台不直接渲染编辑中的原始 HTML，也不加载外部预览图片。“客户页面”链接仍按客户入口和发布规则访问。
 
 ## 发布与访问范围
 
@@ -37,6 +39,8 @@
 客户页 `/news`、`/knowledgebase` 提供搜索、分类和分页，知识库提示登录入口；详情的不可访问提示中性，不显示受限内容。手机长标题和正文自动折行，编辑弹窗在视口内滚动。
 
 ## 验证
+
+当前图片隔离回归为 `TestContentImagesDecodePermissionsAndVisibility`、`TestContentImageAdminPreviewRechecksAuthorityAfterObjectWait` 与 `TestPortalSessionPublicReadersStayCustomerOnly`，分别纳入文件存储和认证严格门禁；正文预览与保存地址分离使用 `node --test scripts/content-image-preview-components.test.mjs`。真实浏览器与发布证据另存 `output/`，不能以组件或静态检查代替。
 
 专项隔离 PG18 测试覆盖权限与 API 密钥、已有角色迁移、CRUD、分类删除关联和并发分配、发布/归档/定时、Unicode 限制、公开字段、阅读计数、搜索分页、凭据过期/撤销/停用、服务归属/状态/导入隔离、并发编辑、等待撤权和审计失败回滚。全量 Go 测试包含强制真实旧库只读导入演练，HTTP API 包 30.488s；`go vet ./...`、前端 lint、类型检查与生产构建通过。
 

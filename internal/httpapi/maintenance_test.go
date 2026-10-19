@@ -70,7 +70,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	h.ServeHTTP(w, r)
 	expect(t, w, 503)
 	for _, cookie := range []string{root, staff} {
-		expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 200)
+		expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 503)
 		expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, cookie, ""), 200)
 	}
 	if _, err = db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1", staffID); err != nil {
@@ -82,7 +82,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	}
 	expect(t, requestBearer(h, "GET", "/api/v1/admin/dashboard", nil, adminKey), 200)
 	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, staff, ""), 403)
-	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, customer, ""), 401)
 	for _, path := range []string{"/healthz", "/readyz", "/api/v1/site"} {
 		expect(t, request(h, "GET", path, nil, "", ""), 200)
 	}
@@ -167,7 +167,7 @@ func TestMaintenancePaymentWebhookAndMFALogin(t *testing.T) {
 	expect(t, verified, 200)
 	cookie := verified.Result().Cookies()[0].String()
 	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, cookie, ""), 200)
-	expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 200)
+	expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 503)
 }
 
 func TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery(t *testing.T) {

@@ -14,7 +14,7 @@ func TestWorkerRuntimePermissionsAndIndependentReadiness(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/runtime", nil, "", ""), 401)
-	expect(t, request(h, "GET", "/api/v1/admin/runtime", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/runtime", nil, customer, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/runtime", nil, staff, ""), 403)
 	w := request(h, "GET", "/api/v1/admin/runtime", nil, root, "")
 	expect(t, w, 200)

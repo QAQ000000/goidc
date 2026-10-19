@@ -62,7 +62,7 @@ func TestNotificationLifecycleCatalogFilteringAndScope(t *testing.T) {
 		t.Fatal("payment deliveries leaked into another event or disappeared")
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/notification-center?event_kind=unknown", nil, admin, ""), 400)
-	expect(t, request(h, "GET", "/api/v1/admin/notification-center?event_kind=order.created", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/notification-center?event_kind=order.created", nil, customer, ""), 401)
 }
 
 func TestNotificationLifecycleExplicitConsentAndAuditRollback(t *testing.T) {

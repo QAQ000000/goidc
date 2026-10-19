@@ -170,7 +170,8 @@ func TestCompiledAppsSuperAdminPermission(t *testing.T) {
 	}
 	_, customer := user(t, db, h, "apps-permission-customer", "customer")
 	expect(t, request(h, "GET", "/api/v1/admin/apps", nil, "", ""), http.StatusUnauthorized)
-	for _, cookie := range []string{fullAdmin, reader, customer} {
+	expect(t, request(h, "GET", "/api/v1/admin/apps", nil, customer, ""), http.StatusUnauthorized)
+	for _, cookie := range []string{fullAdmin, reader} {
 		expect(t, request(h, "GET", "/api/v1/admin/apps", nil, cookie, ""), http.StatusForbidden)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/apps", nil, super, ""), http.StatusOK)

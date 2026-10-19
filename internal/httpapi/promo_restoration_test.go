@@ -179,5 +179,5 @@ func TestPromoRestorationKeyedReplayAuditAndPermissions(t *testing.T) {
 	expect(t, request(f.h, "POST", path, map[string]any{"code": "RESTORE-STAFF", "discount_type": "fixed", "value": 100}, f.staff, "staff-create"), 201)
 	contentRole(t, f.db, f.staffID, "promos.view")
 	expect(t, request(f.h, "PATCH", itemPath, map[string]any{"expected_version": v + 1, "active": false}, f.staff, "staff-revoked"), 403)
-	expect(t, request(f.h, "GET", path+"/page", nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", path+"/page", nil, f.customer, ""), 401)
 }

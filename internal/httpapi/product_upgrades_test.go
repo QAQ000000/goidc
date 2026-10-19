@@ -207,7 +207,7 @@ func TestProductChangePermissionsStaleAndAuditRollback(t *testing.T) {
 	policy := store.ProductUpgradeTargetsInput{ExpectedRevision: *configRevision(t, f.h, f.root, f.pid), Targets: []store.ProductUpgradeTarget{{ProductID: pid}}}
 	expect(t, request(f.h, "GET", path, nil, reader, ""), 200)
 	expect(t, request(f.h, "PUT", path, policy, reader, ""), 403)
-	expect(t, request(f.h, "PUT", path, policy, f.customer, ""), 403)
+	expect(t, request(f.h, "PUT", path, policy, f.customer, ""), 401)
 	invalid := policy
 	invalid.Targets = []store.ProductUpgradeTarget{{ProductID: f.pid}}
 	expect(t, request(f.h, "PUT", path, invalid, f.root, ""), 409)

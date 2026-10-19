@@ -23,7 +23,7 @@ func TestNativeConfigurationRuleLifecycle(t *testing.T) {
 	blocked := configOption(t, h, admin, pid, resultGroup, "blocked")
 	base := fmt.Sprintf("/api/v1/admin/products/%d/configuration-rules", pid)
 	input := store.NativeConfigurationRuleInput{Name: "Trigger requires allowed", Enabled: enabled(), Conditions: []store.NativeRulePredicate{{GroupID: triggerGroup, OptionID: &trigger, Operator: "equals"}}, Results: []store.NativeRulePredicate{{GroupID: resultGroup, OptionID: &allowed, Operator: "equals"}}, ExpectedRevision: configRevision(t, h, admin, pid)}
-	expect(t, request(h, "POST", base, input, customer, ""), 403)
+	expect(t, request(h, "POST", base, input, customer, ""), 401)
 	stale := input
 	stale.ExpectedRevision = new(int64)
 	expect(t, request(h, "POST", base, stale, admin, ""), 409)

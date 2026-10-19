@@ -85,6 +85,7 @@ export const integrationSuites = {
     "TestDownloadResumeAuthorizationAndReplacement",
     "TestCustomerFileResumeOwnershipAndAudit",
     "TestContentImagesDecodePermissionsAndVisibility",
+    "TestContentImageAdminPreviewRechecksAuthorityAfterObjectWait",
     "TestTicketAttachmentsAreOwnedAndBounded",
     "TestInvoiceElectronicFileAndAdjustmentControls",
     "TestInvoiceDocumentWaitingRevocationAndReplacement",

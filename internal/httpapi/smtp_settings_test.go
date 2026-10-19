@@ -24,7 +24,11 @@ func TestSMTPSettingsSecurityAndDynamicResolution(t *testing.T) {
 	server := New(db, config.Config{PublicOrigin: "http://localhost:3088", SMTPPort: 587, ProvisionEncryptionKey: bytes.Repeat([]byte{17}, 32)}, slog.Default())
 	mux := server.Handler()
 	for _, c := range []string{staff, customer} {
-		expect(t, request(mux, "GET", "/api/v1/admin/smtp-settings", nil, c, ""), 403)
+		expected := 403
+		if c == customer {
+			expected = 401
+		}
+		expect(t, request(mux, "GET", "/api/v1/admin/smtp-settings", nil, c, ""), expected)
 	}
 	response := request(mux, "GET", "/api/v1/admin/smtp-settings", nil, root, "")
 	expect(t, response, 200)
@@ -66,7 +70,11 @@ func TestSMTPSettingsSecurityAndDynamicResolution(t *testing.T) {
 		t.Fatal("SMTP field resolution", e)
 	}
 	for _, c := range []string{staff, customer} {
-		expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, c, ""), 403)
+		expected := 403
+		if c == customer {
+			expected = 401
+		}
+		expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, c, ""), expected)
 	}
 	expect(t, request(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": 1}, root, ""), 409)
 	expect(t, requestBearer(mux, "POST", "/api/v1/admin/smtp-settings/test", map[string]any{"recipient": "to@example.test", "expected_version": out.Version}, "test-api-credential"), 403)

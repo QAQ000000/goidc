@@ -70,7 +70,7 @@ func TestCustomerFieldDefinitionsReadOnlyPaginationAndPermissions(t *testing.T) 
 			expect(t, request(h, "GET", "/api/v1/admin/customer-fields", nil, staff, ""), 403)
 		}
 	}
-	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, customer, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, root, ""), 200)
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)

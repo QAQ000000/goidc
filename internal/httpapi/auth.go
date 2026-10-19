@@ -196,17 +196,21 @@ func normalizeLoginIdentifier(raw string) (string, string) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if _, err := r.Cookie(adminSessionCookie); err == nil {
-		s.exitImpersonation(w, r)
+	if apiKeyRequest(r) {
+		writeError(w, http.StatusForbidden, "session_required", "该操作需要浏览器会话")
 		return
 	}
-	cookie, _ := r.Cookie("zjmfgo_session")
-	if _, err := s.db.Pool.Exec(r.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookie.Value)); err != nil {
+	cookie, err := originalSessionCookie(r, requestPortal(r))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
+	}
+	if err = s.db.DeleteAuthenticationSession(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value)); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	s.authAudit(r.Context(), identityFrom(r).ID, "auth.logout", map[string]any{"remote_addr": s.clientIP(r)})
-	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: "", Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(0, 0)})
+	s.clearSessionCookie(w, sessionCookieForRole(identityFrom(r).Role))
 	write(w, 200, map[string]bool{"logged_out": true})
 }
 

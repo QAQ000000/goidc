@@ -17,6 +17,8 @@ let resources;
 let requests;
 let refreshes;
 let resourcePaths;
+let resourcePortals;
+let requestPortals;
 let actions;
 let respond;
 let local;
@@ -29,7 +31,7 @@ class ApiError extends Error { constructor(status, code = 'test', message = '请
 const react = { ...React,
   useState(initial) { const state = current; const i = state.cursor++; if (!(i in state.values)) state.values[i] = typeof initial === 'function' ? initial() : initial; return [state.values[i], next => { state.values[i] = typeof next === 'function' ? next(state.values[i]) : next; }]; },
   useCallback(callback, deps) { const state = current; const i = state.cursor++; if (!state.values[i] || deps.some((value, n) => value !== state.values[i].deps[n])) state.values[i] = { deps, callback }; return state.values[i].callback; },
-  useEffect(callback, deps) { const state = current; const i = state.cursor++; if (!state.values[i] || deps.some((value, n) => value !== state.values[i][n])) { state.values[i] = deps; effectQueue.push(callback); } },
+  useEffect(callback, deps) { const state = current; const i = state.cursor++; const previous = state.values[i]; if (!previous || deps.some((value, n) => value !== previous.deps[n])) { const effect = { deps, cleanup: undefined }; state.values[i] = effect; effectQueue.push(() => { previous?.cleanup?.(); effect.cleanup = callback(); }); } },
 };
 function load(filename) {
   if (cache.has(filename)) return cache.get(filename).exports;
@@ -39,8 +41,8 @@ function load(filename) {
     if (specifier === 'react') return react;
     if (specifier === './workspace') return { useAdminPermission: () => true };
     if (specifier === '@/hooks/use-admin-form-leave') return { useAdminFormLeave() {} };
-    if (specifier === '@/hooks/use-resource') return { useResource: requestPath => { resourcePaths.push(requestPath); return { data: resources.get(requestPath)?.data ?? null, error: resources.get(requestPath)?.error ?? null, refresh: () => refreshes.push(requestPath) }; } };
-    if (specifier === '@/lib/api') return { ApiError, date: value => value, api: async (requestPath, options = {}) => { const request = { path: requestPath, method: options.method ?? 'GET', body: options.body ? JSON.parse(options.body) : undefined }; requests.push(request); actions.push('api:' + request.method); return respond(request); } };
+    if (specifier === '@/hooks/use-resource') return { useResource: (requestPath, _keepPrevious, portal) => { resourcePaths.push(requestPath); resourcePortals.push({ path: requestPath, portal }); return { data: resources.get(requestPath)?.data ?? null, error: resources.get(requestPath)?.error ?? null, refresh: () => refreshes.push(requestPath) }; } };
+    if (specifier === '@/lib/api') return { ApiError, date: value => value, currentAuthPortal: apiHelpers.currentAuthPortal, authPortal: apiHelpers.authPortal, api: async (requestPath, options = {}) => { const request = { path: requestPath, method: options.method ?? 'GET', body: options.body ? JSON.parse(options.body) : undefined }; requests.push(request); requestPortals.push(apiHelpers.authPortal(requestPath, options.portal)); actions.push('api:' + request.method); return respond(request); } };
     if (specifier.startsWith('.') || specifier.startsWith('@/')) {
       const base = specifier.startsWith('@/') ? path.join(web, 'src', specifier.slice(2)) : path.resolve(path.dirname(filename), specifier);
       const source = [base, `${base}.tsx`, `${base}.ts`].find(candidate => existsSync(candidate));
@@ -51,6 +53,7 @@ function load(filename) {
   module._compile(ts.transpileModule(readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText, filename);
   return module.exports;
 }
+const apiHelpers = load(path.join(web, 'src/lib/api.ts'));
 const helper = load(path.join(web, 'src/lib/web-push.ts'));
 const { WebPushPreferences } = load(path.join(web, 'src/components/web-push-preferences.tsx'));
 const { WebPushHistory } = load(path.join(web, 'src/components/web-push-history.tsx'));
@@ -66,11 +69,12 @@ const endpoint = 'https://fcm.googleapis.com/fcm/send/secret-capability-endpoint
 function makeSubscription(bytes = keyBytes, target = endpoint) {
   return { endpoint: target, options: { applicationServerKey: bytes.slice().buffer }, toJSON() { return { endpoint: target, keys: { p256dh: 'browser-key', auth: 'browser-auth' } }; }, async unsubscribe() { actions.push('unsubscribe'); local = null; return true; } };
 }
-function reset() {
+function reset(pathname = '/console/account') {
   resources = new Map([[statePath, { data: { instances: [instance], subscriptions: [] } }]]);
-  requests = []; refreshes = []; resourcePaths = []; actions = []; effectQueue = []; pendingBrowser = new Set(); local = null; permissionResult = 'granted'; respond = async () => ({});
+  requests = []; refreshes = []; resourcePaths = []; resourcePortals = []; requestPortals = []; actions = []; effectQueue = []; pendingBrowser = new Set(); local = null; permissionResult = 'granted'; respond = async () => ({});
   registration = { active: {}, pushManager: { async getSubscription() { return local; }, async subscribe(options) { actions.push('subscribe'); assert.equal(options.userVisibleOnly, true); assert.deepEqual(new Uint8Array(options.applicationServerKey), keyBytes); local = makeSubscription(); return local; } } };
-  globalThis.window = { requestAnimationFrame: callback => setImmediate(callback), cancelAnimationFrame: handle => clearImmediate(handle), isSecureContext: true, PushManager: function () {}, Notification: {}, matchMedia: () => ({ matches: false }), addEventListener() {}, removeEventListener() {}, confirm: () => true };
+  const events = new EventTarget();
+  globalThis.window = { location: { pathname }, requestAnimationFrame: callback => setImmediate(callback), cancelAnimationFrame: handle => clearImmediate(handle), isSecureContext: true, PushManager: function () {}, Notification: {}, matchMedia: () => ({ matches: false }), addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events), confirm: () => true };
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { userAgent: 'TestBrowser', serviceWorker: { getRegistration: async () => registration, register: async (script, options) => { actions.push('register'); assert.equal(script, '/notification-sw.js'); assert.deepEqual(options, { scope: '/', updateViaCache: 'none' }); return registration; }, ready: Promise.resolve(registration) } } });
   globalThis.Notification = { permission: 'default', requestPermission: async () => { actions.push('permission'); return permissionResult; } };
   Object.defineProperty(globalThis, 'crypto', { configurable: true, value: { subtle: { digest(...args) { const operation = webcrypto.subtle.digest(...args); pendingBrowser.add(operation); operation.finally(() => pendingBrowser.delete(operation)); return operation; } } } });
@@ -104,6 +108,41 @@ test('opt-in requests permission from click, registers notification-only worker 
   assert.deepEqual(actions, ['permission', 'register', 'subscribe', 'api:POST']);
   assert.deepEqual(requests, [{ path: statePath + '/subscriptions', method: 'POST', body: { instance_id: instance.id, subscription: { endpoint, keys: { p256dh: 'browser-key', auth: 'browser-auth' } }, expected_version: 0 } }]);
   assert.match(text(render()), /订阅本身不会开启业务通知/); assert.doesNotMatch(text(render()), /secret-capability|browser-auth/);
+});
+
+test('subscription opt-in keeps the initiating portal across permission, worker registration and subscription awaits', async () => {
+  for (const [page, portal, otherPage] of [['/admin/account', 'admin', '/console/account'], ['/console/account', 'customer', '/admin/account']]) for (const stage of ['permission', 'registration', 'subscription']) {
+    reset(page); const render = mount(); render(); await effects();
+    let release, entered;
+    const gate = new Promise(resolve => { release = resolve; });
+    const paused = new Promise(resolve => { entered = resolve; });
+    const delay = callback => async (...args) => { const result = await callback(...args); entered(); await gate; return result; };
+    if (stage === 'permission') Notification.requestPermission = delay(Notification.requestPermission);
+    if (stage === 'registration') navigator.serviceWorker.register = delay(navigator.serviceWorker.register);
+    if (stage === 'subscription') registration.pushManager.subscribe = delay(registration.pushManager.subscribe);
+    const operation = button(render(), '开启此浏览器通知').props.onClick();
+    await paused;
+    assert.deepEqual(requests, []);
+    window.location.pathname = otherPage;
+    release(); await operation; await settle();
+    assert.equal(requests.length, 1); assert.equal(requests[0].method, 'POST');
+    assert.deepEqual(requestPortals, [portal], `${portal} changed session after awaiting ${stage}`);
+    assert.equal(resourcePortals.find(item => item.path === statePath).portal, portal);
+  }
+});
+
+test('subscription management reacts only to its own portal unauthorized event', async () => {
+  for (const [page, portal] of [['/admin/account', 'admin'], ['/console/account', 'customer']]) {
+    reset(page); const render = mount(); render(); await effects();
+    window.dispatchEvent(new CustomEvent('zjmfgo:unauthorized', { detail: { path: '/me', portal: portal === 'admin' ? 'customer' : 'admin' } }));
+    assert.equal(button(render(), '开启此浏览器通知').props.disabled, false);
+    assert.doesNotMatch(text(render()), /登录会话已失效/);
+    window.dispatchEvent(new CustomEvent('zjmfgo:unauthorized', { detail: { path: '/me', portal } }));
+    assert.equal(button(render(), '开启此浏览器通知').props.disabled, true);
+    assert.match(text(render()), /登录会话已失效/);
+    await button(render(), '开启此浏览器通知').props.onClick(); await settle();
+    assert.deepEqual(requests, []); assert.deepEqual(actions, []);
+  }
 });
 
 test('dismissed or denied prompt never subscribes and remains recoverable', async () => {
@@ -171,19 +210,47 @@ function worker() {
   return { listeners, notifications, opened, setWindows(value) { windows = value; } };
 }
 
-test('notification-only worker never reads untrusted payload or displays account secrets', async () => {
+test('notification-only worker treats absent or malformed payloads as fixed customer notifications', async () => {
   const { listeners, notifications } = worker(); assert.deepEqual(Object.keys(listeners).sort(), ['notificationclick', 'push']);
-  let waited; listeners.push({ data: { json() { throw new Error('untrusted data must not be read'); } }, waitUntil(promise) { waited = promise; } }); await waited;
-  assert.equal(notifications[0].title, '账户通知'); assert.equal(notifications[0].options.body, '您有新的账户通知，请登录查看。');
-  assert.equal(Object.keys(notifications[0].options.data).length, 0); assert.equal(notifications[0].options.icon, '/assets/notification-icon-192.png');
+  for (const data of [undefined, { json() { throw new Error('invalid JSON'); } }, { json: () => null }, { json: () => 'arbitrary payload' }]) {
+    let waited; listeners.push({ data, waitUntil(promise) { waited = promise; } }); await waited;
+    const notification = notifications.at(-1);
+    assert.equal(notification.title, '账户通知'); assert.equal(notification.options.body, '您有新的账户通知，请登录查看。');
+    assert.equal(notification.options.data.destination, '/console/account'); assert.equal(notification.options.tag, 'goidc-account-notification');
+    assert.equal(notification.options.icon, '/assets/notification-icon-192.png');
+    assert.deepEqual(Object.keys(notification.options.data), ['destination']);
+  }
 });
 
-test('notification click ignores payload destination and unrelated windows, opening only same-origin account', async () => {
-  const workerState = worker(); let focused = false; let closed = false; let waited;
-  workerState.setWindows([{ url: 'https://evil.example/console/account', focus() { throw new Error('foreign window'); } }, { url: 'https://account.example/console/services', focus() { throw new Error('unrelated window'); } }]);
-  const event = { notification: { data: { url: 'https://evil.example/', title: 'injected' }, close() { closed = true; } }, waitUntil(promise) { waited = promise; } };
-  workerState.listeners.notificationclick(event); await waited; assert.equal(closed, true); assert.deepEqual(workerState.opened, ['https://account.example/console/account']);
-  workerState.setWindows([{ url: 'https://account.example/console/account', async focus() { focused = true; } }]); workerState.listeners.notificationclick(event); await waited; assert.equal(focused, true); assert.equal(workerState.opened.length, 1);
+test('push payloads select only the exact two account paths while business content never reaches notification display', async () => {
+  const state = worker();
+  for (const url of ['/admin/account', '/console/account', '/admin', '/admin/account?secret=invoice', '/admin/account#invoice', 'https://account.example/admin/account', 'https://evil.example/', '//evil.example/admin/account', 'javascript:alert(1)', '/admin%2faccount', '/console/services', '', null]) {
+    let waited;
+    state.listeners.push({ data: { json: () => ({ url, title: 'private-title', body: 'private-invoice-amount', variables: { password: 'private-password' }, data: { destination: 'https://evil.example/' } }) }, waitUntil(promise) { waited = promise; } });
+    await waited;
+    const notification = state.notifications.at(-1), admin = url === '/admin/account';
+    assert.equal(notification.title, '账户通知'); assert.equal(notification.options.body, '您有新的账户通知，请登录查看。');
+    assert.equal(notification.options.data.destination, admin ? '/admin/account' : '/console/account');
+    assert.equal(notification.options.tag, admin ? 'goidc-admin-notification' : 'goidc-account-notification');
+    assert.doesNotMatch(JSON.stringify(notification), /private-|evil\.example|invoice|password/);
+  }
+});
+
+test('notification clicks ignore untrusted paths and focus only exact same-origin windows for the selected portal', async () => {
+  for (const destination of ['/admin/account', '/console/account', '/admin/account?next=evil', 'https://account.example/admin/account', 'https://evil.example/', '//evil.example/', 'javascript:alert(1)', '/console/services', undefined]) {
+    const state = worker(), path = destination === '/admin/account' ? '/admin/account' : '/console/account';
+    let focused = false, closed = false, waited;
+    state.setWindows([
+      { url: `https://evil.example${path}`, focus() { throw new Error('foreign window'); } },
+      { url: `https://account.example${path}?secret=invoice`, focus() { throw new Error('unrelated URL'); } },
+      { url: `https://account.example${path === '/admin/account' ? '/console/account' : '/admin/account'}`, focus() { throw new Error('wrong portal'); } },
+    ]);
+    const event = { notification: { data: { destination, url: 'https://evil.example/', title: 'private-title' }, close() { closed = true; } }, waitUntil(promise) { waited = promise; } };
+    state.listeners.notificationclick(event); await waited;
+    assert.equal(closed, true); assert.deepEqual(state.opened, [`https://account.example${path}`]);
+    state.setWindows([{ url: `https://account.example${path}`, async focus() { focused = true; } }]);
+    state.listeners.notificationclick(event); await waited; assert.equal(focused, true); assert.equal(state.opened.length, 1);
+  }
 });
 
 

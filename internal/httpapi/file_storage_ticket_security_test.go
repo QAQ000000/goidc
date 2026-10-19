@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -89,7 +88,7 @@ func TestFileStorageTicketUploadRechecksAuthorityAfterPut(t *testing.T) {
 			case "customer_department_hidden":
 				_, err = gate.Exec(t.Context(), "UPDATE ticket_departments SET customer_visible=false WHERE id=$1", department)
 			case "session_revoked":
-				_, err = gate.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(actor, "zjmfgo_session=")))
+				_, err = gate.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(actor)))
 				want = 401
 			}
 			if err != nil {

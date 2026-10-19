@@ -35,7 +35,7 @@ func externalRefundTopupHTTPReversal(t *testing.T, resolved bool) {
 	_, reader := externalRefundActor(t, f.db, f.h, "topup-http-reader", []string{"external_refunds.view"})
 	in := map[string]any{"payment_id": payment, "amount_cents": 1234, "method": "bank_transfer", "provider_refund_id": "topup-http-refund", "received_at": time.Now().UTC().Format(time.RFC3339Nano), "evidence_ref": "test://topup-http-refund", "evidence_sha256": strings.Repeat("a", 64), "note": "actual external transfer receipt, not original route", "expected_version": topupLiabilityVersion(t, f, invoice)}
 	expect(t, request(f.h, "POST", path, in, reader, "topup-http-reader-denied"), 403)
-	expect(t, request(f.h, "POST", path, in, f.customer, "topup-http-customer-denied"), 403)
+	expect(t, request(f.h, "POST", path, in, f.customer, "topup-http-customer-denied"), 401)
 	w := request(f.h, "POST", path, in, requester, "topup-http-create")
 	expect(t, w, 201)
 	refund := data(t, w)["refund"].(map[string]any)

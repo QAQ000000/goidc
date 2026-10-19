@@ -133,7 +133,7 @@ func TestManualInvoicePermissionsValidationAndTransferReplay(t *testing.T) {
 	in := manualInvoiceInput(f.uid)
 	expect(t, request(f.h, "GET", "/api/v1/admin/invoice-customers", nil, staff, ""), 403)
 	expect(t, request(f.h, "POST", "/api/v1/admin/invoices", in, staff, "manual-denied-create"), 403)
-	expect(t, request(f.h, "POST", "/api/v1/admin/invoices", in, f.customer, "manual-customer-create"), 403)
+	expect(t, request(f.h, "POST", "/api/v1/admin/invoices", in, f.customer, "manual-customer-create"), 401)
 	expect(t, request(f.h, "POST", "/api/v1/admin/invoices", in, f.root, ""), 409)
 	for _, invalid := range []store.ManualInvoiceInput{{UserID: f.uid, DueAt: in.DueAt}, {UserID: f.uid, DueAt: in.DueAt, Items: []store.ManualInvoiceItem{{Description: "负应收", AmountCents: -1}}}, {UserID: f.uid, DueAt: in.DueAt, Items: []store.ManualInvoiceItem{{Description: "溢出", AmountCents: 10000000001}}}} {
 		expect(t, request(f.h, "POST", "/api/v1/admin/invoices", invalid, f.root, "manual-invalid-create"), 409)

@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, Fragment } from "react";
+import { createContext, useContext, useState, Fragment } from "react";
 import Link from "next/link";
 import { SiteBrand, SiteFooter } from "./site-provider";
 import { usePathname, useRouter } from "next/navigation";
@@ -15,7 +15,6 @@ import {
   Menu,
   LogOut,
   ChevronRight,
-  ArrowUpRight,
   X,
   BadgeCheck,
 } from "lucide-react";
@@ -30,7 +29,7 @@ import { AdminShell } from "./admin-shell";
 type AccessContextValue = { user: User | null; error: Error | null; refresh: () => void };
 const AccessContext = createContext<AccessContextValue | null>(null);
 export function AdminAccessProvider({ initialUser, children }: { initialUser: User; children: React.ReactNode }) {
-  const { data, error, refresh } = useResource<User>("/me", false);
+  const { data, error, refresh } = useResource<User>("/me", false, "admin");
   const value = { user: data ?? (error ? null : initialUser), error, refresh };
   return <AccessContext.Provider value={value}>{children}</AccessContext.Provider>;
 }
@@ -74,33 +73,28 @@ export function Workspace({
   admin?: boolean;
 }) {
   const access = useContext(AccessContext);
-  const customerResource = useResource<User>(admin ? null : "/me");
+  const customerResource = useResource<User>(admin ? null : "/me", true, "customer");
   const user = admin ? access?.user ?? null : customerResource.data;
   const error = admin ? access?.error ?? null : customerResource.error;
   const refresh = admin ? access?.refresh ?? customerResource.refresh : customerResource.refresh;
   const path = usePathname();
   const router = useRouter();
-  const staff = user?.role === "admin" || user?.role === "super_admin";
-  const customerRoute = path === "/console" || path.startsWith("/console/") || path === "/cart" || path.startsWith("/cart/");
-  useEffect(() => {
-    if (!admin && staff && customerRoute) router.replace("/admin");
-  }, [admin, staff, customerRoute, router]);
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const { data: impersonation } = useResource<{ active: boolean; admin_name?: string }>("/auth/impersonation", false);
+  const { data: impersonation } = useResource<{ active: boolean; admin_name?: string }>(!admin && user?.role === "customer" ? "/auth/impersonation" : null, false, "customer");
   // Legacy hides the 实名认证 menu entry whenever certifi_open is off; mirror
   // that with the enabled flag from GET /account/certification. Absent data
   // keeps the entry visible so a loading state never hides it by accident.
-  const { data: certification } = useResource<{ enabled?: boolean }>(!admin && user?.role === "customer" ? "/account/certification" : null, false);
+  const { data: certification } = useResource<{ enabled?: boolean }>(!admin && user?.role === "customer" ? "/account/certification" : null, false, "customer");
   const [impersonationBusy, setImpersonationBusy] = useState(false);
   const [impersonationError, setImpersonationError] = useState("");
-  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : staff ? customerNav.filter(item => item.href === "/" || item.href === "/downloads").map(item => item.href === "/" ? { ...item, label: "产品目录" } : item) : customerNav.filter(item => item.href !== "/console/certification" || certification?.enabled !== false);
+  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : customerNav.filter(item => item.href !== "/console/certification" || certification?.enabled !== false);
   const groups = useServiceNavigation(!admin && user?.role === "customer");
   async function exitImpersonation() {
     if (impersonationBusy) return;
     setImpersonationBusy(true); setImpersonationError("");
     try {
-      await api("/auth/impersonation/exit", { method: "POST" });
+      await api("/auth/impersonation/exit", { method: "POST", portal: "customer" });
       router.push("/admin"); router.refresh();
     } catch (e) {
       setImpersonationError((e as Error).message);
@@ -113,7 +107,7 @@ export function Workspace({
       return;
     }
     try {
-      await api("/auth/logout", { method: "POST" });
+      await api("/auth/logout", { method: "POST", portal: admin ? "admin" : "customer" });
       router.push(admin ? "/admin-login" : "/login");
       router.refresh();
     } catch (e) {
@@ -122,9 +116,6 @@ export function Workspace({
   }
   if (admin) {
     return <AdminShell title={title} user={user} error={error} refresh={refresh} logout={logout} logoutError={logoutError}>{children}</AdminShell>;
-  }
-  if (staff && customerRoute) {
-    return <main className="grid min-h-screen place-items-center p-6"><p role="status">管理员账号仅用于后台管理，正在返回管理后台。</p></main>;
   }
   return (
     <AccessContext.Provider value={{ user, error, refresh }}><div className="workspace">
@@ -152,8 +143,8 @@ export function Workspace({
         >
           <X size={18} />
         </button>
-        <div className="nav-heading">{staff ? "官网预览" : "客户中心"}</div>
-        <nav className="min-h-0 overflow-y-auto" aria-label={staff ? "公开导航" : "客户导航"}>
+        <div className="nav-heading">客户中心</div>
+        <nav className="min-h-0 overflow-y-auto" aria-label="客户导航">
           {navigation.map(({ href, label, icon: Icon }) => (
             <Fragment key={href}><Link
               key={href}
@@ -172,26 +163,11 @@ export function Workspace({
         </nav>
         <div className="mt-auto pt-8 border-t">
           <Link
-            href={
-              admin
-                ? "/"
-                : user?.role === "admin" || user?.role === "super_admin"
-                  ? "/admin"
-                  : "/console/tickets"
-            }
+            href="/console/tickets"
             className="nav-link"
           >
-            {admin || user?.role === "admin" || user?.role === "super_admin" ? (
-              <>
-                <ArrowUpRight size={18} />
-                {admin ? "查看官网" : "返回管理后台"}
-              </>
-            ) : (
-              <>
-                <MessageSquare size={18} />
-                联系支持
-              </>
-            )}
+            <MessageSquare size={18} />
+            联系支持
           </Link>
           <div className="px-3 mt-6 text-xs text-muted-foreground max-h-[25dvh] overflow-y-auto">
             <SiteFooter />
@@ -211,7 +187,7 @@ export function Workspace({
               <Menu size={20} />
             </Button>
             <span className="hidden sm:inline text-muted-foreground">
-              {staff ? "官网预览" : "客户中心"}
+              客户中心
             </span>
             <ChevronRight
               size={14}

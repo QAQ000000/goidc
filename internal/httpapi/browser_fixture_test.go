@@ -34,8 +34,9 @@ func TestAdminAccessBrowserFixture(t *testing.T) {
 
 func TestTicketScopeBrowserFixture(t *testing.T) {
 	adminBrowserFixture(t, "scope-super", func(db *store.Store, h http.Handler) {
-		staffID, staff := user(t, db, h, "scope-support", "admin")
+		staffID, _ := user(t, db, h, "scope-support", "admin")
 		_, customer := user(t, db, h, "scope-customer", "customer")
+		_, supportCustomer := user(t, db, h, "scope-support-customer", "customer")
 		var technical, finance int64
 		if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('技术支持','technical') RETURNING id").Scan(&technical); err != nil {
 			t.Fatal(err)
@@ -56,7 +57,7 @@ func TestTicketScopeBrowserFixture(t *testing.T) {
 			w := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": map[int64]string{technical: "服务器网络问题", finance: "付款凭证核验"}[department], "body": "请核查此请求", "priority": "normal", "department_id": department}, customer, "")
 			expect(t, w, 201)
 		}
-		own := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": "客服本人的客户工单", "body": "客户视角的请求", "priority": "normal", "department_id": technical}, staff, "")
+		own := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": "独立客户的技术工单", "body": "客户视角的请求", "priority": "normal", "department_id": technical}, supportCustomer, "")
 		expect(t, own, 201)
 	})
 }

@@ -103,7 +103,7 @@ func TestNotificationCenterBindingPrivacyAndConsent(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/me/notification-bindings/%.0f", target["id"])
 	expect(t, request(h, "DELETE", path, map[string]any{"expected_version": target["version"]}, other, ""), 409)
 	expect(t, request(h, "DELETE", path, map[string]any{"expected_version": target["version"]}, customer, ""), 200)
-	expect(t, request(h, "GET", "/api/v1/admin/notification-center", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/notification-center", nil, customer, ""), 401)
 	var details string
 	if err := db.Pool.QueryRow(t.Context(), `SELECT coalesce(string_agg(payload::text,''),'') FROM audit_events`).Scan(&details); err != nil {
 		t.Fatal(err)

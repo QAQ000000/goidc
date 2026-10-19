@@ -131,7 +131,7 @@ func TestTopupLiabilityHTTPPermissionScopeInputsAndReplayRevocation(t *testing.T
 	staffID, staff := user(t, f.db, f.h, "liability-finance", "admin")
 	contentRole(t, f.db, staffID, "invoices.view")
 	expect(t, request(f.h, "GET", path, nil, "", ""), 401)
-	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 401)
 	expect(t, request(f.h, "GET", path, nil, staff, ""), 200)
 	expect(t, request(f.h, "POST", path+"/resolve", body, staff, "liability-auth-resolve"), 403)
 	contentRole(t, f.db, staffID, "invoices.view", "balance.topup.resolve")

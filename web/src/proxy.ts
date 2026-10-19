@@ -26,18 +26,18 @@ export async function proxy(request: NextRequest) {
   const adminRoute = path === "/admin" || path.startsWith("/admin/");
   if (adminRoute) {
     const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
-    const cookie = request.cookies.get("zjmfgo_session");
+    const cookie = request.cookies.get("zjmfgo_admin_session");
     if (!cookie) return authRedirect("/admin-login");
     try {
       const response = await fetch(`${origin}/api/v1/me`, {
-        headers: { Cookie: `zjmfgo_session=${cookie.value}` },
+        headers: { Cookie: `zjmfgo_admin_session=${cookie.value}`, "X-Auth-Portal": "admin" },
         cache: "no-store",
         signal: AbortSignal.timeout(3000),
       });
       if (response.ok) {
         const user = (await response.json()).data as User;
         if (user?.role === "admin" || user?.role === "super_admin") return NextResponse.next();
-        return authRedirect("/");
+        return authRedirect("/admin-login");
       }
     } catch {}
     return authRedirect("/admin-login");
@@ -52,16 +52,14 @@ export async function proxy(request: NextRequest) {
   if (cookie && (customerRoute || customerAuthRoute)) {
     try {
       const response = await fetch(`${origin}/api/v1/me`, {
-        headers: { Cookie: `zjmfgo_session=${cookie.value}` },
+        headers: { Cookie: `zjmfgo_session=${cookie.value}`, "X-Auth-Portal": "customer" },
         cache: "no-store",
         signal: AbortSignal.timeout(3000),
       });
       accountStatus = response.status;
       if (response.ok) user = (await response.json()).data as User;
     } catch {}
-    // Staff can preview public pages, but customer workspaces and login forms
-    // must never treat an administrator session as a customer session.
-    if (user?.role === "admin" || user?.role === "super_admin") return authRedirect(path === "/console/account" ? "/admin/account" : "/admin");
+    if (user && user.role !== "customer") return authRedirect("/login");
   }
   let site: SiteProfile | null = null;
   try {
@@ -76,15 +74,6 @@ export async function proxy(request: NextRequest) {
     if (accountStatus === 401) return authRedirect("/login");
     if (user?.role === "customer" && Number.isSafeInteger(user.id) && user.id > 0) return NextResponse.next();
     return new NextResponse("账户服务暂时不可用，请稍后再试。", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "60", "Content-Type": "text/plain; charset=utf-8" } });
-  }
-  if (cookie && !customerRoute && !customerAuthRoute) {
-    try {
-      const response = await fetch(`${origin}/api/v1/me`, { headers: { Cookie: `zjmfgo_session=${cookie.value}` }, cache: "no-store", signal: AbortSignal.timeout(3000) });
-      if (response.ok) {
-        const user = (await response.json()).data as User;
-        if (user.role === "admin" || user.role === "super_admin") return NextResponse.next();
-      }
-    } catch {}
   }
   if (site?.maintenance_url) return NextResponse.redirect(site.maintenance_url, { status: 307, headers: { "Cache-Control": "no-store" } });
   const headers = { "Cache-Control": "no-store", "Retry-After": "60", "Content-Type": "text/html; charset=utf-8" };

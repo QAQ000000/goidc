@@ -8,7 +8,7 @@
 
 ## 当前能力
 
-`GET /api/v1/me` 返回当前身份、`permissions` 字符串数组、工单范围元数据 `ticket_scope/ticket_unassigned` 和客户范围 `customer_scope/customer_ownerless/sales_enabled`。客户权限数组为空；超级管理员返回全部业务能力，角色、管理员和销售归属管理还要求超级管理员浏览器会话。API 密钥不支持这些管理接口，也不支持提交迁移复核决定。
+`GET /api/v1/me` 返回所选入口的当前身份（默认客户，后台通过 `X-Auth-Portal: admin` 选择）、`permissions` 字符串数组、工单范围元数据 `ticket_scope/ticket_unassigned` 和客户范围 `customer_scope/customer_ownerless/sales_enabled`。客户权限数组为空；超级管理员返回全部业务能力，角色、管理员和销售归属管理还要求超级管理员浏览器会话。API 密钥不支持这些管理接口，也不支持提交迁移复核决定。
 
 | 领域 | 读取 | 操作 |
 | --- | --- | --- |
@@ -38,17 +38,19 @@ schema063 的 35 项业务能力覆盖当前 147 条 `/api/v1/admin/*` 路由。
 
 ## 前后台身份边界
 
-`users.role` 区分 `customer`、`admin` 和 `super_admin`；同一账户不能同时承担客户与管理员身份。购物车、报价、优惠码、新购、订单、账单付款、充值、服务续费/操作、联系人、客户文件、实名/电子发票、合同、推广以及客户工单列表/新建/评分均只接受 `customer`。已登录管理员的浏览器会话和 API 密钥直接请求这些接口返回 `403 customer_required`；提高后台权限不能获得客户购买资格。默认 `auth(..., false)` / `sessionAuth(..., false)` 即客户接口，新共享接口必须显式使用 `accountAuth` 并由 handler 检查对象权限。
+`users.role` 区分 `customer`、`admin` 和 `super_admin`；同一账户不能同时承担客户与管理员身份。购物车、报价、优惠码、新购、订单、账单付款、充值、服务续费/操作、联系人、客户文件、实名/电子发票、合同、推广以及客户工单列表/新建/评分均只接受 `customer`。客户业务只读取 `zjmfgo_session`，后台管理只读取 `zjmfgo_admin_session`，两者不会相互回退。只有后台 Cookie 时访问客户业务视为客户未登录，而不是把管理员带入客户页面后禁买；错误放入客户 Cookie 的管理员令牌与管理员 API 密钥仍不能执行客户业务。默认 `auth(..., false)` / `sessionAuth(..., false)` 即客户接口，新共享接口必须显式使用 `accountAuth` 并由 handler 检查对象权限。
 
-共享接口仅保留本人身份/退出、密码、MFA、API 密钥、通知偏好/收件箱/渠道绑定/Web Push，以及后台复用的工单详情、回复、状态、附件和通知记录。共享工单仍执行上文工单能力、部门与既有所有权契约；共享不等于允许任意管理员访问任意工单。后台个人账户 `/admin/account` 只读取安全与通知资料，不读取客户余额或流水；没有业务权限的管理员仍能管理本人的安全设置。
+共享接口以 `X-Auth-Portal: customer|admin` 明确选择会话，缺省按客户处理，固定后台和客户业务路由不允许用该头切换身份。共享接口仅保留本人身份/退出、密码、MFA、API 密钥、通知偏好/收件箱/渠道绑定/Web Push，以及后台复用的工单详情、回复、状态、附件和通知记录。共享工单仍执行上文工单能力、部门与既有所有权契约；共享不等于允许任意管理员访问任意工单。后台个人账户 `/admin/account` 只读取安全与通知资料，不读取客户余额或流水；没有业务权限的管理员仍能管理本人的安全设置。
 
-前台 `/login` 与后台 `/admin-login` 分别提交 `portal: customer` 和 `portal: admin`；错误入口统一返回 `401 invalid_credentials`，不创建会话/MFA 挑战。MFA 挑战持久化冻结入口，完成时重新校验当前角色、入口与登录策略；错误入口不消费恢复码。旧 API 客户端省略 `portal` 时按实际角色登录，仍受客户商业接口的角色围栏约束。迁移 181 使旧未完成 MFA 挑战失效，需要重走密码登录；账号和现有会话保留，既有管理员会话立即受新商业接口限制。旧 API writer 不可与新 schema 混跑。
+原生图片和文件导航不能附加入口请求头，必须使用对应的固定管理或客户路径。后台正文图片预览使用 `/api/v1/admin/content-images/{id}` 并校验 `content.view`；文章持久化和公开页面仍使用 `/api/v1/content-images/{id}`，公开读取不回退到后台 Cookie。详情见[内容管理](content-management.md)。
 
-管理员访问 `/cart`、`/console/*` 会转回后台，固定通知链接 `/console/account` 转至 `/admin/account`；客户登录/注册页的已登录管理员也转回后台。公开官网、商品介绍及维护预览保留只读浏览，管理员不显示客户导航，购买操作被禁用。普通客户访问后台继续拒绝。
+前台 `/login` 与后台 `/admin-login` 分别提交 `portal: customer` 和 `portal: admin`；错误入口统一返回 `401 invalid_credentials`，不创建会话/MFA 挑战。MFA 挑战持久化冻结入口，完成时重新校验当前角色、入口与登录策略；错误入口不消费恢复码。旧 API 客户端省略 `portal` 时按实际角色登录，但只签发该角色对应的 Cookie；入口错误仍拒绝。迁移 181 使旧未完成 MFA 挑战失效，需要重走密码登录；账号与会话记录保留；旧管理员单 Cookie 登录需从后台入口重新登录，不能自动把旧 Cookie 当作新的后台凭据。旧 API writer 不可与新 schema 混跑。
 
-显式的“以客户身份登录”和管理员代客户下单继续保留：代登录创建独立的客户会话、记录原管理员与审计，并允许退出恢复后台；购买归属于目标客户，不是管理员本人。当前修复不删除或改写历史管理员名下的订单、服务和财务证据。
+前后台可以在同一个浏览器同时登录不同账户。前台 `/cart`、`/console/*`、`/login`、`/register` 以及官网商品页仅观察客户会话，后台登录不会让前台显示管理员、禁止配置或跳回后台；只有后台 Cookie 时，前台仍是匿名状态，可独立登录客户账号。后台页面与 `/admin/account` 只观察管理员会话，客户登录不会取得后台访问权。退出操作只撤销所选入口的会话和 Cookie。前台维护时统一显示维护状态，不借后台 Cookie 预览；后台设置与恢复入口继续可用。商品页不以后台管理员身份展示购买围栏，真实购买始终属于有效客户会话。
 
-验收入口为 `node scripts/test-captcha.mjs --integration`（角色/凭据/登录/MFA、共享能力、真实客户下单、代登录及 schema180→181）与 `node --test scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs scripts/captcha-components.test.mjs`。浏览器验收使用独立测试库和 `TestCustomerAdminIsolationBrowserFixture`，真实运行记录留在 `output/`；源码门禁不能替代浏览器或正式发布。
+显式的“以客户身份登录”和管理员代客户下单继续保留：代登录创建独立的客户会话、记录与原管理员会话的可信绑定和审计，保持后台 Cookie 不变，退出仅移除绑定客户会话；正常的前后台同时登录不能被识别为代登录；购买归属于目标客户，不是管理员本人。当前修复不删除或改写历史管理员名下的订单、服务和财务证据。
+
+验收入口为 `node scripts/test-captcha.mjs --integration`（角色/凭据/登录/MFA、共享能力、真实客户下单、代登录及 schema180→181）与 `node --test scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs scripts/captcha-components.test.mjs`。浏览器验收使用独立测试库的 `TestCustomerAdminIsolationBrowserFixture` 或覆盖双端登录/退出及配置下单的 `TestProductPurchaseBrowserFixture`，真实运行记录留在 `output/`；源码门禁不能替代浏览器或正式发布。
 
 ## 管理接口
 

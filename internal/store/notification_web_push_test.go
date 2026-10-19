@@ -75,6 +75,31 @@ func (f webPushFixture) ready(t *testing.T) {
 }
 func (f webPushFixture) session() string { return fmt.Sprint("notification-session-", f.customer) }
 
+func TestNotificationWebPushDispatchKeepsPortal(t *testing.T) {
+	for _, role := range []string{"customer", "super_admin"} {
+		t.Run(role, func(t *testing.T) {
+			f := newWebPushFixture(t)
+			f.save(t, f.customer, f.session(), f.subscription(t, "portal-browser"), 0)
+			f.ready(t)
+			f.queue(t, f.invoice(t, f.customer, "portal-notification"))
+			// A historical recipient can change roles after an event was queued.
+			// Dispatch must choose its current account portal under the user lock.
+			f.exec(t, `UPDATE users SET role=$2 WHERE id=$1`, f.customer, role)
+			job, err := f.db.ClaimNotificationJob(f.ctx)
+			if err != nil || job == nil {
+				t.Fatalf("claim failed: %v", err)
+			}
+			want := "customer"
+			if role == "super_admin" {
+				want = "admin"
+			}
+			if job.Channel != "web_push" || job.AccountPortal != want || job.PushSubscription == nil {
+				t.Fatalf("wrong portal for %s: channel=%s portal=%s", role, job.Channel, job.AccountPortal)
+			}
+		})
+	}
+}
+
 func TestNotificationWebPushMultipleDevicesAreEncryptedAndNeverBackfill(t *testing.T) {
 	f := newWebPushFixture(t)
 	first := f.subscription(t, "browser-one")

@@ -13,6 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
 import { Table,TableHeader,TableHead,TableBody,TableRow,TableCell } from "./ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
+import { AdminContentImagePreview } from "./admin-content-image-preview";
 
 const kindNames = { news: "新闻", knowledge: "知识库" };
 const statusNames = { draft: "草稿", published: "发布", archived: "归档" };
@@ -107,6 +108,7 @@ function ArticleForm({ initial, categories, tags, manage, onClose, onSaved, onRe
       <h3 className="border-b pb-3 pt-3 text-sm font-semibold">文章内容</h3><label className="grid gap-2 text-sm">摘要<Textarea aria-label="文章摘要" value={form.excerpt} maxLength={1000} rows={2} onChange={e => setForm({ ...form, excerpt: e.target.value })} /></label>
       <label className="grid gap-2 text-sm">正文纯文本<Textarea aria-label="文章正文" required value={form.body} maxLength={20000} rows={6} onChange={e => setForm({ ...form, body: e.target.value })} /></label>
       <label className="grid gap-2 text-sm">正文 HTML（仅允许安全白名单标签）<Textarea aria-label="文章正文 HTML" value={form.body_html} maxLength={100000} rows={8} onChange={e => setForm({ ...form, body_html: e.target.value })} /></label>
+      <AdminContentImagePreview html={form.body_html} />
       <fieldset className="space-y-3 border-t pt-4"><legend className="text-sm font-semibold">SEO 元数据</legend><label className="grid gap-2 text-sm">SEO 标题<Input maxLength={240} value={form.seo_title} onChange={e => setForm({ ...form, seo_title: e.target.value })} /></label><label className="grid gap-2 text-sm">SEO 描述<Textarea maxLength={1000} rows={2} value={form.seo_description} onChange={e => setForm({ ...form, seo_description: e.target.value })} /></label><label className="grid gap-2 text-sm">Canonical 路径<Input placeholder="/news/123" value={form.seo_canonical} onChange={e => setForm({ ...form, seo_canonical: e.target.value })} /></label></fieldset>
       {form.id > 0 && <label className="grid gap-2 text-sm">插入图片（单张不超过 5 MiB）<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onChange={async e => { const file = e.target.files?.[0]; if (!file) return; const data = new FormData(); data.append("file", file); setBusy(true); setError(""); e.currentTarget.value = ""; try { const result = await upload<{url:string}>(`/admin/content/${form.id}/images`, data); setForm(current => ({ ...current, body_html: `${current.body_html}<p><img src="${result.url}" alt="" /></p>` })); } catch (err) { setError((err as Error).message); } finally { setBusy(false); } }} /></label>}
     </fieldset>

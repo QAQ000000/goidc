@@ -37,6 +37,14 @@ func lockStorageCredential(ctx context.Context, tx pgx.Tx, actorID int64) error 
 		}
 		return err
 	}
+	if !credential.APIKey {
+		if err := lockImpersonationBinding(ctx, tx, credential.Hash, actorID); err != nil {
+			if err == pgx.ErrNoRows {
+				return conflict("unauthorized", "代登录权限已失效")
+			}
+			return err
+		}
+	}
 	return nil
 }
 

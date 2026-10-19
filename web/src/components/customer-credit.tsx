@@ -26,7 +26,10 @@ export function useCustomerCreditResource<T>(path: string | null) {
   const refresh = useCallback(() => { setSessionLost(false); setRevision(value => value + 1); }, []);
   useEffect(() => {
     const invalidate = () => { setSessionLost(false); refresh(); };
-    const revoke = () => setSessionLost(true);
+    const revoke = (event: Event) => {
+      if ((event as CustomEvent<{ portal?: string }>).detail?.portal === "admin") return;
+      setSessionLost(true);
+    };
     window.addEventListener("focus", invalidate);
     window.addEventListener("zjmfgo:unauthorized", revoke);
     return () => { window.removeEventListener("focus", invalidate); window.removeEventListener("zjmfgo:unauthorized", revoke); };
@@ -36,14 +39,14 @@ export function useCustomerCreditResource<T>(path: string | null) {
     const controller = new AbortController();
     let identity = 0;
     async function read() {
-      const before = await api<User>("/me", { signal: controller.signal });
+      const before = await api<User>("/me", { signal: controller.signal, portal: "customer" });
       if (before.role !== "customer") throw new Error("仅客户账户可查看信用资料");
       if (controller.signal.aborted) return;
       identity = before.id;
       setCurrentIdentity(identity);
-      const data = await api<T>(path!, { signal: controller.signal });
+      const data = await api<T>(path!, { signal: controller.signal, portal: "customer" });
       if (data === undefined || data === null) throw new Error("信用资料响应不完整，请重新加载");
-      const after = await api<User>("/me", { signal: controller.signal });
+      const after = await api<User>("/me", { signal: controller.signal, portal: "customer" });
       if (after.id !== identity || after.role !== "customer") throw new Error("账户已切换，请重新加载信用资料");
       if (!controller.signal.aborted) setState({ path: path!, revision, identity, data, error: null });
     }

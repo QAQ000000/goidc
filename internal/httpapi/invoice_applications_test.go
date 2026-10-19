@@ -52,7 +52,7 @@ func TestInvoiceApplicationLifecycle(t *testing.T) {
 	expect(t, request(f.h, "POST", refundPath, map[string]any{}, f.root, "application-pending-refund"), 409)
 	reviewPath := fmt.Sprintf("/api/v1/admin/invoice-applications/%d/review", appID)
 	review := store.InvoiceApplicationReview{Status: "rejected", ReviewNote: "资料不完整", ExpectedVersion: 1}
-	expect(t, request(f.h, "POST", reviewPath, review, f.customer, "application-denied-review"), 403)
+	expect(t, request(f.h, "POST", reviewPath, review, f.customer, "application-denied-review"), 401)
 	expect(t, request(f.h, "POST", reviewPath, review, f.root, "application-review-1"), 201)
 	expect(t, request(f.h, "POST", reviewPath, review, f.root, "application-review-1"), 200)
 	expect(t, request(f.h, "POST", reviewPath, review, f.root, "application-stale-review"), 409)

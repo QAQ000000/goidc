@@ -48,7 +48,7 @@ func TestSalesReportDetailsAmountsScopeAndSnapshot(t *testing.T) {
 	exec(`INSERT INTO sales_settlements(month,actor_id) VALUES('2024-02',$1)`, owner)
 	exec(`INSERT INTO sales_settlement_items(settlement_id,order_id,invoice_id,customer_id,sales_owner_id,snapshot,commission_cents) SELECT id,$2,$3,$4,$1,'{"original_rule":true,"monthly_turnover_cents":99999999}',7 FROM sales_settlements`, otherOwner, order, invoice, customer)
 	path := "/api/v1/admin/reports/sales/details?year=2024&month=2"
-	expect(t, request(h, "GET", path, nil, customerCookie, ""), 403)
+	expect(t, request(h, "GET", path, nil, customerCookie, ""), 401)
 	get := func(path string) map[string]any {
 		t.Helper()
 		w := request(h, "GET", path, nil, staff, "")

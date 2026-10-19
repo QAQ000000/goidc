@@ -189,7 +189,7 @@ func TestLocalRenewalExternalRefundHTTPAdmission(t *testing.T) {
 	f := newLocalRenewalRefundHTTPFixture(t)
 	path := localRenewalRefundContextPath(f.invoice)
 	expect(t, request(f.h, "GET", path, nil, "", ""), 401)
-	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 401)
 	_, reader := externalRefundActor(t, f.db, f.h, "renewal-reader", []string{"external_refunds.view"})
 	expect(t, request(f.h, "GET", path, nil, reader, ""), 200)
 	_, limited := externalRefundActor(t, f.db, f.h, "renewal-limited", []string{"external_refunds.view"})

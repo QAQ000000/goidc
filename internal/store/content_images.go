@@ -70,3 +70,52 @@ func (s *Store) ContentImage(ctx context.Context, id int64) (ContentImage, int64
 	}
 	return image, articleID, tx.Commit(ctx)
 }
+
+// VisibleContentImage keeps visibility, current credential checks, private object
+// reads and the final recheck in one transaction. Administrator preview is only
+// requested by the fixed, separately authenticated management route.
+func (s *Store) VisibleContentImage(ctx context.Context, id int64, hash, credential string, adminPreview bool) (ContentImage, error) {
+	var image ContentImage
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return image, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		return image, err
+	}
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108196)"); err != nil {
+		return image, err
+	}
+	const query = `WITH viewer AS (
+ SELECT u.id,u.role,r.active AS role_active,r.permissions,
+ CASE WHEN EXISTS(SELECT 1 FROM services WHERE user_id=u.id AND status='active' AND NOT import_review_required) THEN 2 ELSE 1 END AS access
+ FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.status='active'
+ AND (($4 AND u.role IN ('admin','super_admin')) OR (NOT $4 AND ($3='key' OR u.role='customer'))) AND (
+ ($3='session' AND EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.token_hash=$2 AND s.expires_at>clock_timestamp())) OR
+ ($3='key' AND EXISTS(SELECT 1 FROM api_keys k WHERE k.user_id=u.id AND k.secret_hash=$2 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))))
+ ) SELECT i.filename,i.mime_type,i.content,i.storage_object_id FROM content_images i JOIN content_articles a ON a.id=i.article_id
+ LEFT JOIN content_categories c ON c.id=a.category_id LEFT JOIN viewer v ON true WHERE i.id=$1 AND (
+ ($4 AND (v.role='super_admin' OR (v.role='admin' AND v.role_active AND 'content.view'=ANY(v.permissions)))) OR
+ (NOT $4 AND a.status='published' AND a.published_at IS NOT NULL AND a.published_at<=now()
+ AND (a.category_id IS NULL OR c.active)
+ AND NOT EXISTS(SELECT 1 FROM content_article_categories hidden_ac JOIN content_categories hidden_c ON hidden_c.id=hidden_ac.category_id WHERE hidden_ac.article_id=a.id AND NOT hidden_c.active)
+ AND (a.access_level='public' OR (a.access_level='login' AND coalesce(v.access,0)>=1) OR (a.access_level='active_service' AND coalesce(v.access,0)>=2)))) FOR SHARE OF i,a`
+	var objectID *string
+	if err = tx.QueryRow(ctx, query, id, hash, credential, adminPreview).Scan(&image.Filename, &image.MIME, &image.Content, &objectID); err != nil {
+		return image, err
+	}
+	image.Content, err = s.ReadFileContent(ctx, tx, "content_images", image.Content, objectID)
+	if err != nil {
+		return image, err
+	}
+	var currentInline []byte
+	var currentObjectID *string
+	if err = tx.QueryRow(ctx, query, id, hash, credential, adminPreview).Scan(&image.Filename, &image.MIME, &currentInline, &currentObjectID); err != nil {
+		return ContentImage{}, err
+	}
+	if (objectID == nil) != (currentObjectID == nil) || (objectID != nil && *objectID != *currentObjectID) {
+		return ContentImage{}, pgx.ErrNoRows
+	}
+	return image, tx.Commit(ctx)
+}

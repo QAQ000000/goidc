@@ -46,7 +46,7 @@ func TestExternalRefundHTTPPermissionsLifecycleAndReplay(t *testing.T) {
 	_, reviewer := externalRefundActor(t, f.db, f.h, "refund-reviewer", []string{"external_refunds.view", "external_refunds.review"})
 	_, reader := externalRefundActor(t, f.db, f.h, "refund-reader", []string{"external_refunds.view"})
 	expect(t, request(f.h, "POST", path, in, reader, "refund-denied"), 403)
-	expect(t, request(f.h, "POST", path, in, f.customer, "refund-customer"), 403)
+	expect(t, request(f.h, "POST", path, in, f.customer, "refund-customer"), 401)
 	expect(t, requestBearer(f.h, "POST", path, in, "invalid-api-key"), 403)
 	page := data(t, request(f.h, "GET", path+"?limit=1&offset=0", nil, reader, ""))
 	if page["total"] != float64(0) || len(page["items"].([]any)) != 0 {

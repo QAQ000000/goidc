@@ -290,7 +290,7 @@ func TestAffiliateAdminPermissionBoundary(t *testing.T) {
 	expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/accounts", nil, admin, ""), http.StatusOK)
 	expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/attributions", nil, admin, ""), http.StatusOK)
 	expect(t, request(h, http.MethodPost, "/api/v1/admin/affiliate/accounts/1/status", map[string]any{"status": "approved"}, admin, "affiliate-status-1"), http.StatusForbidden)
-	expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/accounts", nil, customer, ""), http.StatusForbidden)
+	expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/accounts", nil, customer, ""), http.StatusUnauthorized)
 }
 
 func TestAffiliateLinkOwnershipIdempotencyAndAccountVersion(t *testing.T) {
@@ -309,7 +309,7 @@ func TestAffiliateLinkOwnershipIdempotencyAndAccountVersion(t *testing.T) {
 	}
 	login := request(h, http.MethodPost, "/api/v1/auth/login", map[string]string{"username": "affiliate-admin", "password": "integration-password"}, "", "")
 	expect(t, login, http.StatusOK)
-	admin := "zjmfgo_session=" + affiliateCookieValue(login.Result(), "zjmfgo_session")
+	admin := adminSessionCookie + "=" + affiliateCookieValue(login.Result(), adminSessionCookie)
 	var accountID int64
 	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM affiliate_accounts WHERE user_id=$1", referrerID).Scan(&accountID); err != nil {
 		t.Fatal(err)

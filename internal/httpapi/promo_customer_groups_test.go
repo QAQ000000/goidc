@@ -106,7 +106,7 @@ func TestPromoCustomerGroupsValidationPermissionsAndOptions(t *testing.T) {
 	}
 	expect(t, request(f.h, "GET", "/api/v1/admin/customer-groups", nil, f.staff, ""), 403)
 	expect(t, request(f.h, "GET", path+"&offset=5", nil, f.staff, ""), 200)
-	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 401)
 	expect(t, request(f.h, "GET", path, nil, "", ""), 401)
 	in := map[string]any{"code": "GROUP-STAFF", "discount_type": "percent", "value": 10, "applies_customer_group_ids": []int64{a}}
 	expect(t, request(f.h, "POST", "/api/v1/admin/promo-codes", in, f.staff, "promo-group-staff"), 403)

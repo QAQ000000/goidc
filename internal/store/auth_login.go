@@ -232,3 +232,20 @@ func (s *Store) CompleteAuthenticationMFA(ctx context.Context, challengeHash, po
 	out.Denial = ""
 	return out, nil
 }
+
+func (s *Store) DeleteAuthenticationSession(ctx context.Context, userID int64, hash string) error {
+	_, err := s.Pool.Exec(ctx, "DELETE FROM sessions WHERE token_hash=$1 AND user_id=$2", hash, userID)
+	return err
+}
+
+type HTTPMaintenanceConfiguration struct {
+	Enabled bool
+	Message string
+	URL     string
+}
+
+func (s *Store) HTTPMaintenanceSettings(ctx context.Context) (HTTPMaintenanceConfiguration, error) {
+	var settings HTTPMaintenanceConfiguration
+	err := s.Pool.QueryRow(ctx, "SELECT maintenance_enabled,maintenance_message,maintenance_url FROM site_settings WHERE id=1").Scan(&settings.Enabled, &settings.Message, &settings.URL)
+	return settings, err
+}

@@ -52,11 +52,15 @@ func TestContentPermissionsAndMigration(t *testing.T) {
 		expect(t, request(h, "GET", "/api/v1/admin/content-categories", nil, cookie, ""), 200)
 	}
 	for _, cookie := range []string{viewer, customer} {
-		expect(t, request(h, "POST", "/api/v1/admin/content", articleInput("news", "denied", "draft"), cookie, ""), 403)
-		expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/content/%d", id), map[string]int{"expected_version": 1}, cookie, ""), 403)
-		expect(t, request(h, "POST", "/api/v1/admin/content-categories", categoryInput("news", "denied"), cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "POST", "/api/v1/admin/content", articleInput("news", "denied", "draft"), cookie, ""), expected)
+		expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/content/%d", id), map[string]int{"expected_version": 1}, cookie, ""), expected)
+		expect(t, request(h, "POST", "/api/v1/admin/content-categories", categoryInput("news", "denied"), cookie, ""), expected)
 	}
-	expect(t, request(h, "GET", "/api/v1/admin/content", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/content", nil, customer, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/content", nil, "", ""), 401)
 	w := request(h, "POST", "/api/v1/api-keys", map[string]string{"name": "content-editor"}, writer, "")
 	expect(t, w, 201)

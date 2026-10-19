@@ -71,7 +71,7 @@ func TestAdminCreditConcurrentReplayAndRevocation(t *testing.T) {
 	}
 	path := fmt.Sprintf("/api/v1/admin/credit/%d/limit", uid)
 	payload := map[string]any{"limit_cents": 8000, "expected_version": 1, "note": "授信审核"}
-	expect(t, request(h, "PUT", path, payload, customer, "credit-denied-client"), 403)
+	expect(t, request(h, "PUT", path, payload, customer, "credit-denied-client"), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/credit?customer_id=invalid", nil, staff, ""), 400)
 	expect(t, request(h, "PUT", path, map[string]any{"limit_cents": 100000000001, "expected_version": 1}, staff, "credit-too-large"), 400)
 	responses := make(chan *httptest.ResponseRecorder, 2)

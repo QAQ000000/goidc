@@ -145,8 +145,8 @@ func TestChannelConfigurationRejectsPollutionAndMissingContracts(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='customer' WHERE id=$1", adminID); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, request(h, http.MethodGet, "/api/v1/admin/channel-instances", nil, admin, ""), http.StatusForbidden)
-	expect(t, request(h, http.MethodPut, path, map[string]any{"enabled": false, "expected_version": 1}, admin, ""), http.StatusForbidden)
+	expect(t, request(h, http.MethodGet, "/api/v1/admin/channel-instances", nil, admin, ""), http.StatusUnauthorized)
+	expect(t, request(h, http.MethodPut, path, map[string]any{"enabled": false, "expected_version": 1}, admin, ""), http.StatusUnauthorized)
 }
 
 func TestChannelConfigurationMissingAndIncompatibleInstancesRemainManageable(t *testing.T) {

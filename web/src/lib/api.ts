@@ -1,5 +1,15 @@
 import { downloadFilename, saveBlob } from "./download";
 
+export type AuthPortal = "admin" | "customer";
+export type ApiRequestOptions = RequestInit & { portal?: AuthPortal };
+export function currentAuthPortal(pathname = typeof window === "undefined" ? "" : window.location.pathname): AuthPortal {
+  return pathname === "/admin" || pathname.startsWith("/admin/") || pathname === "/admin-login" ? "admin" : "customer";
+}
+export function authPortal(path: string, portal?: AuthPortal): AuthPortal {
+  const clean = path.split("?")[0];
+  return clean === "/admin" || clean.startsWith("/admin/") ? "admin" : portal ?? currentAuthPortal();
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -25,28 +35,30 @@ function isCredentialEndpoint(path: string) {
   return credentialEndpoints.some((prefix) => clean === prefix || clean.startsWith(prefix));
 }
 // 会话过期时派发全局事件，由壳层组件统一跳转到对应登录页。
-function noticeUnauthorized(path: string, status: number) {
+function noticeUnauthorized(path: string, status: number, portal: AuthPortal) {
   if (status !== 401 || typeof window === "undefined" || isCredentialEndpoint(path)) return;
-  window.dispatchEvent(new CustomEvent("zjmfgo:unauthorized", { detail: { path } }));
+  window.dispatchEvent(new CustomEvent("zjmfgo:unauthorized", { detail: { path, portal } }));
 }
 export async function api<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
 ): Promise<T> {
+  const { portal: requestedPortal, ...requestOptions } = options;
+  const portal = authPortal(path, requestedPortal);
+  const headers = new Headers(requestOptions.headers);
+  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  headers.set("X-Requested-With", "zjmfgo");
+  headers.set("X-Auth-Portal", portal);
   const response = await fetch(`/api/v1${path}`, {
-    ...options,
+    ...requestOptions,
     credentials: "same-origin",
     cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Requested-With": "zjmfgo",
-      ...options.headers,
-    },
+    headers,
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     noticeMaintenance(body.error?.code);
-    noticeUnauthorized(path, response.status);
+    noticeUnauthorized(path, response.status, portal);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -75,18 +87,19 @@ export type CaptchaChallenge = { enabled: boolean; captcha_id?: string; image?: 
 export function fetchCaptcha(action: "login" | "register" | "forgot-password", signal?: AbortSignal) {
   return api<CaptchaChallenge>(`/auth/captcha?action=${action}`, { signal });
 }
-export async function upload<T>(path: string, form: FormData, method: "POST" | "PUT" = "POST"): Promise<T> {
+export async function upload<T>(path: string, form: FormData, method: "POST" | "PUT" = "POST", requestedPortal?: AuthPortal): Promise<T> {
+  const portal = authPortal(path, requestedPortal);
   const response = await fetch(`/api/v1${path}`, {
     method,
     body: form,
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "X-Requested-With": "zjmfgo" },
+    headers: { "X-Requested-With": "zjmfgo", "X-Auth-Portal": portal },
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     noticeMaintenance(body.error?.code);
-    noticeUnauthorized(path, response.status);
+    noticeUnauthorized(path, response.status, portal);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -97,16 +110,17 @@ export async function upload<T>(path: string, form: FormData, method: "POST" | "
   }
   return body.data as T;
 }
-export async function download(path: string): Promise<Blob> {
+export async function download(path: string, requestedPortal?: AuthPortal): Promise<Blob> {
+  const portal = authPortal(path, requestedPortal);
   const response = await fetch(`/api/v1${path}`, {
     credentials: "same-origin",
     cache: "no-store",
-    headers: { "X-Requested-With": "zjmfgo" },
+    headers: { "X-Requested-With": "zjmfgo", "X-Auth-Portal": portal },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     noticeMaintenance(body.error?.code);
-    noticeUnauthorized(path, response.status);
+    noticeUnauthorized(path, response.status, portal);
     throw new ApiError(
       response.status,
       body.error?.code ?? "request_failed",
@@ -329,10 +343,11 @@ export type DownloadCategory = { id:number;parent_id:number|null;name:string;des
 export type DownloadSettings = { enabled:boolean;version:number };
 export type CustomerFile = {id:number;customer_id:number;title:string;remarks:string;filename:string;mime_type:string;size_bytes:number;sha256:string;downloads:number;created_at:string;updated_at:string};
 export type AdminCustomerFile = CustomerFile & {version:number;uploader_id:number;uploader_name:string;customer_name:string;customer_username:string};
-export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, path = `/downloads/${item.id}/file`) {
-  const response = await fetch(`/api/v1${path}`, { credentials:"same-origin",cache:"no-store",headers:{"X-Requested-With":"zjmfgo"} });
+export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, path = `/downloads/${item.id}/file`, requestedPortal?: AuthPortal) {
+  const portal = authPortal(path, requestedPortal);
+  const response = await fetch(`/api/v1${path}`, { credentials:"same-origin",cache:"no-store",headers:{"X-Requested-With":"zjmfgo","X-Auth-Portal":portal} });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})); noticeMaintenance(body.error?.code); noticeUnauthorized(path, response.status);
+    const body = await response.json().catch(() => ({})); noticeMaintenance(body.error?.code); noticeUnauthorized(path, response.status, portal);
     throw new ApiError(response.status,body.error?.code ?? "download_failed",body.error?.message ?? "下载失败",body.error ?? {},errorCorrelation(response,body));
   }
   if (response.headers.get("Content-Type")?.includes("application/json")) {

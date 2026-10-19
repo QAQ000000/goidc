@@ -56,10 +56,12 @@ export function AdminLoginForm() {
 
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", {
+            portal: "admin",
             method: "POST",
             body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode, portal: "admin" }),
           })
         : await api<User>("/auth/login", {
+            portal: "admin",
             method: "POST",
             body: JSON.stringify({
               username,
@@ -70,7 +72,7 @@ export function AdminLoginForm() {
           });
 
       if (user.role !== "admin" && user.role !== "super_admin") {
-        await api("/auth/logout", { method: "POST" });
+        await api("/auth/logout", { method: "POST", portal: "admin" });
         setMfaChallenge("");
         setMfaCode("");
         setError("需要管理员账户");

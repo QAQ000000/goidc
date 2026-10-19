@@ -225,7 +225,7 @@ func TestDownloadsPermissionsValidationAndLimits(t *testing.T) {
 	_, customer := user(t, db, h, "download-validation-customer", "customer")
 	in := downloadInput()
 	expect(t, downloadUpload(h, "POST", "/api/v1/admin/downloads", viewer, "x.txt", []byte("safe text"), in), 403)
-	expect(t, request(h, "GET", "/api/v1/admin/downloads", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/downloads", nil, customer, ""), 401)
 	for _, p := range []string{"downloads", "download-categories", "download-settings", "download-products"} {
 		expect(t, request(h, "GET", "/api/v1/admin/"+p, nil, viewer, ""), 200)
 	}

@@ -410,7 +410,11 @@ func TestOrderExternalRefundHTTPPermissionsVersionsAndReject(t *testing.T) {
 	in := f.input(t, out, "order-refund-permission-proof")
 	before := f.snapshot(t)
 	for _, actor := range []string{reader, noReverse, reverseOnly, f.customer} {
-		expect(t, request(f.h, "POST", path, in, actor, "order-refund-no-grant"), 403)
+		expected := 403
+		if actor == f.customer {
+			expected = 401
+		}
+		expect(t, request(f.h, "POST", path, in, actor, "order-refund-no-grant"), expected)
 	}
 	expect(t, request(f.h, "GET", orderExternalRefundContextPath(out.invoice), nil, limited, ""), 404)
 	expect(t, request(f.h, "POST", path, in, limited, "order-refund-outside-scope"), 404)

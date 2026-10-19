@@ -199,6 +199,38 @@ func TestWebPushProtocolEncryptsPrivatePayloadAndSignsVAPID(t *testing.T) {
 
 type webPushRoundTrip func(*http.Request) (*http.Response, error)
 
+func TestWebPushPortalRoutesStayPrivate(t *testing.T) {
+	for _, portal := range []string{"customer", "admin", "", "https://untrusted.example/"} {
+		t.Run(portal, func(t *testing.T) {
+			config, job, receiver := webPushFixture(t)
+			job.AccountPortal = portal
+			calls := 0
+			provider, err := newWebPushProvider(config, &http.Client{Transport: webPushRoundTrip(func(r *http.Request) (*http.Response, error) {
+				calls++
+				raw, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				plain := decryptWebPushFixture(t, raw, receiver, job.PushSubscription.Auth)
+				want := webPushPrivatePayload
+				if portal == "admin" {
+					want = webPushAdminPayload
+				}
+				if string(plain) != want || bytes.Contains(plain, []byte("secret_marker")) {
+					t.Fatal("push portal changed generic content or admitted an arbitrary destination")
+				}
+				return &http.Response{StatusCode: http.StatusCreated, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(""))}, nil
+			})})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result := provider.Send(context.Background(), job); result.Outcome != "accepted" || calls != 1 {
+				t.Fatalf("push result=%+v calls=%d", result, calls)
+			}
+		})
+	}
+}
+
 func (f webPushRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestWebPushProviderPreservesDeliveryKnowledgeAndBoundedRetry(t *testing.T) {

@@ -509,7 +509,7 @@ func TestPaymentCloseVerificationHTTPBoundaryAndApplicantCannotSelfReview(t *tes
 	if w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("cacheable unauthenticated verification")
 	}
-	expect(t, request(f.h, "POST", path, body, f.customer, "verify-customer-denied"), 403)
+	expect(t, request(f.h, "POST", path, body, f.customer, "verify-customer-denied"), 401)
 	expect(t, requestBearer(f.h, "POST", path, body, "invalid-api-key"), 403)
 	_, noView := externalRefundActor(t, f.db, f.h, "verify-without-view", []string{"payments.close_verify", "payments.close_review"})
 	expect(t, request(f.h, "POST", path, body, noView, "verify-view-required"), 403)

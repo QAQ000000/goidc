@@ -296,7 +296,7 @@ func TestUnifiedOutboxRetryAndManualRecoveryFencesOldLease(t *testing.T) {
 					t.Fatalf("limit status=%s dead=%v", status, deadAt)
 				}
 			}
-			expect(t, request(h, "POST", path, map[string]any{}, customer, ""), 403)
+			expect(t, request(h, "POST", path, map[string]any{}, customer, ""), 401)
 			expect(t, request(h, "POST", path, map[string]any{}, admin, ""), 200)
 			fresh, err := claim()
 			if err != nil {

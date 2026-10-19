@@ -355,7 +355,7 @@ func TestConfigurationUpgradePreservesUnchangedPricesAndRetries(t *testing.T) {
 		t.Fatal(err)
 	}
 	retryPath := fmt.Sprintf("/api/v1/admin/services/%d/configuration-changes/%d/retry", f.sid, int64(change["id"].(float64)))
-	expect(t, request(f.h, "POST", retryPath, map[string]any{}, f.customer, ""), 403)
+	expect(t, request(f.h, "POST", retryPath, map[string]any{}, f.customer, ""), 401)
 	readerID, reader := user(t, f.db, f.h, "upgrade-retry-reader", "admin")
 	if _, err = f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE name='upgrade-retry-reader-role'"); err != nil {
 		t.Fatal(err)

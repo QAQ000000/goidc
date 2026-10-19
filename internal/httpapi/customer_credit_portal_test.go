@@ -74,7 +74,7 @@ func TestCustomerCreditPortalOwnershipAndPrivacy(t *testing.T) {
 	f.repay(t, aid, 1000, 1, "portal-private-repay")
 	for _, path := range []string{"/api/v1/credit/account", "/api/v1/credit/consumptions", "/api/v1/credit/repayments", fmt.Sprintf("/api/v1/invoices/%d/credit", aid)} {
 		expect(t, request(f.h, "GET", path, nil, "", ""), 401)
-		expect(t, request(f.h, "GET", path, nil, f.root, ""), 403)
+		expect(t, request(f.h, "GET", path, nil, f.root, ""), 401)
 		w := request(f.h, "GET", path, nil, f.a, "")
 		expect(t, w, 200)
 		if w.Header().Get("Cache-Control") != "no-store" {

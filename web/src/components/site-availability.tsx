@@ -3,8 +3,6 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { RefreshCw, Shield, Wrench } from "lucide-react";
-import { useResource } from "@/hooks/use-resource";
-import type { User } from "@/lib/api";
 import { Button } from "./ui/button";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
 import { useUnauthorizedRedirect } from "@/hooks/use-unauthorized-redirect";
@@ -14,14 +12,10 @@ export function SiteAvailability({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   useUnauthorizedRedirect();
   const exempt = path === "/admin" || path.startsWith("/admin/") || ["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path);
-  const { data: user, error, refresh: refreshUser } = useResource<User>(site?.maintenance_enabled && !exempt ? "/me" : null, false);
+  const blocked = site?.maintenance_enabled && !exempt;
   useEffect(() => {
-    if (site?.maintenance_enabled && !exempt) refreshUser();
-  }, [site, exempt, refreshUser]);
-  const blocked = site?.maintenance_enabled && !exempt && user?.role !== "admin" && user?.role !== "super_admin";
-  useEffect(() => {
-    if (blocked && (user || error) && site?.maintenance_url) window.location.replace(site.maintenance_url);
-  }, [blocked, user, error, site?.maintenance_url]);
+    if (blocked && site?.maintenance_url) window.location.replace(site.maintenance_url);
+  }, [blocked, site?.maintenance_url]);
   return blocked ? <MaintenanceScreen /> : children;
 }
 

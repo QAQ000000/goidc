@@ -20,7 +20,7 @@ func TestSupplierConsolePasswordRescueAndReinstall(t *testing.T) {
 	// The real supplier may not have supplied an initial password yet.
 	expect(t, request(f.h, "POST", path+"/credentials", map[string]any{}, f.root, ""), 409)
 	expect(t, request(f.h, "POST", path+"/vnc", map[string]any{}, f.reader, ""), 403)
-	expect(t, request(f.h, "POST", path+"/vnc", map[string]any{}, f.other, ""), 403)
+	expect(t, request(f.h, "POST", path+"/vnc", map[string]any{}, f.other, ""), 401)
 	w := request(f.h, "POST", path+"/vnc", map[string]any{}, f.root, "")
 	expect(t, w, 200)
 	if w.Header().Get("Cache-Control") != "no-store" || data(t, w)["url"] != "https://console.example/vnc?token=private-console-token" || strings.Contains(w.Body.String(), "private-console-password") {

@@ -341,7 +341,7 @@ func TestSupplierManagementImportCheckoutAndDelivery(t *testing.T) {
 	}
 	expect(t, request(f.h, "POST", path+"/catalog", nil, f.reader, ""), 403)
 	expect(t, request(f.h, "POST", path+"/import", f.in, f.reader, ""), 403)
-	expect(t, request(f.h, "GET", "/api/v1/admin/suppliers", nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", "/api/v1/admin/suppliers", nil, f.customer, ""), 401)
 	expect(t, request(f.h, "PUT", path, store.SupplierInput{Name: "Renamed", Provider: supplier.ProviderZJMF, BaseURL: f.remote.URL, Username: "account", Active: enabled(), ExpectedVersion: 1}, f.root, ""), 200)
 	expect(t, request(f.h, "PUT", path, store.SupplierInput{Name: "Stale", Provider: supplier.ProviderZJMF, BaseURL: f.remote.URL, Username: "account", Active: enabled(), ExpectedVersion: 1}, f.root, ""), 409)
 	expect(t, request(f.h, "POST", path+"/catalog", nil, f.root, ""), 200)

@@ -185,8 +185,12 @@ func TestCatalogFiltersPaginationPermissionsAndValidation(t *testing.T) {
 	expect(t, request(h, "GET", "/api/v1/admin/products/page", nil, reader, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/admin/catalog-groups/section", nil, reader, ""), 200)
 	for _, cookie := range []string{reader, customer} {
-		expect(t, request(h, "POST", "/api/v1/admin/products", in, cookie, ""), 403)
-		expect(t, request(h, "POST", "/api/v1/admin/catalog-groups/section", section, cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "POST", "/api/v1/admin/products", in, cookie, ""), expected)
+		expect(t, request(h, "POST", "/api/v1/admin/catalog-groups/section", section, cookie, ""), expected)
 	}
 	key := request(h, "POST", "/api/v1/api-keys", map[string]string{"name": "product-editor"}, writer, "")
 	expect(t, key, 201)

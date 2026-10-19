@@ -106,7 +106,11 @@ func TestMissingSupplierDisableAuditFailureAndPermission(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/admin/suppliers/%d", id)
 	expect(t, request(h, "PUT", path, supplierDisableInput(1), "", ""), http.StatusUnauthorized)
 	for _, cookie := range []string{reader, customer} {
-		expect(t, request(h, "PUT", path, supplierDisableInput(1), cookie, ""), http.StatusForbidden)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "PUT", path, supplierDisableInput(1), cookie, ""), expected)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_supplier_disable_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='supplier.disabled' THEN RAISE EXCEPTION 'injected supplier audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER reject_supplier_disable_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_supplier_disable_audit()`); err != nil {

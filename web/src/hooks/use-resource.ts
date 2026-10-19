@@ -1,9 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
-export function useResource<T>(path: string | null, keepPreviousData = true) {
-  const [state, setState] = useState<{ path: string | null; data: T | null; error: Error | null }>({
+import { api, authPortal, type AuthPortal } from "@/lib/api";
+export function useResource<T>(path: string | null, keepPreviousData = true, requestedPortal?: AuthPortal) {
+  const portal = authPortal(path ?? "", requestedPortal);
+  const [state, setState] = useState<{ path: string | null; portal: AuthPortal; data: T | null; error: Error | null }>({
     path: null,
+    portal,
     data: null,
     error: null,
   });
@@ -11,17 +13,17 @@ export function useResource<T>(path: string | null, keepPreviousData = true) {
   useEffect(() => {
     if (!path) return;
     const controller = new AbortController();
-    api<T>(path, { signal: controller.signal })
+    api<T>(path, { signal: controller.signal, portal })
       .then((data) => {
-        if (!controller.signal.aborted) setState({ path, data, error: null });
+        if (!controller.signal.aborted) setState({ path, portal, data, error: null });
       })
       .catch((error) => {
         if (!controller.signal.aborted)
-          setState((current) => ({ path, data: keepPreviousData ? current.data : null, error }));
+          setState((current) => ({ path, portal, data: keepPreviousData && current.portal === portal ? current.data : null, error }));
       });
     return () => controller.abort();
-  }, [path, revision, keepPreviousData]);
+  }, [path, portal, revision, keepPreviousData]);
   const refresh = useCallback(() => setRevision((v) => v + 1), []);
-  const visible = path && (keepPreviousData || state.path === path);
+  const visible = path && state.portal === portal && (keepPreviousData || state.path === path);
   return { data: visible ? state.data : null, error: visible ? state.error : null, refresh };
 }

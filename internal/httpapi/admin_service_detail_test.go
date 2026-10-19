@@ -23,7 +23,7 @@ func TestAdminServiceDetailIncludesRelationsWithoutSupplierSecrets(t *testing.T)
 		}
 	}
 	expect(t, request(f.h, "GET", path, nil, f.reader, ""), 200)
-	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", path, nil, f.customer, ""), 401)
 	w = request(f.h, "GET", fmt.Sprintf("/api/v1/services/%d", sid), nil, f.customer, "")
 	expect(t, w, 200)
 	for _, field := range []string{"supplier_name", "upstream_product_id", "supplier_running_job_id", "first_price_cents", "invoice_id"} {

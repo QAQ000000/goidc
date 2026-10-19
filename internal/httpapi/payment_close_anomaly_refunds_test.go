@@ -251,7 +251,7 @@ func TestPaymentAnomalyRefundUnverifiedAndHTTPBoundaries(t *testing.T) {
 	staffID, reader := externalRefundActor(t, f.db, f.h, "anomaly-reader", []string{"invoices.view", "payment_anomalies.view"})
 	expect(t, request(f.h, "GET", base+"/payment-anomaly-groups", nil, reader, ""), 200)
 	expect(t, request(f.h, "POST", create, paymentAnomalyInput(anchor, "no-write"), reader, "anomaly-reader-denied"), 403)
-	expect(t, request(f.h, "GET", base+"/payment-anomaly-summary", nil, f.customer, ""), 403)
+	expect(t, request(f.h, "GET", base+"/payment-anomaly-summary", nil, f.customer, ""), 401)
 	for _, method := range []string{"GET", "POST"} {
 		path := base + "/payment-anomaly-groups"
 		var body any

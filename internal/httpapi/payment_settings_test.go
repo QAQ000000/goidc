@@ -109,8 +109,12 @@ func TestPaymentSettingsSecretsPermissionsVersionsAndAuditRollback(t *testing.T)
 	_, staff := user(t, db, h, "payment-settings-staff", "admin")
 	_, customer := user(t, db, h, "payment-settings-customer", "customer")
 	for _, cookie := range []string{staff, customer} {
-		expect(t, request(h, "GET", paymentSettingsPath, nil, cookie, ""), 403)
-		expect(t, request(h, "PUT", paymentSettingsPath, paymentSettingsBody("https://merchant.example", 1), cookie, ""), 403)
+		expected := 403
+		if cookie == customer {
+			expected = 401
+		}
+		expect(t, request(h, "GET", paymentSettingsPath, nil, cookie, ""), expected)
+		expect(t, request(h, "PUT", paymentSettingsPath, paymentSettingsBody("https://merchant.example", 1), cookie, ""), expected)
 	}
 	expect(t, request(h, "GET", paymentSettingsPath, nil, "", ""), 401)
 	secret := "zjmfgo_" + strings.Repeat("a", 64)
@@ -410,7 +414,7 @@ func TestPaymentSettingsSessionRecheckedAfterWaiting(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err = db.Pool.Exec(ctx, "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(root, "zjmfgo_session="))); err != nil {
+	if _, err = db.Pool.Exec(ctx, "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(root))); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(ctx); err != nil {

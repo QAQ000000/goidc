@@ -69,7 +69,7 @@ func TestReportEndpointsJSONOnlyFormatsAndPermissions(t *testing.T) {
 				}
 			}
 			expect(t, request(h, "GET", path+"&format=csv", nil, "", ""), 401)
-			expect(t, request(h, "GET", path+"&format=csv", nil, customer, ""), 403)
+			expect(t, request(h, "GET", path+"&format=csv", nil, customer, ""), 401)
 		})
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {

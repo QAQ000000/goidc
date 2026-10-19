@@ -60,7 +60,7 @@ func TestInvoiceDocumentWaitingRevocationAndReplacement(t *testing.T) {
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- multipartRequest(f.h, path, f.root, "invoice.pdf", pdf) }()
 	waitQueryLock(t, f.db, "SELECT status FROM invoice_applications WHERE id=$1 FOR UPDATE")
-	if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(f.root, "zjmfgo_session="))); err != nil {
+	if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(f.root))); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {
@@ -121,7 +121,7 @@ func TestInvoiceDocumentWaitingRevocationAndReplacement(t *testing.T) {
 	download := fmt.Sprintf("/api/v1/invoice-applications/%d/documents/%d/file", id, docID)
 	go func() { done <- request(f.h, "GET", download, nil, f.customer, "") }()
 	waitQueryLock(t, f.db, "SELECT filename,mime_type,sha256,content,storage_object_id FROM invoice_application_documents WHERE id=$1 AND application_id=$2 FOR UPDATE")
-	if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(strings.TrimPrefix(f.customer, "zjmfgo_session="))); err != nil {
+	if _, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(f.customer))); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {

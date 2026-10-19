@@ -108,6 +108,11 @@ func requestFrom(h http.Handler, method, path string, body any, remoteAddr, cook
 	r.Header.Set("Origin", "http://localhost:3088")
 	if cookie != "" {
 		r.Header.Set("Cookie", cookie)
+		// Fixtures model an administrator page explicitly selecting its audience.
+		// Dual-session fixtures intentionally retain the production customer default.
+		if strings.Contains(cookie, adminSessionCookie+"=") && !strings.Contains(cookie, customerSessionCookie+"=") {
+			r.Header.Set(authPortalHeader, "admin")
+		}
 	}
 	for key, value := range headers {
 		r.Header.Set(key, value)
@@ -127,6 +132,11 @@ func request(h http.Handler, method, path string, body any, cookie string, key s
 	r.Header.Set("Origin", "http://localhost:3088")
 	if cookie != "" {
 		r.Header.Set("Cookie", cookie)
+		// Fixtures model an administrator page explicitly selecting its audience.
+		// Dual-session fixtures intentionally retain the production customer default.
+		if strings.Contains(cookie, adminSessionCookie+"=") && !strings.Contains(cookie, customerSessionCookie+"=") {
+			r.Header.Set(authPortalHeader, "admin")
+		}
 	}
 	if key != "" {
 		r.Header.Set("Idempotency-Key", key)
@@ -168,6 +178,11 @@ func multipartRequest(h http.Handler, path, cookie, filename string, content []b
 	r.Header.Set("Origin", "http://localhost:3088")
 	if cookie != "" {
 		r.Header.Set("Cookie", cookie)
+		// Fixtures model an administrator page explicitly selecting its audience.
+		// Dual-session fixtures intentionally retain the production customer default.
+		if strings.Contains(cookie, adminSessionCookie+"=") && !strings.Contains(cookie, customerSessionCookie+"=") {
+			r.Header.Set(authPortalHeader, "admin")
+		}
 	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -290,7 +305,7 @@ func TestAuthenticationOwnershipAndCSRF(t *testing.T) {
 	_, first := user(t, db, h, "first", "customer")
 	secondID, second := user(t, db, h, "second", "customer")
 	adminID, admin := user(t, db, h, "admin", "super_admin")
-	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, first, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, first, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, admin, ""), 200)
 	w := request(h, "POST", "/api/v1/tickets", map[string]string{"subject": "ownership", "body": "hello", "priority": "normal"}, first, "")
 	expect(t, w, 201)
@@ -538,7 +553,7 @@ func TestAdminCanEditAndDisableCustomer(t *testing.T) {
 	if name != "已更新客户" || email != "updated-customer@example.test" || status != "active" {
 		t.Fatalf("customer update mismatch name=%s email=%s status=%s", name, email, status)
 	}
-	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"display_name": "越权修改"}, customer, ""), 403)
+	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]string{"display_name": "越权修改"}, customer, ""), 401)
 	disabled := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/customers/%d", customerID), map[string]any{"status": "disabled", "expected_version": 2}, admin, "customer-disable-integration-key")
 	expect(t, disabled, 200)
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 401)
@@ -565,7 +580,7 @@ func TestAdminCanCreateCustomer(t *testing.T) {
 		"password":     "password123",
 		"display_name": "新客户",
 	}, staff, "")
-	expect(t, forbidden, 403)
+	expect(t, forbidden, 401)
 
 	created := request(h, "POST", "/api/v1/admin/customers", map[string]any{
 		"username":     "newcust1",
@@ -1274,7 +1289,7 @@ func TestTicketReplyPresetsAreAdminOwned(t *testing.T) {
 	if len(listData(t, presets)) != 1 {
 		t.Fatal("preset was not listed")
 	}
-	expect(t, request(h, "GET", "/api/v1/admin/ticket-reply-presets", nil, customer, ""), 403)
+	expect(t, request(h, "GET", "/api/v1/admin/ticket-reply-presets", nil, customer, ""), 401)
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/ticket-reply-presets/%d", presetID), map[string]any{"active": false}, admin, ""), 200)
 	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/ticket-reply-presets/%d", presetID), nil, admin, ""), 200)
 	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/ticket-reply-preset-categories/%d", categoryID), nil, admin, ""), 200)
@@ -1330,7 +1345,7 @@ func TestTicketDepartmentsAndAssignment(t *testing.T) {
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/tickets/%d/assignment", ticketID), map[string]any{
 		"department_id": departmentID,
 		"assignee_id":   adminID,
-	}, otherCustomer, ""), 403)
+	}, otherCustomer, ""), 401)
 
 	detail := request(h, "GET", fmt.Sprintf("/api/v1/tickets/%d", ticketID), nil, customer, "")
 	expect(t, detail, 200)
@@ -1689,7 +1704,7 @@ func TestServiceRenewalInvoiceAndPayment(t *testing.T) {
 		t.Fatalf("renewal order list mismatch: %s", list.Body.String())
 	}
 	customerList := request(h, "GET", "/api/v1/admin/renewal-orders", nil, customer, "")
-	expect(t, customerList, 403)
+	expect(t, customerList, 401)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", serviceID), map[string]any{}, customer, "renew-service-key-2"), 409)
 	replay := request(h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", serviceID), map[string]any{}, customer, "renew-service-key")
 	expect(t, replay, 200)
