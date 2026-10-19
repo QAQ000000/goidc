@@ -41,21 +41,38 @@ function redirect(response, destination, origin = publicOrigin) {
 }
 
 test('console missing/invalid sessions receive HTTP login redirects before rendering', async () => {
-  for (const path of ['/console', '/console/contracts']) {
+  for (const path of ['/console', '/console/contracts', '/cart', '/cart/']) {
     const anonymous = harness(); redirect(await anonymous.invoke(path), '/login');
     assert.equal(anonymous.calls.filter(row => row.url.endsWith('/me')).length, 0);
     const invalid = harness({ meStatus: 401 }); redirect(await invalid.invoke(path, 'invalid'), '/login');
   }
 });
-test('console admits customer, admin and super_admin after a real no-store session lookup', async () => {
-  for (const role of ['customer', 'admin', 'super_admin']) {
-    const h = harness({ role }); assert.equal((await h.invoke('/console/contracts', 'session')).next, true);
+test('customer workspaces admit only customers after a real no-store session lookup', async () => {
+  for (const path of ['/console/contracts', '/cart']) {
+    const role = 'customer';
+    const h = harness({ role }); assert.equal((await h.invoke(path, 'session')).next, true);
     const call = h.calls.find(row => row.url.endsWith('/me'));
     assert.equal(call.options.headers.Cookie, 'zjmfgo_session=session'); assert.equal(call.options.cache, 'no-store'); assert(call.options.signal instanceof AbortSignal);
   }
 });
+test('staff customer workspaces and customer auth forms redirect to the admin portal even during maintenance', async () => {
+  for (const maintenance of [false, true]) for (const role of ['admin', 'super_admin']) for (const path of ['/console', '/console/orders', '/cart', '/cart/', '/login', '/register']) {
+    const h = harness({ maintenance, role });
+    redirect(await h.invoke(path, 'staff'), '/admin');
+    assert.equal(h.calls.filter(row => row.url.endsWith('/me')).length, 1);
+  }
+});
+test('fixed notification account links take staff to their own personal account during normal operation and maintenance', async () => {
+  for (const maintenance of [false, true]) for (const role of ['admin', 'super_admin']) {
+    const h = harness({ maintenance, role });
+    redirect(await h.invoke('/console/account', 'staff'), '/admin/account');
+    assert.equal(h.calls.filter(row => row.url.endsWith('/me')).length, 1);
+  }
+  const customer = harness({ role: 'customer' });
+  assert.equal((await customer.invoke('/console/account', 'customer')).next, true);
+});
 test('console account failures return uncached 503 rather than render or masquerade as logout', async () => {
-  for (const options of [{ meStatus: 500 }, { meStatus: 403 }, { meError: true }, { malformed: true }]) {
+  for (const options of [{ meStatus: 500 }, { meStatus: 403 }, { meError: true }, { malformed: true }, { role: 'unexpected' }]) {
     const response = await harness(options).invoke('/console/contracts', 'session');
     assert.equal(response.status, 503); assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.equal(response.headers.get('Retry-After'), '60'); assert.equal(response.next, undefined);
   }
@@ -68,7 +85,7 @@ test('maintenance retains customer/anonymous/invalid 503 or external maintenance
     const external = await harness({ maintenance: true, maintenanceURL: target, ...options }).invoke('/console/contracts', cookie);
     assert.equal(external.status, 307); assert.equal(external.headers.get('Location'), target); assert.equal(external.headers.get('Cache-Control'), 'no-store');
   }
-  for (const role of ['admin', 'super_admin']) assert.equal((await harness({ maintenance: true, role }).invoke('/console/contracts', 'staff')).next, true);
+  for (const role of ['admin', 'super_admin']) for (const path of ['/', '/products/1', '/news', '/knowledgebase', '/downloads']) assert.equal((await harness({ maintenance: true, role }).invoke(path, 'staff')).next, true);
   assert.equal((await harness({ siteError: true }).invoke('/console/contracts')).status, 503);
   for (const options of [{ meStatus: 500 }, { meError: true }]) assert.equal((await harness({ maintenance: true, ...options }).invoke('/console/contracts', 'session')).status, 503);
 });
@@ -88,8 +105,7 @@ test('auth redirects use configured public origin despite hostile forwarding/Hos
     redirect(await harness().invoke(path, undefined, headers, 'http://hostile.example'), destination);
     for (const configuredOrigin of ['https://user:password@public.example', 'https://public.example/path', 'https://public.example/?query=1', 'https://public.example/#fragment', 'file:///tmp/x', 'invalid', '']) await assert.rejects(harness({ configuredOrigin }).invoke(path), /Invalid|URL/);
   }
-  const invalidConfiguration = await harness({ configuredOrigin: 'https://user:password@hostile.example', meStatus: 401 }).invoke('/console/contracts', 'invalid', headers, 'http://hostile.example');
-  assert.equal(invalidConfiguration.status, 503); assert.equal(invalidConfiguration.headers.get('Location'), null);
+  await assert.rejects(harness({ configuredOrigin: 'https://user:password@hostile.example', meStatus: 401 }).invoke('/console/contracts', 'invalid', headers, 'http://hostile.example'), /Invalid/);
   redirect(await harness({ configuredOrigin: undefined }).invoke('/console/contracts', undefined, {}, 'http://127.0.0.1:53088'), '/login', 'http://127.0.0.1:53088');
 });
 test('API rewrite and public/exempt pages remain independent of console auth', async () => {

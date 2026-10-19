@@ -33,9 +33,7 @@ func (s *Server) captchaManager() (*captcha.Manager, error) {
 }
 
 func (s *Server) captchaEnabled(ctx context.Context) (bool, error) {
-	var enabled bool
-	err := s.db.Pool.QueryRow(ctx, "SELECT auth_captcha_enabled FROM site_settings WHERE id=1").Scan(&enabled)
-	return enabled, err
+	return s.db.AuthenticationCaptchaEnabled(ctx)
 }
 
 func (s *Server) captchaUnavailable(w http.ResponseWriter, r *http.Request) {
@@ -145,11 +143,9 @@ func (s *Server) consumeCaptcha(ctx context.Context, r *http.Request, action, id
 	if err != nil || !validCaptchaHex(cookie.Value) {
 		return errInvalidCaptcha
 	}
-	var binding captcha.Binding
-	var expected, kind string
-	var state []byte
-	var expires time.Time
-	err = s.db.Pool.QueryRow(ctx, `UPDATE auth_captcha_challenges SET consumed_at=now() WHERE id=$1 AND action=$2 AND nonce_hash=$3 AND consumed_at IS NULL AND expires_at>now() RETURNING provider_id,profile_id,profile_fingerprint,challenge_kind,provider_state,answer_hash,expires_at`, tokenHash(id), action, tokenHash(cookie.Value)).Scan(&binding.ImplementationID, &binding.ProfileID, &binding.Fingerprint, &kind, &state, &expected, &expires)
+	claimed, err := s.db.ClaimAuthenticationCaptcha(ctx, tokenHash(id), action, tokenHash(cookie.Value))
+	binding, expected, kind := claimed.Binding, claimed.Expected, claimed.Kind
+	state, expires := claimed.State, claimed.Expires
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errInvalidCaptcha
 	}

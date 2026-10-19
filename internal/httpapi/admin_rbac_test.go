@@ -271,7 +271,7 @@ func TestAdminRBACStaffCredentialChanges(t *testing.T) {
 	keyResp := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "credential-test"}, cookie, "")
 	expect(t, keyResp, 201)
 	secret := data(t, keyResp)["secret"].(string)
-	_, err := db.Pool.Exec(t.Context(), `INSERT INTO mfa_challenges(token_hash,user_id,expires_at) VALUES(repeat('a',64),$1,now()+interval '5 minutes');
+	_, err := db.Pool.Exec(t.Context(), `INSERT INTO mfa_challenges(token_hash,user_id,login_portal,expires_at) VALUES(repeat('a',64),$1,'admin',now()+interval '5 minutes');
 `, id)
 	if err != nil {
 		t.Fatal(err)

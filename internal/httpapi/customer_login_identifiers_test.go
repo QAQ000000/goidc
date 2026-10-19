@@ -93,7 +93,7 @@ func TestCustomerPhoneMFARechecksLoginPolicy(t *testing.T) {
 	expect(t, request(h, "POST", "/api/v1/auth/login/mfa", map[string]string{"challenge": challenge, "code": testTOTP(secret, time.Now())}, "", ""), 200)
 	// Challenges issued before the migration cannot restore username login.
 	challenge = fmt.Sprintf("%064x", 123)
-	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO mfa_challenges(token_hash,user_id,login_method,expires_at) VALUES($1,$2,'username',now()+interval '1 minute')", tokenHash(challenge), id); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO mfa_challenges(token_hash,user_id,login_method,login_portal,expires_at) VALUES($1,$2,'username','customer',now()+interval '1 minute')", tokenHash(challenge), id); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "POST", "/api/v1/auth/login/mfa", map[string]string{"challenge": challenge, "code": testTOTP(secret, time.Now())}, "", ""), 403)

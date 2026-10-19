@@ -123,9 +123,14 @@ export function AuthForm({ register = false }: { register?: boolean }) {
         return;
       }
       const user = mfaChallenge
-        ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }) })
-        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password, ...captcha.fields }) });
-      router.push(user.role === "customer" ? "/" : "/admin");
+        ? await api<User>("/auth/login/mfa", { method: "POST", body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode, portal: "customer" }) })
+        : await api<User>("/auth/login", { method: "POST", body: JSON.stringify({ identifier, password, portal: "customer", ...captcha.fields }) });
+      if (user.role !== "customer") {
+        await api("/auth/logout", { method: "POST" });
+        setMfaChallenge(""); setMfaCode("");
+        throw new Error("此入口仅供客户登录，管理员请使用管理端登录。");
+      }
+      router.push("/");
       router.refresh();
     } catch (e) {
       const failure = e as Error & { code?: string; details?: Record<string, unknown> };

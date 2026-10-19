@@ -10,7 +10,7 @@ const require = createRequire(path.join(web, 'package.json'));
 const ts = require('typescript');
 const React = require('react');
 const cache = new Map();
-let current, timers, nextTimer, site, captchaResponse, apiHandler, calls, refreshes, captchaRequests;
+let current, timers, nextTimer, site, captchaResponse, apiHandler, calls, refreshes, captchaRequests, destinations;
 let now = Date.parse('2026-10-18T00:00:00Z');
 const realNow = Date.now;
 Date.now = () => now;
@@ -43,7 +43,7 @@ class ApiError extends Error {
   constructor(status, code, message, details = {}) { super(message); Object.assign(this, { status, code, details }); }
 }
 const refreshSite = () => { refreshes++; };
-const router = { push() {}, refresh() {} };
+const router = { push(value) { destinations.push(value); }, refresh() {} };
 const Button = props => React.createElement('button', props);
 const Input = props => React.createElement('input', props);
 const Label = props => React.createElement('label', props);
@@ -88,7 +88,7 @@ const { AdminLoginForm } = load(path.join(web, 'src/components/admin-login-form.
 const image = 'data:image/png;base64,aW1hZ2U=';
 const issued = (challenge = { kind: 'image', image }) => ({ enabled: true, captcha_id: 'challenge-1', expires_at: new Date(now + 300000).toISOString(), challenge });
 function reset() {
-  timers = new Map(); nextTimer = 1; refreshes = 0; calls = []; captchaRequests = [];
+  timers = new Map(); nextTimer = 1; refreshes = 0; calls = []; captchaRequests = []; destinations = [];
   site = { auth_captcha_enabled: true, registration_enabled: true };
   captchaResponse = issued();
   apiHandler = url => {
@@ -290,13 +290,38 @@ test('MFA stage remains submittable after image proof is cleared and uses only M
     reset(); const instance = mount(component);
     instance.render(); await advance(); let tree = instance.render();
     field(tree).props.captcha.setProof({ kind: 'image', answer: 'ABCDEF' }); tree = instance.render();
-    apiHandler = url => { if (url === '/auth/login') throw new ApiError(401, 'mfa_required', 'mfa', { challenge: 'mfa-challenge' }); return { role: 'admin' }; };
+    apiHandler = url => { if (url === '/auth/login') throw new ApiError(401, 'mfa_required', 'mfa', { challenge: 'mfa-challenge' }); return { role: component === AuthForm ? 'customer' : 'admin' }; };
     await find(tree, item => item.type === 'form').props.onSubmit(event);
     tree = instance.render(); await advance(); tree = instance.render();
     assert.equal(nodes(tree).some(item => item.type === CaptchaField), false);
     assert.equal(submitButton(tree).props.disabled, false);
     await find(tree, item => item.type === 'form').props.onSubmit(event);
     assert.equal(calls.at(-1).url, '/auth/login/mfa'); assert.equal('captcha_proof' in calls.at(-1).body, false);
+    assert.equal(calls.find(call => call.url === '/auth/login').body.portal, component === AuthForm ? 'customer' : 'admin');
+    assert.equal(calls.at(-1).body.portal, component === AuthForm ? 'customer' : 'admin');
+    instance.unmount();
+  }
+});
+
+test('customer login never accepts administrator sessions and both forms bind their portal', async () => {
+  for (const role of ['admin', 'super_admin', 'unexpected']) {
+    reset(); site.auth_captcha_enabled = false;
+    apiHandler = () => ({ role });
+    const instance = mount(AuthForm);
+    await find(instance.render(), item => item.type === 'form').props.onSubmit(event);
+    assert.equal(calls.find(call => call.url === '/auth/login').body.portal, 'customer');
+    assert.equal(calls.at(-1).url, '/auth/logout');
+    assert.deepEqual(destinations, []);
+    assert.match(text(instance.render()), /仅供客户登录/);
+    instance.unmount();
+  }
+  for (const [component, role, portal, destination] of [[AuthForm, 'customer', 'customer', '/'], [AdminLoginForm, 'admin', 'admin', '/admin']]) {
+    reset(); site.auth_captcha_enabled = false;
+    apiHandler = () => ({ role });
+    const instance = mount(component);
+    await find(instance.render(), item => item.type === 'form').props.onSubmit(event);
+    assert.equal(calls.find(call => call.url === '/auth/login').body.portal, portal);
+    assert.deepEqual(destinations, [destination]);
     instance.unmount();
   }
 });

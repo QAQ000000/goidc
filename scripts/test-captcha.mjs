@@ -43,8 +43,37 @@ export const integrationSuites = {
     "TestCompiledAppsHTTPContractFilteringAndRedaction",
     "TestCompiledAppsRetainMissingAndIncompatibleConfigurations",
     "TestCompiledAppsSuperAdminPermission",
-    "TestCompiledAppsBuildMetadataAndQueryValidation"
-  ]
+    "TestCompiledAppsBuildMetadataAndQueryValidation",
+    "TestCustomerBusinessRejectsAdministratorCredentials",
+    "TestAccountSecurityAndNotificationsRemainShared",
+    "TestCustomerCheckoutAndImpersonationUseCustomerIdentity",
+    "TestLoginPortalRejectsCrossRoleAndRetainsLegacyClients",
+    "TestLoginPortalMismatchDoesNotUpgradeLegacyPasswordOrClearPressure",
+    "TestLoginMFAPortalMismatchPreservesRecoveryAndChallenge",
+    "TestLoginMFARoleChangeCannotSwitchFrozenPortal",
+    "TestLoginPortalStillRequiresAndConsumesCaptcha",
+    "TestAuthenticationOwnershipAndCSRF",
+    "TestCustomerImpersonationSessionSwitchAndRestore",
+    "TestAdminRBACTicketSharedRoutes",
+    "TestAdminRBACStaffCredentialChanges",
+    "TestAuthSettingsSiteVersionAndLoginMethod",
+    "TestMFAEnrollmentLoginAndDisable",
+    "TestMFASettingsPolicyAndSecrets",
+    "TestMFAEnrollCannotReplaceConfirmedSecret",
+    "TestMFAConfirmRechecksCurrentRolePolicy",
+    "TestMFAChallengeRechecksLoginMethod",
+    "TestCustomerPhoneMFARechecksLoginPolicy",
+    "TestLegacyCMFPasswordUpgradesOnLogin",
+    "TestLoginRateLimitUsesResolvedClientIPBehindTrustedProxy",
+    "TestAutomaticAdminBlockIsPerSourceNotGlobal",
+    "TestAdminFailureBackoffGrowsAndResetsOnSuccess",
+    "TestManualUsernameBlacklistStaysGlobal",
+    "TestMaintenanceCustomerGateAndAdminRecovery",
+    "TestMaintenanceSettingsValidation",
+    "TestMaintenancePaymentWebhookAndMFALogin",
+    "TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery"
+  ],
+  "internal/store": ["TestAuthenticationPortalUpgrade180InvalidatesOnlyUnboundChallenges"]
 };
 
 export async function testCaptcha(mode) {

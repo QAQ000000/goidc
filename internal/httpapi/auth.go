@@ -10,7 +10,6 @@ import (
 	"github.com/codex/zjmfgo/internal/captcha"
 	"net/http"
 	"net/mail"
-	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +34,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
+		Portal        string         `json:"portal"`
 		Identifier    string         `json:"identifier"`
 		Username      string         `json:"username"`
 		Password      string         `json:"password"`
@@ -43,6 +43,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		CaptchaProof  *captcha.Proof `json:"captcha_proof"`
 	}
 	if !decode(w, r, &input) {
+		return
+	}
+	if input.Portal != "" && input.Portal != "customer" && input.Portal != "admin" {
+		writeError(w, http.StatusBadRequest, "invalid_credentials", "登录信息无效")
 		return
 	}
 	if err := s.consumeCaptcha(r.Context(), r, "login", input.CaptchaID, input.CaptchaAnswer, input.CaptchaProof); err != nil {
@@ -70,8 +74,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if input.Identifier == "" && validSlug(strings.ToLower(identifier)) {
 		username, method = strings.ToLower(identifier), "username"
 	}
-	var loginEnabled, emailEnabled, phoneEnabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT login_enabled,login_email_enabled,login_phone_enabled FROM auth_settings WHERE id=1").Scan(&loginEnabled, &emailEnabled, &phoneEnabled); err != nil {
+	settings, err := s.db.AuthenticationLoginSettings(r.Context())
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -80,10 +84,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "login_blocked", "该登录来源已被暂时禁止，请稍后再试")
 		return
 	}
-	var id identity
-	var hash, status string
-	var resetRequired, mfaEnabled bool
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT id,username,email,display_name,role,password_hash,status,password_reset_required,mfa_enabled FROM users WHERE ($2='username' AND username=$1) OR ($2='email' AND email=$1) OR ($2='phone' AND phone=$1 AND phone_verified)", username, method).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role, &hash, &status, &resetRequired, &mfaEnabled)
+	credential, err := s.db.AuthenticationCredential(r.Context(), username, method)
+	id := identity{ID: credential.ID, Username: credential.Username, Email: credential.Email, Name: credential.Name, Role: credential.Role}
+	hash, status := credential.PasswordHash, credential.Status
+	resetRequired, mfaEnabled := credential.ResetRequired, credential.MFAEnabled
 	if errors.Is(err, pgx.ErrNoRows) {
 		hash = "$2b$12$IaaLuziNj3ry6N5MGpfILOWgfDw.czQWlhSIXXp68bPxDJiIX1.3a"
 	} else if err != nil {
@@ -97,7 +101,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			match = nil
 		}
 	}
-	if err != nil || match != nil || status != "active" {
+	if err != nil || match != nil || status != "active" || store.LoginPortalForRole(id.Role) == "" || input.Portal != "" && input.Portal != store.LoginPortalForRole(id.Role) {
 		s.authAudit(r.Context(), id.ID, "auth.login_failed", map[string]any{"username": username, "remote_addr": clientAddr})
 		if id.ID > 0 && (id.Role == "admin" || id.Role == "super_admin") {
 			if delay := s.recordAdminLoginFailure(r.Context(), id.Username, clientAddr, id.ID); delay > 0 {
@@ -117,11 +121,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		// pressure so shared egress is not pushed towards an automatic block.
 		s.clearAdminLoginPressure(r.Context(), id.Username, clientAddr)
 	}
-	if !loginEnabled && id.Role == "customer" {
+	if !settings.Enabled && id.Role == "customer" {
 		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
 		return
 	}
-	if id.Role == "customer" && (method == "username" || method == "email" && !emailEnabled || method == "phone" && !phoneEnabled) {
+	if id.Role == "customer" && (method == "username" || method == "email" && !settings.EmailEnabled || method == "phone" && !settings.PhoneEnabled) {
 		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放")
 		return
 	}
@@ -131,10 +135,13 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, upgradeErr)
 			return
 		}
-		if _, upgradeErr = s.db.Pool.Exec(r.Context(), `UPDATE users
-SET password_hash=$2,password_reset_required=false,updated_at=now()
-WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr != nil {
+		changed, upgradeErr := s.db.UpgradeAuthenticationPassword(r.Context(), id.ID, id.Role, hash, string(upgraded))
+		if upgradeErr != nil {
 			s.fail(w, r, upgradeErr)
+			return
+		}
+		if !changed {
+			writeError(w, http.StatusUnauthorized, "invalid_credentials", "账号或密码错误")
 			return
 		}
 		resetRequired = false
@@ -146,7 +153,11 @@ WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr !=
 		return
 	}
 	if mfaEnabled {
-		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID, method)
+		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID, method, store.LoginPortalForRole(id.Role))
+		if errors.Is(challengeErr, store.ErrAuthenticationRoleChanged) {
+			writeError(w, http.StatusUnauthorized, "invalid_credentials", "账号或密码错误")
+			return
+		}
 		if challengeErr != nil {
 			s.fail(w, r, challengeErr)
 			return
@@ -155,7 +166,10 @@ WHERE id=$1 AND password_hash=$3`, id.ID, string(upgraded), hash); upgradeErr !=
 		writeErrorDetails(w, http.StatusUnauthorized, "mfa_required", "请输入身份验证器验证码", map[string]any{"challenge": challenge})
 		return
 	}
-	if err = s.completeLogin(w, r, id); err != nil {
+	if err = s.completeLogin(w, r, id); errors.Is(err, store.ErrAuthenticationRoleChanged) {
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "账号或密码错误")
+		return
+	} else if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -197,12 +211,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) authAudit(ctx context.Context, actorID int64, action string, payload map[string]any) {
-	b, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	entityID := strconv.FormatInt(actorID, 10)
-	_, _ = s.db.Pool.Exec(ctx, "INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload) VALUES(NULLIF($1,0),$2,'user',$3,$4)", actorID, action, entityID, b)
+	s.db.RecordAuthenticationAudit(ctx, actorID, action, payload)
 }
 
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
@@ -418,10 +427,7 @@ func (s *Server) adminSetCustomerPassword(w http.ResponseWriter, r *http.Request
 
 func (s *Server) authLimit(w http.ResponseWriter, r *http.Request, scope string, limit int) bool {
 	host := s.clientIP(r)
-	var count int
-	err := s.db.Pool.QueryRow(r.Context(), `INSERT INTO auth_rate_limits(key,attempts) VALUES($1,1)
- ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_rate_limits.window_start < now()-interval '1 minute' THEN 1 ELSE auth_rate_limits.attempts+1 END,
- window_start=CASE WHEN auth_rate_limits.window_start < now()-interval '1 minute' THEN now() ELSE auth_rate_limits.window_start END RETURNING attempts`, tokenHash(scope+":"+host)).Scan(&count)
+	count, err := s.db.AuthenticationRateAttempt(r.Context(), tokenHash(scope+":"+host))
 	if err != nil {
 		s.fail(w, r, err)
 		return false
@@ -438,14 +444,7 @@ func (s *Server) authLimit(w http.ResponseWriter, r *http.Request, scope string,
 // username entries stay global on purpose; IP entries only cover the client
 // address they name.
 func (s *Server) loginBlocked(ctx context.Context, username, host string) bool {
-	var blocked bool
-	err := s.db.Pool.QueryRow(ctx, `SELECT EXISTS(
-		SELECT 1 FROM auth_blacklist
-		WHERE operation_type='login'
-		  AND (blocked_until IS NULL OR blocked_until>now())
-		  AND ((subject_type='username' AND subject=$1) OR (subject_type='ip' AND subject=$2))
-	)`, username, host).Scan(&blocked)
-	return err == nil && blocked
+	return s.db.AuthenticationLoginBlocked(ctx, username, host)
 }
 
 // adminFailureDelay converts the number of recorded failures for one
@@ -475,28 +474,7 @@ func adminFailureDelay(attempts, maxAttempts int) time.Duration {
 // caller, never a global account block; administrators retain that decision
 // through the manual username blacklist.
 func (s *Server) recordAdminLoginFailure(ctx context.Context, username, host string, actorID int64) time.Duration {
-	var maxAttempts, lockoutMinutes int
-	if err := s.db.Pool.QueryRow(ctx, "SELECT login_max_attempts,login_lockout_minutes FROM auth_settings WHERE id=1").Scan(&maxAttempts, &lockoutMinutes); err != nil {
-		return 0
-	}
-	if host != "" {
-		key := tokenHash("admin-login:" + username + ":" + host)
-		var attempts int
-		if s.db.Pool.QueryRow(ctx, `INSERT INTO auth_rate_limits(key,attempts) VALUES($1,1)
- ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN 1 ELSE auth_rate_limits.attempts+1 END,
- window_start=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN now() ELSE auth_rate_limits.window_start END RETURNING attempts`, key, lockoutMinutes).Scan(&attempts) == nil && attempts >= maxAttempts {
-			_, _ = s.db.Pool.Exec(ctx, `INSERT INTO auth_blacklist(subject_type,subject,operation_type,remote_addr,reason,blocked_until)
- VALUES('ip',$1,'login',$1,'连续登录失败',now()+make_interval(mins=>$2))
- ON CONFLICT(subject_type,subject,operation_type) DO UPDATE SET remote_addr=excluded.remote_addr,reason=excluded.reason,blocked_until=GREATEST(auth_blacklist.blocked_until,excluded.blocked_until),version=auth_blacklist.version+1,updated_at=now()`, host, lockoutMinutes)
-			s.authAudit(ctx, actorID, "auth.login_blocked", map[string]any{"username": username, "subject_type": "ip", "remote_addr": host, "duration_minutes": lockoutMinutes})
-		}
-	}
-	var attempts int
-	if err := s.db.Pool.QueryRow(ctx, `INSERT INTO auth_rate_limits(key,attempts) VALUES($1,1)
- ON CONFLICT(key) DO UPDATE SET attempts=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN 1 ELSE auth_rate_limits.attempts+1 END,
- window_start=CASE WHEN auth_rate_limits.window_start < now()-make_interval(mins=>$2) THEN now() ELSE auth_rate_limits.window_start END RETURNING attempts`, tokenHash("admin-login-account:"+username), lockoutMinutes).Scan(&attempts); err != nil {
-		return 0
-	}
+	attempts, maxAttempts := s.db.RecordAdministratorLoginFailure(ctx, username, host, actorID)
 	return adminFailureDelay(attempts, maxAttempts)
 }
 
@@ -504,9 +482,5 @@ func (s *Server) recordAdminLoginFailure(ctx context.Context, username, host str
 // login accumulated, so normal use of a shared address never drifts towards an
 // automatic block.
 func (s *Server) clearAdminLoginPressure(ctx context.Context, username, host string) {
-	keys := []string{tokenHash("admin-login-account:" + username)}
-	if host != "" {
-		keys = append(keys, tokenHash("admin-login:"+username+":"+host))
-	}
-	_, _ = s.db.Pool.Exec(ctx, "DELETE FROM auth_rate_limits WHERE key=ANY($1)", keys)
+	s.db.ClearAdministratorLoginPressure(ctx, username, host)
 }

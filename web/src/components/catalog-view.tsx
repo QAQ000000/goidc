@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Server, ShoppingCart, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { api, money, type Cart, type Product, type ProductOption, type ProductPage, type CatalogCategory, type CatalogSection } from "@/lib/api";
+import { api, ApiError, money, type Cart, type Product, type ProductOption, type ProductPage, type CatalogCategory, type CatalogSection, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Workspace } from "./workspace";
 import { PurchaseFieldInputs,purchaseFieldValues } from "./purchase-fields";
@@ -13,6 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
 import { ProductOptionChoice } from "./product-option-choice";
 export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
+  const router = useRouter();
+  const identity = useResource<User>("/me", false);
+  const staff = identity.data?.role === "admin" || identity.data?.role === "super_admin";
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState("");
   const [section, setSection] = useState("");
@@ -74,6 +78,8 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
     setNotice("");
     setFailed(false);
     try {
+      const currentUser = await api<User>("/me");
+      if (currentUser.role !== "customer") throw new Error("管理员账号仅用于后台管理，请使用独立客户账号购买。");
       for (const group of product.option_groups ?? []) {
         const option = group.options.find(candidate => optionIds(product).includes(candidate.id));
         if (!option || !isQuantityOption(group)) continue;
@@ -100,6 +106,7 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
       });
       setNotice(`${product.name} 已加入购物车`);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 401) router.push("/login");
       setNotice((e as Error).message);
       setFailed(true);
     } finally {
@@ -113,13 +120,14 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
           <h1 className="page-title">{initialProduct?.name ?? "产品目录"}</h1>
           <p className="text-muted-foreground mt-2">云计算 / 通用服务</p>
         </div>
-        <div className="flex gap-2">{initialProduct && <Button variant="outline" asChild><Link href="/"><ArrowLeft size={16} />返回目录</Link></Button>}<Button variant="outline" asChild>
+        <div className="flex gap-2">{initialProduct && <Button variant="outline" asChild><Link href="/"><ArrowLeft size={16} />返回目录</Link></Button>}{!staff && <Button variant="outline" asChild>
           <Link href="/cart">
             <ShoppingCart size={16} />
             查看购物车
           </Link>
-        </Button></div>
+        </Button>}</div>
       </div>
+      {staff && <p role="status" className="mb-6 border-y py-4 text-sm text-muted-foreground">管理员账号仅用于后台管理，商品目录可供预览。购买服务请使用独立客户账号。<Link href="/admin" className="ml-2 text-primary underline">返回管理后台</Link></p>}
       {!initialProduct && (sections.error || categories.error ? <Failure error={sections.error??categories.error!} retry={()=>{sections.refresh();categories.refresh();}} /> : <>
         <nav aria-label="一级商品分组" className="flex flex-wrap gap-2 mb-5"><Button variant={section===""?"default":"outline"} onClick={()=>{setSection("");setCategory("");setOffset(0);}}>全部商品</Button>{sections.data?.map(s=><Button key={s.id} variant={section===String(s.id)?"default":"outline"} onClick={()=>{setSection(String(s.id));setCategory("");setOffset(0);}}>{s.name}</Button>)}</nav>
         {section&&<p className="text-sm text-muted-foreground mb-5 whitespace-pre-wrap break-all">{sections.data?.find(s=>String(s.id)===section)?.description}</p>}
@@ -225,11 +233,11 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
                   </p>
                 )}
               </div>
-              <PurchaseFieldInputs fields={product.purchase_field_definitions??[]} values={fieldValues[product.id]??{}} onChange={values=>setFieldValues({...fieldValues,[product.id]:values})} disabled={busy!==null}/>
+              <PurchaseFieldInputs fields={product.purchase_field_definitions??[]} values={fieldValues[product.id]??{}} onChange={values=>setFieldValues({...fieldValues,[product.id]:values})} disabled={staff||busy!==null}/>
               {ruleError(product)&&<p role="alert" className="text-sm text-destructive mb-2">{ruleError(product)}</p>}
               <Button
                 className="w-full"
-                disabled={busy !== null || product.stock === 0 || !optionsComplete(product)}
+                disabled={staff || busy !== null || product.stock === 0 || !optionsComplete(product)}
                 onClick={() => add(product)}
               >
                 {busy === product.id ? (
@@ -237,7 +245,7 @@ export function CatalogView({ initialProduct }: { initialProduct?: Product }) {
                 ) : (
                   <ShoppingCart size={16} />
                 )}{" "}
-                {busy === product.id ? "加入中" : "加入购物车"}
+                {staff ? "管理员账号不可购买" : busy === product.id ? "加入中" : "加入购物车"}
               </Button>
             </article>
           ))}

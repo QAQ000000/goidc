@@ -6,6 +6,8 @@
 
 第三方图片、原生点击和 SDK/widget 令牌共用挑战生命周期。本批提供通用接口、前端组件和测试提供方，未接入任何真实第三方服务。测试提供方只存在于测试文件，不能在部署中选择。
 
+前台和后台登录分别绑定 `portal: customer/admin`，MFA 挑战冻结入口；客户商业接口必须验证真实客户角色，管理员只使用后台和显式共享能力。完整规则、兼容策略与迁移 181 的发布边界见[前后台身份边界](admin-rbac.md#前后台身份边界)。
+
 ## 配置与装配
 
 实现通过 `internal/captcha` 的类型化注册表注册，默认 API/worker composition root 和离线模块清单均包含 `captcha:builtin_png`。注册表复用 `internal/module`，代码编译进二进制；数据库和接口不能注入 Go、HTML 或脚本。

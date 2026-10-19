@@ -390,15 +390,23 @@
         "internal/httpapi/captcha.go",
         "internal/config/captcha.go",
         "db/migrations/168_captcha_providers.sql",
-        "web/src/components/captcha-field.tsx"
+        "web/src/components/captcha-field.tsx",
+        "internal/httpapi/auth.go",
+        "internal/httpapi/mfa.go",
+        "internal/httpapi/server.go",
+        "internal/store/auth_login.go",
+        "db/migrations/181_auth_login_portal.sql",
+        "web/src/app/admin/account",
+        "web/src/proxy.ts"
       ],
       "tests": [
         "node scripts/test-captcha.mjs --unit",
         "node scripts/test-captcha.mjs --integration",
-        "node --test scripts/captcha-components.test.mjs"
+        "node --test scripts/captcha-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18; actual run/pass and zero skip; legacy PNG, image/click/widget, durable consume before verification, concurrent replay and profile rotation",
+        "customer-only commerce for session and API keys; shared personal security, notifications and staff ticket operations; role-bound login/MFA, legacy-client compatibility and explicit customer impersonation; real schema180 upgrade preserves accounts and sessions",
         "local renderer fixtures; real browser, external vendor and production configuration remain separate"
       ],
       "review": {

@@ -9,5 +9,7 @@ export async function requireUser(admin=false):Promise<User>{
  if(!response.ok)throw new Error("账户服务暂时不可用");
  const body=await response.json();const user=body.data as User;
  if(admin&&user.role!=="admin"&&user.role!=="super_admin")redirect("/");
+ if(!admin&&(user.role==="admin"||user.role==="super_admin"))redirect("/admin");
+ if(!admin&&user.role!=="customer")throw new Error("当前账户无法访问客户中心");
  return user;
 }

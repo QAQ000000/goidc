@@ -57,13 +57,14 @@ export function AdminLoginForm() {
       const user = mfaChallenge
         ? await api<User>("/auth/login/mfa", {
             method: "POST",
-            body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode }),
+            body: JSON.stringify({ challenge: mfaChallenge, code: mfaCode, portal: "admin" }),
           })
         : await api<User>("/auth/login", {
             method: "POST",
             body: JSON.stringify({
               username,
               password,
+              portal: "admin",
               ...captcha.fields,
             }),
           });

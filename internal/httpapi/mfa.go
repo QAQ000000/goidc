@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/secure"
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,7 +28,7 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 		return err
 	}
 	token := hex.EncodeToString(raw)
-	if _, err := s.db.Pool.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), id.ID); err != nil {
+	if err := s.db.CreateAuthenticationSession(r.Context(), id.ID, id.Role, tokenHash(token)); err != nil {
 		return err
 	}
 	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
@@ -37,17 +36,13 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 	return nil
 }
 
-func (s *Server) createMFAChallenge(ctx context.Context, userID int64, method string) (string, error) {
+func (s *Server) createMFAChallenge(ctx context.Context, userID int64, method, portal string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
 	challenge := hex.EncodeToString(raw)
-	_, err := s.db.Pool.Exec(ctx, "DELETE FROM mfa_challenges WHERE user_id=$1 OR expires_at<=now()", userID)
-	if err != nil {
-		return "", err
-	}
-	_, err = s.db.Pool.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,login_method,expires_at) VALUES($1,$2,$3,now()+interval '5 minutes')", tokenHash(challenge), userID, method)
+	err := s.db.CreateAuthenticationMFAChallenge(ctx, userID, method, portal, tokenHash(challenge))
 	return challenge, err
 }
 
@@ -58,100 +53,53 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		Challenge string `json:"challenge"`
 		Code      string `json:"code"`
+		Portal    string `json:"portal"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
 	input.Challenge = strings.TrimSpace(input.Challenge)
 	input.Code = strings.TrimSpace(input.Code)
-	if len(input.Challenge) != 64 || (!validMFACode(input.Code) && !validRecoveryCode(input.Code)) {
+	if len(input.Challenge) != 64 || (!validMFACode(input.Code) && !validRecoveryCode(input.Code)) || input.Portal != "" && input.Portal != "customer" && input.Portal != "admin" {
 		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
-		return
-	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var userID int64
-	var secretEnc []byte
-	var username, email, name, role, method string
-	var attempts int
-	err = tx.QueryRow(r.Context(), `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,'')
-		FROM mfa_challenges c JOIN users u ON u.id=c.user_id
-		WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true
-		FOR UPDATE`, tokenHash(input.Challenge)).Scan(&userID, &attempts, &username, &email, &name, &role, &secretEnc, &method)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	var loginEnabled, methodEnabled bool
-	if err = tx.QueryRow(r.Context(), `SELECT login_enabled,CASE $1 WHEN 'username' THEN login_username_enabled WHEN 'email' THEN login_email_enabled WHEN 'phone' THEN login_phone_enabled ELSE false END FROM auth_settings WHERE id=1 FOR SHARE`, method).Scan(&loginEnabled, &methodEnabled); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if role == "customer" && !loginEnabled {
-		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
-		return
-	}
-	if method == "" || (role == "customer" && (method == "username" || !methodEnabled)) {
-		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放，请重新登录")
-		return
-	}
-	if attempts >= 5 {
-		_, _ = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge))
-		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码尝试次数过多，请重新登录")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE mfa_challenges SET attempts=attempts+1 WHERE token_hash=$1", tokenHash(input.Challenge)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	secret, err := s.decryptMFASecret(secretEnc)
-	validCode := err == nil && verifyTOTP(secret, input.Code, time.Now())
-	if !validCode && validRecoveryCode(input.Code) {
-		var usedHash string
-		recoveryErr := tx.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", userID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash)
-		validCode = recoveryErr == nil
-	}
-	if !validCode {
-		if attempts+1 >= 5 {
-			_, _ = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge))
-		}
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		s.authAudit(r.Context(), userID, "auth.mfa_failed", map[string]any{"remote_addr": s.clientIP(r)})
-		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码错误")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE token_hash=$1", tokenHash(input.Challenge)); err != nil {
-		s.fail(w, r, err)
 		return
 	}
 	raw := make([]byte, 32)
-	if _, err = rand.Read(raw); err != nil {
+	if _, err := rand.Read(raw); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	token := hex.EncodeToString(raw)
-	if _, err = tx.Exec(r.Context(), "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash(token), userID); err != nil {
+	recoveryHash := ""
+	if validRecoveryCode(input.Code) {
+		recoveryHash = tokenHash(strings.ToUpper(input.Code))
+	}
+	result, err := s.db.CompleteAuthenticationMFA(r.Context(), tokenHash(input.Challenge), input.Portal, recoveryHash, tokenHash(token), func(encrypted []byte) bool {
+		secret, decryptErr := s.decryptMFASecret(encrypted)
+		return decryptErr == nil && verifyTOTP(secret, input.Code, time.Now())
+	})
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
+	switch result.Denial {
+	case "login_disabled":
+		writeError(w, http.StatusForbidden, "login_disabled", "本站暂未开放客户登录")
+		return
+	case "login_method_disabled":
+		writeError(w, http.StatusForbidden, "login_method_disabled", "此登录方式暂未开放，请重新登录")
+		return
+	case "invalid_mfa":
+		if result.FailedCode {
+			s.authAudit(r.Context(), result.User.ID, "auth.mfa_failed", map[string]any{"remote_addr": s.clientIP(r)})
+		}
+		writeError(w, http.StatusUnauthorized, "invalid_mfa", "验证码或登录挑战无效")
 		return
 	}
-	s.authAudit(r.Context(), userID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
+	s.authAudit(r.Context(), result.User.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
 	http.SetCookie(w, &http.Cookie{Name: "zjmfgo_session", Value: token, Path: "/", HttpOnly: true, Secure: s.cfg.SecureCookie, SameSite: http.SameSiteLaxMode, MaxAge: 86400})
-	write(w, http.StatusOK, identity{ID: userID, Username: username, Email: email, Name: name, Role: role})
+	u := result.User
+	write(w, http.StatusOK, identity{ID: u.ID, Username: u.Username, Email: u.Email, Name: u.Name, Role: u.Role})
 }
 
 func (s *Server) mfaStatus(w http.ResponseWriter, r *http.Request) {

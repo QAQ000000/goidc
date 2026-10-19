@@ -89,11 +89,11 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
         <img src="/assets/country/CN.png" alt="CN" className="h-4 w-6 rounded-sm object-cover hidden sm:inline-block" />
         {user ? <>
           <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span>
-          <span className="admin-user-name" title={user.display_name}>{user.display_name}</span>
+          <Link href="/admin/account" className="admin-user-name" title="个人账户">{user.display_name}</Link>
           <Link href="/admin" className="admin-header-home-btn text-white/80 hover:text-white hidden sm:inline-flex items-center" title="工作台" aria-label="工作台">
             <Home size={18} />
           </Link>
-          <Button className="admin-front-button text-white hover:bg-white/10" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />客户中心</Link></Button>
+          <Button className="admin-front-button text-white hover:bg-white/10" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />查看官网</Link></Button>
           <Button className="text-white hover:bg-white/10" variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut size={16} /></Button>
         </> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-white/80" role="status">连接中</span>}
       </div>
@@ -101,7 +101,7 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
     <aside className="admin-sidebar">
       <div className="admin-sidebar-domain">{domain.label}</div>
       <Navigation key={path} user={user} path={path} />
-      <Hint label="查看客户中心"><Link href="/" className="admin-front-link"><ArrowUpRight size={18} /><span className="admin-nav-label">查看客户中心</span></Link></Hint>
+      <Hint label="查看官网"><Link href="/" className="admin-front-link"><ArrowUpRight size={18} /><span className="admin-nav-label">查看官网</span></Link></Hint>
     </aside>
     <div className="admin-workarea">
       <header className="admin-topbar">
@@ -113,7 +113,7 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
               <Dialog.Title className="sr-only">管理导航</Dialog.Title>
               <div className="admin-drawer-header"><Brand user={user} /><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label="关闭管理菜单"><X /></Button></Dialog.Close></div>
               <Navigation key={path} user={user} path={path} close={() => setDrawer(false)} />
-              <Link href="/" className="admin-front-link" onClick={() => setDrawer(false)}><ArrowUpRight size={18} />查看客户中心</Link>
+              <Link href="/" className="admin-front-link" onClick={() => setDrawer(false)}><ArrowUpRight size={18} />查看官网</Link>
             </Dialog.Content></Dialog.Portal>
           </Dialog.Root>
           <nav className="admin-breadcrumbs" aria-label="面包屑">

@@ -17,6 +17,7 @@
 | 服务取消与续费 | `node scripts/test-service-cancellations.mjs --integration` | 显式回环 PG18 `_test` URL；串行 race、逐入口 run/pass 零 skip；API/资金兼容、执行围栏及真实 schema168→169，规则与部署边界见[交易契约](transactions.md#服务取消与续费互斥) |
 | 内部调度任务 | `node scripts/test-scheduler.mjs --unit` / `--integration`、`node --test scripts/scheduler-components.test.mjs` | 集成须显式回环 PG18 `_test` URL，逐项 run/pass 零 skip；目录/取消/审计和日续费回归，真实 worker 与浏览器另验，见[调度契约](architecture/scheduler.md) |
 | 请求追踪与运行诊断 | `node scripts/test-runtime-observability.mjs --unit` / `--integration`、`node --test scripts/runtime-observability-components.test.mjs scripts/proxy-headers.test.mjs` | 关联来源/取消连接复用、异步重启/重试、历史升级、七类循环及只读队列、超级管理员权限；严格 PG18 逐项 run/pass 零 skip，见[运行诊断契约](architecture/runtime-observability.md) |
+| 前后台身份与认证 | `node scripts/test-captcha.mjs --integration`；`node --test scripts/captcha-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/admin-proxy-auth.test.mjs` | 严格回环 PG18，角色/会话/API 密钥、入口/MFA、共享安全/通知/工单、显式代登录及 schema180 升级；真实浏览器用 `TestCustomerAdminIsolationBrowserFixture`，规则见[RBAC](admin-rbac.md#前后台身份边界) |
 | 强制数据库全量 | `./scripts/test-all.sh` | `ZJMFGO_TEST_DATABASE_URL` 指向独立 PG18、库名以 `_test` 结尾 |
 | Node 工具回归 | `node --test scripts/*.test.mjs` | Node；进程、namespace 等专项以各项环境条件为准 |
 | 浏览器文件保存与下载请求 | `node --test scripts/download.test.mjs` | Node 与 Web 依赖；执行真实 helper/组件及 DOM/fetch 夹具，不启动浏览器 |

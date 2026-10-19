@@ -4,13 +4,15 @@ import { ArrowLeft, BookOpen, Newspaper, Search } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ApiError, date, type ContentArticle, type ContentCategory, type ContentTag } from "@/lib/api";
+import { ApiError, date, type ContentArticle, type ContentCategory, type ContentTag, type User } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { SiteBrand, SiteFooter, useSite } from "./site-provider";
 
 export function PublicShell({ children, title }: { children: React.ReactNode; title: string }) {
   const { site } = useSite();
-  return <main className="min-h-screen bg-background"><header className="border-b bg-white"><div className="max-w-5xl mx-auto px-5 py-5 flex flex-wrap gap-4 items-center justify-between"><Link href="/" className="min-w-0 max-w-full"><SiteBrand compact /></Link><nav className="flex flex-wrap items-center gap-4 text-sm"><Link href="/news" className="text-muted-foreground hover:text-foreground">新闻</Link><Link href="/knowledgebase" className="text-muted-foreground hover:text-foreground">知识库</Link><Link href="/downloads" className="text-muted-foreground hover:text-foreground">下载</Link><Link href="/login" className="text-primary">登录</Link></nav></div></header><div className="max-w-5xl mx-auto px-5 py-10"><p className="text-sm text-muted-foreground mb-2 break-words">{site?.site_name} · {title}</p>{children}</div><div className="border-t px-5 py-6 max-w-5xl mx-auto"><SiteFooter /></div></main>;
+  const identity = useResource<User>("/me", false);
+  const staff = identity.data?.role === "admin" || identity.data?.role === "super_admin";
+  return <main className="min-h-screen bg-background"><header className="border-b bg-white"><div className="max-w-5xl mx-auto px-5 py-5 flex flex-wrap gap-4 items-center justify-between"><Link href="/" className="min-w-0 max-w-full"><SiteBrand compact /></Link><nav className="flex flex-wrap items-center gap-4 text-sm"><Link href="/news" className="text-muted-foreground hover:text-foreground">新闻</Link><Link href="/knowledgebase" className="text-muted-foreground hover:text-foreground">知识库</Link><Link href="/downloads" className="text-muted-foreground hover:text-foreground">下载</Link><Link href={staff ? "/admin" : identity.data?.role === "customer" ? "/console/orders" : "/login"} className="text-primary">{staff ? "返回管理后台" : identity.data?.role === "customer" ? "客户中心" : "登录"}</Link></nav></div></header><div className="max-w-5xl mx-auto px-5 py-10"><p className="text-sm text-muted-foreground mb-2 break-words">{site?.site_name} · {title}</p>{children}</div><div className="border-t px-5 py-6 max-w-5xl mx-auto"><SiteFooter /></div></main>;
 }
 
 export function ContentList({ type }: { type: "news" | "knowledge" }) {

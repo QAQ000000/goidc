@@ -44,33 +44,40 @@ export async function proxy(request: NextRequest) {
   }
   if (["/admin-login", "/maintenance", "/forgot-password", "/reset-password"].includes(path)) return NextResponse.next();
   const origin = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8088";
-  let site: SiteProfile | null = null;
-  try {
-    const response = await fetch(`${origin}/api/v1/site`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
-    if (response.ok) site = (await response.json()).data as SiteProfile;
-  } catch {}
-  if (site && !site.maintenance_enabled) {
-    if (path !== "/console" && !path.startsWith("/console/")) return NextResponse.next();
-    // A nested layout redirect can become a streamed 200 + client meta redirect.
-    // Resolve the console session before rendering to preserve the HTTP redirect.
-    const cookie = request.cookies.get("zjmfgo_session");
-    if (!cookie) return authRedirect("/login");
+  const customerRoute = path === "/console" || path.startsWith("/console/") || path === "/cart" || path.startsWith("/cart/");
+  const customerAuthRoute = path === "/login" || path === "/register";
+  const cookie = request.cookies.get("zjmfgo_session");
+  let user: User | null = null;
+  let accountStatus = 0;
+  if (cookie && (customerRoute || customerAuthRoute)) {
     try {
       const response = await fetch(`${origin}/api/v1/me`, {
         headers: { Cookie: `zjmfgo_session=${cookie.value}` },
         cache: "no-store",
         signal: AbortSignal.timeout(3000),
       });
-      if (response.status === 401) return authRedirect("/login");
-      if (response.ok) {
-        const user = (await response.json()).data as User;
-        if (user && Number.isSafeInteger(user.id) && user.id > 0) return NextResponse.next();
-      }
+      accountStatus = response.status;
+      if (response.ok) user = (await response.json()).data as User;
     } catch {}
+    // Staff can preview public pages, but customer workspaces and login forms
+    // must never treat an administrator session as a customer session.
+    if (user?.role === "admin" || user?.role === "super_admin") return authRedirect(path === "/console/account" ? "/admin/account" : "/admin");
+  }
+  let site: SiteProfile | null = null;
+  try {
+    const response = await fetch(`${origin}/api/v1/site`, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+    if (response.ok) site = (await response.json()).data as SiteProfile;
+  } catch {}
+  if (site && !site.maintenance_enabled) {
+    if (!customerRoute) return NextResponse.next();
+    // A nested layout redirect can become a streamed 200 + client meta redirect.
+    // Resolve the console session before rendering to preserve the HTTP redirect.
+    if (!cookie) return authRedirect("/login");
+    if (accountStatus === 401) return authRedirect("/login");
+    if (user?.role === "customer" && Number.isSafeInteger(user.id) && user.id > 0) return NextResponse.next();
     return new NextResponse("账户服务暂时不可用，请稍后再试。", { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "60", "Content-Type": "text/plain; charset=utf-8" } });
   }
-  const cookie = request.cookies.get("zjmfgo_session");
-  if (cookie) {
+  if (cookie && !customerRoute && !customerAuthRoute) {
     try {
       const response = await fetch(`${origin}/api/v1/me`, { headers: { Cookie: `zjmfgo_session=${cookie.value}` }, cache: "no-store", signal: AbortSignal.timeout(3000) });
       if (response.ok) {

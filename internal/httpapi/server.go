@@ -81,10 +81,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/account/verification/confirm", s.sessionAuth(s.confirmAccountVerification, false))
 	mux.HandleFunc("POST /api/v1/auth/password-reset/request", s.requestPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", s.confirmPasswordReset)
-	mux.HandleFunc("POST /api/v1/auth/logout", s.auth(s.logout, false))
-	mux.HandleFunc("GET /api/v1/auth/impersonation", s.auth(s.impersonationStatus, false))
+	mux.HandleFunc("POST /api/v1/auth/logout", s.accountAuth(s.logout, false))
+	mux.HandleFunc("GET /api/v1/auth/impersonation", s.accountAuth(s.impersonationStatus, false))
 	mux.HandleFunc("POST /api/v1/auth/impersonation/exit", s.exitImpersonation)
-	mux.HandleFunc("GET /api/v1/me", s.auth(s.me, false))
+	mux.HandleFunc("GET /api/v1/me", s.accountAuth(s.me, false))
 	mux.HandleFunc("GET /api/v1/catalog", s.catalog)
 	mux.HandleFunc("GET /api/v1/affiliate/click/{code}", s.affiliateClick)
 	mux.HandleFunc("GET /api/v1/catalog/page", s.catalogPage)
@@ -313,14 +313,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/document", s.auth(s.uploadInvoiceApplicationDocument, true))
 	mux.HandleFunc("POST /api/v1/admin/invoice-applications/{id}/adjustments/{adjustment_id}/document", s.auth(s.uploadInvoiceApplicationDocument, true))
 	mux.HandleFunc("GET /api/v1/admin/invoice-applications/{id}/documents/{document_id}/file", s.auth(s.invoiceApplicationDocumentFile, true))
-	mux.HandleFunc("PUT /api/v1/account/password", s.auth(s.changePassword, false))
-	mux.HandleFunc("GET /api/v1/account/mfa", s.sessionAuth(s.mfaStatus, false))
-	mux.HandleFunc("POST /api/v1/account/mfa/enroll", s.sessionAuth(s.mfaEnroll, false))
-	mux.HandleFunc("POST /api/v1/account/mfa/confirm", s.sessionAuth(s.mfaConfirm, false))
-	mux.HandleFunc("POST /api/v1/account/mfa/disable", s.sessionAuth(s.mfaDisable, false))
-	mux.HandleFunc("GET /api/v1/api-keys", s.sessionAuth(s.listAPIKeys, false))
-	mux.HandleFunc("POST /api/v1/api-keys", s.sessionAuth(s.createAPIKey, false))
-	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", s.sessionAuth(s.revokeAPIKey, false))
+	mux.HandleFunc("PUT /api/v1/account/password", s.accountAuth(s.changePassword, false))
+	mux.HandleFunc("GET /api/v1/account/mfa", s.accountAuth(s.mfaStatus, true))
+	mux.HandleFunc("POST /api/v1/account/mfa/enroll", s.accountAuth(s.mfaEnroll, true))
+	mux.HandleFunc("POST /api/v1/account/mfa/confirm", s.accountAuth(s.mfaConfirm, true))
+	mux.HandleFunc("POST /api/v1/account/mfa/disable", s.accountAuth(s.mfaDisable, true))
+	mux.HandleFunc("GET /api/v1/api-keys", s.accountAuth(s.listAPIKeys, true))
+	mux.HandleFunc("POST /api/v1/api-keys", s.accountAuth(s.createAPIKey, true))
+	mux.HandleFunc("DELETE /api/v1/api-keys/{id}", s.accountAuth(s.revokeAPIKey, true))
 	mux.HandleFunc("POST /api/v1/invoices/{id}/pay", s.auth(s.payInvoice, false))
 	mux.HandleFunc("POST /api/v1/balance/topups/{id}/cancel", s.sessionAuth(s.cancelOnlineTopup, false))
 	mux.HandleFunc("GET /api/v1/balance/topup-options", s.sessionAuth(s.topupOptions, false))
@@ -378,18 +378,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/services/{id}/auto-renew", s.auth(s.setAutoRenew, false))
 	mux.HandleFunc("POST /api/v1/services/{id}/cancellation", s.auth(s.requestCancellation, false))
 	mux.HandleFunc("DELETE /api/v1/services/{id}/cancellation", s.auth(s.withdrawCancellation, false))
-	mux.HandleFunc("GET /api/v1/me/ticket-notification-preferences", s.sessionAuth(s.ticketNotificationPreferences, false))
-	mux.HandleFunc("PATCH /api/v1/me/ticket-notification-preferences", s.sessionAuth(s.ticketNotificationPreferences, false))
-	mux.HandleFunc("GET /api/v1/tickets/{id}/notifications", s.auth(s.ticketNotifications, false))
+	mux.HandleFunc("GET /api/v1/me/ticket-notification-preferences", s.accountAuth(s.ticketNotificationPreferences, true))
+	mux.HandleFunc("PATCH /api/v1/me/ticket-notification-preferences", s.accountAuth(s.ticketNotificationPreferences, true))
+	mux.HandleFunc("GET /api/v1/tickets/{id}/notifications", s.accountAuth(s.ticketNotifications, false))
 	mux.HandleFunc("GET /api/v1/tickets", s.auth(s.tickets, false))
 	mux.HandleFunc("GET /api/v1/ticket-departments", s.auth(s.ticketDepartments, false))
 	mux.HandleFunc("POST /api/v1/tickets", s.auth(s.createTicket, false))
-	mux.HandleFunc("GET /api/v1/tickets/{id}", s.auth(s.ticketDetail, false))
-	mux.HandleFunc("POST /api/v1/tickets/{id}/attachments", s.auth(s.uploadTicketAttachment, false))
-	mux.HandleFunc("GET /api/v1/tickets/{id}/attachments/{attachment_id}", s.auth(s.downloadTicketAttachment, false))
-	mux.HandleFunc("DELETE /api/v1/tickets/{id}/attachments/{attachment_id}", s.auth(s.deleteTicketAttachment, false))
-	mux.HandleFunc("POST /api/v1/tickets/{id}/replies", s.auth(s.replyTicket, false))
-	mux.HandleFunc("PATCH /api/v1/tickets/{id}", s.auth(s.closeTicket, false))
+	mux.HandleFunc("GET /api/v1/tickets/{id}", s.accountAuth(s.ticketDetail, false))
+	mux.HandleFunc("POST /api/v1/tickets/{id}/attachments", s.accountAuth(s.uploadTicketAttachment, false))
+	mux.HandleFunc("GET /api/v1/tickets/{id}/attachments/{attachment_id}", s.accountAuth(s.downloadTicketAttachment, false))
+	mux.HandleFunc("DELETE /api/v1/tickets/{id}/attachments/{attachment_id}", s.accountAuth(s.deleteTicketAttachment, false))
+	mux.HandleFunc("POST /api/v1/tickets/{id}/replies", s.accountAuth(s.replyTicket, false))
+	mux.HandleFunc("PATCH /api/v1/tickets/{id}", s.accountAuth(s.closeTicket, false))
 	mux.HandleFunc("GET /api/v1/contacts", s.auth(s.contacts, false))
 	mux.HandleFunc("POST /api/v1/contacts", s.auth(s.createContact, false))
 	mux.HandleFunc("PATCH /api/v1/contacts/{id}", s.auth(s.updateContact, false))
@@ -694,7 +694,31 @@ func (s *Server) auth(next http.HandlerFunc, admin bool) http.HandlerFunc {
 func (s *Server) sessionAuth(next http.HandlerFunc, admin bool) http.HandlerFunc {
 	return s.authWith(next, admin, true)
 }
+
+type authAudience uint8
+
+const (
+	customerAudience authAudience = iota
+	adminAudience
+	accountAudience
+)
+
+// Account security, personal notifications and the explicitly shared ticket
+// operations accept either account type. Business routes default to customers;
+// granting an administrator more permissions must never grant customer access.
+func (s *Server) accountAuth(next http.HandlerFunc, sessionOnly bool) http.HandlerFunc {
+	return s.authenticate(next, accountAudience, sessionOnly)
+}
+
 func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.HandlerFunc {
+	audience := customerAudience
+	if admin {
+		audience = adminAudience
+	}
+	return s.authenticate(next, audience, sessionOnly)
+}
+
+func (s *Server) authenticate(next http.HandlerFunc, audience authAudience, sessionOnly bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		bearer := bearerCredential(r)
 		if sessionOnly && bearer != "" {
@@ -733,7 +757,11 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 				return
 			}
 		}
-		if admin && id.Role != "admin" && id.Role != "super_admin" {
+		if audience == customerAudience && id.Role != "customer" {
+			writeError(w, http.StatusForbidden, "customer_required", "该功能仅供客户账户使用，请返回管理后台")
+			return
+		}
+		if audience == adminAudience && id.Role != "admin" && id.Role != "super_admin" {
 			writeError(w, 403, "forbidden", "需要管理员权限")
 			return
 		}
@@ -749,7 +777,7 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 				id.Permissions = append(id.Permissions, p.Code)
 			}
 		}
-		if admin {
+		if audience == adminAudience {
 			permission, known := adminRoutePermissions[r.Pattern]
 			allowed := id.can(permission)
 			if r.Pattern == "GET /api/v1/admin/customer-field-definitions" {

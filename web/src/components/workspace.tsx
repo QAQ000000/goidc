@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useState, Fragment } from "react";
+import { createContext, useContext, useEffect, useState, Fragment } from "react";
 import Link from "next/link";
 import { SiteBrand, SiteFooter } from "./site-provider";
 import { usePathname, useRouter } from "next/navigation";
@@ -80,17 +80,22 @@ export function Workspace({
   const refresh = admin ? access?.refresh ?? customerResource.refresh : customerResource.refresh;
   const path = usePathname();
   const router = useRouter();
+  const staff = user?.role === "admin" || user?.role === "super_admin";
+  const customerRoute = path === "/console" || path.startsWith("/console/") || path === "/cart" || path.startsWith("/cart/");
+  useEffect(() => {
+    if (!admin && staff && customerRoute) router.replace("/admin");
+  }, [admin, staff, customerRoute, router]);
   const [open, setOpen] = useState(false);
   const [logoutError, setLogoutError] = useState("");
   const { data: impersonation } = useResource<{ active: boolean; admin_name?: string }>("/auth/impersonation", false);
   // Legacy hides the 实名认证 menu entry whenever certifi_open is off; mirror
   // that with the enabled flag from GET /account/certification. Absent data
   // keeps the entry visible so a loading state never hides it by accident.
-  const { data: certification } = useResource<{ enabled?: boolean }>(!admin && user ? "/account/certification" : null, false);
+  const { data: certification } = useResource<{ enabled?: boolean }>(!admin && user?.role === "customer" ? "/account/certification" : null, false);
   const [impersonationBusy, setImpersonationBusy] = useState(false);
   const [impersonationError, setImpersonationError] = useState("");
-  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : customerNav.filter(item => item.href !== "/console/certification" || certification?.enabled !== false);
-  const groups = useServiceNavigation(!admin && !!user);
+  const navigation = admin ? adminNavigation.filter(item => can(user, item.permission)) : staff ? customerNav.filter(item => item.href === "/" || item.href === "/downloads").map(item => item.href === "/" ? { ...item, label: "产品目录" } : item) : customerNav.filter(item => item.href !== "/console/certification" || certification?.enabled !== false);
+  const groups = useServiceNavigation(!admin && user?.role === "customer");
   async function exitImpersonation() {
     if (impersonationBusy) return;
     setImpersonationBusy(true); setImpersonationError("");
@@ -118,6 +123,9 @@ export function Workspace({
   if (admin) {
     return <AdminShell title={title} user={user} error={error} refresh={refresh} logout={logout} logoutError={logoutError}>{children}</AdminShell>;
   }
+  if (staff && customerRoute) {
+    return <main className="grid min-h-screen place-items-center p-6"><p role="status">管理员账号仅用于后台管理，正在返回管理后台。</p></main>;
+  }
   return (
     <AccessContext.Provider value={{ user, error, refresh }}><div className="workspace">
       {open && (
@@ -144,8 +152,8 @@ export function Workspace({
         >
           <X size={18} />
         </button>
-        <div className="nav-heading">{admin ? "业务运营" : "客户中心"}</div>
-        <nav className="min-h-0 overflow-y-auto" aria-label={admin ? "管理导航" : "客户导航"}>
+        <div className="nav-heading">{staff ? "官网预览" : "客户中心"}</div>
+        <nav className="min-h-0 overflow-y-auto" aria-label={staff ? "公开导航" : "客户导航"}>
           {navigation.map(({ href, label, icon: Icon }) => (
             <Fragment key={href}><Link
               key={href}
@@ -176,7 +184,7 @@ export function Workspace({
             {admin || user?.role === "admin" || user?.role === "super_admin" ? (
               <>
                 <ArrowUpRight size={18} />
-                {admin ? "客户中心" : "管理端"}
+                {admin ? "查看官网" : "返回管理后台"}
               </>
             ) : (
               <>
@@ -203,7 +211,7 @@ export function Workspace({
               <Menu size={20} />
             </Button>
             <span className="hidden sm:inline text-muted-foreground">
-              {admin ? "管理控制台" : "客户中心"}
+              {staff ? "官网预览" : "客户中心"}
             </span>
             <ChevronRight
               size={14}

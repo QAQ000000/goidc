@@ -82,6 +82,7 @@ export const adminNavigation = [
   { href: "/admin/jobs/queue", label: "任务队列", icon: Settings, permission: "jobs.view", group: "system" },
   { href: "/admin/suppliers/tasks", label: "供应商交付任务", icon: ClipboardList, permission: "jobs.view", group: "system" },
   { href: "/admin/system/about", label: "关于系统", icon: Settings, permission: "settings.view", group: "system" },
+  { href: "/admin/account", label: "个人账户", icon: UserRoundCog, permission: "@account", group: "system" },
 ];
 
 export const adminNavigationGroups = [
@@ -118,9 +119,9 @@ export function adminNavigationItem(path: string) {
 }
 
 export function can(user: User | null, permission: string) {
-  return !!user && (user.role === "super_admin" || (user.role === "admin" && permission !== "@super" && user.permissions?.includes(permission)));
+  return !!user && (user.role === "super_admin" || (user.role === "admin" && (permission === "@account" || (permission !== "@super" && user.permissions?.includes(permission)))));
 }
 
 export function adminEntry(user: User) {
-  return adminNavigation.find(item => can(user, item.permission))?.href ?? "/console/account";
+  return adminNavigation.find(item => can(user, item.permission))?.href ?? "/admin/account";
 }
