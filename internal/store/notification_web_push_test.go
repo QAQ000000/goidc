@@ -368,8 +368,8 @@ SELECT id,'invoice-paid-inbox','invoice-paid-inbox',8,6,5,'inbox',$1::bigint::te
 'routes',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM notification_routes r WHERE channel<>'web_push'),
 'templates',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM notification_message_templates m WHERE channel<>'web_push'),
 'preferences',(SELECT jsonb_agg(to_jsonb(p) ORDER BY user_id,channel) FROM user_notification_preferences p),
-'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM notification_events e),
-'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&out); err != nil {
+'events',(SELECT jsonb_agg(to_jsonb(e)-'correlation_id' ORDER BY id) FROM notification_events e),
+'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id'-'correlation_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&out); err != nil {
 			t.Fatal(err)
 		}
 		return out

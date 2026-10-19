@@ -27,6 +27,7 @@ test(`Next ${mode} API rewrite rejects caller IP assertions and preserves busine
     let body = '';
     for await (const chunk of req) body += chunk;
     res.setHeader('Content-Type', 'application/json');
+    res.setHeader('X-Request-ID', '0123456789abcdef0123456789abcdef');
     res.end(JSON.stringify({ data: { maintenance_enabled: false }, url: req.url, method: req.method, headers: req.headers, body }));
   });
   await listen(backend);
@@ -98,6 +99,7 @@ test(`Next ${mode} API rewrite rejects caller IP assertions and preserves busine
       headers: { ...headers, 'Content-Type': 'application/json', Cookie: 'zjmfgo_session=fixture', Origin: origin, 'X-Requested-With': 'zjmfgo', 'Idempotency-Key': 'fixture-once' },
     });
     assert.equal(response.status, 200, logs);
+    assert.equal(response.headers.get('X-Request-ID'), '0123456789abcdef0123456789abcdef');
     const echo = await response.json();
     for (const header of ['x-forwarded-for', 'x-real-ip', 'forwarded']) assert.equal(echo.headers[header], undefined, `caller ${header} reached Go`);
     assert.equal(echo.headers.cookie, 'zjmfgo_session=fixture');

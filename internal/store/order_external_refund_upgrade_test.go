@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/db/migrations"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -115,7 +116,8 @@ func isolatedOrderRefundSchema153(t *testing.T) *Store {
 // run on schema 153 because its new reservation table intentionally needs 154.
 // Keep the original structure: pending review, order_items as purchase truth,
 // one manual pending-payment service per unit, direct stock subtraction, and
-// an automatic unpaid invoice. Payment below uses the unchanged Store entrypoints.
+// an automatic unpaid invoice. Its historical receipt is also seeded with the
+// pre-161 SQL shape; current payment entrypoints require newer channel contracts.
 func createSyntheticSchema153Checkout(t *testing.T, db *Store, actor, user, product int64) CheckoutResult {
 	t.Helper()
 	ctx := t.Context()
@@ -159,6 +161,43 @@ func createSyntheticSchema153Checkout(t *testing.T, db *Store, actor, user, prod
 	return result
 }
 
+// This is a synthetic historical receipt, not execution of the old HTTP API or
+// gateway. It mirrors the paid/pending-review branch in payments.go at 9038e0d:
+// retain the receipt and webhook identity, mark invoice/order paid, and leave
+// pending-review service units untouched. The actual schema153 guards remain on.
+func createSyntheticSchema153Payment(t *testing.T, db *Store, user int64, order CheckoutResult) PaymentIntentResult {
+	t.Helper()
+	ctx := t.Context()
+	out := PaymentIntentResult{Provider: "mock", ProviderPaymentID: "synthetic-schema153-payment", InvoiceID: order.InvoiceID, AmountCents: 2400, Status: "succeeded"}
+	raw := []byte(`{"fixture":"synthetic153-original-receipt"}`)
+	sum := sha256.Sum256(raw)
+	if err := db.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,idempotency_key)
+VALUES('mock',$1,(SELECT id FROM channel_instances WHERE category='payment' AND implementation_id='mock' AND enabled ORDER BY sort_order,id LIMIT 1),$2,$3,2400,'synthetic-schema153-payment-key') RETURNING id`, out.ProviderPaymentID, order.InvoiceID, user).Scan(&out.PaymentID); err != nil {
+			return err
+		}
+		if err := Audit(ctx, tx, user, "payment.intent.created", "invoice", order.InvoiceID, map[string]any{"provider": "mock", "payment_id": out.ProviderPaymentID, "amount_cents": 2400}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO payment_webhook_events(provider,event_id,payload_hash,status) VALUES('mock','synthetic-schema153-paid-event',$1,'processed')`, hex.EncodeToString(sum[:])); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1 AND status='unpaid'`, order.InvoiceID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE orders SET status='paid',updated_at=now() WHERE id=$1`, order.OrderID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE payment_transactions SET status='succeeded',completed_at=now(),raw_result=$2,external_transaction_id='synthetic-schema153-original-transaction',next_reconcile_at=NULL,updated_at=now() WHERE id=$1`, out.PaymentID, raw); err != nil {
+			return err
+		}
+		return Audit(ctx, tx, 0, "payment.webhook.succeeded", "invoice", order.InvoiceID, map[string]any{"provider": "mock", "event_id": "synthetic-schema153-paid-event", "payment_id": out.ProviderPaymentID, "amount_cents": 2400})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 const schema153OrderSnapshot = `SELECT jsonb_build_object(
  'order',(SELECT to_jsonb(o) FROM orders o WHERE id=$1),
  'items',(SELECT jsonb_agg(to_jsonb(oi) ORDER BY id) FROM order_items oi WHERE order_id=$1),
@@ -166,7 +205,7 @@ const schema153OrderSnapshot = `SELECT jsonb_build_object(
  'invoice',(SELECT to_jsonb(i) FROM invoices i WHERE order_id=$1),
  'payments',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM payment_transactions p WHERE invoice_id=(SELECT id FROM invoices WHERE order_id=$1)),
  'callback',(SELECT to_jsonb(e) FROM payment_webhook_events e WHERE provider='mock' AND event_id='synthetic-schema153-paid-event'),
- 'audit',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM audit_events a WHERE entity_type='order' AND entity_id=$1::text),
+ 'audit',(SELECT jsonb_agg(to_jsonb(a)-'correlation_id' ORDER BY id) FROM audit_events a WHERE entity_type='order' AND entity_id=$1::text),
  'user',(SELECT to_jsonb(u) FROM users u WHERE id=(SELECT user_id FROM orders WHERE id=$1)),
  'ledger',(SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM balance_ledger b WHERE user_id=(SELECT user_id FROM orders WHERE id=$1))
 )::text`
@@ -183,13 +222,8 @@ func TestOrderExternalRefundUpgradeFrom153DoesNotAdoptHistoricalOrders(t *testin
 		t.Fatal(err)
 	}
 	old := createSyntheticSchema153Checkout(t, db, actor, user, product)
-	originalPayment, err := db.CreatePaymentIntent(ctx, user, old.InvoiceID, "mock", "synthetic-schema153-payment", "", "synthetic-schema153-payment-key")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.ProcessPaymentWebhook(ctx, "mock", "synthetic-schema153-paid-event", "synthetic-schema153-payment", old.InvoiceID, 2400, "succeeded", []byte(`{"fixture":"synthetic153-original-receipt"}`), "synthetic-schema153-original-transaction"); err != nil {
-		t.Fatal(err)
-	}
+	originalPayment := createSyntheticSchema153Payment(t, db, user, old)
+	var err error
 	var stock, units, jobs, items int
 	var invoiceStatus, orderStatus, reviewStatus string
 	if err = db.Pool.QueryRow(ctx, `SELECT p.stock,o.status,o.review_status,i.status,(SELECT count(*) FROM services WHERE order_id=o.id AND status='pending_payment' AND provision_mode='manual' AND NOT inventory_released),(SELECT count(*) FROM provision_jobs),(SELECT count(*) FROM invoice_items) FROM products p CROSS JOIN orders o JOIN invoices i ON i.order_id=o.id WHERE p.id=$1 AND o.id=$2`, product, old.OrderID).Scan(&stock, &orderStatus, &reviewStatus, &invoiceStatus, &units, &jobs, &items); err != nil || stock != 10 || orderStatus != "paid" || reviewStatus != "pending" || invoiceStatus != "paid" || units != 2 || jobs != 0 || items != 0 {

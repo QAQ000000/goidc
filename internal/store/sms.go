@@ -245,6 +245,7 @@ func (s *Store) ResolveSMSConfigForInstance(ctx context.Context, instanceID stri
 
 type SMSJob struct {
 	ID                    int64
+	CorrelationID         string
 	Recipient, Body, Kind string
 	TemplateID            string
 	VerificationID        string
@@ -335,7 +336,7 @@ func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {
 	var o SMSJob
 	var sealed []byte
 	var challenge string
-	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("sms_outbox", "sms")+` ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,''),coalesce(s.template_id,''),s.locked_at`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID, &o.TemplateID, &o.LockedAt)
+	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("sms_outbox", "sms")+` ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,''),coalesce(s.template_id,''),s.locked_at,coalesce(s.correlation_id,'')`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID, &o.TemplateID, &o.LockedAt, &o.CorrelationID)
 	if e != nil {
 		return nil, e
 	}

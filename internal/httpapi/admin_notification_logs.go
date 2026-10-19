@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/correlation"
+	"github.com/codex/zjmfgo/internal/store"
 )
 
 // adminNotificationLogQuery contains the common filters used by the legacy
@@ -188,7 +191,7 @@ func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"u.role IN ('admin','super_admin')"}}
+	filter := store.APIAccessLogFilter{}
 	if method := strings.TrimSpace(r.URL.Query().Get("method")); method != "" {
 		method = strings.ToUpper(method)
 		switch method {
@@ -197,7 +200,7 @@ func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_api_method", "API方法无效")
 			return
 		}
-		f.add(method, "a.method=$%d")
+		filter.Method = method
 	}
 	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
 		code, err := strconv.Atoi(status)
@@ -205,7 +208,7 @@ func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_api_status", "API状态码无效")
 			return
 		}
-		f.add(code, "a.status_code=$%d")
+		filter.StatusCode = code
 	}
 	if ip := strings.TrimSpace(r.URL.Query().Get("ip")); ip != "" {
 		parsed := net.ParseIP(ip)
@@ -213,28 +216,39 @@ func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid_api_ip", "IP地址无效")
 			return
 		}
-		f.add(parsed, "a.remote_ip=$%d")
+		filter.RemoteIP = parsed
 	}
-	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
-		f.add("%"+username+"%", "(u.display_name ILIKE $%d OR u.username ILIKE $%d OR u.email ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(u.display_name ILIKE $%d OR u.username ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx)
+	filter.Username = strings.TrimSpace(r.URL.Query().Get("username"))
+	filter.Search = strings.TrimSpace(r.URL.Query().Get("q"))
+	if value := strings.TrimSpace(r.URL.Query().Get("correlation_id")); value != "" {
+		if !correlation.Valid(value) {
+			writeError(w, http.StatusBadRequest, "invalid_correlation_id", "请求编号无效")
+			return
+		}
+		filter.CorrelationID = value
 	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		f.add("%"+q+"%", "(a.path ILIKE $%d OR a.method ILIKE $%d OR coalesce(u.display_name,'') ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(a.path ILIKE $%d OR a.method ILIKE $%d OR coalesce(u.display_name,'') ILIKE $%d)", idx, idx, idx)
+	for _, key := range []string{"from", "to"} {
+		value := strings.TrimSpace(r.URL.Query().Get(key))
+		if value == "" {
+			continue
+		}
+		d, err := parseLogDate(value, key, key == "to")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+			return
+		}
+		if key == "from" {
+			filter.From = &d
+		} else {
+			filter.Until = &d
+		}
 	}
-	if err := addLogDateFilters(r, &f, "a.created_at"); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+	page, err := s.db.APIAccessLogs(r.Context(), filter, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
 		return
 	}
-	where := strings.Join(f.where, " AND ")
-	base := " FROM admin_api_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE " + where
-	s.writeListPage(w, r, "SELECT count(*)"+base,
-		`SELECT a.id,a.created_at,a.method,a.path,a.path AS description,a.status_code,a.duration_ms,a.remote_ip,a.remote_ip AS ip,
- a.actor_id,u.display_name AS username`+base+
-			" ORDER BY a.id DESC", f.args, limit, offset)
+	write(w, http.StatusOK, page)
 }
 
 func validOutboxStatus(value string) bool {

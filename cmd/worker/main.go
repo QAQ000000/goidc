@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/codex/zjmfgo/internal/modules/manifest"
 	"github.com/codex/zjmfgo/internal/notification"
 	"github.com/codex/zjmfgo/internal/scheduler"
@@ -59,6 +60,14 @@ func main() {
 	smtpFallback := store.SMTPRuntimeConfig{Host: cfg.SMTPHost, Port: cfg.SMTPPort, Username: cfg.SMTPUsername, Password: cfg.SMTPPassword, From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode, FromName: cfg.SMTPFromName}
 	paymentFallback := store.PaymentConfiguration{PaymentSettings: store.PaymentSettings{Enabled: true, MockEnabled: cfg.PaymentMockEnabled, APIURL: cfg.EpayAPIURL, PID: cfg.EpayPID, Types: cfg.EpayTypes}, Key: cfg.EpayKey, PublicOrigin: cfg.PublicOrigin, MockSecret: cfg.PaymentGatewaySecret}
 	scheduled := store.NewScheduledTaskRunner(db, log, paymentFallback)
+	runtimeCtx, cancelRuntime := context.WithTimeout(ctx, 2*time.Second)
+	runtime, runtimeErr := db.StartWorkerRuntime(runtimeCtx, log)
+	cancelRuntime()
+	if runtimeErr != nil {
+		log.Error("worker runtime registration failed")
+	}
+	// Registered before Wait defers: stop is persisted only after every lane exits.
+	defer runtime.Stop()
 	paymentSchedule, _ := scheduler.Lookup(string(scheduler.AutomaticPaymentReconciliation))
 	notificationSchedule, _ := scheduler.Lookup(string(scheduler.AffiliateSettlement))
 	renewalSchedule, _ := scheduler.Lookup(string(scheduler.AutomaticRenewals))
@@ -67,7 +76,8 @@ func main() {
 		paymentWorker.Add(1)
 		go func() {
 			defer paymentWorker.Done()
-			runScheduledLane(ctx, paymentSchedule, func() {
+			runObservedScheduledLane(ctx, paymentSchedule, runtime.Lane("payment"), func(ctx context.Context) {
+				log := correlation.Logger(ctx, log)
 				if _, checkErr := scheduled.Run(ctx, scheduler.AutomaticPaymentReconciliation); checkErr != nil && ctx.Err() == nil {
 					log.Error("automatic payment reconciliation failed", "error", checkErr)
 				}
@@ -86,9 +96,11 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-timer.C:
-				if _, cleanupErr := db.CollectFileObjects(ctx, 20); cleanupErr != nil && ctx.Err() == nil {
-					log.Error("file object cleanup failed", "error", cleanupErr)
-				}
+				runWorkerPass(ctx, runtime.Lane("file_cleanup"), func(ctx context.Context) {
+					if _, cleanupErr := db.CollectFileObjects(ctx, 20); cleanupErr != nil && ctx.Err() == nil {
+						correlation.Logger(ctx, log).Error("file object cleanup failed", "error", cleanupErr)
+					}
+				})
 			}
 		}
 	}()
@@ -97,21 +109,23 @@ func main() {
 	notificationWorker.Add(1)
 	go func() {
 		defer notificationWorker.Done()
-		runScheduledLane(ctx, notificationSchedule, func() { runNotificationSchedules(ctx, scheduled, log) })
+		runObservedScheduledLane(ctx, notificationSchedule, runtime.Lane("notification_schedule"), func(ctx context.Context) { runNotificationSchedules(ctx, scheduled, correlation.Logger(ctx, log)) })
 	}()
 	defer notificationWorker.Wait()
 	var centerWorker sync.WaitGroup
 	centerWorker.Add(1)
 	go func() {
 		defer centerWorker.Done()
-		notification.RunNotificationCenter(ctx, db, log)
+		lane := runtime.Lane("notification_center")
+		notification.RunNotificationCenter(lane.Context(ctx), db, log, lane.Observe)
 	}()
 	defer centerWorker.Wait()
 	var certificationWorker sync.WaitGroup
 	certificationWorker.Add(1)
 	go func() {
 		defer certificationWorker.Done()
-		runCertifications(ctx, db, log)
+		lane := runtime.Lane("certification")
+		runCertifications(lane.Context(ctx), db, log, lane.Observe)
 	}()
 	defer certificationWorker.Wait()
 	// A full renewal pass can outlast the provisioning poll interval. Run it
@@ -120,7 +134,8 @@ func main() {
 	renewalWorker.Add(1)
 	go func() {
 		defer renewalWorker.Done()
-		runScheduledLane(ctx, renewalSchedule, func() {
+		runObservedScheduledLane(ctx, renewalSchedule, runtime.Lane("auto_renew"), func(ctx context.Context) {
+			log := correlation.Logger(ctx, log)
 			if _, renewErr := scheduled.Run(ctx, scheduler.AutomaticRenewals); renewErr != nil && ctx.Err() == nil {
 				log.Error("auto renewal processing failed", "error", renewErr)
 			}
@@ -136,97 +151,113 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err = db.RecoverStaleSMSJobs(ctx); err != nil {
-				log.Error("SMS stale recovery failed")
-			}
-			for i := 0; i < 10; i++ {
-				job, claimErr := db.ClaimSMSJob(ctx)
-				if errors.Is(claimErr, pgx.ErrNoRows) {
-					break
+			runWorkerPass(ctx, runtime.Lane("provision"), func(ctx context.Context) {
+				baseLog := log
+				log := correlation.Logger(ctx, baseLog)
+				if err = db.RecoverStaleSMSJobs(ctx); err != nil {
+					log.Error("SMS stale recovery failed")
 				}
-				if claimErr != nil {
-					log.Error("SMS claim failed")
-					break
+				for i := 0; i < 10; i++ {
+					job, claimErr := db.ClaimSMSJob(ctx)
+					if errors.Is(claimErr, pgx.ErrNoRows) {
+						break
+					}
+					if claimErr != nil {
+						log.Error("SMS claim failed")
+						break
+					}
+					jobCtx := workerJobContext(ctx, job.CorrelationID)
+					log := correlation.Logger(jobCtx, baseLog).With("job_id", job.ID, "attempts", job.Attempts, "attempt_id", correlation.NewID(), "queue", "sms")
+					store.WorkerRuntimeProgress(ctx)
+					log.Info("job attempt started")
+					active, checkErr := db.SMSJobActive(jobCtx, *job)
+					if checkErr != nil || !active {
+						_ = db.RecoverStaleSMSJobs(ctx)
+						continue
+					}
+					smsRuntime, resolveErr := db.ResolveSMSConfigForInstance(jobCtx, job.ChannelInstanceID)
+					var sendErr error
+					evidence := store.SMSDeliveryEvidence{Provider: smsRuntime.Provider, Outcome: "configuration_rejected"}
+					switch {
+					case resolveErr != nil:
+						sendErr = resolveErr
+					case !smsRuntime.Enabled:
+						sendErr = errors.New("SMS channel disabled")
+					default:
+						evidence, sendErr = notification.SendSMSWithEvidence(jobCtx, smsRuntime, *job)
+					}
+					// Keep the response durable before marking this attempt complete.
+					if evidenceErr := db.SaveSMSDeliveryEvidence(jobCtx, *job, evidence); evidenceErr != nil {
+						log.Error("SMS evidence persistence failed")
+						continue
+					}
+					if completeErr := db.CompleteSMSJob(jobCtx, *job, sendErr); completeErr != nil {
+						log.Error("SMS completion failed")
+					}
+					if sendErr != nil {
+						log.Error("SMS delivery failed")
+					}
 				}
-				active, checkErr := db.SMSJobActive(ctx, *job)
-				if checkErr != nil || !active {
-					_ = db.RecoverStaleSMSJobs(ctx)
-					continue
+				if err = db.RecoverStaleEmailJobs(ctx); err != nil {
+					log.Error("stale email recovery failed", "error", err)
 				}
-				smsRuntime, resolveErr := db.ResolveSMSConfigForInstance(ctx, job.ChannelInstanceID)
-				var sendErr error
-				evidence := store.SMSDeliveryEvidence{Provider: smsRuntime.Provider, Outcome: "configuration_rejected"}
-				switch {
-				case resolveErr != nil:
-					sendErr = resolveErr
-				case !smsRuntime.Enabled:
-					sendErr = errors.New("SMS channel disabled")
-				default:
-					evidence, sendErr = notification.SendSMSWithEvidence(ctx, smsRuntime, *job)
+				for i := 0; i < 10; i++ {
+					job, claimErr := db.ClaimEmailJob(ctx)
+					if errors.Is(claimErr, pgx.ErrNoRows) {
+						break
+					}
+					if claimErr != nil {
+						log.Error("email claim failed", "error", claimErr)
+						break
+					}
+					jobCtx := workerJobContext(ctx, job.CorrelationID)
+					log := correlation.Logger(jobCtx, baseLog).With("job_id", job.ID, "attempts", job.Attempts, "attempt_id", correlation.NewID(), "queue", "email")
+					store.WorkerRuntimeProgress(ctx)
+					log.Info("job attempt started")
+					active, checkErr := db.EmailJobActive(jobCtx, *job)
+					if checkErr != nil || !active {
+						_ = db.RecoverStaleEmailJobs(ctx)
+						continue
+					}
+					implementation, mailConfig, resolveErr := db.ResolveMailConfigForInstance(jobCtx, job.ChannelInstanceID, smtpFallback)
+					var sendErr error
+					if resolveErr != nil {
+						sendErr = resolveErr
+					} else {
+						sendErr = notification.SendMail(implementation, mailConfig, *job)
+					}
+					if completeErr := db.CompleteEmailJob(jobCtx, *job, sendErr); completeErr != nil {
+						log.Error("email completion failed", "error", completeErr)
+					}
+					if sendErr != nil {
+						log.Error("email delivery failed", "error", sendErr)
+					}
 				}
-				// Keep the response durable before marking this attempt complete.
-				if evidenceErr := db.SaveSMSDeliveryEvidence(ctx, *job, evidence); evidenceErr != nil {
-					log.Error("SMS evidence persistence failed", "job_id", job.ID)
-					continue
+				if err = db.RecoverStaleProvisionJobs(ctx); err != nil {
+					log.Error("stale job recovery failed", "error", err)
+					return
 				}
-				if completeErr := db.CompleteSMSJob(ctx, *job, sendErr); completeErr != nil {
-					log.Error("SMS completion failed", "job_id", job.ID)
+				if _, err = scheduled.Run(ctx, scheduler.SupplierSyncSchedule); err != nil {
+					log.Error("periodic supplier sync enqueue failed", "error", err)
 				}
-				if sendErr != nil {
-					log.Error("SMS delivery failed", "job_id", job.ID, "attempts", job.Attempts)
+				for i := 0; i < 20; i++ {
+					job, claimErr := db.ClaimProvisionJob(ctx)
+					if errors.Is(claimErr, pgx.ErrNoRows) {
+						break
+					}
+					if claimErr != nil {
+						log.Error("job claim failed", "error", claimErr)
+						break
+					}
+					jobCtx := workerJobContext(ctx, job.CorrelationID)
+					log := correlation.Logger(jobCtx, baseLog).With("job_id", job.ID, "attempts", job.Attempts, "attempt_id", correlation.NewID(), "queue", "provision")
+					store.WorkerRuntimeProgress(ctx)
+					log.Info("job attempt started", "action", job.Action)
+					if processErr := db.ProcessProvisionJob(jobCtx, *job); processErr != nil {
+						log.Error("provision job failed", "service_id", job.ServiceID, "action", job.Action, "error", processErr)
+					}
 				}
-			}
-			if err = db.RecoverStaleEmailJobs(ctx); err != nil {
-				log.Error("stale email recovery failed", "error", err)
-			}
-			for i := 0; i < 10; i++ {
-				job, claimErr := db.ClaimEmailJob(ctx)
-				if errors.Is(claimErr, pgx.ErrNoRows) {
-					break
-				}
-				if claimErr != nil {
-					log.Error("email claim failed", "error", claimErr)
-					break
-				}
-				active, checkErr := db.EmailJobActive(ctx, *job)
-				if checkErr != nil || !active {
-					_ = db.RecoverStaleEmailJobs(ctx)
-					continue
-				}
-				implementation, mailConfig, resolveErr := db.ResolveMailConfigForInstance(ctx, job.ChannelInstanceID, smtpFallback)
-				var sendErr error
-				if resolveErr != nil {
-					sendErr = resolveErr
-				} else {
-					sendErr = notification.SendMail(implementation, mailConfig, *job)
-				}
-				if completeErr := db.CompleteEmailJob(ctx, *job, sendErr); completeErr != nil {
-					log.Error("email completion failed", "job_id", job.ID, "error", completeErr)
-				}
-				if sendErr != nil {
-					log.Error("email delivery failed", "job_id", job.ID, "attempts", job.Attempts, "error", sendErr)
-				}
-			}
-			if err = db.RecoverStaleProvisionJobs(ctx); err != nil {
-				log.Error("stale job recovery failed", "error", err)
-				continue
-			}
-			if _, err = scheduled.Run(ctx, scheduler.SupplierSyncSchedule); err != nil {
-				log.Error("periodic supplier sync enqueue failed", "error", err)
-			}
-			for i := 0; i < 20; i++ {
-				job, claimErr := db.ClaimProvisionJob(ctx)
-				if errors.Is(claimErr, pgx.ErrNoRows) {
-					break
-				}
-				if claimErr != nil {
-					log.Error("job claim failed", "error", claimErr)
-					break
-				}
-				if processErr := db.ProcessProvisionJob(ctx, *job); processErr != nil {
-					log.Error("provision job failed", "job_id", job.ID, "service_id", job.ServiceID, "action", job.Action, "error", processErr)
-				}
-			}
+			})
 		}
 	}
 }

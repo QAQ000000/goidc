@@ -91,8 +91,8 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instance
  'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM invoices i),
  'payments',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM payment_transactions p),
  'webhooks',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM payment_webhook_events e),
- 'email_outbox',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM email_outbox e),
- 'sms_outbox',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM sms_outbox s),
+ 'email_outbox',(SELECT jsonb_agg(to_jsonb(e)-'correlation_id' ORDER BY id) FROM email_outbox e),
+ 'sms_outbox',(SELECT jsonb_agg(to_jsonb(s)-'correlation_id' ORDER BY id) FROM sms_outbox s),
  'legacy_delivery_events',(SELECT jsonb_agg(to_jsonb(e)-'resource_due_at' ORDER BY id) FROM notification_delivery_events e)
  )`
 	if current {
@@ -100,8 +100,8 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instance
  'migrations',(SELECT jsonb_agg(to_jsonb(m) ORDER BY version) FROM schema_migrations m),
  'routes',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM notification_routes r),
  'templates',(SELECT jsonb_agg(to_jsonb(m) ORDER BY id) FROM notification_message_templates m),
- 'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM notification_events e),
- 'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d),
+ 'events',(SELECT jsonb_agg(to_jsonb(e)-'correlation_id' ORDER BY id) FROM notification_events e),
+ 'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id'-'correlation_id' ORDER BY id) FROM notification_deliveries d),
  'preferences',(SELECT jsonb_agg(to_jsonb(p) ORDER BY user_id,channel) FROM user_notification_preferences p))`
 	}
 	var snapshot string
@@ -487,7 +487,7 @@ func TestNotificationLifecycleUpgradeFrom162(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before string
-	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&before); err != nil {
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id'-'correlation_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Migrate(ctx); err != nil {
@@ -496,7 +496,7 @@ func TestNotificationLifecycleUpgradeFrom162(t *testing.T) {
 	var after, scope string
 	var enabled bool
 	var version, enabledRoutes, events int
-	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&after); err != nil || before != after {
+	if err := db.Pool.QueryRow(ctx, `SELECT jsonb_build_object('route',(SELECT to_jsonb(r) FROM notification_routes r WHERE id='invoice-paid-inbox'),'template',(SELECT to_jsonb(m) FROM notification_message_templates m WHERE id='invoice-paid-inbox'),'deliveries',(SELECT jsonb_agg(to_jsonb(d)-'push_subscription_id'-'correlation_id' ORDER BY id) FROM notification_deliveries d))::text`).Scan(&after); err != nil || before != after {
 		t.Fatal("lifecycle migration altered existing route, template or pending delivery", err)
 	}
 	if err := db.Pool.QueryRow(ctx, `SELECT event_scope,enabled,version FROM user_notification_preferences WHERE user_id=$1 AND channel='inbox'`, customer).Scan(&scope, &enabled, &version); err != nil || scope != "invoice.paid" || !enabled || version != 4 {

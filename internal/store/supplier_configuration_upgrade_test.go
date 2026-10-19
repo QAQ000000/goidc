@@ -80,7 +80,7 @@ func TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity(t *testing.T) 
  'bindings',(SELECT jsonb_agg(to_jsonb(b) ORDER BY id) FROM supplier_product_bindings b),
  'products',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM products p),
  'services',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM services s),
- 'jobs',(SELECT jsonb_agg(to_jsonb(j)-'cancellation_request_id' ORDER BY id) FROM provision_jobs j),
+ 'jobs',(SELECT jsonb_agg(to_jsonb(j)-'cancellation_request_id'-'correlation_id' ORDER BY id) FROM provision_jobs j),
  'orders',(SELECT jsonb_agg(to_jsonb(o) ORDER BY id) FROM orders o),
  'items',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM order_items i),
  'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM invoices i),

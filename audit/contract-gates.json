@@ -434,6 +434,47 @@
         "required": true,
         "kind": "isolated-pg-and-json-report-response"
       }
+    },
+    {
+      "id": "runtime-observability",
+      "contract": "docs/architecture/runtime-observability.md",
+      "implementation": [
+        "internal/correlation",
+        "internal/store/correlation.go",
+        "internal/store/worker_runtime.go",
+        "internal/store/worker_runtime_queues.go",
+        "internal/httpapi/request_correlation.go",
+        "internal/httpapi/worker_runtime.go",
+        "cmd/worker/runtime.go",
+        "db/migrations/177_request_correlation.sql",
+        "db/migrations/178_worker_runtime.sql",
+        "web/src/components/worker-runtime.tsx",
+        "web/src/lib/api.ts"
+      ],
+      "tests": [
+        "node scripts/test-runtime-observability.mjs --unit",
+        "node scripts/test-runtime-observability.mjs --integration",
+        "node --test scripts/runtime-observability-components.test.mjs scripts/proxy-headers.test.mjs"
+      ],
+      "evaluation": [
+        "isolated PG18 exact required run/pass without missing or skipped tests; lease reuse and canceled/concurrent correlation isolation, persisted async origins, real schema176 preservation",
+        "read-only queue windows and distinct readiness, startup grace, stall and multiworker assessment; real idle worker minute polls and TERM stop using owned child and random schema",
+        "component and actual Next rewrite fixtures; real browser, remote CI, production network overhead and external monitoring are separate"
+      ],
+      "review": {
+        "required": true,
+        "owners": [
+          "store",
+          "worker",
+          "httpapi",
+          "web",
+          "release"
+        ]
+      },
+      "releaseEvidence": {
+        "required": true,
+        "kind": "isolated-pg-and-worker-progress"
+      }
     }
   ]
 }

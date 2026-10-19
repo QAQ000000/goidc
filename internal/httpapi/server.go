@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/config"
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -66,6 +67,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerNotificationCenterRoutes(mux)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { write(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /readyz", s.ready)
+	mux.HandleFunc("GET /api/v1/admin/runtime", s.auth(s.workerRuntime, true))
 	mux.HandleFunc("POST /api/host/sync", s.supplierHostSync)
 	mux.HandleFunc("POST /api/v1/host/sync", s.supplierHostSync)
 	mux.HandleFunc("POST /api/v1/auth/login", s.login)
@@ -652,7 +654,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/ticket-reply-presets/{id}", s.auth(s.updateTicketReplyPreset, true))
 	mux.HandleFunc("DELETE /api/v1/admin/ticket-reply-presets/{id}", s.auth(s.deleteTicketReplyPreset, true))
 	mux.HandleFunc("GET /api/v1/admin/audit", s.auth(s.auditEvents, true))
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return s.correlateRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")
 		isWebhook := r.Method == "POST" && ((strings.HasPrefix(r.URL.Path, "/api/v1/payments/") && strings.HasSuffix(r.URL.Path, "/webhook")) || r.URL.Path == "/api/host/sync" || r.URL.Path == "/api/v1/host/sync" || notificationWebhookPath(r.URL.Path))
@@ -666,16 +668,10 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
-		defer func() {
-			if v := recover(); v != nil {
-				s.log.Error("request panic", "path", r.URL.Path, "panic", v)
-				writeError(w, 500, "internal_error", "请求处理失败")
-			}
-		}()
 		if s.maintenanceAllowed(w, r) {
 			mux.ServeHTTP(w, r)
 		}
-	})
+	}))
 }
 
 func (s *Server) originAllowed(origin string) bool {
@@ -703,22 +699,17 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 			writeError(w, http.StatusForbidden, "session_required", "该操作需要浏览器会话")
 			return
 		}
-		var id identity
+		var resolved store.HTTPIdentity
 		var err error
 		if bearer != "" {
-			err = s.db.Pool.QueryRow(r.Context(), `SELECT u.id,u.username,u.email,u.display_name,u.role FROM api_keys k JOIN users u ON u.id=k.user_id
- WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()) AND u.status='active'`, tokenHash(bearer)).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
-			if err == nil {
-				_, _ = s.db.Pool.Exec(r.Context(), "UPDATE api_keys SET last_used_at=now() WHERE secret_hash=$1", tokenHash(bearer))
-			}
+			resolved, err = s.db.APIKeyIdentity(r.Context(), tokenHash(bearer))
 		} else {
 			cookie, cookieErr := r.Cookie("zjmfgo_session")
 			if cookieErr != nil {
 				writeError(w, 401, "unauthorized", "请先登录")
 				return
 			}
-			err = s.db.Pool.QueryRow(r.Context(), `SELECT u.id,u.username,u.email,u.display_name,u.role FROM sessions s JOIN users u ON u.id=s.user_id
- WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+			resolved, err = s.db.SessionIdentity(r.Context(), tokenHash(cookie.Value))
 		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, 401, "unauthorized", "登录已失效")
@@ -728,10 +719,11 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 			s.fail(w, r, err)
 			return
 		}
+		id := identity{ID: resolved.ID, Username: resolved.Username, Email: resolved.Email, Name: resolved.Name, Role: resolved.Role}
 		if bearer != "" && id.Role == "customer" {
-			var enabled bool
-			if err = s.db.Pool.QueryRow(r.Context(), "SELECT enabled FROM resource_api_settings WHERE id=1").Scan(&enabled); err != nil {
-				s.fail(w, r, err)
+			enabled, enabledErr := s.db.CustomerResourceAPIEnabled(r.Context())
+			if enabledErr != nil {
+				s.fail(w, r, enabledErr)
 				return
 			}
 			if !enabled {
@@ -780,8 +772,12 @@ func (s *Server) authWith(next http.HandlerFunc, admin, sessionOnly bool) http.H
 		// blacklists, so audit trails name the real client behind a reverse
 		// proxy instead of the loopback hop.
 		remoteIP := net.ParseIP(s.clientIP(r))
-		_, _ = s.db.Pool.Exec(r.Context(), `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip)
-VALUES($1,$2,$3,$4,$5,$6)`, id.ID, r.Method, r.URL.Path, recorder.status, time.Since(started).Milliseconds(), remoteIP)
+		logCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+		defer cancel()
+		_ = s.db.RecordAPIAccess(logCtx, store.APIAccessRecord{
+			ActorID: id.ID, Method: r.Method, Path: r.URL.Path, StatusCode: recorder.status,
+			DurationMillis: time.Since(started).Milliseconds(), RemoteIP: remoteIP,
+		})
 	}
 }
 
@@ -790,6 +786,8 @@ type apiLogResponseWriter struct {
 	status      int
 	wroteHeader bool
 }
+
+func (w *apiLogResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *apiLogResponseWriter) WriteHeader(status int) {
 	if w.wroteHeader {
@@ -829,6 +827,9 @@ func writeErrorDetails(w http.ResponseWriter, status int, code, message string, 
 	errorBody := map[string]any{"code": code, "message": message}
 	for key, value := range details {
 		errorBody[key] = value
+	}
+	if id := w.Header().Get("X-Request-ID"); id != "" {
+		errorBody["correlation_id"] = id
 	}
 	json.NewEncoder(w).Encode(map[string]any{"error": errorBody})
 }
@@ -894,7 +895,15 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 		writeError(w, 409, "constraint_conflict", "记录重复或关联数据无效")
 		return
 	}
-	s.log.Error("request failed", "method", r.Method, "path", r.URL.Path, "error", err)
+	code := "internal_error"
+	if errors.As(err, &pg) {
+		code = pg.Code
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		code = "deadline_exceeded"
+	} else if errors.Is(err, context.Canceled) {
+		code = "context_cancelled"
+	}
+	correlation.Logger(r.Context(), s.log).Error("request failed", "method", r.Method, "route", requestRoute(r), "error_code", code)
 	writeError(w, 500, "internal_error", "请求处理失败")
 }
 func pathID(w http.ResponseWriter, r *http.Request) (int64, bool) {

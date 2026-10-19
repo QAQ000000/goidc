@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/codex/zjmfgo/internal/scheduler"
 )
 
@@ -19,6 +20,7 @@ func (s *Store) RunScheduled(ctx context.Context, log *slog.Logger, key string, 
 }
 
 func (s *Store) runScheduled(ctx context.Context, log *slog.Logger, key string, fullPass bool, run func(context.Context) (int, error)) (int, error) {
+	log = correlation.Logger(ctx, log)
 	var id int64
 	if err := s.Pool.QueryRow(ctx, "INSERT INTO scheduler_runs(task_key,is_full_pass) VALUES($1,$2) RETURNING id", key, fullPass).Scan(&id); err != nil {
 		log.Error("scheduler audit start failed", "task_key", key, "error_code", "audit_write_failed")

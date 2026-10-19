@@ -15,10 +15,11 @@ import (
 )
 
 type ProvisionJob struct {
-	ID        int64
-	ServiceID int64
-	Action    string
-	Attempts  int
+	ID            int64
+	CorrelationID string
+	ServiceID     int64
+	Action        string
+	Attempts      int
 }
 
 type ServiceActionResult struct {
@@ -628,7 +629,7 @@ ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
 )
 UPDATE provision_jobs j SET status='running',attempts=j.attempts+1,locked_at=now(),updated_at=now()
 FROM candidate c WHERE j.id=c.id
-RETURNING j.id,j.service_id,j.action,j.attempts`).Scan(&job.ID, &job.ServiceID, &job.Action, &job.Attempts)
+RETURNING j.id,j.service_id,j.action,j.attempts,coalesce(j.correlation_id,'')`).Scan(&job.ID, &job.ServiceID, &job.Action, &job.Attempts, &job.CorrelationID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgx.ErrNoRows
 	}

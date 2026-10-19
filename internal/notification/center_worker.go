@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/codex/zjmfgo/internal/module"
 	"github.com/codex/zjmfgo/internal/notify"
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,7 @@ type NotificationCenterStore interface {
 
 // DrainNotificationCenter performs one bounded pass. Inbox deliveries are
 // handled atomically by the store claim transaction and never reach adapters.
-func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, limit int) (int, error) {
+func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, limit int, logs ...*slog.Logger) (int, error) {
 	if limit < 1 || limit > 100 {
 		limit = 10
 	}
@@ -43,13 +44,25 @@ func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, li
 		if err != nil || job == nil {
 			return completed, errors.New("notification claim failed")
 		}
-		active, err := db.NotificationJobActive(ctx, *job)
+		jobCtx := correlation.JobContext(ctx, job.CorrelationID)
+		var jobLog *slog.Logger
+		if len(logs) > 0 && logs[0] != nil {
+			jobLog = correlation.Logger(jobCtx, logs[0]).With("job_id", job.ID, "attempt_id", correlation.NewID(), "channel", job.Channel)
+			jobLog.Info("notification job attempt started")
+		}
+		failure := func(code string) error {
+			if jobLog != nil {
+				jobLog.Error("notification job attempt failed", "code", code)
+			}
+			return errors.New(code)
+		}
+		active, err := db.NotificationJobActive(jobCtx, *job)
 		if err != nil {
-			return completed, errors.New("notification lease check failed")
+			return completed, failure("notification lease check failed")
 		}
 		if !active {
-			if err = db.CompleteNotificationJob(ctx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
-				return completed, errors.New("notification completion failed")
+			if err = db.CompleteNotificationJob(jobCtx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
+				return completed, failure("notification completion failed")
 			}
 			completed++
 			continue
@@ -66,7 +79,7 @@ func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, li
 			category = channel.Push
 		}
 		if category != "" {
-			config, implementation, resolveErr := db.RuntimeChannelInstance(ctx, job.InstanceID, category)
+			config, implementation, resolveErr := db.RuntimeChannelInstance(jobCtx, job.InstanceID, category)
 			if resolveErr == nil {
 				switch category {
 				case channel.Bot:
@@ -78,26 +91,26 @@ func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, li
 		}
 		if provider != nil {
 			// Check again after resolving credentials, before any external write.
-			active, err = db.NotificationJobActive(ctx, *job)
+			active, err = db.NotificationJobActive(jobCtx, *job)
 			if err != nil {
-				return completed, errors.New("notification lease check failed")
+				return completed, failure("notification lease check failed")
 			}
 			if !active {
-				if err = db.CompleteNotificationJob(ctx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
-					return completed, errors.New("notification completion failed")
+				if err = db.CompleteNotificationJob(jobCtx, *job, notify.Result{Outcome: "failed", Code: "eligibility_changed"}); err != nil {
+					return completed, failure("notification completion failed")
 				}
 				completed++
 				continue
 			}
-			if ctx.Err() != nil {
-				return completed, errors.New("notification worker interrupted")
+			if jobCtx.Err() != nil {
+				return completed, failure("notification worker interrupted")
 			}
-			result = provider.Send(ctx, *job)
+			result = provider.Send(jobCtx, *job)
 		}
-		if err = db.CompleteNotificationJob(ctx, *job, result); err != nil {
+		if err = db.CompleteNotificationJob(jobCtx, *job, result); err != nil {
 			// After an external result, never resend on persistence failure. Its
 			// lease remains processing and later recovery records unknown.
-			return completed, errors.New("notification completion failed")
+			return completed, failure("notification completion failed")
 		}
 		completed++
 	}
@@ -106,14 +119,21 @@ func DrainNotificationCenter(ctx context.Context, db NotificationCenterStore, li
 
 // RunNotificationCenter owns its own polling goroutine in cmd/worker so slow
 // Bot requests cannot delay provisioning, verification, or legacy delivery.
-func RunNotificationCenter(ctx context.Context, db NotificationCenterStore, log *slog.Logger) {
+func RunNotificationCenter(ctx context.Context, db NotificationCenterStore, log *slog.Logger, observers ...func(bool)) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 	for {
-		if _, err := DrainNotificationCenter(ctx, db, 10); err != nil && ctx.Err() == nil && log != nil {
-			// All drain errors are fixed local codes; no transport URL/body is logged.
-			log.Error("notification center processing failed", "code", err.Error())
-		}
+		func() {
+			for _, observe := range observers {
+				observe(true)
+				defer observe(false)
+			}
+			passCtx := correlation.WithID(ctx, correlation.NewID())
+			if _, err := DrainNotificationCenter(passCtx, db, 10, log); err != nil && ctx.Err() == nil && log != nil {
+				// All drain errors are fixed local codes; no transport URL/body is logged.
+				correlation.Logger(passCtx, log).Error("notification center processing failed", "code", err.Error())
+			}
+		}()
 		select {
 		case <-ctx.Done():
 			return

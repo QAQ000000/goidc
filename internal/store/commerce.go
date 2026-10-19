@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -139,6 +140,13 @@ func Audit(ctx context.Context, tx pgx.Tx, actor int64, action, entity string, i
 	if actor > 0 {
 		actorValue = actor
 	}
-	_, err = tx.Exec(ctx, "INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload) VALUES($1,$2,$3,$4,$5)", actorValue, action, entity, fmt.Sprint(id), b)
+	if correlation.ID(ctx) == "" {
+		// Preserve the original writer for genuine predecessor-schema fixtures.
+		// On the current schema the lease-scoped DEFAULT still records an
+		// origin inherited from the transaction's acquisition context.
+		_, err = tx.Exec(ctx, "INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload) VALUES($1,$2,$3,$4,$5)", actorValue, action, entity, fmt.Sprint(id), b)
+	} else {
+		_, err = tx.Exec(ctx, "INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload,correlation_id) VALUES($1,$2,$3,$4,$5,$6)", actorValue, action, entity, fmt.Sprint(id), b, correlation.ID(ctx))
+	}
 	return err
 }

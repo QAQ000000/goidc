@@ -80,7 +80,7 @@ func (s *Store) claimNotificationJobTx(ctx context.Context, tx pgx.Tx) (*notify.
 	var userID int64
 	var attempts int
 	var eligible bool
-	err := tx.QueryRow(ctx, `SELECT d.id,d.channel,coalesce(d.instance_id,''),d.target,d.subject,d.body,d.expires_at,e.user_id,d.attempts,`+notificationEligible+` FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id WHERE d.status='pending' AND d.channel IN ('telegram','inbox','web_push') AND d.next_attempt_at<=clock_timestamp() ORDER BY d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&job.ID, &job.Channel, &job.InstanceID, &job.Target, &job.Subject, &job.Body, &job.ExpiresAt, &userID, &attempts, &eligible)
+	err := tx.QueryRow(ctx, `SELECT d.id,d.channel,coalesce(d.instance_id,''),d.target,d.subject,d.body,d.expires_at,e.user_id,d.attempts,`+notificationEligible+`,coalesce(d.correlation_id,'') FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id WHERE d.status='pending' AND d.channel IN ('telegram','inbox','web_push') AND d.next_attempt_at<=clock_timestamp() ORDER BY d.id FOR UPDATE OF d SKIP LOCKED LIMIT 1`).Scan(&job.ID, &job.Channel, &job.InstanceID, &job.Target, &job.Subject, &job.Body, &job.ExpiresAt, &userID, &attempts, &eligible, &job.CorrelationID)
 	if err != nil {
 		return nil, err
 	}

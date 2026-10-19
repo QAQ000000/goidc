@@ -111,6 +111,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/system/database"] = "settings.view"
 	m["GET /api/v1/admin/system/upgrade"] = "settings.view"
 	m["GET /api/v1/admin/jobs"] = "jobs.view"
+	m["GET /api/v1/admin/runtime"] = "@super"
 	m["GET /api/v1/admin/scheduler-settings"] = "@super"
 	m["PUT /api/v1/admin/scheduler-settings"] = "@super"
 	m["GET /api/v1/admin/jobs/queue"] = "jobs.view"

@@ -165,6 +165,7 @@ ORDER BY id LIMIT $1`, pageSize, cutoff, cursor, upperID)
 			if err := ctx.Err(); err != nil {
 				return processed, errors.Join(persistenceErr, err)
 			}
+			WorkerRuntimeProgress(ctx)
 			cursor = item.id
 			attempt, cancel := context.WithTimeout(ctx, 30*time.Second)
 			paid, message := s.attemptAutoRenewal(attempt, item)

@@ -36,6 +36,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		return nil, err
 	}
 	cfg.MaxConns = 10
+	ConfigurePoolCorrelation(cfg)
 	p, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, err

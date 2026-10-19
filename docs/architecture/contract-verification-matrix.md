@@ -28,7 +28,7 @@
 | 前端与 API | 加载、空、错误、冲突、响应式和错误码是否可见且一致？业务文件下载是否保留同源认证、错误语义、失效响应检查及临时资源清理？ | `npm --prefix web run lint`、`typecheck`、`test:proxy`、组件测试、`node --test scripts/download.test.mjs`；数据报表不再承担文件下载 | lint/typecheck 与 DOM/fetch 夹具不等于浏览器或真实 API 验收 |
 | 站点主题 | 匿名接口是否只公开展示字段？保存后 SSR/客户端能否消费？亮色主色可读、页脚转义和后台隔离是否保持？ | [主题契约](../admin-configuration.md#官网主题)、`TestSiteContentVersionedCRUDAndPermissions`、`TestSiteThemeValidationPermissionsAndReplay`、`node --test scripts/site-theme.test.mjs` | API 写入和权限使用隔离 PG18；渲染夹具不代替实际浏览器视觉/Portal/刷新验证 |
 | 内部调度 | 任务目录、API 筛选与页面名称是否一致？既有循环频率和顺序是否保留？审计失败会否重跑？日续费是否保留锁和全量完成标记？ | [调度契约](scheduler.md)、`scripts/test-scheduler.mjs --unit` / `--integration`、调度组件测试 | 必需 run/pass 零 skip；独立 PG18 和组件夹具不代表真实 worker 进程、浏览器或生产调度 |
-| worker 与容量 | 强杀、重启、队列、锁、延迟和资源预算是否有边界？ | `./scripts/test-worker-recovery.sh`、[容量验证](../capacity.md) | 只读负载不能证明支付、写入或生产容量 |
+| worker 与追踪 | 请求错误、审计与异步重试能否按来源串联？worker 缺失是否保留 API 启动语义？真实循环是否暴露卡住、未来任务与近期失败？ | [运行诊断契约](runtime-observability.md)、`scripts/test-runtime-observability.mjs --unit` / `--integration`、运行诊断组件与代理测试；`./scripts/test-worker-recovery.sh`、[容量验证](../capacity.md) | 强制独立 PG18、零 skip，真实闲置 worker 分钟轮询与 TERM 验证；时间加速与组件不证明真实告警耗时、浏览器、生产网络开销或支付容量 |
 
 ## 证据记录模板
 

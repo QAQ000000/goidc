@@ -46,6 +46,7 @@ func isolatedTestStore(t *testing.T) *Store {
 	}
 	scoped := cfg.Copy()
 	scoped.ConnConfig.RuntimeParams["search_path"] = schema
+	ConfigurePoolCorrelation(scoped)
 	pool, err := pgxpool.NewWithConfig(ctx, scoped)
 	if err != nil {
 		base.Close()

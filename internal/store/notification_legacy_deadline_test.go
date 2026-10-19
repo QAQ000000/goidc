@@ -381,8 +381,8 @@ func TestNotificationLegacyDeadlineUpgrade172PreservesFacts(t *testing.T) {
  'services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM services x),
  'ledger',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM balance_ledger x),
  'events',(SELECT jsonb_agg(to_jsonb(x)-'resource_due_at' ORDER BY id) FROM notification_delivery_events x),
- 'mail',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM email_outbox x WHERE status='sent' OR kind='system'),
- 'sms',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM sms_outbox x WHERE status='sent' OR kind='system'))::text`).Scan(&out); err != nil {
+ 'mail',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM email_outbox x WHERE status='sent' OR kind='system'),
+ 'sms',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM sms_outbox x WHERE status='sent' OR kind='system'))::text`).Scan(&out); err != nil {
 			t.Fatal(err)
 		}
 		return out

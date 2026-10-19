@@ -58,7 +58,7 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
   const columns = useMemo(() => {
     if (kind === "sms") return [["id", "ID"], ["created_at", "时间"], ["content", "短信内容"], ["username", "用户名"], ["recipient", "电话"], ["status", "是否成功"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
     if (kind === "inbox") return [["created_at", "发送时间"], ["subject", "标题"], ["username", "用户"], ["status", "状态"]];
-    if (kind === "api") return [["id", "ID"], ["created_at", "时间"], ["path", "描述"], ["username", "用户名"], ["remote_ip", "IP"]];
+    if (kind === "api") return [["id", "ID"], ["created_at", "时间"], ["path", "描述"], ["username", "用户名"], ["status_code", "状态码"], ["correlation_id", "关联编号"], ["remote_ip", "IP"]];
     return [["id", "ID"], ["created_at", "时间"], ["subject", "主题"], ["recipient", "收件人"], ["success", "是否成功"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
   }, [kind]);
 
@@ -89,6 +89,7 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
       <div className="flex flex-wrap items-end gap-3 rounded border bg-card p-4">
         <label className="min-w-[180px] flex-1 text-sm">关键词<Input aria-label="关键词" placeholder="高级搜索" value={params?.get("q") ?? ""} onChange={e => change("q", e.target.value)} /></label>
         {kind !== "api" && <label className="min-w-[140px] text-sm">状态<select aria-label="状态" className="mt-1 h-9 w-full rounded border bg-background px-2 text-sm" value={params?.get("status") ?? ""} onChange={e => change("status", e.target.value)}><option value="">全部状态</option>{(kind === "inbox" ? ["sent", "read", "failed"] : ["pending", "sending", "sent", "expired", "dead_letter"]).map(s => <option key={s} value={s}>{labels[s]}</option>)}</select></label>}
+        {kind === "api" && <label className="min-w-[220px] text-sm">关联编号<Input aria-label="关联编号" placeholder="完整错误编号" maxLength={32} value={params?.get("correlation_id") ?? ""} onChange={e => change("correlation_id", e.target.value)} /></label>}
         {kind === "api" && <label className="min-w-[120px] text-sm">方法<select aria-label="方法" className="mt-1 h-9 w-full rounded border bg-background px-2 text-sm" value={params?.get("method") ?? ""} onChange={e => change("method", e.target.value)}><option value="">全部方法</option>{["GET", "POST", "PUT", "PATCH", "DELETE"].map(s => <option key={s}>{s}</option>)}</select></label>}
         {kind === "api" && <label className="w-24 text-sm">状态码<Input aria-label="状态码" inputMode="numeric" value={params?.get("status") ?? ""} onChange={e => change("status", e.target.value)} /></label>}
         {kind === "api" && <label className="min-w-[140px] text-sm">用户名<Input aria-label="用户名" value={params?.get("username") ?? ""} onChange={e => change("username", e.target.value)} /></label>}

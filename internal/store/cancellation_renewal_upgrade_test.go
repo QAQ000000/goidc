@@ -160,7 +160,7 @@ func TestCancellationRenewalUpgradeFrom168(t *testing.T) {
 			financial := cancellationUpgradeFinancialSnapshot(t, db)
 			var oldRequest, oldJob string
 			if err := db.Pool.QueryRow(t.Context(), `SELECT (SELECT to_jsonb(c)::text FROM service_cancellation_requests c WHERE id=$1),
-(SELECT to_jsonb(j)::text FROM provision_jobs j WHERE id=$2)`, f.request, f.job).Scan(&oldRequest, &oldJob); err != nil {
+(SELECT (to_jsonb(j)-'correlation_id')::text FROM provision_jobs j WHERE id=$2)`, f.request, f.job).Scan(&oldRequest, &oldJob); err != nil {
 				t.Fatal(err)
 			}
 			if err := db.Migrate(t.Context()); err != nil {
@@ -237,7 +237,7 @@ VALUES($1,$2,'immediate','Another pending cancellation','cancellation-upgrade-an
 			before := cancellationUpgradeFinancialSnapshot(t, db)
 			var oldRequests, oldJobs string
 			if err := db.Pool.QueryRow(t.Context(), `SELECT (SELECT jsonb_agg(to_jsonb(c) ORDER BY id)::text FROM service_cancellation_requests c),
-(SELECT jsonb_agg(to_jsonb(j) ORDER BY id)::text FROM provision_jobs j)`).Scan(&oldRequests, &oldJobs); err != nil {
+(SELECT jsonb_agg(to_jsonb(j)-'correlation_id' ORDER BY id)::text FROM provision_jobs j)`).Scan(&oldRequests, &oldJobs); err != nil {
 				t.Fatal(err)
 			}
 			err := db.Migrate(t.Context())
@@ -254,7 +254,7 @@ EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schem
  OR to_regprocedure('cancellation_renewal_payment_unresolved(bigint)') IS NOT NULL,
 (SELECT count(*) FROM audit_events WHERE action='service.cancellation.reopened_for_renewal'),
 (SELECT jsonb_agg(to_jsonb(c) ORDER BY id)::text FROM service_cancellation_requests c),
-(SELECT jsonb_agg(to_jsonb(j) ORDER BY id)::text FROM provision_jobs j)
+(SELECT jsonb_agg(to_jsonb(j)-'correlation_id' ORDER BY id)::text FROM provision_jobs j)
 FROM schema_migrations`).Scan(&boundary, &hasNewObjects, &auditCount, &requests, &jobs); err != nil {
 				t.Fatal(err)
 			}

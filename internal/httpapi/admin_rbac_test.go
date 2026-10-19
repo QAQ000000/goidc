@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +24,7 @@ func TestAdminRBACRouteCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	file, err := parser.ParseFile(token.NewFileSet(), "server.go", nil, 0)
+	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,38 +33,50 @@ func TestAdminRBACRouteCoverage(t *testing.T) {
 	for _, p := range store.AdminPermissions {
 		valid[p.Code] = true
 	}
-	ast.Inspect(file, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || len(call.Args) == 0 {
-			return true
+	// Route registration is split across the main handler and domain helpers.
+	// Inspect every production source file so the two-way permission coverage
+	// remains complete when registration moves out of server.go.
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
 		}
-		selector, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || selector.Sel.Name != "HandleFunc" {
-			return true
-		}
-		literal, ok := call.Args[0].(*ast.BasicLit)
-		if !ok {
-			return true
-		}
-		pattern, err := strconv.Unquote(literal.Value)
+		file, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(pattern, "/api/v1/admin/") {
+		ast.Inspect(file, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok || len(call.Args) == 0 {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != "HandleFunc" {
+				return true
+			}
+			literal, ok := call.Args[0].(*ast.BasicLit)
+			if !ok {
+				return true
+			}
+			pattern, err := strconv.Unquote(literal.Value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(pattern, "/api/v1/admin/") {
+				return true
+			}
+			seen[pattern] = true
+			permission, ok := adminRoutePermissions[pattern]
+			if !ok || !valid[permission] {
+				t.Fatalf("unclassified admin route %s", pattern)
+			}
+			method, path, _ := strings.Cut(pattern, " ")
+			for _, key := range []string{"id", "entity", "contact_id", "note_id"} {
+				path = strings.ReplaceAll(path, "{"+key+"}", "1")
+			}
+			expect(t, request(h, method, path, map[string]any{}, cookie, ""), http.StatusForbidden)
 			return true
-		}
-		seen[pattern] = true
-		permission, ok := adminRoutePermissions[pattern]
-		if !ok || !valid[permission] {
-			t.Fatalf("unclassified admin route %s", pattern)
-		}
-		method, path, _ := strings.Cut(pattern, " ")
-		for _, key := range []string{"id", "entity", "contact_id", "note_id"} {
-			path = strings.ReplaceAll(path, "{"+key+"}", "1")
-		}
-		expect(t, request(h, method, path, map[string]any{}, cookie, ""), http.StatusForbidden)
-		return true
-	})
+		})
+	}
 	for p := range adminRoutePermissions {
 		if !seen[p] {
 			t.Errorf("permission references unregistered route %s", p)

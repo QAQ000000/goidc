@@ -18,6 +18,7 @@ export function Failure({ error, retry }: { error: Error; retry: () => void }) {
   return (
     <div role="alert" className="py-12 text-center">
       <p className="mb-4 text-destructive">{error.message}</p>
+      {error instanceof ApiError && error.correlationId && error.status < 500 && <p className="mb-4 break-all text-xs text-muted-foreground">错误编号：{error.correlationId}</p>}
       {error instanceof ApiError && error.status === 401 ? (
         <Button asChild>
           <Link href="/login">登录账户</Link>

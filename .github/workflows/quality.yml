@@ -85,6 +85,7 @@ jobs:
           node scripts/test-compiled-suppliers.mjs --unit
           node scripts/test-file-storage.mjs --unit
           node scripts/test-scheduler.mjs --unit
+          node scripts/test-runtime-observability.mjs --unit
           node scripts/test-captcha.mjs --unit
 
       - name: Check actual API and worker module manifests without runtime configuration
@@ -105,6 +106,7 @@ jobs:
           node --test scripts/payment-reconciliation-components.test.mjs
           node --test scripts/supplier-components.test.mjs
           node --test scripts/scheduler-components.test.mjs
+          node --test scripts/runtime-observability-components.test.mjs
           node --test scripts/captcha-components.test.mjs
 
   compiled-notification-pg18:
@@ -196,6 +198,9 @@ jobs:
 
       - name: Require internal scheduler catalog, audit and business compatibility on PostgreSQL 18
         run: node scripts/test-scheduler.mjs --integration
+
+      - name: Require request correlation and worker diagnostics on PostgreSQL 18
+        run: node scripts/test-runtime-observability.mjs --integration
 
       - name: Remove the dedicated PostgreSQL container and its volumes
         if: always()

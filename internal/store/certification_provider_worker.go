@@ -11,6 +11,7 @@ import (
 
 	"github.com/codex/zjmfgo/internal/certification"
 	"github.com/codex/zjmfgo/internal/channel"
+	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/codex/zjmfgo/internal/module"
 	"github.com/jackc/pgx/v5"
 )
@@ -20,6 +21,7 @@ type certificationJob struct {
 	instanceVersion                                     int64
 	schemaVersion, queryAttempts                        int
 	provider, instanceID, kind, requestID, subject      string
+	correlationID                                       string
 	lease, action, payloadAAD, snapshotAAD              string
 	payload, snapshot                                   []byte
 	config                                              module.Config
@@ -29,11 +31,13 @@ type certificationJob struct {
 // ProcessCertificationJob makes at most one external call. A persisted submit
 // marker is never cleared: expiry, timeout and process death can only lead to
 // queries or manual verification, never an automatic second submission.
-func (s *Store) ProcessCertificationJob(ctx context.Context) (bool, error) {
+func (s *Store) ProcessCertificationJob(ctx context.Context) (processed bool, resultErr error) {
+	defer func() { resultErr = correlation.WrapError(ctx, resultErr) }()
 	job, processed, err := s.claimCertificationJob(ctx)
 	if err != nil || job == nil {
 		return processed, err
 	}
+	ctx = correlation.JobContext(ctx, job.correlationID)
 	provider, err := newCertificationProvider(job.provider, job.config)
 	if err != nil {
 		return true, s.certificationJobNeedsReview(ctx, *job, "provider_unavailable")
@@ -89,7 +93,8 @@ func callCertificationProvider(ctx context.Context, provider certification.Provi
 	return provider.Query(ctx, certification.Query{RequestID: job.requestID, ProviderSubject: job.subject})
 }
 
-func (s *Store) claimCertificationJob(ctx context.Context) (*certificationJob, bool, error) {
+func (s *Store) claimCertificationJob(ctx context.Context) (claimed *certificationJob, processed bool, resultErr error) {
+	defer func() { resultErr = correlation.WrapError(ctx, resultErr) }()
 	var candidate, profileID int64
 	var instanceID, providerID string
 	err := s.Pool.QueryRow(ctx, `SELECT j.id,sub.profile_id,sub.channel_instance_id,sub.provider_id FROM certification_provider_jobs j
@@ -125,13 +130,15 @@ func (s *Store) claimCertificationJob(ctx context.Context) (*certificationJob, b
 		err := tx.QueryRow(ctx, `SELECT j.id,j.status,j.submit_attempts,j.query_attempts,
  ((j.status IN ('queued','waiting','uncertain') AND j.next_run_at<=clock_timestamp()) OR (j.status IN ('submitting','querying') AND j.lease_until<=clock_timestamp())),
  sub.id,sub.profile_id,sub.user_id,sub.profile_version,sub.provider_id,sub.channel_instance_id,sub.channel_instance_version,sub.channel_schema_version,
- sub.certification_type,sub.request_id,sub.provider_subject,sub.payload_encrypted,sub.payload_aad,sub.config_snapshot_encrypted,sub.config_snapshot_aad
+ sub.certification_type,sub.request_id,sub.provider_subject,sub.payload_encrypted,sub.payload_aad,sub.config_snapshot_encrypted,sub.config_snapshot_aad,coalesce(j.correlation_id,'')
  FROM certification_provider_jobs j JOIN certification_submissions sub ON sub.id=j.submission_id WHERE j.id=$1 FOR UPDATE OF j`, candidate).Scan(
 			&job.id, &state, &submitAttempts, &job.queryAttempts, &due, &job.submissionID, &job.profileID, &job.userID, &job.profileVersion, &job.provider, &job.instanceID, &job.instanceVersion, &job.schemaVersion,
-			&job.kind, &job.requestID, &job.subject, &job.payload, &job.payloadAAD, &job.snapshot, &job.snapshotAAD)
+			&job.kind, &job.requestID, &job.subject, &job.payload, &job.payloadAAD, &job.snapshot, &job.snapshotAAD, &job.correlationID)
 		if err != nil {
 			return err
 		}
+		ctx = correlation.JobContext(ctx, job.correlationID)
+		job.correlationID = correlation.ID(ctx)
 		if !due {
 			return nil
 		}

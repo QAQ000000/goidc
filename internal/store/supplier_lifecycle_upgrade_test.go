@@ -87,7 +87,7 @@ func supplierLifecycleUpgradeFacts(t *testing.T, db *Store) string {
 'accounts',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM supplier_accounts x),
 'bindings',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM supplier_product_bindings x),
 'services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM services x),
-'jobs',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM provision_jobs x),
+'jobs',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM provision_jobs x),
 'orders',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM orders x),
 'items',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM order_items x),
 'users',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM users x),

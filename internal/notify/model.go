@@ -4,14 +4,15 @@ package notify
 import "time"
 
 type Job struct {
-	ID         int64
-	LeaseToken string
-	Channel    string
-	InstanceID string
-	Target     string
-	Body       string
-	Subject    string
-	ExpiresAt  time.Time
+	ID            int64
+	CorrelationID string
+	LeaseToken    string
+	Channel       string
+	InstanceID    string
+	Target        string
+	Body          string
+	Subject       string
+	ExpiresAt     time.Time
 	// PushSubscription is decrypted only for the active leased Web Push job.
 	// Endpoint and browser keys must never appear in logs or delivery metadata.
 	PushSubscription *PushSubscription

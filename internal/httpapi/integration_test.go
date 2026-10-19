@@ -64,6 +64,7 @@ func testServerConfig(t *testing.T, mutate func(*config.Config)) (*store.Store, 
 	}
 	scoped := cfg.Copy()
 	scoped.ConnConfig.RuntimeParams["search_path"] = schema
+	store.ConfigurePoolCorrelation(scoped)
 	pool, err := pgxpool.NewWithConfig(ctx, scoped)
 	if err != nil {
 		t.Fatal(err)

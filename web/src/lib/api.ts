@@ -6,9 +6,14 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public details: Record<string, unknown> = {},
+    public correlationId?: string,
   ) {
-    super(message);
+    super(correlationId && status >= 500 ? `${message}（错误编号：${correlationId}）` : message);
   }
+}
+function errorCorrelation(response: Response, body: { error?: Record<string, unknown> }): string | undefined {
+  const value = response.headers.get("X-Request-ID") ?? body.error?.correlation_id;
+  return typeof value === "string" && /^[a-f0-9]{32}$/.test(value) ? value : undefined;
 }
 function noticeMaintenance(code: string | undefined) {
   if (code === "site_maintenance" && typeof window !== "undefined") window.dispatchEvent(new Event("zjmfgo:maintenance"));
@@ -47,6 +52,7 @@ export async function api<T>(
       body.error?.code ?? "request_failed",
       body.error?.message ?? "请求失败，请稍后重试",
       body.error ?? {},
+      errorCorrelation(response, body),
     );
   }
   return body.data as T;
@@ -85,6 +91,8 @@ export async function upload<T>(path: string, form: FormData, method: "POST" | "
       response.status,
       body.error?.code ?? "request_failed",
       body.error?.message ?? "上传失败，请稍后重试",
+      body.error ?? {},
+      errorCorrelation(response, body),
     );
   }
   return body.data as T;
@@ -103,6 +111,8 @@ export async function download(path: string): Promise<Blob> {
       response.status,
       body.error?.code ?? "request_failed",
       body.error?.message ?? "下载失败，请稍后重试",
+      body.error ?? {},
+      errorCorrelation(response, body),
     );
   }
   return response.blob();
@@ -322,7 +332,7 @@ export async function fetchDownload(item: Pick<DownloadItem,"id"|"filename">, pa
   const response = await fetch(`/api/v1${path}`, { credentials:"same-origin",cache:"no-store",headers:{"X-Requested-With":"zjmfgo"} });
   if (!response.ok) {
     const body = await response.json().catch(() => ({})); noticeMaintenance(body.error?.code); noticeUnauthorized(path, response.status);
-    throw new ApiError(response.status,body.error?.code ?? "download_failed",body.error?.message ?? "下载失败");
+    throw new ApiError(response.status,body.error?.code ?? "download_failed",body.error?.message ?? "下载失败",body.error ?? {},errorCorrelation(response,body));
   }
   if (response.headers.get("Content-Type")?.includes("application/json")) {
     const body = await response.json(); const target = new URL(body.data.url);

@@ -249,6 +249,7 @@ func (s *Store) CollectFileObjects(ctx context.Context, limit int) (int, error) 
 	}
 	deleted := 0
 	for range limit {
+		WorkerRuntimeProgress(ctx)
 		claimCtx, cancelClaim := context.WithTimeout(ctx, 10*time.Second)
 		item, err := claimFileObject(claimCtx, journal)
 		cancelClaim()

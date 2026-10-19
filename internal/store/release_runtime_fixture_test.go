@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -146,6 +147,12 @@ func (f *releaseRuntimeFixture) cleanup(ctx context.Context) error {
 		return errors.New("fixture schema ownership invalid")
 	}
 	if _, err := f.base.Exec(ctx, "DROP SCHEMA "+pgx.Identifier{f.schema}.Sanitize()+" CASCADE"); err != nil {
+		// Preserve a safe diagnostic code without exposing connection details or
+		// server messages. Resource contention must not look like a worker leak.
+		var databaseError *pgconn.PgError
+		if errors.As(err, &databaseError) {
+			return fmt.Errorf("fixture owned schema cleanup failed (SQLSTATE %s)", databaseError.Code)
+		}
 		return errors.New("fixture owned schema cleanup failed")
 	}
 	var exists bool
