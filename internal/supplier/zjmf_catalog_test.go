@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -214,8 +215,7 @@ func TestSupplierRejectsLinkageAndUnsupportedPeriods(t *testing.T) {
 	for _, tc := range []struct{ extra, pricing, reason string }{
 		{`"advanced":{"1":[1]}`, `"monthly":"1.00"`, "advanced_configuration"},
 		{`"config_groups":[{"options":[{"id":8,"option_type":1,"linkage_pid":9,"sub":[{"id":10}]}]}]`, `"monthly":"1.00"`, "option_linkage_unsupported"},
-		{`"advanced":[]`, `"day":"1.00","semiannually":"2.00"`, "unsupported_cycle"},
-		{`"advanced":[]`, `"monthly":"1.00","semiannually":"2.00"`, "unsupported_cycle"},
+		{`"advanced":[]`, `"day":"1.00"`, "unsupported_cycle"},
 	} {
 		data := fmt.Sprintf(`{"products":{"id":7,"location_version":1,"pay_type":{"pay_type":"recurring"}},"product_pricings":[{"code":"CNY",%s}],%s}`, tc.pricing, tc.extra)
 		p, err := catalogFixture(t, data).Product(t.Context(), 7)
@@ -288,5 +288,77 @@ func TestSupplierQuantityIsSubmittedAsQuantity(t *testing.T) {
 	request.ConfigOptions = map[int64]string{8: "3"}
 	if _, err := a.Create(t.Context(), request); err == nil || !seen {
 		t.Fatal("cart request not checked", err, seen)
+	}
+}
+
+func TestSupplierCalendarCyclesAndExcludedOfferings(t *testing.T) {
+	row := map[string]any{"code": "CNY", "hour": "1.00", "day": "2.00", "ontrial": "1.00"}
+	for _, c := range supplierCycles {
+		if c.cycle != "once" {
+			row[c.amount] = "12.34"
+			row[c.setup] = "0.56"
+		}
+	}
+	detail := map[string]any{"products": map[string]any{"id": 7, "location_version": 1, "pay_type": map[string]any{"pay_type": "recurring", "pay_ontrial_status": "1"}}, "product_pricings": []any{row}, "config_groups": []any{map[string]any{"options": []any{map[string]any{"id": 8, "option_type": 1, "linkage_level": "0-192", "sub": []any{map[string]any{"id": 9, "pricings": []any{row}}}}}}}}
+	raw, _ := json.Marshal(detail)
+	p, err := catalogFixture(t, string(raw)).Product(t.Context(), 7)
+	if err != nil || !p.Supported || len(p.Prices) != 13 || len(p.ExcludedCycles) != 3 || len(p.Options) != 1 {
+		t.Fatal(p, err)
+	}
+	for _, c := range supplierCycles {
+		if c.cycle == "once" {
+			continue
+		}
+		price, err := SelectionPrice(p, c.cycle, map[int64]string{8: "9"}, nil)
+		if err != nil || price.AmountCents != 2468 || price.SetupCents != 112 {
+			t.Fatal(c, price, err)
+		}
+	}
+	for _, level := range []string{"", "0", "0-192", "0-20590"} {
+		if !rootLinkageLevel(level) {
+			t.Fatal("rejected root", level)
+		}
+	}
+	for _, level := range []string{"0-192-8", "1-8", "0-0", "0--1", "0-+1", "0-1.0", "0-99999999999999999999999"} {
+		option, reason := normalizeCatalogOption(catalogOption{ID: 8, Type: 1, LinkageLevel: json.RawMessage(strconv.Quote(level)), Sub: []catalogSub{{ID: 9}}}, p.Prices, 0)
+		if reason != "option_linkage_unsupported" {
+			t.Fatal(option, level, reason)
+		}
+	}
+	// Disabled calendar prices are not offered; trial-only products stay blocked.
+	onlyTrial := `{"products":{"id":7,"location_version":1,"pay_type":{"pay_type":"recurring","pay_ontrial_status":1}},"product_pricings":[{"code":"CNY","monthly":"-1.00","semiannually":"-1.00","ontrial":"1.00"}]}`
+	trial, err := catalogFixture(t, onlyTrial).Product(t.Context(), 7)
+	if err != nil || trial.Supported || len(trial.Prices) != 0 || len(trial.ExcludedCycles) != 1 {
+		t.Fatal(trial, err)
+	}
+}
+
+func TestSupplierVolumeQuantityUsesSelectedRateForAllUnits(t *testing.T) {
+	for _, percent := range []bool{false, true} {
+		t.Run(fmt.Sprint(percent), func(t *testing.T) {
+			product := `"id":7,"location_version":1,"pay_type":{"pay_type":"recurring"}`
+			if percent {
+				product += `,"api_type":"zjmf_api","upstream_pid":99,"upstream_price_type":"percent","upstream_price_value":"125.00"`
+			}
+			detail := `{"products":{` + product + `},"product_pricings":[{"code":"CNY","monthly":"0.00"}],"config_groups":[{"options":[{"id":8,"option_name":"IP","option_type":4,"qty_minimum":1,"qty_maximum":4,"sub":[{"id":9,"option_name":"IP","qty_minimum":1,"qty_maximum":1,"pricings":[{"code":"CNY","monthly":"11.00","msetupfee":"1.00"}]},{"id":10,"option_name":"IP","qty_minimum":2,"qty_maximum":4,"pricings":[{"code":"CNY","monthly":"16.00","msetupfee":"2.00"}]}]}]}]}`
+			p, err := catalogFixture(t, detail).Product(t.Context(), 7)
+			if err != nil || !p.Supported || p.Options[0].QuantityMode != "volume" || len(p.Options[0].Choices) != 1 {
+				t.Fatal(p, err)
+			}
+			for _, tc := range []struct{ qty, amount, setup int64 }{{1, 1100, 100}, {2, 3200, 200}, {4, 6400, 200}} {
+				amount, setup := tc.amount, tc.setup
+				if percent {
+					amount = amount * 125 / 100
+					setup = setup * 125 / 100
+				}
+				price, err := SelectionPrice(p, "monthly", map[int64]string{8: fmt.Sprint(tc.qty)}, nil)
+				if err != nil || price.AmountCents != amount || price.SetupCents != setup {
+					t.Fatal(tc, price, err)
+				}
+			}
+			if _, err := SelectionPrice(p, "monthly", map[int64]string{8: "5"}, nil); err == nil {
+				t.Fatal("out-of-range volume accepted")
+			}
+		})
 	}
 }

@@ -29,6 +29,8 @@ type supplierConfigurableFixture struct {
 	remote                             *httptest.Server
 	creates, pays, renews, renewalPays atomic.Int64
 	sourcePercent                      atomic.Bool
+	calendarCycles                     atomic.Bool
+	volumePricing                      atomic.Bool
 	mu                                 sync.Mutex
 	pending                            url.Values
 	resources                          map[int64]*supplierConfigurableResource
@@ -75,6 +77,38 @@ func supplierConfigurableSetupWithImport(t *testing.T, doImport bool) *supplierC
 		case "/cart/get_product_config":
 			pid, _ := strconv.ParseInt(r.URL.Query().Get("pid"), 10, 64)
 			detail := supplierConfigurableDetail(pid)
+			if f.calendarCycles.Load() {
+				extend := func(rows []map[string]any) {
+					row := rows[0]
+					for _, cycle := range supplier.BillingCycles() {
+						if cycle == "once" || cycle == "monthly" || cycle == "annually" {
+							continue
+						}
+						n, _ := strconv.ParseFloat(row["monthly"].(string), 64)
+						row[cycle] = fmt.Sprintf("%.2f", n*float64(supplier.BillingMonths(cycle)))
+						setupKey := map[string]string{"semiannually": "ssetupfee", "biennially": "bsetupfee", "triennially": "tsetupfee", "quarterly": "qsetupfee", "fourly": "foursetupfee", "fively": "fivesetupfee", "sixly": "sixsetupfee", "sevenly": "sevensetupfee", "eightly": "eightsetupfee", "ninely": "ninesetupfee", "tenly": "tensetupfee"}[cycle]
+						row[setupKey] = row["msetupfee"]
+					}
+				}
+				extend(detail["product_pricings"].([]map[string]any))
+				for _, g := range detail["config_groups"].([]map[string]any) {
+					for _, o := range g["options"].([]map[string]any) {
+						o["linkage_level"] = "0-192"
+						for _, c := range o["sub"].([]map[string]any) {
+							extend(c["pricings"].([]map[string]any))
+						}
+					}
+				}
+			}
+			if f.volumePricing.Load() {
+				groups := detail["config_groups"].([]map[string]any)
+				option := groups[0]["options"].([]map[string]any)[1]
+				option["option_type"], option["qty_minimum"], option["qty_maximum"] = 4, 1, 4
+				sub := option["sub"].([]map[string]any)[0]
+				sub["qty_minimum"], sub["qty_maximum"] = 1, 1
+				other := map[string]any{"id": 604, "option_name": "GB", "qty_minimum": 2, "qty_maximum": 4, "pricings": []map[string]any{{"code": "CNY", "monthly": "1.00", "annually": "10.00", "msetupfee": "0.80", "asetupfee": "0.80"}}}
+				option["sub"] = []map[string]any{sub, other}
+			}
 			if f.sourcePercent.Load() {
 				product := detail["products"].(map[string]any)
 				product["api_type"], product["upstream_pid"], product["upstream_price_type"], product["upstream_price_value"] = "zjmf_api", 99, "percent", "125.00"
@@ -125,15 +159,24 @@ func supplierConfigurableSetupWithImport(t *testing.T, doImport bool) *supplierC
 			if choice == "602" {
 				choiceCost, choiceSetup = 200, 30
 			}
-			if cycle == "annually" {
-				recurring *= 10
-				choiceCost *= 10
-				quantityCost *= 10
+			if f.volumePricing.Load() && qty >= 2 {
+				quantityCost = 100
 			}
+			factor := int64(supplier.BillingMonths(cycle))
+			if cycle == "annually" {
+				factor = 10
+			}
+			recurring *= factor
+			choiceCost *= factor
+			quantityCost *= factor
 			recurring += choiceCost + quantityCost*qty
 			setup += choiceSetup
 			if qty > 0 {
-				setup += 40
+				if f.volumePricing.Load() && qty >= 2 {
+					setup += 80
+				} else {
+					setup += 40
+				}
 			}
 			if f.sourcePercent.Load() {
 				// Exercise an invoice that rounds each configured total upward.
@@ -142,7 +185,7 @@ func supplierConfigurableSetupWithImport(t *testing.T, doImport bool) *supplierC
 			hostID, invoiceID := int64(100+len(f.resources)), int64(1000+len(f.invoices))
 			pid, _ := strconv.ParseInt(f.pending.Get("pid"), 10, 64)
 			localID, _ := strconv.ParseInt(f.pending.Get("downstream_id"), 10, 64)
-			f.resources[hostID] = &supplierConfigurableResource{id: hostID, pid: pid, localID: localID, recurring: recurring, setup: setup, cycle: cycle, choice: choice, quantity: strconv.FormatInt(qty, 10), password: f.pending.Get("customfield[702]"), due: time.Now().UTC().AddDate(0, 1, 0).Truncate(time.Second)}
+			f.resources[hostID] = &supplierConfigurableResource{id: hostID, pid: pid, localID: localID, recurring: recurring, setup: setup, cycle: cycle, choice: choice, quantity: strconv.FormatInt(qty, 10), password: f.pending.Get("customfield[702]"), due: time.Now().In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, supplier.BillingMonths(cycle), 0).Truncate(time.Second)}
 			f.invoices[invoiceID] = &supplierConfigurableInvoice{id: invoiceID, hostID: hostID, amount: recurring + setup}
 			f.creates.Add(1)
 			respond(map[string]any{"hostid": []int64{hostID}, "invoiceid": invoiceID})
@@ -173,10 +216,7 @@ func supplierConfigurableSetupWithImport(t *testing.T, doImport bool) *supplierC
 			if !invoice.paid {
 				if invoice.renewal {
 					resource := f.resources[invoice.hostID]
-					months := 1
-					if resource.cycle == "annually" {
-						months = 12
-					}
+					months := supplier.BillingMonths(resource.cycle)
 					resource.due = resource.due.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, months, 0)
 					f.renewalPays.Add(1)
 				} else {
@@ -555,6 +595,90 @@ func TestSupplierConfigurableSelectionFailsClosed(t *testing.T) {
 			if err = f.db.Pool.QueryRow(t.Context(), `SELECT j.status,a.running_job_id FROM provision_jobs j JOIN supplier_accounts a ON a.id=$2 WHERE j.id=$1`, job.ID, f.supplierID).Scan(&status, &lease); err != nil || status != "failed" || lease != nil || f.creates.Load() != 0 || f.pays.Load() != 0 {
 				t.Fatal("invalid selection spent upstream funds or retained lease", status, lease, err)
 			}
+		})
+	}
+}
+
+func TestSupplierCalendarImportCheckoutAndRenewal(t *testing.T) {
+	f := supplierConfigurableSetupWithImport(t, false)
+	f.calendarCycles.Store(true)
+	f.importProduct(t)
+	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", f.uid), map[string]any{"amount_cents": 5000000}, f.root, "calendar-starting-balance"), 201)
+	if len(f.configuration.Product.Prices) != 13 || len(f.configuration.Product.Options) != 2 {
+		t.Fatal("calendar/root configuration was lost")
+	}
+	// All calendar cycles pass the real catalog and option-price constraints.
+	var priceCount int
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM product_prices WHERE product_id=$1", f.pid).Scan(&priceCount); err != nil || priceCount != 13 {
+		t.Fatal(priceCount, err)
+	}
+	for _, cycle := range []string{"semiannually", "biennially", "tenly"} {
+		t.Run(cycle, func(t *testing.T) {
+			sid, _ := f.purchase(t, cycle, 602, 2, "calendar-"+cycle)
+			f.runNext(t, "create")
+			var oldDue time.Time
+			var remoteID int64
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT next_due_at,upstream_id::bigint FROM services WHERE id=$1", sid).Scan(&oldDue, &remoteID); err != nil {
+				t.Fatal(err)
+			}
+			w := request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", sid), map[string]any{}, f.customer, "calendar-renew-"+cycle)
+			expect(t, w, 201)
+			invoice := int64(data(t, w)["invoice_id"].(float64))
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoice), map[string]any{}, f.customer, "calendar-pay-"+cycle), 201)
+			f.runNext(t, "renew")
+			var after time.Time
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT next_due_at FROM services WHERE id=$1", sid).Scan(&after); err != nil || !after.Equal(oldDue.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, supplier.BillingMonths(cycle), 0)) {
+				t.Fatal("wrong renewed calendar", oldDue, after, err)
+			}
+			// Automatic renewal must sync the full purchased calendar period.
+			due := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+			f.mu.Lock()
+			f.resources[remoteID].due = due
+			f.mu.Unlock()
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE services SET auto_renew=true,next_due_at=$2 WHERE id=$1", sid, due); err != nil {
+				t.Fatal(err)
+			}
+			if n, err := f.db.ProcessAutoRenewals(t.Context(), 20); err != nil || n != 1 {
+				t.Fatal(n, err)
+			}
+			f.runNext(t, "renew")
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT next_due_at FROM services WHERE id=$1", sid).Scan(&after); err != nil || !after.Equal(due.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, supplier.BillingMonths(cycle), 0)) {
+				t.Fatal("wrong auto renewal calendar", after, err)
+			}
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/products/%d/pricing", f.pid), map[string]any{"billing_cycle": cycle, "price_cents": 2000, "setup_fee_cents": 100, "active": true}, f.root, ""), 200)
+		})
+	}
+	var native int64
+	if err := f.db.Pool.QueryRow(t.Context(), "INSERT INTO products(name,slug,provision_mode,price_cents) VALUES('Native','calendar-native','manual',0) RETURNING id").Scan(&native); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/products/%d/pricing", native), map[string]any{"billing_cycle": "semiannually", "price_cents": 100, "active": true}, f.root, ""), 400)
+	_, err := f.db.SaveProduct(t.Context(), 3, 0, store.ProductInput{Name: "Native", Slug: "calendar-native-2", Active: enabled(), ProvisionMode: "manual", BillingCycle: "semiannually"})
+	if err == nil {
+		t.Fatal("native product unexpectedly accepted expanded supplier cycles")
+	}
+}
+
+func TestSupplierVolumeImportCheckoutAndRenewal(t *testing.T) {
+	f := supplierConfigurableSetupWithImport(t, false)
+	f.volumePricing.Store(true)
+	f.importProduct(t)
+	for _, tc := range []struct{ qty, total, recurring int64 }{{1, 1965, 1725}, {2, 2250, 1950}, {4, 2550, 2250}} {
+		t.Run(fmt.Sprint(tc.qty), func(t *testing.T) {
+			sid, invoice := f.purchase(t, "monthly", 601, tc.qty, fmt.Sprintf("volume-%d", tc.qty))
+			f.runNext(t, "create")
+			var amount int64
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT amount_cents FROM invoices WHERE id=$1", invoice).Scan(&amount); err != nil || amount != tc.total {
+				t.Fatal("volume differs from supplier formula", amount, tc, err)
+			}
+			w := request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", sid), map[string]any{}, f.customer, fmt.Sprintf("volume-renew-%d", tc.qty))
+			expect(t, w, 201)
+			renewal := int64(data(t, w)["invoice_id"].(float64))
+			if err := f.db.Pool.QueryRow(t.Context(), "SELECT amount_cents FROM invoices WHERE id=$1", renewal).Scan(&amount); err != nil || amount != tc.recurring {
+				t.Fatal("volume recurring differs", amount, tc, err)
+			}
+			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", renewal), map[string]any{}, f.customer, fmt.Sprintf("volume-pay-%d", tc.qty)), 201)
+			f.runNext(t, "renew")
 		})
 	}
 }

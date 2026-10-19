@@ -133,7 +133,13 @@ type catalogOption struct {
 }
 
 var supplierCycles = []struct{ cycle, amount, setup string }{
-	{"monthly", "monthly", "msetupfee"}, {"quarterly", "quarterly", "qsetupfee"}, {"annually", "annually", "asetupfee"}, {"once", "onetime", "osetupfee"},
+	{"monthly", "monthly", "msetupfee"}, {"quarterly", "quarterly", "qsetupfee"},
+	{"semiannually", "semiannually", "ssetupfee"}, {"annually", "annually", "asetupfee"},
+	{"biennially", "biennially", "bsetupfee"}, {"triennially", "triennially", "tsetupfee"},
+	{"fourly", "fourly", "foursetupfee"}, {"fively", "fively", "fivesetupfee"},
+	{"sixly", "sixly", "sixsetupfee"}, {"sevenly", "sevenly", "sevensetupfee"},
+	{"eightly", "eightly", "eightsetupfee"}, {"ninely", "ninely", "ninesetupfee"},
+	{"tenly", "tenly", "tensetupfee"}, {"once", "onetime", "osetupfee"},
 }
 
 func rejectProduct(p *Product, reason string) {
@@ -206,17 +212,16 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 		rejectProduct(&p, "unsupported_currency_or_price")
 	}
 	if payType == "recurring" {
-		// Import is a complete product-schema operation. A valid price outside
-		// the local renewal model must not be silently dropped while claiming
-		// that the supplier product has been fully synchronized.
-		for _, key := range []string{"hour", "day", "semiannually", "biennially", "triennially", "fourly", "fively", "sixly", "sevenly", "eightly", "ninely", "tenly"} {
+		// Custom hour/day lengths and trial eligibility are separate contracts.
+		// Preserve normal paid cycles and disclose every omitted offering.
+		for _, key := range []string{"hour", "day"} {
 			if _, available := moneyRaw(pricing[key]); available {
-				rejectProduct(&p, "unsupported_cycle")
+				p.ExcludedCycles = append(p.ExcludedCycles, ExcludedCycle{Cycle: key, Reason: "custom_duration_unsupported"})
 			}
 		}
 		trial, _ := productRule(raw.PayType, "pay_ontrial_status")
 		if trial == "1" {
-			rejectProduct(&p, "unsupported_cycle")
+			p.ExcludedCycles = append(p.ExcludedCycles, ExcludedCycle{Cycle: "ontrial", Reason: "trial_eligibility_unsupported"})
 		}
 	}
 	for _, cycle := range supplierCycles {
@@ -240,7 +245,11 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 		p.Prices[cycle.cycle] = price
 	}
 	if len(p.Prices) == 0 {
-		rejectProduct(&p, "unsupported_currency_or_price")
+		if len(p.ExcludedCycles) > 0 {
+			rejectProduct(&p, "unsupported_cycle")
+		} else {
+			rejectProduct(&p, "unsupported_currency_or_price")
+		}
 	}
 	optionIDs := map[int64]bool{}
 	for _, group := range data.ConfigGroups {
@@ -267,18 +276,20 @@ func (z *zjmf) Product(ctx context.Context, id int64) (Product, error) {
 				if _, ok := choice.Prices[cycle]; !ok {
 					complete = false
 				}
-				if option.QuantityMode == "graduated" && len(choice.PriceTiers[cycle]) == 0 {
+				if (option.QuantityMode == "graduated" || option.QuantityMode == "volume") && len(choice.PriceTiers[cycle]) == 0 {
 					complete = false
 				}
 			}
 		}
 		if !complete {
 			delete(p.Prices, cycle)
+			p.ExcludedCycles = append(p.ExcludedCycles, ExcludedCycle{Cycle: cycle, Reason: "option_price_missing"})
 		}
 	}
 	if len(p.Prices) == 0 {
 		rejectProduct(&p, "option_price_missing")
 	}
+	sort.Slice(p.ExcludedCycles, func(i, j int) bool { return p.ExcludedCycles[i].Cycle < p.ExcludedCycles[j].Cycle })
 	fieldIDs := map[int64]bool{}
 	for _, source := range data.CustomFields {
 		field := Field{ID: int64(source.ID), Name: source.Name, Description: source.Description, Type: source.Type, Required: source.Required == 1}
@@ -400,7 +411,7 @@ func normalizeCatalogOption(raw catalogOption, cycles map[string]Price, multipli
 			level = string(raw.LinkageLevel)
 		}
 	}
-	if raw.LinkagePID != 0 || raw.LinkageTop != 0 || level != "" && level != "0" {
+	if raw.LinkagePID != 0 || raw.LinkageTop != 0 || !rootLinkageLevel(level) {
 		return o, "option_linkage_unsupported"
 	}
 	quantity := raw.Type == 4 || raw.Type == 7 || raw.Type == 9 || raw.Type == 11 || raw.Type == 14 || raw.Type >= 15 && raw.Type <= 19
@@ -419,7 +430,7 @@ func normalizeCatalogOption(raw catalogOption, cycles map[string]Price, multipli
 			o.QuantityMode = "graduated"
 		}
 		if o.QuantityMode == "linear" && len(raw.Sub) != 1 {
-			return o, "quantity_volume_pricing_unsupported"
+			o.QuantityMode = "volume"
 		}
 	}
 	ids := map[int64]bool{}
@@ -519,4 +530,21 @@ func catalogFieldPattern(source string) (string, bool) {
 	}
 	_, err := regexp.Compile(`\A(?:` + pattern + `)\z`)
 	return pattern, err == nil
+}
+
+// Imported suppliers may remap IDs but retain the original root path ID.
+// A single positive root component is metadata; deeper paths are dependencies.
+func rootLinkageLevel(level string) bool {
+	if level == "" || level == "0" {
+		return true
+	}
+	if !strings.HasPrefix(level, "0-") {
+		return false
+	}
+	id := strings.TrimPrefix(level, "0-")
+	if len(id) == 0 || id[0] == '0' {
+		return false
+	}
+	_, err := strconv.ParseUint(id, 10, 64)
+	return err == nil && strings.IndexFunc(id, func(r rune) bool { return r < '0' || r > '9' }) < 0
 }

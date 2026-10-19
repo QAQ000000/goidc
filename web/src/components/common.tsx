@@ -110,6 +110,16 @@ export function Status({ value }: { value: string }) {
 export const cycles: Record<string, string> = {
   monthly: "月",
   quarterly: "季",
+  semiannually: "半年",
   annually: "年",
+  biennially: "两年",
+  triennially: "三年",
+  fourly: "四年",
+  fively: "五年",
+  sixly: "六年",
+  sevenly: "七年",
+  eightly: "八年",
+  ninely: "九年",
+  tenly: "十年",
   once: "次",
 };

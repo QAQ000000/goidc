@@ -11,12 +11,18 @@ import (
 
 func TestRenewalOwnershipCostPaymentAndDueConfirmation(t *testing.T) {
 	for _, tc := range []struct {
-		name, invoiceType, payment, code                                       string
+		name, invoiceType, payment, code, cycle                                string
 		wrongProduct, wrongHost, expensive, paid, unchanged, checkpointFailure bool
 		paidInvoiceMismatch, shortPeriod                                       bool
 		wantCreates, wantPays                                                  int
 	}{
 		{name: "normal", paid: true, wantCreates: 1, wantPays: 1},
+		{name: "half-year", cycle: "semiannually", paid: true, wantCreates: 1, wantPays: 1},
+		{name: "two-years", cycle: "biennially", paid: true, wantCreates: 1, wantPays: 1},
+		{name: "ten-years", cycle: "tenly", paid: true, wantCreates: 1, wantPays: 1},
+		{name: "half-year-short", cycle: "semiannually", paid: true, shortPeriod: true, code: "renewal_due_unconfirmed", wantCreates: 1, wantPays: 1},
+		{name: "two-years-short", cycle: "biennially", paid: true, shortPeriod: true, code: "renewal_due_unconfirmed", wantCreates: 1, wantPays: 1},
+		{name: "ten-years-short", cycle: "tenly", paid: true, shortPeriod: true, code: "renewal_due_unconfirmed", wantCreates: 1, wantPays: 1},
 		{name: "lost-payment-response", payment: `{"status":`, paid: true, wantCreates: 1, wantPays: 1},
 		{name: "success-but-unpaid", payment: `{"status":1001}`, code: "renewal_payment_unconfirmed", wantCreates: 1, wantPays: 1},
 		{name: "paid-but-old-due", paid: true, unchanged: true, code: "renewal_due_unconfirmed", wantCreates: 1, wantPays: 1},
@@ -30,6 +36,11 @@ func TestRenewalOwnershipCostPaymentAndDueConfirmation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			creates, pays, checkpoints := 0, 0, 0
+			cycle := tc.cycle
+			if cycle == "" {
+				cycle = "monthly"
+			}
+			after := time.Unix(1800000000, 0).In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, BillingMonths(cycle), 0).Unix()
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/zjmf_api_login":
@@ -40,17 +51,17 @@ func TestRenewalOwnershipCostPaymentAndDueConfirmation(t *testing.T) {
 						product = 8
 					}
 					if pays > 0 && tc.paid && !tc.unchanged {
-						due = 1802678400
+						due = after
 					}
 					if pays > 0 && tc.shortPeriod {
 						due = 1800000060
 					}
 					fmt.Fprintf(w, `{"status":200,"data":{"host_data":{"id":42,"productid":%d,"domainstatus":"Active","nextduedate":%d}}}`, product, due)
 				case "/host/renewpage":
-					fmt.Fprint(w, `{"status":200,"data":{"host":{"productid":7,"billingcycle":"monthly","amount":"16.00","nextduedate":1800000000},"currency":{"code":"CNY"}}}`)
+					fmt.Fprintf(w, `{"status":200,"data":{"host":{"productid":7,"billingcycle":%q,"amount":"16.00","nextduedate":1800000000},"currency":{"code":"CNY"}}}`, cycle)
 				case "/host/renew":
 					creates++
-					if r.PostFormValue("hostid") != "42" || r.PostFormValue("billingcycles") != "monthly" {
+					if r.PostFormValue("hostid") != "42" || r.PostFormValue("billingcycles") != cycle {
 						t.Error("wrong renewal identity")
 					}
 					fmt.Fprint(w, `{"status":200,"data":{"invoice_id":"91"}}`)
@@ -92,7 +103,7 @@ func TestRenewalOwnershipCostPaymentAndDueConfirmation(t *testing.T) {
 				t.Fatal(e)
 			}
 			renew := a.(RenewalAdapter)
-			req := RenewalRequest{UpstreamID: 42, ProductID: 7, Cycle: "monthly", Currency: "CNY", CostCents: 1600, MaximumCostCents: 1600, PreviousDue: time.Unix(1800000000, 0).UTC().Format(time.RFC3339)}
+			req := RenewalRequest{UpstreamID: 42, ProductID: 7, Cycle: cycle, Currency: "CNY", CostCents: 1600, MaximumCostCents: 1600, PreviousDue: time.Unix(1800000000, 0).UTC().Format(time.RFC3339)}
 			out, remote, e := renew.Renew(t.Context(), req, func(out CreateResult) error {
 				checkpoints++
 				if out.InvoiceID != 91 {
@@ -111,7 +122,7 @@ func TestRenewalOwnershipCostPaymentAndDueConfirmation(t *testing.T) {
 				if pays > 0 && tc.paid && !failure.Unknown {
 					t.Fatal("post-payment uncertainty treated as known failure", failure)
 				}
-			} else if e != nil || out.InvoiceID != 91 || remote.NextDueDate != "1802678400" {
+			} else if e != nil || out.InvoiceID != 91 || remote.NextDueDate != fmt.Sprint(after) {
 				t.Fatal(out, remote, e)
 			}
 			if creates != tc.wantCreates || pays != tc.wantPays {

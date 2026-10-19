@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,7 +14,7 @@ const productColumns = `products.id,products.category_id,products.name,products.
 COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pp.id,'billing_cycle',pp.billing_cycle,'price_cents',pp.price_cents,'setup_fee_cents',pp.setup_fee_cents,'active',pp.active) ORDER BY pp.id)
 FROM product_prices pp WHERE pp.product_id=products.id), '[]'::jsonb) AS pricing,
 COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pog.id,'name',pog.name,'slug',pog.slug,'required',pog.required,'active',pog.active,'sort_order',pog.sort_order,'option_type',pog.option_type,'qty_minimum',pog.qty_minimum,'qty_maximum',pog.qty_maximum,'qty_stage',pog.qty_stage,'unit',pog.unit,'upgrade_enabled',pog.upgrade_enabled,'options',
-  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',po.id,'label',po.label,'value',po.value,'price_delta_cents',po.price_delta_cents,'setup_delta_cents',po.setup_delta_cents,'active',po.active,'hidden',po.hidden,'qty_minimum',po.qty_minimum,'qty_maximum',po.qty_maximum,'upgrade_enabled',po.upgrade_enabled,'sort_order',po.sort_order,'pricing',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pop.id,'billing_cycle',pop.billing_cycle,'price_cents',pop.price_cents,'setup_fee_cents',pop.setup_fee_cents,'active',pop.active) ORDER BY pop.id) FROM product_option_prices pop WHERE pop.option_id=po.id), '[]'::jsonb),'price_tiers',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pot.id,'billing_cycle',pot.billing_cycle,'qty_minimum',pot.qty_minimum,'qty_maximum',pot.qty_maximum,'price_cents',pot.price_cents,'setup_fee_cents',pot.setup_fee_cents,'active',pot.active) ORDER BY pot.billing_cycle,pot.qty_minimum,pot.id) FROM product_option_price_tiers pot WHERE pot.option_id=po.id), '[]'::jsonb)) ORDER BY po.sort_order,po.id)
+  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',po.id,'label',po.label,'value',po.value,'price_delta_cents',po.price_delta_cents,'setup_delta_cents',po.setup_delta_cents,'active',po.active,'hidden',po.hidden,'qty_minimum',po.qty_minimum,'qty_maximum',po.qty_maximum,'upgrade_enabled',po.upgrade_enabled,'sort_order',po.sort_order,'pricing',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pop.id,'billing_cycle',pop.billing_cycle,'price_cents',pop.price_cents,'setup_fee_cents',pop.setup_fee_cents,'active',pop.active) ORDER BY pop.id) FROM product_option_prices pop WHERE pop.option_id=po.id), '[]'::jsonb),'price_tiers',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pot.id,'billing_cycle',pot.billing_cycle,'pricing_mode',pot.pricing_mode,'qty_minimum',pot.qty_minimum,'qty_maximum',pot.qty_maximum,'price_cents',pot.price_cents,'setup_fee_cents',pot.setup_fee_cents,'active',pot.active) ORDER BY pot.billing_cycle,pot.qty_minimum,pot.id) FROM product_option_price_tiers pot WHERE pot.option_id=po.id), '[]'::jsonb)) ORDER BY po.sort_order,po.id)
   FROM product_options po WHERE po.group_id=pog.id /*value_visibility*/), '[]'::jsonb)) ORDER BY pog.sort_order,pog.id)
 FROM product_option_groups pog WHERE pog.product_id=products.id /*group_visibility*/), '[]'::jsonb) AS option_groups`
 
@@ -196,7 +197,7 @@ func (s *Server) upsertProductPricing(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	if input.BillingCycle != "monthly" && input.BillingCycle != "quarterly" && input.BillingCycle != "annually" && input.BillingCycle != "once" {
+	if !supplier.IsBillingCycle(input.BillingCycle) {
 		writeError(w, 400, "invalid_cycle", "账期无效")
 		return
 	}
@@ -219,9 +220,13 @@ func (s *Server) upsertProductPricing(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	var productID, revision int64
-	var defaultCycle string
-	if err = tx.QueryRow(r.Context(), "SELECT id,revision,billing_cycle FROM products WHERE id=$1 FOR UPDATE", id).Scan(&productID, &revision, &defaultCycle); err != nil {
+	var defaultCycle, provisionMode string
+	if err = tx.QueryRow(r.Context(), "SELECT id,revision,billing_cycle,provision_mode FROM products WHERE id=$1 FOR UPDATE", id).Scan(&productID, &revision, &defaultCycle, &provisionMode); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if provisionMode != "supplier" && input.BillingCycle != "monthly" && input.BillingCycle != "quarterly" && input.BillingCycle != "annually" && input.BillingCycle != "once" {
+		writeError(w, 400, "invalid_cycle", "该商品不支持此账期")
 		return
 	}
 	if input.ExpectedRevision != nil && *input.ExpectedRevision != revision {

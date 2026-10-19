@@ -43,6 +43,8 @@ export const unitSuites = {
     "TestSelectionPreviewAllowsZeroStockButPurchaseRejects",
     "TestSupplierRejectsLinkageAndUnsupportedPeriods",
     "TestSupplierRetainsOnlyCompleteBillingCycles",
+    "TestSupplierCalendarCyclesAndExcludedOfferings",
+    "TestSupplierVolumeQuantityUsesSelectedRateForAllUnits",
     "TestSupplierSimpleRevisionRemainsCompatible",
     "TestSupplierQuantityIsSubmittedAsQuantity"
   ],
@@ -57,13 +59,15 @@ export const unitSuites = {
 };
 
 export const integrationSuites = {
-  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryUpgrade171PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryRequestDatabaseGuards", "TestSupplierCatalogImportUpgrade174PreservesFixedBindings", "TestSupplierCatalogImportReadTimeoutLeavesNoWrites"],
+  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryUpgrade171PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryRequestDatabaseGuards", "TestSupplierCatalogImportUpgrade174PreservesFixedBindings", "TestSupplierCalendarUpgrade175PreservesFixedBindings", "TestSupplierCatalogImportReadTimeoutLeavesNoWrites"],
   "internal/httpapi": [
     "TestSupplierCatalogBatchImportsAllCyclesChoicesAndFields",
     "TestSupplierCatalogBatchRejectsStaleUnsupportedAndAuditFailure",
     "TestSupplierCatalogBatchPermissionValidationAndConcurrentReplay",
     "TestSupplierCatalogBatchRechecksCredentialAfterUpstreamRead",
     "TestSupplierConfigurableDeliverySelectionAndRenewal",
+    "TestSupplierCalendarImportCheckoutAndRenewal",
+    "TestSupplierVolumeImportCheckoutAndRenewal",
     "TestSupplierConfigurableSelectionFailsClosed",
     "TestSupplierExpirySuspendsWithoutCreatingDebtByCapability",
     "TestSupplierExpiryHonorsGraceAndServiceEligibility",

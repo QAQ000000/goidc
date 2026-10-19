@@ -4,16 +4,18 @@ import (
 	"context"
 	"sort"
 
+	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
 // OptionPriceTier is the normalized representation of one legacy quantity
 // pricing interval. Intervals are inclusive.
 type OptionPriceTier struct {
-	Minimum       int64 `json:"qty_minimum"`
-	Maximum       int64 `json:"qty_maximum"`
-	PriceCents    int64 `json:"price_cents"`
-	SetupFeeCents int64 `json:"setup_fee_cents"`
+	PricingMode   string `json:"pricing_mode,omitempty"`
+	Minimum       int64  `json:"qty_minimum"`
+	Maximum       int64  `json:"qty_maximum"`
+	PriceCents    int64  `json:"price_cents"`
+	SetupFeeCents int64  `json:"setup_fee_cents"`
 }
 
 type OptionPriceTiersInput struct {
@@ -23,12 +25,7 @@ type OptionPriceTiersInput struct {
 }
 
 func validOptionPricingCycle(cycle string) bool {
-	switch cycle {
-	case "hourly", "daily", "monthly", "quarterly", "semiannually", "annually", "biennially", "triennially", "once":
-		return true
-	default:
-		return false
-	}
+	return cycle == "hourly" || cycle == "daily" || supplier.IsBillingCycle(cycle)
 }
 
 func (s *Store) ReplaceOptionPriceTiers(ctx context.Context, actor, product, group, option int64, in OptionPriceTiersInput) error {
@@ -55,7 +52,7 @@ func (s *Store) ReplaceOptionPriceTiers(ctx context.Context, actor, product, gro
 }
 
 func normalizeOptionPriceTierChanges(changes map[string][]OptionPriceTier) (map[string][]OptionPriceTier, error) {
-	if len(changes) > 9 {
+	if len(changes) > 16 {
 		return nil, conflict("invalid_option_pricing", "阶梯价格账期数量无效")
 	}
 	normalized := make(map[string][]OptionPriceTier, len(changes))
@@ -66,6 +63,9 @@ func normalizeOptionPriceTierChanges(changes map[string][]OptionPriceTier) (map[
 		ordered := append([]OptionPriceTier(nil), tiers...)
 		sort.Slice(ordered, func(i, j int) bool { return ordered[i].Minimum < ordered[j].Minimum })
 		for i, tier := range ordered {
+			if tier.PricingMode != "" && tier.PricingMode != "graduated" {
+				return nil, conflict("invalid_option_pricing", "原生规格只支持累进阶梯定价")
+			}
 			if tier.Minimum < 1 || tier.Maximum < tier.Minimum || tier.Maximum > 1000000 || tier.PriceCents < 0 || tier.PriceCents > 100000000 || tier.SetupFeeCents < 0 || tier.SetupFeeCents > 100000000 || (i > 0 && tier.Minimum <= ordered[i-1].Maximum) {
 				return nil, conflict("invalid_option_pricing", "阶梯价格区间重叠或金额无效")
 			}
@@ -94,10 +94,9 @@ func replaceOptionPriceTierChanges(ctx context.Context, q pgx.Tx, option int64, 
 	return nil
 }
 
-// PriceForQuantity applies the legacy progressive-tier formula. A tier is
-// charged per unit inside its interval, while setup is charged once for the
-// selected interval. The bool is false for malformed, overlapping, or
-// unmatched tiers.
+// PriceForQuantity preserves progressive pricing by default. Volume tiers use
+// the selected rate for all units. Setup applies once at the selected interval;
+// malformed, mixed-mode, overlapping or unmatched tiers are rejected.
 func PriceForQuantity(tiers []OptionPriceTier, quantity, fallbackPrice, fallbackSetup int64) (int64, int64, bool) {
 	if quantity < 1 {
 		return 0, 0, false
@@ -113,10 +112,24 @@ func PriceForQuantity(tiers []OptionPriceTier, quantity, fallbackPrice, fallback
 		}
 		return ordered[i].Minimum < ordered[j].Minimum
 	})
+	mode := ordered[0].PricingMode
+	if mode == "" {
+		mode = "graduated"
+	}
+	if mode != "graduated" && mode != "volume" {
+		return 0, 0, false
+	}
 	var total int64
 	matched := false
 	var selected OptionPriceTier
 	for i, tier := range ordered {
+		tierMode := tier.PricingMode
+		if tierMode == "" {
+			tierMode = "graduated"
+		}
+		if tierMode != mode {
+			return 0, 0, false
+		}
 		if tier.Minimum < 1 || tier.Maximum < tier.Minimum || tier.PriceCents < 0 || tier.SetupFeeCents < 0 {
 			return 0, 0, false
 		}
@@ -130,6 +143,10 @@ func PriceForQuantity(tiers []OptionPriceTier, quantity, fallbackPrice, fallback
 	}
 	if !matched {
 		return 0, 0, false
+	}
+	if mode == "volume" {
+		price, _, overflow := multiplyOptionAmount(selected.PriceCents, 0, quantity)
+		return price, selected.SetupFeeCents, !overflow
 	}
 	for _, tier := range ordered {
 		if tier.Minimum >= selected.Minimum {

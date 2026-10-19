@@ -35,7 +35,7 @@ function costParts(price: SupplierPrice | undefined, raw: boolean): SupplierCost
   if (amount === undefined || setup === undefined || !Number.isSafeInteger(amount) || !Number.isSafeInteger(setup) || amount < 0 || setup < 0) return null;
   return { amount: BigInt(amount), setup: BigInt(setup) };
 }
-function graduatedCost(tiers: SupplierPriceTier[] | undefined, quantity: number, raw: boolean): SupplierCostParts | null {
+function graduatedCost(tiers: SupplierPriceTier[] | undefined, quantity: number, raw: boolean, volume = false): SupplierCostParts | null {
   if (quantity === 0) return { amount: BigInt(0), setup: BigInt(0) };
   let last = 0, total = BigInt(0);
   for (const tier of tiers ?? []) {
@@ -44,7 +44,7 @@ function graduatedCost(tiers: SupplierPriceTier[] | undefined, quantity: number,
     last = tier.max_qty;
     if (quantity < tier.min_qty) continue;
     total += BigInt(Math.min(quantity, tier.max_qty) - tier.min_qty + 1) * price.amount;
-    if (quantity <= tier.max_qty) return { amount: total, setup: price.setup };
+    if (quantity <= tier.max_qty) return { amount: volume ? BigInt(quantity) * price.amount : total, setup: price.setup };
   }
   return null;
 }
@@ -63,12 +63,12 @@ function upstreamCost(product: SupplierProduct, cycle: string, options: Record<s
     if (option.type === "quantity") {
       const quantity = /^\d+$/.test(value) ? Number(value) : NaN;
       if (!Number.isSafeInteger(quantity)) return NaN;
-      if (option.quantity_mode && !["linear", "graduated"].includes(option.quantity_mode)) return NaN;
+      if (option.quantity_mode && !["linear", "graduated", "volume"].includes(option.quantity_mode)) return NaN;
       const unit = costParts(choice.prices?.[cycle], raw);
       if (!unit) return NaN;
       if (quantity === 0) continue;
-      if (option.quantity_mode === "graduated") {
-        price = graduatedCost(choice.price_tiers?.[cycle], quantity, raw);
+      if (option.quantity_mode === "graduated" || option.quantity_mode === "volume") {
+        price = graduatedCost(choice.price_tiers?.[cycle], quantity, raw, option.quantity_mode === "volume");
       } else {
         price = { amount: unit.amount * BigInt(quantity), setup: unit.setup };
       }
@@ -86,11 +86,11 @@ function upstreamCost(product: SupplierProduct, cycle: string, options: Record<s
 }
 function quantityPriceHint(option: NonNullable<SupplierProduct["options"]>[number], cycle: string) {
   const choice = option.choices?.[0];
-  if (option.quantity_mode === "graduated") return `累进阶梯：${(choice?.price_tiers?.[cycle] ?? []).map(tier => `${tier.min_qty}–${tier.max_qty} 每单位 ${money(tier.amount_cents)}，初装费 ${money(tier.setup_cents)}`).join("；")}。初装费取命中区间并收取一次，数量为 0 不收费。`;
+  if (option.quantity_mode === "graduated" || option.quantity_mode === "volume") return `${option.quantity_mode === "volume" ? "区间单价（全部数量按命中区间单价计算）" : "累进阶梯"}：${(choice?.price_tiers?.[cycle] ?? []).map(tier => `${tier.min_qty}–${tier.max_qty} 每单位 ${money(tier.amount_cents)}，初装费 ${money(tier.setup_cents)}`).join("；")}。初装费取命中区间并收取一次，数量为 0 不收费。`;
   return `${choice?.name ?? ""} · 每单位 ${money(choice?.prices?.[cycle]?.amount_cents ?? 0)}，初装费 ${money(choice?.prices?.[cycle]?.setup_cents ?? 0)}（数量大于 0 时收取一次）`;
 }
 export function unsupportedLabel(reason?: string) {
-  return ({ detail_required: "需要查看商品配置", unsupported_currency: "仅支持人民币", unsupported_cycle: "不支持所选账期", unsupported_option_type: "暂不支持此规格类型", unsupported_advanced: "暂不支持高级配置联动", unsupported_advanced_config: "暂不支持高级配置联动", unsupported_field: "暂不支持此购买字段", invalid_quantity_bounds: "上游数量范围无法映射，请调整上游数量上限", out_of_stock: "上游库存不足" } as Record<string, string>)[reason ?? ""] ?? (reason ? `当前商品暂不支持导入：${reason}` : "当前商品配置暂不支持导入");
+  return ({ detail_required: "需要查看商品配置", unsupported_currency: "仅支持人民币", unsupported_cycle: "没有可导入的付费账期", option_linkage_unsupported: "规格包含尚不支持的多级联动", advanced_configuration: "暂不支持高级配置联动", quantity_tiers_invalid: "数量计价区间不连续或范围无效", quantity_volume_pricing_unsupported: "暂不支持此数量区间计价方式", unsupported_option_type: "暂不支持此规格类型", unsupported_advanced: "暂不支持高级配置联动", unsupported_advanced_config: "暂不支持高级配置联动", unsupported_field: "暂不支持此购买字段", invalid_quantity_bounds: "上游数量范围无法映射，请调整上游数量上限", out_of_stock: "上游库存不足" } as Record<string, string>)[reason ?? ""] ?? (reason ? `当前商品暂不支持导入：${reason}` : "当前商品配置暂不支持导入");
 }
 
 export function SuppliersView({ returnHref }: { returnHref?: string }) {
@@ -215,7 +215,7 @@ export function SupplierAccountEditor({ providers, account, onDone, onCancel }: 
 export function ImportProduct({account,product}:{account:SupplierAccount;product:SupplierProduct}) {
   const router=useRouter(); const manage=useAdminPermission("products.manage");
   const categories=useResource<CatalogCategory[]>("/admin/catalog-groups/category",false);
-  const availableCycles=Object.keys(product.prices??{}).filter(c=>["monthly","quarterly","annually","once"].includes(c));
+  const availableCycles=Object.keys(product.prices??{}).filter(c=>Object.hasOwn(cycles,c));
   const [cycle,setCycle]=useState(availableCycles[0]??"");
   const [name,setName]=useState(product.name);
   const [slug,setSlug]=useState("");

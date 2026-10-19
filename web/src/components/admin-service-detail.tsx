@@ -8,7 +8,7 @@ import { api, date, money, type Service } from "@/lib/api";
 import { PermissionGate, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Status } from "./common";
+import { Status, cycles as billingCycles } from "./common";
 import { OrderRefundImpact, OrderRefundHoldLabel, orderRefundHold, orderRefundBlocksDelivery } from "./external-refund-order";
 import { SupplierServiceDelivery } from "./supplier-delivery";
 import { NOKVMServiceDelivery, isPowerAction, serviceActionLabels } from "./nokvm-delivery";
@@ -21,7 +21,7 @@ import { useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 
 const serviceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
-const cycles:Record<string,string>={monthly:"月付",quarterly:"季付",annually:"年付",once:"一次性"};
+const cycles:Record<string,string>={...billingCycles,monthly:"月付",quarterly:"季付",annually:"年付",once:"一次性"};
 const modes:Record<string,string>={manual:"人工交付",simulation:"模拟交付",nokvm:"NOKVM",supplier:"上游供应商"};
 
 function Field({label,value,children}:{label:string;value?:string|number|null;children?:ReactNode}) {

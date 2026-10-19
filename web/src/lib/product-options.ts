@@ -125,6 +125,8 @@ export function productOptionAmounts(option: ProductOption, cycle: string, quant
     const setup = (matrix?.setup_fee_cents ?? option.setup_delta_cents) * quantity;
     return Number.isSafeInteger(price) && Number.isSafeInteger(setup) ? { price, setup } : null;
   }
+  const mode = tiers[0].pricing_mode ?? "graduated";
+  if (mode !== "volume" && mode !== "graduated" || tiers.some(tier => (tier.pricing_mode ?? "graduated") !== mode)) return null;
   let previousMaximum = 0;
   for (const tier of tiers) {
     if (!Number.isSafeInteger(tier.qty_minimum) || !Number.isSafeInteger(tier.qty_maximum) || tier.qty_minimum <= previousMaximum || tier.qty_maximum < tier.qty_minimum || tier.price_cents < 0 || tier.setup_fee_cents < 0) return null;
@@ -134,7 +136,7 @@ export function productOptionAmounts(option: ProductOption, cycle: string, quant
   if (!selected) return null;
   // Match Go's inclusive progressive intervals; setup applies once at this tier.
   const previous = tiers.filter(tier => tier.qty_minimum < selected.qty_minimum).reduce((sum, tier) => sum + (tier.qty_maximum - tier.qty_minimum + 1) * tier.price_cents, 0);
-  const price = previous + (quantity - selected.qty_minimum + 1) * selected.price_cents;
+  const price = mode === "volume" ? quantity * selected.price_cents : previous + (quantity - selected.qty_minimum + 1) * selected.price_cents;
   const setup = selected.setup_fee_cents;
   return Number.isSafeInteger(price) && Number.isSafeInteger(setup) ? { price, setup } : null;
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/provision"
+	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -197,7 +198,7 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		active := true
 		in.Active = &active
 	}
-	if in.Name == "" || !contentTextValid(in.Name, 180, false) || !contentTextValid(in.Description, 10000, true) || !productSlugPattern.MatchString(in.Slug) || in.Active == nil || (in.CategoryID != nil && *in.CategoryID < 1) || in.SortOrder < 0 || in.SortOrder > 1000000 || in.PriceCents < 0 || in.PriceCents > 100000000 || in.SetupFeeCents < 0 || in.SetupFeeCents > 100000000 || (in.Stock != nil && (*in.Stock < 0 || *in.Stock > 2147483647)) || (in.ProvisionMode != "manual" && in.ProvisionMode != "simulation" && in.ProvisionMode != "nokvm" && in.ProvisionMode != "supplier") || (in.BillingCycle != "monthly" && in.BillingCycle != "quarterly" && in.BillingCycle != "annually" && in.BillingCycle != "once") {
+	if in.Name == "" || !contentTextValid(in.Name, 180, false) || !contentTextValid(in.Description, 10000, true) || !productSlugPattern.MatchString(in.Slug) || in.Active == nil || (in.CategoryID != nil && *in.CategoryID < 1) || in.SortOrder < 0 || in.SortOrder > 1000000 || in.PriceCents < 0 || in.PriceCents > 100000000 || in.SetupFeeCents < 0 || in.SetupFeeCents > 100000000 || (in.Stock != nil && (*in.Stock < 0 || *in.Stock > 2147483647)) || (in.ProvisionMode != "manual" && in.ProvisionMode != "simulation" && in.ProvisionMode != "nokvm" && in.ProvisionMode != "supplier") || (!supplier.IsBillingCycle(in.BillingCycle) || in.ProvisionMode != "supplier" && in.BillingCycle != "monthly" && in.BillingCycle != "quarterly" && in.BillingCycle != "annually" && in.BillingCycle != "once") {
 		return 0, conflict("invalid_product", "商品名称、金额、账期、库存或可售状态无效")
 	}
 	deliveryJSON := []byte(`{}`)

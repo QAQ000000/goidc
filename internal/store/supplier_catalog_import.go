@@ -111,7 +111,7 @@ func supplierCatalogImportSlug(supplierID, productID int64) string {
 
 func supplierCatalogCycles(p supplier.Product) []string {
 	cycles := []string{}
-	for _, cycle := range []string{"monthly", "quarterly", "annually", "once"} {
+	for _, cycle := range supplier.BillingCycles() {
 		if _, ok := p.Prices[cycle]; ok {
 			cycles = append(cycles, cycle)
 		}
@@ -195,7 +195,7 @@ func (s *Store) supplierCatalogImportable(p supplier.Product, bps int64) (map[st
 				if _, err := supplierCatalogScaledPrice(price, bps); !ok || err != nil {
 					return prices, "option_price_missing"
 				}
-				if option.Type == "quantity" && option.QuantityMode == "graduated" {
+				if option.Type == "quantity" && (option.QuantityMode == "graduated" || option.QuantityMode == "volume") {
 					tiers := choice.PriceTiers[cycle]
 					if len(tiers) == 0 || len(tiers) > 100 {
 						return prices, "invalid_option_price_tiers"
@@ -547,7 +547,7 @@ func (s *Store) insertSupplierCatalogOptions(ctx context.Context, tx pgx.Tx, pro
 					if err != nil {
 						return err
 					}
-					if _, err = tx.Exec(ctx, `INSERT INTO product_option_price_tiers(option_id,billing_cycle,qty_minimum,qty_maximum,price_cents,setup_fee_cents,active) VALUES($1,$2,$3,$4,$5,$6,true)`, optionID, cycle, tier.MinQty, tier.MaxQty, price.AmountCents, price.SetupCents); err != nil {
+					if _, err = tx.Exec(ctx, `INSERT INTO product_option_price_tiers(option_id,billing_cycle,qty_minimum,qty_maximum,price_cents,setup_fee_cents,active,pricing_mode) VALUES($1,$2,$3,$4,$5,$6,true,$7)`, optionID, cycle, tier.MinQty, tier.MaxQty, price.AmountCents, price.SetupCents, supplierLocalTierMode(option.QuantityMode)); err != nil {
 						return err
 					}
 				}
@@ -555,4 +555,11 @@ func (s *Store) insertSupplierCatalogOptions(ctx context.Context, tx pgx.Tx, pro
 		}
 	}
 	return nil
+}
+
+func supplierLocalTierMode(mode string) string {
+	if mode == "volume" {
+		return "volume"
+	}
+	return "graduated"
 }

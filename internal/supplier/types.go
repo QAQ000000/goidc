@@ -41,8 +41,8 @@ type Choice struct {
 	PriceTiers map[string][]PriceTier `json:"price_tiers,omitempty"`
 }
 
-// PriceTier is an inclusive graduated interval. Setup belongs to the selected
-// interval only, while recurring amounts accumulate through preceding tiers.
+// PriceTier is an inclusive quantity interval. Setup belongs to the selected
+// interval only; Option.QuantityMode determines volume or progressive pricing.
 type PriceTier struct {
 	MinQty         int64  `json:"min_qty"`
 	MaxQty         int64  `json:"max_qty"`
@@ -72,7 +72,13 @@ type Field struct {
 	Pattern     string   `json:"pattern,omitempty"`
 }
 
+type ExcludedCycle struct {
+	Cycle  string `json:"cycle"`
+	Reason string `json:"reason"`
+}
+
 type Product struct {
+	ExcludedCycles    []ExcludedCycle  `json:"excluded_cycles,omitempty"`
 	ID                int64            `json:"id"`
 	Name              string           `json:"name"`
 	Description       string           `json:"description"`
@@ -318,9 +324,9 @@ func SelectionPrice(product Product, cycle string, options, fields map[int64]str
 				return fail("invalid_price")
 			}
 			if qty > 0 {
-				if option.QuantityMode == "graduated" {
+				if option.QuantityMode == "graduated" || option.QuantityMode == "volume" {
 					var valid bool
-					price, valid = graduatedPrice(choice.PriceTiers[cycle], qty, percent)
+					price, valid = tieredPrice(choice.PriceTiers[cycle], qty, percent, option.QuantityMode == "volume")
 					if !valid {
 						return fail("invalid_option_quantity")
 					}
@@ -452,7 +458,7 @@ func selectionPriceBasis(price Price, raw bool) (Price, bool) {
 	return Price{AmountCents: price.AmountCents, SetupCents: price.SetupCents}, price.AmountCents >= 0 && price.SetupCents >= 0
 }
 
-func graduatedPrice(tiers []PriceTier, quantity int64, raw bool) (Price, bool) {
+func tieredPrice(tiers []PriceTier, quantity int64, raw, volume bool) (Price, bool) {
 	var total Price
 	var last int64
 	matched := false
@@ -470,6 +476,15 @@ func graduatedPrice(tiers []PriceTier, quantity int64, raw bool) (Price, bool) {
 			units = quantity - tier.MinQty + 1
 			total.SetupCents = price.SetupCents
 			matched = true
+		}
+		if volume && matched {
+			if price.AmountCents > math.MaxInt64/quantity {
+				return Price{}, false
+			}
+			return Price{AmountCents: price.AmountCents * quantity, SetupCents: price.SetupCents}, true
+		}
+		if volume {
+			continue
 		}
 		if price.AmountCents > math.MaxInt64/units || total.AmountCents > math.MaxInt64-price.AmountCents*units {
 			return Price{}, false

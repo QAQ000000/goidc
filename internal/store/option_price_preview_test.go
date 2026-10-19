@@ -47,7 +47,7 @@ func TestOptionPricePreviewMatchesGo(t *testing.T) {
 		Expected map[string]int64 `json:"expected"`
 	}
 	tier := func(minimum, maximum, price, setup int64) previewTier {
-		return previewTier{OptionPriceTier{minimum, maximum, price, setup}, "monthly", true}
+		return previewTier{OptionPriceTier{Minimum: minimum, Maximum: maximum, PriceCents: price, SetupFeeCents: setup}, "monthly", true}
 	}
 	base := previewOption{Price: 25, Setup: 3, Pricing: []previewPrice{{"monthly", 50, 5, true}, {"annually", 400, 40, false}}}
 	var cases []previewCase
@@ -94,7 +94,7 @@ func TestOptionPricePreviewMatchesGo(t *testing.T) {
 		}
 	}
 	option := base
-	option.Tiers = []previewTier{tier(1, 6, 125, 7), {OptionPriceTier{1, 6, 950, 12}, "annually", true}, {OptionPriceTier{1, 6, 99, 99}, "monthly", false}}
+	option.Tiers = []previewTier{tier(1, 6, 125, 7), {OptionPriceTier{Minimum: 1, Maximum: 6, PriceCents: 950, SetupFeeCents: 12}, "annually", true}, {OptionPriceTier{Minimum: 1, Maximum: 6, PriceCents: 99, SetupFeeCents: 99}, "monthly", false}}
 	add("inactive overlapping tier ignored", "monthly", option, 5)
 	add("only selected cycle tiers used", "annually", option, 5)
 	add("tier of other cycle does not suppress fallback", "once", option, 5)

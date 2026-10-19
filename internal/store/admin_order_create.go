@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/payment"
+	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -95,7 +96,7 @@ func normalizeAdminOrder(in AdminOrderInput) (AdminOrderInput, error) {
 		if totalQuantity > 100 {
 			return in, conflict("invalid_admin_order", "每笔订单最多创建100项服务")
 		}
-		if v.BillingCycle != "monthly" && v.BillingCycle != "quarterly" && v.BillingCycle != "annually" && v.BillingCycle != "once" {
+		if !supplier.IsBillingCycle(v.BillingCycle) {
 			return in, conflict("invalid_cycle", "账期无效")
 		}
 		for _, amount := range []*int64{v.FirstPriceOverride, v.RenewalPriceOverride} {

@@ -41,8 +41,8 @@ func (z *zjmf) QuoteRenewal(ctx context.Context, r RenewalRequest) (RenewalReque
 	if r.UpstreamID < 1 || r.ProductID < 1 || r.Currency != "CNY" || r.MaximumCostCents < 0 {
 		return r, &Error{Code: "invalid_renewal"}
 	}
-	cycle := map[string]string{"monthly": "monthly", "quarterly": "quarterly", "annually": "annually"}[r.Cycle]
-	if cycle == "" {
+	cycle := r.Cycle
+	if BillingMonths(cycle) == 0 {
 		return r, &Error{Code: "unsupported_cycle"}
 	}
 	svc, err := z.Sync(ctx, r.UpstreamID)
@@ -122,7 +122,7 @@ func (z *zjmf) ConfirmRenewal(ctx context.Context, r RenewalRequest, id int64) (
 	svc, err := z.Sync(ctx, r.UpstreamID)
 	due, ok := renewalTime(svc.NextDueDate)
 	before, valid := renewalTime(r.PreviousDue)
-	months := map[string]int{"monthly": 1, "quarterly": 3, "annually": 12}[r.Cycle]
+	months := BillingMonths(r.Cycle)
 	// Require a complete purchased period, using the supplier's local calendar.
 	expected := before.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, months, 0)
 	if err != nil || svc.ProductID != r.ProductID || !ok || !valid || months == 0 || due.Before(expected) || (svc.Status != "Active" && svc.Status != "active" && svc.Status != "Suspended" && svc.Status != "suspended") {

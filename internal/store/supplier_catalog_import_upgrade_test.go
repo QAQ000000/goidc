@@ -145,3 +145,32 @@ func TestSupplierCatalogImportReadTimeoutLeavesNoWrites(t *testing.T) {
 		t.Fatal("same key could not safely retry after timeout", result, err)
 	}
 }
+
+func TestSupplierCalendarUpgrade175PreservesFixedBindings(t *testing.T) {
+	db := supplierExpirySchema171(t)
+	for _, name := range []string{supplierExpiryMigration172, "173_notification_deadline_recovery.sql", "174_web_push.sql", "175_supplier_catalog_import.sql"} {
+		applyNotificationUpgradeMigration(t, db, name)
+	}
+	supplierLifecycleUpgradeHistory(t, db)
+	before := supplierLifecycleUpgradeFacts(t, db)
+	checksums := supplierExpiryUpgradeMigrations(t, db, "175_supplier_catalog_import.sql")
+	if err := db.Migrate(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Migrate(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if before != supplierLifecycleUpgradeFacts(t, db) || checksums != supplierExpiryUpgradeMigrations(t, db, "175_supplier_catalog_import.sql") {
+		t.Fatal("calendar migration changed historical facts")
+	}
+	var pid int64
+	if err := db.Pool.QueryRow(t.Context(), "SELECT product_id FROM supplier_product_bindings LIMIT 1").Scan(&pid); err != nil {
+		t.Fatal(err)
+	}
+	for _, cycle := range []string{"semiannually", "biennially", "tenly"} {
+		if _, err := db.Pool.Exec(t.Context(), "INSERT INTO product_prices(product_id,billing_cycle,price_cents) VALUES($1,$2,100)", pid, cycle); err == nil {
+			t.Fatal("fixed binding source-cycle guard loosened", cycle)
+		}
+	}
+	assertNotificationUpgradeChecksums(t, db)
+}

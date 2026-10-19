@@ -108,7 +108,7 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
 		return 0, nil
 	}
 	before, err := supplierDueDate(renewal.PreviousDue)
-	months := map[string]int{"monthly": 1, "quarterly": 3, "annually": 12}[renewal.Cycle]
+	months := supplier.BillingMonths(renewal.Cycle)
 	if err != nil || before == nil || months == 0 || remote.UpstreamID != renewal.UpstreamID || remote.ProductID != renewal.ProductID ||
 		due.Before(before.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, months, 0)) {
 		return 0, nil

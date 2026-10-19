@@ -117,7 +117,7 @@ func ValidateProductOptionsForCycleWithQuantities(ctx context.Context, q sqlQuer
 	var rows pgx.Rows
 	selectedGroups := map[int64]bool{}
 	if len(ids) > 0 {
-		rows, err = q.Query(ctx, `SELECT po.id,pog.id,pog.option_type,pog.qty_minimum,pog.qty_maximum,pog.qty_stage,po.qty_minimum,po.qty_maximum,COALESCE(pop.price_cents,po.price_delta_cents),COALESCE(pop.setup_fee_cents,po.setup_delta_cents),COALESCE((SELECT jsonb_agg(jsonb_build_object('qty_minimum',t.qty_minimum,'qty_maximum',t.qty_maximum,'price_cents',t.price_cents,'setup_fee_cents',t.setup_fee_cents) ORDER BY t.qty_minimum,t.id) FROM product_option_price_tiers t WHERE t.option_id=po.id AND t.billing_cycle=$2 AND t.active), '[]'::jsonb),pog.name,pog.slug,po.label,po.value
+		rows, err = q.Query(ctx, `SELECT po.id,pog.id,pog.option_type,pog.qty_minimum,pog.qty_maximum,pog.qty_stage,po.qty_minimum,po.qty_maximum,COALESCE(pop.price_cents,po.price_delta_cents),COALESCE(pop.setup_fee_cents,po.setup_delta_cents),COALESCE((SELECT jsonb_agg(jsonb_build_object('pricing_mode',t.pricing_mode,'qty_minimum',t.qty_minimum,'qty_maximum',t.qty_maximum,'price_cents',t.price_cents,'setup_fee_cents',t.setup_fee_cents) ORDER BY t.qty_minimum,t.id) FROM product_option_price_tiers t WHERE t.option_id=po.id AND t.billing_cycle=$2 AND t.active), '[]'::jsonb),pog.name,pog.slug,po.label,po.value
 FROM product_options po JOIN product_option_groups pog ON pog.id=po.group_id
 LEFT JOIN product_option_prices pop ON pop.option_id=po.id AND pop.billing_cycle=$2 AND pop.active
 WHERE pog.product_id=$1 AND pog.active AND po.active AND po.id=ANY($3) ORDER BY pog.sort_order,pog.id,po.sort_order,po.id`, productID, billingCycle, ids)

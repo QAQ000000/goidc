@@ -855,3 +855,23 @@ test('unknown lifecycle verification keeps the original resource and explicitly 
   assert.equal(requests[1].body.upstream_id, 0);
   assert.equal(requests[1].body.absence_acknowledged, true);
 });
+
+test('calendar previews show paid periods and disclose trial omissions without blocking import', async () => {
+ reset();const render=batch();check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+ respond=async request=>batchResponse(request,{items:[{product:batchProduct(11,{excluded_cycles:[{cycle:'ontrial',reason:'trial_eligibility_unsupported'}]}),slug:'supplier-9-11',local_prices:{semiannually:{amount_cents:600,setup_cents:10},tenly:{amount_cents:12000,setup_cents:0}},importable:true}]});
+ await form(render()).props.onSubmit(event);
+ assert.match(renderToStaticMarkup(find(render(),item=>item.type?.name==='PriceLines'&&item.props.preview)),/半年/);assert.match(renderToStaticMarkup(find(render(),item=>item.type?.name==='PriceLines'&&item.props.preview)),/十年/);assert.match(text(render()),/试用未导入/);assert.match(text(render()),/正常付费账期可用/);assert.equal(button(render(),'确认导入 1 个商品').props.disabled,false);
+});
+
+test('volume supplier limits and customer prices use the selected rate for the entire quantity', async () => {
+ const tiers=[{min_qty:1,max_qty:1,amount_cents:1100,setup_cents:100},{min_qty:2,max_qty:4,amount_cents:1600,setup_cents:200}];
+ for (const [quantity,amount] of [[1,1200],[2,3400],[4,6600]]) {
+  reset();const product={...quantityProduct,prices:{monthly:{amount_cents:0,setup_cents:0}},options:[{...quantityProduct.options[0],quantity_mode:'volume',choices:[{...quantityProduct.options[0].choices[0],prices:{monthly:tiers[0]},price_tiers:{monthly:tiers}}]}]};
+  const render=mount(ImportProduct,{account,product});input(render(),'数据盘数量').props.onChange({target:{value:String(quantity)}});await form(render()).props.onSubmit(event);assert.equal(requests[0].body.maximum_cost_cents,amount);
+ }
+ const {productOptionAmounts}=load(path.join(web,'src/lib/product-options.ts'));
+ const option={price_delta_cents:0,setup_delta_cents:0,price_tiers:tiers.map(t=>({billing_cycle:'monthly',qty_minimum:t.min_qty,qty_maximum:t.max_qty,price_cents:t.amount_cents,setup_fee_cents:t.setup_cents,pricing_mode:'volume',active:true}))};
+ assert.deepEqual(productOptionAmounts(option,'monthly',2),{price:3200,setup:200});assert.deepEqual(productOptionAmounts(option,'monthly',4),{price:6400,setup:200});assert.equal(productOptionAmounts(option,'monthly',5),null);
+ assert.deepEqual(productOptionAmounts({...option,price_tiers:option.price_tiers.map(t=>({...t,pricing_mode:'graduated'}))},'monthly',2),{price:2700,setup:200});
+ assert.equal(productOptionAmounts({...option,price_tiers:[option.price_tiers[0],{...option.price_tiers[1],pricing_mode:'graduated'}]},'monthly',2),null);
+});

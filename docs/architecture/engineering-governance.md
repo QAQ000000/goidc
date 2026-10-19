@@ -80,7 +80,7 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
 
-独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 176 个 SQL 迁移文件、最大编号 175；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及取消续费界面、真实渠道和部署，均不得标为通过。
+独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。仓库共有 177 个 SQL 迁移文件、最大编号 176；文件数不代表业务库已经升级。本批尚未推送触发的远端 CI，以及取消续费界面、真实渠道和部署，均不得标为通过。
 
 本地等价入口如下：
 
