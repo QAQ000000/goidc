@@ -351,7 +351,7 @@ func (s *Store) queueServiceSuspendedEmail(ctx context.Context, tx pgx.Tx, servi
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
 VALUES($1,$2,'email','service_suspended',0,CURRENT_DATE)
-ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
+ON CONFLICT DO NOTHING
 RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
@@ -390,7 +390,7 @@ func (s *Store) queueServiceSuspendedSMS(ctx context.Context, tx pgx.Tx, service
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
 VALUES($1,$2,'sms','service_suspended',0,CURRENT_DATE)
-ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
+ON CONFLICT DO NOTHING
 RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil

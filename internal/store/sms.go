@@ -329,10 +329,13 @@ func (s *Store) RecoverStaleSMSJobs(ctx context.Context) error {
 	return s.recoverOutboxJobs(ctx, "sms_outbox")
 }
 func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {
+	if err := s.expireLegacyDeadlineJobs(ctx, "sms_outbox"); err != nil {
+		return nil, err
+	}
 	var o SMSJob
 	var sealed []byte
 	var challenge string
-	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,''),coalesce(s.template_id,''),s.locked_at`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID, &o.TemplateID, &o.LockedAt)
+	e := s.Pool.QueryRow(ctx, `WITH c AS(SELECT id FROM sms_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND expires_at>now() AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=sms_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("sms_outbox", "sms")+` ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE sms_outbox s SET status='sending',attempts=attempts+1,locked_at=now() FROM c WHERE s.id=c.id RETURNING s.id,s.recipient,s.body_encrypted,s.kind,s.attempts,s.expires_at,s.challenge_id,coalesce(s.channel_instance_id,''),coalesce(s.template_id,''),s.locked_at`).Scan(&o.ID, &o.Recipient, &sealed, &o.Kind, &o.Attempts, &o.ExpiresAt, &challenge, &o.ChannelInstanceID, &o.TemplateID, &o.LockedAt)
 	if e != nil {
 		return nil, e
 	}
@@ -349,7 +352,7 @@ func (s *Store) ClaimSMSJob(ctx context.Context) (*SMSJob, error) {
 // SMSJobActive rechecks challenge consumption immediately before delivery.
 func (s *Store) SMSJobActive(ctx context.Context, job SMSJob) (bool, error) {
 	var active bool
-	e := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sms_outbox s WHERE s.id=$1 AND s.status='sending' AND s.attempts=$2 AND s.locked_at=$3 AND s.expires_at>now() AND (s.verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=s.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())))`, job.ID, job.Attempts, job.LockedAt).Scan(&active)
+	e := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sms_outbox s WHERE s.id=$1 AND s.status='sending' AND s.attempts=$2 AND s.locked_at=$3 AND s.expires_at>now() AND (s.verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=s.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("s", "sms")+`)`, job.ID, job.Attempts, job.LockedAt).Scan(&active)
 	return active, e
 }
 func (s *Store) CompleteSMSJob(ctx context.Context, o SMSJob, sendErr error) error {

@@ -20,6 +20,9 @@ func outboxRetryDelay(attempts int) time.Duration {
 // Recovering a crashed delivery consumes its attempt and uses the same delay
 // and maximum as a normal failure. Expiration always wins over dead-lettering.
 func (s *Store) recoverOutboxJobs(ctx context.Context, table string) error {
+	if err := s.expireLegacyDeadlineJobs(ctx, table); err != nil {
+		return err
+	}
 	body := "body_encrypted=''::bytea"
 	if table == "email_outbox" {
 		body += ",body='[expired]'"

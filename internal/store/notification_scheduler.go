@@ -31,25 +31,36 @@ func (s *Store) EnqueueServiceExpiryReminders(ctx context.Context, limit int) (i
 	if err := json.Unmarshal(raw, &expiryDays); err != nil || len(expiryDays) == 0 {
 		expiryDays = []int{}
 	}
-	args := []any{limit}
-	placeholders := make([]string, len(expiryDays))
-	for i, d := range expiryDays {
-		args = append(args, d)
-		placeholders[i] = fmt.Sprintf("$%d", i+2)
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return 0, err
 	}
-	rows, err := s.Pool.Query(ctx, `
+	defer tx.Rollback(ctx)
+	rows, err := tx.Query(ctx, `
 SELECT s.id,s.user_id,s.next_due_at,p.name,u.email,u.email_verified,u.phone,u.phone_verified,
-       (s.next_due_at::date-CURRENT_DATE)::int AS days_left
+       ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)::int AS days_left
 FROM services s
 JOIN products p ON p.id=s.product_id
 JOIN users u ON u.id=s.user_id
-WHERE s.status IN ('active','suspended')
+WHERE s.status IN ('active','suspended') AND u.status='active'
   AND NOT s.import_review_required
   AND s.billing_cycle <> 'once'
-  AND s.next_due_at IS NOT NULL
-  AND (s.next_due_at::date-CURRENT_DATE) = ANY(ARRAY[`+strings.Join(placeholders, ",")+`]::int[])
+  AND s.next_due_at>now()
+  AND ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)=ANY($2::int[])
+  AND EXISTS(SELECT 1 FROM notification_templates t
+    WHERE t.active AND t.kind='service_expiry_reminder'
+    AND ((t.channel='email' AND u.email_verified AND btrim(u.email)<>'' AND EXISTS(
+           SELECT 1 FROM channel_instances c WHERE c.category='mail' AND c.enabled))
+      OR (t.channel='sms' AND u.phone_verified AND u.phone ~ '^[+][1-9][0-9]{7,14}$' AND EXISTS(
+           SELECT 1 FROM channel_instances c WHERE c.category='sms' AND c.enabled)))
+    AND NOT EXISTS(SELECT 1 FROM notification_delivery_events e
+      WHERE e.service_id=s.id AND e.channel=t.channel AND e.kind=t.kind
+       AND e.stage=(s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date
+       AND (e.resource_due_at=s.next_due_at OR (e.resource_due_at IS NULL
+        AND e.due_date BETWEEN (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-1
+                           AND (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date+1))))
 ORDER BY s.next_due_at,s.id
-LIMIT $1`, args...)
+FOR UPDATE OF s SKIP LOCKED LIMIT $1`, limit, expiryDays)
 	if err != nil {
 		return 0, err
 	}
@@ -67,14 +78,9 @@ LIMIT $1`, args...)
 		return 0, err
 	}
 	rows.Close()
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback(ctx)
 	queued := 0
 	for _, item := range items {
-		dueDate := item.due.Format("2006-01-02")
+		dueDate := item.due.In(notificationShanghai).Format("2006-01-02")
 		if item.emailVerified && strings.TrimSpace(item.email) != "" {
 			ok, e := s.enqueueServiceExpiryEmail(ctx, tx, item, dueDate)
 			if e != nil {
@@ -114,6 +120,10 @@ type expiryReminderCandidate struct {
 }
 
 func (s *Store) enqueueServiceExpiryEmail(ctx context.Context, tx pgx.Tx, item expiryReminderCandidate, dueDate string) (bool, error) {
+	valid, err := serviceExpiryCandidateStillDue(ctx, tx, item, "email")
+	if err != nil || !valid {
+		return false, err
+	}
 	var subject, body, instanceID string
 	var active bool
 	if err := tx.QueryRow(ctx, `SELECT subject,body,active FROM notification_templates WHERE channel='email' AND kind='service_expiry_reminder'`).Scan(&subject, &body, &active); err != nil {
@@ -133,10 +143,13 @@ func (s *Store) enqueueServiceExpiryEmail(ctx context.Context, tx pgx.Tx, item e
 	}
 	body = renderExpiryTemplate(body, item.product, dueDate, item.stage)
 	var eventID int64
-	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
-VALUES($1,$2,'email','service_expiry_reminder',$3,$4::date)
-ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
-RETURNING id`, item.serviceID, item.userID, item.stage, dueDate).Scan(&eventID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date,resource_due_at)
+SELECT $1,$2,'email','service_expiry_reminder',$3,$4::date,$5
+WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.service_id=$1
+ AND n.channel='email' AND n.kind='service_expiry_reminder' AND n.stage=$3
+ AND (n.resource_due_at=$5 OR (n.resource_due_at IS NULL AND n.due_date BETWEEN $4::date-1 AND $4::date+1)))
+ON CONFLICT DO NOTHING
+RETURNING id`, item.serviceID, item.userID, item.stage, dueDate, item.due).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
@@ -154,6 +167,13 @@ VALUES($1,$2,$3,'service_expiry_reminder',now()+interval '3 days',$4) RETURNING 
 }
 
 func (s *Store) enqueueServiceExpirySMS(ctx context.Context, tx pgx.Tx, item expiryReminderCandidate, dueDate string) (bool, error) {
+	if !ValidSMSRecipient(item.phone) {
+		return false, nil
+	}
+	valid, err := serviceExpiryCandidateStillDue(ctx, tx, item, "sms")
+	if err != nil || !valid {
+		return false, err
+	}
 	var body string
 	var templateID string
 	var active bool
@@ -175,10 +195,13 @@ func (s *Store) enqueueServiceExpirySMS(ctx context.Context, tx pgx.Tx, item exp
 		return false, err
 	}
 	var eventID int64
-	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
-VALUES($1,$2,'sms','service_expiry_reminder',$3,$4::date)
-ON CONFLICT (service_id,channel,kind,stage,due_date) DO NOTHING
-RETURNING id`, item.serviceID, item.userID, item.stage, dueDate).Scan(&eventID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date,resource_due_at)
+SELECT $1,$2,'sms','service_expiry_reminder',$3,$4::date,$5
+WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.service_id=$1
+ AND n.channel='sms' AND n.kind='service_expiry_reminder' AND n.stage=$3
+ AND (n.resource_due_at=$5 OR (n.resource_due_at IS NULL AND n.due_date BETWEEN $4::date-1 AND $4::date+1)))
+ON CONFLICT DO NOTHING
+RETURNING id`, item.serviceID, item.userID, item.stage, dueDate, item.due).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
@@ -234,7 +257,7 @@ SELECT i.id,i.user_id,i.invoice_no,i.amount_cents,i.due_at,COALESCE(o.order_no,'
 FROM invoices i
 JOIN users u ON u.id=i.user_id
 LEFT JOIN orders o ON o.id=i.order_id
-WHERE i.status='unpaid' AND NOT i.import_review_required
+WHERE i.status='unpaid' AND NOT i.import_review_required AND u.status='active'
   AND ((o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now())
        OR (i.due_at < now() - ($3::int * interval '1 day')))
   AND ($2='' OR (CASE WHEN o.id IS NOT NULL AND o.status='pending' AND i.due_at>=now()
@@ -245,11 +268,13 @@ WHERE i.status='unpaid' AND NOT i.import_review_required
                                   THEN 'order_payment_reminder' ELSE 'invoice_overdue_reminder' END
       AND ((t.channel='email' AND u.email_verified AND btrim(u.email)<>'' AND EXISTS (
               SELECT 1 FROM channel_instances c WHERE c.category='mail' AND c.enabled))
-        OR (t.channel='sms' AND u.phone_verified AND btrim(u.phone)<>'' AND EXISTS (
+        OR (t.channel='sms' AND u.phone_verified AND u.phone ~ '^[+][1-9][0-9]{7,14}$' AND EXISTS (
               SELECT 1 FROM channel_instances c WHERE c.category='sms' AND c.enabled)))
       AND NOT EXISTS (SELECT 1 FROM notification_delivery_events e
         WHERE e.invoice_id=i.id AND e.channel=t.channel AND e.kind=t.kind
-          AND e.stage=0 AND e.due_date=CURRENT_DATE))
+          AND e.stage=0 AND ((e.resource_due_at IS NULL
+           AND (e.created_at AT TIME ZONE 'Asia/Shanghai')::date=(now() AT TIME ZONE 'Asia/Shanghai')::date)
+          OR (e.resource_due_at=i.due_at AND e.due_date=(now() AT TIME ZONE 'Asia/Shanghai')::date))))
 ORDER BY i.due_at,i.id
 LIMIT $1`, limit, onlyKind, settings.BillingGraceDays)
 	if err != nil {
@@ -333,6 +358,9 @@ func (s *Store) enqueueBillingEmail(ctx context.Context, tx pgx.Tx, item billing
 	if err != nil || !valid {
 		return false, err
 	}
+	if valid, err = legacyRecipientCurrent(ctx, tx, item.userID, item.email, "email"); err != nil || !valid {
+		return false, err
+	}
 	var subject, body, instanceID string
 	var active bool
 	if err := tx.QueryRow(ctx, `SELECT subject,body,active FROM notification_templates WHERE channel='email' AND kind=$1`, item.kind).Scan(&subject, &body, &active); err != nil {
@@ -352,11 +380,15 @@ func (s *Store) enqueueBillingEmail(ctx context.Context, tx pgx.Tx, item billing
 	}
 	body = renderBillingTemplate(body, item)
 	var eventID int64
-	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date)
-VALUES(NULL,$1,$2,'email',$3,0,CURRENT_DATE)
-ON CONFLICT (invoice_id,channel,kind,stage,due_date)
-WHERE invoice_id IS NOT NULL AND kind IN ('order_payment_reminder','invoice_overdue_reminder') DO NOTHING
-RETURNING id`, item.userID, item.invoiceID, item.kind).Scan(&eventID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date,resource_due_at)
+SELECT NULL,$1,$2,'email',$3,0,(now() AT TIME ZONE 'Asia/Shanghai')::date,$4
+WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.invoice_id=$2
+ AND n.channel='email' AND n.kind=$3 AND n.stage=0
+ AND ((n.resource_due_at IS NULL
+   AND (n.created_at AT TIME ZONE 'Asia/Shanghai')::date=(now() AT TIME ZONE 'Asia/Shanghai')::date)
+  OR (n.resource_due_at=$4 AND n.due_date=(now() AT TIME ZONE 'Asia/Shanghai')::date)))
+ON CONFLICT DO NOTHING
+RETURNING id`, item.userID, item.invoiceID, item.kind, item.dueAt).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
@@ -374,8 +406,14 @@ VALUES($1,$2,$3,$4,now()+interval '7 days',$5) RETURNING id`, item.email, subjec
 }
 
 func (s *Store) enqueueBillingSMS(ctx context.Context, tx pgx.Tx, item billingNotificationCandidate) (bool, error) {
+	if !ValidSMSRecipient(item.phone) {
+		return false, nil
+	}
 	valid, err := billingCandidateStillDue(ctx, tx, &item)
 	if err != nil || !valid {
+		return false, err
+	}
+	if valid, err = legacyRecipientCurrent(ctx, tx, item.userID, item.phone, "sms"); err != nil || !valid {
 		return false, err
 	}
 	var body, templateID, instanceID string
@@ -397,11 +435,15 @@ func (s *Store) enqueueBillingSMS(ctx context.Context, tx pgx.Tx, item billingNo
 	}
 	body = renderBillingTemplate(body, item)
 	var eventID int64
-	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date)
-VALUES(NULL,$1,$2,'sms',$3,0,CURRENT_DATE)
-ON CONFLICT (invoice_id,channel,kind,stage,due_date)
-WHERE invoice_id IS NOT NULL AND kind IN ('order_payment_reminder','invoice_overdue_reminder') DO NOTHING
-RETURNING id`, item.userID, item.invoiceID, item.kind).Scan(&eventID); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,invoice_id,channel,kind,stage,due_date,resource_due_at)
+SELECT NULL,$1,$2,'sms',$3,0,(now() AT TIME ZONE 'Asia/Shanghai')::date,$4
+WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.invoice_id=$2
+ AND n.channel='sms' AND n.kind=$3 AND n.stage=0
+ AND ((n.resource_due_at IS NULL
+   AND (n.created_at AT TIME ZONE 'Asia/Shanghai')::date=(now() AT TIME ZONE 'Asia/Shanghai')::date)
+  OR (n.resource_due_at=$4 AND n.due_date=(now() AT TIME ZONE 'Asia/Shanghai')::date)))
+ON CONFLICT DO NOTHING
+RETURNING id`, item.userID, item.invoiceID, item.kind, item.dueAt).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
@@ -420,8 +462,8 @@ RETURNING id`, item.userID, item.invoiceID, item.kind).Scan(&eventID); err != ni
 func billingCandidateStillDue(ctx context.Context, tx pgx.Tx, item *billingNotificationCandidate) (bool, error) {
 	var status string
 	var reviewed bool
-	var dueAt time.Time
-	if err := tx.QueryRow(ctx, "SELECT status,due_at,amount_cents,import_review_required FROM invoices WHERE id=$1 FOR UPDATE", item.invoiceID).Scan(&status, &dueAt, &item.amountCents, &reviewed); err != nil {
+	var dueAt, observedAt time.Time
+	if err := tx.QueryRow(ctx, "SELECT status,due_at,amount_cents,import_review_required,now() FROM invoices WHERE id=$1 FOR UPDATE", item.invoiceID).Scan(&status, &dueAt, &item.amountCents, &reviewed, &observedAt); err != nil {
 		if err == pgx.ErrNoRows {
 			return false, nil
 		}
@@ -432,13 +474,13 @@ func billingCandidateStillDue(ctx context.Context, tx pgx.Tx, item *billingNotif
 	}
 	item.dueAt = dueAt
 	if item.kind == "invoice_overdue_reminder" {
-		return dueAt.Before(time.Now().Add(-time.Duration(item.graceDays) * 24 * time.Hour)), nil
+		return dueAt.Before(observedAt.Add(-time.Duration(item.graceDays) * 24 * time.Hour)), nil
 	}
 	var orderStatus string
 	if err := tx.QueryRow(ctx, "SELECT COALESCE(o.status,'') FROM invoices i LEFT JOIN orders o ON o.id=i.order_id WHERE i.id=$1", item.invoiceID).Scan(&orderStatus); err != nil {
 		return false, err
 	}
-	if orderStatus != "pending" || !dueAt.After(time.Now()) {
+	if orderStatus != "pending" || !dueAt.After(observedAt) {
 		return false, nil
 	}
 	return true, nil
@@ -449,28 +491,31 @@ func renderBillingTemplate(body string, item billingNotificationCandidate) strin
 	body = strings.ReplaceAll(body, "{{order_no}}", item.orderNo)
 	body = strings.ReplaceAll(body, "{{invoice_no}}", item.invoiceNo)
 	body = strings.ReplaceAll(body, "{{amount}}", amount)
-	return strings.ReplaceAll(body, "{{due_date}}", item.dueAt.Format("2006-01-02"))
+	return strings.ReplaceAll(body, "{{due_date}}", item.dueAt.In(notificationShanghai).Format("2006-01-02"))
 }
 
 // The unified scans are intentionally independent of legacy address, template
 // and channel availability. A Telegram-only customer must not disappear from
 // the candidate set. Legacy outboxes and their affected counts remain intact.
 func (s *Store) enqueueUnifiedServiceDeadlines(ctx context.Context, tx pgx.Tx, limit int, stages []int) error {
-	rows, err := tx.Query(ctx, `WITH candidates AS (
- SELECT s.id,s.next_due_at,
-  ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)::int AS stage,
+	rows, err := tx.Query(ctx, `SELECT s.id,s.next_due_at,c.stage,c.kind,
+ (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date::text
+ FROM services s CROSS JOIN LATERAL (SELECT
+  CASE WHEN s.next_due_at<=now() THEN 0 ELSE
+   ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)::int END AS stage,
   CASE WHEN s.next_due_at<=now() THEN 'service.expired' ELSE 'service.expiry_reminder' END AS kind
- FROM services s WHERE s.status IN ('active','suspended') AND NOT s.import_review_required
+ ) c
+ WHERE s.status IN ('active','suspended') AND NOT s.import_review_required
  AND s.billing_cycle<>'once' AND s.next_due_at IS NOT NULL
- AND (((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)=ANY($2::int[])
-      OR (s.next_due_at<=now() AND (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date=(now() AT TIME ZONE 'Asia/Shanghai')::date))
- ) SELECT s.id,c.next_due_at,c.stage,c.kind,
- (c.next_due_at AT TIME ZONE 'Asia/Shanghai')::date::text
- FROM candidates c JOIN services s ON s.id=c.id
- WHERE EXISTS(SELECT 1 FROM notification_routes r JOIN notification_message_templates m ON m.id=r.template_id
+ AND ((s.next_due_at>now() AND
+       ((s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date)=ANY($2::int[]))
+      OR (s.next_due_at<=now() AND s.next_due_at>=now()-interval '72 hours'))
+ AND EXISTS(SELECT 1 FROM notification_routes r JOIN notification_message_templates m ON m.id=r.template_id
   WHERE r.event_kind=c.kind AND r.enabled AND m.active)
  AND NOT EXISTS(SELECT 1 FROM notification_events e WHERE e.dedupe_key=
-  c.kind||':'||s.id::text||':'||(extract(epoch FROM c.next_due_at)*1000000)::bigint::text||':'||c.stage::text)
+  c.kind||':'||s.id::text||':'||(extract(epoch FROM s.next_due_at)*1000000)::bigint::text||':'||c.stage::text
+  OR (c.kind='service.expired' AND e.kind=c.kind AND e.service_id=s.id
+      AND (e.payload->>'resource_due_at')::timestamptz=s.next_due_at))
  ORDER BY s.id FOR UPDATE OF s SKIP LOCKED LIMIT $1`, limit, stages)
 	if err != nil {
 		return err

@@ -132,19 +132,34 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 	if err = s.linkLifecycleLegacyOutboxes(ctx, tx, eventID, kind, invoiceID, serviceID, stage); err != nil {
 		return err
 	}
-	rows, err := tx.Query(ctx, `SELECT r.id,r.channel,coalesce(r.instance_id,''),r.version,t.subject,t.body,t.version,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(b.id,0),coalesce(b.target,''),coalesce(b.version,0),coalesce(p.event_scope,'invoice.paid') FROM notification_routes r JOIN notification_message_templates t ON t.id=r.template_id LEFT JOIN user_notification_preferences p ON p.user_id=$1 AND p.channel=r.channel LEFT JOIN notification_targets b ON b.user_id=$1 AND b.instance_id=r.instance_id AND b.active WHERE r.event_kind=$2 AND r.enabled AND t.active ORDER BY r.id`, userID, kind)
+	// Cross-day recovery must not turn a newly enabled route, subscription or
+	// binding into consent for historical messages. updated_at is deliberately
+	// conservative: without a full configuration history, a later edit cannot
+	// prove that this route was ready at the resource's deadline. Same-day
+	// reminders retain their existing current-configuration semantics.
+	rows, err := tx.Query(ctx, `SELECT r.id,r.channel,coalesce(r.instance_id,''),r.version,t.subject,t.body,t.version,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(b.id,0),coalesce(b.target,''),coalesce(b.version,0),coalesce(p.event_scope,'invoice.paid'),
+ CASE WHEN $2='service.expired' AND
+   ($3::timestamptz AT TIME ZONE 'Asia/Shanghai')::date < (now() AT TIME ZONE 'Asia/Shanghai')::date
+ THEN coalesce(r.updated_at<=$3 AND t.updated_at<=$3 AND p.updated_at<=$3
+   AND (r.channel='inbox' OR (b.updated_at<=$3 AND EXISTS(
+     SELECT 1 FROM channel_instances c WHERE c.id=r.instance_id AND c.enabled AND c.updated_at<=$3))),false)
+ ELSE true END
+ FROM notification_routes r JOIN notification_message_templates t ON t.id=r.template_id
+ LEFT JOIN user_notification_preferences p ON p.user_id=$1 AND p.channel=r.channel
+ LEFT JOIN notification_targets b ON b.user_id=$1 AND b.instance_id=r.instance_id AND b.active
+ WHERE r.event_kind=$2 AND r.enabled AND t.active ORDER BY r.id`, userID, kind, due)
 	if err != nil {
 		return err
 	}
 	type routeSnapshot struct {
 		id, channel, instance, subject, body, target, scope                 string
 		routeVersion, templateVersion, prefVersion, targetID, targetVersion int64
-		enabled                                                             bool
+		enabled, readyAtDeadline                                            bool
 	}
 	snapshots := []routeSnapshot{}
 	for rows.Next() {
 		var r routeSnapshot
-		if err = rows.Scan(&r.id, &r.channel, &r.instance, &r.routeVersion, &r.subject, &r.body, &r.templateVersion, &r.enabled, &r.prefVersion, &r.targetID, &r.target, &r.targetVersion, &r.scope); err != nil {
+		if err = rows.Scan(&r.id, &r.channel, &r.instance, &r.routeVersion, &r.subject, &r.body, &r.templateVersion, &r.enabled, &r.prefVersion, &r.targetID, &r.target, &r.targetVersion, &r.scope, &r.readyAtDeadline); err != nil {
 			rows.Close()
 			return err
 		}
@@ -164,6 +179,8 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 			status, code = "skipped", "event_scope_not_subscribed"
 		} else if r.channel == "telegram" && r.targetID == 0 {
 			status, code = "skipped", "target_unbound"
+		} else if !r.readyAtDeadline {
+			status, code = "skipped", "catchup_subscription_changed"
 		}
 		if !notificationMessageValid(r.channel, subject, body) {
 			// A syntactically valid template can expand beyond provider/storage

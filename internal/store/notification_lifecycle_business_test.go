@@ -175,7 +175,9 @@ func TestLifecycleBusinessDeadlineAndBillingScansWithoutLegacyChannels(t *testin
 		}
 	}
 	lifecycleEventCount(t, f, "service.expiry_reminder", 1)
-	lifecycleEventCount(t, f, "service.expired", 1)
+	// The previous-day deadline is now sampled by bounded catchup, but its
+	// routes and consent were enabled after expiry and cannot receive it.
+	lifecycleEventCount(t, f, "service.expired", 2)
 	for range 2 {
 		if count, err := f.db.EnqueueUnpaidOrderReminders(f.ctx, 100); err != nil || count != 0 {
 			t.Fatal(count, err)

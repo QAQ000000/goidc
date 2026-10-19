@@ -78,11 +78,28 @@ func TestBillingSchedulerDrainsLimitedBatchesAndConcurrentWorkers(t *testing.T) 
 	if n, err := db.EnqueueBillingNotifications(t.Context(), 1); err != nil || n != 0 {
 		t.Fatalf("replay n=%d err=%v", n, err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE notification_delivery_events SET due_date=CURRENT_DATE-1 WHERE kind IN ('order_payment_reminder','invoice_overdue_reminder')`); err != nil {
+	// Deadline snapshots are immutable. Seed another set with yesterday's
+	// facts rather than rewriting today's evidence to impersonate another day.
+	var historicalInvoices []int64
+	for i := 4; i < 8; i++ {
+		_, invoiceID := billingSchedulerFixture(t, db, uid, pid, i, i%2 == 0)
+		historicalInvoices = append(historicalInvoices, invoiceID)
+	}
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO notification_delivery_events
+ (user_id,invoice_id,channel,kind,stage,due_date,resource_due_at,created_at)
+ SELECT i.user_id,i.id,c.channel,
+ CASE WHEN i.due_at>=now() THEN 'order_payment_reminder' ELSE 'invoice_overdue_reminder' END,
+ 0,(now() AT TIME ZONE 'Asia/Shanghai')::date-1,i.due_at,now()-interval '1 day'
+ FROM invoices i CROSS JOIN (VALUES('email'),('sms')) c(channel)
+ WHERE i.id=ANY($1::bigint[])`, historicalInvoices); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := db.EnqueueBillingNotifications(t.Context(), 100); err != nil || n != 8 {
 		t.Fatalf("next day n=%d err=%v", n, err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM notification_delivery_events
+ WHERE invoice_id=ANY($1::bigint[]) AND due_date=(now() AT TIME ZONE 'Asia/Shanghai')::date-1`, historicalInvoices).Scan(&events); err != nil || events != 8 {
+		t.Fatalf("next-day scan changed historical facts: count=%d err=%v", events, err)
 	}
 }
 

@@ -26,10 +26,13 @@ func (s *Store) RecoverStaleEmailJobs(ctx context.Context) error {
 }
 
 func (s *Store) ClaimEmailJob(ctx context.Context) (*EmailJob, error) {
+	if err := s.expireLegacyDeadlineJobs(ctx, "email_outbox"); err != nil {
+		return nil, err
+	}
 	var job EmailJob
 	var sealed []byte
 	err := s.Pool.QueryRow(ctx, `WITH candidate AS (
-SELECT id FROM email_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now()))
+SELECT id FROM email_outbox WHERE status='pending' AND attempts<max_attempts AND available_at<=now() AND (expires_at IS NULL OR expires_at>now()) AND (verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=email_outbox.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("email_outbox", "email")+`
 ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 1
 )
 UPDATE email_outbox e SET status='sending',attempts=e.attempts+1,locked_at=now()
@@ -54,7 +57,7 @@ RETURNING e.id,e.recipient,e.subject,e.body,e.kind,e.attempts,e.body_encrypted,c
 
 func (s *Store) EmailJobActive(ctx context.Context, job EmailJob) (bool, error) {
 	var active bool
-	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM email_outbox e WHERE e.id=$1 AND e.status='sending' AND e.attempts=$2 AND e.locked_at=$3 AND (e.expires_at IS NULL OR e.expires_at>now()) AND (e.verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=e.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())))`, job.ID, job.Attempts, job.LockedAt).Scan(&active)
+	err := s.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM email_outbox e WHERE e.id=$1 AND e.status='sending' AND e.attempts=$2 AND e.locked_at=$3 AND (e.expires_at IS NULL OR e.expires_at>now()) AND (e.verification_id IS NULL OR EXISTS(SELECT 1 FROM verification_challenges v WHERE v.id=e.verification_id AND v.consumed_at IS NULL AND v.expires_at>now())) AND `+legacyDeadlineEligibleSQL("e", "email")+`)`, job.ID, job.Attempts, job.LockedAt).Scan(&active)
 	return active, err
 }
 

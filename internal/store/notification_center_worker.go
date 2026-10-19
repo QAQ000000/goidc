@@ -37,7 +37,8 @@ const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e
   SELECT 1 FROM services s WHERE s.id=e.service_id AND s.status IN ('active','suspended')
   AND NOT s.import_review_required AND s.billing_cycle<>'once'
   AND s.next_due_at=(e.payload->>'resource_due_at')::timestamptz
-  AND ((e.kind='service.expired' AND s.next_due_at<=clock_timestamp())
+  AND ((e.kind='service.expired' AND s.next_due_at<=clock_timestamp()
+        AND s.next_due_at>=clock_timestamp()-interval '72 hours')
     OR (e.kind='service.expiry_reminder' AND s.next_due_at>clock_timestamp()
       AND (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(clock_timestamp() AT TIME ZONE 'Asia/Shanghai')::date=(e.payload->>'stage')::integer)))
  ELSE e.kind IN ('order.created','service.provisioned','service.resumed','service.renewed','service.terminated') END

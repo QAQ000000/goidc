@@ -93,7 +93,7 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instance
  'webhooks',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM payment_webhook_events e),
  'email_outbox',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM email_outbox e),
  'sms_outbox',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM sms_outbox s),
- 'legacy_delivery_events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM notification_delivery_events e)
+ 'legacy_delivery_events',(SELECT jsonb_agg(to_jsonb(e)-'resource_due_at' ORDER BY id) FROM notification_delivery_events e)
  )`
 	if current {
 		query += ` || jsonb_build_object(
