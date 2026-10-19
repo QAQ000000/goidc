@@ -1,6 +1,6 @@
 # 架构与验证
 
-- [工程治理契约](engineering-governance.md)：项目生命周期、Agent 上下文、证据等级和发布安全边界。
+- [工程治理契约](engineering-governance.md)：项目生命周期、架构依赖门禁与存量债务、Agent 上下文、证据等级和发布安全边界。
 - [领域验收矩阵](contract-verification-matrix.md)：契约到测试、审计入口和证据边界。
 - [项目状态与开发入口](../reconstruction.md)：当前实现、边界和入口。
 - [编译期模块架构](../compiled-module-architecture.md)：适配器和模块注册约束。

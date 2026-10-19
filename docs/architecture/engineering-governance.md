@@ -76,6 +76,20 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 ## CI 门禁
 
+### 架构依赖与存量持久化边界
+
+`internal/archtest` 在 CI 中显式执行，约束核心 `internal` 包不得依赖 `internal/httpapi`，并检查 HTTP 层直接访问数据库的现存债务。它通过 Go 类型、窄接口签名和传递 SQL 字符串的辅助函数识别调用，不按 `tx`、`Pool` 等变量名或 SQL 文本前缀放行。HTTP 入口应调用 Store 导出方法，将数据库事务和持久化规则留在 Store。
+
+[`http-persistence-baseline.json`](../../internal/archtest/testdata/http-persistence-baseline.json) 只登记现存调用的受控上限，不是给旧文件或新领域的持久化许可。条目绑定文件、函数、数据库操作、完整声明的规范化 AST 哈希及引用常量值哈希。新增条目、修改绑定函数体或提高调用数量均阻断；移除调用、迁移到 Store 或删除源码后，必须同步减少或删除基线条目。现阶段以整函数收口：同一函数还有旧数据库访问时，局部修改也会阻断。空行和 Go 排版不影响哈希，变量改名及业务修改可能触发门禁，不能通过重建基线接受；应先把该函数的持久化抽到 Store，或单独评审架构策略变更。
+
+本批扫描边界是已有 HTTP 包布局：新增构建标签、平台专用 Go 文件或 HTTP 嵌套子包直接失败，避免它们被静默漏扫；后续扩展这些布局必须同步设计扫描和验证策略。该检查不是通用的跨构建全程序数据流分析，例如动态 SQL 经可变全局值或自定义结构传递仍需评审；修改守卫、工作流本身也必须评审，不能把基线当作防篡改安全边界。
+
+CI 的 `GOIDC_ARCH_BASE_REF` 与文档校验的 `DOC_BASE` 使用同一提交：PR 使用目标分支基准，`main` 推送使用事件的前一个远端提交，覆盖一次推送内的全部提交；首次推送的全零基准回退到当前历史的根提交。不能解析的基准直接失败，不退化成仅检查最后一个提交。当前基线必须同时满足源码扫描和历史基线只能缩减的约束；基准提交尚未包含基线时，从该提交的源码只读采集允许范围再比较，不直接放行新增债务。
+
+`./scripts/go.sh test ./... -run '^$'` 只编译测试，不执行这些断言；本地和 CI 均须另跑 `./scripts/go.sh test ./internal/archtest -count=1`。测试要求有 Git 历史的源码 checkout 和可用的 Go 导出数据；本地默认与 `HEAD` 比较，跨多提交检查时显式设置 `GOIDC_ARCH_BASE_REF`。架构门禁不连接业务数据库，只证明所检查的依赖和调用边界；它不证明统一幂等、权限、资金、事务或外部链路正确，相关行为继续由领域回归保护。
+
+### 领域与运行门禁
+
 `.github/workflows/quality.yml` 是 Pull Request 和 `main` 推送的静态与独立行为门禁，执行文档/契约校验、Go 编译、报表 JSON 格式边界、38 项渠道通知单元 race、实名认证提供方与支付运行单元 race、真实 API/worker 无网络模块清单，以及 Web lint/typecheck、代理、下载、主题和实名认证组件测试。独立 PG18 job 的通知 runner 强制执行 86 项集成入口，覆盖通知进程崩溃恢复、72 小时跨日补偿、上海日界及旧提醒来源升级，并构建 API/worker 验证 160/161/162/172 启动拒绝；runner 逐项核对 Go JSON 的 run/pass，缺失、失败或任何 skip 均阻断。该 job 另执行 8 项站点公开主题、管理权限与维护隔离回归，以及实名认证严格集成 runner，覆盖实例快照、未知结果查询、租约与人工围栏、业务资格和 163 升级。同库另执行供应商严格 runner，验证账户身份/命名密钥、真实任务、未知写结果、worker SIGKILL 与 schema165 升级；另执行支付严格 runner，覆盖第二测试协议、多实例与历史密钥、查询/关单/退款边界和 164 升级，逐入口要求零 skip。另执行验证码严格 runner，覆盖图片/点击/widget、配置绑定、旧挑战兼容和并发单次消费；真实厂商另验。另执行内部调度严格 runner，覆盖目录权限、真实分发、审计故障和日续费全量去重。数据库为任务自有容器，只监听回环并在结束时清理。GitHub 上的实际 job 结果仍须单独记录，本地等价执行不能冒充远端成功。浏览器、真实供应商和生产环境条件继续独立验收。
 
 模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
@@ -91,6 +105,7 @@ node scripts/check-contract-gates.mjs
 node --test scripts/check-doc-governance.test.mjs scripts/check-doc-links.test.mjs scripts/check-contract-gates.test.mjs
 ./scripts/check-go-toolchain.sh
 ./scripts/go.sh test ./... -run '^$'
+./scripts/go.sh test ./internal/archtest -count=1
 ./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'
 node scripts/test-compiled-notifications.mjs --unit
 node scripts/test-compiled-certification.mjs --unit
