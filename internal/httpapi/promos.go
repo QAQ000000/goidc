@@ -1,9 +1,7 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -12,7 +10,6 @@ import (
 
 	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var promoCodePattern = regexp.MustCompile(`^[A-Z0-9][A-Z0-9_-]{2,49}$`)
@@ -90,26 +87,7 @@ func (s *Server) removeCartPromo(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-type promoAdminInput struct {
-	Code               string   `json:"code"`
-	DiscountType       string   `json:"discount_type"`
-	Value              int64    `json:"value"`
-	Cycles             []string `json:"cycles"`
-	AppliesProductIDs  []int64  `json:"applies_product_ids"`
-	RequiresProductIDs []int64  `json:"requires_product_ids"`
-	RequiresExisting   bool     `json:"requires_existing"`
-	StartsAt           string   `json:"starts_at"`
-	ExpiresAt          string   `json:"expires_at"`
-	MaxUses            int64    `json:"max_uses"`
-	OneTime            bool     `json:"one_time"`
-	OnlyNewCustomer    bool     `json:"only_new_customer"`
-	OnlyOldCustomer    bool     `json:"only_old_customer"`
-	OncePerCustomer    bool     `json:"once_per_customer"`
-	Recurring          bool     `json:"recurring"`
-	RecurringLimit     int64    `json:"recurring_limit"`
-	UpgradeOnly        bool     `json:"upgrade_only"`
-	Notes              string   `json:"notes"`
-}
+type promoAdminInput = store.PromoAdminInput
 
 func parsePromoTime(value string) (*time.Time, error) {
 	value = strings.TrimSpace(value)
@@ -165,11 +143,28 @@ func validPromoInput(input *promoAdminInput) (*time.Time, *time.Time, error) {
 	return start, expire, nil
 }
 
-const promoStatusSQL = `CASE WHEN expires_at<=statement_timestamp() THEN 'expired' WHEN NOT active THEN 'disabled' WHEN starts_at>statement_timestamp() THEN 'scheduled' WHEN (max_uses>0 AND used_count>=max_uses) OR (one_time AND used_count>0) THEN 'exhausted' ELSE 'active' END`
-const promoAdminColumns = `id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,recurring_limit,upgrade_only,active,notes,created_at,updated_at,version,` + promoStatusSQL + ` AS status`
-
 func (s *Server) promoCodes(w http.ResponseWriter, r *http.Request) {
-	s.list(w, r, `SELECT `+promoAdminColumns+` FROM promo_codes ORDER BY id DESC`)
+	items, err := s.db.ListAdminPromoCodes(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, items)
+}
+
+func (s *Server) promoCustomerGroupsOptions(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) > 120 {
+		writeError(w, 400, "invalid_query", "搜索条件过长")
+		return
+	}
+	limit, offset := pagination(r)
+	page, err := s.db.PromoCustomerGroupOptions(r.Context(), q, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, page)
 }
 
 // Both items and total use one statement snapshot, including an empty/out-of-range page.
@@ -207,14 +202,12 @@ func (s *Server) promoCodesPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	limit, offset := pagination(r)
-	var items json.RawMessage
-	var total int64
-	err := s.db.Pool.QueryRow(r.Context(), `WITH classified AS (SELECT `+promoAdminColumns+` FROM promo_codes), filtered AS (SELECT * FROM classified WHERE ($1='' OR code ILIKE '%'||$1||'%' OR notes ILIKE '%'||$1||'%') AND ($2='all' OR active=($2='active')) AND (NOT $3 OR NOT upgrade_only) AND ($4='all' OR status=$4)), page AS (SELECT * FROM filtered ORDER BY id DESC LIMIT $5 OFFSET $6) SELECT coalesce((SELECT jsonb_agg(to_jsonb(page) ORDER BY id DESC) FROM page),'[]'::jsonb),(SELECT count(*) FROM filtered)`, q, active, orderEligible, status, limit, offset).Scan(&items, &total)
+	page, err := s.db.PageAdminPromoCodes(r.Context(), store.PromoAdminFilter{Query: q, Active: active, Status: status, OrderEligible: orderEligible, Limit: limit, Offset: offset})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, page)
 }
 
 func (s *Server) createPromoCode(w http.ResponseWriter, r *http.Request) {
@@ -236,85 +229,16 @@ func (s *Server) createPromoCode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
-			return txResponse{}, err
-		}
-		receipt := map[string]any{}
-		key := r.Header.Get("Idempotency-Key")
-		hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, input, &receipt)
-		if err != nil {
-			return txResponse{}, err
-		}
-		if replay {
-
-			return txResponse{201, receipt}, nil
-		}
-		var id int64
-		err = tx.QueryRow(r.Context(), `INSERT INTO promo_codes(code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,notes,created_by,recurring_limit,upgrade_only)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`, input.Code, input.DiscountType, input.Value, input.Cycles, input.AppliesProductIDs, input.RequiresProductIDs, input.RequiresExisting, start, expire, input.MaxUses, input.OneTime, input.OnlyNewCustomer, input.OnlyOldCustomer, input.OncePerCustomer, input.Recurring, input.Notes, identityFrom(r).ID, input.RecurringLimit, input.UpgradeOnly).Scan(&id)
-		if err != nil {
-			var pg *pgconn.PgError
-			if errors.As(err, &pg) && pg.Code == "23505" {
-				return txResponse{}, &txHTTPError{409, "promo_code_exists", "优惠码已存在"}
-			}
-			return txResponse{}, err
-		}
-		rows, err := tx.Query(r.Context(), `SELECT `+promoAdminColumns+` FROM promo_codes WHERE id=$1`, id)
-		if err != nil {
-			return txResponse{}, err
-		}
-		receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-		if err != nil {
-			return txResponse{}, err
-		}
-		if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, "promo_code.create", key, hash, receipt); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.created", "promo_code", id, map[string]any{"code": input.Code, "discount_type": input.DiscountType}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusCreated, receipt}, nil
-	})
-}
-
-// optionalPromoTime distinguishes omitted fields from explicit null/empty clears.
-type optionalPromoTime struct {
-	Present bool
-	Value   *time.Time
-	Invalid bool
-}
-
-func (o *optionalPromoTime) UnmarshalJSON(raw []byte) error {
-	o.Present = true
-	if string(raw) == "null" {
-		o.Value = nil
-		return nil
-	}
-	var value string
-	if err := json.Unmarshal(raw, &value); err != nil {
-		o.Invalid = true
-		return nil
-	}
-	parsed, err := parsePromoTime(value)
+	out, err := s.db.CreateAdminPromoCode(requestFileContext(r), identityFrom(r).ID, r.Header.Get("Idempotency-Key"), input, start, expire)
 	if err != nil {
-		o.Invalid = true
-		return nil
+		s.fail(w, r, err)
+		return
 	}
-	o.Value = parsed
-	return nil
+	write(w, http.StatusCreated, out)
 }
 
-type promoPatchInput struct {
-	Active          *bool             `json:"active"`
-	StartsAt        optionalPromoTime `json:"starts_at"`
-	ExpiresAt       optionalPromoTime `json:"expires_at"`
-	MaxUses         *int64            `json:"max_uses"`
-	Notes           *string           `json:"notes"`
-	ExpectedVersion *int64            `json:"expected_version"`
-}
+type optionalPromoTime = store.OptionalPromoTime
+type promoPatchInput = store.PromoPatchInput
 
 func (s *Server) updatePromoCode(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -333,54 +257,15 @@ func (s *Server) updatePromoCode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_promo", "优惠码字段无效")
 		return
 	}
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if err = store.CheckAdminCreationPermission(requestFileContext(r), tx, identityFrom(r).ID, "promos"); err != nil {
-			return txResponse{}, err
+	out, err := s.db.UpdateAdminPromoCode(requestFileContext(r), identityFrom(r).ID, id, r.Header.Get("Idempotency-Key"), input)
+	if err != nil {
+		var invalid *store.Conflict
+		if errors.As(err, &invalid) && invalid.Code == "invalid_promo_time" {
+			writeError(w, 400, invalid.Code, invalid.Message)
+			return
 		}
-		key := r.Header.Get("Idempotency-Key")
-		receipt := map[string]any{}
-		operation := fmt.Sprintf("promo_code.update.%d", id)
-		hash, replay, err := store.CreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, input, &receipt)
-		if err != nil {
-			return txResponse{}, err
-		}
-		if replay {
-
-			return txResponse{200, receipt}, nil
-		}
-		var currentStart, currentExpire *time.Time
-		var version int64
-		if err = tx.QueryRow(r.Context(), `SELECT starts_at,expires_at,version FROM promo_codes WHERE id=$1 FOR UPDATE`, id).Scan(&currentStart, &currentExpire, &version); err != nil {
-			return txResponse{}, err
-		}
-		if input.ExpectedVersion != nil && *input.ExpectedVersion != version {
-			return txResponse{}, &txHTTPError{409, "promo_version_conflict", "优惠码已更新，请重新加载后保存"}
-		}
-		if input.StartsAt.Present {
-			currentStart = input.StartsAt.Value
-		}
-		if input.ExpiresAt.Present {
-			currentExpire = input.ExpiresAt.Value
-		}
-		if currentStart != nil && currentExpire != nil && !currentExpire.After(*currentStart) {
-			return txResponse{}, &txHTTPError{400, "invalid_promo_time", "结束时间必须晚于开始时间"}
-		}
-		rows, err := tx.Query(r.Context(), `UPDATE promo_codes SET active=coalesce($2,active),starts_at=$3,expires_at=$4,max_uses=coalesce($5,max_uses),notes=coalesce($6,notes),version=version+1,updated_at=now() WHERE id=$1 RETURNING `+promoAdminColumns, id, input.Active, currentStart, currentExpire, input.MaxUses, input.Notes)
-		if err != nil {
-			return txResponse{}, err
-		}
-		receipt, err = pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-		if err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "promo_code.updated", "promo_code", id, map[string]any{}); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.SaveCreationReceipt(r.Context(), tx, identityFrom(r).ID, operation, key, hash, receipt); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{200, receipt}, nil
-	})
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, out)
 }

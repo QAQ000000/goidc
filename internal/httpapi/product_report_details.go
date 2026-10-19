@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/codex/zjmfgo/internal/store"
 )
 
 type productReportDetail struct {
@@ -31,7 +31,7 @@ func (s *Server) registerProductReportRoutes(mux *http.ServeMux) {
 }
 
 // Category/product filters apply after complete order-line discount allocation.
-// Totals and export cover all matching groups; pagination only slices the UI.
+// Totals cover all matching groups; pagination only slices the UI.
 func (s *Server) productIncomeGroups(w http.ResponseWriter, r *http.Request) {
 	period, err := parseReportPeriod(r, true)
 	if s.reportInputFailure(w, r, err) {
@@ -54,47 +54,17 @@ func (s *Server) productIncomeGroups(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_report_filter", "产品搜索条件过长")
 		return
 	}
-	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	items, metadata, err := s.db.ProductIncomeCategoryData(r.Context(), period.Start, period.End, identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	items, err := productIncomeRowsFrom(r.Context(), tx, period, identityFrom(r).ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	ids := make([]int64, 0, len(items))
-	for _, item := range items {
-		ids = append(ids, item.ProductID)
-	}
-	rows, err := tx.Query(r.Context(), `SELECT p.id,coalesce(c.id,0) category_id,coalesce(c.name,'未分类') category_name,coalesce(c.sort_order,0) sort_order FROM products p LEFT JOIN product_categories c ON c.id=p.category_id WHERE p.id=ANY($1::bigint[])`, ids)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	type categoryInfo struct {
-		ProductID  int64
-		CategoryID int64
-		Name       string
-		Sort       int
-	}
-	metadata, err := pgx.CollectRows(rows, pgx.RowToStructByPos[categoryInfo])
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	byProduct := map[int64]categoryInfo{}
+	byProduct := map[int64]store.ProductIncomeCategory{}
 	for _, info := range metadata {
 		byProduct[info.ProductID] = info
 	}
 	options := make([]map[string]any, 0, len(items))
-	categories := map[int64]categoryInfo{}
+	categories := map[int64]store.ProductIncomeCategory{}
 	groups := map[int64]*productReportGroup{}
 	summary := productIncome{}
 	for _, item := range items {

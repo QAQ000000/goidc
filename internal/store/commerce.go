@@ -21,16 +21,19 @@ func conflict(code, message string) error { return &Conflict{code, message} }
 type CheckoutInput struct {
 	CartVersion int64   `json:"cart_version"`
 	ItemIDs     []int64 `json:"item_ids"`
+	QuoteHash   string  `json:"quote_hash,omitempty"`
 }
 type CheckoutResult struct {
-	OrderID       int64  `json:"order_id"`
-	InvoiceID     int64  `json:"invoice_id"`
-	OrderNo       string `json:"order_no"`
-	TotalCents    int64  `json:"total_cents"`
-	DiscountCents int64  `json:"discount_cents"`
-	PromoCode     string `json:"promo_code,omitempty"`
-	Replayed      bool   `json:"replayed"`
-	promoID       int64
+	OrderID            int64  `json:"order_id"`
+	InvoiceID          int64  `json:"invoice_id"`
+	OrderNo            string `json:"order_no"`
+	TotalCents         int64  `json:"total_cents"`
+	DiscountCents      int64  `json:"discount_cents"`
+	PromoCode          string `json:"promo_code,omitempty"`
+	Replayed           bool   `json:"replayed"`
+	GroupDiscountCents int64  `json:"group_discount_cents"`
+	PromoDiscountCents int64  `json:"promo_discount_cents"`
+	promoID            int64
 }
 
 func (s *Store) Checkout(ctx context.Context, userID int64, key string, input CheckoutInput) (CheckoutResult, error) {
@@ -60,10 +63,13 @@ func (s *Store) Checkout(ctx context.Context, userID int64, key string, input Ch
 		return result, err
 	}
 	var savedHash string
-	err = tx.QueryRow(ctx, "SELECT o.id,i.id,o.order_no,o.total_cents,o.request_hash FROM orders o JOIN invoices i ON i.order_id=o.id WHERE o.user_id=$1 AND o.idempotency_key=$2", userID, key).Scan(&result.OrderID, &result.InvoiceID, &result.OrderNo, &result.TotalCents, &savedHash)
+	err = tx.QueryRow(ctx, "SELECT o.id,i.id,o.order_no,o.total_cents,o.discount_cents,coalesce(o.promo_code,''),o.request_hash FROM orders o JOIN invoices i ON i.order_id=o.id WHERE o.user_id=$1 AND o.idempotency_key=$2", userID, key).Scan(&result.OrderID, &result.InvoiceID, &result.OrderNo, &result.TotalCents, &result.DiscountCents, &result.PromoCode, &savedHash)
 	if err == nil {
 		if savedHash != requestHash {
 			return result, conflict("idempotency_conflict", "相同幂等键对应不同的请求")
+		}
+		if err = loadCheckoutPricingTotals(ctx, tx, &result); err != nil {
+			return result, err
 		}
 		result.Replayed = true
 		return result, tx.Commit(ctx)
@@ -81,11 +87,14 @@ func (s *Store) Checkout(ctx context.Context, userID int64, key string, input Ch
 	if errors.Is(err, pgx.ErrNoRows) {
 		promoCode = ""
 	}
+	if err = GroupPricingReadLock(ctx, tx); err != nil {
+		return result, err
+	}
 	if err = CatalogReadLock(ctx, tx); err != nil {
 		return result, err
 	}
 	rows, err := tx.Query(ctx, `SELECT ci.id,ci.product_id,ci.quantity,ci.product_revision,p.revision,p.name,ci.billing_cycle,ci.option_ids,ci.option_quantities,pp.price_cents,pp.setup_fee_cents,p.stock,(p.active AND catalog_category_visible(p.category_id)),pp.active,p.approval_required,ci.purchase_fields
- FROM cart_items ci JOIN products p ON p.id=ci.product_id JOIN product_prices pp ON pp.product_id=ci.product_id AND pp.billing_cycle=ci.billing_cycle WHERE ci.cart_id=$1 AND ci.id=ANY($2) ORDER BY p.id FOR UPDATE OF p,ci,pp`, cartID, ids)
+ FROM cart_items ci JOIN products p ON p.id=ci.product_id JOIN product_prices pp ON pp.product_id=ci.product_id AND pp.billing_cycle=ci.billing_cycle WHERE ci.cart_id=$1 AND ci.id=ANY($2) ORDER BY p.id,ci.id FOR UPDATE OF p,ci,pp`, cartID, ids)
 	if err != nil {
 		return result, err
 	}
@@ -107,9 +116,13 @@ func (s *Store) Checkout(ctx context.Context, userID int64, key string, input Ch
 	if len(items) != len(ids) {
 		return result, conflict("stale_selection", "选中的购物车项目不存在")
 	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
 	result, renewalBenefits, requiresApproval, err := s.prepareCheckoutLines(ctx, tx, userID, items, promoCode)
 	if err != nil {
 		return result, err
+	}
+	if input.QuoteHash != "" && input.QuoteHash != cartPurchaseHash(input.CartVersion, ids, items, result, renewalBenefits) {
+		return result, conflict("stale_quote", "分组、优惠或价格已变化，请重新报价确认")
 	}
 	result, err = s.persistCheckoutLines(ctx, tx, userID, key, requestHash, items, result, renewalBenefits, requiresApproval, result.promoID, checkoutOptions{GenerateInvoice: true, ActorID: userID, Source: "customer", ItemIDs: ids})
 	if err != nil {

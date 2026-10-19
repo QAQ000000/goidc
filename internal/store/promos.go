@@ -10,11 +10,12 @@ import (
 )
 
 type PromoLine struct {
-	ProductID  int64
-	Cycle      string
-	BaseCents  int64
-	SetupCents int64
-	Quantity   int
+	ProductID          int64
+	Cycle              string
+	BaseCents          int64
+	SetupCents         int64
+	Quantity           int
+	GroupDiscountCents int64
 }
 
 type PromoQuote struct {
@@ -25,7 +26,10 @@ type PromoQuote struct {
 	Recurring      bool   `json:"recurring"`
 	RecurringLimit int64  `json:"recurring_limit"`
 	// Per-line benefits are captured only for eligible renewable purchases.
-	RenewalBenefits []RenewalBenefit `json:"-"`
+	RenewalBenefits  []RenewalBenefit `json:"-"`
+	LineDiscounts    []int64          `json:"-"`
+	Version          int64            `json:"-"`
+	CustomerGroupIDs []int64          `json:"-"`
 }
 
 type UpgradePromoQuote struct {
@@ -56,22 +60,55 @@ type promoRecord struct {
 	RecurringLimit                int64
 	UpgradeOnly                   bool
 	Active                        bool
+	Version                       int64
+	CustomerGroupIDs              []int64
 }
 
 func loadPromo(ctx context.Context, tx pgx.Tx, code string, lock bool) (promoRecord, error) {
 	var p promoRecord
-	query := `SELECT id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,active,recurring_limit,upgrade_only FROM promo_codes WHERE code=$1`
+	if err := GroupPricingReadLock(ctx, tx); err != nil {
+		return p, err
+	}
+	query := `SELECT id,code,discount_type,value,cycles,applies_product_ids,requires_product_ids,requires_existing,starts_at,expires_at,max_uses,used_count,one_time,only_new_customer,only_old_customer,once_per_customer,recurring,active,recurring_limit,upgrade_only,version FROM promo_codes WHERE code=$1`
 	if lock {
 		query += " FOR UPDATE"
 	}
-	err := tx.QueryRow(ctx, query, strings.ToUpper(strings.TrimSpace(code))).Scan(&p.ID, &p.Code, &p.DiscountType, &p.Value, &p.Cycles, &p.AppliesIDs, &p.RequiresIDs, &p.RequiresExisting, &p.StartsAt, &p.ExpiresAt, &p.MaxUses, &p.UsedCount, &p.OneTime, &p.OnlyNew, &p.OnlyOld, &p.OncePerCustomer, &p.Recurring, &p.Active, &p.RecurringLimit, &p.UpgradeOnly)
+	err := tx.QueryRow(ctx, query, strings.ToUpper(strings.TrimSpace(code))).Scan(&p.ID, &p.Code, &p.DiscountType, &p.Value, &p.Cycles, &p.AppliesIDs, &p.RequiresIDs, &p.RequiresExisting, &p.StartsAt, &p.ExpiresAt, &p.MaxUses, &p.UsedCount, &p.OneTime, &p.OnlyNew, &p.OnlyOld, &p.OncePerCustomer, &p.Recurring, &p.Active, &p.RecurringLimit, &p.UpgradeOnly, &p.Version)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return p, conflict("promo_not_found", "优惠码不存在")
 		}
 		return p, err
 	}
+	var scoped bool
+	if err = tx.QueryRow(ctx, "SELECT to_regclass('promo_customer_groups') IS NOT NULL").Scan(&scoped); err != nil {
+		return p, err
+	}
+	if scoped {
+		rows, e := tx.Query(ctx, "SELECT customer_group_id FROM promo_customer_groups WHERE promo_id=$1 ORDER BY customer_group_id", p.ID)
+		if e != nil {
+			return p, e
+		}
+		p.CustomerGroupIDs, e = pgx.CollectRows(rows, pgx.RowTo[int64])
+		if e != nil {
+			return p, e
+		}
+	}
 	return p, nil
+}
+
+func checkPromoCustomerGroup(ctx context.Context, tx pgx.Tx, userID int64, p promoRecord) error {
+	if len(p.CustomerGroupIDs) == 0 {
+		return nil
+	}
+	var allowed bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM customer_group_members WHERE customer_id=$1 AND group_id=ANY($2))", userID, p.CustomerGroupIDs).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return conflict("promo_customer_group_ineligible", "该优惠码仅限指定客户分组使用")
+	}
+	return nil
 }
 
 func QuotePromo(ctx context.Context, tx pgx.Tx, userID int64, code string, lines []PromoLine, lock bool) (PromoQuote, error) {
@@ -79,6 +116,16 @@ func QuotePromo(ctx context.Context, tx pgx.Tx, userID int64, code string, lines
 	p, err := loadPromo(ctx, tx, code, lock)
 	if err != nil {
 		return quote, err
+	}
+	if err = checkPromoCustomerGroup(ctx, tx, userID, p); err != nil {
+		return quote, err
+	}
+	if len(p.CustomerGroupIDs) == 0 {
+		for _, line := range lines {
+			if line.GroupDiscountCents > 0 {
+				return quote, conflict("promo_group_discount_incompatible", "该优惠码未指定可叠加的客户分组，不能与分组减免同时使用；可移除优惠码后继续")
+			}
+		}
 	}
 	if !p.Active {
 		return quote, conflict("promo_inactive", "优惠码已停用")
@@ -124,6 +171,7 @@ func QuotePromo(ctx context.Context, tx pgx.Tx, userID int64, code string, lines
 	products := make(map[int64]bool, len(lines))
 	eligibleBase, eligibleSetup := int64(0), int64(0)
 	renewalBenefits := make([]RenewalBenefit, len(lines))
+	weights := make([]int64, len(lines))
 	for index, line := range lines {
 		products[line.ProductID] = true
 		if len(p.AppliesIDs) > 0 && !containsInt64(p.AppliesIDs, line.ProductID) {
@@ -137,6 +185,10 @@ func QuotePromo(ctx context.Context, tx pgx.Tx, userID int64, code string, lines
 		}
 		if line.BaseCents > maxInt64-eligibleBase || line.SetupCents > maxInt64-eligibleSetup {
 			return quote, conflict("promo_invalid_amount", "优惠金额超出范围")
+		}
+		weights[index] = line.BaseCents
+		if p.DiscountType == "free" {
+			weights[index] = line.SetupCents
 		}
 		eligibleBase += line.BaseCents
 		eligibleSetup += line.SetupCents
@@ -195,7 +247,7 @@ func QuotePromo(ctx context.Context, tx pgx.Tx, userID int64, code string, lines
 	if discount <= 0 {
 		return quote, conflict("promo_no_discount", "优惠码未产生折扣")
 	}
-	quote = PromoQuote{ID: p.ID, Code: p.Code, DiscountType: p.DiscountType, DiscountCents: discount, Recurring: p.Recurring, RecurringLimit: p.RecurringLimit, RenewalBenefits: renewalBenefits}
+	quote = PromoQuote{ID: p.ID, Code: p.Code, DiscountType: p.DiscountType, DiscountCents: discount, Recurring: p.Recurring, RecurringLimit: p.RecurringLimit, RenewalBenefits: renewalBenefits, LineDiscounts: allocatePurchaseCents(discount, weights), Version: p.Version, CustomerGroupIDs: p.CustomerGroupIDs}
 	return quote, nil
 }
 
@@ -210,6 +262,9 @@ func QuoteUpgradePromo(ctx context.Context, tx pgx.Tx, userID int64, code string
 	}
 	p, err := loadPromo(ctx, tx, code, lock)
 	if err != nil {
+		return quote, err
+	}
+	if err = checkPromoCustomerGroup(ctx, tx, userID, p); err != nil {
 		return quote, err
 	}
 	if !p.UpgradeOnly {
@@ -295,6 +350,13 @@ func containsString(values []string, value string) bool {
 }
 
 func (s *Store) CartPromoQuote(ctx context.Context, tx pgx.Tx, userID int64, cartID, code string, lock bool) (PromoQuote, int64, error) {
+	if err := GroupPricingReadLock(ctx, tx); err != nil {
+		return PromoQuote{}, 0, err
+	}
+	rules, err := loadGroupPricing(ctx, tx, userID)
+	if err != nil {
+		return PromoQuote{}, 0, err
+	}
 	if err := CatalogReadLock(ctx, tx); err != nil {
 		return PromoQuote{}, 0, err
 	}
@@ -361,7 +423,13 @@ func (s *Store) CartPromoQuote(ctx context.Context, tx pgx.Tx, userID int64, car
 			return PromoQuote{}, 0, conflict("invalid_product_options", "配置后金额超出范围")
 		}
 		line.BaseCents = unit * int64(line.Quantity)
-		line.SetupCents = setup * int64(line.Quantity)
+		pricing, setupNet, priceErr := rules.price(checkoutLine{ProductID: line.ProductID, Qty: line.Quantity, Cycle: line.Cycle, UnitPrice: price, UnitSetup: setup, DefaultRecurring: price})
+		if priceErr != nil {
+			return PromoQuote{}, 0, priceErr
+		}
+		line.BaseCents = pricing.NetCents
+		line.GroupDiscountCents = pricing.GroupDiscountCents
+		line.SetupCents = setupNet
 		subtotal += line.BaseCents
 		lines = append(lines, line)
 	}

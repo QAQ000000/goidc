@@ -1,20 +1,16 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
-type customerProductGroupInput struct {
-	Name            string  `json:"name"`
-	ProductIDs      []int64 `json:"product_ids"`
-	ExpectedVersion int64   `json:"expected_version"`
-}
+type customerProductGroupInput = store.CustomerProductGroupInput
+type customerProductDiscountInput = store.CustomerProductDiscountInput
 
 func normalizeCustomerProductGroup(in *customerProductGroupInput, create bool) error {
 	in.Name = strings.TrimSpace(in.Name)
@@ -68,33 +64,16 @@ func (s *Server) createCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, "customer_product_group.create", key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var id, version int64
-		if err = tx.QueryRow(r.Context(), "INSERT INTO customer_product_groups(name) VALUES($1) RETURNING id,version", in.Name).Scan(&id, &version); err != nil {
-			return txResponse{}, err
-		}
-		if err = ensureCustomerProductGroupProducts(r, tx, id, in.ProductIDs); err != nil {
-			return txResponse{}, err
-		}
-		result := map[string]any{"id": id, "version": version}
-		if err = store.Audit(r.Context(), tx, actor, "customer_product_group.created", "customer_product_group", id, map[string]any{"name": in.Name, "product_ids": in.ProductIDs}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, "customer_product_group.create", key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusCreated, result}, nil
-	})
+	result, replayed, err := s.db.CreateCustomerProductGroup(r.Context(), identityFrom(r).ID, key, in)
+	if err != nil {
+		s.failCustomerPricing(w, r, err)
+		return
+	}
+	status := http.StatusCreated
+	if replayed {
+		status = http.StatusOK
+	}
+	write(w, status, result)
 }
 
 func (s *Server) updateCustomerProductGroup(w http.ResponseWriter, r *http.Request) {
@@ -114,46 +93,12 @@ func (s *Server) updateCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(struct {
-		ID    int64
-		Input customerProductGroupInput
-	}{id, in})
-	operation := "customer_product_group.update:" + strconv.FormatInt(id, 10)
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var current int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_product_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-			if err == pgx.ErrNoRows {
-				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "商品分组不存在"}
-			}
-			return txResponse{}, err
-		}
-		if current != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "商品分组已变更，请刷新后重试"}
-		}
-		if _, err = store.UpdateVersioned(r.Context(), tx, "customer_product_groups", `name=$1`, id, in.ExpectedVersion, in.Name); err != nil {
-			return txResponse{}, err
-		}
-		if err = replaceCustomerProductGroupProducts(r, tx, id, in.ProductIDs); err != nil {
-			return txResponse{}, err
-		}
-		result := map[string]any{"id": id, "version": current + 1}
-		if err = store.Audit(r.Context(), tx, actor, "customer_product_group.updated", "customer_product_group", id, map[string]any{"expected_version": in.ExpectedVersion, "product_ids": in.ProductIDs}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, result}, nil
-	})
+	result, err := s.db.UpdateCustomerProductGroup(r.Context(), identityFrom(r).ID, id, key, in)
+	if err != nil {
+		s.failCustomerPricing(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, result)
 }
 
 func (s *Server) deleteCustomerProductGroup(w http.ResponseWriter, r *http.Request) {
@@ -161,9 +106,7 @@ func (s *Server) deleteCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	var in struct {
-		ExpectedVersion int64 `json:"expected_version"`
-	}
+	var in store.CustomerProductGroupDeleteInput
 	if !decode(w, r, &in) {
 		return
 	}
@@ -175,79 +118,12 @@ func (s *Server) deleteCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(struct {
-		ID    int64
-		Input any
-	}{id, in})
-	operation := "customer_product_group.delete:" + strconv.FormatInt(id, 10)
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var current int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM customer_product_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-			if err == pgx.ErrNoRows {
-				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "商品分组不存在"}
-			}
-			return txResponse{}, err
-		}
-		if current != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "商品分组已变更，请刷新后重试"}
-		}
-		var deleted int64
-		if err = tx.QueryRow(r.Context(), "DELETE FROM customer_product_groups WHERE id=$1 RETURNING id", id).Scan(&deleted); err != nil {
-			return txResponse{}, err
-		}
-		result := map[string]any{"id": deleted, "deleted": true}
-		if err = store.Audit(r.Context(), tx, actor, "customer_product_group.deleted", "customer_product_group", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, result}, nil
-	})
-}
-
-func ensureCustomerProductGroupProducts(r *http.Request, tx pgx.Tx, groupID int64, productIDs []int64) error {
-	if len(productIDs) == 0 {
-		return nil
+	result, err := s.db.DeleteCustomerProductGroup(r.Context(), identityFrom(r).ID, id, key, in)
+	if err != nil {
+		s.failCustomerPricing(w, r, err)
+		return
 	}
-	var count int
-	if err := tx.QueryRow(r.Context(), "SELECT count(*) FROM products WHERE id=ANY($1)", productIDs).Scan(&count); err != nil {
-		return err
-	}
-	if count != len(productIDs) {
-		return &store.Conflict{Code: "invalid_product", Message: "商品分组包含不存在的商品"}
-	}
-	for _, productID := range productIDs {
-		if _, err := tx.Exec(r.Context(), "INSERT INTO customer_product_group_products(group_id,product_id) VALUES($1,$2)", groupID, productID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func replaceCustomerProductGroupProducts(r *http.Request, tx pgx.Tx, groupID int64, productIDs []int64) error {
-	if _, err := tx.Exec(r.Context(), "DELETE FROM customer_product_group_products WHERE group_id=$1", groupID); err != nil {
-		return err
-	}
-	return ensureCustomerProductGroupProducts(r, tx, groupID, productIDs)
-}
-
-type customerProductDiscountInput struct {
-	CustomerGroupID int64  `json:"customer_group_id"`
-	ProductGroupID  int64  `json:"product_group_id"`
-	DiscountType    string `json:"discount_type"`
-	DiscountPercent int    `json:"discount_percent"`
-	FixedCents      int64  `json:"fixed_discount_cents"`
-	ExpectedVersion int64  `json:"expected_version"`
+	write(w, http.StatusOK, result)
 }
 
 func validateCustomerProductDiscount(in *customerProductDiscountInput) error {
@@ -305,69 +181,19 @@ func (s *Server) saveCustomerProductDiscount(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	actor := identityFrom(r).ID
-	hash := settingMutationHash(in)
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		operation := "customer_product_discount.save"
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
+	result, err := s.db.SaveCustomerProductDiscount(r.Context(), identityFrom(r).ID, key, in)
+	if err != nil {
+		s.failCustomerPricing(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, result)
+}
 
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var exists int
-		if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM customer_groups WHERE id=$1", in.CustomerGroupID).Scan(&exists); err != nil {
-			return txResponse{}, err
-		}
-		if exists == 0 {
-			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户分组不存在"}
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT count(*) FROM customer_product_groups WHERE id=$1", in.ProductGroupID).Scan(&exists); err != nil {
-			return txResponse{}, err
-		}
-		if exists == 0 {
-			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "商品分组不存在"}
-		}
-		var id, current int64
-		err = tx.QueryRow(r.Context(), "SELECT id,version FROM customer_product_group_discounts WHERE customer_group_id=$1 AND product_group_id=$2 FOR UPDATE", in.CustomerGroupID, in.ProductGroupID).Scan(&id, &current)
-		hasExisting := err == nil
-		if err != nil && err != pgx.ErrNoRows {
-			return txResponse{}, err
-		}
-		if hasExisting && current != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "折扣已变更，请刷新后重试"}
-		}
-		if !hasExisting && in.ExpectedVersion != 0 {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "折扣已变更，请刷新后重试"}
-		}
-		var result map[string]any
-		if in.DiscountType == "none" {
-			if hasExisting {
-				if _, err = tx.Exec(r.Context(), "DELETE FROM customer_product_group_discounts WHERE id=$1", id); err != nil {
-					return txResponse{}, err
-				}
-			}
-			result = map[string]any{"id": id, "customer_group_id": in.CustomerGroupID, "product_group_id": in.ProductGroupID, "discount_type": "none", "version": 0, "deleted": hasExisting}
-		} else if hasExisting {
-			next := current + 1
-			if _, err = tx.Exec(r.Context(), `UPDATE customer_product_group_discounts SET discount_type=$2,discount_percent=$3,fixed_discount_cents=$4,version=$5,updated_at=now() WHERE id=$1`, id, in.DiscountType, in.DiscountPercent, in.FixedCents, next); err != nil {
-				return txResponse{}, err
-			}
-			result = map[string]any{"id": id, "customer_group_id": in.CustomerGroupID, "product_group_id": in.ProductGroupID, "discount_type": in.DiscountType, "version": next}
-		} else {
-			if err = tx.QueryRow(r.Context(), `INSERT INTO customer_product_group_discounts(customer_group_id,product_group_id,discount_type,discount_percent,fixed_discount_cents) VALUES($1,$2,$3,$4,$5) RETURNING id,version`, in.CustomerGroupID, in.ProductGroupID, in.DiscountType, in.DiscountPercent, in.FixedCents).Scan(&id, &current); err != nil {
-				return txResponse{}, err
-			}
-			result = map[string]any{"id": id, "customer_group_id": in.CustomerGroupID, "product_group_id": in.ProductGroupID, "discount_type": in.DiscountType, "version": current}
-		}
-		if err = store.Audit(r.Context(), tx, actor, "customer_product_discount.saved", "customer_product_group_discount", id, map[string]any{"customer_group_id": in.CustomerGroupID, "product_group_id": in.ProductGroupID, "discount_type": in.DiscountType, "expected_version": in.ExpectedVersion}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, result}, nil
-	})
+func (s *Server) failCustomerPricing(w http.ResponseWriter, r *http.Request, err error) {
+	var missing *store.CustomerPricingResourceNotFound
+	if errors.As(err, &missing) {
+		writeError(w, http.StatusNotFound, "not_found", missing.Error())
+		return
+	}
+	s.fail(w, r, err)
 }

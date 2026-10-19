@@ -646,22 +646,17 @@ func affiliateInvoiceItems(ctx context.Context, tx pgx.Tx, invoiceID int64) ([]a
 	}
 	items := []affiliateInvoiceItem{}
 	if orderID != nil {
-		rows, err := tx.Query(ctx, `WITH lines AS (
- SELECT oi.*,sum(total_cents) OVER (ORDER BY id) AS cumulative,
- sum(total_cents) OVER () AS gross_total FROM order_items oi WHERE oi.order_id=$1
-)
-SELECT oi.order_id,oi.id,oi.product_id,
-(floor(least(current.amount_cents::numeric,oi.gross_total)*oi.cumulative/nullif(oi.gross_total,0))
- -floor(least(current.amount_cents::numeric,oi.gross_total)*(oi.cumulative-oi.total_cents)/nullif(oi.gross_total,0)))::bigint,
+		rows, err := tx.Query(ctx, `SELECT oi.order_id,oi.id,oi.product_id,
+purchase_invoice_item_net(current.id,oi.id),
 oi.product_name,
 CASE WHEN EXISTS (
   SELECT 1 FROM invoices prior JOIN order_items prior_item ON prior_item.order_id=prior.order_id
   WHERE prior.user_id=current.user_id AND prior.status='paid' AND prior.id<>current.id
     AND prior_item.product_id=oi.product_id
 ) THEN 'reorder' ELSE 'first_purchase' END,
-to_jsonb(oi)-'purchase_fields'-'cumulative'-'gross_total'
-FROM lines oi JOIN invoices current ON current.order_id=oi.order_id
-WHERE oi.order_id=$1 ORDER BY oi.id`, *orderID)
+to_jsonb(oi)-'purchase_fields'
+FROM order_items oi JOIN invoices current ON current.order_id=oi.order_id
+WHERE current.id=$1 ORDER BY oi.id`, invoiceID)
 		if err != nil {
 			return nil, err
 		}

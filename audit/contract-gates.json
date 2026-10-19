@@ -139,12 +139,19 @@
         "internal/store/admin_order_create.go",
         "internal/store/mutation_operations.go",
         "db/migrations/179_admin_order_mutation_receipts.sql",
-        "scripts/test-admin-orders.mjs"
+        "scripts/test-admin-orders.mjs",
+        "db/migrations/180_customer_group_pricing.sql",
+        "internal/store/purchase_pricing.go",
+        "internal/store/cart_purchase_quote.go",
+        "docs/domain/customer-group-pricing.md",
+        "scripts/test-customer-group-pricing.mjs"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Transaction|Invoice|MutationOperation'",
         "node scripts/test-service-cancellations.mjs --integration",
-        "node scripts/test-admin-orders.mjs --integration"
+        "node scripts/test-admin-orders.mjs --integration",
+        "node scripts/test-customer-group-pricing.mjs --integration",
+        "node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs"
       ],
       "evaluation": [
         "isolated loopback PostgreSQL 18 test database; required Go JSON run/pass and package results with zero skips under serial race",
@@ -152,6 +159,7 @@
         "actual schema168 to 169 preserves money, intents, receipts, entitlement and old job/audit; only undispatched pending conflicts reopen; ambiguous history rejects upgrade atomically; reapproval creates a new generation and execution rechecks entitlement while manual termination preserves service state",
         "admin order creation uses actor-scoped admin:order.create receipts without changing request hashes or responses; eight concurrent submissions produce one order, stock reservation, coupon use, invoice, email, notification and audit; different requests conflict, permission revocation and customer transfer prevent replay, and audit failures roll back every effect",
         "genuine schema178 to 179 preserves historical receipt timestamps, hashes, results and business facts, removes the legacy receipt table and allows authorized replay; conflicting target receipts or ambiguous actor/customer/order references reject the complete upgrade; order notes, review, cancel, deferred invoices, deletion, bulk operations and customer admission retain their boundaries",
+        "schema179 to 180 leaves refund row evidence, receipts and old purchases intact; immutable per-line net pricing, scoped coupon stacking, fixed per unit reductions, stale quote rejection, preserved recurring contract prices, cumulative credit allocations and pricing lock order under concurrent group edits",
         "stop old API, workers and other writers before upgrading paired migration and binaries; no direct old-binary downgrade on new schema; remote CI, browser, real merchants/providers and production cutover require separate evidence"
       ],
       "review": {

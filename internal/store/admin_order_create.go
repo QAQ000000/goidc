@@ -40,25 +40,28 @@ type AdminOrderInput struct {
 	paymentVersion    string
 }
 type AdminOrderQuoteLine struct {
-	ProductID          int64            `json:"product_id"`
-	ExpectedRevision   int64            `json:"expected_revision"`
-	Name               string           `json:"name"`
-	BillingCycle       string           `json:"billing_cycle"`
-	Quantity           int              `json:"quantity"`
-	UnitFirstCents     int64            `json:"unit_first_cents"`
-	UnitRecurringCents int64            `json:"unit_recurring_cents"`
-	TotalCents         int64            `json:"total_cents"`
-	ConfigSnapshot     []OptionSnapshot `json:"config_snapshot"`
+	ProductID          int64                `json:"product_id"`
+	ExpectedRevision   int64                `json:"expected_revision"`
+	Name               string               `json:"name"`
+	BillingCycle       string               `json:"billing_cycle"`
+	Quantity           int                  `json:"quantity"`
+	UnitFirstCents     int64                `json:"unit_first_cents"`
+	UnitRecurringCents int64                `json:"unit_recurring_cents"`
+	TotalCents         int64                `json:"total_cents"`
+	ConfigSnapshot     []OptionSnapshot     `json:"config_snapshot"`
+	Pricing            *PurchasePricingLine `json:"pricing,omitempty"`
 }
 type AdminOrderQuote struct {
-	QuoteHash       string                `json:"quote_hash"`
-	SubtotalCents   int64                 `json:"subtotal_cents"`
-	DiscountCents   int64                 `json:"discount_cents"`
-	TotalCents      int64                 `json:"total_cents"`
-	PromoCode       string                `json:"promo_code"`
-	ReviewStatus    string                `json:"review_status"`
-	GenerateInvoice bool                  `json:"generate_invoice"`
-	Items           []AdminOrderQuoteLine `json:"items"`
+	QuoteHash          string                `json:"quote_hash"`
+	SubtotalCents      int64                 `json:"subtotal_cents"`
+	DiscountCents      int64                 `json:"discount_cents"`
+	GroupDiscountCents int64                 `json:"group_discount_cents"`
+	PromoDiscountCents int64                 `json:"promo_discount_cents"`
+	TotalCents         int64                 `json:"total_cents"`
+	PromoCode          string                `json:"promo_code"`
+	ReviewStatus       string                `json:"review_status"`
+	GenerateInvoice    bool                  `json:"generate_invoice"`
+	Items              []AdminOrderQuoteLine `json:"items"`
 }
 type AdminOrderResult struct {
 	CheckoutResult
@@ -150,6 +153,9 @@ func lockActiveAdminOrderCustomer(ctx context.Context, tx pgx.Tx, actor, custome
 	return nil
 }
 func (s *Store) loadAdminCheckoutLines(ctx context.Context, tx pgx.Tx, in AdminOrderInput) ([]checkoutLine, error) {
+	if err := GroupPricingReadLock(ctx, tx); err != nil {
+		return nil, err
+	}
 	if err := CatalogReadLock(ctx, tx); err != nil {
 		return nil, err
 	}
@@ -190,12 +196,15 @@ func (s *Store) loadAdminCheckoutLines(ctx context.Context, tx pgx.Tx, in AdminO
 	return items, nil
 }
 func buildAdminOrderQuote(in AdminOrderInput, lines []checkoutLine, result CheckoutResult, requiresApproval bool, benefits []RenewalBenefit) AdminOrderQuote {
-	out := AdminOrderQuote{SubtotalCents: result.TotalCents + result.DiscountCents, DiscountCents: result.DiscountCents, TotalCents: result.TotalCents, PromoCode: result.PromoCode, ReviewStatus: "approved", GenerateInvoice: *in.GenerateInvoice, Items: []AdminOrderQuoteLine{}}
+	out := AdminOrderQuote{SubtotalCents: result.TotalCents + result.DiscountCents, DiscountCents: result.DiscountCents, GroupDiscountCents: result.GroupDiscountCents, PromoDiscountCents: result.PromoDiscountCents, TotalCents: result.TotalCents, PromoCode: result.PromoCode, ReviewStatus: "approved", GenerateInvoice: *in.GenerateInvoice, Items: []AdminOrderQuoteLine{}}
 	if requiresApproval && !in.Confirmed {
 		out.ReviewStatus = "pending"
 	}
 	for _, v := range lines {
 		recurring := v.UnitPrice
+		if v.Pricing != nil {
+			recurring = v.Pricing.RecurringCents
+		}
 		if v.FirstPriceOverride != nil {
 			recurring = v.DefaultRecurring
 		}
@@ -205,7 +214,12 @@ func buildAdminOrderQuote(in AdminOrderInput, lines []checkoutLine, result Check
 		if v.Cycle == "once" {
 			recurring = 0
 		}
-		out.Items = append(out.Items, AdminOrderQuoteLine{v.ProductID, v.CurrentRevision, v.Name, v.Cycle, v.Qty, v.UnitPrice + v.UnitSetup, recurring, (v.UnitPrice + v.UnitSetup) * int64(v.Qty), v.Snapshot})
+		first, total := v.UnitPrice+v.UnitSetup, (v.UnitPrice+v.UnitSetup)*int64(v.Qty)
+		if v.Pricing != nil {
+			first = (v.Pricing.GrossCents - v.Pricing.GroupDiscountCents) / int64(v.Qty)
+			total = v.Pricing.NetCents
+		}
+		out.Items = append(out.Items, AdminOrderQuoteLine{v.ProductID, v.CurrentRevision, v.Name, v.Cycle, v.Qty, first, recurring, total, v.Snapshot, v.Pricing})
 	}
 	// Hash the request and complete authoritative snapshots, including purchase
 	// field definitions and default renewal benefit terms. No plaintext is returned.

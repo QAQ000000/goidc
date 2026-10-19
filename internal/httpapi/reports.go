@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/codex/zjmfgo/internal/store"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -216,17 +217,7 @@ LIMIT 10`, identityFrom(r).ID)
 	writeReport(w, r, result)
 }
 
-type productIncome struct {
-	ProductID           int64  `json:"product_id"`
-	Name                string `json:"name"`
-	NewOrderAmountCents int64  `json:"new_order_amount_cents"`
-	NewOrderCount       int64  `json:"new_order_count"`
-	RenewalAmountCents  int64  `json:"renewal_amount_cents"`
-	RenewalOrderCount   int64  `json:"renewal_order_count"`
-	TotalAmountCents    int64  `json:"total_amount_cents"`
-	NewQuantity         int64  `json:"new_quantity"`
-	RenewalQuantity     int64  `json:"renewal_quantity"`
-}
+type productIncome = store.ProductIncomeRow
 
 func (s *Server) productIncomeReport(w http.ResponseWriter, r *http.Request) {
 	period, err := parseReportPeriod(r, true)
@@ -242,59 +233,5 @@ func (s *Server) productIncomeReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) productIncomeRows(ctx context.Context, period reportPeriod, actor int64) ([]productIncome, error) {
-	return productIncomeRowsFrom(ctx, s.db.Pool, period, actor)
-}
-
-func productIncomeRowsFrom(ctx context.Context, db pageQuerier, period reportPeriod, actor int64) ([]productIncome, error) {
-	// Match affiliateInvoiceItems: allocate paid invoice net by stable line ID.
-	// Exact cumulative integer quotients preserve every cent, even at bigint limits.
-	rows, err := db.Query(ctx, `
-WITH settled_orders AS (
-  SELECT o.id,i.amount_cents
-  FROM orders o JOIN invoices i ON i.order_id=o.id
-  WHERE (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
-), sale_lines AS (
-  SELECT oi.*,o.amount_cents,
-         sum(oi.total_cents) OVER (PARTITION BY oi.order_id ORDER BY oi.id) AS cumulative,
-         sum(oi.total_cents) OVER (PARTITION BY oi.order_id) AS gross_total
-  FROM order_items oi JOIN settled_orders o ON o.id=oi.order_id
-), new_sales AS (
-  SELECT product_id,max(product_name) AS name,
-         sum(coalesce(div(least(amount_cents::numeric,gross_total)*cumulative,nullif(gross_total,0))
-                     -div(least(amount_cents::numeric,gross_total)*(cumulative-total_cents),nullif(gross_total,0)),0))::bigint AS amount,
-         count(DISTINCT order_id)::bigint AS order_count, sum(quantity)::bigint AS quantity
-  FROM sale_lines
-  GROUP BY product_id
-), renewals AS (
-  SELECT s.product_id, max(p.name) AS name, sum(ii.amount_cents)::bigint AS amount,
-         count(DISTINCT i.id)::bigint AS order_count,count(DISTINCT ii.id)::bigint AS quantity
-  FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN services s ON s.id=ii.service_id
-       JOIN products p ON p.id=s.product_id
-  WHERE ii.item_type='renew' AND (i.status='paid' OR (i.status='refunded' AND EXISTS(SELECT 1 FROM external_refunds er WHERE er.invoice_id=i.id AND er.status='confirmed'))) AND i.invoice_kind<>'topup' AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments c WHERE c.invoice_id=i.id) AND i.paid_at >= $1 AND i.paid_at < $2 AND admin_customer_allowed($3,i.user_id)
-  GROUP BY s.product_id
-)
- , credit_products AS (
- SELECT r.invoice_id,r.amount_cents,ii.id item_id,ii.item_type,ii.service_id,s.product_id,p.name
- FROM credit_repayments r JOIN invoices i ON i.id=r.invoice_id
- JOIN invoice_items ii ON ii.invoice_id=i.id JOIN services s ON s.id=ii.service_id AND s.user_id=r.user_id JOIN products p ON p.id=s.product_id
- WHERE r.received_at >= $1 AND r.received_at < $2 AND admin_customer_allowed($3,r.user_id)
- AND i.invoice_kind='automatic' AND ii.item_type IN ('service','renew')
- AND (SELECT count(*) FROM invoice_items x WHERE x.invoice_id=i.id)=1
- ), totals AS (
- SELECT product_id,name,amount new_amount,order_count new_count,0::bigint renew_amount,0::bigint renew_count,quantity new_quantity,0::bigint renew_quantity FROM new_sales
- UNION ALL SELECT product_id,name,0,0,amount,order_count,0,quantity FROM renewals
- UNION ALL SELECT product_id,max(name),coalesce(sum(amount_cents) FILTER(WHERE item_type='service'),0)::bigint,count(DISTINCT invoice_id) FILTER(WHERE item_type='service')::bigint,coalesce(sum(amount_cents) FILTER(WHERE item_type='renew'),0)::bigint,count(DISTINCT invoice_id) FILTER(WHERE item_type='renew')::bigint,count(DISTINCT service_id) FILTER(WHERE item_type='service')::bigint,count(DISTINCT item_id) FILTER(WHERE item_type='renew')::bigint FROM credit_products GROUP BY product_id
- ) SELECT product_id,max(name),sum(new_amount)::bigint,sum(new_count)::bigint,sum(renew_amount)::bigint,sum(renew_count)::bigint,(sum(new_amount)+sum(renew_amount))::bigint,sum(new_quantity)::bigint,sum(renew_quantity)::bigint FROM totals GROUP BY product_id
-ORDER BY 7 DESC,1`, period.Start, period.End, actor)
-	if err != nil {
-		return nil, err
-	}
-	result, err := pgx.CollectRows(rows, pgx.RowToStructByPos[productIncome])
-	if err != nil {
-		return nil, err
-	}
-	if result == nil {
-		result = []productIncome{}
-	}
-	return result, nil
+	return s.db.ProductIncomeRows(ctx, period.Start, period.End, actor)
 }

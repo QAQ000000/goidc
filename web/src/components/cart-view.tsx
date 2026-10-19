@@ -23,6 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { changeProductOption, configurationRuleError, isQuantityOption, optionQuantityBounds, productOptionAmounts, resolveProductOptions } from "@/lib/product-options";
 import { ProductOptionChoice } from "./product-option-choice";
+import { PurchaseDiscountDetails, PurchaseDiscountSummary, type PurchasePricingLine } from "./purchase-discount-details";
+import { useCartPurchaseQuote } from "@/hooks/use-cart-purchase-quote";
 type Selection = { version: number; ids: number[] };
 type OptionQuantityMap = Record<number, number>;
 export function CartView() {
@@ -38,6 +40,9 @@ export function CartView() {
   const [promoCode, setPromoCode] = useState("");
   const retry = useRef<{ key: string; body: string } | null>(null);
   const selected = selection.version === data?.version ? selection.ids : [];
+  const quoteBody = data && selected.length > 0 ? JSON.stringify({ cart_version: data.version, item_ids: [...selected].sort((a, b) => a - b) }) : null;
+  const purchaseQuote = useCartPurchaseQuote(quoteBody);
+  const pricingByItem = new Map(purchaseQuote.quote?.items.map(item => [item.item_id, item]) ?? []);
   useEffect(() => {
     function clear() {
       setSelection({ version: 0, ids: [] });
@@ -82,12 +87,13 @@ export function CartView() {
     }
   }
   async function checkout() {
-    if (!data || selected.length === 0) return;
+    if (!data || selected.length === 0 || !purchaseQuote.quote || purchaseQuote.loading || purchaseQuote.error) return;
     setBusy(true);
     setNotice("");
     const body = JSON.stringify({
       cart_version: data.version,
       item_ids: [...selected].sort((a, b) => a - b),
+      quote_hash: purchaseQuote.quote.quote_hash,
     });
     if (!retry.current || retry.current.body !== body)
       retry.current = { key: crypto.randomUUID(), body };
@@ -126,12 +132,7 @@ export function CartView() {
     catch (e) { setNotice((e as Error).message); refresh(); }
     finally { setBusy(false); }
   }
-  const total =
-    data?.items
-      .filter((item) => selected.includes(item.id))
-      .reduce((sum, item) => sum + item.total_cents, 0) ?? 0;
   const selectedAll = !!data && selected.length === data.items.length;
-  const shownDiscount = selectedAll ? (data?.promo?.discount_cents ?? 0) : 0;
   return (
     <Workspace title="购物车">
       <div className="flex justify-between items-center gap-4 mb-8">
@@ -227,7 +228,8 @@ export function CartView() {
                       />
                     </TableCell>
                     <TableCell className="money font-medium">
-                      {money(item.total_cents)}
+                      {money(pricingByItem.get(item.id)?.net_cents ?? (item as CartItem & { pricing?: PurchasePricingLine }).pricing?.net_cents ?? item.total_cents)}
+                      <PurchaseDiscountDetails pricing={pricingByItem.get(item.id) ?? (item as CartItem & { pricing?: PurchasePricingLine }).pricing} compact />
                     </TableCell>
                     <TableCell>
                       <CartItemEditor
@@ -258,7 +260,7 @@ export function CartView() {
                 <div><label className="text-xs text-muted-foreground block mb-1" htmlFor="cart-promo">优惠码</label><Input id="cart-promo" value={promoCode} onChange={(event) => setPromoCode(event.target.value.toUpperCase())} placeholder="输入优惠码" maxLength={50} disabled={busy} /></div>
                 <Button variant="outline" disabled={busy || !promoCode.trim()}>应用</Button>
               </form>
-              {data.promo && <div className="flex items-center gap-3 text-sm"><span className="font-mono">{data.promo.code}</span>{data.promo.error ? <span className="text-destructive">{data.promo.error}</span> : <span className="text-emerald-700">已优惠 {money(data.promo.discount_cents)}</span>}<Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void removePromo()}>移除</Button></div>}
+              {data.promo && <div className="flex items-center gap-3 text-sm"><span className="font-mono">{data.promo.code}</span>{data.promo.error ? <span className="text-destructive">{data.promo.error}</span> : <span className="text-emerald-700">已应用，实际减免按所选项目报价</span>}<Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => void removePromo()}>移除</Button></div>}
               {data.promo?.recurring && !data.promo.error && <p className="text-xs text-muted-foreground">符合范围的周期服务将保留续费优惠，{data.promo.recurring_limit?`每件可优惠续费 ${data.promo.recurring_limit} 次`:"不限续费次数"}；首次购买不占续费次数，一次性商品只享受本次优惠。固定金额按每件服务每期减免，最多减至零元。</p>}
             </div>
             {!selectedAll && data.promo && !data.promo.error && <p className="text-xs text-muted-foreground mt-3">优惠金额会在只结算部分商品时按所选项目重新计算。</p>}
@@ -268,10 +270,12 @@ export function CartView() {
               <div className="text-xs text-muted-foreground mb-1">
                 已选 {selected.length} 项
               </div>
-              {shownDiscount > 0 && <div className="text-xs text-emerald-700">优惠 -{money(shownDiscount)}</div>}
-              <strong className="money text-2xl">{money(total - shownDiscount)}</strong>
+              {purchaseQuote.loading && <p role="status" className="text-sm text-muted-foreground">正在计算所选项目报价…</p>}
+              {purchaseQuote.error && <div role="alert" className="text-sm text-destructive max-w-sm break-words">{purchaseQuote.error}<Button type="button" variant="link" disabled={busy} onClick={purchaseQuote.retry}>重新报价</Button></div>}
+              {purchaseQuote.quote && <><PurchaseDiscountSummary discountCents={purchaseQuote.quote.discount_cents} groupDiscountCents={purchaseQuote.quote.group_discount_cents} promoDiscountCents={purchaseQuote.quote.promo_discount_cents} promoCode={purchaseQuote.quote.promo_code} /><strong className="money text-2xl">{money(purchaseQuote.quote.total_cents)}</strong></>}
+              {selected.length === 0 && <strong className="money text-2xl">{money(0)}</strong>}
             </div>
-            <Button disabled={busy || selected.length === 0 || data.items.some(item=>selected.includes(item.id)&&!!item.admission_error)} onClick={checkout}>
+            <Button disabled={busy || selected.length === 0 || purchaseQuote.loading || !!purchaseQuote.error || !purchaseQuote.quote || data.items.some(item=>selected.includes(item.id)&&!!item.admission_error)} onClick={checkout}>
               {busy ? "提交中" : "确认订单"}
               <ArrowRight size={16} />
             </Button>

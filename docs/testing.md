@@ -111,3 +111,7 @@ G09 来源 HTTP/易支付脚本共用 `g09-source-controller.mjs`，保留旧 CL
 依赖安装控制流测试 `node --test scripts/prepare-runtime-dependency-input.test.mjs` 在独立 Node 测试进程内 mock `statfs`，按夹具目录实际分配块采样，峰值预算保持 1 MiB。用例验证正常安装、超时及失败清理，2 MiB 写入触发峰值保护，另验证恰好预算/超出一字节、保留空间和 inode 边界。模拟文件系统仅用于夹具，不构成真实磁盘容量证据；生产 `statfs` 和保护逻辑保持原样。
 
 代码量复核以固定提交为边界：`git diff --numstat 3d0b698^ 3d0b698` 为 +2,966/-2,531，净增 435 行；其中 Go/MJS/TSX（含测试）净增 427 行。TSX 从 24,157 增至 24,366 行，前端收益是结构重组与公共流程复用，不能计为代码削减。`git diff --numstat f999984^ 3d0b698 -- '*.go' '*.mjs' '*.tsx'` 合计净减 3,696 行，其中 Go 减 3,089、MJS 减 816、TSX 增 209；单文件缩短不代表全库减量，文档/封存资产另行统计。
+
+## 客户分组定价
+
+按[客户分组定价契约](domain/customer-group-pricing.md)运行 `node scripts/test-customer-group-pricing.mjs --integration`。使用独立回环 PostgreSQL 18 测试库，不与其他迁移套件并行；runner 逐入口核对 run/pass 并拒绝 skip。前端运行 `node --test scripts/purchase-discount-components.test.mjs scripts/promo-customer-groups-components.test.mjs`。本地真实 Next/Go 浏览器验收使用可选 `TestCustomerGroupPricingBrowserFixture`，结束文件触发金额断言和随机 schema 清理；已覆盖部分结账、叠加范围、详情与后台保存，外部渠道与生产升级仍单独验收。

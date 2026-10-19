@@ -29,6 +29,7 @@ type checkoutLine struct {
 	UnitPrice, UnitSetup                                   int64
 	DefaultRecurring                                       int64
 	SupplierSelection                                      *supplierCheckoutSelection
+	Pricing                                                *PurchasePricingLine
 }
 
 type checkoutOptions struct {
@@ -41,6 +42,10 @@ type checkoutOptions struct {
 func (s *Store) prepareCheckoutLines(ctx context.Context, tx pgx.Tx, userID int64, items []checkoutLine, promoCode string) (CheckoutResult, []RenewalBenefit, bool, error) {
 	var result CheckoutResult
 	var err error
+	rules, err := loadGroupPricing(ctx, tx, userID)
+	if err != nil {
+		return result, nil, false, err
+	}
 	promoLines := []PromoLine{}
 	requiresApproval := false
 	stockUse := map[int64]int{}
@@ -110,22 +115,40 @@ func (s *Store) prepareCheckoutLines(ctx context.Context, tx pgx.Tx, userID int6
 			return result, nil, false, conflict("invalid_product_options", "配置后金额无效")
 		}
 		result.TotalCents += unitTotal * int64(v.Qty)
-		promoLines = append(promoLines, PromoLine{ProductID: v.ProductID, Cycle: v.Cycle, BaseCents: unitTotal * int64(v.Qty), SetupCents: setup * int64(v.Qty), Quantity: v.Qty})
+		pricing, setupNet, priceErr := rules.price(*v)
+		if priceErr != nil {
+			return result, nil, false, priceErr
+		}
+		if rules.enabled {
+			v.Pricing = &pricing
+		}
+		result.GroupDiscountCents += pricing.GroupDiscountCents
+		promoLines = append(promoLines, PromoLine{ProductID: v.ProductID, Cycle: v.Cycle, BaseCents: pricing.NetCents, SetupCents: setupNet, Quantity: v.Qty, GroupDiscountCents: pricing.GroupDiscountCents})
 	}
+	result.DiscountCents = result.GroupDiscountCents
+	result.TotalCents -= result.GroupDiscountCents
 	renewalBenefits := make([]RenewalBenefit, len(items))
 	if promoCode != "" {
 		quote, quoteErr := QuotePromo(ctx, tx, userID, promoCode, promoLines, true)
 		if quoteErr != nil {
 			return result, nil, false, quoteErr
 		}
-		result.DiscountCents = quote.DiscountCents
+		result.PromoDiscountCents = quote.DiscountCents
+		result.DiscountCents += quote.DiscountCents
 		result.PromoCode = quote.Code
-		if result.DiscountCents > result.TotalCents {
-			result.DiscountCents = result.TotalCents
-		}
-		result.TotalCents -= result.DiscountCents
+		result.TotalCents -= quote.DiscountCents
 		result.promoID = quote.ID
 		renewalBenefits = quote.RenewalBenefits
+		for i := range items {
+			if items[i].Pricing != nil {
+				p := items[i].Pricing
+				p.PromoDiscountCents = quote.LineDiscounts[i]
+				p.NetCents -= quote.LineDiscounts[i]
+				p.PromoCode = quote.Code
+				p.PromoVersion = quote.Version
+				p.PromoCustomerGroupIDs = quote.CustomerGroupIDs
+			}
+		}
 	}
 	return result, renewalBenefits, requiresApproval, nil
 }
@@ -176,6 +199,11 @@ func (s *Store) persistCheckoutLines(ctx context.Context, tx pgx.Tx, userID int6
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, result.OrderID, v.ProductID, v.Name, v.Cycle, v.Qty, v.UnitPrice, v.UnitSetup, unitTotal*int64(v.Qty), optionJSON, optionQuantityJSON, snapshot, benefit.Percent, benefit.Code, purchaseJSON, benefit.FixedCents, benefit.Limit).Scan(&orderItemID); err != nil {
 			return result, err
 		}
+		if v.Pricing != nil {
+			if err = persistPurchasePricing(ctx, tx, orderItemID, *v.Pricing); err != nil {
+				return result, err
+			}
+		}
 		delivery, freezeErr := s.freezeSupplierCheckoutSelection(v.SupplierSelection, orderItemID)
 		if freezeErr != nil {
 			return result, freezeErr
@@ -185,8 +213,11 @@ SELECT $1,$2,$3,p.id,$5,'svc-'||replace(gen_random_uuid()::text,'-',''),$6,n,p.p
 FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, result.OrderID, orderItemID, v.ProductID, v.Name, v.Cycle, v.Qty, benefit.Percent, benefit.Code, benefit.FixedCents, benefit.Limit, delivery); err != nil {
 			return result, err
 		}
-		if v.RenewalPriceOverride != nil || v.FirstPriceOverride != nil {
+		if v.Pricing != nil || v.RenewalPriceOverride != nil || v.FirstPriceOverride != nil {
 			renewalPrice := v.DefaultRecurring
+			if v.Pricing != nil {
+				renewalPrice = v.Pricing.RecurringCents
+			}
 			if v.RenewalPriceOverride != nil {
 				renewalPrice = *v.RenewalPriceOverride
 			}
@@ -216,7 +247,7 @@ FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, 
 		}
 	}
 	if promoID > 0 {
-		if _, err = tx.Exec(ctx, "INSERT INTO promo_code_redemptions(promo_code_id,user_id,order_id,discount_cents) VALUES($1,$2,$3,$4)", promoID, userID, result.OrderID, result.DiscountCents); err != nil {
+		if _, err = tx.Exec(ctx, "INSERT INTO promo_code_redemptions(promo_code_id,user_id,order_id,discount_cents) VALUES($1,$2,$3,$4)", promoID, userID, result.OrderID, result.PromoDiscountCents); err != nil {
 			return result, err
 		}
 		if _, err = tx.Exec(ctx, "UPDATE promo_codes SET used_count=used_count+1,updated_at=now() WHERE id=$1", promoID); err != nil {

@@ -12,151 +12,15 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) cart(w http.ResponseWriter, r *http.Request) {
-	// Read the version and items from one snapshot so a refresh cannot mix revisions.
-	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	out, err := s.db.ReadCart(r.Context(), identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var cartID string
-	var version int64
-	if err = tx.QueryRow(r.Context(), "SELECT id::text,version FROM carts WHERE user_id=$1", identityFrom(r).ID).Scan(&cartID, &version); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT ci.id,ci.product_id,ci.quantity,p.name,p.slug,ci.billing_cycle,ci.option_ids,ci.option_ids::text AS option_ids_json,ci.option_quantities::text AS option_quantities_json,ci.purchase_fields,ci.purchase_fields::text AS purchase_fields_json,pp.price_cents AS base_price_cents,pp.setup_fee_cents AS base_setup_cents,
- pp.price_cents+COALESCE((SELECT sum(COALESCE(pop.price_cents,po.price_delta_cents)) FROM product_options po LEFT JOIN product_option_prices pop ON pop.option_id=po.id AND pop.billing_cycle=ci.billing_cycle AND pop.active WHERE po.id=ANY(SELECT jsonb_array_elements_text(ci.option_ids)::bigint)),0) AS price_cents,
- pp.setup_fee_cents+COALESCE((SELECT sum(COALESCE(pop.setup_fee_cents,po.setup_delta_cents)) FROM product_options po LEFT JOIN product_option_prices pop ON pop.option_id=po.id AND pop.billing_cycle=ci.billing_cycle AND pop.active WHERE po.id=ANY(SELECT jsonb_array_elements_text(ci.option_ids)::bigint)),0) AS setup_fee_cents,
- p.stock,(p.active AND pp.active AND catalog_category_visible(p.category_id)) AS active,(ci.product_revision=p.revision) AS current,
- (pp.price_cents+pp.setup_fee_cents+COALESCE((SELECT sum(COALESCE(pop.price_cents,po.price_delta_cents)+COALESCE(pop.setup_fee_cents,po.setup_delta_cents)) FROM product_options po LEFT JOIN product_option_prices pop ON pop.option_id=po.id AND pop.billing_cycle=ci.billing_cycle AND pop.active WHERE po.id=ANY(SELECT jsonb_array_elements_text(ci.option_ids)::bigint)),0))*ci.quantity AS total_cents FROM cart_items ci JOIN products p ON p.id=ci.product_id JOIN product_prices pp ON pp.product_id=ci.product_id AND pp.billing_cycle=ci.billing_cycle WHERE ci.cart_id=$1 ORDER BY ci.id`, cartID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	for _, item := range items {
-		if err = s.db.CheckOrderAdmission(r.Context(), tx, identityFrom(r).ID, item["product_id"].(int64), false); err != nil {
-			if c, ok := err.(*store.Conflict); ok {
-				item["active"] = false
-				item["admission_error"] = c.Message
-				item["admission_code"] = c.Code
-			} else {
-				s.fail(w, r, err)
-				return
-			}
-		}
-		var ids []int64
-		if err = json.Unmarshal([]byte(item["option_ids_json"].(string)), &ids); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		quantities := map[int64]int64{}
-		if err = json.Unmarshal([]byte(item["option_quantities_json"].(string)), &quantities); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		selection, selectionErr := store.ValidateProductOptionsForCycleWithQuantities(r.Context(), tx, item["product_id"].(int64), item["billing_cycle"].(string), ids, quantities)
-		if selectionErr == nil {
-			price, setup, amountErr := store.OptionAmounts(item["base_price_cents"].(int64), item["base_setup_cents"].(int64), selection)
-			selectionErr = amountErr
-			if selectionErr == nil {
-				item["price_cents"], item["setup_fee_cents"] = price, setup
-				item["total_cents"] = (price + setup) * mapInteger(item["quantity"])
-			}
-		}
-		if selectionErr != nil {
-			if _, ok := selectionErr.(*store.Conflict); !ok {
-				s.fail(w, r, selectionErr)
-				return
-			}
-			item["active"] = false
-		}
-		item["options_valid"] = selectionErr == nil
-		item["config_snapshot"] = selection.Snapshot
-		item["option_quantities"] = selection.Quantities
-		var fieldValues map[string]string
-		if err = json.Unmarshal([]byte(item["purchase_fields_json"].(string)), &fieldValues); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		canonicalFields, fieldSnapshot, fieldErr := store.ValidateStoredPurchaseFields(r.Context(), tx, identityFrom(r).ID, item["product_id"].(int64), fieldValues, s.db.PurchaseFieldEncryptionKey)
-		if fieldErr != nil {
-			if _, ok := fieldErr.(*store.Conflict); !ok {
-				s.fail(w, r, fieldErr)
-				return
-			}
-			item["active"] = false
-			item["fields_error"] = fieldErr.Error()
-		}
-		item["fields_valid"] = fieldErr == nil
-		item["purchase_field_snapshot"] = fieldSnapshot
-		if fieldErr == nil {
-			for i := range fieldSnapshot {
-				if fieldSnapshot[i].Encrypted {
-					fieldSnapshot[i].Value = "********"
-					canonicalFields[fieldSnapshot[i].Key] = "********"
-				}
-			}
-			item["purchase_fields"] = canonicalFields
-			item["purchase_field_snapshot"] = fieldSnapshot
-		} else {
-			item["purchase_fields"] = map[string]string{}
-		}
-		delete(item, "purchase_fields_json")
-		delete(item, "option_ids_json")
-		delete(item, "option_quantities_json")
-		delete(item, "base_price_cents")
-		delete(item, "base_setup_cents")
-	}
-	var promoCode string
-	var promoID int64
-	if err = tx.QueryRow(r.Context(), "SELECT promo_code_id,code FROM cart_promo_codes WHERE cart_id=$1", cartID).Scan(&promoID, &promoCode); err != nil && err != pgx.ErrNoRows {
-		s.fail(w, r, err)
-		return
-	}
-	var promo any
-	var discountCents int64
-	if promoCode != "" {
-		quote, subtotal, quoteErr := s.db.CartPromoQuote(r.Context(), tx, identityFrom(r).ID, cartID, promoCode, false)
-		if quoteErr == nil {
-			discountCents = quote.DiscountCents
-			promo = map[string]any{"id": promoID, "code": quote.Code, "discount_type": quote.DiscountType, "discount_cents": quote.DiscountCents, "subtotal_cents": subtotal, "total_cents": subtotal - quote.DiscountCents, "recurring": quote.Recurring, "recurring_limit": quote.RecurringLimit}
-		} else {
-			promo = map[string]any{"id": promoID, "code": promoCode, "discount_cents": 0, "error": quoteErr.Error()}
-		}
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"id": cartID, "version": version, "currency": "CNY", "items": items, "promo": promo, "discount_cents": discountCents})
-}
-
-func mapInteger(value any) int64 {
-	switch n := value.(type) {
-	case int:
-		return int64(n)
-	case int32:
-		return int64(n)
-	case int64:
-		return n
-	case float64:
-		return int64(n)
-	default:
-		return 0
-	}
+	write(w, http.StatusOK, out)
 }
 
 type cartInput struct {

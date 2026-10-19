@@ -140,17 +140,9 @@ function AdminCustomerGroupsListView() {
   return (
     <Workspace title="客户分组" admin>
       <div className="bg-white rounded border border-[#ebeef5] shadow-sm p-4 sm:p-5 space-y-4 max-w-full overflow-hidden">
-        {/* Top guide text matching MoFang #/customer-group */}
-        <div className="text-xs text-[#606266]">
-          客户分组功能可以很轻松的区分您的客户，并能给客户组中的客户提供特别的待遇。{" "}
-          <a
-            href="https://bbs.idcsmart.com"
-            target="_blank"
-            rel="noreferrer"
-            className="text-[#409eff] hover:underline ml-1"
-          >
-            帮助文档
-          </a>
+        <div className="text-sm text-muted-foreground space-y-2">
+          <p>客户组默认减免适用于新购的商品、配置和初装费；商品分组的专属规则优先，命中多条时取实际减免最多的规则。减免 20% 表示从原价减去 20%，0% 表示不减免。</p>
+          <p>新服务保存分组折后的续费基价，已有订单与服务价格不随分组变更重算。优惠码仅在明确允许当前客户组时叠加。</p>
         </div>
 
         <CustomerGroupTabs active="customers" />
@@ -214,7 +206,7 @@ function AdminCustomerGroupsListView() {
                     <TableHead className="w-16 text-center text-xs font-semibold text-[#909399] py-3">ID</TableHead>
                     <TableHead className="text-xs font-semibold text-[#909399] py-3">客户组名称</TableHead>
                     <TableHead className="text-xs font-semibold text-[#909399] py-3">组颜色</TableHead>
-                    <TableHead className="text-xs font-semibold text-[#909399] py-3">商品折扣</TableHead>
+                    <TableHead className="text-xs font-semibold text-[#909399] py-3">默认减免</TableHead>
                     <TableHead className="text-xs font-semibold text-[#909399] py-3">拆分账单</TableHead>
                     <TableHead className="text-xs font-semibold text-[#909399] py-3">客户数量</TableHead>
                     <TableHead className="text-right text-xs font-semibold text-[#909399] py-3 pr-4">操作</TableHead>
@@ -252,7 +244,7 @@ function AdminCustomerGroupsListView() {
                         </TableCell>
                         <TableCell>
                           <span className="text-[#67c23a] font-medium">
-                            {group.discount_percent}%
+                            减免 {group.discount_percent}%
                           </span>
                         </TableCell>
                         <TableCell>
@@ -365,7 +357,7 @@ function AdminCustomerGroupsListView() {
 
               <div className="space-y-1.5">
                 <label className="font-medium text-[#303133] block">
-                  商品折扣百分比（%）
+                  默认减免百分比（%）
                 </label>
                 <Input
                   type="number"
@@ -377,7 +369,7 @@ function AdminCustomerGroupsListView() {
                   className="h-8 text-xs border-[#dcdfe6]"
                 />
                 <span className="text-[#909399] text-[11px] block">
-                  该组客户在购买适用商品时享受的全局折扣，0 为不打折。
+                  减免比例为 0–100%；20 表示减免 20%，100 表示免单。商品分组专属规则优先。
                 </span>
               </div>
 

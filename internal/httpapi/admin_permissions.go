@@ -260,7 +260,7 @@ var adminRoutePermissions = func() map[string]string {
 		"invoice_applications.view":     {"GET /api/v1/admin/invoice-applications", "GET /api/v1/admin/invoice-applications/{id}", "GET /api/v1/admin/invoice-applications/{id}/documents/{document_id}/file"},
 		"balance.topup.resolve":         {"POST /api/v1/admin/invoices/{id}/topup-liability/resolve"},
 		"balance.manage":                {"POST /api/v1/admin/customers/{id}/balance"},
-		"promos.view":                   {"GET /api/v1/admin/promo-codes", "GET /api/v1/admin/promo-codes/page"},
+		"promos.view":                   {"GET /api/v1/admin/promo-codes", "GET /api/v1/admin/promo-codes/page", "GET /api/v1/admin/promo-codes/customer-groups"},
 		"promos.manage":                 {"POST /api/v1/admin/promo-codes", "PATCH /api/v1/admin/promo-codes/{id}"},
 		"services.view":                 {"GET /api/v1/admin/services", "GET /api/v1/admin/services/{id}", "GET /api/v1/admin/cancellations"},
 		"services.manage":               {"POST /api/v1/admin/services/{id}/actions", "POST /api/v1/admin/services/{id}/delivery", "POST /api/v1/admin/cancellations/{id}/decision"},

@@ -280,6 +280,7 @@ export type PromoCode = {
   value: number;
   cycles: string[];
   applies_product_ids: number[];
+  applies_customer_group_ids?: number[];
   requires_product_ids: number[];
   requires_existing: boolean;
   starts_at: string | null;

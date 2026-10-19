@@ -1,4 +1,5 @@
 "use client";
+import { PurchaseDiscountDetails, PurchaseDiscountSummary, type PurchasePricingLine } from "./purchase-discount-details";
 
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { useRef, useState } from "react";
@@ -25,6 +26,7 @@ export type OrderItem = {
   price_cents: number;
   setup_fee_cents: number;
   total_cents: number;
+  pricing?: PurchasePricingLine;
   config_options: number[];
   config_snapshot: OptionSnapshot[];
   renewal_discount_percent: number;
@@ -44,6 +46,8 @@ type Order = {
   invoice_no?: string;
   invoice_status: string | null;
   discount_cents: number;
+  group_discount_cents?: number | null;
+  promo_discount_cents?: number | null;
   promo_code: string;
   items: OrderItem[];
   services: {
@@ -75,6 +79,7 @@ export function OrderItems({ items }: { items: OrderItem[] }) {
               <p className="font-medium break-all">{item.product_name}</p>
               <PurchaseFieldDetails fields={item.purchase_fields} />
               <RenewalBenefitDetails terms={item} />
+              <PurchaseDiscountDetails pricing={item.pricing} />
               <div className="text-xs text-muted-foreground space-y-1 mt-2">
                 {(item.config_snapshot ?? []).map((choice) => (
                   <p key={choice.id} className="break-all">
@@ -92,7 +97,7 @@ export function OrderItems({ items }: { items: OrderItem[] }) {
             </TableCell>
             <TableCell className="money">{money(item.setup_fee_cents)}</TableCell>
             <TableCell>{item.quantity}</TableCell>
-            <TableCell className="money">{money(item.total_cents)}</TableCell>
+            <TableCell className="money">{money(item.pricing?.net_cents ?? item.total_cents)}</TableCell>
           </>
         )}
       />
@@ -207,12 +212,7 @@ export function CustomerOrderDetailView({ id }: { id: number }) {
               <p className="text-2xl font-semibold mt-2 money">
                 {money(data.total_cents)}
               </p>
-              {data.discount_cents > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  优惠 {money(data.discount_cents)}
-                  {data.promo_code ? ` · ${data.promo_code}` : ""}
-                </p>
-              )}
+              <PurchaseDiscountSummary discountCents={data.discount_cents} groupDiscountCents={data.group_discount_cents} promoDiscountCents={data.promo_discount_cents} promoCode={data.promo_code} />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">账单</p>

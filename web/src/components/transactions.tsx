@@ -1,4 +1,5 @@
 "use client";
+import { PurchaseDiscountSummary } from "./purchase-discount-details";
 
 import { CustomerCreditAccount, InvoiceCreditStatus, useCustomerCreditResource } from "./customer-credit";
 import { renewalBenefitLabel } from "./renewal-benefit";
@@ -52,6 +53,8 @@ type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   external_payment_paid: boolean;
  credit_payment?:{remaining_cents:number;amount_cents:number;status:string}|null;
   discount_cents: number;
+  group_discount_cents?: number | null;
+  promo_discount_cents?: number | null;
   promo_code: string;
   items: {
     id: number;
@@ -788,12 +791,7 @@ export function InvoiceDetailView({
               <p className="text-2xl font-semibold money mt-2">
                 {money(data.amount_cents)}
               </p>
-              {data.discount_cents > 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  优惠 {money(data.discount_cents)}
-                  {data.promo_code ? ` · ${data.promo_code}` : ""}
-                </p>
-              )}
+              <PurchaseDiscountSummary discountCents={data.discount_cents} groupDiscountCents={data.group_discount_cents} promoDiscountCents={data.promo_discount_cents} promoCode={data.promo_code} />
             </div>
             <DetailFields
               className="contents"
