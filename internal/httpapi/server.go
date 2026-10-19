@@ -437,6 +437,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/catalog", s.auth(s.supplierCatalog, true))
 	mux.HandleFunc("GET /api/v1/admin/suppliers/{id}/products/{product_id}", s.auth(s.supplierProduct, true))
 	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/import", s.auth(s.importSupplierProduct, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/import-preview", s.auth(s.supplierImportPreview, true))
+	mux.HandleFunc("POST /api/v1/admin/suppliers/{id}/import-batch", s.auth(s.supplierImportBatch, true))
 	mux.HandleFunc("GET /api/v1/admin/products/{id}/supplier-binding", s.auth(s.supplierBinding, true))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/supplier-verification", s.auth(s.supplierVerification, true))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/supplier-lifecycle/verify", s.auth(s.verifySupplierLifecycle, true))

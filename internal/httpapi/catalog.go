@@ -33,6 +33,11 @@ func productProjection(admin bool) string {
 	optionParent := `CASE WHEN po.hierarchy_native THEN COALESCE(po.parent_option_id,0) WHEN pog.option_type=20 THEN COALESCE((SELECT parent.id FROM product_options parent JOIN product_option_groups pg ON pg.id=parent.group_id WHERE pg.product_id=pog.product_id AND parent.legacy_source=po.legacy_source AND parent.legacy_id=CASE WHEN pg_input_is_valid(po.legacy_metadata->>'linkage_pid','bigint') THEN (po.legacy_metadata->>'linkage_pid')::bigint END),0) ELSE 0 END`
 	projection = strings.ReplaceAll(projection, "'option_type',pog.option_type", "'parent_group_id',"+groupParent+",'option_type',pog.option_type")
 	projection = strings.ReplaceAll(projection, "'label',po.label", "'parent_option_id',"+optionParent+",'label',po.label")
+	imported := `EXISTS(SELECT 1 FROM supplier_catalog_imports ci JOIN supplier_product_bindings b ON b.id=ci.binding_id WHERE b.product_id=products.id)`
+	zeroQuantity := `(` + imported + ` AND pog.option_type=4 AND pog.qty_minimum=0)`
+	projection = strings.ReplaceAll(projection, "'option_type',pog.option_type", "'allow_zero_quantity',"+zeroQuantity+",'option_type',pog.option_type")
+	projection = strings.ReplaceAll(projection, "'label',po.label", "'allow_zero_quantity',"+zeroQuantity+" AND po.qty_minimum=0,'label',po.label")
+	projection = `CASE WHEN ` + imported + ` THEN 'configurable' ELSE '' END AS supplier_catalog_mode,` + projection
 	fieldVisibility := ""
 	if !admin {
 		fieldVisibility = " AND f.active"

@@ -110,13 +110,14 @@ export function isQuantityOption(group: ProductOptionGroup) {
 export function optionQuantityBounds(group: ProductOptionGroup, option: ProductOption) {
   const origin = option.qty_minimum || group.qty_minimum || 0;
   const step = group.qty_stage || 1;
-  const min = origin > 0 ? origin : step;
+  const min = group.allow_zero_quantity && option.allow_zero_quantity && origin === 0 ? 0 : origin > 0 ? origin : step;
   const max = Math.min(option.qty_maximum || group.qty_maximum || 1000000, 1000000);
   return { min, max, step };
 }
 
 export function productOptionAmounts(option: ProductOption, cycle: string, quantity = 1) {
-  if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1000000) return null;
+  if (!Number.isSafeInteger(quantity) || quantity < 0 || quantity > 1000000 || (quantity === 0 && !option.allow_zero_quantity)) return null;
+  if (quantity === 0) return { price: 0, setup: 0 };
   const tiers = (option.price_tiers ?? []).filter(tier => tier.billing_cycle === cycle && tier.active !== false).sort((a, b) => a.qty_minimum - b.qty_minimum);
   if (tiers.length === 0) {
     const matrix = option.pricing?.find(price => price.billing_cycle === cycle && price.active !== false);

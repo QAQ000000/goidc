@@ -195,7 +195,7 @@ export function CartView() {
                           产品已变更，请重新选购
                         </div>
                       )}
-                      {item.admission_error&&<div role="alert" className="text-xs text-destructive mt-2">{item.admission_error}<div className="flex gap-3 mt-1"><Link className="underline" href="/console/account">验证绑定手机</Link><Link className="underline" href="/console/certification">实名认证</Link></div></div>}{item.config_snapshot?.map(option=><div key={option.id} className="text-xs text-muted-foreground mt-1 break-all">{option.group_name}：{option.label}{(option.quantity??1)>1?` × ${option.quantity}`:""}</div>)}
+                      {item.admission_error&&<div role="alert" className="text-xs text-destructive mt-2">{item.admission_error}<div className="flex gap-3 mt-1"><Link className="underline" href="/console/account">验证绑定手机</Link><Link className="underline" href="/console/certification">实名认证</Link></div></div>}{item.config_snapshot?.map(option=><div key={option.id} className="text-xs text-muted-foreground mt-1 break-all">{option.group_name}：{option.label}{(option.quantity??1)!==1?` × ${option.quantity}`:""}</div>)}
                       {!item.options_valid&&<div className="text-xs text-destructive mt-1">配置已不可用，请修改配置或移除</div>}
                       <PurchaseFieldDetails fields={item.purchase_field_snapshot}/>
                       {item.fields_error&&<p className="text-xs text-destructive mt-1">{item.fields_error}，请修改购买信息</p>}

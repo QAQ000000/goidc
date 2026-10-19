@@ -4,8 +4,11 @@ package supplier
 import (
 	"context"
 	"math"
+	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const ProviderZJMF = "zjmf_finance_v1"
@@ -23,23 +26,41 @@ type Account struct {
 }
 
 type Price struct {
-	AmountCents int64 `json:"amount_cents"`
-	SetupCents  int64 `json:"setup_cents"`
+	AmountCents    int64  `json:"amount_cents"`
+	SetupCents     int64  `json:"setup_cents"`
+	RawAmountCents *int64 `json:"raw_amount_cents,omitempty"`
+	RawSetupCents  *int64 `json:"raw_setup_cents,omitempty"`
 }
 
 type Choice struct {
-	ID     int64            `json:"id"`
-	Name   string           `json:"name"`
-	MinQty int64            `json:"min_qty,omitempty"`
-	MaxQty int64            `json:"max_qty,omitempty"`
-	Prices map[string]Price `json:"prices"`
+	ID         int64                  `json:"id"`
+	Name       string                 `json:"name"`
+	MinQty     int64                  `json:"min_qty,omitempty"`
+	MaxQty     int64                  `json:"max_qty,omitempty"`
+	Prices     map[string]Price       `json:"prices"`
+	PriceTiers map[string][]PriceTier `json:"price_tiers,omitempty"`
+}
+
+// PriceTier is an inclusive graduated interval. Setup belongs to the selected
+// interval only, while recurring amounts accumulate through preceding tiers.
+type PriceTier struct {
+	MinQty         int64  `json:"min_qty"`
+	MaxQty         int64  `json:"max_qty"`
+	AmountCents    int64  `json:"amount_cents"`
+	SetupCents     int64  `json:"setup_cents"`
+	RawAmountCents *int64 `json:"raw_amount_cents,omitempty"`
+	RawSetupCents  *int64 `json:"raw_setup_cents,omitempty"`
 }
 type Option struct {
-	ID       int64    `json:"id"`
-	Name     string   `json:"name"`
-	Type     string   `json:"type"`
-	Required bool     `json:"required"`
-	Choices  []Choice `json:"choices"`
+	ID           int64    `json:"id"`
+	Name         string   `json:"name"`
+	Type         string   `json:"type"`
+	Required     bool     `json:"required"`
+	Choices      []Choice `json:"choices"`
+	SourceType   int      `json:"source_type,omitempty"`
+	MinQty       int64    `json:"min_qty,omitempty"`
+	MaxQty       int64    `json:"max_qty,omitempty"`
+	QuantityMode string   `json:"quantity_mode,omitempty"`
 }
 type Field struct {
 	ID          int64    `json:"id"`
@@ -48,6 +69,7 @@ type Field struct {
 	Description string   `json:"description"`
 	Required    bool     `json:"required"`
 	Choices     []string `json:"choices"`
+	Pattern     string   `json:"pattern,omitempty"`
 }
 
 type Product struct {
@@ -65,6 +87,10 @@ type Product struct {
 	UnsupportedReason string           `json:"unsupported_reason,omitempty"`
 	HostRule          *credentialRule  `json:"-"`
 	PasswordRule      *credentialRule  `json:"-"`
+	GroupID           int64            `json:"group_id,omitempty"`
+	GroupName         string           `json:"group_name,omitempty"`
+	Type              string           `json:"type,omitempty"`
+	PriceMultiplier   int64            `json:"price_multiplier,omitempty"`
 }
 
 type Capabilities struct {
@@ -221,97 +247,141 @@ type Adapter interface {
 	Execute(context.Context, ActionRequest) (Service, error)
 }
 
+// ValidateSelection is the purchase admission check, including current stock.
 func ValidateSelection(product Product, cycle string, options, fields map[int64]string) (int64, error) {
-	if !product.Supported {
-		return 0, &Error{Code: "unsupported_product"}
-	}
 	if product.Stock != nil && *product.Stock < 1 {
 		return 0, &Error{Code: "out_of_stock"}
 	}
+	price, err := SelectionPrice(product, cycle, options, fields)
+	if err != nil {
+		return 0, err
+	}
+	return price.AmountCents + price.SetupCents, nil
+}
+
+// SelectionPrice validates a concrete supplier configuration and separates its
+// recurring amount from setup. For percent proxies it returns conservative
+// cost ceilings: aggregate raw recurring/setup amounts, then ceil each to cents.
+// Supplier versions differ in intermediate invoice rounding, so actual paid
+// costs remain authoritative only after reading the exact upstream invoice.
+// Zero stock is permitted for preview/import while unavailable for purchase.
+func SelectionPrice(product Product, cycle string, options, fields map[int64]string) (Price, error) {
+	fail := func(code string) (Price, error) { return Price{}, &Error{Code: code} }
+	if !product.Supported {
+		return fail("unsupported_product")
+	}
 	if product.Currency != "CNY" {
-		return 0, &Error{Code: "unsupported_currency"}
+		return fail("unsupported_currency")
 	}
 	base, ok := product.Prices[cycle]
 	if !ok {
-		return 0, &Error{Code: "unsupported_cycle"}
+		return fail("unsupported_cycle")
 	}
-	if options == nil {
-		options = map[int64]string{}
-	}
-	if fields == nil {
-		fields = map[int64]string{}
+	percent := product.PriceMultiplier > 0
+	base, ok = selectionPriceBasis(base, percent)
+	if !ok {
+		return fail("invalid_price")
 	}
 	seen := map[int64]bool{}
 	for _, option := range product.Options {
+		if option.ID <= 0 || seen[option.ID] {
+			return fail("option_schema_invalid")
+		}
+		seen[option.ID] = true
 		value, present := options[option.ID]
 		if option.Required && (!present || value == "") {
-			return 0, &Error{Code: "required_option"}
+			return fail("required_option")
 		}
 		if !present || value == "" {
 			continue
 		}
-		if option.Type != "select" && option.Type != "quantity" {
-			return 0, &Error{Code: "unsupported_option_type"}
-		}
-		var choice *Choice
+		var price Price
 		if option.Type == "quantity" {
-			qty, err := strconv.ParseInt(value, 10, 64)
-			if err != nil || len(option.Choices) != 1 || qty < option.Choices[0].MinQty || qty > option.Choices[0].MaxQty {
-				return 0, &Error{Code: "invalid_option_quantity"}
+			qty, err := strictQuantity(value)
+			if err != nil || len(option.Choices) != 1 {
+				return fail("invalid_option_quantity")
 			}
-			choice = &option.Choices[0]
-		} else {
-			for i := range option.Choices {
-				if strconv.FormatInt(option.Choices[i].ID, 10) == value {
-					choice = &option.Choices[i]
+			choice := option.Choices[0]
+			minimum, maximum := option.MinQty, option.MaxQty
+			if maximum == 0 { // Existing normalized quantity fixtures.
+				minimum, maximum = choice.MinQty, choice.MaxQty
+			}
+			if qty < minimum || qty > maximum {
+				return fail("invalid_option_quantity")
+			}
+			unit, exists := choice.Prices[cycle]
+			if !exists {
+				return fail("option_price_missing")
+			}
+			unit, exists = selectionPriceBasis(unit, percent)
+			if !exists {
+				return fail("invalid_price")
+			}
+			if qty > 0 {
+				if option.QuantityMode == "graduated" {
+					var valid bool
+					price, valid = graduatedPrice(choice.PriceTiers[cycle], qty, percent)
+					if !valid {
+						return fail("invalid_option_quantity")
+					}
+				} else {
+					if option.QuantityMode != "" && option.QuantityMode != "linear" || unit.AmountCents < 0 || unit.SetupCents < 0 || unit.AmountCents > math.MaxInt64/qty {
+						return fail("invalid_price")
+					}
+					price = Price{AmountCents: unit.AmountCents * qty, SetupCents: unit.SetupCents}
+				}
+			}
+		} else if option.Type == "select" {
+			found := false
+			for _, choice := range option.Choices {
+				if strconv.FormatInt(choice.ID, 10) == value {
+					var exists bool
+					price, exists = choice.Prices[cycle]
+					if !exists {
+						return fail("option_price_missing")
+					}
+					price, exists = selectionPriceBasis(price, percent)
+					if !exists {
+						return fail("invalid_price")
+					}
+					found = true
 					break
 				}
 			}
-		}
-		if choice == nil {
-			return 0, &Error{Code: "invalid_option"}
-		}
-		seen[option.ID] = true
-		price, exists := choice.Prices[cycle]
-		if !exists {
-			return 0, &Error{Code: "option_price_missing"}
-		}
-		if option.Type == "quantity" {
-			qty, _ := strconv.ParseInt(value, 10, 64)
-			if qty > 0 && (price.AmountCents > math.MaxInt64/qty || price.SetupCents > math.MaxInt64/qty) {
-				return 0, &Error{Code: "invalid_price"}
+			if !found {
+				return fail("invalid_option")
 			}
-			price.AmountCents *= qty
-			price.SetupCents *= qty
+		} else {
+			return fail("unsupported_option_type")
 		}
 		if price.AmountCents < 0 || price.SetupCents < 0 || base.AmountCents > math.MaxInt64-price.AmountCents || base.SetupCents > math.MaxInt64-price.SetupCents {
-			return 0, &Error{Code: "invalid_price"}
+			return fail("invalid_price")
 		}
 		base.AmountCents += price.AmountCents
 		base.SetupCents += price.SetupCents
 	}
 	for id := range options {
 		if !seen[id] {
-			found := false
-			for _, o := range product.Options {
-				if o.ID == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return 0, &Error{Code: "unknown_option"}
-			}
+			return fail("unknown_option")
 		}
 	}
 	fieldIDs := map[int64]bool{}
 	for _, field := range product.Fields {
+		if field.ID <= 0 || fieldIDs[field.ID] {
+			return fail("field_schema_invalid")
+		}
 		fieldIDs[field.ID] = true
 		value, present := fields[field.ID]
-		if field.Required && (!present || strings.TrimSpace(value) == "") {
-			return 0, &Error{Code: "required_field"}
+		if field.Required && (!present || strings.TrimSpace(value) == "" || field.Type == "tickbox" && value != "true") {
+			return fail("required_field")
 		}
-		if present && len(field.Choices) > 0 {
+		if !present {
+			continue
+		}
+		if !utf8.ValidString(value) || utf8.RuneCountInString(value) > 2048 || strings.ContainsRune(value, 0) {
+			return fail("invalid_field")
+		}
+		if len(field.Choices) > 0 && value != "" {
 			valid := false
 			for _, choice := range field.Choices {
 				if choice == value {
@@ -320,17 +390,94 @@ func ValidateSelection(product Product, cycle string, options, fields map[int64]
 				}
 			}
 			if !valid {
-				return 0, &Error{Code: "invalid_field"}
+				return fail("invalid_field")
+			}
+		}
+		if field.Type == "tickbox" && value != "true" && value != "false" && value != "" {
+			return fail("invalid_field")
+		}
+		if field.Type == "link" && value != "" {
+			u, err := url.Parse(value)
+			if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+				return fail("invalid_field")
+			}
+		}
+		if field.Pattern != "" && value != "" {
+			re, err := regexp.Compile(`\A(?:` + field.Pattern + `)\z`)
+			if err != nil || !re.MatchString(value) {
+				return fail("invalid_field")
 			}
 		}
 	}
 	for id := range fields {
 		if !fieldIDs[id] {
-			return 0, &Error{Code: "unknown_field"}
+			return fail("unknown_field")
 		}
 	}
-	if base.AmountCents < 0 || base.SetupCents < 0 || base.AmountCents > math.MaxInt64-base.SetupCents {
-		return 0, &Error{Code: "invalid_price"}
+	if percent {
+		amount, valid := scaleCatalogCents(base.AmountCents, product.PriceMultiplier, true)
+		setup, setupValid := scaleCatalogCents(base.SetupCents, product.PriceMultiplier, true)
+		if !valid || !setupValid {
+			return fail("invalid_price")
+		}
+		base = Price{AmountCents: amount, SetupCents: setup}
 	}
-	return base.AmountCents + base.SetupCents, nil
+	if base.AmountCents < 0 || base.SetupCents < 0 || base.AmountCents > math.MaxInt64-base.SetupCents {
+		return fail("invalid_price")
+	}
+	return base, nil
+}
+
+func strictQuantity(value string) (int64, error) {
+	if value == "" {
+		return 0, &Error{Code: "invalid_option_quantity"}
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return 0, &Error{Code: "invalid_option_quantity"}
+		}
+	}
+	return strconv.ParseInt(value, 10, 64)
+}
+
+// Percent proxy APIs multiply the complete configured recurring/setup totals,
+// rather than rounding each component before the configuration is summed.
+func selectionPriceBasis(price Price, raw bool) (Price, bool) {
+	if raw {
+		if price.RawAmountCents == nil || price.RawSetupCents == nil {
+			return Price{}, false
+		}
+		price.AmountCents, price.SetupCents = *price.RawAmountCents, *price.RawSetupCents
+	}
+	return Price{AmountCents: price.AmountCents, SetupCents: price.SetupCents}, price.AmountCents >= 0 && price.SetupCents >= 0
+}
+
+func graduatedPrice(tiers []PriceTier, quantity int64, raw bool) (Price, bool) {
+	var total Price
+	var last int64
+	matched := false
+	for _, tier := range tiers {
+		price, valid := selectionPriceBasis(Price{AmountCents: tier.AmountCents, SetupCents: tier.SetupCents, RawAmountCents: tier.RawAmountCents, RawSetupCents: tier.RawSetupCents}, raw)
+		if tier.MinQty != last+1 || tier.MaxQty < tier.MinQty || !valid {
+			return Price{}, false
+		}
+		last = tier.MaxQty
+		if quantity < tier.MinQty {
+			continue
+		}
+		units := tier.MaxQty - tier.MinQty + 1
+		if quantity <= tier.MaxQty {
+			units = quantity - tier.MinQty + 1
+			total.SetupCents = price.SetupCents
+			matched = true
+		}
+		if price.AmountCents > math.MaxInt64/units || total.AmountCents > math.MaxInt64-price.AmountCents*units {
+			return Price{}, false
+		}
+		total.AmountCents += price.AmountCents * units
+		if matched {
+			return total, true
+		}
+	}
+	return Price{}, false
 }

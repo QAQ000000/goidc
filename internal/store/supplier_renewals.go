@@ -32,8 +32,9 @@ func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID
 	var snap supplierSnapshot
 	var raw []byte
 	var upstream, cycle string
+	var orderItemID, productID int64
 	var out supplierRenewalSnapshot
-	if err := tx.QueryRow(ctx, "SELECT delivery_snapshot,upstream_id,billing_cycle FROM services WHERE id=$1", serviceID).Scan(&raw, &upstream, &cycle); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT delivery_snapshot,upstream_id,billing_cycle,order_item_id,product_id FROM services WHERE id=$1", serviceID).Scan(&raw, &upstream, &cycle, &orderItemID, &productID); err != nil {
 		return nil, out, err
 	}
 	if json.Unmarshal(raw, &snap) != nil || snap.BindingID < 1 {
@@ -46,8 +47,11 @@ func (s *Store) requireSupplierRenewal(ctx context.Context, tx pgx.Tx, serviceID
 	if err != nil {
 		return nil, out, err
 	}
-	if b.SupplierID != snap.SupplierID || b.Provider != snap.Provider || b.BillingCycle != cycle {
-		return nil, out, conflict("supplier_snapshot_invalid", "供应商交付绑定不匹配")
+	if b.ProductID != productID {
+		return nil, out, conflict("supplier_snapshot_invalid", "供应商服务商品与绑定不匹配")
+	}
+	if _, err = s.applySupplierServiceSelection(ctx, tx, &b, snap, orderItemID, cycle, true); err != nil {
+		return nil, out, err
 	}
 	// Keep the account configuration stable through this short transaction.
 	// No upstream request may run while this lock is held.

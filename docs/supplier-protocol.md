@@ -26,23 +26,38 @@ character groups and optional hostname prefix are recognized. They use secure
 random generation and participate in the revision; interactive credential input
 remains unsupported. Products without automatic rules retain the previous hash.
 
-`Providers()` returns registry metadata for the admin UI. Import and checkout
-both call `ValidateSelection` to require every fixed upstream choice and
-mandatory field, reject unknown IDs, and calculate base, option, and setup
-costs in cents. Dropdown and radio options are supported. A DCIM fixed
-specification whose provider-specific `option_type` has no variable range is
-normalized to a regular choice. A single-range disk quantity is also supported
-when it has one choice, no linkage, and a non-staged unit price; the submitted
-integer is checked against the provider range and multiplies the option and
-setup price. Arbitrary interactive quantities, staged pricing, OS linkage and
-advanced linkage remain unsupported. Text and dropdown custom fields are
-supported only without a supplier regex rule. The store seals custom field
-values and never projects them back in binding responses.
+`Providers()` returns registry metadata for the admin UI. `SelectionPrice`
+validates a concrete selection and separates periodic cost from setup;
+`ValidateSelection` additionally checks available stock before a purchase.
+Dropdown/radio, ordinary select type 10 and recognized fixed DCIM choices are
+supported. Linear quantity options send the actual quantity, multiply periodic
+cost by quantity and charge setup once; quantity zero charges neither.
+Continuous graduated tiers accumulate periodic amounts across inclusive ranges
+and charge the selected tier's setup once. The adapter rejects unsupported
+linkage, volume bands, non-unit steps and checkbox option schemas instead of
+silently discarding them. Custom fields support text, dropdown, textarea,
+password, HTTP(S) link and tickbox, including validated anchored RE2 rules;
+unsupported PCRE features block import. Password fields require both provision
+and purchase-field encryption keys. Binding responses never return field values.
 
 Product payment rules accept the legacy JSON string or object form. Recurring
 products expose recurring cycles only; one-time products expose `once` only.
 Hidden/retired products, missing payment rules, malformed setup prices and
 products that require unsupported hostname/password rules cannot be imported.
+
+## 批量导入与客户可选规格
+
+管理入口为供应商目录：搜索/分组/跨页勾选上游商品，设置售价比例和本地二级商品分组，预览后统一确认；单批 1–50 项。公开标识自动生成，默认直接上架，可选择保持下架；隐藏分类仍不向客户开放。旧单商品固定规格导入作为高级入口兼容。
+
+- `POST /api/v1/admin/suppliers/{id}/import-preview` 读取完整详情并逐项返回可导入状态、原因、版本及本地基础价，不购买上游资源。权限、会话、账户版本与本地分类在远端读取前后复核。
+- `POST /api/v1/admin/suppliers/{id}/import-batch` 接收预览版本与必填 `Idempotency-Key`，统一创建商品、各账期价格、可选规格/阶梯价和购买字段，事务内审计与回执一起提交。一项失败全批回滚；重复请求返回原回执，已有完整导入不会重复创建。未知响应保留原请求与键恢复，不能盲目新建一批。
+- `price_multiplier_bps=12000` 表示 120%（上游 × 1.2），10000 表示同价。售价采用整数分：商品、每个规格单价和各初装费分别按比例半上舍入，阶梯单价同样处理。此规则与旧版累计后乘比例可能存在分级舍入差，预览、购物车与结账采用相同本地价格定义。上游自身为百分比代理时另保留原始基价：所选规格累计后按上游比例计算周期/初装成本上限，各自向上取整到分（每部分余量小于 1 分），兼容上游 PHP 与数据库的中间舍入；实际支出仍取真实上游账单，不能超过冻结上限。
+- 当前本地支持月付、季付、年付和一次性，导入复制商品全部受支持账期；上游同时启用本地尚不支持的半年、两年、多年、小时、天或试用账期时整项拦截，避免悄悄漏掉账期。外币和复杂联动同样明确拒绝。
+- 迁移 175 的 `supplier_catalog_imports` 保存不可变上游归一化定义、售价比例、本地规格/字段到上游 ID 的映射。旧固定绑定及默认账期保持不可变；新模式可编辑已导入账期的本地售价/启用状态，规格和购买字段只读。上游日后变价不自动改本地售价，也不改已售服务。
+- 客户复用通用商品页选择账期、规格/数量和填写字段。服务端从映射计算上游初购及续费成本上限，将实际选择以订单项为 AAD 加密后直接写入不可变 `services.delivery_snapshot`；每笔订单分别冻结。开通、人工/自动续费验证原商品、原账期和成本，不能回退成导入时默认规格，也不能从客户端接受成本。缺失、损坏、跨订单项置换的选择拒绝派发。
+- 上游详情的版本在实际创建前再次校验；未知写仍保留供应商账户租约并等待核验。当前未开放已售服务的规格升级或账期切换。
+
+175 迁移必须与 API、worker、Web 成套升级，先停旧 writer；不要用不理解服务选择的旧 worker 接管新订单。迁移不改历史绑定/服务/资金或旧 checksum。已写新订单后的回退须保留兼容程序，或在独立恢复后完整核对新增业务；不能直接覆盖线上数据库。
 
 `Create` checks the selected product's revision, cycle and maximum cost. It
 reads currency from the top-level `user.currency` in GET `/user_info` and sends

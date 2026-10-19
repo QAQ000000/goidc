@@ -351,6 +351,7 @@ export type NOKVMMonitoring={
 };
 export type DeliveryConfig={profile_id:string;resources:NOKVMResources;templates?:NOKVMTemplate[]};
 export type Product = {
+ supplier_catalog_mode?:"configurable"|"";
  require_verified_phone?:boolean;
  require_certification?:boolean;
   delivery_config?:DeliveryConfig|null;
@@ -389,14 +390,18 @@ export type Product = {
 export type NativeRulePredicate = {group_id:number;option_id:number|null;operator:"equals"|"not_equals"|"absent"|"quantity_in"|"quantity_out";qty_minimum:number|null;qty_maximum:number|null};
 export type SupplierProvider = { id:string; name:string; capabilities:{catalog:boolean;product:boolean;create:boolean;sync:boolean;power:boolean;reset_password:boolean;rescue:boolean;vnc:boolean;reinstall:boolean;suspend:boolean;resume:boolean;terminate:boolean;renew:boolean}; descriptor?:import("./channel-configuration").ChannelDescriptor };
 export type SupplierAccount = { id:number; name:string; provider:string; base_url:string; username:string; active:boolean; version:number; credentials_configured:boolean; product_count:number; blocked_job_id?:number|null; running_job_id?:number|null; config?:Record<string,unknown>; secure_fields?:Record<string,boolean>; schema_version?:number; factory_available?:boolean; configuration_status?:"valid"|"invalid"|"implementation_missing"|"schema_incompatible"; configuration_errors?:{field:string;code:string}[] };
-export type SupplierPrice = {amount_cents:number;setup_cents:number};
-export type SupplierProduct = {id:number;name:string;description:string;currency?:string;revision?:string;stock?:number|null;prices?:Record<string,SupplierPrice>|null;options?:{id:number;name:string;type:string;required:boolean;choices?:{id:number;name:string;min_qty?:number;max_qty?:number;prices?:Record<string,SupplierPrice>|null}[]|null}[]|null;fields?:{id:number;name:string;type:string;description:string;required:boolean;choices?:string[]|null}[]|null;supported:boolean;unsupported_reason?:string};
-export type SupplierBinding = {id:number;supplier_id:number;provider:string;upstream_product_id:number;upstream_revision:string;billing_cycle:string;maximum_cost_cents:number;config_options:Record<string,string>;currency:string;custom_fields_configured:boolean};
+export type SupplierPrice = {amount_cents:number;setup_cents:number;raw_amount_cents?:number;raw_setup_cents?:number};
+export type SupplierPriceTier = SupplierPrice & {min_qty:number;max_qty:number};
+export type SupplierProduct = {id:number;name:string;description:string;group_id?:number;group_name?:string;type?:string;currency?:string;revision?:string;stock?:number|null;price_multiplier?:number;prices?:Record<string,SupplierPrice>|null;options?:{id:number;name:string;type:string;required:boolean;quantity_mode?:string;choices?:{id:number;name:string;min_qty?:number;max_qty?:number;prices?:Record<string,SupplierPrice>|null;price_tiers?:Record<string,SupplierPriceTier[]>}[]|null}[]|null;fields?:{id:number;name:string;type:string;description:string;required:boolean;choices?:string[]|null}[]|null;supported:boolean;unsupported_reason?:string};
+export type SupplierBatchImportInput = {expected_supplier_version:number;category_id:number|null;price_multiplier_bps:number;active:boolean;items:{upstream_product_id:number;expected_upstream_revision?:string;name?:string}[]};
+export type SupplierBatchImportPreview = {expected_supplier_version:number;price_multiplier_bps:number;category_id:number|null;active:boolean;items:{product:SupplierProduct;slug:string;local_prices:Record<string,SupplierPrice>;importable:boolean;reason?:string}[]};
+export type SupplierBatchImportResult = {items:{upstream_product_id:number;product_id:number;name:string;slug:string;status:"created"|"existing"}[]};
+export type SupplierBinding = {id:number;supplier_id:number;provider:string;upstream_product_id:number;upstream_revision:string;billing_cycle:string;maximum_cost_cents:number;config_options:Record<string,string>;currency:string;custom_fields_configured:boolean;catalog_mode?:string;billing_cycles?:string[]};
 export type NativeConfigurationRule = {id:number;name:string;enabled:boolean;conditions:NativeRulePredicate[];results:NativeRulePredicate[]};
 export type ProductOptionPrice = { id:number;billing_cycle:string;price_cents:number;setup_fee_cents:number;active:boolean };
 export type ProductOptionPriceTier = { id?:number;billing_cycle:string;qty_minimum:number;qty_maximum:number;price_cents:number;setup_fee_cents:number;active?:boolean };
-export type ProductOption = { id:number;parent_option_id?:number;label:string;value:string;price_delta_cents:number;setup_delta_cents:number;sort_order:number;active:boolean;hidden?:boolean;qty_minimum?:number;qty_maximum?:number;upgrade_enabled?:boolean;pricing?:ProductOptionPrice[];price_tiers?:ProductOptionPriceTier[] };
-export type ProductOptionGroup = { id:number;parent_group_id?:number;name:string;slug:string;required:boolean;active:boolean;sort_order:number;option_type?:number;qty_minimum?:number;qty_maximum?:number;qty_stage?:number;unit?:string;upgrade_enabled?:boolean;options:ProductOption[] };
+export type ProductOption = { id:number;parent_option_id?:number;label:string;value:string;price_delta_cents:number;setup_delta_cents:number;sort_order:number;active:boolean;hidden?:boolean;qty_minimum?:number;qty_maximum?:number;allow_zero_quantity?:boolean;upgrade_enabled?:boolean;pricing?:ProductOptionPrice[];price_tiers?:ProductOptionPriceTier[] };
+export type ProductOptionGroup = { id:number;parent_group_id?:number;name:string;slug:string;required:boolean;active:boolean;sort_order:number;option_type?:number;qty_minimum?:number;qty_maximum?:number;allow_zero_quantity?:boolean;qty_stage?:number;unit?:string;upgrade_enabled?:boolean;options:ProductOption[] };
 export type OptionSnapshot = { id:number;group_id:number;group_name:string;group_slug:string;label:string;value:string;quantity?:number;price_delta_cents:number;setup_delta_cents:number };
 export type CartItem = Product & {
  admission_error?:string;

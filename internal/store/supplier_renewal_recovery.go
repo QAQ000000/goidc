@@ -128,8 +128,15 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
  AND s.delivery_snapshot->>'binding_id'=b.id::text
  AND s.delivery_snapshot->>'supplier_id'=a.id::text AND s.delivery_snapshot->>'provider'=$4
  AND a.active AND a.version=$6 AND a.provider=$4
- AND b.provider=$4 AND b.supplier_id=$5 AND b.upstream_product_id=$8 AND b.billing_cycle=$9
- AND b.currency=$10 AND b.maximum_cost_cents=$11
+ AND b.provider=$4 AND b.supplier_id=$5 AND b.upstream_product_id=$8
+ AND b.currency=$10 AND (
+  (NOT EXISTS(SELECT 1 FROM supplier_catalog_imports ci WHERE ci.binding_id=b.id)
+   AND b.billing_cycle=$9 AND b.maximum_cost_cents=$11 AND NOT s.delivery_snapshot ? 'selection')
+  OR (EXISTS(SELECT 1 FROM supplier_catalog_imports ci WHERE ci.binding_id=b.id)
+   AND s.delivery_snapshot->'selection'->>'cycle'=$9
+   AND s.delivery_snapshot->'selection'->>'order_item_id'=s.order_item_id::text
+   AND s.delivery_snapshot->'selection'->>'renewal_maximum_cost_cents'=$11::bigint::text)
+ )
  AND s.upstream_id=$7 AND s.billing_cycle=$9
  AND $14::timestamptz<=clock_timestamp()+interval '24 hours' AND $15::timestamptz>clock_timestamp()
  AND EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id AND ii.item_type='renew')

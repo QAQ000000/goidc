@@ -66,6 +66,13 @@ func (s *Store) configurationTx(ctx context.Context, actor, product int64, revis
 	if err == nil && revision != nil && current != *revision {
 		err = conflict("version_conflict", "商品配置已变更，请重新加载")
 	}
+	if err == nil {
+		var imported bool
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM supplier_catalog_imports ci JOIN supplier_product_bindings b ON b.id=ci.binding_id WHERE b.product_id=$1)`, product).Scan(&imported)
+		if err == nil && imported {
+			err = conflict("supplier_configuration_locked", "上游同步的规格和购买字段为只读，不能通过普通商品编辑破坏上游映射")
+		}
+	}
 	if err != nil {
 		tx.Rollback(ctx)
 		return nil, err

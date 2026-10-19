@@ -28,6 +28,7 @@ type checkoutLine struct {
 	StoredFields                                           bool
 	UnitPrice, UnitSetup                                   int64
 	DefaultRecurring                                       int64
+	SupplierSelection                                      *supplierCheckoutSelection
 }
 
 type checkoutOptions struct {
@@ -86,6 +87,10 @@ func (s *Store) prepareCheckoutLines(ctx context.Context, tx pgx.Tx, userID int6
 		} else {
 			_, v.PurchaseSnapshot, err = ValidatePurchaseFieldsWithKey(ctx, tx, v.ProductID, fieldValues, s.PurchaseFieldEncryptionKey)
 		}
+		if err != nil {
+			return result, nil, false, err
+		}
+		v.SupplierSelection, err = s.prepareSupplierCheckoutSelection(ctx, tx, *v)
 		if err != nil {
 			return result, nil, false, err
 		}
@@ -171,9 +176,13 @@ func (s *Store) persistCheckoutLines(ctx context.Context, tx pgx.Tx, userID int6
 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, result.OrderID, v.ProductID, v.Name, v.Cycle, v.Qty, v.UnitPrice, v.UnitSetup, unitTotal*int64(v.Qty), optionJSON, optionQuantityJSON, snapshot, benefit.Percent, benefit.Code, purchaseJSON, benefit.FixedCents, benefit.Limit).Scan(&orderItemID); err != nil {
 			return result, err
 		}
+		delivery, freezeErr := s.freezeSupplierCheckoutSelection(v.SupplierSelection, orderItemID)
+		if freezeErr != nil {
+			return result, freezeErr
+		}
 		if _, err = tx.Exec(ctx, `INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle,unit_number,provision_mode,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,delivery_snapshot)
-SELECT $1,$2,$3,p.id,$5,'svc-'||replace(gen_random_uuid()::text,'-',''),$6,n,p.provision_mode,$8,$9,$10,$11,p.delivery_config
-FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, result.OrderID, orderItemID, v.ProductID, v.Name, v.Cycle, v.Qty, benefit.Percent, benefit.Code, benefit.FixedCents, benefit.Limit); err != nil {
+SELECT $1,$2,$3,p.id,$5,'svc-'||replace(gen_random_uuid()::text,'-',''),$6,n,p.provision_mode,$8,$9,$10,$11,coalesce($12::jsonb,p.delivery_config)
+FROM products p CROSS JOIN generate_series(1,$7::int) n WHERE p.id=$4`, userID, result.OrderID, orderItemID, v.ProductID, v.Name, v.Cycle, v.Qty, benefit.Percent, benefit.Code, benefit.FixedCents, benefit.Limit, delivery); err != nil {
 			return result, err
 		}
 		if v.RenewalPriceOverride != nil || v.FirstPriceOverride != nil {

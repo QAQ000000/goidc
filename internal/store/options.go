@@ -32,7 +32,7 @@ type OptionSnapshot struct {
 	Value           string `json:"value"`
 	PriceDeltaCents int64  `json:"price_delta_cents"`
 	SetupDeltaCents int64  `json:"setup_delta_cents"`
-	Quantity        int64  `json:"quantity,omitempty"`
+	Quantity        int64  `json:"quantity"`
 }
 
 func OptionAmounts(price, setup int64, selection OptionSelection) (int64, int64, error) {
@@ -75,6 +75,10 @@ func ValidateProductOptionsForCycleWithQuantities(ctx context.Context, q sqlQuer
 	selection := OptionSelection{IDs: []int64{}, Quantities: map[int64]int64{}, Snapshot: []OptionSnapshot{}}
 	if productID < 1 || len(ids) > 100 {
 		return selection, conflict("invalid_product_options", "产品配置项无效")
+	}
+	var imported bool
+	if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM supplier_catalog_imports ci JOIN supplier_product_bindings b ON b.id=ci.binding_id WHERE b.product_id=$1)`, productID).Scan(&imported); err != nil {
+		return selection, err
 	}
 	ids = append([]int64(nil), ids...)
 	if ids == nil {
@@ -150,7 +154,7 @@ WHERE pog.product_id=$1 AND pog.active AND po.active AND po.id=ANY($3) ORDER BY 
 				if max == 0 {
 					max = groupMax
 				}
-				if quantity < min || (max > 0 && quantity > max) || quantity < 1 {
+				if quantity < min || (max > 0 && quantity > max) || quantity < 0 || quantity == 0 && !imported {
 					rows.Close()
 					return selection, conflict("invalid_product_option_quantity", "配置数量超出允许范围")
 				}
@@ -162,7 +166,7 @@ WHERE pog.product_id=$1 AND pog.active AND po.active AND po.id=ANY($3) ORDER BY 
 				rows.Close()
 				return selection, conflict("invalid_product_option_quantity", "固定价配置数量必须为一")
 			}
-			if quantity < 1 || quantity > 1000000 {
+			if quantity < 0 || quantity == 0 && !imported || quantity > 1000000 {
 				rows.Close()
 				return selection, conflict("invalid_product_option_quantity", "配置数量无效")
 			}
@@ -172,6 +176,9 @@ WHERE pog.product_id=$1 AND pog.active AND po.active AND po.id=ANY($3) ORDER BY 
 				return selection, conflict("unsupported_product_configuration", "配置阶梯价格数据无效")
 			}
 			weightedPrice, weightedSetup, ok := PriceForQuantity(tiers, quantity, priceDelta, setupDelta)
+			if imported && quantity == 0 {
+				weightedPrice, weightedSetup, ok = 0, 0, true
+			}
 			overflow := !ok
 			if len(tiers) > 0 && overflow {
 				rows.Close()

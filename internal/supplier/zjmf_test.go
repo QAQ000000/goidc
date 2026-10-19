@@ -297,7 +297,10 @@ func TestDCIMFixedSpecificationOptionsAreSupported(t *testing.T) {
 	if err != nil || !p.Supported || len(p.Options) != 3 || p.Options[1].Choices[1].ID != 136801 {
 		t.Fatal(p, err)
 	}
-	cost, err := ValidateSelection(p, "monthly", map[int64]string{33165: "136795", 33166: "136801", 33170: "136819"}, nil)
+	if p.Options[2].Type != "quantity" || p.Options[2].MinQty != 20 || p.Options[2].MaxQty != 20 {
+		t.Fatal("fixed bandwidth must submit its quantity", p.Options[2])
+	}
+	cost, err := ValidateSelection(p, "monthly", map[int64]string{33165: "136795", 33166: "136801", 33170: "20"}, nil)
 	if err != nil || cost != 2000 {
 		t.Fatal(cost, err)
 	}

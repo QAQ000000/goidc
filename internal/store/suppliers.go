@@ -57,13 +57,16 @@ type SupplierBinding struct {
 	MaximumCostCents       int64            `json:"maximum_cost_cents"`
 	ConfigOptions          map[int64]string `json:"config_options"`
 	CustomFieldsConfigured bool             `json:"custom_fields_configured"`
+	CatalogMode            string           `json:"catalog_mode,omitempty"`
+	BillingCycles          []string         `json:"billing_cycles,omitempty"`
 	sealed                 []byte
 }
 
 type supplierSnapshot struct {
-	SupplierID int64  `json:"supplier_id"`
-	BindingID  int64  `json:"binding_id"`
-	Provider   string `json:"provider"`
+	SupplierID int64                     `json:"supplier_id"`
+	BindingID  int64                     `json:"binding_id"`
+	Provider   string                    `json:"provider"`
+	Selection  *supplierServiceSelection `json:"selection,omitempty"`
 }
 
 func (s *Store) SaveSupplier(ctx context.Context, actor, id int64, in SupplierInput) (int64, error) {
@@ -355,7 +358,15 @@ func (s *Store) supplierBindingWith(ctx context.Context, q sqlQueryer, id int64,
 	return b, nil
 }
 func (s *Store) SupplierBinding(ctx context.Context, productID int64) (SupplierBinding, error) {
-	return s.supplierBinding(ctx, productID, true)
+	b, err := s.supplierBinding(ctx, productID, true)
+	if err != nil {
+		return b, err
+	}
+	configuration, imported, err := supplierCatalogConfiguration(ctx, s.Pool, b.ID)
+	if imported {
+		b.CatalogMode, b.BillingCycles = "configurable", supplierCatalogCycles(configuration.Product)
+	}
+	return b, err
 }
 
 // Bound provider, upstream identity and configuration must not be retargeted through ordinary product writes.
@@ -368,14 +379,14 @@ func RequireSupplierProductCycle(ctx context.Context, tx sqlQueryer, pid int64, 
 		return nil
 	}
 	var bound string
-	var active bool
-	if err := tx.QueryRow(ctx, `SELECT b.billing_cycle,a.active FROM supplier_product_bindings b JOIN supplier_accounts a ON a.id=b.supplier_id WHERE b.product_id=$1`, pid).Scan(&bound, &active); err != nil {
+	var active, importedCycle bool
+	if err := tx.QueryRow(ctx, `SELECT b.billing_cycle,a.active,coalesce(ci.configuration->'product'->'prices' ? $2,false) FROM supplier_product_bindings b JOIN supplier_accounts a ON a.id=b.supplier_id LEFT JOIN supplier_catalog_imports ci ON ci.binding_id=b.id WHERE b.product_id=$1`, pid, cycle).Scan(&bound, &active, &importedCycle); err != nil {
 		return err
 	}
 	if !active {
 		return conflict("supplier_disabled", "该商品供应商已停用")
 	}
-	if bound != cycle {
+	if bound != cycle && !importedCycle {
 		return conflict("supplier_cycle_locked", "上游商品只接受导入时绑定的账期")
 	}
 	return nil
@@ -383,15 +394,15 @@ func RequireSupplierProductCycle(ctx context.Context, tx sqlQueryer, pid int64, 
 
 func lockSupplierAtCheckout(ctx context.Context, tx pgx.Tx, productID int64, cycle string) error {
 	var bound string
-	var active bool
-	err := tx.QueryRow(ctx, `SELECT b.billing_cycle,a.active FROM supplier_product_bindings b JOIN supplier_accounts a ON a.id=b.supplier_id WHERE b.product_id=$1 FOR SHARE OF a`, productID).Scan(&bound, &active)
+	var active, importedCycle bool
+	err := tx.QueryRow(ctx, `SELECT b.billing_cycle,a.active,coalesce(ci.configuration->'product'->'prices' ? $2,false) FROM supplier_product_bindings b JOIN supplier_accounts a ON a.id=b.supplier_id LEFT JOIN supplier_catalog_imports ci ON ci.binding_id=b.id WHERE b.product_id=$1 FOR SHARE OF a`, productID, cycle).Scan(&bound, &active, &importedCycle)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if !active || bound != cycle {
+	if !active || bound != cycle && !importedCycle {
 		return conflict("supplier_unavailable", "供应商已停用或上游商品账期不匹配")
 	}
 	return nil

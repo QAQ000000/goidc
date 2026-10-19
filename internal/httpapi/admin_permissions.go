@@ -41,7 +41,7 @@ var adminRoutePermissions = func() map[string]string {
 	for _, p := range []string{"GET /api/v1/admin/supplier-providers", "GET /api/v1/admin/supplier-api-settings", "GET /api/v1/admin/suppliers", "GET /api/v1/admin/products/{id}/supplier-binding"} {
 		m[p] = "products.view"
 	}
-	for _, p := range []string{"PUT /api/v1/admin/supplier-api-settings", "POST /api/v1/admin/suppliers", "PUT /api/v1/admin/suppliers/{id}", "POST /api/v1/admin/suppliers/{id}/test-connection", "POST /api/v1/admin/suppliers/{id}/catalog", "GET /api/v1/admin/suppliers/{id}/products/{product_id}", "POST /api/v1/admin/suppliers/{id}/import"} {
+	for _, p := range []string{"PUT /api/v1/admin/supplier-api-settings", "POST /api/v1/admin/suppliers", "PUT /api/v1/admin/suppliers/{id}", "POST /api/v1/admin/suppliers/{id}/test-connection", "POST /api/v1/admin/suppliers/{id}/catalog", "GET /api/v1/admin/suppliers/{id}/products/{product_id}", "POST /api/v1/admin/suppliers/{id}/import", "POST /api/v1/admin/suppliers/{id}/import-preview", "POST /api/v1/admin/suppliers/{id}/import-batch"} {
 		m[p] = "products.manage"
 	}
 	m["POST /api/v1/admin/services/{id}/supplier-verification"] = "services.manage"

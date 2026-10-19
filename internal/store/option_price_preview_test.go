@@ -33,10 +33,11 @@ func TestOptionPricePreviewMatchesGo(t *testing.T) {
 		Active bool   `json:"active"`
 	}
 	type previewOption struct {
-		Price   int64          `json:"price_delta_cents"`
-		Setup   int64          `json:"setup_delta_cents"`
-		Tiers   []previewTier  `json:"price_tiers"`
-		Pricing []previewPrice `json:"pricing"`
+		Price     int64          `json:"price_delta_cents"`
+		Setup     int64          `json:"setup_delta_cents"`
+		Tiers     []previewTier  `json:"price_tiers"`
+		Pricing   []previewPrice `json:"pricing"`
+		AllowZero bool           `json:"allow_zero_quantity"`
 	}
 	type previewCase struct {
 		Name     string           `json:"name"`
@@ -65,6 +66,9 @@ func TestOptionPricePreviewMatchesGo(t *testing.T) {
 			}
 		}
 		price, setup, ok := PriceForQuantity(active, quantity, price, setup)
+		if option.AllowZero && quantity == 0 {
+			price, setup, ok = 0, 0, true
+		}
 		var expected map[string]int64
 		if ok {
 			expected = map[string]int64{"price": price, "setup": setup}
@@ -97,6 +101,13 @@ func TestOptionPricePreviewMatchesGo(t *testing.T) {
 	option.Tiers = nil
 	add("signed non-tier discount", "once", previewOption{Price: -25, Setup: -3}, 4)
 	add("maximum native amount and quantity", "once", previewOption{Price: 100000000, Setup: 100000000}, 1000000)
+	option = base
+	option.AllowZero = true
+	option.Tiers = []previewTier{tier(1, 100, 50, 5)}
+	add("imported zero quantity has no periodic or setup cost", "monthly", option, 0)
+	add("imported positive quantity charges setup once", "monthly", option, 3)
+	option.AllowZero = false
+	add("ordinary zero quantity stays invalid", "monthly", option, 0)
 	input, err := json.Marshal(cases)
 	if err != nil {
 		t.Fatal(err)

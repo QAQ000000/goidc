@@ -264,7 +264,7 @@ function DeferredOrderInvoice({row,refresh}:{row:Row;refresh:()=>void}) {
 
 function OrderConfigurationSnapshot({item}:{item:Row}){
  const snapshot=Array.isArray(item.config_snapshot)?item.config_snapshot as Row[]:[];
- return <div className="text-xs text-muted-foreground mt-2 space-y-1">{snapshot.map(option=><p className="whitespace-normal break-all" key={String(option.id)}>{String(option.group_name)}：{String(option.label)}（{String(option.value)}）{Number(option.quantity??1)>1?` × ${option.quantity}`:""} · 周期增减 {money(Number(option.price_delta_cents))} · 初装增减 {money(Number(option.setup_delta_cents))}</p>)}{snapshot.length===0&&Array.isArray(item.config_options)&&item.config_options.length>0&&<p>历史配置编号：{item.config_options.join("、")}；未保留名称快照。</p>}</div>;
+ return <div className="text-xs text-muted-foreground mt-2 space-y-1">{snapshot.map(option=><p className="whitespace-normal break-all" key={String(option.id)}>{String(option.group_name)}：{String(option.label)}（{String(option.value)}）{Number(option.quantity??1)!==1?` × ${option.quantity}`:""} · 周期增减 {money(Number(option.price_delta_cents))} · 初装增减 {money(Number(option.setup_delta_cents))}</p>)}{snapshot.length===0&&Array.isArray(item.config_options)&&item.config_options.length>0&&<p>历史配置编号：{item.config_options.join("、")}；未保留名称快照。</p>}</div>;
 }
 
 export function OrderDetailView({ id }: { id: number }) {

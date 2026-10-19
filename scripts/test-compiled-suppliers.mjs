@@ -8,6 +8,7 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 
 export const unitSuites = {
   "internal/supplier": [
+    "TestSupplierPercentConfigurationUsesAggregatedRawCostCeilings",
     "TestSupplierLifecycleCapabilitiesAndTargetProof",
     "TestSupplierConfigurationFactoryAndStableIdentity",
     "TestSupplierRegistrationRejectsUnsafeIdentityAndCapabilityMetadata",
@@ -33,19 +34,37 @@ export const unitSuites = {
     "TestAmbiguousWriteAndSecretFreeError",
     "TestUnsafeURLs",
     "TestSelectionAndJSONContract",
-    "TestExistingHostWithoutInvoiceIsUnknown"
+    "TestExistingHostWithoutInvoiceIsUnknown",
+    "TestCatalogPreservesGroupsAndNumericStrings",
+    "TestProductCNYPercentAndAdditionalSelect",
+    "TestSupplierLinearQuantityTypesAndSetup",
+    "TestSupplierGraduatedQuantityAndInvalidTiers",
+    "TestSupplierFieldsAndSafePattern",
+    "TestSelectionPreviewAllowsZeroStockButPurchaseRejects",
+    "TestSupplierRejectsLinkageAndUnsupportedPeriods",
+    "TestSupplierRetainsOnlyCompleteBillingCycles",
+    "TestSupplierSimpleRevisionRemainsCompatible",
+    "TestSupplierQuantityIsSubmittedAsQuantity"
   ],
   "internal/store": [
     "TestSupplierSecretsRejectOwnerDomainAndTampering",
     "TestSupplierNamedCredentialsAreOwnerAndFieldBound",
     "TestSupplierCredentialFormatNeverFallsBack",
-    "TestSupplierConfigCompatibilityFreezeAndSafeSummary"
+    "TestSupplierConfigCompatibilityFreezeAndSafeSummary",
+    "TestSupplierMarkupCentsRoundingAndBounds",
+    "TestSupplierCatalogImportRejectsZeroOnlyQuantityRange"
   ]
 };
 
 export const integrationSuites = {
-  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryUpgrade171PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryRequestDatabaseGuards"],
+  "internal/store": ["TestSupplierConfigurationUpgrade165PreservesDeliveryIdentity", "TestSupplierLifecycleUpgrade169PreservesHistory", "TestSupplierLifecycleRequestDatabaseGuards", "TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryUpgrade171PreservesHistoryAndDoesNotInferSource", "TestSupplierExpiryRequestDatabaseGuards", "TestSupplierCatalogImportUpgrade174PreservesFixedBindings", "TestSupplierCatalogImportReadTimeoutLeavesNoWrites"],
   "internal/httpapi": [
+    "TestSupplierCatalogBatchImportsAllCyclesChoicesAndFields",
+    "TestSupplierCatalogBatchRejectsStaleUnsupportedAndAuditFailure",
+    "TestSupplierCatalogBatchPermissionValidationAndConcurrentReplay",
+    "TestSupplierCatalogBatchRechecksCredentialAfterUpstreamRead",
+    "TestSupplierConfigurableDeliverySelectionAndRenewal",
+    "TestSupplierConfigurableSelectionFailsClosed",
     "TestSupplierExpirySuspendsWithoutCreatingDebtByCapability",
     "TestSupplierExpiryHonorsGraceAndServiceEligibility",
     "TestSupplierExpiryConcurrentScansQueueOnce",
@@ -162,7 +181,8 @@ export async function testCompiledSuppliers(mode) {
     env.ZJMFGO_WORKER_CRASH_ACCEPTANCE = '1';
   }
   const names = [...new Set(Object.values(suites).flat())];
-  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', '-timeout=10m', ...Object.keys(suites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
+  const timeout = mode === 'integration' ? '-timeout=15m' : '-timeout=10m';
+  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', timeout, ...Object.keys(suites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
     cwd: repository, env, timeoutMs: 1200000, maxBytes: 32 * 1024 * 1024, label: `compiled suppliers ${mode} tests`,
   });
   process.stdout.write(result.stdout);

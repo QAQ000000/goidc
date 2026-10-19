@@ -239,6 +239,13 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		if err = RequireSupplierProductCycle(ctx, tx, id, in.BillingCycle); err != nil {
 			return 0, err
 		}
+		var defaultCycle string
+		if err = tx.QueryRow(ctx, "SELECT billing_cycle FROM products WHERE id=$1", id).Scan(&defaultCycle); err != nil {
+			return 0, err
+		}
+		if defaultCycle != in.BillingCycle {
+			return 0, conflict("supplier_cycle_locked", "供应商商品的默认账期不可更改，请在价格页维护已导入的账期")
+		}
 		if err = tx.QueryRow(ctx, "SELECT delivery_config FROM products WHERE id=$1 AND provision_mode='supplier'", id).Scan(&deliveryJSON); err != nil {
 			return 0, err
 		}

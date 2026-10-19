@@ -43,7 +43,9 @@ ON CONFLICT (idempotency_key) DO UPDATE
 
 func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) error {
 	var raw []byte
-	if err := s.Pool.QueryRow(ctx, "SELECT delivery_snapshot FROM services WHERE id=$1 AND provision_mode='supplier'", claimed.ServiceID).Scan(&raw); err != nil {
+	var selectedCycle string
+	var orderItemID, productID int64
+	if err := s.Pool.QueryRow(ctx, "SELECT delivery_snapshot,billing_cycle,order_item_id,product_id FROM services WHERE id=$1 AND provision_mode='supplier'", claimed.ServiceID).Scan(&raw, &selectedCycle, &orderItemID, &productID); err != nil {
 		return err
 	}
 	var snap supplierSnapshot
@@ -54,8 +56,12 @@ func (s *Store) processSupplierJob(ctx context.Context, claimed ProvisionJob) er
 	if err != nil {
 		return err
 	}
-	if b.SupplierID != snap.SupplierID || b.Provider != snap.Provider {
+	if b.SupplierID != snap.SupplierID || b.Provider != snap.Provider || b.ProductID != productID {
 		return conflict("supplier_snapshot_invalid", "供应商交付绑定不匹配")
+	}
+	fields, err := s.applySupplierServiceSelection(ctx, s.Pool, &b, snap, orderItemID, selectedCycle, claimed.Action == "renew")
+	if err != nil {
+		return s.failUndispatchedSupplierJob(ctx, claimed, err)
 	}
 	adapter, version, err := s.supplierAdapter(ctx, b.SupplierID)
 	// Even a disabled/misconfigured account must durably fail its claimed job.
@@ -185,7 +191,7 @@ locked_at=NULL,completed_at=NULL,updated_at=clock_timestamp() WHERE id=$1`, clai
 		if err = tx.QueryRow(ctx, "SELECT request_payload FROM provision_jobs WHERE id=$1", claimed.ID).Scan(&raw); err != nil {
 			return err
 		}
-		if json.Unmarshal(raw, &renewal) != nil || renewal.SupplierID != b.SupplierID || renewal.AccountVersion != accountVersion || renewal.ProductID != b.UpstreamProductID || renewal.UpstreamID != upstreamID || renewal.Cycle != cycle || renewal.InvoiceID < 1 {
+		if json.Unmarshal(raw, &renewal) != nil || renewal.SupplierID != b.SupplierID || renewal.AccountVersion != accountVersion || renewal.ProductID != b.UpstreamProductID || renewal.UpstreamID != upstreamID || renewal.Cycle != cycle || renewal.MaximumCostCents != b.MaximumCostCents || renewal.InvoiceID < 1 {
 			return s.failUndispatchedRenewal(ctx, tx, claimed, "供应商续费快照或账户已变更")
 		}
 		var paid bool
@@ -235,10 +241,6 @@ locked_at=NULL,completed_at=NULL,updated_at=clock_timestamp() WHERE id=$1`, clai
 			}
 			actionRequest.System = payload.System
 		}
-	}
-	var fields map[int64]string
-	if err = supplierUnseal(s.ProvisionEncryptionKey, "binding-fields", b.ProductID, b.sealed, &fields); err != nil {
-		return err
 	}
 	req := supplier.CreateRequest{ProductID: b.UpstreamProductID, Cycle: b.BillingCycle, Revision: b.UpstreamRevision, ConfigOptions: b.ConfigOptions, CustomFields: fields, LocalServiceID: claimed.ServiceID, DownstreamURL: s.SupplierDownstreamURL, DownstreamToken: supplierDownstreamToken(s.ProvisionEncryptionKey, claimed.ServiceID), MaximumCostCents: b.MaximumCostCents, Currency: b.Currency, Host: "svc-" + strconv.FormatInt(claimed.ServiceID, 10)}
 	if _, err = tx.Exec(ctx, "UPDATE supplier_accounts SET running_job_id=$2,updated_at=now() WHERE id=$1", b.SupplierID, claimed.ID); err != nil {

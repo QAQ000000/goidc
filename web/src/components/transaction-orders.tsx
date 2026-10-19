@@ -79,7 +79,7 @@ export function OrderItems({ items }: { items: OrderItem[] }) {
                 {(item.config_snapshot ?? []).map((choice) => (
                   <p key={choice.id} className="break-all">
                     {choice.group_name}：{choice.label}
-                    {(choice.quantity ?? 1) > 1 ? ` × ${choice.quantity}` : ""}
+                    {(choice.quantity ?? 1) !== 1 ? ` × ${choice.quantity}` : ""}
                   </p>
                 ))}
                 {!item.config_snapshot?.length && item.config_options?.length > 0 && (

@@ -81,6 +81,9 @@ function load(filename) {
 }
 const { SupplierAccountEditor, SuppliersView, ImportProduct } = load(path.join(web, 'src/components/suppliers-admin.tsx'));
 const { SupplierCatalogView } = load(path.join(web, 'src/components/supplier-catalog.tsx'));
+const { SupplierBatchImport, supplierMultiplierBPS } = load(path.join(web, 'src/components/supplier-batch-import.tsx'));
+const { PricingPanel, SupplierImportedSpecifications, SupplierImportedFields } = load(path.join(web, 'src/components/product-editor.tsx'));
+const { AdminPagination } = load(path.join(web, 'src/components/admin-pagination.tsx'));
 const { SupplierAPISettingsView } = load(path.join(web, 'src/components/supplier-api-settings.tsx'));
 const { SupplierServiceDelivery, SupplierLifecycle } = load(path.join(web, 'src/components/supplier-delivery.tsx'));
 const { ChannelFieldEditor } = load(path.join(web, 'src/components/channel-instances.tsx'));
@@ -139,6 +142,228 @@ function manager(component) {
 }
 function flushTimers() { for (const callback of timers.splice(0)) callback(); }
 function editor(props = {}) { return mount(SupplierAccountEditor, { providers: [provider], onDone: () => refreshes.push('saved'), onCancel() {}, ...props }); }
+
+const batchProduct = (id, extra = {}) => ({ ...quantityProduct, id, name: `商品 ${id}`, revision: `revision-${id}`, group_id: id < 30 ? 1 : 2, group_name: id < 30 ? '云主机' : '其他服务', ...extra });
+const select = (tree, label) => find(tree, item => item.type === 'select' && item.props['aria-label'] === label);
+const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+function batch(catalog = [batchProduct(11), batchProduct(12)], extra = {}) { return mount(SupplierBatchImport, { account, catalog, ...extra }); }
+function batchResponse(request, overrides = {}) {
+  return { ...request.body, items: request.body.items.map(item => ({ product: batchProduct(item.upstream_product_id), slug: `supplier-9-${item.upstream_product_id}`, local_prices: { monthly: { amount_cents: 1200, setup_cents: 120 }, annually: { amount_cents: 12000, setup_cents: 0 } }, importable: true })), ...overrides };
+}
+
+test('batch percentage uses an exact sale multiplier, permits fractional discounts and rejects invalid bounds', () => {
+  assert.equal(supplierMultiplierBPS('100'), 10000);
+  assert.equal(supplierMultiplierBPS('120.25'), 12025);
+  assert.equal(supplierMultiplierBPS('0.01'), 1);
+  assert.equal(supplierMultiplierBPS('99.99'), 9999);
+  assert.equal(supplierMultiplierBPS('10000.00'), 1000000);
+  for (const value of ['0', '10000.01', '-1', '1e2', '120.001', '', 'NaN']) assert.throws(() => supplierMultiplierBPS(value), /售价比例/);
+});
+
+test('batch selection survives pages and filters, and selecting a group includes only importable products', () => {
+  reset();
+  const products = Array.from({ length: 40 }, (_, index) => batchProduct(index + 1));
+  products.push(batchProduct(44, { supported: false, unsupported_reason: 'unsupported_advanced' }));
+  const render = batch(products);
+  check(render(), '选择上游商品 商品 1 #1').props.onCheckedChange(true);
+  find(render(), item => item.type === AdminPagination).props.onPageChange(1);
+  check(render(), '选择上游商品 商品 30 #30').props.onCheckedChange(true);
+  assert.match(text(render()), /已选 2 个/);
+  select(render(), '上游商品分组').props.onChange({ target: { value: '2:其他服务' } });
+  button(render(), '全选当前筛选').props.onClick();
+  assert.match(text(render()), /已选 12 个/);
+  assert.equal(check(render(), '选择上游商品 商品 44 #44').props.disabled, true);
+  button(render(), '取消选择当前筛选').props.onClick();
+  assert.match(text(render()), /已选 1 个/);
+  button(render(), '重置筛选').props.onClick();
+  assert.equal(check(render(), '选择上游商品 商品 1 #1').props.checked, true);
+});
+
+test('batch select-all enforces the backend limit without silently discarding existing selections', () => {
+  reset();
+  const render = batch(Array.from({ length: 51 }, (_, index) => batchProduct(index + 1)));
+  check(render(), '选择上游商品 商品 1 #1').props.onCheckedChange(true);
+  button(render(), '全选当前筛选').props.onClick();
+  assert.match(text(render()), /单批最多 50 个/);
+  assert.match(text(render()), /已选 1 个/);
+});
+
+test('batch preview sends group and fractional multiplier, then confirms frozen revisions without frontend amounts', async () => {
+  reset();
+  resources.set('/admin/catalog-groups/category', { data: [{ id: 4, name: '基础套餐', section_name: '云服务', active: true, section_active: true }] });
+  const render = batch();
+  check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  check(render(), '选择上游商品 商品 12 #12').props.onCheckedChange(true);
+  input(render(), '售价比例').props.onChange({ target: { value: '120.25' } });
+  select(render(), '本地商品分组').props.onChange({ target: { value: '4' } });
+  assert.equal(check(render(), '导入后直接上架').props.checked, true);
+  check(render(), '导入后直接上架').props.onCheckedChange(false);
+  respond = async request => request.url.endsWith('import-preview') ? batchResponse(request) : { items: request.body.items.map(item => ({ upstream_product_id: item.upstream_product_id, product_id: item.upstream_product_id + 100, name: `已导入 ${item.upstream_product_id}`, slug: `supplier-${item.upstream_product_id}`, status: 'created' })) };
+  await form(render()).props.onSubmit(event);
+  assert.deepEqual(requests[0].body, { expected_supplier_version: 6, category_id: 4, price_multiplier_bps: 12025, active: false, items: [{ upstream_product_id: 11 }, { upstream_product_id: 12 }] });
+  assert.match(text(render()), /120.25%/);
+  button(render(), '确认导入 2 个商品').props.onClick();
+  await tick();
+  assert.equal(requests[1].url, '/admin/suppliers/9/import-batch');
+  assert.ok(requests[1].headers['Idempotency-Key']);
+  assert.deepEqual(requests[1].body.items, [{ upstream_product_id: 11, expected_upstream_revision: 'revision-11' }, { upstream_product_id: 12, expected_upstream_revision: 'revision-12' }]);
+  assert.equal('price_cents' in requests[1].body, false);
+  assert.match(text(render()), /已确认 2 个商品/);
+  assert.equal(pending.pending.current, null);
+});
+
+test('failed preview items block the whole batch and show the exact unsupported reason', async () => {
+  reset();
+  const render = batch();
+  button(render(), '全选当前筛选').props.onClick();
+  respond = async request => batchResponse(request, { items: [batchResponse(request).items[0], { product: batchProduct(12), slug: '', local_prices: {}, importable: false, reason: 'unsupported_advanced' }] });
+  await form(render()).props.onSubmit(event);
+  assert.match(text(render()), /暂不支持高级配置联动/);
+  assert.match(text(render()), /尚未创建任何本地商品/);
+  assert.equal(button(render(), '确认导入 2 个商品').props.disabled, true);
+  await button(render(), '确认导入 2 个商品').props.onClick();
+  assert.equal(requests.length, 1);
+});
+
+test('batch draft edits invalidate preview and stale preview responses never restore it', async () => {
+  reset();
+  const render = batch();
+  check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  respond = async request => batchResponse(request);
+  await form(render()).props.onSubmit(event);
+  input(render(), '售价比例').props.onChange({ target: { value: '125' } });
+  assert.equal(nodes(render()).some(item => item.type === Button && text(item).includes('确认导入')), false);
+  let finish;
+  respond = request => new Promise(resolve => { finish = () => resolve(batchResponse(request)); });
+  const loading = form(render()).props.onSubmit(event);
+  input(render(), '售价比例').props.onChange({ target: { value: '130' } });
+  finish(); await loading;
+  assert.equal(nodes(render()).some(item => item.type === Button && text(item).includes('确认导入')), false);
+});
+
+test('unknown batch import replays the identical body and key across remounts, even if the displayed account differs', async () => {
+  reset();
+  const render = batch();
+  check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  respond = async request => request.url.endsWith('import-preview') ? batchResponse(request) : Promise.reject(new TypeError('network lost'));
+  await form(render()).props.onSubmit(event);
+  button(render(), '确认导入 1 个商品').props.onClick(); await tick();
+  const original = requests[1];
+  assert.match(text(render()), /导入结果尚未确认/);
+  assert.equal(pending.unknown, true);
+  const restored = batch([batchProduct(25)], { account: { ...account, id: 22, name: '上游 B', version: 9 } });
+  assert.match(text(restored()), /供应商 #9/);
+  assert.equal(button(restored(), '预览 0 个商品').props.disabled, true);
+  respond = async () => ({ items: [{ upstream_product_id: 11, product_id: 101, name: '原请求商品', slug: 'restored', status: 'existing' }] });
+  button(restored(), '重试原导入请求').props.onClick(); await tick();
+  assert.deepEqual(requests[2], original);
+  assert.match(text(restored()), /此前已导入，本次未重复创建/);
+  assert.equal(pending.unknown, false);
+});
+
+test('malformed successful import responses preserve the original request until a complete matching replay succeeds', async () => {
+  const items = [
+    { upstream_product_id: 11, product_id: 101, name: '商品 11', slug: 'one', status: 'created' },
+    { upstream_product_id: 12, product_id: 102, name: '商品 12', slug: 'two', status: 'existing' },
+  ];
+  for (const malformed of [
+    undefined, null, {}, { items: null }, { items: [] }, { items: [items[0]] }, { items: ['broken', items[1]] },
+    { items: [{ ...items[0], upstream_product_id: 99 }, items[1]] },
+    { items: [items[0], { ...items[1], upstream_product_id: 11 }] },
+    { items: [items[0], { ...items[1], status: 'unknown' }] },
+    { items: [items[0], { ...items[1], product_id: 0 }] },
+    { items: [items[0], { ...items[1], product_id: 1.5 }] },
+    { items: [items[0], { ...items[1], product_id: '102' }] },
+    { items: [items[0], { ...items[1], product_id: 101 }] },
+    { items: [items[0], { ...items[1], name: ' ' }] },
+    { items: [items[0], { ...items[1], slug: '' }] },
+  ]) {
+    reset();
+    const render = batch();
+    button(render(), '全选当前筛选').props.onClick();
+    respond = async request => request.url.endsWith('import-preview') ? batchResponse(request) : malformed;
+    await form(render()).props.onSubmit(event);
+    button(render(), '确认导入 2 个商品').props.onClick(); await tick();
+    assert.equal(pending.unknown, true);
+    assert.ok(pending.pending.current?.key);
+    const originalOperation = { ...pending.pending.current };
+    const originalRequest = requests[1];
+    assert.match(text(render()), /导入结果尚未确认/);
+    assert.equal(nodes(render()).some(item => item.props?.role === 'status' && text(item).includes('已确认 2 个商品')), false);
+    assert.equal(button(render(), '预览 2 个商品').props.disabled, true);
+    respond = async () => ({ items: [...items].reverse() });
+    button(render(), '重试原导入请求').props.onClick(); await tick();
+    assert.deepEqual(requests[2], originalRequest);
+    assert.equal(requests[2].headers['Idempotency-Key'], originalOperation.key);
+    assert.deepEqual(requests[2].body, JSON.parse(originalOperation.body));
+    assert.equal(pending.unknown, false);
+    assert.equal(pending.pending.current, null);
+    assert.match(text(render()), /已确认 2 个商品/);
+  }
+});
+
+test('known version conflicts clear the batch operation and require a new preview', async () => {
+  reset();
+  const render = batch();
+  check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  respond = async request => request.url.endsWith('import-preview') ? batchResponse(request) : Promise.reject(new ApiError(409, 'version_conflict', '供应商版本已变化'));
+  await form(render()).props.onSubmit(event);
+  button(render(), '确认导入 1 个商品').props.onClick(); await tick();
+  assert.match(text(render()), /供应商版本已变化.*重新预览/);
+  assert.equal(pending.pending.current, null);
+  assert.equal(pending.unknown, false);
+  assert.equal(nodes(render()).some(item => item.type === Button && text(item).includes('确认导入')), false);
+});
+
+test('batch permission denial and revoked permission block preview and retry calls', async () => {
+  reset(); permissions.clear();
+  const render = batch();
+  check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  assert.match(text(render()), /没有商品管理权限/);
+  await form(render()).props.onSubmit(event);
+  pending.unknown = true; pending.pending.current = { path: '/admin/suppliers/9/import-batch', key: 'known-key', body: '{}' };
+  assert.equal(button(render(), '重试原导入请求').props.disabled, true);
+  await button(render(), '重试原导入请求').props.onClick();
+  assert.deepEqual(requests, []);
+  reset();
+  const revoked = batch();
+  check(revoked(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+  respond = async () => { throw new ApiError(403, 'forbidden', '无权限'); };
+  await form(revoked()).props.onSubmit(event);
+  assert.match(text(revoked()), /商品管理权限已变化/);
+  assert.equal(button(revoked(), '预览 1 个商品').props.disabled, true);
+});
+
+test('preview cannot be confirmed after the supplier identity or account version changes', async () => {
+  for (const changed of [{ id: 10 }, { version: 7 }]) {
+    reset();
+    const props = { account, catalog: [batchProduct(11)] };
+    const render = mount(SupplierBatchImport, props);
+    check(render(), '选择上游商品 商品 11 #11').props.onCheckedChange(true);
+    respond = async request => batchResponse(request);
+    await form(render()).props.onSubmit(event);
+    assert.ok(button(render(), '确认导入 1 个商品'));
+    props.account = { ...account, ...changed };
+    assert.equal(nodes(render()).some(item => item.type === Button && text(item).includes('确认导入')), false);
+  }
+});
+
+test('catalog-imported products show every imported cycle and source specifications remain read only', () => {
+  reset();
+  const product = { id: 101, billing_cycle: 'monthly', provision_mode: 'supplier', supplier_catalog_mode: 'configurable', pricing: [{ id: 1, billing_cycle: 'monthly', price_cents: 1000, setup_fee_cents: 100, active: true }, { id: 2, billing_cycle: 'annually', price_cents: 10000, setup_fee_cents: 0, active: true }], option_groups: [{ id: 1, name: '地区', required: true, options: [{ id: 2, label: '上海', price_delta_cents: 0, setup_delta_cents: 0 }] }], purchase_field_definitions: [{ key: 'account', label: '上游账号', type: 'text', required: true, description: '填写账号', encrypted: true, choices: [] }] };
+  const render = mount(PricingPanel, { product, manage: true, onReload() {} });
+  const priceRows = nodes(render()).filter(item => item.type?.name === 'PriceForm');
+  assert.equal(priceRows.length, 2);
+  assert.match(text(render()), /已导入上游的多个账期/);
+  const fixed = mount(PricingPanel, { product: { ...product, supplier_catalog_mode: '' }, manage: true, onReload() {} });
+  assert.equal(nodes(fixed()).filter(item => item.type?.name === 'PriceForm').length, 1);
+  const specifications = SupplierImportedSpecifications({ product });
+  assert.match(text(specifications), /地区.*上海/);
+  assert.equal(nodes(specifications).some(item => item.type === Button || item.type === Input), false);
+  const fields = SupplierImportedFields({ product });
+  assert.match(text(fields), /上游账号.*必填.*加密保存/);
+  assert.equal(nodes(fields).some(item => item.type === Button || item.type === Input), false);
+});
 
 test('new supplier forms use typed module fields and submit each named credential separately', async () => {
   reset();
@@ -328,8 +553,8 @@ test('API settings connection probes include both account and schema versions an
   assert.deepEqual(requests, []);
 });
 
-test('quantity import uses the actual quantity and multiplies unit and setup prices alongside select options', async () => {
-  for (const quantity of ['0', '3', '10']) {
+test('quantity import multiplies recurring units and charges setup once only for nonzero quantities', async () => {
+  for (const quantity of ['0', '1', '3', '10']) {
     reset();
     const product = { ...quantityProduct, options: [...quantityProduct.options, { id: 8, name: '地域', type: 'select', required: true, choices: [{ id: 23, name: '华东', prices: { monthly: { amount_cents: 200, setup_cents: 20 } } }] }] };
     const render = mount(ImportProduct, { account, product });
@@ -340,12 +565,106 @@ test('quantity import uses the actual quantity and multiplies unit and setup pri
     await form(render()).props.onSubmit(event);
     assert.equal(requests.length, 1);
     assert.deepEqual(requests[0].body.config_options, { 7: quantity, 8: '23' });
-    assert.equal(requests[0].body.maximum_cost_cents, 1320 + Number(quantity) * 55);
+    assert.equal(requests[0].body.maximum_cost_cents, 1320 + (Number(quantity) > 0 ? Number(quantity) * 50 + 5 : 0));
+    assert.match(text(render()), /每单位 CNY 0.50，初装费 CNY 0.05（数量大于 0 时收取一次）/);
     assert.equal(requests[0].body.active, false);
     assert.equal(requests[0].body.expected_supplier_version, 6);
     assert.equal(requests[0].body.expected_upstream_revision, 'revision-1');
     assert.deepEqual(navigations, ['/admin/products/12']);
   }
+});
+
+test('graduated quantity import accumulates earlier tiers and uses setup from the selected tier once', async () => {
+  const product = { ...quantityProduct, options: [{ ...quantityProduct.options[0], quantity_mode: 'graduated', choices: [{ ...quantityProduct.options[0].choices[0], price_tiers: { monthly: [
+    { min_qty: 1, max_qty: 5, amount_cents: 100, setup_cents: 10 },
+    { min_qty: 6, max_qty: 10, amount_cents: 70, setup_cents: 20 },
+  ] } }] }] };
+  for (const [quantity, cost] of [['0', 1100], ['3', 1410], ['7', 1760], ['10', 1970]]) {
+    reset();
+    const render = mount(ImportProduct, { account, product });
+    input(render(), '数据盘数量').props.onChange({ target: { value: quantity } });
+    await form(render()).props.onSubmit(event);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].body.maximum_cost_cents, cost);
+    assert.match(text(render()), /初装费取命中区间并收取一次，数量为 0 不收费/);
+  }
+  for (const tiers of [undefined, [{ min_qty: 2, max_qty: 10, amount_cents: 100, setup_cents: 10 }]]) {
+    reset();
+    const bad = { ...product, options: [{ ...product.options[0], choices: [{ ...product.options[0].choices[0], price_tiers: { monthly: tiers } }] }] };
+    const render = mount(ImportProduct, { account, product: bad });
+    input(render(), '数据盘数量').props.onChange({ target: { value: '3' } });
+    assert.equal(button(render(), '导入为下架商品').props.disabled, true);
+    assert.match(text(render()), /上游价格、原始计价数据或阶梯区间无效/);
+    await form(render()).props.onSubmit(event);
+    assert.deepEqual(requests, []);
+  }
+});
+
+test('upstream percentage products calculate a conservative limit from aggregate raw costs and preserve zero raw values', async () => {
+  const price = (amount = 1, setup = 1) => ({ amount_cents: Math.floor(amount * 1.25), setup_cents: Math.floor(setup * 1.25), raw_amount_cents: amount, raw_setup_cents: setup });
+  const product = { ...quantityProduct, price_multiplier: 12500, prices: { monthly: price() }, options: [
+    { ...quantityProduct.options[0], choices: [{ ...quantityProduct.options[0].choices[0], prices: { monthly: price() } }] },
+    { id: 8, name: '地域', type: 'select', required: true, choices: [{ id: 23, name: '华东', prices: { monthly: price() } }] },
+  ] };
+  // At quantity 3 the raw recurring subtotal is 5 cents and setup is 3:
+  // ceil(5 * 1.25) + ceil(3 * 1.25) = 11, independently of displayed components.
+  for (const [quantity, expected] of [['0', 6], ['2', 9], ['3', 11]]) {
+    reset();
+    const render = mount(ImportProduct, { account, product });
+    input(render(), '数据盘数量').props.onChange({ target: { value: quantity } });
+    select(render(), '地域').props.onChange({ target: { value: '23' } });
+    await form(render()).props.onSubmit(event);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].body.maximum_cost_cents, expected);
+    assert.match(text(render()), /保守预估上限；实际支出以上游账单为准/);
+  }
+  reset();
+  const zero = mount(ImportProduct, { account, product: { ...product, options: [], prices: { monthly: price(1, 0) } } });
+  await form(zero()).props.onSubmit(event);
+  assert.equal(requests[0].body.maximum_cost_cents, 2);
+  for (const bad of [
+    { ...product, prices: { monthly: { ...price(), raw_setup_cents: undefined } } },
+    { ...product, options: [{ ...product.options[0], choices: [{ ...product.options[0].choices[0], prices: { monthly: { ...price(), raw_amount_cents: undefined } } }] }] },
+    { ...product, options: [product.options[1]], prices: { monthly: { ...price(), raw_amount_cents: -1 } } },
+  ]) {
+    reset();
+    const render = mount(ImportProduct, { account, product: bad });
+    if (bad.options.some(option => option.id === 7)) input(render(), '数据盘数量').props.onChange({ target: { value: '3' } });
+    assert.equal(button(render(), '导入为下架商品').props.disabled, true);
+    assert.match(text(render()), /原始计价数据/);
+    await form(render()).props.onSubmit(event);
+    assert.deepEqual(requests, []);
+  }
+  reset();
+  const missingZeroBasis = mount(ImportProduct, { account, product: { ...product, options: [{ ...product.options[0], choices: [{ ...product.options[0].choices[0], prices: { monthly: { ...price(), raw_setup_cents: undefined } } }] }] } });
+  assert.equal(input(missingZeroBasis(), '数据盘数量').props.value, '0');
+  assert.equal(button(missingZeroBasis(), '导入为下架商品').props.disabled, true);
+  await form(missingZeroBasis()).props.onSubmit(event);
+  assert.deepEqual(requests, []);
+});
+
+test('upstream percentage graduated limits aggregate raw tier units and use only the matched setup once', async () => {
+  const price = (amount, setup) => ({ amount_cents: Math.floor(amount * 1.25), setup_cents: Math.floor(setup * 1.25), raw_amount_cents: amount, raw_setup_cents: setup });
+  const product = { ...quantityProduct, price_multiplier: 12500, prices: { monthly: price(1, 1) }, options: [{ ...quantityProduct.options[0], quantity_mode: 'graduated', choices: [{ ...quantityProduct.options[0].choices[0], prices: { monthly: price(1, 7) }, price_tiers: { monthly: [
+    { min_qty: 1, max_qty: 5, ...price(1, 7) },
+    { min_qty: 6, max_qty: 10, ...price(2, 2) },
+  ] } }] }] };
+  reset();
+  const render = mount(ImportProduct, { account, product });
+  input(render(), '数据盘数量').props.onChange({ target: { value: '7' } });
+  await form(render()).props.onSubmit(event);
+  // Raw recurring = 1 + 5*1 + 2*2 = 10; setup = 1 + 2 = 3.
+  assert.equal(requests[0].body.maximum_cost_cents, 17);
+  reset();
+  const bad = { ...product, options: [{ ...product.options[0], choices: [{ ...product.options[0].choices[0], price_tiers: { monthly: [
+    { ...product.options[0].choices[0].price_tiers.monthly[0], raw_amount_cents: undefined },
+    product.options[0].choices[0].price_tiers.monthly[1],
+  ] } }] }] };
+  const missing = mount(ImportProduct, { account, product: bad });
+  input(missing(), '数据盘数量').props.onChange({ target: { value: '7' } });
+  assert.equal(button(missing(), '导入为下架商品').props.disabled, true);
+  await form(missing()).props.onSubmit(event);
+  assert.deepEqual(requests, []);
 });
 
 test('quantity bounds, safe integers and cost ceilings reject invalid imports before any request', async () => {

@@ -47,6 +47,8 @@
 
 供应商接入规则见[供应商模块开发契约](architecture/supplier-module-development.md)。`scripts/test-compiled-suppliers.mjs` 强制设置 worker 崩溃恢复开关，验证第二测试提供方双账户/双密钥、身份冻结与重复身份、schema/CAS、审计回滚、原魔方密文兼容、真实 store 任务与生产 worker 子进程。上游为本地模拟器，真实资源/扣费/网络没有因此获得外部验收。`node --test scripts/supplier-components.test.mjs` 验证 schema 表单、密钥保留/清除、权限与数量型规格成本，以及人工生命周期确认、未知响应原键重试和等待状态隔离，不代表真实浏览器。
 
+供应商批量导入回归另覆盖 174→175 原样保留历史/checksum、全批回滚、同键重放及并发、读取期间撤权/注销、全部支持账期和阶梯/购买字段复制；可配置服务按各自选择验证真实上游 payload、敏感字段加密、缺失/跨订单项选择拒绝派发，以及按所购账期的人工/自动续费。前端组件覆盖跨页选择、比例、预览版本、原请求恢复和只读规格；真实浏览器单独验证完整交互，证据写入忽略的 `output/`。可售账期和不支持类型见[供应商批量导入契约](supplier-protocol.md#批量导入与客户可选规格)。
+
 自动续费严格入口另覆盖上游未来期限只同步不扣款、建单后关闭/变更期限/代次/取消及供应商停用/版本变化的付款围栏、人工同 key 缺少可信来源、余额不足保留原单且充值后不追扣、报价/上游账单变价的已知失败与原单退款，以及付款与完整期限确认之间的通知边界。`TestSupplierRenewalWorkerSIGKILLRecovery` 在真实 worker 的 `host/renew` 回执无 checkpoint 和 `apply_credit` 生效后回执丢失两个位置强杀进程，前者冻结不重发，后者只读核验原账单再确认期限；传输为本地模拟器，不代表真实上游故障恢复。`TestAutoRenewalUpgrade170PreservesHistoryAndDoesNotInferSource` 从实际 schema170 升至171，核对原资金、服务、任务及租约不改、历史相似 key 不获自动来源、重复迁移及 checksum。
 
 ## 编译渠道与通知运行验收
