@@ -274,6 +274,11 @@ function statefulHook(loadHook) {
       if (changed(previous?.dependencies, dependencies)) values[index] = { dependencies, callback };
       return values[index].callback;
     },
+    useRef(initial) {
+      const index = cursor++;
+      if (!(index in values)) values[index] = { current: initial };
+      return values[index];
+    },
   };
   const hook = loadHook(hooks);
   return {
@@ -301,6 +306,173 @@ test('real resource hook hides previous administrator data immediately when its 
     replies[1].resolve(Response.json({ data: user('customer') })); await flushResources();
     assert.equal(view.render('customer').data.role, 'customer');
   } finally { view.unmount(); }
+});
+
+function impersonatedWorkspace({ active = true, send = async () => ({ restored: true }) } = {}) {
+  const calls = [], navigation = [];
+  const customer = { ...user('customer'), id: 42, username: 'fixture-customer', display_name: '目标客户' };
+  const view = statefulHook(hooks => {
+    const { Workspace } = load('web/src/components/workspace.tsx', {
+      react: { ...hooks, useContext: context => context._currentValue },
+      'next/link': { default: Link },
+      'next/navigation': { usePathname: () => '/console/services', useRouter: () => ({ replace: href => navigation.push(['replace', href]), push: href => navigation.push(['push', href]), refresh: () => navigation.push(['refresh']) }) },
+      '@/hooks/use-resource': { useResource: endpoint => ({ data: endpoint === '/me' ? customer : endpoint === '/auth/impersonation' ? { active, admin_name: '原管理员' } : null, error: null, refresh() {} }) },
+      '@/lib/api': { api: async (path, options) => { calls.push({ path, options }); return send(); } },
+      '@/lib/admin-navigation': load('web/src/lib/admin-navigation.ts'),
+      '@/hooks/use-service-navigation': { useServiceNavigation: () => ({}) },
+      '@/lib/service-icons': { serviceIcon: () => () => null },
+      './site-provider': { SiteBrand: () => null, SiteFooter: () => null },
+      './admin-shell': { AdminShell: primitive('main') },
+    });
+    return () => Workspace({ title: '服务', children: 'content' });
+  });
+  return { view, calls, navigation };
+}
+
+test('delegated workspace names the customer and returns to their administrator detail only after exit succeeds', async () => {
+  let resolve;
+  const fixture = impersonatedWorkspace({ send: () => new Promise(done => { resolve = done; }) });
+  const tree = fixture.view.render();
+  assert.match(text(tree), /目标客户（#42）/);
+  assert.match(text(tree), /原管理员/);
+  const end = nodes(tree).find(node => node.type === Button && text(node) === '结束代登录并返回客户详情');
+  assert(end);
+  end.props.onClick();
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.calls[0].path, '/auth/impersonation/exit');
+  assert.equal(fixture.calls[0].options.method, 'POST');
+  assert.equal(fixture.calls[0].options.portal, 'customer');
+  assert.deepEqual(fixture.navigation, []);
+  resolve({ restored: true }); await flushResources();
+  assert.deepEqual(fixture.navigation, [['replace', '/admin/customers/42'], ['refresh']]);
+});
+
+test('failed delegation exit stays on the customer page and exposes a retryable error', async () => {
+  const fixture = impersonatedWorkspace({ send: async () => { throw new Error('结束代登录失败'); } });
+  const end = nodes(fixture.view.render()).find(node => node.type === Button && text(node) === '结束代登录并返回客户详情');
+  end.props.onClick(); await flushResources();
+  assert.deepEqual(fixture.navigation, []);
+  const tree = fixture.view.render();
+  assert(nodes(tree).some(node => node.props?.role === 'alert' && text(node) === '结束代登录失败'));
+  assert.equal(nodes(tree).find(node => node.type === Button && text(node) === '结束代登录并返回客户详情').props.disabled, false);
+});
+
+test('an independent customer session has no delegation banner and logs out only the customer portal', async () => {
+  const fixture = impersonatedWorkspace({ active: false });
+  const tree = fixture.view.render();
+  assert.doesNotMatch(text(tree), /结束代登录|原管理员|客户身份查看/);
+  const logout = nodes(tree).find(node => node.type === Button && node.props.title === '退出登录');
+  assert(logout);
+  await logout.props.onClick();
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.calls[0].path, '/auth/logout');
+  assert.equal(fixture.calls[0].options.portal, 'customer');
+  assert.deepEqual(fixture.navigation, [['push', '/login'], ['refresh']]);
+});
+
+function customerImpersonationButton({ allowed = true, status = 'active', confirm = true, blocked = false, setupFailure = false, navigateFailure = false, response = async () => Response.json({ data: { customer_id: 42 } }) } = {}) {
+  const events = [], urls = [], confirmations = [];
+  const popup = { closed: false, opener: {}, document: { title: '', body: { textContent: '' } }, location: { replace(url) { if (navigateFailure) throw new Error('navigation unavailable'); urls.push(url); } }, close() { this.closed = true; } };
+  if (setupFailure) Object.defineProperty(popup, 'document', { get() { throw new Error('popup unavailable'); } });
+  const client = clientAPI('/admin/customers/42', async (url, options) => { events.push('request'); return response(url, options); });
+  Object.assign(client.browser, {
+    confirm(message) { confirmations.push(message); return confirm; },
+    open(url, target) { events.push(['open', url, target]); return blocked ? null : popup; },
+  });
+  const view = statefulHook(hooks => {
+    const { CustomerImpersonationButton } = load('web/src/components/customer-impersonation-button.tsx', {
+      react: hooks, '@/lib/api': client.helpers, './workspace': { useAdminPermission: permission => allowed && permission === 'customers.manage' },
+    }, { window: client.browser });
+    return () => CustomerImpersonationButton({ customer: { id: 42, username: 'fixture-customer', display_name: '目标客户', status } });
+  });
+  const click = () => nodes(view.render()).find(node => node.type === Button).props.onClick();
+  return { view, click, client, popup, events, urls, confirmations };
+}
+
+test('delegation requires an active customer, administrator permission and explicit confirmation before opening a tab', async () => {
+  const denied = customerImpersonationButton({ allowed: false });
+  assert.equal(denied.view.render(), null);
+  assert.equal(denied.client.calls.length, 0);
+  const disabled = customerImpersonationButton({ status: 'disabled' });
+  assert.equal(nodes(disabled.view.render()).find(node => node.type === Button).props.disabled, true);
+  disabled.click(); await flushResources();
+  assert.deepEqual(disabled.events, []); assert.deepEqual(disabled.confirmations, []);
+  const cancelled = customerImpersonationButton({ confirm: false });
+  cancelled.click(); await flushResources();
+  assert.deepEqual(cancelled.events, []);
+  assert.match(cancelled.confirmations[0], /目标客户（#42）/);
+  assert.match(cancelled.confirmations[0], /所有客户页面共用此客户身份/);
+  assert.match(cancelled.confirmations[0], /不会恢复原客户会话/);
+});
+
+test('a blocked or inaccessible new tab never creates a customer session and remains retryable', async () => {
+  for (const option of [{ blocked: true }, { setupFailure: true }]) {
+    const fixture = customerImpersonationButton(option);
+    fixture.click(); await flushResources();
+    assert.equal(fixture.client.calls.length, 0);
+    assert.equal(fixture.urls.length, 0);
+    const tree = fixture.view.render();
+    assert(nodes(tree).some(node => node.props?.role === 'alert'));
+    assert.equal(nodes(tree).find(node => node.type === Button).props.disabled, false);
+    if (option.setupFailure) assert.equal(fixture.popup.closed, true);
+  }
+});
+
+test('delegation opens the tab during the click and makes one administrator POST before navigating to a fixed customer path', async () => {
+  let resolve;
+  const fixture = customerImpersonationButton({ response: () => new Promise(done => { resolve = done; }) });
+  fixture.click(); fixture.click();
+  assert.deepEqual(fixture.events, [['open', 'about:blank', '_blank'], 'request']);
+  assert.equal(fixture.confirmations.length, 1);
+  assert.equal(fixture.popup.opener, null);
+  assert.match(fixture.popup.document.body.textContent, /目标客户（#42）/);
+  assert.deepEqual(fixture.urls, []);
+  assert.equal(fixture.client.calls.length, 1);
+  const call = fixture.client.calls[0];
+  assert.equal(call.url, '/api/v1/admin/customers/42/impersonate');
+  assert.equal(call.options.method, 'POST');
+  assert.equal(call.options.credentials, 'same-origin');
+  assert.equal(new Headers(call.options.headers).get('X-Auth-Portal'), 'admin');
+  assert.equal(call.options.body, '{}');
+  assert.equal(nodes(fixture.view.render()).find(node => node.type === Button).props.disabled, true);
+  resolve(Response.json({ data: { customer_id: 42 } })); await flushResources();
+  assert.deepEqual(fixture.urls, ['/console/services']);
+  const tree = fixture.view.render();
+  assert(nodes(tree).some(node => node.props?.role === 'status' && /已以客户 目标客户（#42）/.test(text(node))));
+  const manual = nodes(tree).find(node => node.type === 'a' && text(node) === '打开客户中心');
+  assert.equal(manual.props.href, '/console/services');
+  assert.equal(manual.props.target, '_blank');
+  assert.equal(manual.props.rel, 'noopener noreferrer');
+  assert.equal(fixture.popup.closed, false);
+});
+
+test('a failed delegation request closes the empty tab and displays the API error without navigating', async () => {
+  const fixture = customerImpersonationButton({ response: async () => Response.json({ error: { code: 'already_impersonating', message: '当前已经以客户身份登录' } }, { status: 409 }) });
+  fixture.click(); await flushResources();
+  assert.equal(fixture.popup.closed, true);
+  assert.deepEqual(fixture.urls, []);
+  const tree = fixture.view.render();
+  assert(nodes(tree).some(node => node.props?.role === 'alert' && /当前已经以客户身份登录/.test(text(node))));
+  assert.equal(nodes(tree).some(node => node.props?.role === 'status'), false);
+  assert.equal(nodes(tree).find(node => node.type === Button).props.disabled, false);
+  assert.equal(fixture.client.calls.length, 1);
+});
+
+test('a successful delegation with a closed tab or failed navigation offers a manual link without retrying login', async () => {
+  for (const failure of ['closed', 'navigation']) {
+    let resolve;
+    const fixture = customerImpersonationButton({ navigateFailure: failure === 'navigation', response: () => new Promise(done => { resolve = done; }) });
+    fixture.click();
+    if (failure === 'closed') fixture.popup.closed = true;
+    resolve(Response.json({ data: { customer_id: 42 } })); await flushResources();
+    const tree = fixture.view.render();
+    assert(nodes(tree).some(node => node.props?.role === 'status' && /已以客户.*可手动打开/.test(text(node))));
+    assert.equal(nodes(tree).some(node => node.props?.role === 'alert'), false);
+    assert(nodes(tree).some(node => node.type === 'a' && node.props.href === '/console/services'));
+    assert.equal(fixture.client.calls.length, 1);
+    assert.deepEqual(fixture.urls, []);
+    if (failure === 'navigation') assert.equal(fixture.popup.closed, false, 'successful customer session must not be treated as a failed login');
+  }
 });
 test('real resource hook aborts the old portal request and ignores its late response', async () => {
   const replies = [];

@@ -95,7 +95,7 @@ export function Workspace({
     setImpersonationBusy(true); setImpersonationError("");
     try {
       await api("/auth/impersonation/exit", { method: "POST", portal: "customer" });
-      router.push("/admin"); router.refresh();
+      router.replace(user ? `/admin/customers/${user.id}` : "/admin"); router.refresh();
     } catch (e) {
       setImpersonationError((e as Error).message);
       setImpersonationBusy(false);
@@ -221,7 +221,7 @@ export function Workspace({
           </div>
         </header>
         <main className="content">
-          {impersonation?.active && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>当前以客户身份查看{impersonation.admin_name ? `，原管理员：${impersonation.admin_name}` : ""}。客户操作会按该客户权限执行。</span><Button type="button" variant="outline" size="sm" disabled={impersonationBusy} onClick={() => void exitImpersonation()}>{impersonationBusy ? "返回中..." : "返回管理后台"}</Button></div>}
+          {impersonation?.active && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"><span>当前以客户{user ? ` ${user.display_name || user.username}（#${user.id}）` : ""}身份查看{impersonation.admin_name ? `，原管理员：${impersonation.admin_name}` : ""}。客户操作会按该客户权限执行。</span><Button type="button" variant="outline" size="sm" disabled={impersonationBusy} onClick={() => void exitImpersonation()}>{impersonationBusy ? "返回中..." : "结束代登录并返回客户详情"}</Button></div>}
           {impersonationError && <p role="alert" className="text-destructive mb-4">{impersonationError}</p>}
           {logoutError && (
             <p role="alert" className="text-destructive mb-4">

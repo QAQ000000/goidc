@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
-  LogIn,
   Save,
   Trash2,
   CheckCircle2,
@@ -29,6 +28,7 @@ import { Failure, Loading, Status } from "./common";
 import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
 import { CustomerFieldInputs, customerFieldValues, useCustomerFieldDefinitions, useCustomerMutation, useCustomerDraft, CustomerDraftNotice, CustomerMutationMessage } from "./customer-field-inputs";
 import { CustomerFileManager } from "./customer-files";
+import { CustomerImpersonationButton } from "./customer-impersonation-button";
 
 type Row = Record<string, unknown>;
 type AdminCustomer = {
@@ -376,7 +376,7 @@ function CustomerSummaryView({
 
         {/* Impersonate button */}
         <div className="pt-2">
-          <ImpersonateCustomerButton customerId={customer.id} />
+          <CustomerImpersonationButton customer={customer} />
         </div>
       </div>
 
@@ -655,53 +655,6 @@ function CustomerSummaryView({
           </form>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function ImpersonateCustomerButton({ customerId }: { customerId: number }) {
-  const router = useRouter();
-  const manage = useAdminPermission("customers.manage");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-
-  async function start() {
-    if (
-      !manage ||
-      busy ||
-      !window.confirm("将以该客户身份进入前台，原管理员会话会保留，退出后可恢复。继续吗？")
-    )
-      return;
-    setBusy(true);
-    setMessage("");
-    try {
-      await api(`/admin/customers/${customerId}/impersonate`, { method: "POST", body: "{}" });
-      router.push("/console/services");
-      router.refresh();
-    } catch (error) {
-      setMessage((error as Error).message);
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="w-full">
-      <PermissionGate permission="customers.manage">
-        <Button
-          type="button"
-          disabled={busy}
-          onClick={() => void start()}
-          className="w-full bg-[#409eff] hover:bg-[#337ecc] text-white text-xs h-9 rounded font-normal"
-        >
-          <LogIn size={14} className="mr-1.5" />
-          {busy ? "切换中..." : "以该客户登录"}
-        </Button>
-      </PermissionGate>
-      {message && (
-        <span role="alert" className="text-xs text-destructive mt-1 block">
-          {message}
-        </span>
-      )}
     </div>
   );
 }
