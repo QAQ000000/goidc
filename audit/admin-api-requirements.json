@@ -3441,15 +3441,19 @@
       "id": "services.legacy-manual-management",
       "domain": "services",
       "title": "旧服务的人工改价改期、立即代续费与归属转移",
-      "required": false,
-      "disposition": "deferred",
+      "required": true,
+      "disposition": "add",
       "pages": [
         "/admin/services",
         "/admin/services/[id]"
       ],
-      "reason": "管理员自动续费开关不等于立即代续费、批量续费、任改期限/价格/状态或转移服务客户。须先冻结版本、资金/权益、未决外部任务、审计和幂等口径；不照搬旧transfer删除未付账单后修改owner。",
+      "reason": "已批准按独立动作恢复，首批实现管理员单服务报价、代建未付续费单与客户余额付款。批量、人工价格/期限、状态纠错、可信人工收款及转移按稳定服务契约分批实施，整组仍partial。",
       "current": {
-        "endpoints": []
+        "endpoints": [
+          "POST /api/v1/admin/services/{id}/renewal-quotes",
+          "POST /api/v1/admin/services/{id}/renewals",
+          "POST /api/v1/admin/services/{id}/renewals/{invoice_id}/pay"
+        ]
       },
       "legacy": {
         "evidence": [
@@ -3471,10 +3475,10 @@
         "interpretation": "controller声明的动作不能猜成已展开显式路由；旧破坏性行为不作新实现模板。"
       },
       "api": {
-        "status": "deferred"
+        "status": "partial"
       },
       "ui": {
-        "status": "deferred"
+        "status": "unwired"
       },
       "verification": {
         "static": "source-reviewed",
@@ -3484,14 +3488,16 @@
         "external": "not-run"
       },
       "evidence": [
-        "docs/transactions.md",
-        "docs/replacement-gap-audit.md",
-        "internal/store/auto_renew.go"
+        "docs/admin/service-management-api.md",
+        "internal/httpapi/admin_service_renewals.go",
+        "internal/httpapi/admin_service_renewals_test.go",
+        "internal/store/admin_service_renewals.go",
+        "internal/store/admin_service_renewal_payment.go"
       ],
       "acceptance": [
-        "先确认各动作是否仍属必需业务及是否仅生成账单或立即收款；现有自动续费API只改变开关。",
-        "转移不得删除或改写既有财务历史，必须定义未付账单、抵扣、信用、取消和外部未决任务归属。",
-        "任何未来写入必须具备版本、幂等、权限锁后重验、审计与未知结果恢复契约。"
+        "报价、未付建单与余额付款独立，真实管理员权限/客户范围/原凭据锁后及提交前复核；不改变auto-renew或长期价格。",
+        "服务/账单版本、报价窗口、精确确认金额及统一回执；审计或回执故障原子回滚，不重复扣款；供应商付款仅pending。",
+        "后续批次分离单次/长期价格与客户/上游期限，纠错不复活终态；转移保留历史财务并隔离旧客户隐私。"
       ]
     },
     {

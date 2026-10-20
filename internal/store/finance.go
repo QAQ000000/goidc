@@ -46,6 +46,19 @@ func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key str
 		return out, err
 	}
 	defer tx.Rollback(ctx)
+	out, err = s.payInvoiceTx(ctx, tx, userID, invoiceID, key, credit, automatic, nil, expectedVersion...)
+	if err != nil {
+		return out, err
+	}
+	return out, tx.Commit(ctx)
+}
+
+// payInvoiceTx is the common settlement for customer, automatic and explicit
+// administrator balance payments. Its caller owns the transaction and commit;
+// financial facts, entitlement, outboxes and receipts therefore commit together.
+func (s *Store) payInvoiceTx(ctx context.Context, tx pgx.Tx, userID, invoiceID int64, key string, credit bool, automatic *autoRenewalPayment, admin *adminRenewalPaymentCommand, expectedVersion ...int64) (PaymentResult, error) {
+	var out PaymentResult
+	var err error
 	if err = LockFinancialCustomer(ctx, tx, userID); err != nil {
 		return out, err
 	}
@@ -80,12 +93,12 @@ func (s *Store) payInvoice(ctx context.Context, userID, invoiceID int64, key str
 			}
 			out.Status = "paid"
 			out.Replayed = true
-			return out, tx.Commit(ctx)
+			return out, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
 		}
-	} else {
+	} else if admin == nil {
 		var delta int64
 		var replayInvoiceID int64
 		err = tx.QueryRow(ctx, `SELECT l.reference_id,i.invoice_no,l.delta_cents,i.status
@@ -102,7 +115,7 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 				return out, err
 			}
 			out.Replayed = true
-			return out, tx.Commit(ctx)
+			return out, nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return out, err
@@ -115,6 +128,11 @@ WHERE l.user_id=$1 AND l.entry_type='payment' AND l.idempotency_key=$2`, userID,
 		Scan(&out.InvoiceID, &ownerID, &out.InvoiceNo, &out.AmountCents, &out.Status, &orderID, &kind, &version)
 	if err != nil {
 		return out, err
+	}
+	if admin != nil {
+		if err = s.validateAdminRenewalPaymentInvoice(ctx, tx, userID, invoiceID, ownerID, orderID, kind, version, out.AmountCents, *admin); err != nil {
+			return out, err
+		}
 	}
 	if kind == "topup" {
 		return out, conflict("topup_external_payment_required", "充值只能使用在线支付渠道，不能使用余额或信用")
@@ -256,12 +274,21 @@ VALUES($1,'payment',$2,$3,'invoice',$4,$5,'账单支付')`, userID, -out.AmountC
 			return out, err
 		}
 	}
-	if err = Audit(ctx, tx, userID, "invoice.paid", "invoice", invoiceID, map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}); err != nil {
+	auditActor := userID
+	auditPayload := map[string]any{"amount_cents": out.AmountCents, "balance_cents": balance}
+	if admin != nil {
+		auditActor = admin.Actor
+		auditPayload["customer_id"] = userID
+		auditPayload["service_id"] = admin.ServiceID
+		auditPayload["reason"] = admin.Input.Reason
+		auditPayload["payment_source"] = "admin_customer_balance"
+	}
+	if err = Audit(ctx, tx, auditActor, "invoice.paid", "invoice", invoiceID, auditPayload); err != nil {
 		return out, err
 	}
 	out.BalanceCents = balance
 	out.Status = "paid"
-	return out, tx.Commit(ctx)
+	return out, nil
 }
 
 func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, note string) (int64, bool, error) {

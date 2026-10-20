@@ -106,71 +106,41 @@ WHERE user_id=$1 AND idempotency_key=$2`, userID, key).Scan(&out.InvoiceID, &out
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return out, nil, err
 	}
-	var ownerID int64
-	var renewalBase int64
-	var benefit RenewalBenefit
-	var serviceStatus, cycle, productName string
-	var serviceVersion int64
-	var due *time.Time
-	var autoRenew, supplierMode bool
-	if err = tx.QueryRow(ctx, `SELECT s.user_id,s.status,s.billing_cycle,p.name,coalesce(s.recurring_price_cents,oi.price_cents,p.price_cents),s.renewal_discount_percent,s.renewal_promo_code,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,s.version,s.next_due_at,s.auto_renew,s.provision_mode='supplier'
-FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 FOR UPDATE OF s`, serviceID).
-		Scan(&ownerID, &serviceStatus, &cycle, &productName, &renewalBase, &benefit.Percent, &benefit.Code, &benefit.FixedCents, &benefit.Limit, &benefit.Used, &serviceVersion, &due, &autoRenew, &supplierMode); err != nil {
+	terms, err := lockRenewalTerms(ctx, tx, serviceID)
+	if err != nil {
 		return out, nil, err
 	}
-	if ownerID != userID {
+	if terms.CustomerID != userID {
 		return out, nil, pgx.ErrNoRows
 	}
+	// Keep customer/automatic rejection precedence unchanged while admission
+	// below remains shared with the explicit administrator command.
 	if err = requireServiceCancellationOpen(ctx, tx, serviceID); err != nil {
 		return out, nil, err
 	}
 	if automaticDue != nil {
-		if !autoRenew || due == nil || (serviceStatus != "active" && serviceStatus != "suspended") {
+		if !terms.AutoRenew || terms.Due == nil || (terms.Status != "active" && terms.Status != "suspended") {
 			return out, nil, pgx.ErrNoRows
 		}
-		if due.Sub(*automaticDue) > time.Second || automaticDue.Sub(*due) > time.Second || due.After(time.Now().Add(24*time.Hour)) {
+		if terms.Due.Sub(*automaticDue) > time.Second || automaticDue.Sub(*terms.Due) > time.Second || terms.Due.After(time.Now().Add(24*time.Hour)) {
 			return out, nil, conflict("auto_renewal_race", "服务到期时间已变化，请稍后重试")
 		}
 	}
-	if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+	if _, err = requireRenewalAdmission(ctx, tx, serviceID, terms, false); err != nil {
 		return out, nil, err
-	}
-	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
-		return out, nil, err
-	}
-	if serviceStatus != "active" && serviceStatus != "suspended" {
-		return out, nil, conflict("invalid_renewal_state", "只有已启用或已暂停的服务可以续费")
-	}
-	if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
-		return out, nil, err
-	}
-	var pending bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(
-SELECT 1 FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
-WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid')`, serviceID).Scan(&pending); err != nil {
-		return out, nil, err
-	}
-	if pending {
-		return out, nil, conflict("renewal_invoice_pending", "该服务已有待支付的续费账单")
-	}
-	if cycle == "once" {
-		return out, nil, conflict("nonrenewable_service", "一次性服务不可续费")
-	}
-	if renewalBase < 0 {
-		return out, nil, conflict("invalid_renewal_price", "续费价格无效")
 	}
 	supplierQuote := []byte(`{}`)
-	if supplierMode {
+	if terms.SupplierMode {
 		adapter, snapshot, quoteErr := s.requireSupplierRenewal(ctx, tx, serviceID)
 		if quoteErr != nil {
 			return out, nil, quoteErr
 		}
 		if quote == nil {
-			prepared := &supplierRenewalQuote{adapter: adapter, snapshot: snapshot, serviceVersion: serviceVersion, due: due}
+			prepared := &supplierRenewalQuote{adapter: adapter, snapshot: snapshot, serviceVersion: terms.Version, due: terms.Due}
 			return out, prepared, tx.Commit(ctx)
 		}
-		sameDue := quote.due == nil && due == nil || quote.due != nil && due != nil && quote.due.Equal(*due)
-		if quote.serviceVersion != serviceVersion || !sameDue || quote.snapshot != snapshot {
+		sameDue := quote.due == nil && terms.Due == nil || quote.due != nil && terms.Due != nil && quote.due.Equal(*terms.Due)
+		if quote.serviceVersion != terms.Version || !sameDue || quote.snapshot != snapshot {
 			return out, nil, conflict("supplier_renewal_quote_changed", "服务或供应商配置已变更，请重新获取续费报价")
 		}
 		if automaticDue != nil {
@@ -191,7 +161,7 @@ auto_renew_error='',version=version+1,updated_at=clock_timestamp() WHERE id=$1`,
 					return out, nil, err
 				}
 				if err = Audit(ctx, tx, 0, "supplier.auto_renewal.skipped", "service", serviceID,
-					map[string]any{"reason": "upstream_not_due", "previous_due": due, "upstream_due": *remoteDue}); err != nil {
+					map[string]any{"reason": "upstream_not_due", "previous_due": terms.Due, "upstream_due": *remoteDue}); err != nil {
 					return out, nil, err
 				}
 				if err = tx.Commit(ctx); err != nil {
@@ -205,19 +175,8 @@ auto_renew_error='',version=version+1,updated_at=clock_timestamp() WHERE id=$1`,
 	} else if quote != nil {
 		return out, nil, conflict("supplier_renewal_quote_changed", "服务交付方式已变更，请重新获取续费报价")
 	}
-	renewalDiscount, snapshot, ordinal, err := benefit.Quote(renewalBase)
+	out, err = insertRenewalInvoice(ctx, tx, userID, serviceID, key, terms, supplierQuote, userID, "")
 	if err != nil {
-		return out, nil, err
-	}
-	out.AmountCents = renewalBase - renewalDiscount
-	err = tx.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,order_id,status,amount_cents,idempotency_key)
-VALUES('R-'||replace(gen_random_uuid()::text,'-',''),$1,NULL,'unpaid',$2,$3)
-RETURNING id,invoice_no`, userID, out.AmountCents, key).Scan(&out.InvoiceID, &out.InvoiceNo)
-	if err != nil {
-		return out, nil, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id,renewal_base_cents,renewal_discount_cents,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,renewal_discount_ordinal,supplier_renewal_snapshot)
-VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, out.InvoiceID, productName+"续费", out.AmountCents, serviceID, renewalBase, renewalDiscount, snapshot.Percent, snapshot.Code, snapshot.FixedCents, snapshot.Limit, ordinal, supplierQuote); err != nil {
 		return out, nil, err
 	}
 	if automaticDue != nil {
@@ -227,11 +186,86 @@ VALUES($1,$2,$3,$4,$5)`, out.InvoiceID, serviceID, userID, *automaticDue, genera
 			return out, nil, err
 		}
 	}
-	out.ServiceID = serviceID
-	if err = Audit(ctx, tx, userID, "service.renewal.created", "service", serviceID, map[string]any{"invoice_id": out.InvoiceID, "amount_cents": out.AmountCents, "billing_cycle": cycle, "base_cents": renewalBase, "discount_cents": renewalDiscount, "discount_percent": snapshot.Percent, "promo_code": snapshot.Code, "fixed_discount_cents": snapshot.FixedCents, "discount_limit": snapshot.Limit, "discount_ordinal": ordinal}); err != nil {
-		return out, nil, err
-	}
 	return out, nil, tx.Commit(ctx)
+}
+
+// renewalTerms and admission are shared by customer, automatic and explicit
+// administrator renewal commands. They never change the contract price or the
+// auto-renew intent merely because a new unpaid invoice is being prepared.
+type renewalTerms struct {
+	CustomerID, Version, BaseCents int64
+	Status, Cycle, ProductName     string
+	Benefit                        RenewalBenefit
+	Due                            *time.Time
+	AutoRenew, SupplierMode        bool
+}
+
+func lockRenewalTerms(ctx context.Context, tx pgx.Tx, serviceID int64) (renewalTerms, error) {
+	var terms renewalTerms
+	err := tx.QueryRow(ctx, `SELECT s.user_id,s.status,s.billing_cycle,p.name,coalesce(s.recurring_price_cents,oi.price_cents,p.price_cents),s.renewal_discount_percent,s.renewal_promo_code,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,s.version,s.next_due_at,s.auto_renew,s.provision_mode='supplier'
+FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 FOR UPDATE OF s`, serviceID).
+		Scan(&terms.CustomerID, &terms.Status, &terms.Cycle, &terms.ProductName, &terms.BaseCents, &terms.Benefit.Percent, &terms.Benefit.Code, &terms.Benefit.FixedCents, &terms.Benefit.Limit, &terms.Benefit.Used, &terms.Version, &terms.Due, &terms.AutoRenew, &terms.SupplierMode)
+	return terms, err
+}
+
+func requireRenewalAdmission(ctx context.Context, tx pgx.Tx, serviceID int64, terms renewalTerms, allowPending bool) (int64, error) {
+	if err := requireServiceCancellationOpen(ctx, tx, serviceID); err != nil {
+		return 0, err
+	}
+	if err := requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
+		return 0, err
+	}
+	if err := requireServiceReviewed(ctx, tx, serviceID); err != nil {
+		return 0, err
+	}
+	if terms.Status != "active" && terms.Status != "suspended" {
+		return 0, conflict("invalid_renewal_state", "只有已启用或已暂停的服务可以续费")
+	}
+	if err := requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
+		return 0, err
+	}
+	var pendingInvoice int64
+	if err := tx.QueryRow(ctx, `SELECT coalesce(min(i.id),0) FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id
+WHERE ii.service_id=$1 AND ii.item_type='renew' AND i.status='unpaid'`, serviceID).Scan(&pendingInvoice); err != nil {
+		return 0, err
+	}
+	if pendingInvoice > 0 && !allowPending {
+		return pendingInvoice, conflict("renewal_invoice_pending", "该服务已有待支付的续费账单")
+	}
+	if terms.Cycle == "once" {
+		return 0, conflict("nonrenewable_service", "一次性服务不可续费")
+	}
+	if terms.BaseCents < 0 {
+		return 0, conflict("invalid_renewal_price", "续费价格无效")
+	}
+	return pendingInvoice, nil
+}
+
+func insertRenewalInvoice(ctx context.Context, tx pgx.Tx, customer, service int64, key string, terms renewalTerms, supplierQuote []byte, actor int64, reason string) (RenewalResult, error) {
+	var out RenewalResult
+	discount, snapshot, ordinal, err := terms.Benefit.Quote(terms.BaseCents)
+	if err != nil {
+		return out, err
+	}
+	out.AmountCents, out.ServiceID = terms.BaseCents-discount, service
+	err = tx.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,order_id,status,amount_cents,idempotency_key)
+VALUES('R-'||replace(gen_random_uuid()::text,'-',''),$1,NULL,'unpaid',$2,$3)
+RETURNING id,invoice_no`, customer, out.AmountCents, key).Scan(&out.InvoiceID, &out.InvoiceNo)
+	if err != nil {
+		return out, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents,service_id,renewal_base_cents,renewal_discount_cents,renewal_discount_percent,renewal_promo_code,renewal_fixed_discount_cents,renewal_discount_limit,renewal_discount_ordinal,supplier_renewal_snapshot)
+VALUES($1,$2,'renew',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, out.InvoiceID, terms.ProductName+"续费", out.AmountCents, service, terms.BaseCents, discount, snapshot.Percent, snapshot.Code, snapshot.FixedCents, snapshot.Limit, ordinal, supplierQuote); err != nil {
+		return out, err
+	}
+	payload := map[string]any{"invoice_id": out.InvoiceID, "amount_cents": out.AmountCents, "billing_cycle": terms.Cycle, "base_cents": terms.BaseCents, "discount_cents": discount, "discount_percent": snapshot.Percent, "promo_code": snapshot.Code, "fixed_discount_cents": snapshot.FixedCents, "discount_limit": snapshot.Limit, "discount_ordinal": ordinal}
+	if reason != "" {
+		payload["customer_id"], payload["reason"] = customer, reason
+	}
+	if err = Audit(ctx, tx, actor, "service.renewal.created", "service", service, payload); err != nil {
+		return out, err
+	}
+	return out, nil
 }
 
 type autoRenewGenerationKey struct{}

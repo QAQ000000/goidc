@@ -7,6 +7,20 @@ import { validateIntegrationURL, verifyRequiredGoTests } from './test-compiled-n
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const integrationSuites = {
   'internal/httpapi': [
+    'TestAdminServiceRenewalLifecycleAndReadOnlyQuote',
+    'TestAdminServiceRenewalIdempotencyCASAndActorIsolation',
+    'TestAdminServiceRenewalStrictInputPermissionsAndScope',
+    'TestAdminServiceRenewalAuditAndReceiptRollback',
+    'TestAdminServiceRenewalConcurrentCreateAndCustomerPayment',
+    'TestAdminServiceRenewalConcurrentPaymentReplaysOneResult',
+    'TestAdminServiceRenewalPaymentBusinessFences',
+    'TestAdminServiceRenewalWaitingCredentialAndNaturalExpiry',
+    'TestAdminServiceRenewalReceiptWaitRechecksRevokedCredential',
+    'TestAdminServiceRenewalPermissionWaitDoesNotRestoreRevokedAuthority',
+    'TestAdminServiceRenewalSupplierPaidRemainsPendingUntilConfirmed',
+    'TestAdminServiceRenewalZeroPriceRequiresExplicitPayment',
+    'TestAdminServiceRenewalLateWaitNaturalExpiryRollsBack',
+    'TestAdminServiceRenewalPasswordRotationLockOrder',
     'TestCustomerReferrerQueryEncodingValidation',
     'TestCustomerReferrerMutationVersionsReplayAndRollback',
     'TestCustomerReferrerInvoiceBirthAndRefundOwnership',

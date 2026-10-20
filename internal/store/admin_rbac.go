@@ -47,6 +47,7 @@ var AdminPermissions = []Permission{
 	{"payments.close_verify", "财务", "只读核验未知关单"}, {"payments.close_review", "财务", "独立复核关单或可信收款"}, {"payments.reconcile", "财务", "查询在线支付并补结算"}, {"payments.close", "财务", "核验上游最终关闭并解除支付保护"},
 	{"invoice_applications.view", "发票", "读取授权客户的发票申请"}, {"invoice_applications.manage", "发票", "审核、登记开具及邮寄信息"},
 	{"services.view", "服务", "读取服务和取消申请"}, {"services.manage", "服务", "执行服务动作、交付和取消审核"},
+	{"services.renew", "服务", "报价并代建客户续费账单"}, {"services.renew.pay_balance", "服务", "使用客户余额支付续费账单"},
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
 	{"ticket_presets.view", "预设回复", "读取预设回复"}, {"ticket_presets.manage", "预设回复", "管理预设回复及分类"},
 	{"notifications.view", "通知", "读取模板和邮件队列"}, {"notifications.manage", "通知", "修改模板和重试邮件"},

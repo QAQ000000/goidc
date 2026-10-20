@@ -49,7 +49,8 @@ func TestLimitedRenewalMigrationPreservesSettledAndPendingHistory(t *testing.T) 
 	// historical columns from the latest schema: newer immutable-effect triggers
 	// correctly depend on them. Copy only columns that existed in schema063.
 	var source string
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&source); err != nil {
+	var originalCreator int64
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT current_schema(),created_by FROM promo_codes WHERE code='FOREVER'").Scan(&source, &originalCreator); err != nil {
 		t.Fatal(err)
 	}
 	historical := source + "_pre064"
@@ -90,6 +91,14 @@ func TestLimitedRenewalMigrationPreservesSettledAndPendingHistory(t *testing.T) 
 			t.Fatal(e)
 		}
 	}
+	// Schema063 stored administrators in users too. Restore those original
+	// identities before copying rows such as promo_codes whose created_by still
+	// references users(id), rather than dropping their historical actor reference.
+	historicalUsers := pgx.Identifier{historical, "users"}.Sanitize()
+	sourceAdministrators := pgx.Identifier{source, "administrators"}.Sanitize()
+	if _, err = tx.Exec(t.Context(), "INSERT INTO "+historicalUsers+" OVERRIDING SYSTEM VALUE SELECT (jsonb_populate_record(NULL::"+historicalUsers+",to_jsonb(r))).* FROM "+sourceAdministrators+" r"); err != nil {
+		t.Fatalf("copy historical administrators into users: %v", err)
+	}
 	for _, table := range []string{"users", "products", "promo_codes", "orders", "order_items", "services", "invoices", "invoice_items"} {
 		target := pgx.Identifier{historical, table}.Sanitize()
 		src := pgx.Identifier{source, table}.Sanitize()
@@ -106,6 +115,15 @@ func TestLimitedRenewalMigrationPreservesSettledAndPendingHistory(t *testing.T) 
 	}
 	if err = f.db.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
+	}
+	var creatorPreserved bool
+	if err = pool.QueryRow(t.Context(), `SELECT p.created_by=$1
+ AND EXISTS(SELECT 1 FROM administrators a JOIN `+sourceAdministrators+` original ON original.id=a.id
+  WHERE a.id=$1 AND a.password_hash=original.password_hash AND a.role=original.role
+   AND a.status=original.status AND a.status='active')
+ AND NOT EXISTS(SELECT 1 FROM users WHERE id=$1)
+ FROM promo_codes p WHERE p.code='FOREVER'`, originalCreator).Scan(&creatorPreserved); err != nil || !creatorPreserved {
+		t.Fatal("historical promo creator identity changed across administrator split", err)
 	}
 	limitedUsed(t, f, 1)
 	var ordinal int64
