@@ -65,7 +65,11 @@ func (s *Store) WebPushState(ctx context.Context, userID int64, sessionHash stri
 	}
 	defer tx.Rollback(ctx)
 	var valid bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users u JOIN sessions ss ON ss.user_id=u.id WHERE u.id=$1 AND u.status='active' AND ss.token_hash=$2 AND ss.expires_at>clock_timestamp())`, userID, sessionHash).Scan(&valid); err != nil {
+	table, tableErr := authenticationTable(ctx, tx, userID)
+	if tableErr != nil {
+		return out, conflict("notification_session_expired", "登录会话已失效")
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM `+table+` u JOIN sessions ss ON ss.user_id=u.id WHERE u.id=$1 AND u.status='active' AND ss.token_hash=$2 AND ss.expires_at>clock_timestamp())`, userID, sessionHash).Scan(&valid); err != nil {
 		return out, err
 	}
 	if !valid {

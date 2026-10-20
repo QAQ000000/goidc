@@ -140,7 +140,7 @@ func TestCustomerFilesAdministratorSalesScopeAndBulkAtomicity(t *testing.T) {
 	unassigned, _ := user(t, db, h, "cf-unassigned", "customer")
 	contentRole(t, db, staffID, "customer_files.view", "customer_files.manage")
 	contentRole(t, db, readerID, "customer_files.view")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []int64{own, second} {
@@ -178,7 +178,7 @@ func TestCustomerFilesAdministratorSalesScopeAndBulkAtomicity(t *testing.T) {
 	input.CustomerID = second
 	expect(t, customerFileUpload(h, "PUT", path, staff, "", nil, input), 200)
 	expect(t, request(h, "GET", ownFilePath(ids[own]), nil, customer, ""), 404)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='all' WHERE id=$1", readerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='all' WHERE id=$1", readerID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", path, nil, reader, ""), 200)
@@ -198,17 +198,17 @@ func TestCustomerFilesAdministratorSalesScopeAndBulkAtomicity(t *testing.T) {
 	expect(t, request(h, "GET", customerFilePath(ids[own]), nil, staff, ""), 200)
 	bulk["items"] = []store.CustomerFileVersion{{ID: ids[second], ExpectedVersion: 1}, {ID: ids[own], ExpectedVersion: 2}}
 	expect(t, request(h, "POST", "/api/v1/admin/customer-files/bulk-delete", bulk, staff, ""), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_ownerless=true WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_ownerless=true WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", customerFilePath(ids[unassigned]), nil, staff, ""), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='assigned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='assigned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", customerFilePath(ids[foreign]), nil, staff, ""), 200)
 	expect(t, request(h, "GET", customerFilePath(ids[unassigned]), nil, staff, ""), 404)
 	// Real customer reassignment immediately revokes old staff scope.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',sales_enabled=true WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',sales_enabled=true WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	// Assignment requires a sales administrator with customers.view.
@@ -350,7 +350,7 @@ func TestCustomerFilesWaitingRevocationAndSalesTransfer(t *testing.T) {
 			}
 			defer tx.Rollback(context.Background())
 			if kind == "sales_transfer" || kind == "sales_wait_session" {
-				if _, err = tx.Exec(ctx, "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+				if _, err = tx.Exec(ctx, "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 					t.Fatal(err)
 				}
 				if _, err = tx.Exec(ctx, "UPDATE users SET sales_owner_id=$2 WHERE id=$1", uid, staffID); err != nil {
@@ -409,10 +409,10 @@ func TestCustomerFilesWaitingRevocationAndSalesTransfer(t *testing.T) {
 			case "api_key":
 				_, err = tx.Exec(ctx, "UPDATE api_keys SET revoked_at=now() WHERE secret_hash=$1", tokenHash(secret))
 			case "read_permission":
-				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 				want = 403
 			case "manage_permission":
-				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['customer_files.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['customer_files.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 				want = 403
 			case "sales_transfer":
 				_, err = tx.Exec(ctx, "UPDATE users SET sales_owner_id=NULL WHERE id=$1", uid)

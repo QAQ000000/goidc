@@ -10,7 +10,7 @@ func TestWorkerRuntimePermissionsAndIndependentReadiness(t *testing.T) {
 	_, root := user(t, db, h, "runtime-root", "super_admin")
 	_, customer := user(t, db, h, "runtime-customer", "customer")
 	staffID, staff := user(t, db, h, "runtime-staff", "admin")
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions=ARRAY['jobs.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions=ARRAY['jobs.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/runtime", nil, "", ""), 401)

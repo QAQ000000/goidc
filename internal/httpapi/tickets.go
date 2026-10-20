@@ -49,17 +49,15 @@ func (s *Server) tickets(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
-		if adminRoute(r) && !s.allowTicketDepartment(w, r, s.db.Pool, department) {
-			return
-		}
 	}
-	s.list(w, r, `SELECT t.id,t.ticket_no,t.legacy_ticket_no,t.user_id,u.display_name AS customer_name,t.department_id,d.name AS department_name,t.assignee_id,a.display_name AS assignee_name,t.subject,t.status,t.priority,t.version,t.created_at,t.updated_at
- FROM tickets t JOIN users u ON u.id=t.user_id LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN users a ON a.id=t.assignee_id
- WHERE t.merged_ticket_id IS NULL AND (($1::boolean AND admin_ticket_department_allowed($2,t.department_id)) OR (NOT $1::boolean AND t.user_id=$2 AND coalesce(d.customer_visible,true)))
- AND (NOT $5::boolean OR t.department_id IS NOT DISTINCT FROM $6::bigint)
- AND ($7='' OR t.subject ILIKE '%'||$7||'%' OR t.ticket_no ILIKE '%'||$7||'%' OR t.legacy_ticket_no ILIKE '%'||$7||'%')
- AND ($8::bigint IS NULL OR t.user_id=$8) ORDER BY t.updated_at DESC,t.id DESC LIMIT $3 OFFSET $4`, adminRoute(r), identityFrom(r).ID, limit, offset, filter, department, strings.TrimSpace(r.URL.Query().Get("q")), customerID)
+	items, err := s.db.TicketList(r.Context(), identityFrom(r).ID, adminRoute(r), limit, offset, filter, department, strings.TrimSpace(r.URL.Query().Get("q")), customerID)
+	if err != nil {
+		s.failTicketAccount(w, r, err)
+		return
+	}
+	write(w, 200, items)
 }
+
 func (s *Server) ticketDepartments(w http.ResponseWriter, r *http.Request) {
 	s.list(w, r, "SELECT id,name,slug,sort_order FROM ticket_departments WHERE active AND customer_visible ORDER BY sort_order,id")
 }
@@ -69,12 +67,14 @@ func (s *Server) ticketAssignees(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.allowTicketDepartment(w, r, s.db.Pool, department) {
+	items, err := s.db.TicketAssigneeDirectory(r.Context(), identityFrom(r).ID, department)
+	if err != nil {
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	s.list(w, r, `SELECT u.id,u.username,u.display_name,u.role FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id
- WHERE u.status='active' AND admin_ticket_department_allowed(u.id,$1) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions))) ORDER BY u.display_name,u.id`, department)
+	write(w, 200, items)
 }
+
 func (s *Server) createTicket(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		IdempotencyKey string `json:"idempotency_key,omitempty"`
@@ -156,87 +156,12 @@ func (s *Server) ticketDetail(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	result, err := s.db.TicketDetail(r.Context(), id, identityFrom(r).ID, isAdmin(r), identityFrom(r).Role == "customer")
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	rows, err := tx.Query(r.Context(), "SELECT t.id,t.ticket_no,t.legacy_ticket_no,t.user_id,t.merged_ticket_id,t.service_id,t.legacy_status_label,t.department_id,d.name AS department_name,t.assignee_id,a.display_name AS assignee_name,t.subject,t.body,t.status,t.priority,t.version,t.created_at,t.updated_at,($2::boolean AND admin_ticket_department_allowed($3,t.department_id)) AS admin_access FROM tickets t LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN users a ON a.id=t.assignee_id WHERE t.id=$1 AND (($2::boolean AND admin_ticket_department_allowed($3,t.department_id)) OR (t.user_id=$3 AND coalesce(d.customer_visible,true)))", id, isAdmin(r), identityFrom(r).ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	ticket, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if ticket["merged_ticket_id"] != nil {
-		writeError(w, http.StatusConflict, "ticket_merged", "该工单已合并到其他工单")
-		return
-	}
-	var initialRating map[string]any
-	canRate := identityFrom(r).Role == "customer" && ticket["user_id"] == identityFrom(r).ID
-	if err = tx.QueryRow(r.Context(), `SELECT jsonb_build_object('stars',tr.stars,'provenance',tr.provenance,'can_rate',($2::boolean AND t.initial_author_kind='staff' AND t.created_by IS NOT NULL AND tr.id IS NULL)) FROM tickets t LEFT JOIN ticket_ratings tr ON tr.initial_ticket_id=t.id WHERE t.id=$1`, id, canRate).Scan(&initialRating); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	ticket["initial_rating"] = initialRating
-	rows, err = tx.Query(r.Context(), `SELECT r.id,r.body,r.created_at,u.display_name AS author_name,
-CASE r.author_kind WHEN 'staff' THEN 'admin' WHEN 'customer' THEN 'customer' ELSE 'unknown' END AS author_role,
-jsonb_build_object('stars',tr.stars,'provenance',tr.provenance,'can_rate',($2::boolean AND r.author_kind='staff' AND tr.id IS NULL)) AS rating
-FROM ticket_replies r JOIN users u ON u.id=r.author_id LEFT JOIN ticket_ratings tr ON tr.reply_id=r.id WHERE ticket_id=$1 ORDER BY r.created_at,r.id`, id, canRate)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	replies, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if replies == nil {
-		replies = []map[string]any{}
-	}
-	rows, err = tx.Query(r.Context(), `SELECT a.id,a.ticket_id,a.reply_id,a.note_id,a.uploader_id,u.display_name AS uploader_name,a.filename,a.mime_type,a.size_bytes,a.sha256,a.created_at
-FROM ticket_attachments a JOIN users u ON u.id=a.uploader_id WHERE a.ticket_id=$1 AND (a.note_id IS NULL OR $2::boolean) ORDER BY a.id`, id, ticket["admin_access"] == true)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	attachments, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if attachments == nil {
-		attachments = []map[string]any{}
-	}
-	ticket["replies"] = replies
-	ticket["attachments"] = attachments
-	if ticket["admin_access"] == true {
-		rows, err = tx.Query(r.Context(), `SELECT n.id,n.ticket_id,n.author_id,u.display_name AS author_name,n.body,n.created_at
-FROM ticket_notes n JOIN users u ON u.id=n.author_id WHERE n.ticket_id=$1 ORDER BY n.id`, id)
-		if err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		notes, noteErr := pgx.CollectRows(rows, pgx.RowToMap)
-		if noteErr != nil {
-			s.fail(w, r, noteErr)
-			return
-		}
-		if notes == nil {
-			notes = []map[string]any{}
-		}
-		ticket["notes"] = notes
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, ticket)
+	write(w, 200, result)
 }
 
 func attachmentID(w http.ResponseWriter, r *http.Request) (int64, bool) {
@@ -319,61 +244,12 @@ func (s *Server) uploadTicketAttachment(w http.ResponseWriter, r *http.Request) 
 	}
 	digest := sha256.Sum256(content)
 	hash := hex.EncodeToString(digest[:])
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		if _, err := tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
-			return txResponse{}, err
-		}
-		actorID := identityFrom(r).ID
-		var ownerID int64
-		var status string
-		const scope = `SELECT t.user_id,t.status FROM tickets t JOIN users u ON u.id=$2 LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id
-WHERE t.id=$1 AND t.merged_ticket_id IS NULL AND u.status='active' AND (
- ((u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions) AND 'tickets.manage'=ANY(ar.permissions)))
-  AND admin_ticket_department_allowed(u.id,t.department_id)) OR
- (u.role='customer' AND t.user_id=u.id AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true))) FOR UPDATE OF t`
-		authorize := func() error {
-			current, err := s.publicDownloadIdentity(r, tx)
-			if err != nil {
-				return err
-			}
-			if current != actorID {
-				return &txHTTPError{401, "unauthorized", "登录已失效，请重新登录"}
-			}
-			if err = tx.QueryRow(r.Context(), scope, id, actorID).Scan(&ownerID, &status); err != nil {
-				return err
-			}
-			if status == "closed" {
-				return &txHTTPError{409, "ticket_closed", "工单已关闭"}
-			}
-			return nil
-		}
-		if err := authorize(); err != nil {
-			return txResponse{}, err
-		}
-		var attachmentID int64
-		var createdAt any
-		stored, err := s.db.PersistFile(requestFileContext(r), tx, "ticket_attachments", content)
-		if err != nil {
-			return txResponse{}, err
-		}
-		if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
-			return txResponse{}, err
-		}
-		// PersistFile can wait on local or remote I/O. Recheck the current actor
-		// and ticket scope instead of reusing the middleware's role snapshot.
-		if err = authorize(); err != nil {
-			return txResponse{}, err
-		}
-		if err = tx.QueryRow(r.Context(), `INSERT INTO ticket_attachments(ticket_id,uploader_id,filename,mime_type,size_bytes,sha256,content,storage_object_id)
-VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,created_at`, id, identityFrom(r).ID, name, mimeType, len(content), hash, stored.Content, stored.ObjectID).Scan(&attachmentID, &createdAt); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.attachment.uploaded", "ticket_attachment", attachmentID, map[string]any{"ticket_id": id, "filename": name, "mime_type": mimeType, "size_bytes": len(content), "sha256": hash, "customer_id": ownerID}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{201, map[string]any{"id": attachmentID, "ticket_id": id, "uploader_id": identityFrom(r).ID, "filename": name, "mime_type": mimeType, "size_bytes": len(content), "sha256": hash, "created_at": createdAt}}, nil
-	})
+	result, err := s.db.UploadTicketAccountAttachment(requestFileContext(r), identityFrom(r).ID, id, name, mimeType, hash, content)
+	if err != nil {
+		s.failTicketAccount(w, r, err)
+		return
+	}
+	write(w, 201, result)
 }
 
 func (s *Server) downloadTicketAttachment(w http.ResponseWriter, r *http.Request) {
@@ -386,72 +262,17 @@ func (s *Server) downloadTicketAttachment(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	var name, mimeType string
-	var size int64
-	var content []byte
-	var objectID *string
-	tx, err := s.db.Pool.Begin(r.Context())
+	file, err := s.db.DownloadTicketAccountAttachment(requestFileContext(r), identityFrom(r).ID, ticketID, attachment, isAdmin(r))
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	if _, err = tx.Exec(r.Context(), "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	const scope = ` FROM ticket_attachments a JOIN tickets t ON t.id=a.ticket_id
-WHERE a.id=$1 AND a.ticket_id=$2 AND t.merged_ticket_id IS NULL AND (($3::boolean AND admin_ticket_department_allowed($4,t.department_id)
- AND EXISTS(SELECT 1 FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id WHERE u.id=$4 AND u.status='active'
- AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions)))))
- OR (t.user_id=$4 AND a.note_id IS NULL AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true)))`
-	// Merge and upload lock the parent first. Do not let a joined row-lock
-	// plan acquire an attachment before its parent and invert that order.
-	var parentID int64
-	if err = tx.QueryRow(r.Context(), `SELECT t.id`+scope+` FOR SHARE OF t`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&parentID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	err = tx.QueryRow(r.Context(), `SELECT a.filename,a.mime_type,a.size_bytes,a.content,a.storage_object_id`+scope+` FOR SHARE OF a`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&name, &mimeType, &size, &content, &objectID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	content, err = s.db.ReadFileContent(r.Context(), tx, "ticket_attachments", content, objectID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.LockFileCredential(requestFileContext(r), tx, identityFrom(r).ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !s.customerFileCredentialCurrent(w, r, tx, identityFrom(r).ID) {
-		return
-	}
-	var allowed bool
-	if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1`+scope+`)`, attachment, ticketID, isAdmin(r), identityFrom(r).ID).Scan(&allowed); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !allowed {
-		writeError(w, 404, "not_found", "附件不存在或当前账户无法访问")
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.attachment.downloaded", "ticket_attachment", attachment, map[string]any{"ticket_id": ticketID, "filename": name, "size_bytes": size}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	w.Header().Set("Content-Type", mimeType)
-	w.Header().Set("Content-Length", fmt.Sprint(size))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"attachment\"; filename*=UTF-8''%s", url.PathEscape(name)))
+	w.Header().Set("Content-Type", file.MIMEType)
+	w.Header().Set("Content-Length", fmt.Sprint(file.Size))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"attachment\"; filename*=UTF-8''%s", url.PathEscape(file.Name)))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(content)
+	_, _ = w.Write(file.Content)
 }
 
 func (s *Server) deleteTicketAttachment(w http.ResponseWriter, r *http.Request) {
@@ -520,62 +341,16 @@ func (s *Server) assignTicket(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var input struct {
-		DepartmentID *int64 `json:"department_id"`
-		AssigneeID   *int64 `json:"assignee_id"`
-	}
+	var input store.TicketAssignmentInput
 	if !decode(w, r, &input) {
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
+	result, err := s.db.AssignTicketAccount(r.Context(), id, identityFrom(r).ID, input)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var ownerID int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM tickets WHERE id=$1 AND merged_ticket_id IS NULL AND admin_ticket_department_allowed($2,department_id) FOR UPDATE", id, identityFrom(r).ID).Scan(&ownerID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !s.allowTicketDepartment(w, r, tx, input.DepartmentID) {
-		return
-	}
-	if input.DepartmentID != nil {
-		var active bool
-		if err = tx.QueryRow(r.Context(), "SELECT COALESCE((SELECT active FROM ticket_departments WHERE id=$1), false)", *input.DepartmentID).Scan(&active); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !active {
-			writeError(w, 409, "invalid_ticket_department", "工单部门不可用")
-			return
-		}
-	}
-	if input.AssigneeID != nil {
-		var valid bool
-		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id WHERE u.id=$1 AND u.status='active' AND admin_ticket_department_allowed(u.id,$2) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions))))`, *input.AssigneeID, input.DepartmentID).Scan(&valid); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !valid {
-			writeError(w, 409, "invalid_ticket_assignee", "处理人不可用")
-			return
-		}
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE tickets SET department_id=$2,assignee_id=$3,version=version+1,updated_at=now(),status=CASE WHEN status='open' THEN 'pending' ELSE status END WHERE id=$1", id, input.DepartmentID, input.AssigneeID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.assigned", "ticket", id, map[string]any{"department_id": input.DepartmentID, "assignee_id": input.AssigneeID, "customer_id": ownerID}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"ticket_id": id, "department_id": input.DepartmentID, "assignee_id": input.AssigneeID})
+	write(w, 200, result)
 }
 
 func (s *Server) ticketNotes(w http.ResponseWriter, r *http.Request) {
@@ -583,35 +358,12 @@ func (s *Server) ticketNotes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	result, err := s.db.TicketNotes(r.Context(), id, identityFrom(r).ID)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var ticketID int64
-	if err = tx.QueryRow(r.Context(), "SELECT id FROM tickets WHERE id=$1 AND merged_ticket_id IS NULL AND admin_ticket_department_allowed($2,department_id)", id, identityFrom(r).ID).Scan(&ticketID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), `SELECT n.id,n.ticket_id,n.author_id,u.display_name AS author_name,n.body,n.created_at FROM ticket_notes n JOIN users u ON u.id=n.author_id WHERE n.ticket_id=$1 ORDER BY n.id`, id)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	notes, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if notes == nil {
-		notes = []map[string]any{}
-	}
-	write(w, 200, notes)
+	write(w, 200, result)
 }
 
 func (s *Server) createTicketNote(w http.ResponseWriter, r *http.Request) {
@@ -717,11 +469,7 @@ func (s *Server) transferTicket(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var input struct {
-		DepartmentID *int64 `json:"department_id"`
-		AssigneeID   *int64 `json:"assignee_id"`
-		Reason       string `json:"reason"`
-	}
+	var input store.TicketTransferInput
 	if !decode(w, r, &input) {
 		return
 	}
@@ -734,68 +482,12 @@ func (s *Server) transferTicket(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_transfer", "转移备注过长")
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
+	result, err := s.db.TransferTicketAccount(r.Context(), tid, identityFrom(r).ID, input)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var ownerID int64
-	var previousDepartment, previousAssignee *int64
-	var status string
-	if err = tx.QueryRow(r.Context(), "SELECT user_id,department_id,assignee_id,status FROM tickets WHERE id=$1 AND merged_ticket_id IS NULL AND admin_ticket_department_allowed($2,department_id) FOR UPDATE", tid, identityFrom(r).ID).Scan(&ownerID, &previousDepartment, &previousAssignee, &status); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	departmentID, assigneeID := previousDepartment, previousAssignee
-	if input.DepartmentID != nil && !s.allowTicketDepartment(w, r, tx, input.DepartmentID) {
-		return
-	}
-	if input.DepartmentID != nil {
-		var active bool
-		if err = tx.QueryRow(r.Context(), "SELECT COALESCE((SELECT active FROM ticket_departments WHERE id=$1),false)", *input.DepartmentID).Scan(&active); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !active {
-			writeError(w, http.StatusConflict, "invalid_ticket_department", "工单部门不可用")
-			return
-		}
-		departmentID = input.DepartmentID
-		if input.AssigneeID == nil {
-			assigneeID = nil
-		}
-	}
-	if input.AssigneeID != nil {
-		var valid bool
-		if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM users u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id WHERE u.id=$1 AND u.status='active' AND admin_ticket_department_allowed(u.id,$2) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions))))`, *input.AssigneeID, departmentID).Scan(&valid); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !valid {
-			writeError(w, http.StatusConflict, "invalid_ticket_assignee", "处理人不可用")
-			return
-		}
-		assigneeID = input.AssigneeID
-	}
-	if _, err = tx.Exec(r.Context(), `UPDATE tickets SET department_id=$2,assignee_id=$3,status=CASE WHEN $3::bigint IS NULL AND status='pending' THEN 'open' ELSE status END,version=version+1,updated_at=now() WHERE id=$1`, tid, departmentID, assigneeID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), `INSERT INTO ticket_transfer_logs(ticket_id,actor_id,previous_department_id,department_id,previous_assignee_id,assignee_id,reason)
-VALUES($1,$2,$3,$4,$5,$6,$7)`, tid, identityFrom(r).ID, previousDepartment, departmentID, previousAssignee, assigneeID, input.Reason); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "ticket.transferred", "ticket", tid, map[string]any{"department_id": departmentID, "assignee_id": assigneeID, "previous_department_id": previousDepartment, "previous_assignee_id": previousAssignee, "reason": input.Reason, "status": status, "customer_id": ownerID}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, http.StatusOK, map[string]any{"ticket_id": tid, "department_id": departmentID, "assignee_id": assigneeID})
+	write(w, 200, result)
 }
 
 func (s *Server) mergeTickets(w http.ResponseWriter, r *http.Request) {

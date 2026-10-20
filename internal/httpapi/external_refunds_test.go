@@ -32,7 +32,7 @@ func externalRefundPaidInvoice(t *testing.T, db *store.Store, h http.Handler, ro
 func externalRefundActor(t *testing.T, db *store.Store, h http.Handler, name string, permissions []string) (int64, string) {
 	t.Helper()
 	id, cookie := user(t, db, h, name, "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id, permissions); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id, permissions); err != nil {
 		t.Fatal(err)
 	}
 	return id, cookie
@@ -72,7 +72,7 @@ func TestExternalRefundHTTPPermissionsLifecycleAndReplay(t *testing.T) {
 	expect(t, request(f.h, "POST", path, in, requester, "refund-create"), 409)
 	in["note"] = "隔离退款到账凭证"
 	expect(t, request(f.h, "POST", review, map[string]any{"expected_version": 1, "note": "review"}, reader, "reader-confirm"), 403)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_append(permissions,'external_refunds.review') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", requesterID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_append(permissions,'external_refunds.review') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", requesterID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", review, map[string]any{"expected_version": 1, "note": "self"}, requester, "self-confirm"), 403)
@@ -139,7 +139,7 @@ func TestExternalRefundHTTPPermissionsLifecycleAndReplay(t *testing.T) {
 		t.Fatal("notification replay reopened invoice", status, err)
 	}
 	// Replays must still recheck current grants, scope and session validity.
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", requesterID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", requesterID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path, in, requester, "refund-create"), 403)
@@ -215,7 +215,7 @@ func TestExternalRefundHTTPRejectScopeAndFailureAtomicity(t *testing.T) {
 	invoice, in := externalRefundPaidInvoice(t, f.db, f.h, f.root, f.customer, f.uid, "external-reject")
 	path := fmt.Sprintf("/api/v1/admin/invoices/%d/external-refunds", invoice)
 	actorID, actor := externalRefundActor(t, f.db, f.h, "scope-refund", []string{"external_refunds.view", "external_refunds.create", "external_refunds.review"})
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", actorID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", actorID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", path, nil, actor, ""), 404)

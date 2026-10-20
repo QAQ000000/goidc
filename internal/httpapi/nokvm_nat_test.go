@@ -183,7 +183,7 @@ func TestNOKVMNATPermissionsQuotaAndPayload(t *testing.T) {
 	f, remote := natFixture(t)
 	path := natPathFor(f, "acl", false)
 	readerID, reader := user(t, f.db, f.h, "nat-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", natPathFor(f, "acl", true), nil, reader, ""), 200)
@@ -314,9 +314,9 @@ func TestNOKVMNATAuthorizationAfterSupplierPreflight(t *testing.T) {
 			case "disabled":
 				_, err = f.db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", actor)
 			case "grant":
-				_, err = f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actor)
+				_, err = f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", actor)
 			case "scope":
-				_, err = f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", actor)
+				_, err = f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", actor)
 			case "upstream":
 				_, err = f.db.Pool.Exec(t.Context(), "UPDATE services SET upstream_id='43' WHERE id=$1", f.sid)
 			}

@@ -15,7 +15,7 @@ func TestAdminCustomerAffiliateActivityEndpoint(t *testing.T) {
 	if len(items) != 0 {
 		t.Fatalf("empty customer affiliate activity=%v", items)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", adminID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", adminID); err != nil {
 		t.Fatal(err)
 	}
 	response = request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d/affiliate", customerID), nil, admin, "")
@@ -23,7 +23,7 @@ func TestAdminCustomerAffiliateActivityEndpoint(t *testing.T) {
 	expect(t, response, 200)
 	staffID, staff := user(t, db, h, "customer-affiliate-staff", "admin")
 	contentRole(t, db, staffID, "customers.view")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	response = request(h, "GET", fmt.Sprintf("/api/v1/admin/customers/%d/affiliate", customerID), nil, staff, "")

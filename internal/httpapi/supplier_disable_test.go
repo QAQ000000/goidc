@@ -155,9 +155,9 @@ func TestMissingSupplierDisableRechecksRevocationAfterLock(t *testing.T) {
 				t.Fatal(err)
 			}
 			if revoke == "session" {
-				_, err = tx.Exec(ctx, "SELECT id FROM users WHERE id=$1 FOR UPDATE", writerID)
+				_, err = tx.Exec(ctx, "SELECT id FROM administrators WHERE id=$1 FOR UPDATE", writerID)
 			} else {
-				_, err = tx.Exec(ctx, "SELECT id FROM admin_roles WHERE id=(SELECT admin_role_id FROM users WHERE id=$1) FOR UPDATE", writerID)
+				_, err = tx.Exec(ctx, "SELECT id FROM admin_roles WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1) FOR UPDATE", writerID)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -183,7 +183,7 @@ func TestMissingSupplierDisableRechecksRevocationAfterLock(t *testing.T) {
 			if revoke == "session" {
 				_, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", writerID)
 			} else {
-				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", writerID)
+				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", writerID)
 			}
 			if err != nil {
 				t.Fatal(err)

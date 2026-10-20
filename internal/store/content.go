@@ -155,7 +155,7 @@ func (s *Store) contentTx(ctx context.Context, actorID int64) (pgx.Tx, error) {
 	}
 	if err == nil {
 		var allowed bool
-		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'content.manage'=ANY(r.permissions) AND 'content.view'=ANY(r.permissions)),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
+		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'content.manage'=ANY(r.permissions) AND 'content.view'=ANY(r.permissions)),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
 		if err == nil && !allowed {
 			err = conflict("permission_denied", "没有管理内容的权限")
 		}

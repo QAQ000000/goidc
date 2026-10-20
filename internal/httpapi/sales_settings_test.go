@@ -9,11 +9,11 @@ func TestSalesSettingsPermissionsAndVersioning(t *testing.T) {
 	db, h := testServer(t)
 	rootID, root := user(t, db, h, "sales-settings-root", "super_admin")
 	_, reader := user(t, db, h, "sales-settings-reader", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['sales.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=(SELECT id FROM users WHERE username='sales-settings-reader'))"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['sales.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=(SELECT id FROM administrators WHERE username='sales-settings-reader'))"); err != nil {
 		t.Fatal(err)
 	}
 	_, denied := user(t, db, h, "sales-settings-denied", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=(SELECT id FROM users WHERE username='sales-settings-denied'))"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=(SELECT id FROM administrators WHERE username='sales-settings-denied'))"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,7 +44,7 @@ func TestSalesCommissionGroupsTiersAndStaff(t *testing.T) {
 	db, h := testServer(t)
 	rootID, root := user(t, db, h, "sales-commission-root", "super_admin")
 	staffID, staff := user(t, db, h, "sales-commission-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['sales.view','sales.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['sales.view','sales.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -82,13 +82,13 @@ func TestSalesCommissionGroupsTiersAndStaff(t *testing.T) {
 		t.Fatalf("sales staff page: %#v", staffPage["total"])
 	}
 	var adminVersion int64
-	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_version FROM users WHERE id=$1", rootID).Scan(&adminVersion); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_version FROM administrators WHERE id=$1", rootID).Scan(&adminVersion); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/sales-staff/%d", rootID), map[string]any{"sales_enabled": true, "customer_scope": "owned", "customer_ownerless": false, "sales_commission_group_id": groupID, "expected_version": adminVersion}, staff, "sales-staff-update-1"), 200)
 	var enabled bool
 	var assignedGroupID *int64
-	if err := db.Pool.QueryRow(t.Context(), "SELECT sales_enabled,sales_commission_group_id FROM users WHERE id=$1", rootID).Scan(&enabled, &assignedGroupID); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT sales_enabled,sales_commission_group_id FROM administrators WHERE id=$1", rootID).Scan(&enabled, &assignedGroupID); err != nil {
 		t.Fatal(err)
 	}
 	if !enabled || assignedGroupID == nil || *assignedGroupID != groupID {

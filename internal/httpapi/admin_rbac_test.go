@@ -2,12 +2,19 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"github.com/codex/zjmfgo/db/migrations"
+	"github.com/jackc/pgx/v5"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"net/http"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +27,7 @@ import (
 func TestAdminRBACRouteCoverage(t *testing.T) {
 	db, h := testServer(t)
 	id, cookie := user(t, db, h, "denied-staff", "admin")
-	_, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id)
+	_, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,9 +133,15 @@ func TestAdminRBACManagementAndRevocation(t *testing.T) {
 	expect(t, request(h, "POST", "/api/v1/admin/roles", roleInput("缺少读取", "tickets.manage"), root, ""), 409)
 	// Cannot turn a protected super administrator or customer into ordinary staff.
 	payload["expected_version"] = 1
-	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", rootID), payload, root, ""), 409)
 	customerID, _ := user(t, db, h, "protected-customer", "customer")
-	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", customerID), payload, root, ""), 409)
+	for _, protectedID := range []int64{rootID, customerID} {
+		protected := request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", protectedID), payload, root, "")
+		expect(t, protected, 409)
+		if errorData(t, protected)["code"] != "protected_account" {
+			t.Fatal("staff mutation lost protected-account semantics", protected.Body.String())
+		}
+	}
+	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", customerID+1000000), payload, root, ""), 404)
 	payload["status"] = "disabled"
 	payload["password"] = ""
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", staffID), payload, root, ""), 200)
@@ -150,7 +163,7 @@ func TestAdminRBACTicketSharedRoutes(t *testing.T) {
 	db, h := testServer(t)
 	_, customer := user(t, db, h, "ticket-owner", "customer")
 	staffID, staff := user(t, db, h, "ticket-reader", "admin")
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	w := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": "客户问题", "body": "测试工单", "priority": "normal"}, customer, "")
@@ -162,7 +175,7 @@ func TestAdminRBACTicketSharedRoutes(t *testing.T) {
 	expect(t, request(h, "POST", path+"/replies", map[string]any{"body": "越权回复", "version": 1}, staff, ""), 404)
 	expect(t, multipartRequest(h, path+"/attachments", staff, "test.txt", []byte("test")), 404)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/tickets/%d/notes", ticketID), map[string]any{"body": "internal"}, staff, ""), 403)
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", path, nil, staff, ""), 404)
@@ -204,12 +217,45 @@ func TestAdminRBACConcurrentRoleUpdates(t *testing.T) {
 func TestAdminRBACMigrationExistingOperators(t *testing.T) {
 	db, _ := testServer(t)
 	ctx := t.Context()
-	// This is the disposable random schema created by testServer, never the development schema.
-	if _, err := db.Pool.Exec(ctx, `ALTER TABLE users DROP CONSTRAINT users_admin_role, DROP COLUMN admin_role_id, DROP COLUMN admin_version;
-DROP TABLE admin_roles; DELETE FROM schema_migrations WHERE version='031_admin_rbac.sql';
-INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-operator','old-operator@example.test','unused','Operator','admin');`); err != nil {
+	resetHistoricalAccountTestSchema(t, db, "030_legacy_reviews.sql")
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-operator','old-operator@example.test','unused','Operator','admin')`); err != nil {
 		t.Fatal(err)
 	}
+	const version = "031_admin_rbac.sql"
+	content, err := migrations.Files.ReadFile(version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(ctx, string(content)); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(content)
+	if _, err = db.Pool.Exec(ctx, "INSERT INTO schema_migrations(version,checksum) VALUES($1,$2)", version, hex.EncodeToString(sum[:])); err != nil {
+		t.Fatal(err)
+	}
+	// Check immutable 031 independently, before subsequent migrations explicitly
+	// extend the migrated operator role or split the account tables.
+	want := []string{
+		"dashboard.view", "customers.view", "customers.manage", "customer_groups.view", "customer_groups.manage",
+		"promos.view", "promos.manage", "products.view", "products.manage", "content.manage",
+		"orders.view", "orders.manage", "invoices.view", "invoices.refund", "balance.manage",
+		"services.view", "services.manage", "tickets.view", "tickets.manage", "ticket_presets.view", "ticket_presets.manage",
+		"notifications.view", "notifications.manage", "reports.view", "audit.view", "migrations.view",
+	}
+	assertGrants := func(stage string, got, expected []string) {
+		t.Helper()
+		got, expected = slices.Clone(got), slices.Clone(expected)
+		slices.Sort(got)
+		slices.Sort(expected)
+		if !slices.Equal(got, expected) {
+			t.Fatalf("%s grants=%v want=%v", stage, got, expected)
+		}
+	}
+	var grants []string
+	if err = db.Pool.QueryRow(ctx, `SELECT r.permissions FROM users u JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.username='old-operator'`).Scan(&grants); err != nil {
+		t.Fatal(err)
+	}
+	assertGrants("schema031", grants, want)
 	if err := db.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -217,45 +263,22 @@ INSERT INTO users(username,email,password_hash,display_name,role) VALUES('old-op
 		t.Fatal(err)
 	}
 	var assigned, roles int
-	if err := db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM users WHERE role='admin' AND admin_role_id IS NOT NULL), (SELECT count(*) FROM admin_roles)`).Scan(&assigned, &roles); err != nil || assigned != 1 || roles != 1 {
+	if err := db.Pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM administrators WHERE role='admin' AND admin_role_id IS NOT NULL), (SELECT count(*) FROM admin_roles)`).Scan(&assigned, &roles); err != nil || assigned != 1 || roles != 1 {
 		t.Fatalf("assignment=%d roles=%d err=%v", assigned, roles, err)
 	}
 	var id int64
-	if err := db.Pool.QueryRow(ctx, "SELECT id FROM users WHERE username='old-operator'").Scan(&id); err != nil {
+	if err := db.Pool.QueryRow(ctx, "SELECT id FROM administrators WHERE username='old-operator'").Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	grants, err := db.AdminGrants(ctx, id)
-	if err != nil || len(grants) != 26 { // The immutable 031 migration grants exactly 26 capabilities.
-		t.Fatalf("migration grants=%d err=%v", len(grants), err)
+	grants, err = db.AdminGrants(ctx, id)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, p := range store.AdminPermissions {
-		if p.Code == "balance.topup.resolve" || p.Code == "resources.view" || p.Code == "resources.manage" || p.Code == "credit.view" || p.Code == "credit.manage" || p.Code == "contracts.view" || p.Code == "contracts.manage" {
-			for _, grant := range grants {
-				if grant == p.Code {
-					t.Fatalf("later permission implicitly granted: %s", grant)
-				}
-			}
-			continue
-		}
-		if strings.HasPrefix(p.Code, "payment_anomalies.") || strings.HasPrefix(p.Code, "external_refunds.") || p.Code == "jobs.view" || p.Code == "content.view" || p.Code == "downloads.view" || p.Code == "downloads.manage" || p.Code == "customer_files.view" || p.Code == "customer_files.manage" || p.Code == "customer_levels.view" || p.Code == "customer_levels.manage" || p.Code == "invoices.manage" || p.Code == "invoice_applications.view" || p.Code == "invoice_applications.manage" || p.Code == "payments.reconcile" || p.Code == "payments.close" || p.Code == "payments.close_verify" || p.Code == "payments.close_review" || p.Code == "settings.view" || p.Code == "settings.manage" || p.Code == "certifications.view" || p.Code == "certifications.manage" || p.Code == "affiliates.view" || p.Code == "affiliates.manage" || p.Code == "affiliates.withdrawals.review" || p.Code == "affiliates.payout" || p.Code == "sales.view" || p.Code == "sales.manage" || p.Code == "security.view" || p.Code == "security.manage" { // Introduced after 031; never expand old roles implicitly.
-			for _, grant := range grants {
-				if grant == p.Code {
-					t.Fatalf("later permission implicitly granted: %s", grant)
-				}
-			}
-			continue
-		}
-		found := false
-		for _, grant := range grants {
-			if grant == p.Code {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("missing migrated permission %s", p.Code)
-		}
-	}
-	if _, err = db.Pool.Exec(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('no-role','no-role@example.test','unused','No role','admin')`); err == nil {
+	// 036 explicitly preserves content read access; 100 explicitly grants this
+	// named historical role withdrawal review/payout. No other grants may appear.
+	want = append(want, "content.view", "affiliates.withdrawals.review", "affiliates.payout")
+	assertGrants("latest schema after repeat migration", grants, want)
+	if _, err = db.Pool.Exec(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('no-role','no-role@example.test','unused','No role','admin')`); err == nil {
 		t.Fatal("unassigned administrator accepted")
 	}
 }
@@ -265,7 +288,7 @@ func TestAdminRBACStaffCredentialChanges(t *testing.T) {
 	_, root := user(t, db, h, "credential-root", "super_admin")
 	id, cookie := user(t, db, h, "credential-staff", "admin")
 	var roleID int64
-	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_role_id FROM users WHERE id=$1", id).Scan(&roleID); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_role_id FROM administrators WHERE id=$1", id).Scan(&roleID); err != nil {
 		t.Fatal(err)
 	}
 	keyResp := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "credential-test"}, cookie, "")
@@ -286,7 +309,7 @@ func TestAdminRBACStaffCredentialChanges(t *testing.T) {
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", id), payload, root, ""), 409)
 	var hash string
 	var challenges, resets int
-	if err = db.Pool.QueryRow(t.Context(), `SELECT password_hash,(SELECT count(*) FROM mfa_challenges WHERE user_id=$1), (SELECT count(*) FROM password_reset_tokens WHERE user_id=$1 AND consumed_at IS NULL) FROM users WHERE id=$1`, id).Scan(&hash, &challenges, &resets); err != nil {
+	if err = db.Pool.QueryRow(t.Context(), `SELECT password_hash,(SELECT count(*) FROM mfa_challenges WHERE user_id=$1), (SELECT count(*) FROM password_reset_tokens WHERE user_id=$1 AND consumed_at IS NULL) FROM administrators WHERE id=$1`, id).Scan(&hash, &challenges, &resets); err != nil {
 		t.Fatal(err)
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("updated-integration-password")) != nil || challenges != 0 || resets != 0 {
@@ -303,4 +326,39 @@ func TestAdminRBACStaffCredentialChanges(t *testing.T) {
 	payload["password"] = ""
 	payload["expected_version"] = 2
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", id), payload, root, ""), 200)
+}
+
+func resetHistoricalAccountTestSchema(t *testing.T, db *store.Store, cutoff string) {
+	t.Helper()
+	var schema string
+	if err := db.Pool.QueryRow(t.Context(), "SELECT current_schema()").Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(schema, "zjmfgo_test_") {
+		t.Fatal("refusing non-fixture schema")
+	}
+	if _, err := db.Pool.Exec(t.Context(), "DROP SCHEMA "+pgx.Identifier{schema}.Sanitize()+" CASCADE; CREATE SCHEMA "+pgx.Identifier{schema}.Sanitize()); err != nil {
+		t.Fatal(err)
+	}
+	names, err := fs.Glob(migrations.Files, "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if name > cutoff {
+			break
+		}
+		content, err := migrations.Files.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Pool.Exec(t.Context(), string(content)); err != nil {
+			t.Fatalf("historical migration %s: %v", name, err)
+		}
+		sum := sha256.Sum256(content)
+		if _, err = db.Pool.Exec(t.Context(), "INSERT INTO schema_migrations(version,checksum) VALUES($1,$2)", name, hex.EncodeToString(sum[:])); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

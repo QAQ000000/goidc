@@ -41,7 +41,7 @@ func (s *Store) CustomerFileTx(ctx context.Context, actorID int64, admin, manage
 			permission = "customer_files.manage"
 		}
 		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'customer_files.view'=ANY(r.permissions) AND $2=ANY(r.permissions)),false)
-   FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID, permission).Scan(&allowed)
+   FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID, permission).Scan(&allowed)
 		if err == nil && !allowed {
 			err = conflict("permission_denied", "没有访问客户文件的权限")
 		}

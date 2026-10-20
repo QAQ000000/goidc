@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -51,14 +52,20 @@ type VerificationChallenge struct {
 	ExpiresAt                       time.Time
 }
 
-// The caller locks the account first, then this per-recipient scope.
+// The caller locks the account first, then the recipient within that owner.
+// Customer/admin profiles may share a recipient; neither may invalidate or
+// exhaust the other account's challenges. Registration retains an anonymous scope.
 func (s *Store) IssueVerification(ctx context.Context, tx pgx.Tx, purpose, channel, recipient string, userID *int64, deliver bool) (string, error) {
-	if err := lockOperationKey(ctx, tx, "verification-issue", purpose+":"+channel+":"+recipient); err != nil {
+	owner := "anonymous"
+	if userID != nil {
+		owner = strconv.FormatInt(*userID, 10)
+	}
+	if err := lockOperationKey(ctx, tx, "verification-issue", purpose+":"+channel+":"+recipient+":"+owner); err != nil {
 		return "", err
 	}
 	var recent bool
 	var count int
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM verification_challenges WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND created_at>clock_timestamp()-interval '60 seconds'),(SELECT count(*) FROM verification_challenges WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND created_at>clock_timestamp()-interval '1 hour')`, purpose, channel, recipient).Scan(&recent, &count); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM verification_challenges WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND user_id IS NOT DISTINCT FROM $4::bigint AND created_at>clock_timestamp()-interval '60 seconds'),(SELECT count(*) FROM verification_challenges WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND user_id IS NOT DISTINCT FROM $4::bigint AND created_at>clock_timestamp()-interval '1 hour')`, purpose, channel, recipient, userID).Scan(&recent, &count); err != nil {
 		return "", err
 	}
 	if recent || count >= 5 {
@@ -79,7 +86,7 @@ func (s *Store) IssueVerification(ctx context.Context, tx pgx.Tx, purpose, chann
 	if err != nil {
 		return "", err
 	}
-	if _, err = tx.Exec(ctx, "UPDATE verification_challenges SET consumed_at=clock_timestamp() WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND consumed_at IS NULL", purpose, channel, recipient); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE verification_challenges SET consumed_at=clock_timestamp() WHERE purpose=$1 AND channel=$2 AND recipient=$3 AND user_id IS NOT DISTINCT FROM $4::bigint AND consumed_at IS NULL", purpose, channel, recipient, userID); err != nil {
 		return "", err
 	}
 	var expires time.Time

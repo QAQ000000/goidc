@@ -83,7 +83,7 @@ func TestSiteThemeValidationPermissionsAndReplay(t *testing.T) {
 	writerID, root := user(t, db, h, "theme-write-admin", "admin")
 	viewerID, viewer := user(t, db, h, "theme-write-viewer", "admin")
 	_, customer := user(t, db, h, "theme-write-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, viewerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, viewerID); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/theme-settings"
@@ -147,7 +147,7 @@ func TestSiteThemeValidationPermissionsAndReplay(t *testing.T) {
 	input := siteInput(settings.SiteProfile, settings.Version)
 	input["theme"] = store.PublicSiteTheme{Template: "classic", PrimaryColor: "#000000", LogoVariant: "full"}
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", input, root, ""), 400)
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, writerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, writerID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", path, nil, root, ""), 200)

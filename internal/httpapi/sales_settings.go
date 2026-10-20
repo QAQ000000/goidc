@@ -199,40 +199,11 @@ func (s *Server) deleteSalesCommissionGroup(w http.ResponseWriter, r *http.Reque
 	actor := identityFrom(r).ID
 	operation := "sales.commission_group.delete:" + strconv.FormatInt(id, 10)
 	hash := settingMutationHash(struct{ ID, Version int64 }{id, in.ExpectedVersion})
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var current int64
-		if err = tx.QueryRow(r.Context(), "SELECT version FROM sales_commission_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "提成组不存在"}
-			}
-			return txResponse{}, err
-		}
-		if current != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "提成组已变更，请重新加载"}
-		}
-		if _, err = tx.Exec(r.Context(), "UPDATE users SET sales_commission_group_id=NULL WHERE sales_commission_group_id=$1", id); err != nil {
-			return txResponse{}, err
-		}
-		if _, err = tx.Exec(r.Context(), "DELETE FROM sales_commission_groups WHERE id=$1", id); err != nil {
-			return txResponse{}, err
-		}
-		result := map[string]any{"id": id, "deleted": true}
-		if err = store.Audit(r.Context(), tx, actor, "sales.commission_group.deleted", "sales_commission_group", id, map[string]any{"expected_version": in.ExpectedVersion}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, result}, nil
-	})
+	result, err := s.db.DeleteSalesCommissionGroup(r.Context(), actor, id, in.ExpectedVersion, operation, key, hash)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, 200, result)
 }
 
 type salesCommissionTierInput struct {
@@ -388,19 +359,14 @@ func (s *Server) deleteSalesCommissionTier(w http.ResponseWriter, r *http.Reques
 func (s *Server) salesStaff(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	s.writeListPage(w, r, `SELECT count(*) FROM users WHERE role IN ('admin','super_admin') AND ($1='' OR username ILIKE '%'||$1||'%' OR display_name ILIKE '%'||$1||'%' OR email ILIKE '%'||$1||'%')`,
-		`SELECT u.id,u.display_name,u.email,u.username,u.role,u.status,u.sales_enabled,u.customer_scope,u.customer_ownerless,u.sales_commission_group_id,u.admin_version,u.updated_at,COALESCE(g.name,'') AS sales_commission_group_name
-FROM users u LEFT JOIN sales_commission_groups g ON g.id=u.sales_commission_group_id
-WHERE u.role IN ('admin','super_admin') AND ($1='' OR u.username ILIKE '%'||$1||'%' OR u.display_name ILIKE '%'||$1||'%' OR u.email ILIKE '%'||$1||'%') ORDER BY u.id`, []any{q}, limit, offset)
+	result, err := s.db.SalesStaffPage(r.Context(), q, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, 200, result)
 }
 
-type salesStaffInput struct {
-	SalesEnabled           *bool  `json:"sales_enabled"`
-	CustomerScope          string `json:"customer_scope"`
-	CustomerOwnerless      *bool  `json:"customer_ownerless"`
-	SalesCommissionGroupID *int64 `json:"sales_commission_group_id"`
-	ExpectedVersion        int64  `json:"expected_version"`
-}
+type salesStaffInput = store.SalesStaffInput
 
 func (s *Server) updateSalesStaff(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
@@ -425,57 +391,9 @@ func (s *Server) updateSalesStaff(w http.ResponseWriter, r *http.Request) {
 		ID int64
 		In salesStaffInput
 	}{id, in})
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if replay, replayed, e := loadSettingReplayTx(r, tx, actor, operation, key, hash); e != nil {
-			return txResponse{}, e
-		} else if replayed {
-
-			return txResponse{http.StatusOK, replay}, nil
-		}
-		var current int64
-		var role string
-		if err = tx.QueryRow(r.Context(), "SELECT admin_version,role FROM users WHERE id=$1 AND role IN ('admin','super_admin') FOR UPDATE", id).Scan(&current, &role); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "销售人员不存在"}
-			}
-			return txResponse{}, err
-		}
-		if current != in.ExpectedVersion {
-			return txResponse{}, &txHTTPError{http.StatusConflict, "version_conflict", "销售人员资料已变更，请重新加载"}
-		}
-		if in.SalesCommissionGroupID != nil {
-			var exists bool
-			if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM sales_commission_groups WHERE id=$1)", *in.SalesCommissionGroupID).Scan(&exists); err != nil {
-				return txResponse{}, err
-			}
-			if !exists {
-				return txResponse{}, &txHTTPError{http.StatusBadRequest, "invalid_sales_staff", "提成组不存在"}
-			}
-		}
-		if in.SalesEnabled == nil {
-			in.SalesEnabled = boolPtr(false)
-		}
-		if in.CustomerOwnerless == nil {
-			in.CustomerOwnerless = boolPtr(false)
-		}
-		if in.CustomerScope == "" {
-			in.CustomerScope = "owned"
-		}
-		var version int64
-		err = tx.QueryRow(r.Context(), `UPDATE users SET sales_enabled=$1,customer_scope=$2,customer_ownerless=$3,sales_commission_group_id=$4,admin_version=admin_version+1,updated_at=now()
-WHERE id=$5 RETURNING admin_version`, *in.SalesEnabled, in.CustomerScope, *in.CustomerOwnerless, in.SalesCommissionGroupID, id).Scan(&version)
-		if err != nil {
-			return txResponse{}, err
-		}
-		result := map[string]any{"id": id, "version": version}
-		if err = store.Audit(r.Context(), tx, actor, "sales.staff_updated", "user", id, map[string]any{"sales_enabled": *in.SalesEnabled, "customer_scope": in.CustomerScope, "customer_ownerless": *in.CustomerOwnerless, "sales_commission_group_id": in.SalesCommissionGroupID, "previous_version": current, "role": role}); err != nil {
-			return txResponse{}, err
-		}
-		if err = saveSettingOperationTx(r, tx, actor, operation, key, hash, result); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, result}, nil
-	})
+	result, err := s.db.UpdateSalesStaff(r.Context(), actor, id, in, operation, key, hash)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, 200, result)
 }

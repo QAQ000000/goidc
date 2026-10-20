@@ -21,7 +21,7 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 	_, root := user(t, db, h, "sales-root", "super_admin")
 	staffID, staff := user(t, db, h, "sales-staff", "admin")
 	otherID, _ := user(t, db, h, "sales-other", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	pid := product(t, db, 12)
@@ -69,7 +69,7 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 		count     int
 	}{{"owned", false, 1}, {"owned", true, 2}, {"assigned", false, 2}, {"assigned", true, 3}, {"all", false, 3}} {
 		t.Run(fmt.Sprintf("%s-%t", tc.scope, tc.ownerless), func(t *testing.T) {
-			if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope=$2,customer_ownerless=$3 WHERE id=$1", staffID, tc.scope, tc.ownerless); err != nil {
+			if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope=$2,customer_ownerless=$3 WHERE id=$1", staffID, tc.scope, tc.ownerless); err != nil {
 				t.Fatal(err)
 			}
 			for _, list := range []struct {
@@ -84,7 +84,7 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 			}
 		})
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range items[1:] {
@@ -169,7 +169,7 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 	w := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": "Independent department", "body": "scope test", "priority": "normal"}, items[1].cookie, "")
 	expect(t, w, 201)
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/tickets/%d", int64(data(t, w)["id"].(float64))), nil, staff, ""), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/customers", nil, staff, ""), 403)
@@ -194,7 +194,7 @@ func TestCustomerSalesAssignmentAndStaffRevocation(t *testing.T) {
 	secret := data(t, key)["secret"].(string)
 	expect(t, requestBearer(h, "GET", "/api/v1/admin/sales-owners", nil, secret), 403)
 	expect(t, requestBearer(h, "PUT", path, input, secret), 403)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	w := request(h, "GET", "/api/v1/admin/sales-owners", nil, root, "")
@@ -217,7 +217,7 @@ func TestCustomerSalesAssignmentAndStaffRevocation(t *testing.T) {
 	if counts[200] != 1 || counts[409] != 1 {
 		t.Fatal("assignment race", counts)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	var savedOwner int64
@@ -231,11 +231,11 @@ func TestCustomerSalesAssignmentAndStaffRevocation(t *testing.T) {
 	}
 	expect(t, request(h, "PUT", path, map[string]any{"sales_owner_id": staffID, "expected_version": 2}, root, ""), 409)
 	salesAssignment(t, h, root, customerID, nil, 2)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET status='active' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='active' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	var roleID int64
-	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_role_id FROM users WHERE id=$1", staffID).Scan(&roleID); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_role_id FROM administrators WHERE id=$1", staffID).Scan(&roleID); err != nil {
 		t.Fatal(err)
 	}
 	payload := map[string]any{"username": "sales-new-staff", "email": "sales-new@example.test", "display_name": "New sales", "status": "active", "admin_role_id": roleID, "password": "integration-password"}
@@ -269,7 +269,7 @@ func TestCustomerSalesAssignmentAndStaffRevocation(t *testing.T) {
 	expect(t, request(h, "PATCH", fmt.Sprintf("/api/v1/admin/staff/%d", id), payload, root, ""), 200)
 	var scope string
 	var ownerless, enabled bool
-	if err := db.Pool.QueryRow(t.Context(), "SELECT customer_scope,customer_ownerless,sales_enabled FROM users WHERE id=$1", id).Scan(&scope, &ownerless, &enabled); err != nil || scope != "assigned" || !ownerless || !enabled {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT customer_scope,customer_ownerless,sales_enabled FROM administrators WHERE id=$1", id).Scan(&scope, &ownerless, &enabled); err != nil || scope != "assigned" || !ownerless || !enabled {
 		t.Fatal("omitted scope fields lost", err)
 	}
 }
@@ -280,7 +280,7 @@ func TestCustomerScopeServiceReplayAfterTransfer(t *testing.T) {
 	staffID, staff := user(t, db, h, "sales-service-staff", "admin")
 	otherID, _ := user(t, db, h, "sales-service-other", "admin")
 	customerID, customer := user(t, db, h, "sales-service-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, h, root, customerID, staffID, 1)
@@ -323,12 +323,16 @@ func TestCustomerScopeServiceReplayAfterTransfer(t *testing.T) {
 }
 
 func TestCustomerSalesMigrationExistingAdministrators(t *testing.T) {
-	db, h := testServer(t)
-	staffID, _ := user(t, db, h, "sales-old-staff", "admin")
-	rootID, _ := user(t, db, h, "sales-old-root", "super_admin")
-	if _, err := db.Pool.Exec(t.Context(), `DROP FUNCTION admin_customer_allowed(bigint,bigint); DROP FUNCTION admin_customer_owner_allowed(bigint,bigint);
-ALTER TABLE users DROP COLUMN customer_scope,DROP COLUMN customer_ownerless,DROP COLUMN sales_enabled,DROP COLUMN sales_owner_id,DROP COLUMN sales_version;
-DELETE FROM schema_migrations WHERE version='033_customer_sales_scope.sql';`); err != nil {
+	db, _ := testServer(t)
+	resetHistoricalAccountTestSchema(t, db, "032_ticket_department_scope.sql")
+	var role, staffID, rootID int64
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO admin_roles(name) VALUES('historical-role') RETURNING id").Scan(&role); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id) VALUES('sales-old-staff','sales-old-staff@example.test','unused','Historical staff','admin',$1) RETURNING id`, role).Scan(&staffID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('sales-old-root','sales-old-root@example.test','unused','Historical root','super_admin') RETURNING id`).Scan(&rootID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Migrate(t.Context()); err != nil {
@@ -339,7 +343,7 @@ DELETE FROM schema_migrations WHERE version='033_customer_sales_scope.sql';`); e
 	}
 	for _, id := range []int64{staffID, rootID} {
 		var scope string
-		if err := db.Pool.QueryRow(t.Context(), "SELECT customer_scope FROM users WHERE id=$1", id).Scan(&scope); err != nil || scope != "all" {
+		if err := db.Pool.QueryRow(t.Context(), "SELECT customer_scope FROM administrators WHERE id=$1", id).Scan(&scope); err != nil || scope != "all" {
 			t.Fatal("existing scope lost", err)
 		}
 	}
@@ -351,7 +355,7 @@ func TestCustomerScopeFinanceReplayAfterTransfer(t *testing.T) {
 	staffID, staff := user(t, db, h, "sales-replay-staff", "admin")
 	otherID, _ := user(t, db, h, "sales-replay-other", "admin")
 	customerID, customer := user(t, db, h, "sales-replay-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, h, root, customerID, staffID, 1)
@@ -380,7 +384,7 @@ func TestCustomerScopeWaitingMutationRechecksTransfer(t *testing.T) {
 	staffID, staff := user(t, db, h, "sales-race-staff", "admin")
 	otherID, _ := user(t, db, h, "sales-race-other", "admin")
 	customerID, _ := user(t, db, h, "sales-race-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", customerID, staffID); err != nil {

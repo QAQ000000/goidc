@@ -43,7 +43,7 @@ func TestAdminCustomerCustomFieldsVersionedCRUDAndPermission(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "custom-fields-root", "super_admin")
 	staffID, staff := user(t, db, h, "custom-fields-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if response := request(h, "GET", "/api/v1/admin/customer-fields", nil, staff, ""); response.Code != 403 {

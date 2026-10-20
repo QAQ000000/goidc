@@ -17,7 +17,7 @@ func TestSalesSettlementLifecycle(t *testing.T) {
 	if e := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps) VALUES('confirm',7500) RETURNING id`).Scan(&gid); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, gid); e != nil {
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE administrators SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, gid); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, customer, owner); e != nil {
@@ -59,7 +59,7 @@ func TestSalesSettlementLifecycle(t *testing.T) {
 		t.Fatal("full-scope actor changed commission")
 	}
 	contentRole(t, db, deniedID, "sales.view", "sales.manage")
-	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, deniedID); e != nil {
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, deniedID); e != nil {
 		t.Fatal(e)
 	}
 	expect(t, request(h, "POST", "/api/v1/admin/sales-settlements/preview", body, denied, ""), 403)
@@ -105,7 +105,7 @@ func TestSalesSettlementLifecycle(t *testing.T) {
 	changed := map[string]any{"month": "2026-06", "order_ids": []int64{oid}, "preview_digest": body["preview_digest"]}
 	expect(t, request(h, "POST", "/api/v1/admin/sales-settlements", changed, root, "confirm-key"), 409)
 	expect(t, request(h, "POST", "/api/v1/admin/sales-settlements", body, root, "duplicate"), 409)
-	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE username='sales-confirm-denied'`); e != nil {
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE username='sales-confirm-denied'`); e != nil {
 		t.Fatal(e)
 	}
 	contentRole(t, db, deniedID, "sales.view")
@@ -162,7 +162,7 @@ func TestSalesSettlementConcurrentRefund(t *testing.T) {
 	if e := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps) VALUES('race',500) RETURNING id`).Scan(&gid); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, gid); e != nil {
+	if _, e := db.Pool.Exec(t.Context(), `UPDATE administrators SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, gid); e != nil {
 		t.Fatal(e)
 	}
 	if _, e := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, customer, owner); e != nil {

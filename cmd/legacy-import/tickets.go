@@ -273,7 +273,7 @@ func (im *importer) importTickets(ctx context.Context, tx pgx.Tx, users, service
 		}
 		username := "legacy-staff-" + checksum([]byte(im.sourceName))[:8] + "-" + r["id"]
 		var id int64
-		if err = tx.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id,status,password_reset_required,legacy_source,legacy_id,created_at,updated_at)
+		if err = tx.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role,admin_role_id,status,password_reset_required,legacy_source,legacy_id,created_at,updated_at)
  VALUES($1,$2,$3,$4,'admin',$5,'disabled',true,$6,$7,$8,$8) RETURNING id`, username, username+"@import.invalid", hash, name, role, im.targetSource("staff"), sourceID(r), ts(r["create_time"])).Scan(&id); err != nil {
 			return err
 		}
@@ -456,8 +456,16 @@ func (im *importer) importTickets(ctx context.Context, tx pgx.Tx, users, service
 func (im *importer) syncTicketRatingFacts(ctx context.Context, tx pgx.Tx, entity string, r legacy.Record, id int64) error {
 	if entity == "tickets" {
 		if admin := referenceID(r, "admin_id"); admin > 0 {
-			_, err := tx.Exec(ctx, `UPDATE tickets SET created_by=(SELECT target_id FROM legacy_id_map WHERE source=$2||':staff' AND entity='staff' AND legacy_id=$3),initial_author_kind='staff' WHERE id=$1`, id, im.sourceName, admin)
-			return err
+			result, err := tx.Exec(ctx, `UPDATE tickets t SET created_by=a.id,initial_author_kind='staff'
+ FROM legacy_id_map m JOIN administrators a ON a.id=m.target_id AND a.legacy_source=$2||':staff' AND a.legacy_id=$3
+ WHERE t.id=$1 AND m.source=$2 AND m.entity='staff' AND m.legacy_id=$3`, id, im.sourceName, admin)
+			if err != nil {
+				return err
+			}
+			if result.RowsAffected() != 1 {
+				return fmt.Errorf("unmapped ticket staff author: %d", admin)
+			}
+			return nil
 		}
 		_, err := tx.Exec(ctx, `UPDATE tickets SET initial_author_kind='customer' WHERE id=$1`, id)
 		return err

@@ -78,7 +78,7 @@ func TestTicketNotificationReplayUsesCurrentAuthority(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('权限部门','notify-authority') RETURNING id`).Scan(&dept); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='departments' WHERE id=$1`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='departments' WHERE id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)`, staffID, dept); err != nil {
@@ -159,7 +159,7 @@ func TestTicketNotificationReplayUsesCurrentAuthority(t *testing.T) {
 	}
 	assertHidden()
 	// All-department scope alone does not grant ticket content access.
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	contentRole(t, db, staffID, "notifications.view", "notifications.manage")
@@ -233,7 +233,7 @@ func TestAdminTicketEmailOwnershipAndHistoricalFailClosed(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET email_verified=true WHERE id=$1`, customerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='departments' WHERE id=$1`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='departments' WHERE id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2);`, staffID, dept); err != nil {
@@ -282,7 +282,7 @@ func TestAdminTicketEmailOwnershipAndHistoricalFailClosed(t *testing.T) {
 	}
 	assertCount(staff, 0)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/email-outbox/%d/retry", jobID), nil, staff, ""), 404)
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='all' WHERE id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	contentRole(t, db, staffID, "notifications.view", "notifications.manage")

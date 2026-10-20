@@ -19,14 +19,14 @@ func TestAffiliateSalesBrowserFixture(t *testing.T) {
 		customer, cookie := user(t, db, h, "commission-buyer", "customer")
 		reader, _ := user(t, db, h, "commission-reader", "admin")
 		contentRole(t, db, reader, "sales.view", "affiliates.view")
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, reader); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, reader); err != nil {
 			t.Fatal(err)
 		}
 		var group int64
 		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps) VALUES('验收销售提成组',500) RETURNING id`).Scan(&group); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, customer, owner); err != nil {

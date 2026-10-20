@@ -10,13 +10,13 @@ func TestAdminBlacklistContractsAndLoginBlock(t *testing.T) {
 	adminID, admin := user(t, db, h, "blacklist-root", "super_admin")
 	_, reader := user(t, db, h, "blacklist-reader", "admin")
 	var readerID int64
-	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM users WHERE username='blacklist-reader'").Scan(&readerID); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM administrators WHERE username='blacklist-reader'").Scan(&readerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['security.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['security.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	// The route-level permission check must reject a role without security.view.
@@ -45,7 +45,7 @@ func TestAdminBlacklistContractsAndLoginBlock(t *testing.T) {
 	// A blocked username is rejected before password verification.
 	blocked := request(h, "POST", "/api/v1/auth/login", map[string]any{"username": "blocked-admin", "password": "anything"}, "", "")
 	expect(t, blocked, 403)
-	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM users WHERE id=$1", adminID).Scan(&adminID); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM administrators WHERE id=$1", adminID).Scan(&adminID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/blacklist/%d", id), map[string]any{"expected_version": int64(data(t, updated)["version"].(float64))}, admin, "blacklist-delete"), 200)

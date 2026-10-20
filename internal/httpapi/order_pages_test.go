@@ -14,7 +14,7 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 	_, root := user(t, db, h, "order-page-root", "super_admin")
 	staffID, staff := user(t, db, h, "order-page-staff", "admin")
 	contentRole(t, db, staffID, "orders.view", "customers.view")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	pid := product(t, db, 10)
@@ -86,7 +86,8 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 		for _, query := range []string{"customer_id=bad", "customer_id=0", "status=unknown"} {
 			expect(t, request(h, "GET", base+"?"+query, nil, root, ""), 400)
 		}
-		expect(t, request(h, "GET", base, nil, ownCookie, ""), 403)
+		// Customer cookies do not authenticate fixed administrator routes.
+		expect(t, request(h, "GET", base, nil, ownCookie, ""), 401)
 	}
 	contentRole(t, db, staffID, "customers.view")
 	for _, path := range []string{"orders/page", "renewal-orders"} {

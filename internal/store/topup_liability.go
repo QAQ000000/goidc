@@ -57,7 +57,7 @@ type ResolveTopupLiabilityInput struct {
 func authorizeTopupLiability(ctx context.Context, tx pgx.Tx, actor int64, write bool) error {
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
 		return conflict("permission_denied", "员工会话或权限无效")
 	}
 	if role != "super_admin" {

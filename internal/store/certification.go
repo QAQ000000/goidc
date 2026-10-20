@@ -306,7 +306,7 @@ func (s *Store) LockCertificationReview(ctx context.Context, tx pgx.Tx, reviewer
 		return err
 	}
 	var allowed bool
-	if err := tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND r.active AND 'certifications.manage'=ANY(r.permissions))),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, reviewerID).Scan(&allowed); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND r.active AND 'certifications.manage'=ANY(r.permissions))),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, reviewerID).Scan(&allowed); err != nil {
 		return err
 	}
 	if !allowed {

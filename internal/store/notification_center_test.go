@@ -645,7 +645,7 @@ func TestNotificationCenterRollbackAndAdminMetadataScope(t *testing.T) {
 	if err = f.db.Pool.QueryRow(f.ctx, `INSERT INTO admin_roles(name,permissions) VALUES('notification fixture',ARRAY['reports.view']) RETURNING id`).Scan(&roleID); err != nil {
 		t.Fatal(err)
 	}
-	if err = f.db.Pool.QueryRow(f.ctx, `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id,customer_scope) VALUES('notification-staff','notification-staff@example.test','unused','Staff','admin',$1,'owned') RETURNING id`, roleID).Scan(&staff); err != nil {
+	if err = f.db.Pool.QueryRow(f.ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role,admin_role_id,customer_scope) VALUES('notification-staff','notification-staff@example.test','unused','Staff','admin',$1,'owned') RETURNING id`, roleID).Scan(&staff); err != nil {
 		t.Fatal(err)
 	}
 	f.exec(t, `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, f.customer, staff)

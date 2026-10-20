@@ -193,7 +193,7 @@ func TestLocalRenewalExternalRefundHTTPAdmission(t *testing.T) {
 	_, reader := externalRefundActor(t, f.db, f.h, "renewal-reader", []string{"external_refunds.view"})
 	expect(t, request(f.h, "GET", path, nil, reader, ""), 200)
 	_, limited := externalRefundActor(t, f.db, f.h, "renewal-limited", []string{"external_refunds.view"})
-	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE username='renewal-limited'`); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE username='renewal-limited'`); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", path, nil, limited, ""), 404)
@@ -237,7 +237,7 @@ func TestLocalRenewalExternalRefundHTTPRevocationAndHold(t *testing.T) {
 	refund := f.create(t, "renewal-hold-create")
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/services/%d/renew", f.sid), map[string]any{}, f.customer, "renewal-under-hold"), 409)
 	orderExternalRefundCode(t, request(f.h, "PATCH", fmt.Sprintf("/api/v1/services/%d/auto-renew", f.sid), map[string]any{"enabled": false}, f.customer, ""), 409, "renewal_refund_hold")
-	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, f.requesterID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, f.requesterID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", f.reviewPath(refund, "reject"), map[string]any{"expected_version": 1, "note": "permission removed must deny"}, f.requester, "renewal-revoked-review"), 403)
@@ -406,13 +406,13 @@ func TestLocalRenewalExternalRefundHTTPRevocationAfterActualLockWait(t *testing.
 				if err = tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
 					t.Fatal(err)
 				}
-				statement := `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
+				statement := `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
 				expected := 404
 				if revoke == "permission" {
-					statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+					statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.renewal_reverse') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 					expected = 403
 					if operation == "context" {
-						statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+						statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 					}
 				}
 				if _, err = tx.Exec(ctx, statement, staffID); err != nil {

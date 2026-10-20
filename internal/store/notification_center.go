@@ -51,14 +51,18 @@ func notificationChannelName(channelName string) string {
 
 func activeNotificationUser(ctx context.Context, tx pgx.Tx, userID int64) error {
 	var id int64
-	if err := tx.QueryRow(ctx, `SELECT id FROM users WHERE id=$1 AND status='active' FOR UPDATE`, userID).Scan(&id); err != nil {
+	table, err := authenticationTable(ctx, tx, userID)
+	if err != nil {
+		return conflict("notification_user_unavailable", "用户不可用")
+	}
+	if err := tx.QueryRow(ctx, `SELECT id FROM `+table+` WHERE id=$1 AND status='active' FOR UPDATE`, userID).Scan(&id); err != nil {
 		return conflict("notification_user_unavailable", "用户不可用")
 	}
 	return nil
 }
 
 func (s *Store) NotificationPreferences(ctx context.Context, userID int64) ([]NotificationPreference, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(p.event_scope,'invoice.paid') FROM users u CROSS JOIN (VALUES('telegram'),('inbox'),('web_push')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
+	rows, err := s.Pool.Query(ctx, `SELECT c.channel,coalesce(p.enabled,false),coalesce(p.version,0),coalesce(p.event_scope,'invoice.paid') FROM account_identities u CROSS JOIN (VALUES('telegram'),('inbox'),('web_push')) c(channel) LEFT JOIN user_notification_preferences p ON p.user_id=u.id AND p.channel=c.channel WHERE u.id=$1 AND u.status='active' ORDER BY c.channel`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +149,7 @@ func maskedNotificationTarget(target string) string {
 }
 
 func (s *Store) NotificationTargets(ctx context.Context, userID int64) ([]NotificationTarget, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT t.id,t.channel,t.instance_id,t.target,t.active,t.version FROM notification_targets t JOIN users u ON u.id=t.user_id WHERE t.user_id=$1 AND u.status='active' ORDER BY t.id`, userID)
+	rows, err := s.Pool.Query(ctx, `SELECT t.id,t.channel,t.instance_id,t.target,t.active,t.version FROM notification_targets t JOIN account_identities u ON u.id=t.user_id WHERE t.user_id=$1 AND u.status='active' ORDER BY t.id`, userID)
 	if err != nil {
 		return nil, err
 	}

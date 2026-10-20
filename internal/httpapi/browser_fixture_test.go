@@ -44,13 +44,13 @@ func TestTicketScopeBrowserFixture(t *testing.T) {
 		if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('财务支持','finance') RETURNING id").Scan(&finance); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET ticket_scope='departments',ticket_unassigned=false WHERE id=$1", staffID); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET ticket_scope='departments',ticket_unassigned=false WHERE id=$1", staffID); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), "INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, technical); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view','tickets.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view','tickets.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 			t.Fatal(err)
 		}
 		for _, department := range []int64{technical, finance} {
@@ -66,7 +66,7 @@ func TestCustomerSalesBrowserFixture(t *testing.T) {
 	adminBrowserFixture(t, "sales-super", func(db *store.Store, h http.Handler) {
 		first, _ := user(t, db, h, "sales-east", "admin")
 		second, _ := user(t, db, h, "sales-west", "admin")
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE role='admin'"); err != nil {
 			t.Fatal(err)
 		}
 		for i, owner := range []*int64{&first, &second, nil} {
@@ -89,7 +89,7 @@ func TestCompiledAppsBrowserFixture(t *testing.T) {
 	adminBrowserFixture(t, "compiled-apps-super", func(db *store.Store, h http.Handler) {
 		seedCompiledApps(t, db)
 		readerID, _ := user(t, db, h, "apps-reader", "admin")
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 			t.Fatal(err)
 		}
 	})

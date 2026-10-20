@@ -24,7 +24,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	_, root := user(t, db, h, "site-root", "super_admin")
 	_, staff := user(t, db, h, "site-staff", "admin")
 	_, customer := user(t, db, h, "site-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='site-staff')"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE username='site-staff')"); err != nil {
 		t.Fatal(err)
 	}
 	settings, err := db.SiteSettings(t.Context())
@@ -208,7 +208,7 @@ func TestCaptchaSettingsReadOnlyOmittedAndRevokedWhileWaiting(t *testing.T) {
 	deniedID, denied := user(t, db, h, "captcha-settings-denied", "admin")
 	contentRole(t, db, viewerID, "settings.view")
 	contentRole(t, db, writerID, "settings.view", "settings.manage")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", deniedID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", deniedID); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/site-settings"
@@ -272,7 +272,7 @@ func TestCaptchaSettingsReadOnlyOmittedAndRevokedWhileWaiting(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", writerID); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", writerID); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(ctx); err != nil {
@@ -315,7 +315,7 @@ func TestCaptchaSettingsSessionRevokedWhileWaitingForUserLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	if _, err := tx.Exec(ctx, "SELECT id FROM users WHERE id=$1 FOR UPDATE", writerID); err != nil {
+	if _, err := tx.Exec(ctx, "SELECT id FROM administrators WHERE id=$1 FOR UPDATE", writerID); err != nil {
 		t.Fatal(err)
 	}
 	result := make(chan int, 1)
@@ -324,7 +324,7 @@ func TestCaptchaSettingsSessionRevokedWhileWaitingForUserLock(t *testing.T) {
 	}()
 	for {
 		var waiting bool
-		if err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT role,admin_role_id FROM users WHERE id=$1 AND status=''active'' FOR SHARE')").Scan(&waiting); err != nil {
+		if err := db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status=''active'' FOR SHARE')").Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {

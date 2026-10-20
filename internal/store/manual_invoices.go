@@ -183,7 +183,7 @@ func (s *Store) manualInvoiceTx(ctx context.Context, actorID int64) (pgx.Tx, err
 		var allowed bool
 		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active
  AND 'invoices.view'=ANY(r.permissions) AND 'invoices.manage'=ANY(r.permissions)),false)
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
 		if err == nil && !allowed {
 			err = conflict("permission_denied", "没有维护账单的权限")
 		}

@@ -142,14 +142,7 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	var input struct {
-		ExpectedVersion    *int64  `json:"expected_version"`
-		Name               *string `json:"name"`
-		Subject            *string `json:"subject"`
-		Body               *string `json:"body"`
-		ProviderTemplateID *string `json:"provider_template_id"`
-		Active             *bool   `json:"active"`
-	}
+	var input store.NotificationTemplatePatch
 	if !decode(w, r, &input) {
 		return
 	}
@@ -189,48 +182,11 @@ func (s *Server) updateNotificationTemplate(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		actor := identityFrom(r).ID
-		if err = store.LockFileCredential(requestFileContext(r), tx, actor); err != nil {
-			return txResponse{}, err
-		}
-		var role string
-		var roleID *int64
-		if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
-			return txResponse{}, err
-		}
-		if role != "super_admin" {
-			var allowed bool
-			if roleID != nil {
-				if err = tx.QueryRow(r.Context(), "SELECT active AND 'notifications.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
-					return txResponse{}, err
-				}
-			}
-			if !allowed {
-				return txResponse{}, &txHTTPError{http.StatusForbidden, "permission_denied", "没有通知模板管理权限"}
-			}
-		}
-		var kind, channel string
-		var version int64
-		if err = tx.QueryRow(r.Context(), "SELECT kind,channel,version FROM notification_templates WHERE id=$1 FOR UPDATE", id).Scan(&kind, &channel, &version); err != nil {
-			return txResponse{}, err
-		}
-		if version != *input.ExpectedVersion {
-			return txResponse{}, &txHTTPError{409, "notification_template_conflict", "模板已被其他管理员修改，请刷新后重新编辑"}
-		}
-		if channel == "email" && input.Subject != nil && *input.Subject == "" {
-			return txResponse{}, &txHTTPError{http.StatusBadRequest, "invalid_notification_template", "邮件主题无效"}
-		}
-		if _, err = tx.Exec(r.Context(), `UPDATE notification_templates SET name=COALESCE($2,name),subject=COALESCE($3,subject),body=COALESCE($4,body),provider_template_id=COALESCE($5,provider_template_id),active=COALESCE($6,active),version=version+1,updated_by=$7,updated_at=now() WHERE id=$1`, id, input.Name, input.Subject, input.Body, input.ProviderTemplateID, input.Active, identityFrom(r).ID); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "notification_template.updated", "notification_template", id, map[string]any{"kind": kind, "active": input.Active}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, map[string]any{"id": id, "channel": channel, "kind": kind, "version": version + 1}}, nil
-	})
+	result, err := s.db.UpdateAccountNotificationTemplate(requestFileContext(r), identityFrom(r).ID, id, input)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, 200, result)
 }
 
 func (s *Server) emailOutbox(w http.ResponseWriter, r *http.Request) {

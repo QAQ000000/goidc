@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,16 +11,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type ticketScopeQuerier interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}
-
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	var scope string
-	var unassigned bool
-	var customerScope string
-	var ownerless, salesEnabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT ticket_scope,admin_ticket_department_allowed(id,NULL),customer_scope,customer_ownerless,sales_enabled FROM users WHERE id=$1", identityFrom(r).ID).Scan(&scope, &unassigned, &customerScope, &ownerless, &salesEnabled); err != nil {
+	scope, unassigned, customerScope, ownerless, salesEnabled, err := s.db.CurrentTicketAccountScopes(r.Context(), identityFrom(r).ID)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -34,9 +27,17 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	}{identityFrom(r), scope, unassigned, customerScope, ownerless, salesEnabled})
 }
 
-func (s *Server) allowTicketDepartment(w http.ResponseWriter, r *http.Request, q ticketScopeQuerier, department *int64) bool {
-	var allowed bool
-	if err := q.QueryRow(r.Context(), "SELECT admin_ticket_department_allowed($1,$2)", identityFrom(r).ID, department).Scan(&allowed); err != nil {
+func (s *Server) failTicketAccount(w http.ResponseWriter, r *http.Request, err error) {
+	var failure *store.TicketAccountError
+	if errors.As(err, &failure) {
+		writeError(w, failure.Status, failure.Code, failure.Message)
+		return
+	}
+	s.fail(w, r, err)
+}
+func (s *Server) allowTicketDepartment(w http.ResponseWriter, r *http.Request, q store.TicketScopeQuery, department *int64) bool {
+	allowed, err := store.TicketDepartmentAllowed(r.Context(), q, identityFrom(r).ID, department)
+	if err != nil {
 		s.fail(w, r, err)
 		return false
 	}

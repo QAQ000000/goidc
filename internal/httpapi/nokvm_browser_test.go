@@ -41,7 +41,7 @@ func TestNOKVMBrowserFixture(t *testing.T) {
 		}
 	}, false)
 	readerID, _ := user(t, f.db, f.h, "nokvm-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['products.view','services.view','invoices.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['products.view','services.view','invoices.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", f.uid), map[string]any{"amount_cents": 100000}, f.root, "nokvm-browser-topup"), 201)

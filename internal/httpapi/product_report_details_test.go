@@ -17,7 +17,7 @@ func TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec("UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
+	exec("UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
 	exec("UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, uid)
 	var category int64
 	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO product_categories(name,slug,sort_order,active) VALUES('历史分类','report-category',1,false) RETURNING id").Scan(&category); err != nil {
@@ -77,7 +77,7 @@ func TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope(t *testing.T) {
 		expect(t, request(h, "GET", path+"&"+filter, nil, staff, ""), 400)
 	}
 	expect(t, request(h, "GET", path, nil, "", ""), 401)
-	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	expect(t, request(h, "GET", path+"&format=csv", nil, staff, ""), 403)
 }
 

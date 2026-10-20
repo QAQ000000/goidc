@@ -88,10 +88,14 @@ func (s *Store) VisibleContentImage(ctx context.Context, id int64, hash, credent
 		return image, err
 	}
 	const query = `WITH viewer AS (
- SELECT u.id,u.role,r.active AS role_active,r.permissions,
+ SELECT u.id,u.role,NULL::boolean AS role_active,NULL::text[] AS permissions,
  CASE WHEN EXISTS(SELECT 1 FROM services WHERE user_id=u.id AND status='active' AND NOT import_review_required) THEN 2 ELSE 1 END AS access
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.status='active'
- AND (($4 AND u.role IN ('admin','super_admin')) OR (NOT $4 AND ($3='key' OR u.role='customer'))) AND (
+ FROM users u WHERE NOT $4 AND u.status='active' AND (
+ ($3='session' AND EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.token_hash=$2 AND s.expires_at>clock_timestamp())) OR
+ ($3='key' AND EXISTS(SELECT 1 FROM api_keys k WHERE k.user_id=u.id AND k.secret_hash=$2 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))))
+ UNION ALL
+ SELECT u.id,u.role,r.active AS role_active,r.permissions,1 AS access
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE $4 AND u.status='active' AND (
  ($3='session' AND EXISTS(SELECT 1 FROM sessions s WHERE s.user_id=u.id AND s.token_hash=$2 AND s.expires_at>clock_timestamp())) OR
  ($3='key' AND EXISTS(SELECT 1 FROM api_keys k WHERE k.user_id=u.id AND k.secret_hash=$2 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()))))
  ) SELECT i.filename,i.mime_type,i.content,i.storage_object_id FROM content_images i JOIN content_articles a ON a.id=i.article_id

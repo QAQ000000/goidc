@@ -9,11 +9,11 @@ func TestAdminSystemLogsSearchPermissionsAndRedaction(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "system-logs-root", "super_admin")
 	staffID, staff := user(t, db, h, "system-logs-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/logs", nil, staff, ""), 403)
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['audit.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['audit.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload) VALUES(NULL,'system.search.fixture','search-object','123456789','{"password":"never-return-this-secret","token":"private-token"}')`); err != nil {

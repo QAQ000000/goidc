@@ -9,7 +9,7 @@ func TestAdminCustomerLevelsVersionedCRUDAndPermission(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "customer-level-root", "super_admin")
 	staffID, staff := user(t, db, h, "customer-level-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if response := request(h, "GET", "/api/v1/admin/customer-levels", nil, staff, ""); response.Code != 403 {

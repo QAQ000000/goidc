@@ -21,31 +21,11 @@ type logCleanupInput struct {
 
 func (s *Server) adminLoginLog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	f := adminLogFilters{where: []string{"a.action='auth.login_succeeded'", "u.role IN ('admin','super_admin')"}}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		f.add("%"+q+"%", "(u.username ILIKE $%d OR u.email ILIKE $%d OR u.display_name ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = "(u.username ILIKE $" + itoa(idx) + " OR u.email ILIKE $" + itoa(idx) + " OR u.display_name ILIKE $" + itoa(idx) + ")"
-	}
-	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
-		f.add("%"+username+"%", "(u.username ILIKE $%d OR u.display_name ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = "(u.username ILIKE $" + itoa(idx) + " OR u.display_name ILIKE $" + itoa(idx) + ")"
-	}
-	if ip := strings.TrimSpace(r.URL.Query().Get("ip")); ip != "" {
-		f.add("%"+ip+"%", "coalesce(a.payload->>'remote_addr','') ILIKE $%d")
-	}
-	if err := addLogDateFilters(r, &f, "a.created_at"); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+	page, err := s.db.AccountAdministratorLoginLog(r.Context(), r.URL.Query(), limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	where := strings.Join(f.where, " AND ")
-	base := ` FROM audit_events a JOIN users u ON u.id=a.actor_id
-LEFT JOIN LATERAL (SELECT created_at FROM audit_events l WHERE l.action='auth.logout' AND l.actor_id=a.actor_id AND l.created_at>=a.created_at ORDER BY l.created_at LIMIT 1) logout ON true WHERE ` + where
-	s.writeListPage(w, r, "SELECT count(*)"+base,
-		`SELECT a.id,a.created_at AS login_time,a.created_at AS last_access,logout.created_at AS logout_time,
-u.username,u.display_name,coalesce(a.payload->>'remote_addr','') AS ip`+base+
-			" ORDER BY a.id DESC", f.args, limit, offset)
+	write(w, 200, page)
 }
 
 func itoa(value int) string {

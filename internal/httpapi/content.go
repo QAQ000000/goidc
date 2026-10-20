@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,27 +41,13 @@ func categoryFilter(w http.ResponseWriter, r *http.Request) (*int64, bool) {
 
 // Invalid credentials on public content endpoints remain anonymous.
 func (s *Server) contentAccess(r *http.Request) (int, error) {
-	var id int64
-	var err error
 	if bearer := bearerCredential(r); bearer != "" {
-		err = s.db.Pool.QueryRow(r.Context(), `SELECT u.id FROM api_keys k JOIN users u ON u.id=k.user_id WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()) AND u.status='active'`, tokenHash(bearer)).Scan(&id)
-	} else if cookie, e := r.Cookie("zjmfgo_session"); e == nil {
-		err = s.db.Pool.QueryRow(r.Context(), `SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&id)
-	} else {
-		return 0, nil
+		return s.db.PublicCustomerContentAccess(r.Context(), tokenHash(bearer), true)
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
+	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
+		return s.db.PublicCustomerContentAccess(r.Context(), tokenHash(cookie.Value), false)
 	}
-	if err != nil {
-		return 0, err
-	}
-	var active bool
-	err = s.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM services WHERE user_id=$1 AND status='active' AND NOT import_review_required)", id).Scan(&active)
-	if active {
-		return 2, err
-	}
-	return 1, err
+	return 0, nil
 }
 
 const publicArticleWhere = `a.status='published' AND a.published_at IS NOT NULL AND a.published_at<=now()

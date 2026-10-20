@@ -34,7 +34,7 @@ func (s *Store) WebPushNotificationHistory(ctx context.Context, userID int64, li
 		offset = 0
 	}
 	rows, err := s.Pool.Query(ctx, `SELECT e.id,e.kind,e.created_at,e.payload
- FROM notification_events e JOIN users u ON u.id=e.user_id
+ FROM notification_events e JOIN account_identities u ON u.id=e.user_id
  WHERE e.user_id=$1 AND u.status='active'
  AND EXISTS(SELECT 1 FROM notification_deliveries d WHERE d.event_id=e.id AND d.channel='web_push' AND d.status IN ('accepted','unknown'))
  AND (e.invoice_id IS NULL OR EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.user_id=$1))

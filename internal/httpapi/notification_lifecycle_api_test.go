@@ -12,7 +12,7 @@ func TestNotificationLifecycleCatalogFilteringAndScope(t *testing.T) {
 	uid, customer := user(t, db, h, "lifecycle-catalog-customer", "customer")
 	otherID, _ := user(t, db, h, "lifecycle-catalog-other", "customer")
 	for _, statement := range []string{
-		fmt.Sprintf(`UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=%d`, staffID),
+		fmt.Sprintf(`UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=%d`, staffID),
 		fmt.Sprintf(`UPDATE users SET sales_owner_id=%d WHERE id=%d`, staffID, uid),
 	} {
 		if _, err := db.Pool.Exec(t.Context(), statement); err != nil {

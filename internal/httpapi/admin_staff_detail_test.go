@@ -46,7 +46,7 @@ func TestAdminStaffDetailAndSafeRetry(t *testing.T) {
 	}
 	wg.Wait()
 	var version, audits int
-	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_version FROM users WHERE id=$1", staffID).Scan(&version); err != nil || version != 2 {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT admin_version FROM administrators WHERE id=$1", staffID).Scan(&version); err != nil || version != 2 {
 		t.Fatalf("version=%d err=%v", version, err)
 	}
 	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE actor_id=$1 AND action='admin_staff.updated' AND entity_id=$2", rootID, fmt.Sprint(staffID)).Scan(&audits); err != nil || audits != 1 {

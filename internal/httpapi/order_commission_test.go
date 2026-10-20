@@ -20,7 +20,7 @@ func TestAdminOrderCommissionPreviewUsesSalesRulesAndScope(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO sales_commission_tiers(threshold_cents,extra_rate_bps,active) VALUES(6000,100,true)`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false,sales_commission_group_id=$2 WHERE id=$1`, sellerID, groupID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false,sales_commission_group_id=$2 WHERE id=$1`, sellerID, groupID); err != nil {
 		t.Fatal(err)
 	}
 	customerID, _ := user(t, db, h, "order-commission-customer", "customer")

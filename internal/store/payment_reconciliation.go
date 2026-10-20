@@ -43,7 +43,11 @@ func authorizePaymentCheck(ctx context.Context, tx pgx.Tx, check *PaymentCheck) 
 	}
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", check.ActorID).Scan(&role, &roleID); err != nil {
+	table := "users"
+	if check.Admin {
+		table = "administrators"
+	}
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM "+table+" WHERE id=$1 AND status='active' FOR SHARE", check.ActorID).Scan(&role, &roleID); err != nil {
 		return conflict("permission_denied", "账户不可执行支付查询")
 	}
 	if !check.Admin || role == "super_admin" {
@@ -163,6 +167,13 @@ func (s *Store) CompletePaymentCheck(ctx context.Context, check PaymentCheck, re
 	defer tx.Rollback(ctx)
 	if err = authorizePaymentCheck(ctx, tx, &check); err != nil {
 		return WebhookResult{}, err
+	}
+	raw, _ := json.Marshal(result)
+	if reviewed, handled, reviewErr := reviewHistoricalAdministratorPayment(ctx, tx, check.Provider, "query:"+result.ExternalTransactionID, check.ProviderPaymentID, check.InvoiceID, result.AmountCents, result.Status, raw, []string{result.ExternalTransactionID}, &check); handled || reviewErr != nil {
+		if reviewErr != nil {
+			return WebhookResult{}, reviewErr
+		}
+		return reviewed, tx.Commit(ctx)
 	}
 	var state, external string
 	if err = tx.QueryRow(ctx, "SELECT status,external_transaction_id FROM payment_transactions WHERE id=$1 FOR UPDATE", check.PaymentID).Scan(&state, &external); err != nil {

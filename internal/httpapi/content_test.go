@@ -32,7 +32,7 @@ func contentCategoryID(t *testing.T, h http.Handler, root string, input store.Co
 }
 func contentRole(t *testing.T, db *store.Store, id int64, grants ...string) {
 	t.Helper()
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id, grants); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id, grants); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -81,7 +81,7 @@ func TestContentPermissionsAndMigration(t *testing.T) {
 	for _, uid := range []int64{viewerID, writerID} {
 		var grants []string
 		var version int
-		if err := db.Pool.QueryRow(t.Context(), "SELECT permissions,version FROM admin_roles WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", uid).Scan(&grants, &version); err != nil {
+		if err := db.Pool.QueryRow(t.Context(), "SELECT permissions,version FROM admin_roles WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", uid).Scan(&grants, &version); err != nil {
 			t.Fatal(err)
 		}
 		wantLength, wantVersion := 1, 1
@@ -388,7 +388,7 @@ func TestContentWaitingPermissionRevocation(t *testing.T) {
 	}
 	// Direct SQL revocation verifies the fresh check after the content lock.
 	// Real role management takes the exclusive 70108190 lock and serializes before/after mutations.
-	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['content.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['content.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(ctx); err != nil {

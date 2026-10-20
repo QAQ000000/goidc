@@ -76,7 +76,7 @@ func TestAdminOrderMutationsRejectPermissionRevokedAfterHTTPAuth(t *testing.T) {
 			if err = tx.QueryRow(t.Context(), "SELECT pg_backend_pid()").Scan(&blocker); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", f.staffID); err != nil {
+			if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", f.staffID); err != nil {
 				t.Fatal(err)
 			}
 			done := make(chan *httptest.ResponseRecorder, 1)

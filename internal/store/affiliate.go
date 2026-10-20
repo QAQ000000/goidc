@@ -406,7 +406,7 @@ func (s *Store) ApproveAffiliateAccount(ctx context.Context, actorID, accountID 
 		var err error
 		var allowed bool
 		if err = tx.QueryRow(ctx, `SELECT u.role='super_admin' OR (u.role='admin' AND coalesce(r.active AND 'affiliates.manage'=ANY(r.permissions),false))
-FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
+FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
 			return err
 		}
 		if !allowed {

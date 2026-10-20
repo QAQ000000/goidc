@@ -70,7 +70,15 @@ func isolatedTestStore(t *testing.T) *Store {
 func topUpFixture(t *testing.T, db *Store) (actorID, customerID int64) {
 	t.Helper()
 	ctx := t.Context()
-	if err := db.Pool.QueryRow(ctx, "INSERT INTO users(username,email,password_hash,display_name,role) VALUES('topup-root','topup-root@example.test','unused','Topup root','super_admin') RETURNING id").Scan(&actorID); err != nil {
+	var separate bool
+	if err := db.Pool.QueryRow(ctx, "SELECT to_regclass('administrators') IS NOT NULL").Scan(&separate); err != nil {
+		t.Fatal(err)
+	}
+	table := "users"
+	if separate {
+		table = "administrators"
+	}
+	if err := db.Pool.QueryRow(ctx, "INSERT INTO "+table+"(username,email,password_hash,display_name,role) VALUES('topup-root','topup-root@example.test','unused','Topup root','super_admin') RETURNING id").Scan(&actorID); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Pool.QueryRow(ctx, "INSERT INTO users(username,email,password_hash,display_name,role) VALUES('topup-customer','topup-customer@example.test','unused','Topup customer','customer') RETURNING id").Scan(&customerID); err != nil {

@@ -3,15 +3,13 @@ package httpapi
 import (
 	"context"
 	"errors"
-	"github.com/codex/zjmfgo/internal/captcha"
 	"net/http"
 	"net/mail"
 	"strings"
 
+	"github.com/codex/zjmfgo/internal/captcha"
 	"github.com/codex/zjmfgo/internal/notification"
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func (s *Server) verificationChannels(w http.ResponseWriter, r *http.Request) {
@@ -31,8 +29,8 @@ func (s *Server) verificationChannels(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) verificationAvailable(ctx context.Context, channel string) error {
-	var enabled bool
-	if err := s.db.Pool.QueryRow(ctx, "SELECT CASE WHEN $1='sms' THEN verification_sms_enabled ELSE verification_email_enabled END FROM auth_settings WHERE id=1", channel).Scan(&enabled); err != nil {
+	enabled, err := s.db.AccountVerificationChannelEnabled(ctx, channel)
+	if err != nil {
 		return err
 	}
 	if !enabled {
@@ -61,6 +59,7 @@ func (s *Server) verificationAvailable(ctx context.Context, channel string) erro
 func storeError(code, message string) error { return &store.Conflict{Code: code, Message: message} }
 
 type verificationInput struct {
+	Portal        string         `json:"portal"`
 	Purpose       string         `json:"purpose"`
 	Channel       string         `json:"channel"`
 	Recipient     string         `json:"recipient"`
@@ -152,87 +151,35 @@ func (s *Server) requestVerification(w http.ResponseWriter, r *http.Request, flo
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
+	if in.Portal != "" && in.Portal != "customer" && in.Portal != "admin" {
+		writeError(w, 400, "invalid_verification", "验证入口无效")
+		return
+	}
+	actorID := int64(0)
+	sessionHash := ""
+	if flow == "account" {
+		actorID = identityFrom(r).ID
+		if cookie, err := r.Cookie(customerSessionCookie); err == nil {
+			sessionHash = tokenHash(cookie.Value)
+		}
+	}
+	result, err := s.db.IssueAccountVerification(r.Context(), store.AccountVerificationInput{Flow: flow, Purpose: purpose, Channel: in.Channel, Recipient: in.Recipient, Identifier: in.Identifier, Portal: in.Portal, ActorID: actorID, SessionHash: sessionHash})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var uid *int64
-	deliver := true
-	if flow == "register" {
-		var enabled bool
-		if err = tx.QueryRow(r.Context(), "SELECT s.registration_enabled AND a.registration_email_enabled FROM site_settings s JOIN auth_settings a ON a.id=1 WHERE s.id=1 FOR SHARE").Scan(&enabled); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !enabled {
-			writeError(w, 403, "registration_disabled", "本站暂未开放注册")
-			return
-		}
-	} else if flow == "password_reset" {
-		var id int64
-		var email, phone string
-		var phoneVerified bool
-		err = tx.QueryRow(r.Context(), "SELECT id,email,phone,phone_verified FROM users WHERE (lower(username)=$1 OR lower(email)=$1 OR phone=$1) AND status='active' FOR UPDATE", in.Identifier).Scan(&id, &email, &phone, &phoneVerified)
-		if errors.Is(err, pgx.ErrNoRows) {
-			deliver = false
-			in.Recipient = "unknown:" + in.Identifier
-		} else if err != nil {
-			s.fail(w, r, err)
-			return
-		} else {
-			uid = &id
-			if in.Channel == "email" {
-				in.Recipient = email
-			} else {
-				in.Recipient = phone
-				deliver = phoneVerified && phone != ""
-				if !deliver {
-					in.Recipient = "unknown:" + in.Identifier
-				}
-			}
-		}
-	} else {
-		id := identityFrom(r).ID
-		uid = &id
-		var active bool
-		if err = tx.QueryRow(r.Context(), "SELECT status='active' FROM users WHERE id=$1 FOR UPDATE", id).Scan(&active); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if !active {
-			writeError(w, 401, "unauthorized", "请重新登录")
-			return
-		}
-		if !s.recheckVerificationSession(w, r, tx, id) {
-			return
-		}
-	}
-	if deliver && !validVerificationRecipient(in.Channel, in.Recipient) {
-		writeError(w, 400, "invalid_verification_recipient", "邮箱或手机号无效")
+	switch result.Denial {
+	case "registration_disabled":
+		writeError(w, 403, result.Denial, "本站暂未开放注册")
+		return
+	case "unauthorized":
+		writeError(w, 401, result.Denial, "请重新登录")
+		return
+	case "invalid_verification_recipient":
+		writeError(w, 400, result.Denial, "邮箱或手机号无效")
 		return
 	}
-	id, err := s.db.IssueVerification(r.Context(), tx, purpose, in.Channel, in.Recipient, uid, deliver)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if uid != nil {
-		action := "auth.verification_requested"
-		if purpose == "password_reset" {
-			action = "auth.password_reset_requested"
-		}
-		if err = store.Audit(r.Context(), tx, *uid, action, "user", *uid, map[string]any{"purpose": purpose, "channel": in.Channel}); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	verificationResponse(w, id, in.Channel)
+	verificationResponse(w, result.ID, in.Channel)
 }
 
 type verificationConfirmInput struct {
@@ -253,74 +200,13 @@ func (s *Server) confirmPasswordReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_password_reset", "验证码或密码无效")
 		return
 	}
-	// Lock account before its challenges, matching password and account updates.
-	var uid *int64
-	var recipient, channel string
-	err := s.db.Pool.QueryRow(r.Context(), "SELECT user_id,recipient,channel FROM verification_challenges WHERE id=$1 AND purpose='password_reset'", store.VerificationID(in.ChallengeID)).Scan(&uid, &recipient, &channel)
-	if errors.Is(err, pgx.ErrNoRows) {
+	valid, err := s.db.ConfirmAccountPasswordReset(r.Context(), in.ChallengeID, in.Code, in.Password)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !valid {
 		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if uid == nil {
-		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), 12)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var status, email, phone string
-	var phoneVerified bool
-	if err = tx.QueryRow(r.Context(), "SELECT status,email,phone,phone_verified FROM users WHERE id=$1 FOR UPDATE", *uid).Scan(&status, &email, &phone, &phoneVerified); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	_, valid, err := s.db.ConsumeVerification(r.Context(), tx, in.ChallengeID, in.Code, "password_reset", uid)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !valid || status != "active" || channel == "email" && email != recipient || channel == "sms" && (!phoneVerified || phone != recipient) {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE users SET password_hash=$2,password_reset_required=false,admin_version=admin_version+1,updated_at=now() WHERE id=$1", *uid, string(hash)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1", *uid); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM mfa_challenges WHERE user_id=$1", *uid); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", *uid); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, *uid, "auth.password_reset_completed", "user", *uid, map[string]any{"channel": channel}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
 		return
 	}
 	write(w, 200, map[string]bool{"changed": true})
@@ -334,86 +220,18 @@ func (s *Server) confirmAccountVerification(w http.ResponseWriter, r *http.Reque
 	if !decode(w, r, &in) {
 		return
 	}
-	uid := identityFrom(r).ID
-	tx, err := s.db.Pool.Begin(r.Context())
+	sessionHash := ""
+	if cookie, err := r.Cookie(customerSessionCookie); err == nil {
+		sessionHash = tokenHash(cookie.Value)
+	}
+	valid, err := s.db.ConfirmAccountContactVerification(r.Context(), identityFrom(r).ID, sessionHash, in.ChallengeID, in.Code)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	var email, status string
-	if err = tx.QueryRow(r.Context(), "SELECT email,status FROM users WHERE id=$1 FOR UPDATE", uid).Scan(&email, &status); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !s.recheckVerificationSession(w, r, tx, uid) {
-		return
-	}
-	var purpose string
-	err = tx.QueryRow(r.Context(), "SELECT purpose FROM verification_challenges WHERE id=$1", store.VerificationID(in.ChallengeID)).Scan(&purpose)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if !valid {
 		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if purpose != "bind_email" && purpose != "bind_phone" {
-		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	challenge, valid, err := s.db.ConsumeVerification(r.Context(), tx, in.ChallengeID, in.Code, purpose, &uid)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !valid || status != "active" || purpose == "bind_email" && challenge.Recipient != email {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		writeError(w, 409, "invalid_verification_code", "验证码无效或已过期")
-		return
-	}
-	if purpose == "bind_email" {
-		_, err = tx.Exec(r.Context(), "UPDATE users SET email_verified=true WHERE id=$1", uid)
-	} else {
-		_, err = tx.Exec(r.Context(), "UPDATE users SET phone=$2 WHERE id=$1", uid, challenge.Recipient)
-		if err == nil {
-			_, err = tx.Exec(r.Context(), "UPDATE users SET phone_verified=true WHERE id=$1", uid)
-		}
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, uid, "auth.contact_verified", "user", uid, map[string]any{"channel": challenge.Channel}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
 		return
 	}
 	write(w, 200, map[string]bool{"verified": true})
-}
-
-func (s *Server) recheckVerificationSession(w http.ResponseWriter, r *http.Request, tx pgx.Tx, uid int64) bool {
-	cookie, err := r.Cookie("zjmfgo_session")
-	if err != nil {
-		writeError(w, 401, "unauthorized", "请重新登录")
-		return false
-	}
-	var token string
-	err = tx.QueryRow(r.Context(), "SELECT token_hash FROM sessions WHERE user_id=$1 AND token_hash=$2 AND expires_at>now() FOR SHARE", uid, tokenHash(cookie.Value)).Scan(&token)
-	if errors.Is(err, pgx.ErrNoRows) {
-		writeError(w, 401, "unauthorized", "请重新登录")
-		return false
-	}
-	if err != nil {
-		s.fail(w, r, err)
-		return false
-	}
-	return true
 }

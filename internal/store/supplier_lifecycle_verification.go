@@ -31,7 +31,7 @@ type supplierManualLifecycleSnapshot struct {
 func requireSupplierLifecycleManage(ctx context.Context, tx pgx.Tx, actorID int64) error {
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM users
+	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM administrators
 WHERE id=$1 AND status='active' FOR SHARE`, actorID).Scan(&role, &roleID); err != nil {
 		return conflict("permission_denied", "没有核验供应商服务的权限")
 	}

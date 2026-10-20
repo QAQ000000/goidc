@@ -77,8 +77,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/register", s.register)
 	mux.HandleFunc("GET /api/v1/auth/verification/channels", s.verificationChannels)
 	mux.HandleFunc("POST /api/v1/auth/verification/request", s.requestRegistrationVerification)
-	mux.HandleFunc("POST /api/v1/account/verification/request", s.sessionAuth(s.requestAccountVerification, false))
-	mux.HandleFunc("POST /api/v1/account/verification/confirm", s.sessionAuth(s.confirmAccountVerification, false))
+	mux.HandleFunc("POST /api/v1/account/verification/request", s.accountAuth(s.requestAccountVerification, true))
+	mux.HandleFunc("POST /api/v1/account/verification/confirm", s.accountAuth(s.confirmAccountVerification, true))
 	mux.HandleFunc("POST /api/v1/auth/password-reset/request", s.requestPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/password-reset/confirm", s.confirmPasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/logout", s.accountAuth(s.logout, false))
@@ -657,6 +657,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/ticket-reply-presets/{id}", s.auth(s.updateTicketReplyPreset, true))
 	mux.HandleFunc("DELETE /api/v1/admin/ticket-reply-presets/{id}", s.auth(s.deleteTicketReplyPreset, true))
 	mux.HandleFunc("GET /api/v1/admin/audit", s.auth(s.auditEvents, true))
+	mux.HandleFunc("GET /api/v1/admin/account-history/{id}", s.sessionAuth(s.administratorAccountHistory, true))
 	return s.correlateRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Cache-Control", "no-store")

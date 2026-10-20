@@ -29,7 +29,7 @@ func TestExtraReportsScopeAndEmptyContracts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec("UPDATE users SET customer_scope='owned',customer_ownerless=false,ticket_scope='departments' WHERE id=$1", staffID)
+	exec("UPDATE administrators SET customer_scope='owned',customer_ownerless=false,ticket_scope='departments' WHERE id=$1", staffID)
 	exec("UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, allowedID)
 	for _, path := range []string{"/api/v1/admin/reports/sales?year=2024", "/api/v1/admin/reports/tickets?year=2024&month=2"} {
 		expect(t, request(h, "GET", path, nil, customer, ""), 401)
@@ -70,7 +70,7 @@ func TestExtraReportsScopeAndEmptyContracts(t *testing.T) {
 		t.Fatalf("ticket scope/timezone: %#v", first)
 	}
 	// Report visibility does not imply access to ticket totals.
-	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	w = request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, "")
 	expect(t, w, 403)
 	if errorData(t, w)["code"] != "permission_denied" {
@@ -96,7 +96,7 @@ func TestTicketReportRetainsMergedSourceHistory(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('Hidden','ticket-report-hidden') RETURNING id").Scan(&hidden); err != nil {
 		t.Fatal(err)
 	}
-	exec("UPDATE users SET ticket_scope='departments' WHERE id=$1", staffID)
+	exec("UPDATE administrators SET ticket_scope='departments' WHERE id=$1", staffID)
 	exec("INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, visible)
 	ticket := func(number, date string, department int64) int64 {
 		t.Helper()

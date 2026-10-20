@@ -15,7 +15,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "maintenance-super", "super_admin")
 	staffID, staff := user(t, db, h, "maintenance-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(array_remove(permissions,'settings.view'),'settings.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(array_remove(permissions,'settings.view'),'settings.manage') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	_, customer := user(t, db, h, "maintenance-customer", "customer")
@@ -89,7 +89,7 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "maintenance-customer@example.test", "password": "integration-password"}, "", ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]any{"identifier": "maintenance-super"}, "", ""), 202)
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/catalog", nil, staff, ""), 503)

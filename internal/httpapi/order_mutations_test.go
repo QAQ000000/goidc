@@ -257,18 +257,18 @@ func TestOrderMutationsDeferredNoInvoiceCanCancelDelete(t *testing.T) {
 func TestOrderMutationsReplayRespectsRevokedPermissionAndScope(t *testing.T) {
 	f := newMutationOrderFixture(t)
 	id, _ := f.order(t, "mutation-scope-order", 1)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", f.staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", f.staffID); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, f.h, f.root, f.customerID, f.staffID, 1)
 	path := fmt.Sprintf("/api/v1/admin/orders/%d/notes", id)
 	body := map[string]any{"notes": "销售备注", "expected_version": orderVersion(t, f.db, id)}
 	expect(t, request(f.h, "POST", path, body, f.staff, "mutation-scope-notes"), 200)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", f.staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", f.staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path, body, f.staff, "mutation-scope-notes"), 403)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view','orders.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", f.staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['orders.view','orders.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", f.staffID); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, f.h, f.root, f.customerID, nil, 2)

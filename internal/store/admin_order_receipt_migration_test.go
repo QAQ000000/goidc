@@ -16,8 +16,9 @@ const adminOrderReceiptScope = "admin:order.create"
 
 // Construct the actual predecessor, rather than dropping the new objects from
 // an already upgraded schema. The receipt below is written using the pre-179
-// SQL shape and current unchanged checkout primitives; it is a synthetic
-// historical writer fixture, not evidence of a production snapshot upgrade.
+// SQL shape with explicit historical INSERTs; it must not invoke current Store
+// writers against that schema. This is a synthetic historical writer fixture,
+// not evidence of a production snapshot upgrade.
 func adminOrderReceiptSchema178(t *testing.T) *Store {
 	t.Helper()
 	db := supplierExpirySchema171(t)
@@ -49,11 +50,6 @@ func legacyAdminOrderReceipt178(t *testing.T, db *Store, actor, customer, produc
 		t.Fatal(err)
 	}
 	in := AdminOrderInput{CustomerID: customer, Notes: "历史代下单：保留请求与回执\n原始凭证", Items: []AdminOrderItemInput{{ProductID: product, ExpectedRevision: revision, BillingCycle: "monthly", Quantity: 1}}}
-	quote, err := db.QuoteAdminOrder(ctx, actor, in, PaymentConfiguration{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	in.QuoteHash = quote.QuoteHash
 	normalized, err := normalizeAdminOrder(in)
 	if err != nil {
 		t.Fatal(err)
@@ -63,26 +59,42 @@ func legacyAdminOrderReceipt178(t *testing.T, db *Store, actor, customer, produc
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx)
-	if err = requireAdminOrdersManager(ctx, tx, actor); err != nil {
+	var authorized bool
+	if err = tx.QueryRow(ctx, `SELECT role='super_admin' AND status='active' FROM users WHERE id=$1 FOR SHARE`, actor).Scan(&authorized); err != nil || !authorized {
+		t.Fatal("historical actor must be an active administrator", authorized, err)
+	}
+	if err = tx.QueryRow(ctx, `SELECT role='customer' AND status='active' FROM users WHERE id=$1 FOR SHARE`, customer).Scan(&authorized); err != nil || !authorized {
+		t.Fatal("historical owner must be an active customer", authorized, err)
+	}
+	line := checkoutLine{ProductID: product, Revision: revision, Qty: 1, Cycle: "monthly", Snapshot: []OptionSnapshot{}, PurchaseSnapshot: []PurchaseFieldSnapshot{}}
+	if err = tx.QueryRow(ctx, `SELECT p.revision,p.name,pp.price_cents,pp.setup_fee_cents,p.approval_required FROM products p JOIN product_prices pp ON pp.product_id=p.id AND pp.billing_cycle='monthly' WHERE p.id=$1 FOR UPDATE OF p,pp`, product).Scan(&line.CurrentRevision, &line.Name, &line.UnitPrice, &line.UnitSetup, &line.ApprovalRequired); err != nil {
 		t.Fatal(err)
 	}
-	if err = lockActiveAdminOrderCustomer(ctx, tx, actor, customer); err != nil {
-		t.Fatal(err)
-	}
-	lines, err := db.loadAdminCheckoutLines(ctx, tx, normalized)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, benefits, required, err := db.prepareCheckoutLines(ctx, tx, customer, lines, normalized.PromoCode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if current := buildAdminOrderQuote(normalized, lines, result, required, benefits); current.QuoteHash != normalized.QuoteHash {
-		t.Fatal("schema178 fixture did not use a genuine current checkout quote")
-	}
+	result := CheckoutResult{TotalCents: line.UnitPrice + line.UnitSetup}
+	quote := buildAdminOrderQuote(normalized, []checkoutLine{line}, result, line.ApprovalRequired, []RenewalBenefit{{}})
+	in.QuoteHash = quote.QuoteHash
+	normalized.QuoteHash = quote.QuoteHash
 	hash := adminOrderHash(normalized)
-	result, err = db.persistCheckoutLines(ctx, tx, customer, "admin:"+fmt.Sprint(actor)+":"+key, hash, lines, result, benefits, required, result.promoID, checkoutOptions{GenerateInvoice: true, ActorID: actor, Source: "admin"})
-	if err != nil {
+	if err = tx.QueryRow(ctx, `INSERT INTO orders(order_no,user_id,total_cents,idempotency_key,request_hash,review_status)
+ VALUES('O-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3,$4,$5) RETURNING id,order_no`, customer, result.TotalCents, "admin:"+fmt.Sprint(actor)+":"+key, hash, quote.ReviewStatus).Scan(&result.OrderID, &result.OrderNo); err != nil {
+		t.Fatal(err)
+	}
+	var item int64
+	if err = tx.QueryRow(ctx, `INSERT INTO order_items(order_id,product_id,product_name,billing_cycle,quantity,price_cents,setup_fee_cents,total_cents,config_options,option_quantities,config_snapshot,purchase_fields)
+ VALUES($1,$2,$3,'monthly',1,$4,$5,$6,'[]','{}','[]','[]') RETURNING id`, result.OrderID, product, line.Name, line.UnitPrice, line.UnitSetup, result.TotalCents).Scan(&item); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO services(user_id,order_id,order_item_id,product_id,name,domain,billing_cycle,unit_number,provision_mode,delivery_snapshot)
+ SELECT $1,$2,$3,p.id,p.name,'svc-'||replace(gen_random_uuid()::text,'-',''),'monthly',1,p.provision_mode,p.delivery_config FROM products p WHERE p.id=$4`, customer, result.OrderID, item, product); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO external_refund_order_stock_reservations(order_item_id,order_id,product_id,units,item_snapshot,service_ids) VALUES($1,$2,$3,1,'{}','[]')`, item, result.OrderID, product); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,order_id,amount_cents) VALUES('I-'||replace(gen_random_uuid()::text,'-',''),$1,$2,$3) RETURNING id`, customer, result.OrderID, result.TotalCents).Scan(&result.InvoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload) VALUES($1,'order.created','order',$2,jsonb_build_object('total_cents',$3::bigint,'source','admin'))`, actor, fmt.Sprint(result.OrderID), result.TotalCents); err != nil {
 		t.Fatal(err)
 	}
 	out := AdminOrderResult{CheckoutResult: result, ReviewStatus: quote.ReviewStatus, EmailStatus: "not_requested"}
@@ -96,7 +108,8 @@ func legacyAdminOrderReceipt178(t *testing.T, db *Store, actor, customer, produc
 	if _, err = tx.Exec(ctx, `INSERT INTO admin_order_creation_receipts(actor_id,idempotency_key,customer_id,order_id,request_hash,result,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, actor, key, customer, out.OrderID, hash, raw, created); err != nil {
 		t.Fatal(err)
 	}
-	if err = Audit(ctx, tx, actor, "order.admin_created", "order", out.OrderID, map[string]any{"customer_id": customer, "invoice_deferred": false, "payment_provider": "", "channel_instance_id": "", "confirmed": false, "send_email": false, "email_status": out.EmailStatus}); err != nil {
+	if _, err = tx.Exec(ctx, `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload)
+ VALUES($1,'order.admin_created','order',$2,jsonb_build_object('customer_id',$3::bigint,'invoice_deferred',false,'payment_provider','','channel_instance_id','','confirmed',false,'send_email',false,'email_status','not_requested'))`, actor, fmt.Sprint(out.OrderID), customer); err != nil {
 		t.Fatal(err)
 	}
 	var savedJSON string
@@ -122,7 +135,7 @@ func adminOrderReceiptMigrationFacts(t *testing.T, db *Store) string {
 	t.Helper()
 	var raw string
 	if err := db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_object(
- 'users',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM users x),
+ 'users',`+historicalAccountSnapshotRows(t, db)+`,
  'products',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM products x),
  'orders',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM orders x),
  'items',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM order_items x),

@@ -50,7 +50,7 @@ func authorizePaymentClose(ctx context.Context, tx pgx.Tx, actorID int64, sessio
 	}
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		return conflict("permission_denied", "没有支付关单权限")
 	}
 	var sessionUser int64

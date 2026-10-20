@@ -26,7 +26,7 @@ func TestAuthSettingsContractAndEnforcement(t *testing.T) {
 	_, root := user(t, db, h, "auth-settings-root", "super_admin")
 	staffID, staff := user(t, db, h, "auth-settings-reader", "admin")
 	_, customer := user(t, db, h, "auth-settings-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/auth-settings"
@@ -114,7 +114,7 @@ func TestMFASettingsPolicyAndSecrets(t *testing.T) {
 	_, root := user(t, db, h, "mfa-settings-root", "super_admin")
 	staffID, staff := user(t, db, h, "mfa-settings-reader", "admin")
 	_, customer := user(t, db, h, "mfa-settings-customer", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/security/mfa"
@@ -176,7 +176,7 @@ func TestMFAEnrollCannotReplaceConfirmedSecret(t *testing.T) {
 	go func() {
 		enrollDone <- request(h, "POST", "/api/v1/account/mfa/enroll", map[string]any{}, cookie, "").Code
 	}()
-	waitForMFALock(t, db, "SELECT mfa_enabled FROM users")
+	waitForMFALock(t, db, "SELECT mfa_enabled,role FROM users")
 	if err = lock.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
@@ -205,17 +205,23 @@ func TestMFAConfirmRechecksCurrentRolePolicy(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_settings SET customer_enabled=true,admin_enabled=false"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='super_admin' WHERE id=$1", userID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='super_admin' WHERE id=$1", userID); err == nil {
+		t.Fatal("customer changed its immutable account kind")
+	}
+	// Administrators have independent factors and use the current admin policy.
+	adminID, adminCookie := user(t, db, h, "mfa-confirm-admin-policy", "super_admin")
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_settings SET admin_enabled=true"); err != nil {
 		t.Fatal(err)
 	}
-	// The previous customer cookie cannot turn into an administrator login.
-	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, cookie, ""), 401)
-	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "mfa-confirm-policy", "password": "integration-password", "portal": "admin"}, "", "")
-	expect(t, login, 200)
-	current := login.Result().Cookies()[0]
-	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(secret, time.Now())}, current.Name+"="+current.Value, ""), 403)
+	adminEnroll := request(h, "POST", "/api/v1/account/mfa/enroll", map[string]any{}, adminCookie, "")
+	expect(t, adminEnroll, 200)
+	adminSecret := data(t, adminEnroll)["secret"].(string)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_settings SET admin_enabled=false"); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]any{"code": testTOTP(adminSecret, time.Now())}, adminCookie, ""), 403)
 	var enabled bool
-	if err := db.Pool.QueryRow(t.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", userID).Scan(&enabled); err != nil || enabled {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT mfa_enabled FROM administrators WHERE id=$1", adminID).Scan(&enabled); err != nil || enabled {
 		t.Fatal("MFA was enabled despite disabled role policy", enabled, err)
 	}
 }

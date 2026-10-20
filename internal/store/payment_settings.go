@@ -156,7 +156,7 @@ func recheckPaymentSettingsManager(ctx context.Context, tx pgx.Tx, actor int64, 
 		return err
 	}
 	var role string
-	if err := tx.QueryRow(ctx, "SELECT role FROM users WHERE id=$1", actor).Scan(&role); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT role FROM administrators WHERE id=$1", actor).Scan(&role); err != nil {
 		return err
 	}
 	if role != "super_admin" {

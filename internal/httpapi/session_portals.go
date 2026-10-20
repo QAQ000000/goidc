@@ -107,8 +107,30 @@ func browserIdentity(r *http.Request) (store.HTTPIdentity, error) {
 	}
 	return resolved.identity, resolved.err
 }
+
+// Network reads must reauthenticate using current credentials before sending
+// their results. Retain the original portal cookies, but discard any identity
+// resolved earlier in this request; the next auth wrapper queries Store again.
+func freshBrowserSessionRequest(r *http.Request) *http.Request {
+	state, ok := r.Context().Value(browserSessionContextKey{}).(*browserSessionState)
+	if !ok {
+		return r
+	}
+	fresh := &browserSessionState{customer: state.customer, admin: state.admin, resolved: map[string]browserSessionResolution{}}
+	return r.WithContext(context.WithValue(r.Context(), browserSessionContextKey{}, fresh))
+}
+
 func sharedAccountPath(path string) bool {
-	return path == "/api/v1/me" || strings.HasPrefix(path, "/api/v1/me/") || path == "/api/v1/account/password" || path == "/api/v1/account/mfa" || strings.HasPrefix(path, "/api/v1/account/mfa/") || path == "/api/v1/api-keys" || strings.HasPrefix(path, "/api/v1/api-keys/") || path == "/api/v1/auth/logout" || strings.HasPrefix(path, "/api/v1/tickets/")
+	return path == "/api/v1/me" || strings.HasPrefix(path, "/api/v1/me/") || path == "/api/v1/account/password" || strings.HasPrefix(path, "/api/v1/account/verification/") || path == "/api/v1/account/mfa" || strings.HasPrefix(path, "/api/v1/account/mfa/") || path == "/api/v1/api-keys" || strings.HasPrefix(path, "/api/v1/api-keys/") || path == "/api/v1/auth/logout" || strings.HasPrefix(path, "/api/v1/tickets/")
+}
+
+// Authentication wrappers project only the selected portal's verified session
+// into this cookie; callers must still lock/recheck it before security writes.
+func accountSessionHash(r *http.Request) string {
+	if cookie, err := r.Cookie(customerSessionCookie); err == nil {
+		return tokenHash(cookie.Value)
+	}
+	return ""
 }
 func selectedBrowserPortal(r *http.Request) string {
 	if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") {

@@ -265,7 +265,7 @@ func TestPaymentAnomalyRefundUnverifiedAndHTTPBoundaries(t *testing.T) {
 			t.Fatal(w.Body.String())
 		}
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", base+"/payment-anomaly-groups", nil, reader, ""), 404)
@@ -337,7 +337,7 @@ func TestPaymentAnomalySameKeyConcurrencyAndRevokedReplay(t *testing.T) {
 	if err := f.db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM payment_close_anomaly_refunds),(SELECT count(*) FROM mutation_operations WHERE scope='payment-anomaly-refund'),(SELECT count(*) FROM external_refund_payout_claims)").Scan(&facts, &receipts, &claims); err != nil || facts != 1 || receipts != 1 || claims != 1 {
 		t.Fatal(facts, receipts, claims, err)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actorID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", actorID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", create, in, actor, "anomaly-same-key"), 403)
@@ -353,7 +353,7 @@ func TestPaymentAnomalyScopeNarrowedWhileAuthorizationWaits(t *testing.T) {
 			f, invoice, _, _, anchor := paymentAnomalyFixture(t, "merchant:scope-wait")
 			base, create := anomalyPaths(invoice, anchor)
 			actorID, actor := externalRefundActor(t, f.db, f.h, "anomaly-scope-wait", []string{"invoices.view", "payment_anomalies.view", "payment_anomalies.create", "payment_anomalies.review"})
-			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='all',customer_ownerless=false WHERE id=$1", actorID); err != nil {
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='all',customer_ownerless=false WHERE id=$1", actorID); err != nil {
 				t.Fatal(err)
 			}
 			method, path, key := "POST", create, "anomaly-scope-wait-create"
@@ -377,7 +377,7 @@ func TestPaymentAnomalyScopeNarrowedWhileAuthorizationWaits(t *testing.T) {
 			if err = tx.QueryRow(t.Context(), "SELECT pg_backend_pid()").Scan(&blocker); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = tx.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", actorID); err != nil {
+			if _, err = tx.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", actorID); err != nil {
 				t.Fatal(err)
 			}
 			result := make(chan *httptest.ResponseRecorder, 1)
@@ -385,7 +385,7 @@ func TestPaymentAnomalyScopeNarrowedWhileAuthorizationWaits(t *testing.T) {
 			deadline := time.Now().Add(10 * time.Second)
 			for {
 				var waiting bool
-				if err = f.db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid)) AND a.query='SELECT role,admin_role_id FROM users WHERE id=$1 AND status=''active'' FOR SHARE')`, blocker).Scan(&waiting); err != nil {
+				if err = f.db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a WHERE $1=ANY(pg_blocking_pids(a.pid)) AND a.query='SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status=''active'' FOR SHARE')`, blocker).Scan(&waiting); err != nil {
 					t.Fatal(err)
 				}
 				if waiting {

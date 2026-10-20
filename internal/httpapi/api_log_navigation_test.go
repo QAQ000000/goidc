@@ -23,12 +23,12 @@ func apiLogReaders(t *testing.T, db *store.Store, h http.Handler) (string, strin
 		{"api-log-notifications", "notifications.view"},
 	} {
 		id, cookie := user(t, db, h, reader.name, "admin")
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[$2]::text[] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, id, reader.permission); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[$2]::text[] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, id, reader.permission); err != nil {
 			t.Fatal(err)
 		}
 		cookies[i] = cookie
 	}
-	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip) SELECT id,'GET','/api/v1/navigation-acceptance',200,3,'127.0.0.1' FROM users WHERE username='api-log-audit'`); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip) SELECT id,'GET','/api/v1/navigation-acceptance',200,3,'127.0.0.1' FROM administrators WHERE username='api-log-audit'`); err != nil {
 		t.Fatal(err)
 	}
 	return cookies[0], cookies[1]

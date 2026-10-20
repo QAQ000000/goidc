@@ -64,7 +64,7 @@ func TestLoginPortalMismatchDoesNotUpgradeLegacyPasswordOrClearPressure(t *testi
 	outer := md5.Sum([]byte(hex.EncodeToString(inner[:])))
 	hash := legacy.WrapCMFPasswordHash("###" + hex.EncodeToString(outer[:]))
 	var id int64
-	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role,password_reset_required) VALUES('portal-legacy','portal-legacy@example.test',$1,'Portal Legacy','super_admin',true) RETURNING id`, hash).Scan(&id); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO administrators(username,email,password_hash,display_name,role,password_reset_required) VALUES('portal-legacy','portal-legacy@example.test',$1,'Portal Legacy','super_admin',true) RETURNING id`, hash).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	key := tokenHash("admin-login-account:portal-legacy")
@@ -79,12 +79,12 @@ func TestLoginPortalMismatchDoesNotUpgradeLegacyPasswordOrClearPressure(t *testi
 	var actual string
 	var reset bool
 	var attempts, sessions, challenges int
-	if err := db.Pool.QueryRow(t.Context(), `SELECT password_hash,password_reset_required,(SELECT attempts FROM auth_rate_limits WHERE key=$2),(SELECT count(*) FROM sessions WHERE user_id=$1),(SELECT count(*) FROM mfa_challenges WHERE user_id=$1) FROM users WHERE id=$1`, id, key).Scan(&actual, &reset, &attempts, &sessions, &challenges); err != nil || actual != hash || !reset || attempts < 1 || sessions != 0 || challenges != 0 {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT password_hash,password_reset_required,(SELECT attempts FROM auth_rate_limits WHERE key=$2),(SELECT count(*) FROM sessions WHERE user_id=$1),(SELECT count(*) FROM mfa_challenges WHERE user_id=$1) FROM administrators WHERE id=$1`, id, key).Scan(&actual, &reset, &attempts, &sessions, &challenges); err != nil || actual != hash || !reset || attempts < 1 || sessions != 0 || challenges != 0 {
 		t.Fatal("wrong portal changed legacy authentication state", actual == hash, reset, attempts, sessions, challenges, err)
 	}
 	accepted := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "portal-legacy", "password": "legacy-portal-password", "portal": "admin"}, "", "")
 	expect(t, accepted, 200)
-	if err := db.Pool.QueryRow(t.Context(), "SELECT password_hash,password_reset_required FROM users WHERE id=$1", id).Scan(&actual, &reset); err != nil || !strings.HasPrefix(actual, "$2") || reset {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT password_hash,password_reset_required FROM administrators WHERE id=$1", id).Scan(&actual, &reset); err != nil || !strings.HasPrefix(actual, "$2") || reset {
 		t.Fatal("correct portal lost legacy upgrade compatibility", reset, err)
 	}
 }
@@ -182,7 +182,15 @@ func TestLoginMFARoleChangeCannotSwitchFrozenPortal(t *testing.T) {
 			if originalRole == "super_admin" {
 				newRole = "customer"
 			}
-			if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role=$2 WHERE id=$1", id, newRole); err != nil {
+			table := "users"
+			if originalRole != "customer" {
+				table = "administrators"
+			}
+			if _, err := db.Pool.Exec(t.Context(), "UPDATE "+table+" SET role=$2 WHERE id=$1", id, newRole); err == nil {
+				t.Fatal("account crossed the immutable customer/administrator boundary")
+			}
+			// A corrupt or stale challenge cannot switch the account's physical portal.
+			if _, err := db.Pool.Exec(t.Context(), "UPDATE mfa_challenges SET login_portal=$2 WHERE user_id=$1", id, store.LoginPortalForRole(newRole)); err != nil {
 				t.Fatal(err)
 			}
 			for _, portal := range []string{"", store.LoginPortalForRole(originalRole), store.LoginPortalForRole(newRole)} {

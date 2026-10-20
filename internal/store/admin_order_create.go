@@ -121,7 +121,7 @@ func normalizeAdminOrder(in AdminOrderInput) (AdminOrderInput, error) {
 func requireAdminOrdersManager(ctx context.Context, tx pgx.Tx, actor int64) error {
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
 		return err
 	}
 	if role == "super_admin" {

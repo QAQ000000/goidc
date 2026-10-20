@@ -165,7 +165,7 @@ func TestCompiledAppsSuperAdminPermission(t *testing.T) {
 	_, super := user(t, db, h, "apps-permission-super", "super_admin")
 	_, fullAdmin := user(t, db, h, "apps-permission-full-admin", "admin")
 	readerID, reader := user(t, db, h, "apps-permission-reader", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, readerID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, readerID); err != nil {
 		t.Fatal(err)
 	}
 	_, customer := user(t, db, h, "apps-permission-customer", "customer")

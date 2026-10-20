@@ -33,10 +33,14 @@ func TestTicketNotificationsBrowserFixture(t *testing.T) {
 		if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('通知验收支持','ticket-notify') RETURNING id`).Scan(&department); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET email_verified=true,phone_verified=true,phone=CASE WHEN id=$1 THEN '+8613800000001' ELSE '+8613800000002' END WHERE id=ANY($2::bigint[])`, customer, []int64{customer, staff}); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET email_verified=true,phone='+8613800000001' WHERE id=$1`, customer); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET phone_verified=true WHERE phone<>''; INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('ticket-browser-sms','sms','generic_http_json','Local SMS',true); UPDATE channel_instances SET enabled=true WHERE category IN ('mail','sms'); UPDATE notification_templates SET active=true,provider_template_id=CASE WHEN channel='sms' THEN 'local-ticket-template' ELSE provider_template_id END WHERE kind IN ('ticket_customer_created','ticket_customer_replied','ticket_staff_replied')`); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET email_verified=true,phone='+8613800000002' WHERE id=$1`, staff); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET phone_verified=true WHERE phone<>''; UPDATE administrators SET phone_verified=true WHERE phone<>''; INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('ticket-browser-sms','sms','generic_http_json','Local SMS',true); UPDATE channel_instances SET enabled=true WHERE category IN ('mail','sms'); UPDATE notification_templates SET active=true,provider_template_id=CASE WHEN channel='sms' THEN 'local-ticket-template' ELSE provider_template_id END WHERE kind IN ('ticket_customer_created','ticket_customer_replied','ticket_staff_replied')`); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), `INSERT INTO customer_contacts(customer_id,username,email,status,support_emails) VALUES($1,'订阅联系人','ticket-contact@example.test','active',true),($1,'退订联系人','ticket-unsubscribed@example.test','active',false)`, customer); err != nil {

@@ -46,7 +46,7 @@ func setupTransactionEntries(t *testing.T, db *store.Store, h http.Handler) tran
 	}
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", otherID), map[string]any{"amount_cents": 7777, "note": "其他客户不可泄漏"}, f.root, "entries-other-topup"), 201)
 	readerID, reader := user(t, db, h, "transactions-entry-reader", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoices.view','customers.view'] WHERE name='transactions-entry-reader-role'; UPDATE users SET customer_scope='owned',customer_ownerless=false,sales_enabled=true WHERE username='transactions-entry-reader'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoices.view','customers.view'] WHERE name='transactions-entry-reader-role'; UPDATE administrators SET customer_scope='owned',customer_ownerless=false,sales_enabled=true WHERE username='transactions-entry-reader'"); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, h, f.root, f.uid, readerID, 1)

@@ -120,7 +120,7 @@ func TestUpgradePolicyAtomicityAndSessionReplay(t *testing.T) {
 				case <-time.After(10 * time.Millisecond):
 				}
 			}
-			if _, err = lock.Exec(ctx, `DELETE FROM sessions WHERE user_id=(SELECT id FROM users WHERE username='order-mutation-root')`); err != nil {
+			if _, err = lock.Exec(ctx, `DELETE FROM sessions WHERE user_id=(SELECT id FROM administrators WHERE username='order-mutation-root')`); err != nil {
 				t.Fatal(err)
 			}
 			if err = lock.Commit(ctx); err != nil {

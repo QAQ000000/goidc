@@ -118,11 +118,11 @@ func TestTransactionDetailsPrivacyOwnershipAndScope(t *testing.T) {
 	expect(t, request(h, "GET", adminPath, nil, staff, ""), 200)
 	expect(t, request(h, "POST", adminPath+"/refund", map[string]any{}, staff, "transaction-reader-refund"), 403)
 	expect(t, request(h, "GET", adminPath, nil, f.customer, ""), 401)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", adminPath, nil, staff, ""), 404)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoices.view','customers.view'] WHERE name='transaction-reader-role'"); err != nil {
@@ -236,7 +236,7 @@ func TestTransactionInvoiceReadRechecksWaitingSalesTransfer(t *testing.T) {
 	db, h := testServer(t)
 	f := transactionFixture(t, db, h)
 	staffID, staff := user(t, db, h, "transaction-race-reader", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", f.uid, staffID); err != nil {

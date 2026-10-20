@@ -155,7 +155,7 @@ type SalesReportDetailFilter struct {
 const salesDetailCTE = `WITH invoices_scope AS (
  SELECT i.*,c.display_name customer_name,c.sales_owner_id,u.display_name sales_owner_name,coalesce(o.status IN ('cancelled','refunded'),false) order_invalid,
  g.id rule_group_id,g.name rule_group_name,g.version rule_version,g.purchase_rate_bps,g.renewal_rate_bps,g.upgrade_rate_bps,g.include_renewal,g.include_upgrade
- FROM invoices i JOIN users c ON c.id=i.user_id LEFT JOIN users u ON u.id=c.sales_owner_id LEFT JOIN orders o ON o.id=i.order_id AND o.user_id=i.user_id
+ FROM invoices i JOIN account_identities c ON c.id=i.user_id LEFT JOIN administrators u ON u.id=c.sales_owner_id LEFT JOIN orders o ON o.id=i.order_id AND o.user_id=i.user_id
  LEFT JOIN sales_commission_groups g ON g.id=u.sales_commission_group_id AND g.active AND u.sales_enabled AND u.status='active'
  WHERE i.invoice_kind<>'topup' AND i.status IN ('paid','refunded') AND i.paid_at IS NOT NULL AND admin_customer_allowed($1,i.user_id)
 ), raw_lines AS (

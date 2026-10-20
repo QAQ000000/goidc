@@ -211,7 +211,7 @@ VALUES('mock','existing-payment',$1,$2,4000,'existing-intent')`, iid, uid); err 
 		t.Fatal(err)
 	}
 	var adminID int64
-	if err = db.Pool.QueryRow(ctx, "INSERT INTO users(username,email,password_hash,display_name,role) VALUES('guard-admin','guard-admin@example.test','unused','Guard admin','super_admin') RETURNING id").Scan(&adminID); err != nil {
+	if err = db.Pool.QueryRow(ctx, "INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('guard-admin','guard-admin@example.test','unused','Guard admin','super_admin') RETURNING id").Scan(&adminID); err != nil {
 		t.Fatal(err)
 	}
 	_, err = db.RefundInvoice(ctx, adminID, iid, "guard-refund-test")
@@ -248,7 +248,7 @@ func TestLegacyEmailTemplateImportPreservesEditsOnReplay(t *testing.T) {
 	db := importTestDB(t)
 	ctx := t.Context()
 	var adminID int64
-	if err := db.Pool.QueryRow(ctx, "INSERT INTO users(username,email,password_hash,display_name,role,status) VALUES('email-import-admin','email-import-admin@example.test','unused','Email import admin','super_admin','active') RETURNING id").Scan(&adminID); err != nil {
+	if err := db.Pool.QueryRow(ctx, "INSERT INTO administrators(username,email,password_hash,display_name,role,status) VALUES('email-import-admin','email-import-admin@example.test','unused','Email import admin','super_admin','active') RETURNING id").Scan(&adminID); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := importFixture()
@@ -310,7 +310,7 @@ func TestImportedServiceCannotBypassReview(t *testing.T) {
 	_, err = db.EnqueueServiceAction(t.Context(), uid, sid, "resume", "guard-resume-test", false)
 	assertImportReview(t, err)
 	var adminID int64
-	if err = db.Pool.QueryRow(t.Context(), "INSERT INTO users(username,email,password_hash,display_name,role) VALUES('guard-admin','guard-admin@example.test','unused','Guard admin','super_admin') RETURNING id").Scan(&adminID); err != nil {
+	if err = db.Pool.QueryRow(t.Context(), "INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('guard-admin','guard-admin@example.test','unused','Guard admin','super_admin') RETURNING id").Scan(&adminID); err != nil {
 		t.Fatal(err)
 	}
 	_, err = db.EnqueueServiceAction(t.Context(), adminID, sid, "sync", "guard-sync-test", true)

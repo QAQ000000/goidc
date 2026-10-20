@@ -104,17 +104,17 @@ func TestCreditManagementPermissionsAndAuditRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "POST", path, map[string]any{"expected_version": 1}, customer, "credit-security-pay"), 201)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view','credit.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view','credit.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	freeze := fmt.Sprintf("/api/v1/admin/credit/%d/freeze", uid)
 	body := map[string]any{"frozen": true, "expected_version": 2}
 	expect(t, request(h, "PUT", freeze, body, staff, "credit-security-freeze"), 201)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", freeze, body, staff, "credit-security-freeze"), 404)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", freeze, body, staff, "credit-security-freeze"), 403)

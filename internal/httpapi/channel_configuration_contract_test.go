@@ -142,7 +142,10 @@ func TestChannelConfigurationRejectsPollutionAndMissingContracts(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM channel_instances WHERE display_name IN ('secret','unknown','boolean','enum','fraction','range','No parallel configuration')").Scan(&count); err != nil || count != 0 {
 		t.Fatal("invalid configuration persisted")
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='customer' WHERE id=$1", adminID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET role='customer' WHERE id=$1", adminID); err == nil {
+		t.Fatal("administrator crossed immutable customer/administrator boundary")
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", adminID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, http.MethodGet, "/api/v1/admin/channel-instances", nil, admin, ""), http.StatusUnauthorized)

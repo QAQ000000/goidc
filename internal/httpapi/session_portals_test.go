@@ -164,7 +164,7 @@ func TestPortalSessionImpersonationRequiresBoundSession(t *testing.T) {
 		t.Fatal("trusted binding inactive")
 	}
 	expect(t, portalRequest(h, "GET", "/api/v1/admin/dashboard", nil, impersonated, "admin"), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'customers.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", aid); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'customers.manage') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", aid); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, portalRequest(h, "GET", "/api/v1/cart", nil, impersonated, ""), 401)
@@ -180,7 +180,7 @@ func TestPortalSessionImpersonationRequiresBoundSession(t *testing.T) {
 	expect(t, portalRequest(h, "GET", "/api/v1/admin/dashboard", nil, admin, "admin"), 200)
 	// Re-authorize, then leave a stale delegated customer cookie after logging out
 	// of the parent. A new administrator login must be able to start delegation.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_append(permissions,'customers.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", aid); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_append(permissions,'customers.manage') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", aid); err != nil {
 		t.Fatal(err)
 	}
 	start = portalRequest(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/impersonate", cid), nil, dual, "admin")
@@ -223,7 +223,7 @@ func TestPortalSessionCSRFAndMaintenanceStayIsolated(t *testing.T) {
 
 func TestPortalSessionPublicReadersStayCustomerOnly(t *testing.T) {
 	db, h := testServer(t)
-	_, admin := user(t, db, h, "portal-readers-admin", "super_admin")
+	adminID, admin := user(t, db, h, "portal-readers-admin", "super_admin")
 	_, customer := user(t, db, h, "portal-readers-customer", "customer")
 	article := articleInput("knowledge", "portal-private-readers", "published")
 	article.AccessLevel = "login"
@@ -254,4 +254,54 @@ func TestPortalSessionPublicReadersStayCustomerOnly(t *testing.T) {
 	expect(t, portalRequest(h, "GET", downloadPath, nil, dual, "admin"), 200)
 	expect(t, portalRequest(h, "GET", fmt.Sprintf("/api/v1/admin/content/%d", aid), nil, dual, ""), 200)
 	expect(t, portalRequest(h, "GET", fmt.Sprintf("/api/v1/admin/downloads/%d", did), nil, dual, ""), 200)
+	// API keys have no cookie projection. Public identity readers must enforce
+	// the customer table themselves, including when a customer cookie coexists.
+	issueKey := func(cookie, portal string) string {
+		t.Helper()
+		result := portalRequest(h, "POST", "/api/v1/api-keys", map[string]string{"name": "public-readers-key"}, cookie, portal)
+		expect(t, result, 201)
+		return data(t, result)["secret"].(string)
+	}
+	adminKey, customerKey := issueKey(admin, "admin"), issueKey(customer, "customer")
+	for _, tc := range []struct {
+		name, secret                  string
+		articleStatus, downloadStatus int
+		allowed                       bool
+	}{
+		{"administrator", adminKey, 404, 401, false},
+		{"customer", customerKey, 200, 200, true},
+	} {
+		t.Run(tc.name+"_api_key", func(t *testing.T) {
+			expect(t, requestBearer(h, "GET", articlePath, nil, tc.secret), tc.articleStatus)
+			file := requestBearer(h, "GET", downloadPath, nil, tc.secret)
+			expect(t, file, tc.downloadStatus)
+			if tc.allowed && file.Body.String() != "下载内容 UTF-8\n" {
+				t.Fatal("customer download bytes changed")
+			}
+			list := requestBearer(h, "GET", "/api/v1/downloads", nil, tc.secret)
+			expect(t, list, 200)
+			if data(t, list)["items"].([]any)[0].(map[string]any)["can_download"] != tc.allowed {
+				t.Fatal("file identity crossed account tables")
+			}
+		})
+	}
+	mixed := requestFrom(h, "GET", downloadPath, nil, "192.0.2.10:1234", customer, map[string]string{"Authorization": "Bearer " + adminKey, authPortalHeader: "admin"})
+	expect(t, mixed, 401)
+	// The fixed administrator endpoint still authenticates an administrator key.
+	adminList := requestBearer(h, "GET", "/api/v1/admin/downloads", nil, adminKey)
+	expect(t, adminList, 200)
+	if int64(data(t, adminList)["items"].([]any)[0].(map[string]any)["viewer_id"].(float64)) != adminID {
+		t.Fatal("administrator file identity was lost")
+	}
+	expect(t, requestBearer(h, "GET", "/api/v1/admin/downloads", nil, customerKey), 403)
+	publicID := downloadID(t, h, admin, downloadInput())
+	publicPath := fmt.Sprintf("/api/v1/downloads/%d/file", publicID)
+	expect(t, request(h, "GET", publicPath, nil, "", ""), 200)
+	for _, secret := range []string{adminKey, customerKey} {
+		file := requestBearer(h, "GET", publicPath, nil, secret)
+		expect(t, file, 200)
+		if file.Body.String() != "下载内容 UTF-8\n" {
+			t.Fatal("public anonymous download bytes changed")
+		}
+	}
 }

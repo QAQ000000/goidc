@@ -694,7 +694,7 @@ func (s *Store) RetryConfigurationChange(ctx context.Context, actorID, serviceID
 		}
 		var allowed bool
 		if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions) AND 'services.manage'=ANY(r.permissions)),false)
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
 			return err
 		}
 		if !allowed {

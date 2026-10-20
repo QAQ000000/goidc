@@ -116,7 +116,7 @@ FROM tickets t WHERE t.id=$2`, customerID, ticketID).Scan(&status, &emailStatus,
 	if status != "open" || emailStatus != "queued" || createdBy < 1 || string(cc) != `["copy@example.test"]` || ticketCount != 1 || receiptCount != 1 || auditCount != 1 || outboxCount != 2 {
 		t.Fatalf("admin ticket create did not commit atomically: status=%s email=%s actor=%d cc=%s tickets=%d receipts=%d audits=%d outbox=%d", status, emailStatus, createdBy, cc, ticketCount, receiptCount, auditCount, outboxCount)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='departments',customer_scope='owned',customer_ownerless=false WHERE id=$1`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='departments',customer_scope='owned',customer_ownerless=false WHERE id=$1`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$1 WHERE id=$2`, staffID, customerID); err != nil {

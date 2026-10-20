@@ -74,11 +74,11 @@ func TestNOKVMReinstallCataloguePermissionsAndImmutableReplay(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/services/%d", f.sid)
 	adminPath := fmt.Sprintf("/api/v1/admin/services/%d", f.sid)
 	readerID, reader := user(t, f.db, f.h, "reinstall-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	staffID, staff := user(t, f.db, f.h, "reinstall-scope", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", path+"/reinstall-templates", nil, f.other, ""), 404)

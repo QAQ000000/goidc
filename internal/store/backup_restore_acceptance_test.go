@@ -77,7 +77,7 @@ func TestCurrentSchemaRepresentativeBackupRestore(t *testing.T) {
 	}
 	resolve(second, "recovery-second-resolution")
 	var reviewer int64
-	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('recovery-reviewer','recovery-reviewer@example.test','unused','Recovery reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('recovery-reviewer','recovery-reviewer@example.test','unused','Recovery reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('recovery-review-session',$1,now()+interval '1 hour')`, reviewer); err != nil {

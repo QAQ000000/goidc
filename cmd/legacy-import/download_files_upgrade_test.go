@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/codex/zjmfgo/db/migrations"
-	"github.com/codex/zjmfgo/internal/store"
 )
 
 func TestLegacyDownloadMigrationPreservesNonemptyCatalog(t *testing.T) {
@@ -32,7 +31,7 @@ func TestLegacyDownloadMigrationPreservesNonemptyCatalog(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	admin := navigationAdmin(t, db)
+	admin := historicalImportAdministrator(t, db)
 	var parent, child, product int64
 	if err = db.Pool.QueryRow(t.Context(), "INSERT INTO download_categories(name,active,version) VALUES('原目录',false,7) RETURNING id").Scan(&parent); err != nil {
 		t.Fatal(err)
@@ -43,7 +42,8 @@ func TestLegacyDownloadMigrationPreservesNonemptyCatalog(t *testing.T) {
 	if err = db.Pool.QueryRow(t.Context(), "INSERT INTO products(name,slug,price_cents) VALUES('原商品','upgrade-file',10) RETURNING id").Scan(&product); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.SaveDownload(t.Context(), admin, 0, store.DownloadInput{CategoryID: &child, Title: "原文件", SourceType: "local", AccessLevel: "product", ProductIDs: []int64{product}, Active: true}, &store.DownloadFile{Filename: "原文档.txt", MIME: "text/plain; charset=utf-8", Content: []byte("完整内容")}); err != nil {
+	download := historicalImportDownload(t, db, admin, child, "product", []byte("完整内容"))
+	if _, err = db.Pool.Exec(t.Context(), "INSERT INTO download_products(download_id,product_id) VALUES($1,$2)", download, product); err != nil {
 		t.Fatal(err)
 	}
 	payload := []byte("私有原内容")
@@ -51,13 +51,14 @@ func TestLegacyDownloadMigrationPreservesNonemptyCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := func(new bool) string {
-		suffix := ""
+		suffix, fileSuffix := "", ""
 		link := ""
 		if new {
 			suffix = "-'legacy_source'-'legacy_id'"
+			fileSuffix = suffix + "-'storage_object_id'"
 			link = "-'id'-'legacy_source'-'legacy_id'"
 		}
-		return `SELECT jsonb_build_object('categories',(SELECT jsonb_agg(to_jsonb(c)` + suffix + ` ORDER BY id) FROM download_categories c),'files',(SELECT jsonb_agg(to_jsonb(d)` + suffix + ` ORDER BY id) FROM downloads d),'private',(SELECT jsonb_agg(to_jsonb(c)` + suffix + ` ORDER BY id) FROM customer_files c),'links',(SELECT jsonb_agg(to_jsonb(p)` + link + ` ORDER BY download_id,product_id) FROM download_products p),'settings',(SELECT to_jsonb(s) FROM download_settings s))::text`
+		return `SELECT jsonb_build_object('categories',(SELECT jsonb_agg(to_jsonb(c)` + suffix + ` ORDER BY id) FROM download_categories c),'files',(SELECT jsonb_agg(to_jsonb(d)` + fileSuffix + ` ORDER BY id) FROM downloads d),'private',(SELECT jsonb_agg(to_jsonb(c)` + fileSuffix + ` ORDER BY id) FROM customer_files c),'links',(SELECT jsonb_agg(to_jsonb(p)` + link + ` ORDER BY download_id,product_id) FROM download_products p),'settings',(SELECT to_jsonb(s) FROM download_settings s))::text`
 	}
 	var before, after string
 	if err = db.Pool.QueryRow(t.Context(), query(false)).Scan(&before); err != nil {

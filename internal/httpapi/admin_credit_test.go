@@ -31,10 +31,10 @@ func TestAdminCreditPageAndLimitAdjustment(t *testing.T) {
 	expect(t, request(h, "PUT", path, map[string]any{"limit_cents": 8000, "expected_version": 1}, root, "credit-limit-key"), 409)
 	expect(t, request(h, "PUT", path, map[string]any{"limit_cents": 1000, "expected_version": 2}, root, "credit-limit-below"), 409)
 	staffID, staff := user(t, db, h, "credit-contract-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view','credit.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view','credit.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", path, map[string]any{"limit_cents": 7000, "expected_version": 1}, staff, "credit-limit-key"), 404)
@@ -42,7 +42,7 @@ func TestAdminCreditPageAndLimitAdjustment(t *testing.T) {
 	if scoped["total"].(float64) != 0 {
 		t.Fatal("scope leaked", scoped)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/credit", nil, staff, ""), 403)
@@ -63,7 +63,7 @@ func TestAdminCreditConcurrentReplayAndRevocation(t *testing.T) {
 	db, h := testServer(t)
 	staffID, staff := user(t, db, h, "credit-mutation-staff", "admin")
 	uid, customer := user(t, db, h, "credit-mutation-client", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, uid); err != nil {
@@ -103,7 +103,7 @@ func TestAdminCreditConcurrentReplayAndRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", path, payload, staff, "credit-concurrent-key"), 404)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['credit.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", path, payload, staff, "credit-concurrent-key"), 403)

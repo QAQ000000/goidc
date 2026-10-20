@@ -28,7 +28,7 @@ func legacyRecipientCurrent(ctx context.Context, tx pgx.Tx, userID int64, recipi
 		address = "phone_verified AND phone=$2"
 	}
 	var valid bool
-	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND status='active' AND `+address+`)`, userID, recipient).Scan(&valid)
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM account_identities WHERE id=$1 AND status='active' AND `+address+`)`, userID, recipient).Scan(&valid)
 	return valid, err
 }
 

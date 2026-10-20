@@ -48,7 +48,7 @@ func TestOrderExternalRefundBrowserFixture(t *testing.T) {
 		for _, actor := range actors {
 			id, cookie := externalRefundActor(t, db, f.h, actor.name, actor.permissions)
 			if actor.limited {
-				if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, id); err != nil {
+				if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, id); err != nil {
 					t.Fatal(err)
 				}
 			}

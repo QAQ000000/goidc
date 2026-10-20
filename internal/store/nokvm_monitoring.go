@@ -18,8 +18,12 @@ func (s *Store) monitoringBinding(ctx context.Context, actorID, serviceID int64,
 	return withTx(ctx, s, func(tx pgx.Tx) (monitoringBinding, error) {
 		var err error
 		var allowed bool
+		table, err := authenticationTable(ctx, tx, actorID)
+		if err != nil {
+			return binding, err
+		}
 		if err = tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (NOT $2::boolean OR u.role='super_admin' OR (u.role='admin' AND r.active AND 'services.view'=ANY(r.permissions))),false)
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actorID, admin).Scan(&allowed); err != nil {
+ FROM `+table+` u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actorID, admin).Scan(&allowed); err != nil {
 			return binding, err
 		}
 		if !allowed {

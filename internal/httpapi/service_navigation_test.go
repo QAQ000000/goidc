@@ -142,7 +142,7 @@ func TestServiceNavigationPermissionsSalesScopeAndConcurrency(t *testing.T) {
 	assignNav(t, h, root, pid, &g)
 	navOrder(t, h, c1, pid, "nav-scope-order-one")
 	navOrder(t, h, c2, pid, "nav-scope-order-two")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1;", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1;", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", c1ID, staffID); err != nil {
@@ -161,7 +161,9 @@ func TestServiceNavigationPermissionsSalesScopeAndConcurrency(t *testing.T) {
 	expect(t, request(h, "GET", "/api/v1/admin/service-groups", nil, reader, ""), 200)
 	expect(t, request(h, "PUT", path, in, reader, ""), 403)
 	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/products/%d/service-group", pid), map[string]any{"group_id": nil, "expected_revision": 2}, reader, ""), 403)
-	expect(t, request(h, "POST", "/api/v1/admin/service-groups", in, c1, ""), 403)
+	// A customer cookie does not authenticate fixed administrator routes; the
+	// administrator permission checks above still exercise the 403 boundary.
+	expect(t, request(h, "POST", "/api/v1/admin/service-groups", in, c1, ""), 401)
 	// Two same-version writers cannot both succeed.
 	codes := make(chan int, 2)
 	var wg sync.WaitGroup
@@ -201,7 +203,7 @@ func TestServiceNavigationPermissionsSalesScopeAndConcurrency(t *testing.T) {
 	contentRole(t, db, staffID, "products.view", "services.view")
 	expect(t, requestBearer(h, "POST", "/api/v1/admin/service-groups", keyInput, secret), 403)
 	// Cached route permissions cannot replace the store's fresh authorization.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", rootID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", rootID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.SaveServiceGroup(t.Context(), rootID, 0, store.ServiceGroupInput{Name: "blocked", Icon: "server"}); err == nil {

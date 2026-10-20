@@ -83,7 +83,7 @@ func TestOrderExternalRefundHTTPBroadRejections(t *testing.T) {
 	affiliateSetup := []string{
 		`INSERT INTO affiliate_programs(name) VALUES('isolated-matrix-program')`,
 		`INSERT INTO affiliate_rule_sets(program_id,version) SELECT id,1 FROM affiliate_programs WHERE name='isolated-matrix-program'`,
-		`INSERT INTO affiliate_accounts(user_id,program_id,status) SELECT u.id,p.id,'approved' FROM users u CROSS JOIN affiliate_programs p WHERE u.username='order-refund-root' AND p.name='isolated-matrix-program'`,
+		`INSERT INTO affiliate_accounts(user_id,program_id,status) SELECT u.id,p.id,'approved' FROM users u CROSS JOIN affiliate_programs p WHERE u.username='order-refund-customer' AND p.name='isolated-matrix-program'`,
 	}
 	cases = append(cases, boundary{name: "turnover_without_commission", statements: append(append([]string{}, affiliateSetup...), `INSERT INTO affiliate_turnover_entries(invoice_id,account_id,rule_set_id,basis_cents,paid_at) SELECT @invoice,a.id,r.id,@amount,now() FROM affiliate_accounts a JOIN affiliate_rule_sets r ON r.program_id=a.program_id`), proof: `EXISTS(SELECT 1 FROM affiliate_turnover_entries WHERE invoice_id=@invoice) AND NOT EXISTS(SELECT 1 FROM affiliate_commission_entries WHERE invoice_id=@invoice)`})
 	for _, status := range []string{"pending", "available", "reserved", "paid", "reversed", "clawback"} {

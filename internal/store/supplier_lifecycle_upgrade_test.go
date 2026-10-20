@@ -90,7 +90,7 @@ func supplierLifecycleUpgradeFacts(t *testing.T, db *Store) string {
 'jobs',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM provision_jobs x),
 'orders',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM orders x),
 'items',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM order_items x),
-'users',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM users x),
+'users',`+historicalAccountSnapshotRows(t, db)+`,
 'invoices',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoices x),
 'payments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM payment_transactions x),
 'ledger',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM balance_ledger x))::text`).Scan(&facts); err != nil {

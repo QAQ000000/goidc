@@ -31,7 +31,7 @@ func impersonationBindingAllowed(ctx context.Context, q impersonationQuerier, b 
 	var allowed bool
 	err := q.QueryRow(ctx, `SELECT coalesce((a.role='super_admin' OR (a.role='admin' AND ar.active AND 'customers.manage'=ANY(ar.permissions)))
  AND admin_customer_owner_allowed(a.id,c.sales_owner_id),false)
- FROM sessions s JOIN users a ON a.id=s.user_id AND a.status='active'
+ FROM sessions s JOIN administrators a ON a.id=s.user_id AND a.status='active'
  LEFT JOIN admin_roles ar ON ar.id=a.admin_role_id
  JOIN users c ON c.id=$3 AND c.role='customer' AND c.status='active'
  WHERE s.token_hash=$1 AND s.user_id=$2 AND s.expires_at>clock_timestamp()`, b.AdminHash, b.ActorID, b.CustomerID).Scan(&allowed)
@@ -50,7 +50,7 @@ func lockImpersonationAdministrator(ctx context.Context, tx pgx.Tx, actorID int6
 	}
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		return err
 	}
 	if role == "super_admin" {
@@ -155,7 +155,7 @@ func (s *Store) CustomerImpersonationStatus(ctx context.Context, customerID int6
 		return "", false, err
 	}
 	var name string
-	err = s.Pool.QueryRow(ctx, "SELECT display_name FROM users WHERE id=$1", b.ActorID).Scan(&name)
+	err = s.Pool.QueryRow(ctx, "SELECT display_name FROM administrators WHERE id=$1", b.ActorID).Scan(&name)
 	return name, err == nil, err
 }
 func (s *Store) EndCustomerImpersonation(ctx context.Context, customerHash, adminHash string) (int64, error) {

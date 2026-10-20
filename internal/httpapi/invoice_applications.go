@@ -20,7 +20,18 @@ func requestFileContext(r *http.Request) context.Context {
 	if bearer := bearerCredential(r); bearer != "" {
 		return store.WithStorageCredential(r.Context(), tokenHash(bearer), true)
 	}
-	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
+	// Fixed management routes and shared routes with an explicit admin audience
+	// must bind the final check to the selected original portal. The auth wrapper
+	// may project that cookie into zjmfgo_session, so prefer the immutable browser
+	// session state when present; never fall back to the other portal.
+	portal, hasPortal := r.Context().Value(browserPortalContextKey{}).(string)
+	if !hasPortal {
+		portal = "customer"
+		if strings.HasPrefix(r.URL.Path, "/api/v1/admin/") || r.Header.Get("X-Auth-Portal") == "admin" {
+			portal = "admin"
+		}
+	}
+	if cookie, err := originalSessionCookie(r, portal); err == nil {
 		return store.WithStorageCredential(r.Context(), tokenHash(cookie.Value), false)
 	}
 	return r.Context()
@@ -216,24 +227,8 @@ func (s *Server) invoiceApplicationDetail(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) invoiceApplicationReader(w http.ResponseWriter, r *http.Request, tx pgx.Tx, actor int64) bool {
-	var role string
-	var roleID *int64
-	if err := tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
+	if err := store.RequireAdministratorPermission(r.Context(), tx, actor, "invoice_applications.view"); err != nil {
 		s.fail(w, r, err)
-		return false
-	}
-	if role == "super_admin" {
-		return true
-	}
-	var allowed bool
-	if role == "admin" && roleID != nil {
-		if err := tx.QueryRow(r.Context(), "SELECT active AND 'invoice_applications.view'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
-			s.fail(w, r, err)
-			return false
-		}
-	}
-	if !allowed {
-		writeError(w, 403, "permission_denied", "没有读取发票申请的权限")
 		return false
 	}
 	return true

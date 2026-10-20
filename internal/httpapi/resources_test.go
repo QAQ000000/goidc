@@ -11,7 +11,7 @@ func TestAdminResourcesPageContractAndPermission(t *testing.T) {
 	_, root := user(t, db, h, "resources-contract-root", "super_admin")
 	_, customer := user(t, db, h, "resources-contract-customer", "customer")
 	adminID, resourceViewer := user(t, db, h, "resources-contract-viewer", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['resources.view']::text[] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, adminID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['resources.view']::text[] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, adminID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/resources", nil, "", ""), 401)
@@ -44,7 +44,7 @@ func TestAdminResourcesPageContractAndPermission(t *testing.T) {
 	if _, err := db.Pool.Exec(t.Context(), `DELETE FROM services WHERE id=$1`, sid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned' WHERE id=$1;`, adminID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned' WHERE id=$1;`, adminID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$1 WHERE id=$2`, adminID, owner); err != nil {
@@ -73,7 +73,7 @@ func TestAdminResourcesPageContractAndPermission(t *testing.T) {
 		}
 	}
 
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, adminID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, adminID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/resources", nil, resourceViewer, ""), 403)

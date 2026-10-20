@@ -9,7 +9,7 @@ func TestAdminCustomerAndCertificationPages(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "pagination-root", "super_admin")
 	owner, staff := user(t, db, h, "pagination-owner", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE id=$1", owner); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE id=$1", owner); err != nil {
 		t.Fatal(err)
 	}
 	var group int64

@@ -297,7 +297,7 @@ func TestNotificationCenterAdminScopeAndAuditRollback(t *testing.T) {
 	staffID, staff := user(t, db, h, "center-scope-staff", "admin")
 	uid, customer := user(t, db, h, "center-scope-customer", "customer")
 	otherID, _ := user(t, db, h, "center-scope-other", "customer")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1;`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1;`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, uid, staffID); err != nil {
@@ -333,7 +333,7 @@ func TestNotificationCenterAdminScopeAndAuditRollback(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `SELECT count(*) FROM user_notification_preferences WHERE user_id=$1`, uid).Scan(&count); err != nil || count != 0 {
 		t.Fatal("audit failure did not rollback preference", count, err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PATCH", "/api/v1/admin/notification-center/templates/invoice-paid-inbox", map[string]any{"subject": "新模板", "body": "{{amount}}", "active": true, "expected_version": 1}, staff, ""), 403)

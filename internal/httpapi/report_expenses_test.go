@@ -14,7 +14,7 @@ import (
 )
 
 func TestReportExpenseValidation(t *testing.T) {
-	valid := reportExpenseInput{100, "2024-02-29", " hosting ", " bank ", " test://receipt ", " note "}
+	valid := reportExpenseInput{AmountCents: 100, OccurredOn: "2024-02-29", Category: " hosting ", Source: " bank ", EvidenceRef: " test://receipt ", Note: " note "}
 	if err := validateReportExpense(&valid); err != nil || valid.Category != "hosting" {
 		t.Fatalf("valid expense rejected: %+v err=%v", valid, err)
 	}
@@ -36,7 +36,7 @@ func TestReportExpensesPermissionsAppendOnlyReplayAndAudit(t *testing.T) {
 	in := map[string]any{"amount_cents": 1234, "occurred_on": "2024-02-01", "category": "机房", "source": "银行", "evidence_ref": "test://expense-receipt", "note": "manual cost"}
 	expect(t, request(h, "POST", path, in, "", "expense-no-session"), 401)
 	expect(t, request(h, "POST", path, in, customer, "expense-customer"), 401)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['reports.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['reports.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "POST", path, in, staff, "expense-reader-denied"), 403)
@@ -57,7 +57,7 @@ func TestReportExpensesPermissionsAppendOnlyReplayAndAudit(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["recorded_by_name"] != "expense-root" || data(t, w)["manageable"] != false {
 		t.Fatalf("expense ledger: %s", w.Body.String())
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	w = request(h, "GET", path+"?year=2024", nil, staff, "")
@@ -112,7 +112,7 @@ func TestReportExpensesPermissionsAppendOnlyReplayAndAudit(t *testing.T) {
 		t.Fatalf("void expense still in active costs: %s", w.Body.String())
 	}
 	// Role revocation applies to an otherwise valid idempotent replay.
-	for _, query := range []string{"UPDATE admin_roles SET permissions=ARRAY['reports.view','finance.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", "UPDATE users SET customer_scope='all' WHERE id=$1"} {
+	for _, query := range []string{"UPDATE admin_roles SET permissions=ARRAY['reports.view','finance.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", "UPDATE administrators SET customer_scope='all' WHERE id=$1"} {
 		if _, err := db.Pool.Exec(t.Context(), query, staffID); err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +120,7 @@ func TestReportExpensesPermissionsAppendOnlyReplayAndAudit(t *testing.T) {
 	in["evidence_ref"] = "test://expense-staff-receipt"
 	w = request(h, "POST", path, in, staff, "expense-staff-create")
 	expect(t, w, 201)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['reports.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['reports.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "POST", path, in, staff, "expense-staff-create"), 403)

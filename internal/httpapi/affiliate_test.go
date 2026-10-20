@@ -284,7 +284,7 @@ func TestAffiliateAdminPermissionBoundary(t *testing.T) {
 	db, h := testServer(t)
 	_, customer := user(t, db, h, "affiliate-permission-customer", "customer")
 	_, admin := user(t, db, h, "affiliate-permission-admin", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['affiliates.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='affiliate-permission-admin')"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['affiliates.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE username='affiliate-permission-admin')"); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, http.MethodGet, "/api/v1/admin/affiliate/accounts", nil, admin, ""), http.StatusOK)

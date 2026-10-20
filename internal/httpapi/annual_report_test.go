@@ -21,7 +21,7 @@ func TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	exec("UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
+	exec("UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
 	exec("UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, uid)
 	_ = customer
 	invoice := manualInvoiceCreate(t, h, root, manualInvoiceInput(uid), "annual-real-refund-invoice")

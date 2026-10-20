@@ -86,7 +86,7 @@ func lockAffiliateActor(ctx context.Context, tx pgx.Tx, actor, customer int64, p
 			return err
 		}
 	} else {
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND r.active AND $2=ANY(r.permissions))),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actor, permission).Scan(&allowed); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND r.active AND $2=ANY(r.permissions))),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actor, permission).Scan(&allowed); err != nil {
 			return err
 		}
 	}

@@ -49,7 +49,7 @@ func TestCommissionMigrationsUpgradeHistorical133(t *testing.T) {
 	exec(`UPDATE invoices SET created_at='2026-08-01T00:00:00+08',paid_at=CASE WHEN status='paid' THEN '2026-08-25T10:00:00+08'::timestamptz ELSE NULL END WHERE id=ANY($1::bigint[])`, []int64{paid, zero, repaid, outstanding, refunded, unproven, noAt})
 	exec(`UPDATE invoices SET created_at='2026-01-15T00:00:00+08' WHERE id=$1`, unproven)
 	var actor int64
-	if e := f.db.Pool.QueryRow(t.Context(), `SELECT id FROM users WHERE username='settlement-root'`).Scan(&actor); e != nil {
+	if e := f.db.Pool.QueryRow(t.Context(), `SELECT id FROM administrators WHERE username='settlement-root'`).Scan(&actor); e != nil {
 		t.Fatal(e)
 	}
 	exec(`INSERT INTO credit_invoice_payments(invoice_id,user_id,amount_cents,remaining_cents,status,version,expected_version,idempotency_key) SELECT id,user_id,amount_cents,CASE WHEN id=$1 THEN 0 ELSE amount_cents-333 END,CASE WHEN id=$1 THEN 'repaid' ELSE 'outstanding' END,CASE WHEN id=$1 THEN 3 ELSE 2 END,1,'migration-credit-'||id FROM invoices WHERE id=ANY($2::bigint[])`, repaid, []int64{repaid, outstanding})

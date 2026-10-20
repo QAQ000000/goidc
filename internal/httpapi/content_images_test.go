@@ -96,6 +96,11 @@ func TestContentImagesDecodePermissionsAndVisibility(t *testing.T) {
 	secret := data(t, key)["secret"].(string)
 	expect(t, requestBearer(h, "GET", adminImagePath, nil, secret), 200)
 	expect(t, requestBearer(h, "GET", imagePath, nil, secret), 404)
+	customerKey := request(h, "POST", "/api/v1/api-keys", map[string]string{"name": "image-customer"}, customer, "")
+	expect(t, customerKey, 201)
+	customerSecret := data(t, customerKey)["secret"].(string)
+	expect(t, requestBearer(h, "GET", adminImagePath, nil, customerSecret), 403)
+	expect(t, requestBearer(h, "GET", imagePath, nil, customerSecret), 404)
 	input.Status = "published"
 	input.ExpectedVersion = 1
 	input.BodyHTML = `<p>Safe <strong>body</strong></p><img src="` + imagePath + `" onerror="alert(1)"><a href="/\evil.test">bad</a><script>secret-script-text</script>`
@@ -105,14 +110,19 @@ func TestContentImagesDecodePermissionsAndVisibility(t *testing.T) {
 	expect(t, portalRequest(h, "GET", imagePath, nil, root, "admin"), 404)
 	expect(t, portalRequest(h, "GET", imagePath, nil, root+"; "+customerSessionCookie+"=invalid", "admin"), 404)
 	expect(t, portalRequest(h, "GET", imagePath, nil, root+"; "+customer, "admin"), 200)
-	// Explicit API keys retain the published-content reader contract. They cannot
-	// use the public URL to preview drafts, even with administrator permissions.
-	expect(t, requestBearer(h, "GET", imagePath, nil, secret), 200)
+	// Public image URLs accept customer credentials only. Administrator API keys
+	// remain restricted to the fixed management preview route.
+	expect(t, requestBearer(h, "GET", imagePath, nil, secret), 404)
+	expect(t, requestBearer(h, "GET", imagePath, nil, customerSecret), 200)
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE api_keys SET revoked_at=now() WHERE secret_hash=$1", tokenHash(secret)); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, requestBearer(h, "GET", adminImagePath, nil, secret), 401)
 	expect(t, requestBearer(h, "GET", imagePath, nil, secret), 404)
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE api_keys SET revoked_at=now() WHERE secret_hash=$1", tokenHash(customerSecret)); err != nil {
+		t.Fatal(err)
+	}
+	expect(t, requestBearer(h, "GET", imagePath, nil, customerSecret), 404)
 	body := request(h, "GET", fmt.Sprintf("/api/v1/knowledgebase/%d", id), nil, customer, "")
 	expect(t, body, 200)
 	if !strings.Contains(body.Body.String(), imagePath) || strings.Contains(body.Body.String(), adminImagePath) {
@@ -166,7 +176,7 @@ func TestContentImageAdminPreviewRechecksAuthorityAfterObjectWait(t *testing.T) 
 			if change == "session" {
 				_, err = f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(reader)))
 			} else {
-				_, err = f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID)
+				_, err = f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID)
 			}
 			if err != nil {
 				t.Fatal(err)

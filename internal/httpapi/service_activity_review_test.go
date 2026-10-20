@@ -42,7 +42,7 @@ VALUES($1,'service.nokvm.verified','service',$2,jsonb_build_object('resolution',
 }
 
 func TestServiceActivityWaitingRechecksCredentialsAndPermissions(t *testing.T) {
-	for _, revocation := range []string{"customer_session", "admin_session", "admin_scope_session", "admin_key", "admin_permission", "admin_account"} {
+	for _, revocation := range []string{"customer_session", "customer_api_disabled", "admin_session", "admin_scope_session", "admin_key", "admin_permission", "admin_account"} {
 		t.Run(revocation, func(t *testing.T) {
 			db, h := testServer(t)
 			uid, owner := user(t, db, h, "activity-wait-owner", "customer")
@@ -50,11 +50,11 @@ func TestServiceActivityWaitingRechecksCredentialsAndPermissions(t *testing.T) {
 			sid := downloadService(t, db, h, uid, owner, product(t, db, 4), "activity-wait-order")
 			path := fmt.Sprintf("/api/v1/admin/services/%d/activity", sid)
 			actor, cookie := adminID, admin
-			if revocation == "customer_session" {
+			if revocation == "customer_session" || revocation == "customer_api_disabled" {
 				actor, cookie, path = uid, owner, fmt.Sprintf("/api/v1/services/%d/activity", sid)
 			}
 			secret := "zjmfgo_" + strings.Repeat("a", 64)
-			if revocation == "admin_key" {
+			if revocation == "admin_key" || revocation == "customer_api_disabled" {
 				if _, err := db.Pool.Exec(t.Context(), `INSERT INTO api_keys(user_id,name,prefix,secret_hash) VALUES($1,'activity-test','zjmfgo_1234567890123456',$2)`, actor, tokenHash(secret)); err != nil {
 					t.Fatal(err)
 				}
@@ -76,7 +76,7 @@ func TestServiceActivityWaitingRechecksCredentialsAndPermissions(t *testing.T) {
 			}
 			done := make(chan int, 1)
 			go func() {
-				if revocation == "admin_key" {
+				if revocation == "admin_key" || revocation == "customer_api_disabled" {
 					done <- requestBearer(h, "GET", path, nil, secret).Code
 				} else {
 					done <- request(h, "GET", path, nil, cookie, "").Code
@@ -98,13 +98,16 @@ func TestServiceActivityWaitingRechecksCredentialsAndPermissions(t *testing.T) {
 			}
 			want := 401
 			switch revocation {
+			case "customer_api_disabled":
+				_, err = db.Pool.Exec(t.Context(), "UPDATE resource_api_settings SET enabled=false WHERE id=1")
+				want = 403
 			case "admin_key":
 				_, err = db.Pool.Exec(t.Context(), "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1", actor)
 			case "admin_permission":
-				_, err = db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actor)
+				_, err = db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", actor)
 				want = 403
 			case "admin_account":
-				_, err = db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", actor)
+				_, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", actor)
 			default:
 				_, err = db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE user_id=$1", actor)
 			}

@@ -264,7 +264,7 @@ func TestFileStorageAPIReplacementRollbackAndCascadeRelease(t *testing.T) {
 	}
 	// Deleting an internal note follows a different cascade than deleting a ticket.
 	var noteID int64
-	if err := f.db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_notes(ticket_id,author_id,body) VALUES($1,(SELECT id FROM users WHERE role='super_admin' LIMIT 1),'private') RETURNING id", f.ticketID).Scan(&noteID); err != nil {
+	if err := f.db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_notes(ticket_id,author_id,body) VALUES($1,(SELECT id FROM administrators WHERE role='super_admin' LIMIT 1),'private') RETURNING id", f.ticketID).Scan(&noteID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE ticket_attachments SET note_id=$2 WHERE id=$1", f.files[2].id, noteID); err != nil {

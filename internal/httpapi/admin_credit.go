@@ -136,43 +136,14 @@ func (s *Server) adminCreditLimit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) lockCreditManager(w http.ResponseWriter, r *http.Request, tx pgx.Tx, id int64) bool {
-	actor := identityFrom(r).ID
-	var err error
-	var role string
-	var roleID *int64
-	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
-		s.fail(w, r, err)
-		return false
-	}
-	if role != "super_admin" {
-		var allowed bool
-		if roleID == nil {
-			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
-			return false
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT active AND 'credit.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil {
-			s.fail(w, r, err)
-			return false
-		}
-		if !allowed {
-			writeError(w, 403, "permission_denied", "没有管理信用额的权限")
-			return false
-		}
-	}
-	cookie, cookieErr := r.Cookie("zjmfgo_session")
-	if cookieErr != nil {
+	cookie, err := r.Cookie("zjmfgo_session")
+	if err != nil {
 		writeError(w, 401, "unauthorized", "会话失效")
 		return false
 	}
-	var sessionUser int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>now() FOR SHARE", tokenHash(cookie.Value), actor).Scan(&sessionUser); err != nil {
-		writeError(w, 401, "unauthorized", "会话失效")
-		return false
-	}
-	if err = store.LockAdminCustomer(r.Context(), tx, actor, id); err != nil {
+	if err = store.LockCreditAdministrator(r.Context(), tx, identityFrom(r).ID, id, tokenHash(cookie.Value)); err != nil {
 		s.fail(w, r, err)
 		return false
 	}
-
 	return true
 }

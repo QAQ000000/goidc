@@ -471,13 +471,13 @@ func TestPaymentCloseVerificationRechecksAuthorityAtCompletionAndReview(t *testi
 				}
 				switch mode {
 				case "permission":
-					_, err = f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, actor)
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, actor)
 				case "session":
 					_, err = f.db.Pool.Exec(t.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hash)
 				case "scope":
-					_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, actor)
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, actor)
 				case "disabled":
-					_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET status='disabled' WHERE id=$1`, actor)
+					_, err = f.db.Pool.Exec(t.Context(), `UPDATE administrators SET status='disabled' WHERE id=$1`, actor)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -516,7 +516,7 @@ func TestPaymentCloseVerificationHTTPBoundaryAndApplicantCannotSelfReview(t *tes
 	expect(t, request(f.h, "POST", path, map[string]any{"close_operation_id": f.operation.ID, "expected_version": 1, "target_status": "closed"}, f.verifier, "verify-no-forged-status"), 400)
 	id := f.lookup(t, "verify-boundary-candidate")
 	actor, _ := closeActor(t, f.upgradeFixture, f.verifier)
-	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view','payments.close_verify','payments.close_review'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, actor); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['invoices.view','payments.close_verify','payments.close_review'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, actor); err != nil {
 		t.Fatal(err)
 	}
 	review := fmt.Sprintf("%s/%d/confirm", path, id)

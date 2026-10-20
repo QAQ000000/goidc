@@ -54,7 +54,7 @@ func (s *Store) APIAccessLogs(ctx context.Context, filter APIAccessLogFilter, li
 	if filter.Until != nil {
 		add(*filter.Until, "a.created_at<?")
 	}
-	base := " FROM admin_api_logs a LEFT JOIN users u ON u.id=a.actor_id WHERE " + strings.Join(where, " AND ")
+	base := " FROM admin_api_logs a LEFT JOIN account_identities u ON u.id=a.actor_id WHERE " + strings.Join(where, " AND ")
 	var total int64
 	if err := s.Pool.QueryRow(ctx, "SELECT count(*)"+base, args...).Scan(&total); err != nil {
 		return nil, err

@@ -31,7 +31,7 @@ func TestSalesReportDetailsAmountsScopeAndSnapshot(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps,renewal_rate_bps,upgrade_rate_bps) VALUES('detail',1000,2000,3000) RETURNING id`).Scan(&group); err != nil {
 		t.Fatal(err)
 	}
-	exec(`UPDATE users SET customer_scope='owned',customer_ownerless=false,sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group)
+	exec(`UPDATE administrators SET customer_scope='owned',customer_ownerless=false,sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group)
 	exec(`UPDATE users SET sales_owner_id=$2 WHERE id=$1`, customer, owner)
 	exec(`UPDATE users SET sales_owner_id=$2 WHERE id=$1`, hidden, otherOwner)
 	p1, p2 := product(t, db, 20), product(t, db, 20)
@@ -159,7 +159,7 @@ func TestSalesReportDetailsCreditUnconfiguredAndRenewal(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO sales_commission_groups(name,purchase_rate_bps,renewal_rate_bps,upgrade_rate_bps,include_upgrade) VALUES('credit-group',1000,2000,3000,false) RETURNING id`).Scan(&group); err != nil {
 		t.Fatal(err)
 	}
-	exec(`UPDATE users SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group)
+	exec(`UPDATE administrators SET sales_enabled=true,sales_commission_group_id=$2 WHERE id=$1`, owner, group)
 	feb = get("year=2024&month=2&condition=credit")
 	item = feb["items"].([]any)[0].(map[string]any)
 	if item["estimated_commission_cents"] != float64(48) {

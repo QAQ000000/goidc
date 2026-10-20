@@ -48,7 +48,7 @@ func TestNotificationCenterBrowserFixture(t *testing.T) {
 		_, seedAdmin := user(t, db, h, "notify-browser-seed", "super_admin")
 		uid, _ := user(t, db, h, "notify-browser-customer", "customer")
 		staff, _ := user(t, db, h, "notify-browser-reader", "admin")
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, staff); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['notifications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, staff); err != nil {
 			t.Fatal(err)
 		}
 		centerBot(t, h, seedAdmin, "browser-telegram")

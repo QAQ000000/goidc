@@ -25,8 +25,12 @@ func TestTicketRatingOwnershipOnceReplayAndHistoricalIdentity(t *testing.T) {
 	adminCreated := request(h, "POST", "/api/v1/admin/tickets", map[string]any{"customer_id": customerID, "department_id": dept, "subject": "Initial staff content", "body": "staff initial", "priority": "normal", "send_email": false}, root, "rating-admin-initial")
 	expect(t, adminCreated, 201)
 	initialID := int64(data(t, adminCreated)["id"].(float64))
-	// Changing the author's current role must not rewrite the writing-time identity.
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET role='customer' WHERE id=$1`, rootID); err != nil {
+	// A physical administrator cannot become a customer. Historical staff authors
+	// still remain rateable after their administrator account is disabled.
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET role='customer' WHERE id=$1`, rootID); err == nil {
+		t.Fatal("administrator changed to customer role")
+	}
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET status='disabled' WHERE id=$1`, rootID); err != nil {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/api/v1/tickets/%d/ratings", tid)
@@ -135,7 +139,7 @@ func TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination(t *testing.T
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO ticket_departments(name,slug) VALUES('Hidden','handler-hidden') RETURNING id`).Scan(&hidden); err != nil {
 		t.Fatal(err)
 	}
-	exec(`UPDATE users SET ticket_scope='departments' WHERE id=$1`, viewerID)
+	exec(`UPDATE administrators SET ticket_scope='departments' WHERE id=$1`, viewerID)
 	exec(`INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)`, viewerID, dept)
 	ticket := func(no string, department, assignee int64) int64 {
 		t.Helper()
@@ -205,6 +209,6 @@ func TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination(t *testing.T
 		t.Fatal("tickets not attributed to current assignee")
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/reports/tickets/handlers?year=2024&month=2&sort=handler_id%3BDROP", nil, viewer, ""), 400)
-	exec(`UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, viewerID)
+	exec(`UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, viewerID)
 	expect(t, request(h, "GET", path, nil, viewer, ""), 403)
 }

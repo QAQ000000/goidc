@@ -61,7 +61,7 @@ func TestProductPurchaseBrowserFixture(t *testing.T) {
 			defer cancel()
 			var orders, units, total, quantity, staffOrders int64
 			var cycle, hostname string
-			err := db.Pool.QueryRow(ctx, `SELECT count(DISTINCT o.id),coalesce(sum(i.quantity),0),coalesce(sum(i.total_cents),0),coalesce(max((i.option_quantities->>$2)::bigint),0),coalesce(max(i.billing_cycle),''),coalesce(max((SELECT f->>'value' FROM jsonb_array_elements(i.purchase_fields) f WHERE f->>'key'='hostname')),''),(SELECT count(*) FROM orders x JOIN users u ON u.id=x.user_id WHERE u.role IN ('admin','super_admin')) FROM orders o JOIN order_items i ON i.order_id=o.id WHERE o.user_id=$1`, buyer, fmt.Sprint(diskOption)).Scan(&orders, &units, &total, &quantity, &cycle, &hostname, &staffOrders)
+			err := db.Pool.QueryRow(ctx, `SELECT count(DISTINCT o.id),coalesce(sum(i.quantity),0),coalesce(sum(i.total_cents),0),coalesce(max((i.option_quantities->>$2)::bigint),0),coalesce(max(i.billing_cycle),''),coalesce(max((SELECT f->>'value' FROM jsonb_array_elements(i.purchase_fields) f WHERE f->>'key'='hostname')),''),(SELECT count(*) FROM orders x JOIN administrators u ON u.id=x.user_id WHERE u.role IN ('admin','super_admin')) FROM orders o JOIN order_items i ON i.order_id=o.id WHERE o.user_id=$1`, buyer, fmt.Sprint(diskOption)).Scan(&orders, &units, &total, &quantity, &cycle, &hostname, &staffOrders)
 			if err != nil || orders != 1 || units != 2 || total != 9486 || quantity != 6 || cycle != "quarterly" || hostname != "purchase-web-01" || staffOrders != 0 {
 				t.Errorf("browser purchase facts mismatch: orders=%d units=%d cents=%d disk=%d cycle=%s hostname=%s staff=%d err=%v", orders, units, total, quantity, cycle, hostname, staffOrders, err)
 			}

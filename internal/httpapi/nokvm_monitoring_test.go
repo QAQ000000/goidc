@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/provision"
 )
 
 func TestNOKVMMonitoringHTTPPermissionsAndRedaction(t *testing.T) {
@@ -30,7 +32,7 @@ func TestNOKVMMonitoringHTTPPermissionsAndRedaction(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/services/%d/monitoring?period=1h", f.sid)
 	expect(t, request(f.h, "GET", path, nil, f.other, ""), 404)
 	readerID, reader := user(t, f.db, f.h, "monitor-reader-http", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	adminPath := strings.Replace(path, "/services/", "/admin/services/", 1)
@@ -58,7 +60,7 @@ func TestNOKVMMonitoringHTTPPermissionsAndRedaction(t *testing.T) {
 }
 
 func TestNOKVMMonitoringRevalidatesAuthorizationAfterNetwork(t *testing.T) {
-	for _, change := range []string{"logout", "disable", "revoke_role", "scope", "resource", "terminate"} {
+	for _, change := range []string{"logout", "logout_admin", "revoke_customer_key", "revoke_admin_key", "disable", "revoke_role", "scope", "resource", "terminate"} {
 		t.Run(change, func(t *testing.T) {
 			entered, release := make(chan struct{}), make(chan struct{})
 			f := nokvmFixtureSetup(t, func(w http.ResponseWriter, r *http.Request) {
@@ -84,12 +86,24 @@ func TestNOKVMMonitoringRevalidatesAuthorizationAfterNetwork(t *testing.T) {
 			})
 			actor, cookie := f.uid, f.customer
 			path := fmt.Sprintf("/api/v1/services/%d/monitoring", f.sid)
-			if change == "revoke_role" || change == "scope" {
+			if change == "logout_admin" || change == "revoke_admin_key" || change == "revoke_role" || change == "scope" {
 				actor, cookie = user(t, f.db, f.h, "monitor-revalidate-reader", "admin")
 				path = fmt.Sprintf("/api/v1/admin/services/%d/monitoring", f.sid)
 			}
+			secret := ""
+			if change == "revoke_customer_key" || change == "revoke_admin_key" {
+				key := request(f.h, "POST", "/api/v1/api-keys", map[string]string{"name": "monitor-revalidation"}, cookie, "")
+				expect(t, key, 201)
+				secret = data(t, key)["secret"].(string)
+			}
 			done := make(chan *httptest.ResponseRecorder, 1)
-			go func() { done <- request(f.h, "GET", path, nil, cookie, "") }()
+			go func() {
+				if secret != "" {
+					done <- requestBearer(f.h, "GET", path, nil, secret)
+					return
+				}
+				done <- request(f.h, "GET", path, nil, cookie, "")
+			}()
 			select {
 			case <-entered:
 			case <-time.After(5 * time.Second):
@@ -108,14 +122,17 @@ func TestNOKVMMonitoringRevalidatesAuthorizationAfterNetwork(t *testing.T) {
 			var query string
 			var param any = actor
 			switch change {
-			case "logout":
+			case "logout", "logout_admin":
 				query = "DELETE FROM sessions WHERE user_id=$1"
+			case "revoke_customer_key", "revoke_admin_key":
+				query = "UPDATE api_keys SET revoked_at=now() WHERE secret_hash=$1"
+				param = tokenHash(secret)
 			case "disable":
 				query = "UPDATE users SET status='disabled' WHERE id=$1"
 			case "revoke_role":
-				query = "UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)"
+				query = "UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)"
 			case "scope":
-				query = "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1"
+				query = "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1"
 			case "resource":
 				query = "UPDATE services SET upstream_id='43' WHERE id=$1"
 				param = f.sid
@@ -129,7 +146,7 @@ func TestNOKVMMonitoringRevalidatesAuthorizationAfterNetwork(t *testing.T) {
 			close(release)
 			response := <-done
 			expected := 409
-			if change == "logout" {
+			if change == "logout" || change == "logout_admin" || change == "revoke_customer_key" || change == "revoke_admin_key" {
 				expected = 401
 			}
 			if change == "disable" || change == "revoke_role" {
@@ -143,5 +160,67 @@ func TestNOKVMMonitoringRevalidatesAuthorizationAfterNetwork(t *testing.T) {
 				t.Fatal("monitor data returned after authorization changed")
 			}
 		})
+	}
+}
+
+func TestNOKVMResourceReadsRevalidatePortalLogoutAfterNetwork(t *testing.T) {
+	for _, kind := range []string{"storage/snapshot", "cdrom"} {
+		for _, portal := range []string{"customer", "admin"} {
+			t.Run(kind+"/"+portal, func(t *testing.T) {
+				entered, release := make(chan struct{}), make(chan struct{})
+				f := nokvmFixtureSetup(t, func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == "/api/snapshot/42" || r.URL.Path == "/api/cd_rom/" {
+						close(entered)
+						<-release
+						fmt.Fprint(w, `{"code":0,"data":[{"id":10,"name":"private-remote-data","created_at":"2026-10-06T04:00:00Z"}]}`)
+						return
+					}
+					if r.URL.Path == "/api/virtual/42" {
+						fmt.Fprint(w, `{"code":0,"data":{"id":42,"name":"resource-vm","cd_roms_id":0}}`)
+						return
+					}
+					if strings.Contains(r.URL.Path, "run_status") {
+						fmt.Fprint(w, `{"code":0,"data":{"code":1}}`)
+						return
+					}
+					fmt.Fprint(w, `{"code":0,"data":{"id":42,"name":"resource-vm"}}`)
+				}, true, func(d *provision.Delivery) { d.Resources.Snapshots = 3 })
+				t.Cleanup(func() {
+					select {
+					case <-release:
+					default:
+						close(release)
+					}
+				})
+				f.process(t)
+				cookie, dual, prefix := f.customer, f.root+"; "+f.customer, ""
+				if portal == "admin" {
+					cookie, prefix = f.root, "/admin"
+				}
+				path := fmt.Sprintf("/api/v1%s/services/%d/%s", prefix, f.sid, kind)
+				done := make(chan *httptest.ResponseRecorder, 1)
+				go func() { done <- portalRequest(f.h, "GET", path, nil, dual, "") }()
+				select {
+				case <-entered:
+				case response := <-done:
+					t.Fatalf("resource read returned before its remote listing: status %d; %s", response.Code, response.Body.String())
+				case <-time.After(5 * time.Second):
+					t.Fatal("resource read did not reach the remote server")
+				}
+				if _, err := f.db.Pool.Exec(t.Context(), "DELETE FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(cookie))); err != nil {
+					t.Fatal(err)
+				}
+				close(release)
+				select {
+				case response := <-done:
+					expect(t, response, 401)
+					if strings.Contains(response.Body.String(), "private-remote-data") {
+						t.Fatal("resource data escaped after selected portal logout")
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("resource read did not finish after releasing the remote server")
+				}
+			})
+		}
 	}
 }

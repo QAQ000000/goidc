@@ -21,7 +21,7 @@ func AuthorizeSMSTest(ctx context.Context, tx pgx.Tx, actor int64, hash string, 
 		return e
 	}
 	var super bool
-	if e := tx.QueryRow(ctx, `SELECT role='super_admin' AND status='active' FROM users WHERE id=$1 FOR UPDATE`, actor).Scan(&super); e != nil {
+	if e := tx.QueryRow(ctx, `SELECT role='super_admin' AND status='active' FROM administrators WHERE id=$1 FOR UPDATE`, actor).Scan(&super); e != nil {
 		return e
 	}
 	if !super {
@@ -128,7 +128,7 @@ func (s *Store) UpdateSMSSettings(ctx context.Context, actor int64, hash string,
 		return SMSSettings{}, e
 	}
 	var super bool
-	if e = tx.QueryRow(ctx, `SELECT role='super_admin' AND status='active' FROM users WHERE id=$1`, actor).Scan(&super); e != nil || !super {
+	if e = tx.QueryRow(ctx, `SELECT role='super_admin' AND status='active' FROM administrators WHERE id=$1`, actor).Scan(&super); e != nil || !super {
 		return SMSSettings{}, conflict("permission_denied", "需要超级管理员权限")
 	}
 	var version int64

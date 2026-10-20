@@ -381,7 +381,7 @@ func TestCatalogWaitingWriterRevocation(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
-	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['products.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(ctx); err != nil {

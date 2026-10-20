@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) registerSalesReportRoutes(mux *http.ServeMux) {
@@ -22,14 +21,7 @@ func salesReportRoutePermissions(m map[string]string) {
 
 func (s *Server) salesReportOptions(w http.ResponseWriter, r *http.Request) {
 	// Staff names come from visible customers, never the unrestricted staff directory.
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT DISTINCT coalesce(c.sales_owner_id,0) id,coalesce(u.display_name,'未分配') name
- FROM users c LEFT JOIN users u ON u.id=c.sales_owner_id
- WHERE c.role='customer' AND admin_customer_allowed($1,c.id) ORDER BY 2,1`, identityFrom(r).ID)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	items, err := s.db.SalesReportOwnerOptions(r.Context(), identityFrom(r).ID)
 	if err != nil {
 		s.fail(w, r, err)
 		return

@@ -94,7 +94,7 @@ CI 的 `GOIDC_ARCH_BASE_REF` 与文档校验的 `DOC_BASE` 使用同一提交：
 
 模块清单验收以 `audit/module-build-profile.json` 为声明源，比较 API/worker 的 profile、契约版本和完整装配集合，并按键检查必需工厂，不固定模块数量或顺序位置。认证设置锁序测试使用有界独立观察连接，业务四连接池仍承受真实锁竞争；测试连接池饥饿修复不能解释为生产锁顺序变更。
 
-独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。同一契约的 `node scripts/test-admin-orders.mjs --integration` 验证代下单的统一回执、单次副作用、撤权与客户范围、审计回滚及 schema178→179 历史兼容。仓库共有 182 个 SQL 迁移文件、最大编号 181；文件数不代表业务库已经升级。远端 CI、界面、真实渠道和部署分别记录实际证据，本地验收不替代未执行的线上检查。
+独立 PG18 job 还执行 `node scripts/test-service-cancellations.mjs --integration`，在现有 `transactions` 契约下严格验证取消/续费/付款互斥、执行前权益、人工终止保留状态及 schema168→169 历史处理，逐入口要求 run/pass 且零 skip。同一契约的 `node scripts/test-admin-orders.mjs --integration` 验证代下单的统一回执、单次副作用、撤权与客户范围、审计回滚及 schema178→179 历史兼容。仓库共有 183 个 SQL 迁移文件、最大编号 182；文件数不代表业务库已经升级。远端 CI、界面、真实渠道和部署分别记录实际证据，本地验收不替代未执行的线上检查。
 
 本地等价入口如下：
 
@@ -155,4 +155,6 @@ node --test scripts/captcha-components.test.mjs
 
 当前未关闭的替代差距和外部条件集中在[当前差距审计](../replacement-gap-audit.md)及[发布准备契约](../release-readiness-next-contract.md)；状态变化时更新这两个稳定入口，不新建日期快照。
 
-认证迁移 181 绑定 MFA 登录入口，清理无入口证据的未完成挑战，保留已有账户和会话。先停旧 API writer，升级 schema 后使用配套 API；旧 writer 不得混跑。`scripts/test-captcha.mjs --integration` 同时严格验证客户/管理员商业边界、共享安全与通知、显式代登录、认证防护及真实 schema180 升级；前端隔离组件和代理门禁归既有认证契约。详见[前后台身份边界](../admin-rbac.md#前后台身份边界)。
+认证迁移 181 绑定 MFA 登录入口，清理无入口证据的未完成挑战。迁移 182 将客户 `users` 与 `administrators` 物理拆分；`account_principals` 仅保存不可变全局 ID/kind，`account_identities` 仅作无秘密的只读资料展示，认证与安全写入选择实际账号表。共享安全/通知记录继续归属全局账号 ID，保留历史 ID、凭据、金额与业务证据，不将旧管理员商务记录转成客户，也不为 bootstrap 或 staff 新建客户购物车。
+
+schema182 发布须先停旧 API、worker 和导入等 writer，再升级数据库并启用配套 API/worker/Web；旧 writer 不得混跑，不能直接降级旧二进制。既有双 Cookie、前台匿名/客户体验与显式代登录契约继续生效，详见[前后台身份边界](../admin-rbac.md#前后台身份边界)。`node scripts/test-captcha.mjs --integration` 是已有认证严格入口，纳入物理分表、跨表标识冲突、独立密码/MFA/API 密钥、bootstrap、共享安全与通知、客户商业边界、显式代登录及真实 schema180→181→182 升级，逐项要求 run/pass 且零 skip。schema182 本批已在独立测试库与真实 Chrome 通过管理员前台匿名、错误入口拒绝、双端独立登录/退出及客户真实下单验收，并核实管理员未获得客户副本或商务归属。严格认证已在隔离 PostgreSQL 18 实际运行 76 项且零跳过，生产发布与回退未执行；浏览器的具体覆盖边界见 RBAC 契约，前端组件/代理及旧版本证据不能替代未执行项。

@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -20,6 +23,7 @@ func purchasePricingUpgradeFacts(t *testing.T, db *Store) string {
  'business',$1::jsonb,
  'receipts',(SELECT jsonb_agg(to_jsonb(x) ORDER BY actor_id,scope,idempotency_key) FROM mutation_operations x),
  'payments',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM payment_transactions x),
+ 'webhooks',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM payment_webhook_events x),
  'refunds',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM external_refunds x),
  'holds',(SELECT jsonb_agg(to_jsonb(x) ORDER BY refund_id) FROM external_refund_order_holds x),
  'refund_services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY refund_id,service_id) FROM external_refund_order_services x)
@@ -38,9 +42,126 @@ func purchasePricingAdminInput(t *testing.T, db *Store, customer, product int64)
 	return AdminOrderInput{CustomerID: customer, Items: []AdminOrderItemInput{{ProductID: product, ExpectedRevision: revision, BillingCycle: "monthly", Quantity: 1}}}
 }
 
+// Seed the actual schema179 SQL shape. Current payment and refund entrypoints
+// require the physical account split in 182 and must never run on this fixture.
+// This is synthetic historical evidence, not execution of an old HTTP binary.
+// Keep the real database guards enabled while freezing the payment, refund hold,
+// complete resource snapshots and the canonical request/result receipt.
+func purchasePricingHistoricalRefund179(t *testing.T, db *Store, actor, customer int64, order CheckoutResult) (in ExternalRefundInput, pending ExternalRefundResult) {
+	t.Helper()
+	ctx := t.Context()
+	if err := db.WithTx(ctx, func(tx pgx.Tx) error {
+		var boundary string
+		var split bool
+		if err := tx.QueryRow(ctx, `SELECT max(version),to_regclass('account_principals') IS NOT NULL FROM schema_migrations`).Scan(&boundary, &split); err != nil {
+			return err
+		}
+		if boundary != purchasePricingPredecessor || split {
+			return fmt.Errorf("historical payment/refund requires untouched schema179: boundary=%s split=%v", boundary, split)
+		}
+		var authorized bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='super_admin' AND status='active') AND EXISTS(SELECT 1 FROM users WHERE id=$2 AND role='customer' AND status='active')`, actor, customer).Scan(&authorized); err != nil {
+			return err
+		}
+		if !authorized {
+			return fmt.Errorf("historical refund requires the original active staff and customer")
+		}
+		var paymentID int64
+		if err := tx.QueryRow(ctx, `INSERT INTO payment_transactions(provider,provider_payment_id,channel_instance_id,invoice_id,user_id,amount_cents,idempotency_key)
+ SELECT 'mock','pricing-upgrade-payment',(SELECT id FROM channel_instances WHERE id='payment-mock-default'),i.id,i.user_id,i.amount_cents,'pricing-upgrade-payment-key'
+ FROM invoices i WHERE i.id=$1 AND i.user_id=$2 AND i.status='unpaid' RETURNING id`, order.InvoiceID, customer).Scan(&paymentID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload)
+ VALUES($1,'payment.intent.created','invoice',$2,jsonb_build_object('provider','mock','payment_id','pricing-upgrade-payment','amount_cents',$3::bigint))`, customer, fmt.Sprint(order.InvoiceID), order.TotalCents); err != nil {
+			return err
+		}
+		raw := []byte(`{"fixture":"verified schema179 merchant payment"}`)
+		payloadHash := sha256.Sum256(raw)
+		if _, err := tx.Exec(ctx, `INSERT INTO payment_webhook_events(provider,event_id,payload_hash,status)
+ VALUES('mock','pricing-upgrade-paid-event',$1,'processed')`, hex.EncodeToString(payloadHash[:])); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1 AND status='unpaid'`, order.InvoiceID); err != nil {
+			return err
+		}
+		// Approval remains pending, so settlement does not queue or provision the
+		// service; the existing immutable stock reservation remains authoritative.
+		if _, err := tx.Exec(ctx, `UPDATE orders SET status='paid',updated_at=now() WHERE id=$1 AND review_status='pending'`, order.OrderID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE payment_transactions SET status='succeeded',completed_at=now(),raw_result=$2,external_transaction_id='pricing-upgrade-transaction',next_reconcile_at=NULL,updated_at=now() WHERE id=$1`, paymentID, json.RawMessage(raw)); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO audit_events(action,entity_type,entity_id,payload)
+ VALUES('payment.webhook.succeeded','invoice',$1,jsonb_build_object('provider','mock','event_id','pricing-upgrade-paid-event','payment_id','pricing-upgrade-payment','amount_cents',$2::bigint))`, fmt.Sprint(order.InvoiceID), order.TotalCents); err != nil {
+			return err
+		}
+		in = ExternalRefundInput{PaymentID: paymentID, AmountCents: order.TotalCents, Method: "original_route", ProviderRefundID: "pricing-upgrade-refund-evidence", ReceivedAt: time.Now(), EvidenceRef: "redacted/pricing-upgrade", EvidenceSHA256: strings.Repeat("c", 64), Note: "pre180 immutable merchant evidence"}
+		var reason string
+		if err := tx.QueryRow(ctx, `SELECT i.version,o.version,external_refund_order_reason(i.id) FROM invoices i JOIN orders o ON o.id=i.order_id WHERE i.id=$1`, order.InvoiceID).Scan(&in.ExpectedVersion, &in.ExpectedOrderVersion, &reason); err != nil {
+			return err
+		}
+		if reason != "" {
+			return fmt.Errorf("historical pending refund is ineligible: %s", reason)
+		}
+		rows, err := tx.Query(ctx, `SELECT id,version FROM services WHERE order_id=$1 ORDER BY id`, order.OrderID)
+		if err != nil {
+			return err
+		}
+		if in.ExpectedServiceVersions, err = pgx.CollectRows(rows, pgx.RowToStructByPos[ExternalRefundServiceVersion]); err != nil {
+			return err
+		}
+		if len(in.ExpectedServiceVersions) != 1 {
+			return fmt.Errorf("historical refund lost its original service")
+		}
+		var refundID int64
+		if err := tx.QueryRow(ctx, `INSERT INTO external_refunds(invoice_id,payment_id,user_id,amount_cents,method,provider,channel_instance_id,provider_payment_id,provider_refund_id,received_at,evidence_ref,evidence_sha256,note,requested_by,original_transaction_id,merchant_scope)
+ SELECT i.id,p.id,i.user_id,i.amount_cents,$3,p.provider,coalesce(p.channel_instance_id,''),p.provider_payment_id,$4,$5,$6,$7,$8,$9,p.external_transaction_id,'mock:test-only'
+ FROM invoices i JOIN payment_transactions p ON p.invoice_id=i.id WHERE i.id=$1 AND p.id=$2 RETURNING id`, order.InvoiceID, paymentID, in.Method, in.ProviderRefundID, in.ReceivedAt, in.EvidenceRef, in.EvidenceSHA256, in.Note, actor).Scan(&refundID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO external_refund_order_holds(refund_id,invoice_id,payment_id,order_id,user_id,amount_cents,invoice_version,order_version,invoice_snapshot,order_snapshot,items_snapshot)
+ SELECT r.id,i.id,r.payment_id,o.id,r.user_id,r.amount_cents,i.version,o.version,external_refund_order_snapshot(i),external_refund_order_snapshot(o),(SELECT jsonb_agg(external_refund_order_snapshot(oi) ORDER BY oi.id) FROM order_items oi WHERE oi.order_id=o.id)
+ FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id JOIN orders o ON o.id=i.order_id WHERE r.id=$1`, refundID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO external_refund_order_services(refund_id,service_id,order_item_id,product_id,unit_number,version,snapshot,stock_at_request)
+ SELECT $1,s.id,s.order_item_id,s.product_id,s.unit_number,s.version,external_refund_order_snapshot(s),p.stock FROM services s JOIN products p ON p.id=s.product_id WHERE s.order_id=$2 ORDER BY s.id`, refundID, order.OrderID); err != nil {
+			return err
+		}
+		var refundJSON []byte
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(r)||jsonb_build_object('order_reversal',external_refund_order_reversal_json(r.id)) FROM external_refunds r WHERE id=$1`, refundID).Scan(&refundJSON); err != nil {
+			return err
+		}
+		if err := json.Unmarshal(refundJSON, &pending.Refund); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload)
+ VALUES($1,'external_refund.created','external_refund',$2,jsonb_build_object('invoice_id',$3::bigint,'payment_id',$4::bigint,'amount_cents',$5::bigint,'status','pending_review'))`, actor, fmt.Sprint(refundID), order.InvoiceID, paymentID, in.AmountCents); err != nil {
+			return err
+		}
+		canonical, err := json.Marshal([]any{order.InvoiceID, int64(0), false, in, ExternalRefundReviewInput{}})
+		if err != nil {
+			return err
+		}
+		requestHash := sha256.Sum256(canonical)
+		resultJSON, err := json.Marshal(pending)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO mutation_operations(actor_id,scope,idempotency_key,request_hash,result)
+ VALUES($1,'external-refund','pricing-upgrade-refund-create',$2,$3)`, actor, hex.EncodeToString(requestHash[:]), resultJSON)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
 func TestPurchasePricingUpgrade179PreservesRefundEvidenceAndReplay(t *testing.T) {
 	// The previous receipt helper writes the real pre-179 receipt SQL. Advance
-	// that untouched schema to 179 before creating the actual pending refund.
+	// that untouched schema to 179 before seeding its historical pending refund.
 	db := adminOrderReceiptSchema178(t)
 	actor, customer := topUpFixture(t, db)
 	product := adminOrderReceiptMigrationProduct(t, db)
@@ -57,40 +178,25 @@ func TestPurchasePricingUpgrade179PreservesRefundEvidenceAndReplay(t *testing.T)
 	if _, err := db.Pool.Exec(t.Context(), `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('pricing-upgrade-session',$1,now()+interval '1 hour')`, actor); err != nil {
 		t.Fatal(err)
 	}
-	pay, err := db.CreatePaymentIntent(t.Context(), customer, old.result.InvoiceID, "mock", "pricing-upgrade-payment", "", "pricing-upgrade-payment-key")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.ProcessPaymentWebhook(t.Context(), "mock", "pricing-upgrade-paid-event", "pricing-upgrade-payment", old.result.InvoiceID, old.result.TotalCents, "succeeded", []byte(`{"fixture":"verified schema179 merchant payment"}`), "pricing-upgrade-transaction"); err != nil {
-		t.Fatal(err)
-	}
+	in, pending := purchasePricingHistoricalRefund179(t, db, actor, customer, old.result.CheckoutResult)
 	ctx := WithExternalRefundSession(t.Context(), "pricing-upgrade-session")
-	eligibility, err := db.ExternalRefundOrderContext(ctx, actor, old.result.InvoiceID)
-	if err != nil || !eligibility.Eligible {
-		t.Fatal("historical manual order must remain refund eligible", eligibility, err)
-	}
-	in := ExternalRefundInput{PaymentID: pay.PaymentID, AmountCents: old.result.TotalCents, Method: "original_route", ProviderRefundID: "pricing-upgrade-refund-evidence", ReceivedAt: time.Now(), EvidenceRef: "redacted/pricing-upgrade", EvidenceSHA256: strings.Repeat("c", 64), Note: "pre180 immutable merchant evidence", ExpectedVersion: eligibility.InvoiceVersion, ExpectedOrderVersion: eligibility.OrderVersion}
-	for _, service := range eligibility.Services {
-		in.ExpectedServiceVersions = append(in.ExpectedServiceVersions, ExternalRefundServiceVersion{ID: service.ID, Version: service.Version})
-	}
-	pending, err := db.CreateExternalRefund(ctx, actor, old.result.InvoiceID, in, "pricing-upgrade-refund-create")
-	if err != nil || pending.Refund.OrderReversal == nil || pending.Refund.OrderReversal.Status != "pending" {
-		t.Fatal("historical pending hold was not produced by actual refund API", pending, err)
+	if pending.Refund.Status != "pending_review" || pending.Refund.OrderReversal == nil || pending.Refund.OrderReversal.Status != "pending" {
+		t.Fatal("historical SQL did not retain a complete pending refund hold", pending)
 	}
 	unreserved := purchasePricingUnreservedHistory(t, db, customer, product)
 	before := purchasePricingUpgradeFacts(t, db)
 	checksums := supplierExpiryUpgradeMigrations(t, db, purchasePricingPredecessor)
-	if err = db.CheckSchema(t.Context()); err == nil {
+	if err := db.CheckSchema(t.Context()); err == nil {
 		t.Fatal("current runtime accepted predecessor before pricing upgrade")
 	}
-	if err = db.Migrate(t.Context()); err != nil {
+	if err := db.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	if before != purchasePricingUpgradeFacts(t, db) || checksums != supplierExpiryUpgradeMigrations(t, db, purchasePricingPredecessor) {
 		t.Fatal("pricing upgrade changed historical complete rows, refunds, reservations, holds, receipts or checksums")
 	}
 	var snapshots, births int
-	if err = db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM order_item_pricing),(SELECT count(*) FROM purchase_pricing_births)`).Scan(&snapshots, &births); err != nil || snapshots != 0 || births != 0 {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT (SELECT count(*) FROM order_item_pricing),(SELECT count(*) FROM purchase_pricing_births)`).Scan(&snapshots, &births); err != nil || snapshots != 0 || births != 0 {
 		t.Fatal("pricing upgrade inferred historical snapshots or births", snapshots, births, err)
 	}
 	result, err := db.CreateAdminOrder(t.Context(), actor, old.key, old.input, PaymentConfiguration{})
@@ -104,6 +210,11 @@ func TestPurchasePricingUpgrade179PreservesRefundEvidenceAndReplay(t *testing.T)
 	wantRefund.Replayed = true
 	if err != nil || !reflect.DeepEqual(replayed, wantRefund) {
 		t.Fatal("pricing upgrade invalidated historical pending-refund replay", replayed, err)
+	}
+	changed := in
+	changed.Note = "changed historical refund evidence"
+	if _, err = db.CreateExternalRefund(ctx, actor, old.result.InvoiceID, changed, "pricing-upgrade-refund-create"); conflictCode(t, err) != "idempotency_conflict" {
+		t.Fatal("historical refund receipt accepted a changed request", err)
 	}
 	if err = db.Migrate(t.Context()); err != nil || before != purchasePricingUpgradeFacts(t, db) {
 		t.Fatal("repeat upgrade or replay modified immutable historical evidence", err)

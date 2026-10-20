@@ -15,7 +15,7 @@ func TestCertificationReviewHonorsCustomerScope(t *testing.T) {
 	staffID, staff := user(t, db, h, "cert-scope-staff", "admin")
 	// Scope 'owned' means the administrator only handles customers assigned to
 	// them, so an unassigned applicant is out of scope.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 

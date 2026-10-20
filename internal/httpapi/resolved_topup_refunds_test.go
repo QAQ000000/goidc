@@ -51,10 +51,10 @@ func TestExternalRefundResolvedTopupHTTPRevocationWhileLocked(t *testing.T) {
 				if err = tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&blocker); err != nil {
 					t.Fatal(err)
 				}
-				statement := `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
+				statement := `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
 				expected := 404
 				if revoke == "permission" {
-					statement = `UPDATE admin_roles SET active=false WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+					statement = `UPDATE admin_roles SET active=false WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 					expected = 403
 				}
 				if _, err = tx.Exec(ctx, statement, staffID); err != nil {

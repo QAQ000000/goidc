@@ -143,20 +143,20 @@ func TestTopupLiabilityHTTPPermissionScopeInputsAndReplayRevocation(t *testing.T
 	expect(t, request(f.h, "POST", path+"/resolve", map[string]any{"expected_version": body["expected_version"], "note": "x", "amount_cents": 1}, staff, "liability-extra-field"), 400)
 	expect(t, request(f.h, "POST", path+"/resolve", body, staff, ""), 409)
 	expect(t, request(f.h, "POST", path+"/resolve", map[string]any{"expected_version": 9999, "note": "stale"}, staff, "liability-stale"), 409)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", path, nil, staff, ""), 404)
 	expect(t, request(f.h, "POST", path+"/resolve", body, staff, "liability-auth-resolve"), 404)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='all' WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='all' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path+"/resolve", body, staff, "liability-auth-resolve"), 201)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path+"/resolve", body, staff, "liability-auth-resolve"), 404)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='all' WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='all' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	contentRole(t, f.db, staffID, "invoices.view")
@@ -189,7 +189,7 @@ func TestTopupLiabilityBrowserFixture(t *testing.T) {
 		contentRole(t, db, reader, "invoices.view", "customers.view")
 		limited, _ := user(t, db, f.h, "liability-limited", "admin")
 		contentRole(t, db, limited, "invoices.view", "balance.topup.resolve")
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", limited); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", limited); err != nil {
 			t.Fatal(err)
 		}
 		other, _ := user(t, db, f.h, "liability-other-customer", "customer")
@@ -244,7 +244,7 @@ func TestTopupLiabilityHTTPScopeRevocationWhileActorLocked(t *testing.T) {
 				t.Fatal(err)
 			}
 			// The sales-staff settings endpoint updates this row without revoking sessions.
-			if _, err = tx.Exec(ctx, "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+			if _, err = tx.Exec(ctx, "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 				t.Fatal(err)
 			}
 			result := make(chan *httptest.ResponseRecorder, 1)
@@ -257,7 +257,7 @@ func TestTopupLiabilityHTTPScopeRevocationWhileActorLocked(t *testing.T) {
 			}()
 			for {
 				var waiting bool
-				if err = f.db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid AND NOT l.granted WHERE $1::int=ANY(pg_blocking_pids(a.pid)) AND a.query LIKE 'SELECT role,admin_role_id FROM users%FOR SHARE')`, blocker).Scan(&waiting); err != nil {
+				if err = f.db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity a JOIN pg_locks l ON l.pid=a.pid AND NOT l.granted WHERE $1::int=ANY(pg_blocking_pids(a.pid)) AND a.query LIKE 'SELECT role,admin_role_id FROM administrators%FOR SHARE')`, blocker).Scan(&waiting); err != nil {
 					t.Fatal(err)
 				}
 				if waiting {

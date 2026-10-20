@@ -12,17 +12,26 @@ func TestCustomerBusinessRejectsAdministratorCredentials(t *testing.T) {
 	db, h := testServer(t)
 	_, customer := user(t, db, h, "boundary-customer", "customer")
 	pid := product(t, db, 20)
+	_, item := add(t, h, customer, pid, 1)
 	for _, role := range []string{"admin", "super_admin"} {
 		t.Run(role, func(t *testing.T) {
 			uid, cookie := user(t, db, h, "boundary-"+strings.ReplaceAll(role, "_", "-"), role)
 			keyResponse := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "boundary-key"}, cookie, "")
 			expect(t, keyResponse, 201)
 			secret := data(t, keyResponse)["secret"].(string)
-			// Pre-existing administrator carts must not become an admission bypass.
-			var item int64
-			if err := db.Pool.QueryRow(t.Context(), `INSERT INTO cart_items(cart_id,product_id,quantity,product_revision,billing_cycle) SELECT c.id,p.id,1,p.revision,'monthly' FROM carts c CROSS JOIN products p WHERE c.user_id=$1 AND p.id=$2 RETURNING cart_items.id`, uid, pid).Scan(&item); err != nil {
-				t.Fatal(err)
+			// A newly created administrator never owns a customer cart.
+			var carts int
+			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM carts WHERE user_id=$1", uid).Scan(&carts); err != nil || carts != 0 {
+				t.Fatal("administrator acquired a customer cart", carts, err)
 			}
+			if _, err := db.Pool.Exec(t.Context(), "INSERT INTO carts(user_id) VALUES($1)", uid); err == nil {
+				t.Fatal("database admitted an administrator-owned customer cart")
+			}
+			// Rejected requests must leave a legitimate customer's cart untouched.
+
+			// Account security is intentionally shared by both physical account
+			// tables; the customer-only list below covers business data and
+			// customer portal actions.
 			for _, tc := range []struct{ method, path string }{
 				{"GET", "/api/v1/cart"}, {"HEAD", "/api/v1/cart"}, {"POST", "/api/v1/cart/items"}, {"PATCH", "/api/v1/cart/items/1"}, {"DELETE", "/api/v1/cart/items/1"},
 				{"POST", "/api/v1/cart/quote"}, {"POST", "/api/v1/cart/promo"}, {"DELETE", "/api/v1/cart/promo"},
@@ -52,7 +61,7 @@ func TestCustomerBusinessRejectsAdministratorCredentials(t *testing.T) {
 			}
 			for _, tc := range []struct{ method, path string }{
 				{"POST", "/api/v1/invoices/1/pay-credit"}, {"POST", "/api/v1/balance/topups"}, {"GET", "/api/v1/balance/topup-options"},
-				{"GET", "/api/v1/contracts"}, {"POST", "/api/v1/contracts"}, {"POST", "/api/v1/account/verification/request"},
+				{"GET", "/api/v1/contracts"}, {"POST", "/api/v1/contracts"},
 			} {
 				response := request(h, tc.method, tc.path, map[string]any{}, cookie, "boundary-session-key")
 				expect(t, response, 401)
@@ -81,7 +90,7 @@ func TestAccountSecurityAndNotificationsRemainShared(t *testing.T) {
 	for _, role := range []string{"customer", "admin", "super_admin"} {
 		uid, cookie := user(t, db, h, "account-"+strings.ReplaceAll(role, "_", "-"), role)
 		if role == "admin" {
-			if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", uid); err != nil {
+			if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", uid); err != nil {
 				t.Fatal(err)
 			}
 		}

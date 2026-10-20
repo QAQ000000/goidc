@@ -241,7 +241,7 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 		return out, err
 	}
 	defer tx.Rollback(ctx)
-	topup, err := lockOnlineTopupCustomer(ctx, tx, invoiceID)
+	topup, err := lockPaymentWebhookCustomer(ctx, tx, invoiceID)
 	if err != nil {
 		return out, err
 	}
@@ -262,6 +262,9 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider, eventID, providerPaymentID string, invoiceID, amountCents int64, status string, raw []byte, externalTransaction []string, check *PaymentCheck, topup bool) (WebhookResult, error) {
 	var out WebhookResult
 	var err error
+	if reviewed, handled, reviewErr := reviewHistoricalAdministratorPayment(ctx, tx, provider, eventID, providerPaymentID, invoiceID, amountCents, status, raw, externalTransaction, check); handled || reviewErr != nil {
+		return reviewed, reviewErr
+	}
 	hash := sha256.Sum256(raw)
 	payloadHash := hex.EncodeToString(hash[:])
 	if err = lockOperationKey(ctx, tx, "payment-webhook", provider+":"+eventID); err != nil {

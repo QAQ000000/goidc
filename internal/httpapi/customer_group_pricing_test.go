@@ -484,7 +484,7 @@ func TestCustomerGroupPricingWritersTakePricingLockBeforeGroupRows(t *testing.T)
 func TestCustomerGroupPricingLegacyProductGroupReceiptsReplay(t *testing.T) {
 	f := newMutationOrderFixture(t)
 	var actor int64
-	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM users WHERE username='order-mutation-root'").Scan(&actor); err != nil {
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT id FROM administrators WHERE username='order-mutation-root'").Scan(&actor); err != nil {
 		t.Fatal(err)
 	}
 	// Reproduce predecessor payloads independently of the new Store input types.

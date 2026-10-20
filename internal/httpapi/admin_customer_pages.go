@@ -40,12 +40,12 @@ func (s *Server) customersPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pagination(r)
-	query := customerListSelect + ` WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
- AND (u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.email ILIKE $2)
- AND ($3::bigint IS NULL OR coalesce(g.id,0)=$3)
- AND ($4::bigint IS NULL OR coalesce(u.sales_owner_id,0)=$4)
- AND ($5='' OR u.status=$5)`
-	s.adminListPage(w, r, query, "id DESC", limit, offset, identityFrom(r).ID, "%"+strings.TrimSpace(r.URL.Query().Get("q"))+"%", group, owner, status)
+	page, err := s.db.AdminCustomerDirectoryPage(r.Context(), identityFrom(r).ID, strings.TrimSpace(r.URL.Query().Get("q")), group, owner, status, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, page)
 }
 
 func (s *Server) adminCertificationsPage(w http.ResponseWriter, r *http.Request) {

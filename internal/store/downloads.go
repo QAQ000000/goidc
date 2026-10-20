@@ -48,7 +48,7 @@ func (s *Store) DownloadTx(ctx context.Context, actorID int64, manage bool) (pgx
 	if err == nil && manage {
 		var allowed bool
 		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'downloads.view'=ANY(r.permissions) AND 'downloads.manage'=ANY(r.permissions)),false)
-   FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
+   FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
 		if err == nil && !allowed {
 			err = conflict("permission_denied", "没有管理下载中心的权限")
 		}

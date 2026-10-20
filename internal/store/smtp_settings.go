@@ -152,7 +152,7 @@ func (s *Store) UpdateSMTPSettings(ctx context.Context, actor int64, sessionHash
 		return old, e
 	}
 	var super bool
-	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1", actor).Scan(&super); e != nil || !super {
+	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM administrators WHERE id=$1", actor).Scan(&super); e != nil || !super {
 		return SMTPSettings{}, conflict("permission_denied", "需要超级管理员权限")
 	}
 	if old.Version != expected {
@@ -224,7 +224,7 @@ func (s *Store) QueueSMTPTest(ctx context.Context, actor int64, sessionHash, rec
 		return 0, e
 	}
 	var super bool
-	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM users WHERE id=$1", actor).Scan(&super); e != nil || !super {
+	if e = tx.QueryRow(ctx, "SELECT role='super_admin' AND status='active' FROM administrators WHERE id=$1", actor).Scan(&super); e != nil || !super {
 		return 0, conflict("permission_denied", "需要超级管理员权限")
 	}
 	instanceID := ""

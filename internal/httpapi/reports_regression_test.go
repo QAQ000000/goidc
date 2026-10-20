@@ -208,7 +208,7 @@ func TestIncomeReportCountsInvoicesOnceAcrossRepaymentMonths(t *testing.T) {
 	staffID, staff := user(t, db, h, "distinct-report-staff", "admin")
 	allowed, _ := user(t, db, h, "distinct-report-allowed", "customer")
 	denied, _ := user(t, db, h, "distinct-report-denied", "customer")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, allowed); err != nil {

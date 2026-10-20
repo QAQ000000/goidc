@@ -331,7 +331,7 @@ func TestNOKVMFixedResourcesAndPermissionBoundaries(t *testing.T) {
 	expect(t, role, 201)
 	roleID := int64(data(t, role)["id"].(float64))
 	readerID, reader := user(t, f.db, f.h, "nokvm-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET admin_role_id=$2 WHERE id=$1", readerID, roleID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET admin_role_id=$2 WHERE id=$1", readerID, roleID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", "/api/v1/admin/provision-profiles", nil, reader, ""), 200)

@@ -30,7 +30,7 @@ func TestSupplierOrdersSnapshotScopeAndPagination(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned' WHERE id=$1`, aid); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned' WHERE id=$1`, aid); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$1 WHERE id=$2`, aid, owner); err != nil {
@@ -68,7 +68,7 @@ func TestSupplierOrdersSnapshotScopeAndPagination(t *testing.T) {
 			expect(t, request(h, "GET", path+query, nil, root, ""), 400)
 		}
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, aid); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY[]::text[] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, aid); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/supplier-orders", nil, staff, ""), 403)

@@ -134,7 +134,7 @@ func cancellationUpgradeFinancialSnapshot(t *testing.T, db *Store) string {
 	t.Helper()
 	var value string
 	if err := db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_object(
-'users',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM users x),
+'users',`+historicalAccountSnapshotRows(t, db)+`,
 'services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM services x),
 'invoices',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoices x),
 'items',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoice_items x),

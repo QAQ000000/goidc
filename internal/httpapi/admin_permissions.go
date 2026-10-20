@@ -12,6 +12,7 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/account-history/{id}"] = "audit.view"
 	m["GET /api/v1/admin/notification-center"] = "notifications.view"
 	m["PATCH /api/v1/admin/notification-center/rules/{id}"] = "notifications.manage"
 	m["PATCH /api/v1/admin/notification-center/templates/{id}"] = "notifications.manage"
@@ -291,8 +292,12 @@ func (s *Server) permissionCatalogue(w http.ResponseWriter, r *http.Request) {
 	write(w, 200, store.AdminPermissions)
 }
 func (s *Server) adminRoles(w http.ResponseWriter, r *http.Request) {
-	s.list(w, r, `SELECT r.id,r.name,r.description,r.active,r.permissions,r.version,r.created_at,r.updated_at,
- (SELECT count(*) FROM users u WHERE u.admin_role_id=r.id) AS member_count FROM admin_roles r ORDER BY r.id`)
+	items, err := s.db.AdminRoleDirectory(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, items)
 }
 func (s *Server) saveAdminRole(w http.ResponseWriter, r *http.Request) {
 	var id int64
@@ -337,11 +342,12 @@ func (s *Server) deleteAdminRole(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) adminStaff(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	s.list(w, r, `SELECT u.id,u.username,u.email,u.display_name,u.role,u.status,u.admin_role_id,r.name AS admin_role_name,
- r.active AS admin_role_active,u.admin_version,u.mfa_enabled,u.created_at,u.customer_scope,u.customer_ownerless,u.sales_enabled,u.updated_at,u.ticket_scope,u.ticket_unassigned,
- ARRAY(SELECT department_id FROM admin_ticket_departments WHERE user_id=u.id ORDER BY department_id) AS ticket_department_ids
-	 FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.role IN ('admin','super_admin')
-	 AND ($3='' OR u.username ILIKE '%'||$3||'%' OR u.display_name ILIKE '%'||$3||'%') ORDER BY u.id LIMIT $1 OFFSET $2`, limit, offset, strings.TrimSpace(r.URL.Query().Get("q")))
+	items, err := s.db.AdminStaffDirectory(r.Context(), limit, offset, strings.TrimSpace(r.URL.Query().Get("q")))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, 200, items)
 }
 func (s *Server) saveAdminStaff(w http.ResponseWriter, r *http.Request) {
 	var id int64

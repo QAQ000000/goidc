@@ -120,11 +120,11 @@ func TestG09SourceWorkerLoopbackSmoke(t *testing.T) {
 	// Fixture-only identity/catalog/template setup, before any worker starts.
 	// The customer remains unverified: payment and provision notifications have
 	// no recipient; this finite cohort uses the ticket source alone for mail/SMS.
-	if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET email_verified=true,phone=$2 WHERE id=$1`, staffID, phone); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET email_verified=true,phone=$2 WHERE id=$1`, staffID, phone); err != nil {
 		t.Fatal("staff identity seed failed")
 	}
 	// Changing phone resets verification through the normal database trigger.
-	if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET phone_verified=true WHERE id=$1`, staffID); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET phone_verified=true WHERE id=$1`, staffID); err != nil {
 		t.Fatal("staff verification seed failed")
 	}
 	if _, err = db.Pool.Exec(t.Context(), `UPDATE channel_instances SET enabled=false WHERE category IN ('mail','sms'); UPDATE notification_templates SET active=false`); err != nil {

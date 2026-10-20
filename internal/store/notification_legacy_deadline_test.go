@@ -375,7 +375,7 @@ func TestNotificationLegacyDeadlineUpgrade172PreservesFacts(t *testing.T) {
 		t.Helper()
 		var out string
 		if err := db.Pool.QueryRow(f.ctx, `SELECT jsonb_build_object(
- 'users',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM users x),
+ 'users',`+historicalAccountSnapshotRows(t, db)+`,
  'orders',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM orders x),
  'invoices',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoices x),
  'services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM services x),

@@ -175,7 +175,7 @@ func TestPurchaseFinancialReadsUseLinePricingSnapshots(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO admin_roles(name,permissions) VALUES('Financial scope reader',ARRAY['reports.view']) RETURNING id`).Scan(&role); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET role='admin',admin_role_id=$2,customer_scope='owned',customer_ownerless=false WHERE id=$1`, actor, role); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET role='admin',admin_role_id=$2,customer_scope='owned',customer_ownerless=false WHERE id=$1`, actor, role); err != nil {
 		t.Fatal(err)
 	}
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, location)

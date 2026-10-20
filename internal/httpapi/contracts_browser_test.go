@@ -14,7 +14,7 @@ func TestContractsBrowserFixture(t *testing.T) {
 	adminBrowserFixture(t, "contract-super", func(db *store.Store, h http.Handler) {
 		uid, _ := user(t, db, h, "contract-customer", "customer")
 		reader, _ := user(t, db, h, "contract-reader", "admin")
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['contracts.view','settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, reader); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['contracts.view','settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, reader); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), `UPDATE contract_settings SET enabled=true`); err != nil {

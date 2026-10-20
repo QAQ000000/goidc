@@ -30,7 +30,7 @@ func TestTicketMigrationPreservesExistingThreadsAndAttachments(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	admin := navigationAdmin(t, db)
+	admin := historicalImportAdministrator(t, db)
 	var dept, ticket, reply int64
 	if err = db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug,active,version) VALUES('原部门','original-dept',false,8) RETURNING id").Scan(&dept); err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestTicketMigrationPreservesExistingThreadsAndAttachments(t *testing.T) {
 			common = "-'legacy_source'-'legacy_id'"
 			departments = common + "-'customer_visible'"
 			tickets = common + "-'service_id'-'legacy_status_label'-'legacy_ticket_no'-'created_by'-'cc'-'send_initial_email'-'initial_email_status'-'initial_author_kind'"
-			attachments = common + "-'reply_id'-'note_id'"
+			attachments = common + "-'reply_id'-'note_id'-'storage_object_id'"
 		}
 		return `SELECT jsonb_build_object('departments',(SELECT jsonb_agg(to_jsonb(d)` + departments + ` ORDER BY id) FROM ticket_departments d),'tickets',(SELECT jsonb_agg(to_jsonb(t)` + tickets + ` ORDER BY id) FROM tickets t),'replies',(SELECT jsonb_agg(to_jsonb(r)` + common + func() string {
 			if new {

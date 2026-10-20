@@ -97,7 +97,7 @@ WHERE profile_id=$1 AND user_id=$2 ORDER BY id DESC LIMIT 1 FOR SHARE`, profileI
 func resourceAPIManagerCheck(ctx context.Context, tx pgx.Tx, actor int64, sessionHash string) error {
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE`, actor).Scan(&role, &roleID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return conflict("permission_denied", "没有管理供应商 API 的权限")
 		}

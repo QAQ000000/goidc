@@ -204,7 +204,7 @@ func (im *importer) checkFileAuthor(ctx context.Context, tx pgx.Tx) error {
 		return nil
 	}
 	var valid bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='super_admin' AND status='active')", im.fileAuthorID).Scan(&valid); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM administrators WHERE id=$1 AND role='super_admin' AND status='active')", im.fileAuthorID).Scan(&valid); err != nil {
 		return err
 	}
 	if !valid {

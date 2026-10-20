@@ -28,7 +28,11 @@ func (s *Store) supplierConsoleBindingTx(ctx context.Context, tx pgx.Tx, actor, 
 		return out, err
 	}
 	var actorActive bool
-	if err := tx.QueryRow(ctx, "SELECT status='active',role FROM users WHERE id=$1 FOR SHARE", actor).Scan(&actorActive, &out.ActorRole); err != nil {
+	table, err := authenticationTable(ctx, tx, actor)
+	if err != nil {
+		return out, err
+	}
+	if err := tx.QueryRow(ctx, "SELECT status='active',role FROM "+table+" WHERE id=$1 FOR SHARE", actor).Scan(&actorActive, &out.ActorRole); err != nil {
 		return out, err
 	}
 	if !actorActive || (!admin && out.ActorRole != "customer") {

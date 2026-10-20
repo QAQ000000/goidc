@@ -404,7 +404,7 @@ func TestOrderExternalRefundHTTPPermissionsVersionsAndReject(t *testing.T) {
 	_, noReverse := externalRefundActor(t, f.db, f.h, "order-refund-no-reverse", []string{"invoices.view", "external_refunds.view", "external_refunds.create", "external_refunds.review"})
 	_, reverseOnly := externalRefundActor(t, f.db, f.h, "order-refund-reverse-only", []string{"invoices.view", "external_refunds.view", "external_refunds.order_reverse"})
 	limitedID, limited := externalRefundActor(t, f.db, f.h, "order-refund-limited", all)
-	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, limitedID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, limitedID); err != nil {
 		t.Fatal(err)
 	}
 	in := f.input(t, out, "order-refund-permission-proof")
@@ -538,13 +538,13 @@ func TestOrderExternalRefundHTTPRevocationAfterActualLockWait(t *testing.T) {
 				if err = tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
 					t.Fatal(err)
 				}
-				statement := `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
+				statement := `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`
 				expected := 404
 				if revoke == "permission" {
-					statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.order_reverse') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+					statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.order_reverse') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 					expected = 403
 					if operation == "context" {
-						statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+						statement = `UPDATE admin_roles SET permissions=array_remove(permissions,'external_refunds.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 					}
 				}
 				if _, err = tx.Exec(ctx, statement, staffID); err != nil {

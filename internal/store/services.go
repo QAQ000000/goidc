@@ -120,7 +120,11 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 			return out, err
 		}
 		var active bool
-		if err = tx.QueryRow(ctx, "SELECT status='active' FROM users WHERE id=$1 FOR SHARE", actorID).Scan(&active); err != nil {
+		table, tableErr := authenticationTable(ctx, tx, actorID)
+		if tableErr != nil {
+			return out, tableErr
+		}
+		if err = tx.QueryRow(ctx, "SELECT status='active' FROM "+table+" WHERE id=$1 FOR SHARE", actorID).Scan(&active); err != nil {
 			return out, err
 		}
 		if !active {

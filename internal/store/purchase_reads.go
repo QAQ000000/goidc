@@ -88,7 +88,7 @@ func (s *Store) ReadAdminOrder(ctx context.Context, actor, id int64) (map[string
 	rows, err := tx.Query(ctx, `SELECT external_refund_order_hold_json(o.id) AS external_refund_order_hold,o.id,o.order_no,o.user_id,u.username,u.email,u.display_name,
 COALESCE((SELECT cp.admin_note FROM customer_profiles cp WHERE cp.customer_id=o.user_id),'') AS customer_note,o.invoice_deferred,o.payment_provider,o.payment_channel_instance_id,o.send_order_email,o.email_status,o.version,o.status,o.review_status,o.notes,o.total_cents,o.promo_code,o.discount_cents,o.currency,o.created_at,o.updated_at,
 i.id AS invoice_id,i.invoice_no,i.status AS invoice_status,i.amount_cents,i.paid_at,i.due_at
-FROM orders o JOIN users u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id WHERE o.id=$1 AND o.deleted_at IS NULL`, id)
+FROM orders o JOIN account_identities u ON u.id=o.user_id LEFT JOIN invoices i ON i.order_id=o.id WHERE o.id=$1 AND o.deleted_at IS NULL`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (s *Store) ReadInvoice(ctx context.Context, actor, id int64, options Invoic
 	if admin {
 		projection += ",u.display_name AS customer_name,u.email"
 	}
-	query := "SELECT " + projection + ` FROM invoices i JOIN users u ON u.id=i.user_id
+	query := "SELECT " + projection + ` FROM invoices i JOIN account_identities u ON u.id=i.user_id
  LEFT JOIN orders o ON o.id=i.order_id AND o.user_id=i.user_id WHERE i.id=$1 AND ($2::boolean OR i.user_id=$3)`
 	if admin {
 		query += " FOR SHARE OF i"

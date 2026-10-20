@@ -22,7 +22,7 @@ func TestExternalRefundIndependentFact(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('refund-reviewer','reviewer@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('refund-reviewer','reviewer@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer))
 	_, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('refund-request',$1,now()+interval '1 hour'),('refund-review',$2,now()+interval '1 hour')`, actor, reviewer)
 	must(err)
 	must(db.Pool.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,status,amount_cents,paid_at) VALUES('ER-1',$1,'manual','paid',100,now()-interval '1 hour') RETURNING id`, customer).Scan(&invoice))
@@ -275,7 +275,7 @@ func TestExternalRefundResolvedTopupBalanceReservationAndReversal(t *testing.T) 
 func externalRefundTopupBalanceLifecycle(t *testing.T, resolved bool) {
 	db, ctx, actor, uid := onlineTopupFixture(t)
 	var reviewer int64
-	if err := db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('topup-refund-reviewer','topup-refund-reviewer@example.test','unused','Topup refund reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('topup-refund-reviewer','topup-refund-reviewer@example.test','unused','Topup refund reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('topup-refund-request',$1,now()+interval '1 hour'),('topup-refund-review',$2,now()+interval '1 hour')`, actor, reviewer); err != nil {
@@ -444,7 +444,7 @@ func externalRefundTopupReservationRace(t *testing.T, resolved bool) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var reviewer, spendInvoice int64
-	if err := db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('race-reviewer','race-reviewer@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('race-reviewer','race-reviewer@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('race-refund-request',$1,now()+interval '1 hour'),('race-refund-review',$2,now()+interval '1 hour')`, actor, reviewer); err != nil {
@@ -548,7 +548,7 @@ func TestExternalRefundMerchantIdentity(t *testing.T) {
 		}
 	}
 	var reviewer int64
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('merchant-review','merchant-review@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('merchant-review','merchant-review@example.test','unused','Reviewer','super_admin') RETURNING id`).Scan(&reviewer))
 	_, err := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('merchant-request',$1,now()+interval '1 hour'),('merchant-review',$2,now()+interval '1 hour');`, actor, reviewer)
 	must(err)
 	_, err = db.Pool.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name) VALUES('merchant-copy-a','payment','epay','A'),('merchant-copy-b','payment','epay','B')`)

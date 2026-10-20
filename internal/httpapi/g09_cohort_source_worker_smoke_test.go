@@ -223,11 +223,17 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 		if role == "admin" {
 			assigned = &staffRoleID
 		}
-		if db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id) VALUES($1,$2,$3,$1,$4,$5) RETURNING id`, name, name+"@example.test", string(hash), role, assigned).Scan(&id) != nil {
+		table := "users"
+		if role != "customer" {
+			table = "administrators"
+		}
+		if db.Pool.QueryRow(t.Context(), `INSERT INTO `+table+`(username,email,password_hash,display_name,role,admin_role_id) VALUES($1,$2,$3,$1,$4,$5) RETURNING id`, name, name+"@example.test", string(hash), role, assigned).Scan(&id) != nil {
 			t.Fatal("fixture identity seed failed")
 		}
-		if _, err = db.Pool.Exec(t.Context(), `INSERT INTO carts(user_id) VALUES($1)`, id); err != nil {
-			t.Fatal("fixture cart seed failed")
+		if role == "customer" {
+			if _, err = db.Pool.Exec(t.Context(), `INSERT INTO carts(user_id) VALUES($1)`, id); err != nil {
+				t.Fatal("fixture cart seed failed")
+			}
 		}
 		return id, e.login(t, name, role)
 	}
@@ -235,7 +241,7 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 	e.root = root
 	// A super_admin bypasses department scope. It is demoted to an empty
 	// fixture-only role below after all administrative preparation has finished.
-	if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET ticket_scope='departments',ticket_unassigned=false,email_verified=false,phone_verified=false WHERE id=$1`, rootID); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET ticket_scope='departments',ticket_unassigned=false,email_verified=false,phone_verified=false WHERE id=$1`, rootID); err != nil {
 		t.Fatal("bootstrap recipient exclusion failed")
 	}
 	if _, err = db.Pool.Exec(t.Context(), `UPDATE channel_instances SET enabled=false WHERE category IN ('mail','sms'); UPDATE notification_templates SET active=false`); err != nil {
@@ -295,10 +301,10 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 		}
 		phone := fmt.Sprintf("+999%09d", i+1)
 		email := fmt.Sprintf("g09-cohort-staff-%03d@example.test", i)
-		if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET admin_role_id=$2,ticket_scope='departments',ticket_unassigned=false,email_verified=true,phone=$3 WHERE id=$1`, sid, staffRoleID, phone); err != nil {
+		if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET admin_role_id=$2,ticket_scope='departments',ticket_unassigned=false,email_verified=true,phone=$3 WHERE id=$1`, sid, staffRoleID, phone); err != nil {
 			t.Fatal("scoped staff identity seed failed")
 		}
-		if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET phone_verified=true WHERE id=$1`, sid); err != nil {
+		if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET phone_verified=true WHERE id=$1`, sid); err != nil {
 			t.Fatal("staff phone verification seed failed")
 		}
 		if _, err = db.Pool.Exec(t.Context(), `INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)`, sid, department); err != nil {
@@ -328,7 +334,7 @@ func g09CohortPrepare(t *testing.T, n int, withPurchases bool) *g09CohortEnv {
 	if db.Pool.QueryRow(t.Context(), `INSERT INTO admin_roles(name,permissions) VALUES('g09-bootstrap-no-ticket','{}') RETURNING id`).Scan(&disabledRole) != nil {
 		t.Fatal("bootstrap role seed failed")
 	}
-	if _, err = db.Pool.Exec(t.Context(), `UPDATE users SET role='admin',admin_role_id=$2 WHERE id=$1`, rootID, disabledRole); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), `UPDATE administrators SET role='admin',admin_role_id=$2 WHERE id=$1`, rootID, disabledRole); err != nil {
 		t.Fatal("bootstrap notification exclusion failed")
 	}
 	g09CohortAssertSQL(t, db, `SELECT count(*)=$1 AND bool_and(expires_at>now()+interval '15 minutes') FROM sessions`, 2*n+1)

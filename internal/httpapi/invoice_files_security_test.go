@@ -77,7 +77,7 @@ func TestInvoiceDocumentWaitingRevocationAndReplacement(t *testing.T) {
 		t.Fatal("revoked upload wrote file", err)
 	}
 	var username string
-	if err = f.db.Pool.QueryRow(t.Context(), "SELECT username FROM users WHERE role='super_admin' ORDER BY id LIMIT 1").Scan(&username); err != nil {
+	if err = f.db.Pool.QueryRow(t.Context(), "SELECT username FROM administrators WHERE role='super_admin' ORDER BY id LIMIT 1").Scan(&username); err != nil {
 		t.Fatal(err)
 	}
 	root := request(f.h, "POST", "/api/v1/auth/login", map[string]string{"username": username, "password": "integration-password"}, "", "")
@@ -159,7 +159,7 @@ func TestInvoiceFileWaitingManagePermissionRevocation(t *testing.T) {
 	}()
 	waitQueryLock(t, f.db, "SELECT status FROM invoice_applications WHERE id=$1 FOR UPDATE")
 	// Direct SQL simulates a change during the wait; normal role management also takes 70108190.
-	if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {

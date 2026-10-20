@@ -253,7 +253,7 @@ var targetTables = map[string]string{
 	"product_config_options": "product_option_groups", "product_config_option_subs": "product_options",
 	"product_config_option_links": "legacy_product_config_option_links",
 	"service_option_selections":   "service_option_selections",
-	"staff":                       "users", "ticket_departments": "ticket_departments", "tickets": "tickets", "ticket_replies": "ticket_replies", "ticket_notes": "ticket_notes", "ticket_attachments": "ticket_attachments",
+	"staff":                       "administrators", "ticket_departments": "ticket_departments", "tickets": "tickets", "ticket_replies": "ticket_replies", "ticket_notes": "ticket_notes", "ticket_attachments": "ticket_attachments",
 }
 
 func (im *importer) replay(ctx context.Context, tx pgx.Tx, entity string, r legacy.Record, out map[int64]int64) (bool, error) {

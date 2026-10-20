@@ -21,8 +21,15 @@ type HTTPIdentity struct {
 
 func (s *Store) SessionIdentity(ctx context.Context, hash string) (HTTPIdentity, error) {
 	var id HTTPIdentity
-	err := s.Pool.QueryRow(ctx, `SELECT u.id,u.username,u.email,u.display_name,u.role FROM sessions s JOIN users u ON u.id=s.user_id
- WHERE s.token_hash=$1 AND s.expires_at>now() AND u.status='active'`, hash).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+	var owner int64
+	err := s.Pool.QueryRow(ctx, "SELECT user_id FROM sessions WHERE token_hash=$1 AND expires_at>now()", hash).Scan(&owner)
+	if err == nil {
+		table, tableErr := authenticationTable(ctx, s.Pool, owner)
+		if tableErr != nil {
+			return id, tableErr
+		}
+		err = s.Pool.QueryRow(ctx, "SELECT u.id,u.username,u.email,u.display_name,u.role FROM "+table+" u JOIN sessions credential ON credential.user_id=u.id WHERE credential.token_hash=$1 AND credential.expires_at>clock_timestamp() AND u.status='active'", hash).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+	}
 	if err == nil && id.Role == "customer" {
 		binding, bindingErr := readImpersonationBinding(ctx, s.Pool, hash)
 		if bindingErr == nil {
@@ -41,8 +48,15 @@ func (s *Store) SessionIdentity(ctx context.Context, hash string) (HTTPIdentity,
 
 func (s *Store) APIKeyIdentity(ctx context.Context, hash string) (HTTPIdentity, error) {
 	var id HTTPIdentity
-	err := s.Pool.QueryRow(ctx, `SELECT u.id,u.username,u.email,u.display_name,u.role FROM api_keys k JOIN users u ON u.id=k.user_id
- WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>now()) AND u.status='active'`, hash).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+	var owner int64
+	err := s.Pool.QueryRow(ctx, "SELECT user_id FROM api_keys WHERE secret_hash=$1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>now())", hash).Scan(&owner)
+	if err == nil {
+		table, tableErr := authenticationTable(ctx, s.Pool, owner)
+		if tableErr != nil {
+			return id, tableErr
+		}
+		err = s.Pool.QueryRow(ctx, "SELECT u.id,u.username,u.email,u.display_name,u.role FROM "+table+" u JOIN api_keys credential ON credential.user_id=u.id WHERE credential.secret_hash=$1 AND credential.revoked_at IS NULL AND (credential.expires_at IS NULL OR credential.expires_at>clock_timestamp()) AND u.status='active'", hash).Scan(&id.ID, &id.Username, &id.Email, &id.Name, &id.Role)
+	}
 	if err == nil {
 		// Usage timestamps have always been best effort and must not turn a
 		// valid credential into a failed request.

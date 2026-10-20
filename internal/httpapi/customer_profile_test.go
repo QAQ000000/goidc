@@ -14,10 +14,10 @@ func TestCustomerCreationPermissionsProfileAndLogin(t *testing.T) {
 	_, root := user(t, db, h, "profile-root", "super_admin")
 	staffID, staff := user(t, db, h, "profile-staff", "admin")
 	ownerID, _ := user(t, db, h, "profile-owner", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['customers.view','customers.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1);`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['customers.view','customers.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1);`, staffID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_enabled=true,customer_scope='owned' WHERE role='admin'`); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET sales_enabled=true,customer_scope='owned' WHERE role='admin'`); err != nil {
 		t.Fatal(err)
 	}
 	var group int64
@@ -129,7 +129,7 @@ func TestCustomerCreationRechecksRevokedRoleAfterLock(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err = tx.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if err = tx.Commit(t.Context()); err != nil {

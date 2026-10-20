@@ -8,7 +8,7 @@ import (
 func TestCustomerRankingRequiresLedgerAndPreservesScope(t *testing.T) {
 	db, h := testServer(t)
 	staffID, staff := user(t, db, h, "ranking-ledger-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	customer := func(name, status string, owner *int64) int64 {
@@ -95,7 +95,7 @@ func TestDailyReportTicketMetricsCapabilityAndRevocation(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('Daily hidden','daily-hidden') RETURNING id").Scan(&hidden); err != nil {
 		t.Fatal(err)
 	}
-	exec("UPDATE users SET ticket_scope='departments',customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
+	exec("UPDATE administrators SET ticket_scope='departments',customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
 	exec("INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, visible)
 	exec("UPDATE users SET sales_owner_id=$1,created_at='2024-02-01T12:00:00+08' WHERE id=$2", staffID, uid)
 	exec(`INSERT INTO orders(order_no,user_id,status,total_cents,idempotency_key,request_hash,created_at)
@@ -140,7 +140,7 @@ VALUES($1,$2,'capability test','test',$3,'2024-02-01T12:00:00+08') RETURNING id`
 	assertDaily(true)
 	expect(t, request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, ""), 200)
 	// Reuse the same authenticated session to prove role revocation is immediate.
-	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	assertDaily(false)
 	response := request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, "")
 	expect(t, response, 403)
@@ -149,10 +149,10 @@ VALUES($1,$2,'capability test','test',$3,'2024-02-01T12:00:00+08') RETURNING id`
 	}
 	// Other report access stays available; a ticket permission is independent.
 	expect(t, request(h, "GET", "/api/v1/admin/reports/sales?year=2024", nil, staff, ""), 200)
-	exec("UPDATE admin_roles SET permissions=array_append(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	exec("UPDATE admin_roles SET permissions=array_append(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	assertDaily(true)
 	expect(t, request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, ""), 200)
-	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	exec("UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	expect(t, request(h, "GET", "/api/v1/admin/reports/new-clients?year=2024&month=2", nil, staff, ""), 403)
 	expect(t, request(h, "GET", "/api/v1/admin/reports/tickets?year=2024&month=2", nil, staff, ""), 403)
 }

@@ -243,21 +243,12 @@ func (s *Server) adminCertificationHistory(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), `SELECT r.id,r.submission_id,r.reviewer_id,coalesce(u.display_name,u.username) AS reviewer_name,r.decision,r.note,r.created_at
-FROM certification_reviews r JOIN users u ON u.id=r.reviewer_id JOIN certification_profiles p ON p.id=r.profile_id
-WHERE r.profile_id=$1 AND admin_customer_allowed($2,p.user_id) ORDER BY r.id DESC`, id, identityFrom(r).ID)
+	items, err := s.db.AdministratorCertificationHistory(r.Context(), identityFrom(r).ID, id)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
+
 	write(w, http.StatusOK, items)
 }
 

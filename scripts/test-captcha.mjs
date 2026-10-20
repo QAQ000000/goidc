@@ -23,6 +23,16 @@ export const unitSuites = {
 
 export const integrationSuites = {
   "internal/httpapi": [
+    "TestPhysicalAccountTablesLoginCollisionsAndCredentialOwnership",
+    "TestPhysicalAdministratorPasswordMFAAndKeyIsolation",
+    "TestPhysicalAccountPasswordResetDoesNotCrossPortal",
+    "TestPhysicalRegistrationAndVerificationChallengesDoNotCrossPortal",
+    "TestPhysicalAccountSecurityMutationsRejectRevokedSessionAfterHTTPAuth",
+    "TestPhysicalPasswordChangeRejectsBearerWithOtherPortalCookie",
+    "TestPhysicalAccountContactVerificationUsesSelectedPortal",
+    "TestPhysicalLoginFinalizationRechecksCredentialAfterLockWait",
+    "TestPhysicalPasswordChangeInvalidatesPendingMFAChallenge",
+    "TestAdministratorAccountHistoryHTTPSuperSessionBoundary",
     "TestCaptchaDisabledAndPNGContract",
     "TestCaptchaProtectsAuthAndConsumesOnce",
     "TestCaptchaProtectsRegisterAndForgotPassword",
@@ -80,7 +90,7 @@ export const integrationSuites = {
     "TestMaintenancePaymentWebhookAndMFALogin",
     "TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery"
   ],
-  "internal/store": ["TestAuthenticationPortalUpgrade180InvalidatesOnlyUnboundChallenges"]
+  "internal/store": ["TestAuthenticationPortalUpgrade180InvalidatesOnlyUnboundChallenges", "TestAdministratorBootstrapUsesSeparateTableWithoutCustomerCart", "TestAccountSeparationUpgrade181PreservesHistory", "TestAccountSeparationPrincipalsAndIndependentUniqueness", "TestAccountSeparationTypedReferenceGuards", "TestAccountSeparationTypedReferencesPreserveHistoricalOwnership", "TestAdministratorAccountHistoryUpgrade181IsReadOnlyAndSuperOnly", "TestAdministratorHistoricalPaymentUpgradeCallbacksOnlyRecordEvidence", "TestAdministratorHistoricalPaymentValidationAndAuditRollback", "TestAdministratorHistoricalPaymentAutomaticQueriesRequireManualReview"]
 };
 
 export async function testCaptcha(mode) {
@@ -92,7 +102,7 @@ export async function testCaptcha(mode) {
     env.REQUIRE_INTEGRATION = '1';
   }
   const names = [...new Set(Object.values(suites).flat())];
-  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', '-timeout=10m', ...Object.keys(suites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
+  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', '-timeout=15m', ...Object.keys(suites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
     cwd: repository, env, timeoutMs: 1200000, maxBytes: 32 * 1024 * 1024, label: `captcha ${mode} tests`,
   });
   process.stdout.write(result.stdout);

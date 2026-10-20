@@ -391,7 +391,7 @@ func (s *Store) ReviewInvoiceApplication(ctx context.Context, actorID, id int64,
 		return out, err
 	}
 	var allowed bool
-	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'invoice_applications.view'=ANY(r.permissions) AND 'invoice_applications.manage'=ANY(r.permissions)),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'invoice_applications.view'=ANY(r.permissions) AND 'invoice_applications.manage'=ANY(r.permissions)),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil {
 		return out, err
 	}
 	if !allowed {
@@ -473,7 +473,7 @@ func (s *Store) invoiceManageTx(ctx context.Context, actorID, applicationID int6
 	}
 	var allowed bool
 	if err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'invoice_applications.view'=ANY(r.permissions) AND 'invoice_applications.manage'=ANY(r.permissions)),false)
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil || !allowed {
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed); err != nil || !allowed {
 		if err == nil {
 			err = conflict("permission_denied", "没有管理发票申请的权限")
 		}
@@ -496,7 +496,7 @@ func invoiceDocumentAuthorize(ctx context.Context, tx pgx.Tx, actorID int64) err
 	}
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		return conflict("permission_denied", "没有管理发票申请的权限")
 	}
 	if role == "super_admin" {

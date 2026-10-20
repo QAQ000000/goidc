@@ -72,13 +72,13 @@ func TestReportEndpointsJSONOnlyFormatsAndPermissions(t *testing.T) {
 			expect(t, request(h, "GET", path+"&format=csv", nil, customer, ""), 401)
 		})
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'tickets.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"tickets", "tickets/handlers"} {
 		expect(t, request(h, "GET", "/api/v1/admin/reports/"+path+"?year=2024&month=2&format=csv", nil, staff, ""), 403)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'reports.view') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	for _, report := range paths {

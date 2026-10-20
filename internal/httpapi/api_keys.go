@@ -44,23 +44,12 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 	secret := "zjmfgo_" + hex.EncodeToString(raw)
 	prefix := "zjmfgo_" + hex.EncodeToString(raw[:8])
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		if identityFrom(r).Role == "customer" {
-			if err = s.db.CheckCustomerAPIKeyEligibilityTx(r.Context(), tx, identityFrom(r).ID); err != nil {
-				return txResponse{}, err
-			}
-		}
-		var id int64
-		if err = tx.QueryRow(r.Context(), "INSERT INTO api_keys(user_id,name,prefix,secret_hash,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id", identityFrom(r).ID, input.Name, prefix, tokenHash(secret), expiresAt).Scan(&id); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "api_key.created", "api_key", id, map[string]any{"name": input.Name, "prefix": prefix, "expires_at": expiresAt}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusCreated, map[string]any{"id": id, "name": input.Name, "prefix": prefix, "secret": secret, "expires_at": expiresAt}}, nil
-	})
+	id, err := s.db.CreateAccountAPIKey(r.Context(), identityFrom(r).ID, accountSessionHash(r), store.AccountAPIKeyInput{Name: input.Name, Prefix: prefix, SecretHash: tokenHash(secret), ExpiresAt: expiresAt})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]any{"id": id, "name": input.Name, "prefix": prefix, "secret": secret, "expires_at": expiresAt})
 }
 
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {

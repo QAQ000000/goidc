@@ -16,7 +16,7 @@ func pendingScopedCertification(t *testing.T) (*store.Store, http.Handler, int64
 	db, h := testServer(t)
 	_, root := user(t, db, h, "concurrent-cert-root", "super_admin")
 	staffID, staff := user(t, db, h, "concurrent-cert-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	uid, customer := user(t, db, h, "concurrent-cert-customer", "customer")
@@ -117,7 +117,7 @@ func TestCertificationReviewRechecksPermissionAfterRoleLockWait(t *testing.T) {
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- certificationReviewRequest(h, profile, staff, "revoke-role-during-wait") }()
 	waitQueryLock(t, db, "SELECT pg_advisory_xact_lock_shared(70108190)")
-	if _, err = blocker.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'certifications.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err = blocker.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'certifications.manage') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if err = blocker.Commit(t.Context()); err != nil {
@@ -170,11 +170,11 @@ func TestCertificationReplayRequiresCurrentScopeAndPermission(t *testing.T) {
 			case "sales_owner":
 				expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/sales-owner", uid), map[string]any{"sales_owner_id": nil, "expected_version": 2}, root, ""), 200)
 			case "permission":
-				if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'certifications.manage') WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+				if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=array_remove(permissions,'certifications.manage') WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 					t.Fatal(err)
 				}
 			case "disabled":
-				if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
+				if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
 					t.Fatal(err)
 				}
 			}

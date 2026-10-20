@@ -2,11 +2,19 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/codex/zjmfgo/db/migrations"
+	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestTicketDepartmentScopeConcurrentTransfer(t *testing.T) {
@@ -20,7 +28,7 @@ func TestTicketDepartmentScopeConcurrentTransfer(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO ticket_departments(name,slug) VALUES('B','race-b') RETURNING id").Scan(&b); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET ticket_scope='departments' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET ticket_scope='departments' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, a); err != nil {
@@ -91,7 +99,7 @@ func TestTicketDepartmentScopeBoundaries(t *testing.T) {
 	}
 	a, b := department("scope-a"), department("scope-b")
 	for _, pair := range [][2]int64{{staffID, a}, {otherID, b}} {
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET ticket_scope='departments' WHERE id=$1", pair[0]); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET ticket_scope='departments' WHERE id=$1", pair[0]); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), "INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", pair[0], pair[1]); err != nil {
@@ -153,21 +161,13 @@ func TestTicketDepartmentScopeBoundaries(t *testing.T) {
 	if err := db.Pool.QueryRow(t.Context(), "SELECT (SELECT count(*) FROM tickets WHERE merged_ticket_id IS NOT NULL),(SELECT count(*) FROM ticket_notes WHERE ticket_id=$1),(SELECT count(*) FROM ticket_replies)", tb).Scan(&merged, &notes, &replies); err != nil || merged != 0 || notes != 1 || replies != 0 {
 		t.Fatalf("failed operation changed records: %d %d %d %v", merged, notes, replies, err)
 	}
-	// Staff can still act as the customer on their own ticket outside departmental scope.
-	own := ticket(b, staff)
-	expect(t, request(h, "POST", adminPath(own)+"/notes", map[string]any{"body": "private-own-note"}, root, ""), 201)
-	detail := request(h, "GET", path(own), nil, staff, "")
-	expect(t, detail, 200)
-	if data(t, detail)["admin_access"] != false || strings.Contains(detail.Body.String(), "private-own-note") {
-		t.Fatal("own customer ticket exposed admin access")
-	}
-	expect(t, request(h, "POST", path(own)+"/replies", map[string]any{"body": "owner reply", "version": 1}, staff, ""), 200)
-	detail = request(h, "GET", path(own), nil, staff, "")
-	if data(t, detail)["status"] != "open" {
-		t.Fatal("owner reply used administrator status")
-	}
+	// Physical account separation prevents an administrator session from acting
+	// as a customer on the customer portal. Customer-owned ticket behavior is
+	// covered by the customer session checks above.
+	adminCustomerTicket := request(h, "POST", "/api/v1/tickets", map[string]any{"subject": "管理员不应创建客户工单", "body": "隔离验收", "priority": "normal", "department_id": b}, staff, "")
+	expect(t, adminCustomerTicket, 401)
 	// Capability and department are independent prerequisites.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view','reports.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['dashboard.view','reports.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", path(ta), nil, staff, ""), 404)
@@ -176,7 +176,7 @@ func TestTicketDepartmentScopeBoundaries(t *testing.T) {
 	if data(t, dashboard)["open_tickets"].(float64) != 0 {
 		t.Fatal("dashboard leaked without ticket capability")
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view','tickets.manage','dashboard.view','reports.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view','tickets.manage','dashboard.view','reports.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	dashboard = request(h, "GET", "/api/v1/admin/dashboard", nil, staff, "")
@@ -195,7 +195,7 @@ func TestTicketDepartmentScopeBoundaries(t *testing.T) {
 		t.Fatalf("scoped report tickets=%v", total)
 	}
 	// Unassigned access is independent; inactive departments retain historical access.
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET ticket_unassigned=true WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET ticket_unassigned=true WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", path(unassigned), nil, staff, ""), 200)
@@ -284,22 +284,66 @@ func TestTicketDepartmentScopeManagement(t *testing.T) {
 }
 
 func TestTicketDepartmentScopeMigration(t *testing.T) {
-	db, h := testServer(t)
-	id, _ := user(t, db, h, "scope-existing", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `DROP FUNCTION admin_ticket_department_allowed(bigint,bigint); DROP TABLE admin_ticket_departments;
- ALTER TABLE users DROP COLUMN ticket_scope,DROP COLUMN ticket_unassigned;
- ALTER TABLE ticket_departments DROP COLUMN version;
- DELETE FROM schema_migrations WHERE version='032_ticket_department_scope.sql';`); err != nil {
+	parent, _ := testServer(t)
+	schema := fmt.Sprintf("ticket_scope_upgrade_%d", time.Now().UnixNano())
+	if _, err := parent.Pool.Exec(t.Context(), "CREATE SCHEMA "+schema); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(t.Context()); err != nil {
+	cfg := parent.Pool.Config()
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Migrate(t.Context()); err != nil {
+	db := &store.Store{Pool: pool}
+	t.Cleanup(func() { db.Close(); parent.Pool.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE") })
+	names, err := fs.Glob(migrations.Files, "*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(names)
+	var id int64
+	// Build the genuine pre-032 schema. Replaying an old identity function on
+	// top of the physical account split would test an impossible installation.
+	for _, name := range names {
+		if name >= "032_" {
+			break
+		}
+		// Seed the historical administrator before schema 031 creates and
+		// assigns the legacy admin role. This mirrors a real pre-RBAC install.
+		if name == "031_admin_rbac.sql" {
+			if err = db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role)
+ VALUES('scope-existing','scope-existing@example.test','unused','Existing staff','admin') RETURNING id`).Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+		}
+		content, err := migrations.Files.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Pool.Exec(t.Context(), string(content)); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		sum := sha256.Sum256(content)
+		if _, err = db.Pool.Exec(t.Context(), "INSERT INTO schema_migrations(version,checksum) VALUES($1,$2)", name, hex.EncodeToString(sum[:])); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = db.Migrate(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Migrate(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.CheckSchema(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	var scope string
-	if err := db.Pool.QueryRow(t.Context(), "SELECT ticket_scope FROM users WHERE id=$1", id).Scan(&scope); err != nil || scope != "all" {
-		t.Fatal("existing access lost", err)
+	if err = db.Pool.QueryRow(t.Context(), "SELECT ticket_scope FROM administrators WHERE id=$1", id).Scan(&scope); err != nil || scope != "all" {
+		t.Fatal("existing access lost", scope, err)
+	}
+	var customerRows int
+	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM users WHERE id=$1", id).Scan(&customerRows); err != nil || customerRows != 0 {
+		t.Fatal("upgraded staff remained a customer", customerRows, err)
 	}
 }

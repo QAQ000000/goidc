@@ -162,7 +162,7 @@ func TestAffiliateSettlementReleaseWithdrawReviewPayoutAndReplay(t *testing.T) {
 	f.review(t, id, "approved", 1, "settlement-review-one")
 	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": " "}, f.admin, ""), 409)
 	_, viewer := user(t, f.db, f.h, "withdrawal-target-viewer", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['affiliates.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='withdrawal-target-viewer')"); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['affiliates.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE username='withdrawal-target-viewer')"); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", targetPath, map[string]any{"reason": "offline payout"}, viewer, ""), 403)

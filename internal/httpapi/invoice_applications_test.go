@@ -154,14 +154,14 @@ func TestInvoiceApplicationPermissionsAndScopeReplay(t *testing.T) {
 	id := int64(data(t, w)["application_id"].(float64))
 	path := fmt.Sprintf("/api/v1/admin/invoice-applications/%d", id)
 	staffID, staff := user(t, f.db, f.h, "application-staff", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoices.view','invoices.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoices.view','invoices.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "GET", path, nil, staff, ""), 403)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view','invoice_applications.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1);", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view','invoice_applications.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1);", staffID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	review := store.InvoiceApplicationReview{Status: "rejected", ReviewNote: "补充资料", ExpectedVersion: 1}
@@ -179,7 +179,7 @@ func TestInvoiceApplicationPermissionsAndScopeReplay(t *testing.T) {
 	if page["total"] != float64(0) {
 		t.Fatal("application list leaked transferred customer", page)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['invoice_applications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path+"/review", review, staff, "application-scope-review"), 403)

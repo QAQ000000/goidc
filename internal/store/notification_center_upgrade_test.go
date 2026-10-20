@@ -87,7 +87,7 @@ func notificationUpgradeSnapshot(t *testing.T, db *Store, current bool, instance
  'payment_settings',(SELECT to_jsonb(p) FROM payment_settings p),
  'smtp_settings',(SELECT to_jsonb(s) FROM smtp_settings s),
  'sms_settings',(SELECT to_jsonb(s) FROM sms_settings s),
- 'users',(SELECT jsonb_agg(to_jsonb(u) ORDER BY id) FROM users u),
+ 'users',` + historicalAccountSnapshotRows(t, db) + `,
  'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM invoices i),
  'payments',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM payment_transactions p),
  'webhooks',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM payment_webhook_events e),

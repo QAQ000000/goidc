@@ -38,10 +38,14 @@ func (s *Store) ContractTx(ctx context.Context, actor int64, admin, manage, temp
 	}
 	if err == nil {
 		var locked int64
-		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 FOR SHARE", actor).Scan(&locked)
+		table := "users"
+		if admin {
+			table = "administrators"
+		}
+		err = tx.QueryRow(ctx, "SELECT id FROM "+table+" WHERE id=$1 FOR SHARE", actor).Scan(&locked)
 	}
 	if err == nil && admin {
-		_, err = tx.Exec(ctx, "SELECT id FROM admin_roles WHERE id=(SELECT admin_role_id FROM users WHERE id=$1) FOR SHARE", actor)
+		_, err = tx.Exec(ctx, "SELECT id FROM admin_roles WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1) FOR SHARE", actor)
 	}
 	if err == nil {
 		var allowed bool
@@ -54,7 +58,7 @@ func (s *Store) ContractTx(ctx context.Context, actor int64, admin, manage, temp
 			if manage {
 				permission = write
 			}
-			err = tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (u.role='super_admin' OR(u.role='admin' AND r.active AND $2=ANY(r.permissions) AND $3=ANY(r.permissions))),false) FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actor, view, permission).Scan(&allowed)
+			err = tx.QueryRow(ctx, `SELECT coalesce(u.status='active' AND (u.role='super_admin' OR(u.role='admin' AND r.active AND $2=ANY(r.permissions) AND $3=ANY(r.permissions))),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actor, view, permission).Scan(&allowed)
 		} else {
 			err = tx.QueryRow(ctx, "SELECT role='customer' AND status='active' FROM users WHERE id=$1", actor).Scan(&allowed)
 		}

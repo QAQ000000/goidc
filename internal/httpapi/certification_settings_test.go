@@ -29,7 +29,7 @@ func TestCertificationSettingsContractAndPermissions(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "cert-settings-root", "super_admin")
 	_, staff := user(t, db, h, "cert-settings-reader", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['certifications.view'] WHERE id=(SELECT admin_role_id FROM users WHERE username='cert-settings-reader')"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['certifications.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE username='cert-settings-reader')"); err != nil {
 		t.Fatal(err)
 	}
 	path := "/api/v1/admin/certification-settings"

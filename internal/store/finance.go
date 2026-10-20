@@ -374,7 +374,7 @@ func (s *Store) RefundInvoice(ctx context.Context, actorID, invoiceID int64, key
 	if ctx.Value(creditSessionKey{}) != nil {
 		var role string
 		var roleID *int64
-		if err = tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 			return out, err
 		}
 		if role != "super_admin" {

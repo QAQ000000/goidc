@@ -20,5 +20,5 @@ func (s *Server) serviceMonitoring(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Also revalidate the session/API key after the network call, including logout.
-	s.auth(func(w http.ResponseWriter, r *http.Request) { write(w, 200, result) }, adminRoute(r))(w, r)
+	s.auth(func(w http.ResponseWriter, r *http.Request) { write(w, 200, result) }, adminRoute(r))(w, freshBrowserSessionRequest(r))
 }

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/store"
 )
@@ -130,17 +131,26 @@ func TestPaymentReconciliationPendingRollbackPaidAndLateCallback(t *testing.T) {
 func TestPaymentReconciliationConcurrentChecksAndCallbackWins(t *testing.T) {
 	var calls atomic.Int64
 	entered, release := make(chan struct{}), make(chan struct{})
+	var enteredOnce, releaseOnce sync.Once
+	releaseRemote := func() { releaseOnce.Do(func() { close(release) }) }
 	var checkout url.Values
 	f, iid, pid, v := reconciliationFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		close(entered)
+		enteredOnce.Do(func() { close(entered) })
 		<-release
 		_ = json.NewEncoder(w).Encode(queryProtocolResponse(checkout, 0))
 	})
+	t.Cleanup(releaseRemote)
 	checkout = v
 	result := make(chan *httptest.ResponseRecorder, 1)
 	go func() { result <- request(f.h, "POST", queryPath(iid, pid, false), nil, f.customer, "") }()
-	<-entered
+	select {
+	case <-entered:
+	case response := <-result:
+		t.Fatalf("reconciliation returned before contacting the upstream: status %d; %s", response.Code, response.Body.String())
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconciliation did not reach the upstream within 5 seconds")
+	}
 	var wg sync.WaitGroup
 	codes := make(chan int, 6)
 	for i := 0; i < cap(codes); i++ {
@@ -161,8 +171,13 @@ func TestPaymentReconciliationConcurrentChecksAndCallbackWins(t *testing.T) {
 	if callback.Code != 200 {
 		t.Fatal("callback while query in flight failed", callback.Code)
 	}
-	close(release)
-	w := <-result
+	releaseRemote()
+	var w *httptest.ResponseRecorder
+	select {
+	case w = <-result:
+	case <-time.After(5 * time.Second):
+		t.Fatal("reconciliation did not finish after releasing the upstream")
+	}
 	expect(t, w, 200)
 	if calls.Load() != 1 || data(t, w)["status"] != "succeeded" {
 		t.Fatal("pending query overwrote paid callback", calls.Load(), w.Body.String())
@@ -185,7 +200,7 @@ func TestPaymentReconciliationRechecksPermissionAndCustomerTransfer(t *testing.T
 			})
 			checkout = v
 			staffID, staff := user(t, f.db, f.h, "query-sales", "admin")
-			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+			if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 				t.Fatal(err)
 			}
 			salesAssignment(t, f.h, f.root, f.uid, staffID, 1)
@@ -203,7 +218,7 @@ func TestPaymentReconciliationRechecksPermissionAndCustomerTransfer(t *testing.T
 				want = 404
 			case "disabled":
 				want = 404 // Disabled administrators no longer pass the customer scope check.
-				if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", staffID); err != nil {
+				if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
 					t.Fatal(err)
 				}
 			}

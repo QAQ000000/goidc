@@ -15,7 +15,7 @@ func TestAdminCreditSupplierBrowserFixture(t *testing.T) {
 		uid, customer := user(t, db, h, "next-customer", "customer")
 		_, root := user(t, db, h, "fixture-super", "super_admin")
 		reader, _ := user(t, db, h, "next-reader", "admin")
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['credit.view','orders.view','products.view','jobs.view','services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, reader); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['credit.view','orders.view','products.view','jobs.view','services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, reader); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(t.Context(), `UPDATE credit_settings SET enabled=true; UPDATE customer_credit_accounts SET limit_cents=50000`); err != nil {

@@ -67,68 +67,8 @@ func (s *Server) mutateGlobalConfiguration(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	actor := identityFrom(r).ID
-	tx, err := s.db.CatalogTx(r.Context(), actor)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	// Lock current user/role/session after the catalog lock, before replay or mutation.
-	var role string
-	var roleID *int64
-	if err = tx.QueryRow(r.Context(), "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {
-		writeError(w, 403, "permission_denied", "权限已失效")
-		return
-	}
-	if role != "super_admin" {
-		var allowed bool
-		if role != "admin" || roleID == nil {
-			writeError(w, 403, "permission_denied", "没有管理商品权限")
-			return
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT active AND 'products.view'=ANY(permissions) AND 'products.manage'=ANY(permissions) FROM admin_roles WHERE id=$1 FOR SHARE", *roleID).Scan(&allowed); err != nil || !allowed {
-			writeError(w, 403, "permission_denied", "权限已失效")
-			return
-		}
-	}
-	cookie, cookieErr := r.Cookie("zjmfgo_session")
-	if cookieErr != nil {
-		writeError(w, 401, "unauthorized", "请先登录")
-		return
-	}
-	var sessionUser int64
-	if err = tx.QueryRow(r.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1 AND user_id=$2 AND expires_at>clock_timestamp() FOR SHARE", tokenHash(cookie.Value), actor).Scan(&sessionUser); err != nil {
-		writeError(w, 401, "unauthorized", "登录已失效")
-		return
-	}
-	hash := settingMutationHash(struct {
-		ID    int64
-		Input store.GlobalConfigurationInput
-	}{id, in})
-	op := "global_configuration." + operation
-	if replay, replayed, e := loadSettingReplayTx(r, tx, actor, op, key, hash); e != nil {
-		s.fail(w, r, e)
-		return
-	} else if replayed {
-		if err = tx.Commit(r.Context()); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		write(w, 200, replay)
-		return
-	}
-	result, err := store.MutateGlobalConfiguration(r.Context(), tx, actor, id, operation, in)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = saveSettingOperationTx(r, tx, actor, op, key, hash, result); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
+	result, err := s.db.MutateAccountGlobalConfiguration(requestFileContext(r), identityFrom(r).ID, id, operation, key, in)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
 	write(w, 200, result)

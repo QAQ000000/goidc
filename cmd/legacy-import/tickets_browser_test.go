@@ -45,7 +45,10 @@ func TestImportedTicketBrowserFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	uid, other := importedID(t, db, "users", 10), importedID(t, db, "users", 11)
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET password_hash=$1,password_reset_required=false,status='active' WHERE id=ANY($2)", string(hash), []int64{uid, other, admin}); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET password_hash=$1,password_reset_required=false,status='active' WHERE id=ANY($2)", string(hash), []int64{uid, other}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET password_hash=$1,password_reset_required=false,status='active' WHERE id=$2", string(hash), admin); err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(httpapi.New(db, config.Config{PublicOrigin: "http://localhost:3089"}, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler())

@@ -20,7 +20,7 @@ func (s *Server) serviceCDROM(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		s.auth(func(w http.ResponseWriter, r *http.Request) { write(w, 200, result) }, adminRoute(r))(w, r)
+		s.auth(func(w http.ResponseWriter, r *http.Request) { write(w, 200, result) }, adminRoute(r))(w, freshBrowserSessionRequest(r))
 		return
 	}
 	var in struct {

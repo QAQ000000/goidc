@@ -50,7 +50,7 @@ func TestNOKVMResourcesBrowserFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	readerID, _ := user(t, f.db, f.h, "resources-browser-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	fileID := downloadID(t, f.h, f.root, downloadInput())

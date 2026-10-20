@@ -195,7 +195,7 @@ func TestPaymentCloseHTTPReadWriteScopeAndBearerBoundaries(t *testing.T) {
 	setPermissions([]string{})
 	expect(t, request(f.h, "GET", path, nil, staff, ""), 403)
 	setPermissions([]string{"invoices.view", "payments.close"})
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	for _, method := range []string{"GET", "POST"} {
@@ -233,9 +233,9 @@ func TestPaymentCloseRechecksRevocationScopeAndSession(t *testing.T) {
 			case "session":
 				_, err = f.db.Pool.Exec(t.Context(), `DELETE FROM sessions WHERE token_hash=$1`, hash)
 			case "scope":
-				_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, staffID)
+				_, err = f.db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, staffID)
 			case "disabled":
-				_, err = f.db.Pool.Exec(t.Context(), `UPDATE users SET status='disabled' WHERE id=$1`, staffID)
+				_, err = f.db.Pool.Exec(t.Context(), `UPDATE administrators SET status='disabled' WHERE id=$1`, staffID)
 			}
 			if err != nil {
 				t.Fatal(err)

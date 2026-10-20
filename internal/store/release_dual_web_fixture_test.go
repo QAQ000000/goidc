@@ -103,7 +103,7 @@ func (f *releaseDualWebFixture) prepareDual(ctx context.Context) error {
 		return errors.New("dual fixture migrated schema invalid")
 	}
 	var empty bool
-	if err := f.db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM users) AND NOT EXISTS(SELECT 1 FROM sessions) AND NOT EXISTS(SELECT 1 FROM audit_events) AND NOT EXISTS(SELECT 1 FROM products) AND NOT EXISTS(SELECT 1 FROM services) AND NOT EXISTS(SELECT 1 FROM orders) AND NOT EXISTS(SELECT 1 FROM provision_jobs)`).Scan(&empty); err != nil || !empty {
+	if err := f.db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM account_principals) AND NOT EXISTS(SELECT 1 FROM sessions) AND NOT EXISTS(SELECT 1 FROM audit_events) AND NOT EXISTS(SELECT 1 FROM products) AND NOT EXISTS(SELECT 1 FROM services) AND NOT EXISTS(SELECT 1 FROM orders) AND NOT EXISTS(SELECT 1 FROM provision_jobs)`).Scan(&empty); err != nil || !empty {
 		return errors.New("dual fixture requires empty newly migrated business tables")
 	}
 	tx, err := f.db.Pool.Begin(ctx)
@@ -135,13 +135,14 @@ func (f *releaseDualWebFixture) prepareDual(ctx context.Context) error {
 	for _, account := range []struct {
 		credential dualWebCredential
 		role       string
+		table      string
 		id         *int64
-	}{{f.credentials.Customer, "customer", &f.customerID}, {f.credentials.Admin, "super_admin", &f.adminID}} {
+	}{{f.credentials.Customer, "customer", "users", &f.customerID}, {f.credentials.Admin, "super_admin", "administrators", &f.adminID}} {
 		hash, err := bcrypt.GenerateFromPassword([]byte(account.credential.Password), 12)
 		if err != nil {
 			return errors.New("dual fixture credential hashing failed")
 		}
-		if err = tx.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role,balance_cents,email_verified,phone_verified,password_reset_required,mfa_enabled) VALUES($1,$2,$3,$4,$5,0,true,false,false,false) RETURNING id`, account.credential.Username, account.credential.Email, string(hash), "Dual Web "+account.role, account.role).Scan(account.id); err != nil {
+		if err = tx.QueryRow(ctx, `INSERT INTO `+account.table+`(username,email,password_hash,display_name,role,email_verified,phone_verified,password_reset_required,mfa_enabled) VALUES($1,$2,$3,$4,$5,true,false,false,false) RETURNING id`, account.credential.Username, account.credential.Email, string(hash), "Dual Web "+account.role, account.role).Scan(account.id); err != nil {
 			return errors.New("dual fixture account preparation failed")
 		}
 	}
@@ -635,9 +636,10 @@ func TestReleaseDualWebFixtureDatabaseContract(t *testing.T) {
 		id         int64
 		credential dualWebCredential
 		role       string
-	}{{f.customerID, f.credentials.Customer, "customer"}, {f.adminID, f.credentials.Admin, "super_admin"}} {
+		table      string
+	}{{f.customerID, f.credentials.Customer, "customer", "users"}, {f.adminID, f.credentials.Admin, "super_admin", "administrators"}} {
 		var hash, role string
-		if err = f.db.Pool.QueryRow(ctx, "SELECT password_hash,role FROM users WHERE id=$1", account.id).Scan(&hash, &role); err != nil || role != account.role || bcrypt.CompareHashAndPassword([]byte(hash), []byte(account.credential.Password)) != nil {
+		if err = f.db.Pool.QueryRow(ctx, "SELECT password_hash,role FROM "+account.table+" WHERE id=$1", account.id).Scan(&hash, &role); err != nil || role != account.role || bcrypt.CompareHashAndPassword([]byte(hash), []byte(account.credential.Password)) != nil {
 			t.Fatal("real login credential invalid")
 		}
 		token, err := dualWebRandom()

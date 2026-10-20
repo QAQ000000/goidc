@@ -359,7 +359,7 @@ func TestDownloadsWaitingCredentialAndPermissionRevocation(t *testing.T) {
 				}
 			}
 			if kind == "permission" {
-				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['downloads.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", writerID)
+				_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['downloads.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", writerID)
 			} else if kind == "api_key" {
 				_, err = tx.Exec(ctx, "UPDATE api_keys SET revoked_at=now() WHERE secret_hash=$1", tokenHash(secret))
 			} else {

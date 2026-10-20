@@ -59,7 +59,7 @@ func TestSupplierCustomerConsole(t *testing.T) {
 }
 
 func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
-	for _, change := range []string{"service_version", "supplier_version", "binding", "role", "disabled", "supplier_disabled", "ownership", "admin_permission"} {
+	for _, change := range []string{"service_version", "supplier_version", "binding", "session", "disabled", "supplier_disabled", "ownership", "admin_permission"} {
 		t.Run(change, func(t *testing.T) {
 			f := supplierSetup(t)
 			f.publish(t, f.pid, "local-vm")
@@ -74,7 +74,7 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 			token, route := f.customer, fmt.Sprintf("/api/v1/services/%d/vnc", sid)
 			var adminID int64
 			if change == "admin_permission" {
-				if err := f.db.Pool.QueryRow(t.Context(), `SELECT id FROM users WHERE username='supplier-reader'`).Scan(&adminID); err != nil {
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT id FROM administrators WHERE username='supplier-reader'`).Scan(&adminID); err != nil {
 					t.Fatal(err)
 				}
 				contentRole(t, f.db, adminID, "services.view", "services.manage")
@@ -86,7 +86,7 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 			var id int64
 			switch change {
 			case "admin_permission":
-				query = `UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`
+				query = `UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`
 				id = adminID
 			case "supplier_disabled":
 				query = `UPDATE supplier_accounts SET active=false WHERE id=$1`
@@ -103,8 +103,8 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 			case "binding":
 				query = `UPDATE services SET upstream_id='43' WHERE id=$1`
 				id = sid
-			case "role":
-				query = `UPDATE users SET role='admin',admin_role_id=(SELECT id FROM admin_roles LIMIT 1) WHERE id=$1`
+			case "session":
+				query = `DELETE FROM sessions WHERE user_id=$1`
 				id = f.uid
 			case "disabled":
 				query = `UPDATE users SET status='disabled' WHERE id=$1`

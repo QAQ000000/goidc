@@ -22,7 +22,7 @@ func TestTicketNotificationDeliveryTransactions(t *testing.T) {
 	must(err)
 	_, err = db.Pool.Exec(ctx, `UPDATE users SET phone_verified=true WHERE id=$1`, owner)
 	must(err)
-	_, err = db.Pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, staff)
+	_, err = db.Pool.Exec(ctx, `UPDATE administrators SET email_verified=true WHERE id=$1`, staff)
 	must(err)
 	_, err = db.Pool.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('ticket-mail','mail','smtp','Local test',true),('ticket-sms','sms','http','Local SMS',true); UPDATE notification_templates SET active=true WHERE kind LIKE 'ticket_%';`)
 	must(err)
@@ -175,9 +175,9 @@ func TestTicketNotificationStaffEligibilityAndSkips(t *testing.T) {
 	var role, department, staff, wrong, disabled, ticket int64
 	must(db.Pool.QueryRow(ctx, `INSERT INTO admin_roles(name,permissions) VALUES('ticket support',ARRAY['tickets.manage']) RETURNING id`).Scan(&role))
 	must(db.Pool.QueryRow(ctx, `INSERT INTO ticket_departments(name,slug) VALUES('Support','support') RETURNING id`).Scan(&department))
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id,email_verified) VALUES('legal','legal@example.test','unused','Legal','admin',$1,true) RETURNING id`, role).Scan(&staff))
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id,email_verified) VALUES('wrong','wrong@example.test','unused','Wrong','admin',$1,true) RETURNING id`, role).Scan(&wrong))
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id,email_verified,status) VALUES('disabled','disabled@example.test','unused','Disabled','admin',$1,true,'disabled') RETURNING id`, role).Scan(&disabled))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role,admin_role_id,email_verified) VALUES('legal','legal@example.test','unused','Legal','admin',$1,true) RETURNING id`, role).Scan(&staff))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role,admin_role_id,email_verified) VALUES('wrong','wrong@example.test','unused','Wrong','admin',$1,true) RETURNING id`, role).Scan(&wrong))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role,admin_role_id,email_verified,status) VALUES('disabled','disabled@example.test','unused','Disabled','admin',$1,true,'disabled') RETURNING id`, role).Scan(&disabled))
 	_, err := db.Pool.Exec(ctx, `INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)`, staff, department)
 	must(err)
 	must(db.Pool.QueryRow(ctx, `INSERT INTO tickets(ticket_no,user_id,subject,body,department_id,assignee_id) VALUES('TN-SCOPE',$1,'subject','body',$2,$3) RETURNING id`, owner, department, staff).Scan(&ticket))
@@ -241,7 +241,7 @@ func TestTicketNotificationInvalidEmailPayloadSkips(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err := db.Pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, staff)
+	_, err := db.Pool.Exec(ctx, `UPDATE administrators SET email_verified=true WHERE id=$1`, staff)
 	must(err)
 	_, err = db.Pool.Exec(ctx, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled) VALUES('ticket-mail','mail','smtp','Local test',true);UPDATE notification_templates SET active=true WHERE channel='email' AND kind='ticket_customer_created'`)
 	must(err)
@@ -253,9 +253,9 @@ func TestTicketNotificationInvalidEmailPayloadSkips(t *testing.T) {
 	}
 	for i, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := db.Pool.Exec(ctx, `UPDATE users SET email=$2 WHERE id=$1`, staff, tc.recipient)
+			_, err := db.Pool.Exec(ctx, `UPDATE administrators SET email=$2 WHERE id=$1`, staff, tc.recipient)
 			must(err)
-			_, err = db.Pool.Exec(ctx, `UPDATE users SET email_verified=true WHERE id=$1`, staff)
+			_, err = db.Pool.Exec(ctx, `UPDATE administrators SET email_verified=true WHERE id=$1`, staff)
 			must(err)
 			tx, err := db.Pool.Begin(ctx)
 			must(err)

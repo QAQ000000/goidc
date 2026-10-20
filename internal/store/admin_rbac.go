@@ -68,7 +68,7 @@ func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx,
 	}
 	var allowed bool
 	err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'settings.manage'=ANY(r.permissions)),false)
- FROM users u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actorID).Scan(&allowed)
 	if err != nil || !allowed {
 		tx.Rollback(ctx)
 		if err != nil {
@@ -85,7 +85,7 @@ func settingsManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx,
 func recheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessionHash string) error {
 	var role string
 	var roleID *int64
-	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM users WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actorID).Scan(&role, &roleID); err != nil {
 		if err == pgx.ErrNoRows {
 			return conflict("permission_denied", "没有管理站点设置的权限")
 		}
@@ -126,7 +126,7 @@ func RecheckSettingsManager(ctx context.Context, tx pgx.Tx, actorID int64, sessi
 func (s *Store) AdminGrants(ctx context.Context, userID int64) ([]string, error) {
 	var grants []string
 	err := s.Pool.QueryRow(ctx, `SELECT coalesce((SELECT r.permissions FROM admin_roles r WHERE r.id=u.admin_role_id AND r.active),'{}'::text[])
- FROM users u WHERE u.id=$1 AND u.status='active'`, userID).Scan(&grants)
+ FROM administrators u WHERE u.id=$1 AND u.status='active'`, userID).Scan(&grants)
 	return grants, err
 }
 
@@ -188,7 +188,7 @@ func adminManagementTx(ctx context.Context, s *Store, actorID int64) (pgx.Tx, er
 	}
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108190)"); err == nil {
 		var id int64
-		err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND role='super_admin' AND status='active' FOR SHARE", actorID).Scan(&id)
+		err = tx.QueryRow(ctx, "SELECT id FROM administrators WHERE id=$1 AND role='super_admin' AND status='active' FOR SHARE", actorID).Scan(&id)
 	}
 	if err != nil {
 		tx.Rollback(ctx)
@@ -238,7 +238,7 @@ func (s *Store) DeleteAdminRole(ctx context.Context, actorID, id, version int64)
 		return err
 	}
 	var assigned bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE admin_role_id=$1)", id).Scan(&assigned); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM administrators WHERE admin_role_id=$1)", id).Scan(&assigned); err != nil {
 		return err
 	}
 	if assigned {
@@ -357,10 +357,17 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 	oldScope, oldUnassigned, oldDepartments := "departments", false, []int64{}
 	oldCustomerScope, oldOwnerless, oldSalesEnabled := "owned", false, false
 	if id != 0 {
-		if err = tx.QueryRow(ctx, `SELECT ticket_scope,ticket_unassigned,ARRAY(SELECT department_id FROM admin_ticket_departments WHERE user_id=$1 ORDER BY department_id) FROM users WHERE id=$1`, id).Scan(&oldScope, &oldUnassigned, &oldDepartments); err != nil {
+		table, err := authenticationTable(ctx, tx, id)
+		if err != nil {
 			return 0, err
 		}
-		if err = tx.QueryRow(ctx, "SELECT customer_scope,customer_ownerless,sales_enabled FROM users WHERE id=$1", id).Scan(&oldCustomerScope, &oldOwnerless, &oldSalesEnabled); err != nil {
+		if table != "administrators" {
+			return 0, conflict("protected_account", "该账号受保护，请使用个人账户设置")
+		}
+		if err = tx.QueryRow(ctx, `SELECT ticket_scope,ticket_unassigned,ARRAY(SELECT department_id FROM admin_ticket_departments WHERE user_id=$1 ORDER BY department_id) FROM administrators WHERE id=$1`, id).Scan(&oldScope, &oldUnassigned, &oldDepartments); err != nil {
+			return 0, err
+		}
+		if err = tx.QueryRow(ctx, "SELECT customer_scope,customer_ownerless,sales_enabled FROM administrators WHERE id=$1", id).Scan(&oldCustomerScope, &oldOwnerless, &oldSalesEnabled); err != nil {
 			return 0, err
 		}
 	}
@@ -417,16 +424,13 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 	}
 	action := "admin_staff.created"
 	if id == 0 {
-		err = tx.QueryRow(ctx, "INSERT INTO users(username,email,display_name,role,status,admin_role_id,password_hash) VALUES($1,$2,$3,'admin',$4,$5,$6) RETURNING id", in.Username, in.Email, in.Name, in.Status, in.RoleID, string(hash)).Scan(&id)
-		if err == nil {
-			_, err = tx.Exec(ctx, "INSERT INTO carts(user_id) VALUES($1)", id)
-		}
+		err = tx.QueryRow(ctx, "INSERT INTO administrators(username,email,display_name,role,status,admin_role_id,password_hash) VALUES($1,$2,$3,'admin',$4,$5,$6) RETURNING id", in.Username, in.Email, in.Name, in.Status, in.RoleID, string(hash)).Scan(&id)
 	} else {
 		action = "admin_staff.updated"
 		var currentVersion int64
 		var role, oldStatus, oldEmail, oldUsername string
 		var oldRoleID *int64
-		if err = tx.QueryRow(ctx, "SELECT role,admin_version,status,email,username,admin_role_id FROM users WHERE id=$1 FOR UPDATE", id).Scan(&role, &currentVersion, &oldStatus, &oldEmail, &oldUsername, &oldRoleID); err != nil {
+		if err = tx.QueryRow(ctx, "SELECT role,admin_version,status,email,username,admin_role_id FROM administrators WHERE id=$1 FOR UPDATE", id).Scan(&role, &currentVersion, &oldStatus, &oldEmail, &oldUsername, &oldRoleID); err != nil {
 			return 0, err
 		}
 		if role != "admin" || id == actorID {
@@ -435,7 +439,7 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 		if currentVersion != in.ExpectedVersion {
 			return 0, conflict("version_conflict", "管理员资料已变更，请重新加载")
 		}
-		_, err = tx.Exec(ctx, "UPDATE users SET username=$2,email=$3,display_name=$4,status=$5,admin_role_id=$6,password_hash=CASE WHEN $7='' THEN password_hash ELSE $7 END,admin_version=admin_version+1,updated_at=now() WHERE id=$1", id, in.Username, in.Email, in.Name, in.Status, in.RoleID, string(hash))
+		_, err = tx.Exec(ctx, "UPDATE administrators SET username=$2,email=$3,display_name=$4,status=$5,admin_role_id=$6,password_hash=CASE WHEN $7='' THEN password_hash ELSE $7 END,admin_version=admin_version+1,updated_at=now() WHERE id=$1", id, in.Username, in.Email, in.Name, in.Status, in.RoleID, string(hash))
 		if err != nil {
 			return 0, err
 		}
@@ -457,7 +461,7 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 	if err != nil {
 		return 0, err
 	}
-	if _, err = tx.Exec(ctx, "UPDATE users SET ticket_scope=$2,ticket_unassigned=$3,customer_scope=$4,customer_ownerless=$5,sales_enabled=$6 WHERE id=$1", id, scope, unassigned, customerScope, ownerless, salesEnabled); err != nil {
+	if _, err = tx.Exec(ctx, "UPDATE administrators SET ticket_scope=$2,ticket_unassigned=$3,customer_scope=$4,customer_ownerless=$5,sales_enabled=$6 WHERE id=$1", id, scope, unassigned, customerScope, ownerless, salesEnabled); err != nil {
 		return 0, err
 	}
 	if _, err = tx.Exec(ctx, "DELETE FROM admin_ticket_departments WHERE user_id=$1", id); err != nil {
@@ -468,7 +472,7 @@ func (s *Store) saveStaff(ctx context.Context, actorID, id int64, sessionHash, k
 			return 0, err
 		}
 	}
-	if err = Audit(ctx, tx, actorID, action, "user", id, map[string]any{"username": in.Username, "status": in.Status, "admin_role_id": in.RoleID, "password_changed": hash != nil, "ticket_scope": scope, "ticket_unassigned": unassigned, "ticket_department_ids": departments, "customer_scope": customerScope, "customer_ownerless": ownerless, "sales_enabled": salesEnabled}); err != nil {
+	if err = Audit(ctx, tx, actorID, action, "administrator", id, map[string]any{"username": in.Username, "status": in.Status, "admin_role_id": in.RoleID, "password_changed": hash != nil, "ticket_scope": scope, "ticket_unassigned": unassigned, "ticket_department_ids": departments, "customer_scope": customerScope, "customer_ownerless": ownerless, "sales_enabled": salesEnabled}); err != nil {
 		return 0, err
 	}
 	if key != "" {

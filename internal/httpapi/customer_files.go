@@ -73,82 +73,27 @@ func (s *Server) customerFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		filter = &id
 	}
-	tx, uid, ok := s.customerFileTx(w, r, false)
-	if !ok {
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var columns, scope string
-	if admin {
-		if filter != nil {
-			if err := store.LockAdminCustomer(r.Context(), tx, uid, *filter); err != nil {
-				s.fail(w, r, err)
-				return
-			}
-		}
-		columns = adminCustomerFileColumns
-		scope = "admin_customer_allowed($1,f.customer_id)"
-	} else {
-		columns = customerFileColumns
-		scope = "f.customer_id=$1"
-	}
 	limit, offset := pagination(r)
-	if !s.customerFileCredentialCurrent(w, r, tx, uid) {
-		return
-	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	where := ` FROM customer_files f JOIN users c ON c.id=f.customer_id JOIN users u ON u.id=f.uploader_id WHERE ` + scope + `
- AND ($2::bigint IS NULL OR f.customer_id=$2) AND ($3='' OR f.title ILIKE '%'||$3||'%' OR f.remarks ILIKE '%'||$3||'%' OR f.filename ILIKE '%'||$3||'%')`
-	page, err := listPage(r.Context(), tx, "SELECT count(*)"+where,
-		"SELECT "+columns+where+" ORDER BY f.id DESC", []any{uid, filter, query}, limit, offset, pgx.RowToMap)
+	result, err := s.db.CustomerAccountFilePage(requestFileContext(r), identityFrom(r).ID, admin, filter, strings.TrimSpace(r.URL.Query().Get("q")), limit, offset)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, page)
+	write(w, 200, result)
 }
 func (s *Server) adminCustomerFileDetail(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)
 	if !ok {
 		return
 	}
-	tx, uid, ok := s.customerFileTx(w, r, false)
-	if !ok {
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var owner int64
-	if err := tx.QueryRow(r.Context(), "SELECT customer_id FROM customer_files WHERE id=$1", id).Scan(&owner); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err := store.LockAdminCustomer(r.Context(), tx, uid, owner); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	rows, err := tx.Query(r.Context(), "SELECT "+adminCustomerFileColumns+" FROM customer_files f JOIN users c ON c.id=f.customer_id JOIN users u ON u.id=f.uploader_id WHERE f.id=$1", id)
+	result, err := s.db.AdminCustomerAccountFileDetail(requestFileContext(r), identityFrom(r).ID, id)
 	if err != nil {
-		s.fail(w, r, err)
+		s.failTicketAccount(w, r, err)
 		return
 	}
-	item, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !s.customerFileCredentialCurrent(w, r, tx, uid) {
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, item)
+	write(w, 200, result)
 }
+
 func (s *Server) saveCustomerFile(w http.ResponseWriter, r *http.Request) {
 	var id int64
 	var ok bool

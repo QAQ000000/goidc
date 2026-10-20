@@ -14,7 +14,7 @@ import (
 // messages created before the change. External adapters still resolve their
 // compiled factory and credentials immediately before sending.
 const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e
- JOIN users u ON u.id=e.user_id JOIN notification_routes r ON r.id=d.route_id
+ JOIN account_identities u ON u.id=e.user_id JOIN notification_routes r ON r.id=d.route_id
  JOIN notification_message_templates m ON m.id=r.template_id
  JOIN user_notification_preferences p ON p.user_id=e.user_id AND p.channel=d.channel
  WHERE e.id=d.event_id AND u.status='active' AND r.enabled AND r.version=d.route_version
@@ -96,7 +96,11 @@ func (s *Store) claimNotificationJobTx(ctx context.Context, tx pgx.Tx) (*notify.
 	// same locks here serializes claim against those changes.
 	var id int64
 	var role string
-	if err = tx.QueryRow(ctx, `SELECT id,role FROM users WHERE id=$1 AND status='active' FOR SHARE`, userID).Scan(&id, &role); err != nil {
+	table, tableErr := authenticationTable(ctx, tx, userID)
+	if tableErr != nil {
+		return nil, tableErr
+	}
+	if err = tx.QueryRow(ctx, `SELECT id,role FROM `+table+` WHERE id=$1 AND status='active' FOR SHARE`, userID).Scan(&id, &role); err != nil {
 		return nil, err
 	}
 	job.AccountPortal = LoginPortalForRole(role)

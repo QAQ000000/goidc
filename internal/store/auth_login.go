@@ -39,13 +39,43 @@ func (s *Store) AuthenticationLoginSettings(ctx context.Context) (out LoginSetti
 	return
 }
 
-func (s *Store) AuthenticationCredential(ctx context.Context, identifier, method string) (out LoginCredential, err error) {
-	err = s.Pool.QueryRow(ctx, "SELECT id,username,email,display_name,role,password_hash,status,password_reset_required,mfa_enabled FROM users WHERE ($2='username' AND username=$1) OR ($2='email' AND email=$1) OR ($2='phone' AND phone=$1 AND phone_verified)", identifier, method).Scan(&out.ID, &out.Username, &out.Email, &out.Name, &out.Role, &out.PasswordHash, &out.Status, &out.ResetRequired, &out.MFAEnabled)
-	return
+func (s *Store) AuthenticationCredential(ctx context.Context, identifier, method, portal string) (out LoginCredential, err error) {
+	read := func(table string) (credential LoginCredential, readErr error) {
+		readErr = s.Pool.QueryRow(ctx, "SELECT id,username,email,display_name,role,password_hash,status,password_reset_required,mfa_enabled FROM "+table+" WHERE ($2='username' AND username=$1) OR ($2='email' AND email=$1) OR ($2='phone' AND phone=$1 AND phone_verified)", identifier, method).Scan(&credential.ID, &credential.Username, &credential.Email, &credential.Name, &credential.Role, &credential.PasswordHash, &credential.Status, &credential.ResetRequired, &credential.MFAEnabled)
+		return
+	}
+	if portal != "" {
+		table, tableErr := authenticationTableForPortal(portal)
+		if tableErr != nil {
+			return out, tableErr
+		}
+		return read(table)
+	}
+	// Legacy callers may omit the portal only when the identifier names one
+	// physical account. Never resolve cross-table collisions by query order.
+	customer, customerErr := read("users")
+	administrator, administratorErr := read("administrators")
+	if customerErr != nil && !errors.Is(customerErr, pgx.ErrNoRows) {
+		return out, customerErr
+	}
+	if administratorErr != nil && !errors.Is(administratorErr, pgx.ErrNoRows) {
+		return out, administratorErr
+	}
+	if customerErr == nil && administratorErr == nil {
+		return out, pgx.ErrNoRows
+	}
+	if customerErr == nil {
+		return customer, nil
+	}
+	return administrator, administratorErr
 }
 
 func (s *Store) UpgradeAuthenticationPassword(ctx context.Context, userID int64, role, original, upgraded string) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `UPDATE users SET password_hash=$2,password_reset_required=false,updated_at=now() WHERE id=$1 AND password_hash=$3 AND role=$4 AND status='active'`, userID, upgraded, original, role)
+	table, err := authenticationTableForPortal(LoginPortalForRole(role))
+	if err != nil {
+		return false, err
+	}
+	tag, err := s.Pool.Exec(ctx, `UPDATE `+table+` SET password_hash=$2,password_reset_required=false,updated_at=now() WHERE id=$1 AND password_hash=$3 AND role=$4 AND status='active'`, userID, upgraded, original, role)
 	return err == nil && tag.RowsAffected() == 1, err
 }
 
@@ -127,29 +157,49 @@ func (s *Store) ClaimAuthenticationCaptcha(ctx context.Context, id, action, nonc
 
 var ErrAuthenticationRoleChanged = errors.New("authentication role changed")
 
-func (s *Store) CreateAuthenticationSession(ctx context.Context, userID int64, role, tokenHash string) error {
-	tag, err := s.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) SELECT $1,id,now()+interval '24 hours' FROM users WHERE id=$2 AND role=$3 AND status='active'`, tokenHash, userID, role)
-	if err == nil && tag.RowsAffected() != 1 {
+func lockAuthenticatedAccount(ctx context.Context, tx pgx.Tx, table string, userID int64, expectedHash, expectedRole string, expectedMFA bool) error {
+	var role, hash string
+	var mfa, reset bool
+	err := tx.QueryRow(ctx, "SELECT role,password_hash,mfa_enabled,password_reset_required FROM "+table+" WHERE id=$1 AND status='active' FOR SHARE", userID).Scan(&role, &hash, &mfa, &reset)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrAuthenticationRoleChanged
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if hash != expectedHash || mfa != expectedMFA || reset || expectedRole != "" && role != expectedRole {
+		return ErrAuthenticationRoleChanged
+	}
+	return nil
 }
 
-func (s *Store) CreateAuthenticationMFAChallenge(ctx context.Context, userID int64, method, portal, challengeHash string) error {
+func (s *Store) CreateAuthenticationSession(ctx context.Context, userID int64, role, passwordHash, tokenHash string) error {
+	table, err := authenticationTableForPortal(LoginPortalForRole(role))
+	if err != nil {
+		return ErrAuthenticationRoleChanged
+	}
 	return s.WithTx(ctx, func(tx pgx.Tx) error {
-		var role string
-		if err := tx.QueryRow(ctx, "SELECT role FROM users WHERE id=$1 AND status='active' FOR SHARE", userID).Scan(&role); errors.Is(err, pgx.ErrNoRows) {
-			return ErrAuthenticationRoleChanged
-		} else if err != nil {
+		if err := lockAuthenticatedAccount(ctx, tx, table, userID, passwordHash, role, false); err != nil {
 			return err
 		}
-		if LoginPortalForRole(role) != portal {
+		_, err := tx.Exec(ctx, "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '24 hours')", tokenHash, userID)
+		return err
+	})
+}
+
+func (s *Store) CreateAuthenticationMFAChallenge(ctx context.Context, userID int64, method, portal, passwordHash, challengeHash string) error {
+	return s.WithTx(ctx, func(tx pgx.Tx) error {
+		table, err := authenticationTableForPortal(portal)
+		if err != nil {
 			return ErrAuthenticationRoleChanged
+		}
+		if err = lockAuthenticatedAccount(ctx, tx, table, userID, passwordHash, "", true); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, "DELETE FROM mfa_challenges WHERE user_id=$1 OR expires_at<=now()", userID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,login_method,login_portal,expires_at) VALUES($1,$2,$3,$4,now()+interval '5 minutes')", challengeHash, userID, method, portal)
+		_, err = tx.Exec(ctx, "INSERT INTO mfa_challenges(token_hash,user_id,login_method,login_portal,expires_at) VALUES($1,$2,$3,$4,now()+interval '5 minutes')", challengeHash, userID, method, portal)
 		return err
 	})
 }
@@ -172,7 +222,16 @@ func (s *Store) CompleteAuthenticationMFA(ctx context.Context, challengeHash, po
 	var secretEnc []byte
 	var method, frozenPortal string
 	var attempts int
-	err = tx.QueryRow(ctx, `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,''),c.login_portal FROM mfa_challenges c JOIN users u ON u.id=c.user_id WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true FOR UPDATE`, challengeHash).Scan(&out.User.ID, &attempts, &out.User.Username, &out.User.Email, &out.User.Name, &out.User.Role, &secretEnc, &method, &frozenPortal)
+	if err = tx.QueryRow(ctx, "SELECT login_portal FROM mfa_challenges WHERE token_hash=$1 AND expires_at>now()", challengeHash).Scan(&frozenPortal); errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	} else if err != nil {
+		return out, err
+	}
+	table, err := authenticationTableForPortal(frozenPortal)
+	if err != nil {
+		return out, nil
+	}
+	err = tx.QueryRow(ctx, `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,''),c.login_portal FROM mfa_challenges c JOIN `+table+` u ON u.id=c.user_id WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true FOR UPDATE`, challengeHash).Scan(&out.User.ID, &attempts, &out.User.Username, &out.User.Email, &out.User.Name, &out.User.Role, &secretEnc, &method, &frozenPortal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}

@@ -164,7 +164,7 @@ func (s *Store) UserNotificationInbox(ctx context.Context, userID int64, limit, 
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT m.id,m.subject,m.body,m.status,m.created_at,m.read_at FROM admin_inbox_messages m JOIN users u ON u.id=m.user_id WHERE m.user_id=$1 AND u.status='active' ORDER BY m.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+	rows, err := s.Pool.Query(ctx, `SELECT m.id,m.subject,m.body,m.status,m.created_at,m.read_at FROM admin_inbox_messages m JOIN account_identities u ON u.id=m.user_id WHERE m.user_id=$1 AND u.status='active' ORDER BY m.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (s *Store) notificationDeliveries(ctx context.Context, actorID, userID int6
  d.provider_message_id,d.created_at,d.expires_at
  FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
  LEFT JOIN email_outbox m ON m.id=d.legacy_email_outbox_id LEFT JOIN sms_outbox s ON s.id=d.legacy_sms_outbox_id
- WHERE (($1>0 AND admin_customer_allowed($1,e.user_id)) OR ($2>0 AND e.user_id=$2 AND EXISTS(SELECT 1 FROM users u WHERE u.id=$2 AND u.status='active'))) AND ($5='' OR e.kind=$5) ORDER BY d.id DESC LIMIT $3 OFFSET $4`, actorID, userID, limit, offset, kind)
+ WHERE (($1>0 AND admin_customer_allowed($1,e.user_id)) OR ($2>0 AND e.user_id=$2 AND EXISTS(SELECT 1 FROM account_identities u WHERE u.id=$2 AND u.status='active'))) AND ($5='' OR e.kind=$5) ORDER BY d.id DESC LIMIT $3 OFFSET $4`, actorID, userID, limit, offset, kind)
 	if err != nil {
 		return nil, err
 	}

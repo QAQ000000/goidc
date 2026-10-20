@@ -17,18 +17,17 @@ import (
 	"time"
 
 	"github.com/codex/zjmfgo/internal/secure"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const mfaStep = 30 * time.Second
 
-func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identity) error {
+func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identity, passwordHash string) error {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return err
 	}
 	token := hex.EncodeToString(raw)
-	if err := s.db.CreateAuthenticationSession(r.Context(), id.ID, id.Role, tokenHash(token)); err != nil {
+	if err := s.db.CreateAuthenticationSession(r.Context(), id.ID, id.Role, passwordHash, tokenHash(token)); err != nil {
 		return err
 	}
 	s.authAudit(r.Context(), id.ID, "auth.login_succeeded", map[string]any{"remote_addr": s.clientIP(r)})
@@ -36,13 +35,13 @@ func (s *Server) completeLogin(w http.ResponseWriter, r *http.Request, id identi
 	return nil
 }
 
-func (s *Server) createMFAChallenge(ctx context.Context, userID int64, method, portal string) (string, error) {
+func (s *Server) createMFAChallenge(ctx context.Context, userID int64, method, portal, passwordHash string) (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", err
 	}
 	challenge := hex.EncodeToString(raw)
-	err := s.db.CreateAuthenticationMFAChallenge(ctx, userID, method, portal, tokenHash(challenge))
+	err := s.db.CreateAuthenticationMFAChallenge(ctx, userID, method, portal, passwordHash, tokenHash(challenge))
 	return challenge, err
 }
 
@@ -103,8 +102,8 @@ func (s *Server) loginMFA(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) mfaStatus(w http.ResponseWriter, r *http.Request) {
-	var enabled bool
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1", identityFrom(r).ID).Scan(&enabled); err != nil {
+	enabled, err := s.db.AuthenticationMFAEnabled(r.Context(), identityFrom(r).ID)
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -113,7 +112,7 @@ func (s *Server) mfaStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 	if len(s.cfg.MFAEncryptionKey) != 32 {
-		writeError(w, http.StatusServiceUnavailable, "mfa_unavailable", "服务器未配置 MFA 加密密钥")
+		writeError(w, 503, "mfa_unavailable", "服务器未配置 MFA 加密密钥")
 		return
 	}
 	user := identityFrom(r)
@@ -128,43 +127,8 @@ func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	tx, err := s.db.Pool.Begin(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var enabled, allowed bool
-	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT CASE WHEN $1='customer' THEN customer_enabled ELSE admin_enabled END FROM mfa_settings WHERE id=1 FOR SHARE", user.Role).Scan(&allowed); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !allowed {
-		writeError(w, http.StatusForbidden, "mfa_enrollment_disabled", "当前账户类型暂未开放二次验证设置")
-		return
-	}
-	if enabled {
-		writeError(w, http.StatusConflict, "mfa_already_enabled", "MFA 已启用")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=$2,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID, enc); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "DELETE FROM mfa_recovery_codes WHERE user_id=$1", user.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	// Enrollment only stages a secret until mfaConfirm activates it, so API
-	// keys are deliberately not revoked here: nothing is enforced yet and a
-	// hijacked session must not be able to invalidate the owner's credentials
-	// through an enrollment that is never confirmed. Revocation happens once in
-	// mfaConfirm, at the moment the factor becomes effective.
 	recoveryCodes := make([]string, 0, 8)
+	recoveryHashes := make([]string, 0, 8)
 	for i := 0; i < 8; i++ {
 		codeBytes := make([]byte, 5)
 		if _, err = rand.Read(codeBytes); err != nil {
@@ -172,21 +136,27 @@ func (s *Server) mfaEnroll(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		code := strings.ToUpper(hex.EncodeToString(codeBytes))
-		if _, err = tx.Exec(r.Context(), "INSERT INTO mfa_recovery_codes(code_hash,user_id) VALUES($1,$2)", tokenHash(code), user.ID); err != nil {
-			s.fail(w, r, err)
-			return
-		}
 		recoveryCodes = append(recoveryCodes, code)
+		recoveryHashes = append(recoveryHashes, tokenHash(code))
 	}
-	if err = tx.Commit(r.Context()); err != nil {
+	denial, err := s.db.EnrollAuthenticationMFA(r.Context(), user.ID, accountSessionHash(r), enc, recoveryHashes)
+	if err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	if denial == "mfa_enrollment_disabled" {
+		writeError(w, 403, denial, "当前账户类型暂未开放二次验证设置")
+		return
+	}
+	if denial == "mfa_already_enabled" {
+		writeError(w, 409, denial, "MFA 已启用")
 		return
 	}
 	issuer := url.QueryEscape("ZJMF")
 	account := url.QueryEscape(user.Email)
 	otpauth := fmt.Sprintf("otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=6&period=30", issuer, account, secret, issuer)
 	s.authAudit(r.Context(), user.ID, "auth.mfa_enrollment_started", map[string]any{})
-	write(w, http.StatusOK, map[string]any{"secret": secret, "otpauth_uri": otpauth, "recovery_codes": recoveryCodes})
+	write(w, 200, map[string]any{"secret": secret, "otpauth_uri": otpauth, "recovery_codes": recoveryCodes})
 }
 
 func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
@@ -197,62 +167,31 @@ func (s *Server) mfaConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validMFACode(strings.TrimSpace(input.Code)) {
-		writeError(w, http.StatusBadRequest, "invalid_mfa", "请输入 6 位验证码")
+		writeError(w, 400, "invalid_mfa", "请输入 6 位验证码")
 		return
 	}
 	user := identityFrom(r)
-	var enabled, allowed bool
-	var role string
-	var enc []byte
-	tx, err := s.db.Pool.Begin(r.Context())
+	denial, err := s.db.ConfirmAuthenticationMFA(r.Context(), user.ID, accountSessionHash(r), func(enc []byte) bool {
+		secret, e := s.decryptMFASecret(enc)
+		return e == nil && verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now())
+	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	if err = tx.QueryRow(r.Context(), "SELECT mfa_enabled,mfa_secret_enc,role FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&enabled, &enc, &role); err != nil {
-		s.fail(w, r, err)
+	switch denial {
+	case "mfa_enrollment_disabled":
+		writeError(w, 403, denial, "当前账户类型暂未开放二次验证设置")
 		return
-	}
-	if err = tx.QueryRow(r.Context(), "SELECT CASE WHEN $1='customer' THEN customer_enabled ELSE admin_enabled END FROM mfa_settings WHERE id=1 FOR SHARE", role).Scan(&allowed); err != nil {
-		s.fail(w, r, err)
+	case "mfa_not_pending":
+		writeError(w, 409, denial, "没有待确认的 MFA 设置")
 		return
-	}
-	if !allowed {
-		writeError(w, http.StatusForbidden, "mfa_enrollment_disabled", "当前账户类型暂未开放二次验证设置")
-		return
-	}
-	if enabled || len(enc) == 0 {
-		writeError(w, http.StatusConflict, "mfa_not_pending", "没有待确认的 MFA 设置")
-		return
-	}
-	secret, err := s.decryptMFASecret(enc)
-	if err != nil || !verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now()) {
-		writeError(w, http.StatusBadRequest, "invalid_mfa", "验证码错误")
-		return
-	}
-	if _, err = tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=true,mfa_confirmed_at=now(),updated_at=now() WHERE id=$1", user.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	// Confirming enrollment is the moment the account actually gets hardened,
-	// and API keys authenticate without MFA (see the bearer path of
-	// Server.authWith). Keys issued while MFA was off would silently bypass the
-	// factor this request just enabled, so every active key is revoked in the
-	// same transaction and the owner reissues keys from a session that passed
-	// MFA. Enrollment itself deliberately does not revoke: nothing is
-	// protected yet and an unconfirmed enrollment must not destroy the user's
-	// credentials. See mfaDisable for the symmetric decision.
-	if _, err = tx.Exec(r.Context(), "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", user.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
+	case "invalid_mfa":
+		writeError(w, 400, denial, "验证码错误")
 		return
 	}
 	s.authAudit(r.Context(), user.ID, "auth.mfa_enabled", map[string]any{"api_keys_revoked": true})
-	write(w, http.StatusOK, map[string]bool{"enabled": true})
+	write(w, 200, map[string]bool{"enabled": true})
 }
 
 func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
@@ -264,64 +203,29 @@ func (s *Server) mfaDisable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if (!validMFACode(strings.TrimSpace(input.Code)) && !validRecoveryCode(input.Code)) || len(input.Password) < 8 || len(input.Password) > 72 {
-		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码无效")
+		writeError(w, 400, "invalid_mfa", "密码或验证码无效")
 		return
 	}
 	user := identityFrom(r)
-	var hash string
-	var enc []byte
-	var enabled bool
-	tx, err := s.db.Pool.Begin(r.Context())
+	recoveryHash := ""
+	if validRecoveryCode(input.Code) {
+		recoveryHash = tokenHash(strings.ToUpper(input.Code))
+	}
+	sessionHash := accountSessionHash(r)
+	valid, err := s.db.DisableAuthenticationMFA(r.Context(), user.ID, input.Password, recoveryHash, sessionHash, func(enc []byte) bool {
+		secret, e := s.decryptMFASecret(enc)
+		return e == nil && verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now())
+	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	if err = tx.QueryRow(r.Context(), "SELECT password_hash,mfa_enabled,mfa_secret_enc FROM users WHERE id=$1 AND status='active' FOR UPDATE", user.ID).Scan(&hash, &enabled, &enc); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	secret, decryptErr := s.decryptMFASecret(enc)
-	validCode := decryptErr == nil && verifyTOTP(secret, strings.TrimSpace(input.Code), time.Now())
-	passwordValid := bcrypt.CompareHashAndPassword([]byte(hash), []byte(input.Password)) == nil
-	if !enabled || !passwordValid {
-		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码错误")
-		return
-	}
-	if !validCode && validRecoveryCode(input.Code) {
-		var usedHash string
-		if err := tx.QueryRow(r.Context(), "UPDATE mfa_recovery_codes SET used_at=now() WHERE user_id=$1 AND code_hash=$2 AND used_at IS NULL RETURNING code_hash", user.ID, tokenHash(strings.ToUpper(input.Code))).Scan(&usedHash); err == nil {
-			validCode = true
-		}
-	}
-	if !validCode {
-		writeError(w, http.StatusBadRequest, "invalid_mfa", "密码或验证码错误")
-		return
-	}
-	if _, err := tx.Exec(r.Context(), "UPDATE users SET mfa_enabled=false,mfa_secret_enc=NULL,mfa_confirmed_at=NULL,updated_at=now() WHERE id=$1", user.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	// API keys are intentionally left untouched when MFA is switched off. This
-	// path already demands the password plus a TOTP/recovery code, so an actor
-	// who reaches it is fully authenticated; disabling the factor does not make
-	// surviving keys bypass anything (they were issued while MFA was on and the
-	// account has no factor to bypass afterwards). Revoking them here would
-	// only punish the legitimate owner and is asymmetric with the enable/disable
-	// contract, unlike mfaConfirm where revocation is what makes the new factor
-	// effective. Owners who want a clean slate can revoke keys explicitly.
-	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
-		if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1 AND token_hash<>$2", user.ID, tokenHash(cookie.Value)); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
+	if !valid {
+		writeError(w, 400, "invalid_mfa", "密码或验证码错误")
 		return
 	}
 	s.authAudit(r.Context(), user.ID, "auth.mfa_disabled", map[string]any{})
-	write(w, http.StatusOK, map[string]bool{"enabled": false})
+	write(w, 200, map[string]bool{"enabled": false})
 }
 
 func (s *Server) encryptMFASecret(secret string) ([]byte, error) {

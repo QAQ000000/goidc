@@ -245,7 +245,7 @@ func TestTrafficCancellationReplayRespectsRevokedCustomerScope(t *testing.T) {
 	staffID, staff := user(t, db, h, "traffic-scope-staff", "admin")
 	uid, customer := user(t, db, h, "traffic-scope-customer", "customer")
 	contentRole(t, db, staffID, "orders.view", "orders.manage", "customers.view")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, h, root, uid, staffID, 1)

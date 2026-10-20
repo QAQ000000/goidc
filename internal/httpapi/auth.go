@@ -84,7 +84,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "login_blocked", "该登录来源已被暂时禁止，请稍后再试")
 		return
 	}
-	credential, err := s.db.AuthenticationCredential(r.Context(), username, method)
+	credential, err := s.db.AuthenticationCredential(r.Context(), username, method, input.Portal)
 	id := identity{ID: credential.ID, Username: credential.Username, Email: credential.Email, Name: credential.Name, Role: credential.Role}
 	hash, status := credential.PasswordHash, credential.Status
 	resetRequired, mfaEnabled := credential.ResetRequired, credential.MFAEnabled
@@ -145,6 +145,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		resetRequired = false
+		hash = string(upgraded)
 		s.authAudit(r.Context(), id.ID, "auth.legacy_password_upgraded", map[string]any{})
 	}
 	if resetRequired {
@@ -153,7 +154,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if mfaEnabled {
-		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID, method, store.LoginPortalForRole(id.Role))
+		challenge, challengeErr := s.createMFAChallenge(r.Context(), id.ID, method, store.LoginPortalForRole(id.Role), hash)
 		if errors.Is(challengeErr, store.ErrAuthenticationRoleChanged) {
 			writeError(w, http.StatusUnauthorized, "invalid_credentials", "账号或密码错误")
 			return
@@ -166,7 +167,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeErrorDetails(w, http.StatusUnauthorized, "mfa_required", "请输入身份验证器验证码", map[string]any{"challenge": challenge})
 		return
 	}
-	if err = s.completeLogin(w, r, id); errors.Is(err, store.ErrAuthenticationRoleChanged) {
+	if err = s.completeLogin(w, r, id, hash); errors.Is(err, store.ErrAuthenticationRoleChanged) {
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "账号或密码错误")
 		return
 	} else if err != nil {
@@ -219,6 +220,10 @@ func (s *Server) authAudit(ctx context.Context, actorID int64, action string, pa
 }
 
 func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	if apiKeyRequest(r) {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
+		return
+	}
 	var input struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`

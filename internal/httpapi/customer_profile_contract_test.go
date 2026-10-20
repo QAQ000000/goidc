@@ -53,7 +53,7 @@ func TestCustomerFieldDefinitionsReadOnlyPaginationAndPermissions(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, permission := range []string{"customers.view", "customers.manage"} {
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY[$2] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID, permission); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY[$2] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID, permission); err != nil {
 			t.Fatal(err)
 		}
 		first := request(h, "GET", "/api/v1/admin/customer-field-definitions?limit=100", nil, staff, "")
@@ -72,7 +72,7 @@ func TestCustomerFieldDefinitionsReadOnlyPaginationAndPermissions(t *testing.T) 
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, customer, ""), 401)
 	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, root, ""), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions='{}' WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/customer-field-definitions", nil, staff, ""), 403)
@@ -251,7 +251,7 @@ func TestCustomerProfileReplayRechecksPermissionAndSalesScope(t *testing.T) {
 	_, root := user(t, db, h, "profile-scope-root", "super_admin")
 	staffID, staff := user(t, db, h, "profile-scope-staff", "admin")
 	ownerID, _ := user(t, db, h, "profile-scope-owner", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true,customer_scope='owned',customer_ownerless=false WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	body := createProfileCustomerBody("profile-scope-customer", nil, 0)
@@ -262,12 +262,12 @@ func TestCustomerProfileReplayRechecksPermissionAndSalesScope(t *testing.T) {
 	path := fmt.Sprintf("/api/v1/admin/customers/%d", id)
 	patch := map[string]any{"expected_version": 1, "profile": map[string]any{"admin_note": "范围保护"}}
 	expect(t, request(h, "PATCH", path, patch, staff, "profile-scope-update-key"), 200)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PATCH", path, patch, staff, "profile-scope-update-key"), 403)
 	expect(t, request(h, "POST", "/api/v1/admin/customers", body, staff, "profile-scope-create-key"), 403)
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view','customers.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['customers.view','customers.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "PUT", path+"/sales-owner", map[string]any{"sales_owner_id": ownerID, "expected_version": 1}, root, ""), 200)

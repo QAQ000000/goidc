@@ -180,7 +180,7 @@ func TestDownloadImportValidationAndTransactionFailures(t *testing.T) {
 					t.Fatal("partial import", target, n, err)
 				}
 			}
-			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM users").Scan(&n); err != nil || n != 1 {
+			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM account_identities").Scan(&n); err != nil || n != 1 {
 				t.Fatal("customer rollback", err)
 			}
 			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM legacy_import_runs WHERE status='failed'").Scan(&n); err != nil || n != 1 {
@@ -197,14 +197,21 @@ func TestDownloadImportSnapshotAndAuthorGuards(t *testing.T) {
 	if err := fileImporter(s, root, 0).apply(t.Context(), db.Pool); err == nil {
 		t.Fatal("missing author accepted")
 	}
-	for _, change := range []string{"role='customer'", "status='disabled'"} {
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET "+change+" WHERE id=$1", admin); err != nil {
+	var customer int64
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO users(username,email,password_hash,display_name) VALUES('invalid-import-author','invalid-import-author@example.test','unused','Customer') RETURNING id").Scan(&customer); err != nil {
+		t.Fatal(err)
+	}
+	if err := fileImporter(s, root, customer).apply(t.Context(), db.Pool); err == nil {
+		t.Fatal("customer author accepted")
+	}
+	for _, change := range []string{"status='disabled'"} {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET "+change+" WHERE id=$1", admin); err != nil {
 			t.Fatal(err)
 		}
 		if err := fileImporter(s, root, admin).apply(t.Context(), db.Pool); err == nil {
 			t.Fatal("invalid author accepted")
 		}
-		if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET role='super_admin',status='active' WHERE id=$1", admin); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET role='super_admin',status='active' WHERE id=$1", admin); err != nil {
 			t.Fatal(err)
 		}
 	}

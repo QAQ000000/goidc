@@ -76,7 +76,7 @@ func importedNavigation(t *testing.T, db *store.Store, user int64) map[int64]boo
 func navigationAdmin(t *testing.T, db *store.Store) int64 {
 	t.Helper()
 	var id int64
-	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO users(username,email,password_hash,display_name,role) VALUES('nav-import-root','nav-import-root@example.test','unused','导航测试管理员','super_admin') RETURNING id").Scan(&id); err != nil {
+	if err := db.Pool.QueryRow(t.Context(), "INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('nav-import-root','nav-import-root@example.test','unused','导航测试管理员','super_admin') RETURNING id").Scan(&id); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -406,13 +406,22 @@ func TestNavigationMigrationPreservesExistingPreferences(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	admin := navigationAdmin(t, db)
-	group, err := db.SaveServiceGroup(t.Context(), admin, 0, store.ServiceGroupInput{Name: "迁移前分组", Icon: "server"})
-	if err != nil {
+	// Write schema039 facts explicitly: current Store writers require later
+	// account tables. Preferences belong to a customer, separately from the
+	// administrator who will manage groups after the complete upgrade.
+	admin := historicalImportAdministrator(t, db)
+	var customer, group int64
+	if err = db.Pool.QueryRow(t.Context(), `INSERT INTO users(username,email,password_hash,display_name,role)
+ VALUES('nav-upgrade-customer','nav-upgrade-customer@example.test','unused','导航测试客户','customer') RETURNING id`).Scan(&customer); err != nil {
 		t.Fatal(err)
 	}
-	importedNavigation(t, db, admin)
-	if err = db.SetServiceNavigation(t.Context(), admin, group, 1, false); err != nil {
+	if err = db.Pool.QueryRow(t.Context(), `INSERT INTO service_navigation_groups(name,icon,sort_order) VALUES('迁移前分组','server',0) RETURNING id`).Scan(&group); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), `INSERT INTO service_navigation_state(user_id) VALUES($1)`, customer); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), `INSERT INTO service_navigation_preferences(user_id,group_id,visible,version) VALUES($1,$2,false,2)`, customer, group); err != nil {
 		t.Fatal(err)
 	}
 	var before, after string
@@ -432,18 +441,18 @@ func TestNavigationMigrationPreservesExistingPreferences(t *testing.T) {
 		t.Fatal("schema upgrade changed preferences", err)
 	}
 	var id int64
-	if err = db.Pool.QueryRow(t.Context(), "SELECT id FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2", admin, group).Scan(&id); err != nil || id < 1 {
+	if err = db.Pool.QueryRow(t.Context(), "SELECT id FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2", customer, group).Scan(&id); err != nil || id < 1 {
 		t.Fatal("preexisting preference missing stable ID")
 	}
 	next, err := db.SaveServiceGroup(t.Context(), admin, 0, store.ServiceGroupInput{Name: strings.Repeat("长", 255), Icon: "cloud"})
 	if err != nil {
 		t.Fatal("legacy length unsupported", err)
 	}
-	if importedNavigation(t, db, admin)[next] {
+	if importedNavigation(t, db, customer)[next] {
 		t.Fatal("upgrade changed initialization")
 	}
 	var second int64
-	if err = db.Pool.QueryRow(t.Context(), "SELECT id FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2", admin, next).Scan(&second); err != nil || id == second {
+	if err = db.Pool.QueryRow(t.Context(), "SELECT id FROM service_navigation_preferences WHERE user_id=$1 AND group_id=$2", customer, next).Scan(&second); err != nil || id == second {
 		t.Fatal("identity sequence collision")
 	}
 }

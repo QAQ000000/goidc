@@ -160,7 +160,7 @@ func TestAdminOrderCreatePermissionsScopeAndActiveCustomer(t *testing.T) {
 	// Creating an order must not require customer/product view rights.
 	expect(t, request(f.h, "GET", "/api/v1/admin/orders/create-options?kind=products&limit=1", nil, f.staff, ""), 200)
 	expect(t, request(f.h, "GET", "/api/v1/admin/products", nil, f.staff, ""), 403)
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", f.staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", f.staffID); err != nil {
 		t.Fatal(err)
 	}
 	empty := request(f.h, "GET", "/api/v1/admin/orders/create-options?kind=customers", nil, f.staff, "")
@@ -170,7 +170,7 @@ func TestAdminOrderCreatePermissionsScopeAndActiveCustomer(t *testing.T) {
 	}
 	expect(t, request(f.h, "POST", "/api/v1/admin/orders/quote", in, f.staff, ""), 404)
 	contentRole(t, f.db, f.staffID, "orders.manage", "customers.view")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true WHERE id=$1", f.staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true WHERE id=$1", f.staffID); err != nil {
 		t.Fatal(err)
 	}
 	salesAssignment(t, f.h, f.root, f.customerID, f.staffID, 1)

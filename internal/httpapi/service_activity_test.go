@@ -12,9 +12,10 @@ import (
 func TestServiceActivitySafeProjectionScopeAndPaging(t *testing.T) {
 	db, h := testServer(t)
 	ownerID, owner := user(t, db, h, "activity-owner", "customer")
-	foreignID, foreign := user(t, db, h, "activity-foreign", "customer")
+	_, foreign := user(t, db, h, "activity-foreign", "customer")
 	_, admin := user(t, db, h, "activity-admin", "super_admin")
 	scopedID, scoped := user(t, db, h, "activity-scoped", "admin")
+	otherOwner, _ := user(t, db, h, "activity-other-sales", "admin")
 	pid := product(t, db, 2)
 	version, item := add(t, h, owner, pid, 1)
 	order := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version, ItemIDs: []int64{item}}, owner, "activity-order")
@@ -73,14 +74,14 @@ func TestServiceActivitySafeProjectionScopeAndPaging(t *testing.T) {
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/services/%d/activity", serviceID), nil, foreign, ""), 404)
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/services/%d/activity", serviceID), nil, admin, ""), 200)
 
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET customer_scope='owned' WHERE id=$1", scopedID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", scopedID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", ownerID, scopedID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/services/%d/activity", serviceID), nil, scoped, ""), 200)
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", ownerID, foreignID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET sales_owner_id=$2 WHERE id=$1", ownerID, otherOwner); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", fmt.Sprintf("/api/v1/admin/services/%d/activity", serviceID), nil, scoped, ""), 404)

@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -22,23 +21,16 @@ func (s *Server) downloadProducts(w http.ResponseWriter, r *http.Request) {
 	s.list(w, r, "SELECT id,name,active FROM products ORDER BY id")
 }
 
-// Re-read credentials after waiting for catalog locks; revoked sessions never authorize bytes.
-func (s *Server) publicDownloadIdentity(r *http.Request, q interface {
-	QueryRow(context.Context, string, ...any) pgx.Row
-}) (int64, error) {
-	var id int64
-	var err error
+// Re-read the fixed endpoint's account kind after catalog waits. Public file
+// readers only accept customers; the portal header cannot select an administrator.
+func (s *Server) publicDownloadIdentity(r *http.Request, q store.TicketScopeQuery) (int64, error) {
 	if bearer := bearerCredential(r); bearer != "" {
-		err = q.QueryRow(r.Context(), `SELECT u.id FROM api_keys k JOIN users u ON u.id=k.user_id WHERE k.secret_hash=$1 AND k.revoked_at IS NULL AND (k.expires_at IS NULL OR k.expires_at>clock_timestamp()) AND u.status='active'`, tokenHash(bearer)).Scan(&id)
-	} else if cookie, e := r.Cookie("zjmfgo_session"); e == nil {
-		err = q.QueryRow(r.Context(), `SELECT u.id FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at>clock_timestamp() AND u.status='active'`, tokenHash(cookie.Value)).Scan(&id)
-	} else {
-		return 0, nil
+		return store.FileAccountIdentity(r.Context(), q, tokenHash(bearer), true, adminRoute(r))
 	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, nil
+	if cookie, err := r.Cookie("zjmfgo_session"); err == nil {
+		return store.FileAccountIdentity(r.Context(), q, tokenHash(cookie.Value), false, adminRoute(r))
 	}
-	return id, err
+	return 0, nil
 }
 
 func (s *Server) downloadsList(w http.ResponseWriter, r *http.Request) {

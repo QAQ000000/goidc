@@ -43,7 +43,7 @@ func setupExternalRefundReversalBrowser(t *testing.T, db *store.Store, h http.Ha
 	reviewerID, reviewer := externalRefundActor(t, db, f.h, "reversal-reviewer", []string{"invoices.view", "external_refunds.view", "external_refunds.review"})
 	readerID, _ := externalRefundActor(t, db, f.h, "reversal-reader", []string{"invoices.view", "external_refunds.view"})
 	limitedID, _ := externalRefundActor(t, db, f.h, "reversal-limited", []string{"invoices.view", "external_refunds.view", "external_refunds.create", "external_refunds.review"})
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, limitedID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1`, limitedID); err != nil {
 		t.Fatal(err)
 	}
 	externalRefundActor(t, db, f.h, "reversal-denied", []string{"invoices.view"})

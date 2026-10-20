@@ -55,6 +55,7 @@ func TestTicketImportIdentityLineageBytesAndReplay(t *testing.T) {
 	db := importTestDB(t)
 	admin := navigationAdmin(t, db)
 	s, root := ticketImportFixture(t)
+	s["tickets"][0]["admin_id"] = "10"
 	im := fileImporter(s, root, admin)
 	if err := im.apply(t.Context(), db.Pool); err != nil {
 		t.Fatal(err)
@@ -63,12 +64,23 @@ func TestTicketImportIdentityLineageBytesAndReplay(t *testing.T) {
 	if uid == staff {
 		t.Fatal("staff and customer source IDs collided")
 	}
+	var typed bool
+	if err := db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1)
+ AND EXISTS(SELECT 1 FROM administrators WHERE id=$2)
+ AND NOT EXISTS(SELECT 1 FROM users WHERE id=$2)
+ AND NOT EXISTS(SELECT 1 FROM administrators WHERE id=$1)
+ AND NOT EXISTS(SELECT 1 FROM carts WHERE user_id=$2)`, uid, staff).Scan(&typed); err != nil || !typed {
+		t.Fatal("imported account types or administrator cart", err)
+	}
 	var disabled bool
 	var name string
-	if err := db.Pool.QueryRow(t.Context(), `SELECT u.display_name,u.status='disabled' AND u.password_reset_required AND NOT r.active AND cardinality(r.permissions)=0 FROM users u JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, staff).Scan(&name, &disabled); err != nil || name != "历史客服" || !disabled {
+	if err := db.Pool.QueryRow(t.Context(), `SELECT u.display_name,u.status='disabled' AND u.password_reset_required AND NOT r.active AND cardinality(r.permissions)=0 FROM administrators u JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, staff).Scan(&name, &disabled); err != nil || name != "历史客服" || !disabled {
 		t.Fatal("historical staff obtained access", err)
 	}
 	canonical, merged := importedID(t, db, "tickets", 201), importedID(t, db, "tickets", 202)
+	if err := db.Pool.QueryRow(t.Context(), "SELECT created_by=$2 AND initial_author_kind='staff' FROM tickets WHERE id=$1", canonical, staff).Scan(&typed); err != nil || !typed {
+		t.Fatal("staff initial author mapping lost", err)
+	}
 	var parent, owner, assignee, service int64
 	var state, priority, original string
 	if err := db.Pool.QueryRow(t.Context(), "SELECT merged_ticket_id,user_id,status FROM tickets WHERE id=$1", merged).Scan(&parent, &owner, &state); err != nil || parent != canonical || owner != uid || state != "closed" {
@@ -135,6 +147,36 @@ func TestTicketImportIdentityLineageBytesAndReplay(t *testing.T) {
 	}
 }
 
+func TestTicketImportRejectsCrossTypeAccountMappings(t *testing.T) {
+	db := importTestDB(t)
+	admin := navigationAdmin(t, db)
+	s, root := ticketImportFixture(t)
+	im := fileImporter(s, root, admin)
+	if err := im.apply(t.Context(), db.Pool); err != nil {
+		t.Fatal(err)
+	}
+	uid, staff := importedID(t, db, "users", 10), importedID(t, db, "staff", 10)
+	for _, test := range []struct {
+		entity string
+		target int64
+	}{{"users", staff}, {"staff", uid}} {
+		t.Run(test.entity, func(t *testing.T) {
+			tx, err := db.Pool.Begin(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(t.Context())
+			if _, err = tx.Exec(t.Context(), "UPDATE legacy_id_map SET target_id=$3 WHERE source=$1 AND entity=$2 AND legacy_id=10", im.sourceName, test.entity, test.target); err != nil {
+				t.Fatal(err)
+			}
+			out := map[int64]int64{}
+			if replay, err := im.replay(t.Context(), tx, test.entity, s[test.entity][0], out); err == nil || replay || !strings.Contains(err.Error(), "stale target mapping") || len(out) != 0 {
+				t.Fatal("cross-type account map accepted", replay, err, out)
+			}
+		})
+	}
+}
+
 func TestTicketImportValidationAndWholeBatchRollback(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -187,7 +229,7 @@ func TestTicketImportValidationAndWholeBatchRollback(t *testing.T) {
 					t.Fatal("partial batch", target, n, err)
 				}
 			}
-			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM users").Scan(&n); err != nil || n != 1 {
+			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM account_identities").Scan(&n); err != nil || n != 1 {
 				t.Fatal("staff or customer rollback", err)
 			}
 			if err := db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM legacy_import_runs WHERE status='failed'").Scan(&n); err != nil || n != 1 {
@@ -209,10 +251,13 @@ func TestImportedTicketAPIPrivacyVisibilityAndLiveOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET password_hash=$1,password_reset_required=false,status='active' WHERE id=ANY($2)", string(hash), []int64{uid, other, admin}); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET password_hash=$1,password_reset_required=false,status='active' WHERE id=ANY($2)", string(hash), []int64{uid, other}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE users SET password_hash=$1 WHERE id=$2", string(hash), staff); err != nil {
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET password_hash=$1,password_reset_required=false,status='active' WHERE id=$2", string(hash), admin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET password_hash=$1 WHERE id=$2", string(hash), staff); err != nil {
 		t.Fatal(err)
 	}
 	h := httpapi.New(db, config.Config{PublicOrigin: "http://localhost:3088"}, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
@@ -223,26 +268,33 @@ func TestImportedTicketAPIPrivacyVisibilityAndLiveOperations(t *testing.T) {
 		r.Header.Set("Origin", "http://localhost:3088")
 		r.Header.Set("X-Requested-With", "zjmfgo")
 		r.Header.Set("Cookie", cookie)
+		if strings.Contains(cookie, "zjmfgo_admin_session=") {
+			r.Header.Set("X-Auth-Portal", "admin")
+		}
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
 	}
-	login := func(name string) string {
+	login := func(name, portal string) string {
 		t.Helper()
+		table := "users"
+		if portal == "admin" {
+			table = "administrators"
+		}
 		var email string
-		if err := db.Pool.QueryRow(t.Context(), "SELECT email FROM users WHERE username=$1", name).Scan(&email); err != nil {
+		if err := db.Pool.QueryRow(t.Context(), "SELECT email FROM "+table+" WHERE username=$1", name).Scan(&email); err != nil {
 			t.Fatal(err)
 		}
-		w := call("POST", "/auth/login", map[string]string{"identifier": email, "password": "ticket-api-fixture"}, "")
+		w := call("POST", "/auth/login", map[string]string{"identifier": email, "password": "ticket-api-fixture", "portal": portal}, "")
 		if w.Code != 200 {
 			t.Fatal("login", w.Code)
 		}
 		c := w.Result().Cookies()[0]
 		return c.Name + "=" + c.Value
 	}
-	owner, foreign, super := login("legacy-10"), login("legacy-11"), login("nav-import-root")
+	owner, foreign, super := login("legacy-10", "customer"), login("legacy-11", "customer"), login("nav-import-root", "admin")
 	var lockedName string
-	if err = db.Pool.QueryRow(t.Context(), "SELECT username FROM users WHERE id=$1", staff).Scan(&lockedName); err != nil {
+	if err = db.Pool.QueryRow(t.Context(), "SELECT username FROM administrators WHERE id=$1", staff).Scan(&lockedName); err != nil {
 		t.Fatal(err)
 	}
 	locked := call("POST", "/auth/login", map[string]string{"username": lockedName, "password": "ticket-api-fixture"}, "")

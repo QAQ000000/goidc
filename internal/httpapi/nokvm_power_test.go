@@ -139,7 +139,7 @@ func TestNOKVMPowerAcceptanceSyncIdempotencyAndPermissions(t *testing.T) {
 	before := f.powerInvariant(t)
 	path := fmt.Sprintf("/api/v1/services/%d/actions", f.sid)
 	readerID, reader := user(t, f.db, f.h, "power-reader", "admin")
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", readerID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", readerID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", path, map[string]string{"action": "reboot"}, f.other, "power-other-user"), 404)

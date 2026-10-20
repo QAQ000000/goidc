@@ -145,7 +145,7 @@ func TestManualInvoicePermissionsValidationAndTransferReplay(t *testing.T) {
 	if page["total"] != float64(1) {
 		t.Fatal("invoice customer picker", page)
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(f.h, "POST", "/api/v1/admin/invoices", in, staff, "manual-scope-create"), 404)

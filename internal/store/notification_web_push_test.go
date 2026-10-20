@@ -37,6 +37,11 @@ type webPushFixture struct {
 
 func newWebPushFixture(t *testing.T) webPushFixture {
 	t.Helper()
+	return webPushFixtureWithNotification(t, notificationCenterFixture(t))
+}
+
+func webPushFixtureWithNotification(t *testing.T, notification notificationFixture) webPushFixture {
+	t.Helper()
 	webPushFixtureOnce.Do(func() {
 		// The store package cannot import notification (the worker imports store).
 		// Protocol/factory validation is independently covered by adapter tests.
@@ -44,7 +49,7 @@ func newWebPushFixture(t *testing.T) webPushFixture {
 			channel.MustRegisterFactory(channel.Descriptor{ID: "web_push", Name: "Push fixture", Category: channel.Push, Fields: []channel.Field{{Key: "public_key", Label: "Public", Type: channel.Text, Required: true}, {Key: "subject", Label: "Subject", Type: channel.Text, Required: true}}}, func(any) (any, error) { return struct{}{}, nil })
 		}
 	})
-	f := webPushFixture{notificationFixture: notificationCenterFixture(t), key: webPushFixtureKey(t)}
+	f := webPushFixture{notificationFixture: notification, key: webPushFixtureKey(t)}
 	f.exec(t, `INSERT INTO channel_instances(id,category,implementation_id,display_name,enabled,config) VALUES('push-fixture','push','web_push','Browser fixture',true,jsonb_build_object('public_key',$1::text,'subject','mailto:push@example.test'))`, f.key)
 	return f
 }
@@ -78,20 +83,49 @@ func (f webPushFixture) session() string { return fmt.Sprint("notification-sessi
 func TestNotificationWebPushDispatchKeepsPortal(t *testing.T) {
 	for _, role := range []string{"customer", "super_admin"} {
 		t.Run(role, func(t *testing.T) {
-			f := newWebPushFixture(t)
-			f.save(t, f.customer, f.session(), f.subscription(t, "portal-browser"), 0)
-			f.ready(t)
-			f.queue(t, f.invoice(t, f.customer, "portal-notification"))
-			// A historical recipient can change roles after an event was queued.
-			// Dispatch must choose its current account portal under the user lock.
-			f.exec(t, `UPDATE users SET role=$2 WHERE id=$1`, f.customer, role)
-			job, err := f.db.ClaimNotificationJob(f.ctx)
-			if err != nil || job == nil {
-				t.Fatalf("claim failed: %v", err)
-			}
+			var f webPushFixture
+			var recipient, invoice int64
 			want := "customer"
 			if role == "super_admin" {
 				want = "admin"
+				// Only pre-split administrators can have commercial history. Seed
+				// that real checkpoint, then migrate into the separate staff table.
+				// Current administrators never create or purchase a new invoice.
+				db := adminOrderReceiptSchema178(t)
+				for _, name := range []string{"179_admin_order_mutation_receipts.sql", "180_customer_group_pricing.sql", "181_auth_login_portal.sql"} {
+					applyNotificationUpgradeMigration(t, db, name)
+				}
+				db.ProvisionEncryptionKey = make([]byte, 32)
+				actor, customer := topUpFixture(t, db)
+				notification := notificationFixture{db: db, actor: actor, customer: customer, ctx: t.Context()}
+				recipient = actor
+				invoice = notification.invoice(t, actor, "historical-staff-notification")
+				if err := db.Migrate(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				f = webPushFixtureWithNotification(t, notification)
+				f.exec(t, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '1 hour')`, fmt.Sprint("notification-session-", recipient), recipient)
+			} else {
+				f = newWebPushFixture(t)
+				recipient = f.customer
+				invoice = f.invoice(t, recipient, "customer-portal-notification")
+			}
+			session := fmt.Sprint("notification-session-", recipient)
+			f.save(t, recipient, session, f.subscription(t, "portal-browser"), 0)
+			f.preference(t, recipient, "web_push", true, 0)
+			if err := f.db.WithTx(f.ctx, func(tx pgx.Tx) error {
+				if _, err := f.db.UpdateNotificationRoute(f.ctx, tx, "invoice-paid-web_push", NotificationRouteInput{Enabled: true, InstanceID: "push-fixture", ExpectedVersion: 1}); err != nil {
+					return err
+				}
+				// Test shared dispatch of an existing fact independently of the
+				// customer-only payment and invoice APIs.
+				return f.db.queueUnifiedInvoicePaid(f.ctx, tx, invoice, recipient, "portal-notification", 12345)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			job, err := f.db.ClaimNotificationJob(f.ctx)
+			if err != nil || job == nil {
+				t.Fatalf("claim failed: %v", err)
 			}
 			if job.Channel != "web_push" || job.AccountPortal != want || job.PushSubscription == nil {
 				t.Fatalf("wrong portal for %s: channel=%s portal=%s", role, job.Channel, job.AccountPortal)

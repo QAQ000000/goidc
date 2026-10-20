@@ -248,14 +248,20 @@ func user(t *testing.T, db *store.Store, h http.Handler, name, role string) (int
 		}
 		roleID = &assigned
 	}
-	if err = db.Pool.QueryRow(context.Background(), "INSERT INTO users(username,email,password_hash,display_name,role,admin_role_id) VALUES($1,$2,$3,$1,$4,$5) RETURNING id", name, name+"@example.test", string(hash), role, roleID).Scan(&id); err != nil {
+	table := "users"
+	if role != "customer" {
+		table = "administrators"
+	}
+	if err = db.Pool.QueryRow(context.Background(), "INSERT INTO "+table+"(username,email,password_hash,display_name,role,admin_role_id) VALUES($1,$2,$3,$1,$4,$5) RETURNING id", name, name+"@example.test", string(hash), role, roleID).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Pool.Exec(context.Background(), "INSERT INTO carts(user_id) VALUES($1)", id); err != nil {
-		t.Fatal(err)
+	if role == "customer" {
+		if _, err = db.Pool.Exec(context.Background(), "INSERT INTO carts(user_id) VALUES($1)", id); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if role == "admin" {
-		if _, err = db.Pool.Exec(context.Background(), "UPDATE users SET ticket_scope='all',customer_scope='all' WHERE id=$1", id); err != nil {
+		if _, err = db.Pool.Exec(context.Background(), "UPDATE administrators SET ticket_scope='all',customer_scope='all' WHERE id=$1", id); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -355,7 +361,7 @@ func TestAuthenticationOwnershipAndCSRF(t *testing.T) {
 	if err := db.Pool.QueryRow(context.Background(), "SELECT count(*) FROM audit_events WHERE action IN ('customer.password_reset','customer.password_changed') AND entity_id=$1", fmt.Sprint(secondID)).Scan(&passwordAudits); err != nil || passwordAudits != 2 {
 		t.Fatalf("password reset audit count=%d err=%v", passwordAudits, err)
 	}
-	if _, err := db.Pool.Exec(context.Background(), "UPDATE users SET status='disabled' WHERE id=$1", adminID); err != nil {
+	if _, err := db.Pool.Exec(context.Background(), "UPDATE administrators SET status='disabled' WHERE id=$1", adminID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, admin, ""), 401)

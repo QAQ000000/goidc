@@ -11,7 +11,7 @@ func TestDashboardAggregatesPeriodsAndReviewQueues(t *testing.T) {
 	uid, _ := user(t, db, h, "dashboard-customer", "customer")
 	otherID, _ := user(t, db, h, "dashboard-other", "customer")
 	staffID, staff := user(t, db, h, "dashboard-staff", "admin")
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1;`, staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), `UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1;`, staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE users SET sales_owner_id=$2 WHERE id=$1`, uid, staffID); err != nil {
@@ -66,7 +66,7 @@ func TestDashboardAggregatesPeriodsAndReviewQueues(t *testing.T) {
 		}
 	}
 	for _, permissions := range [][]string{{"dashboard.view"}, {"dashboard.view", "certifications.view", "affiliates.view", "reports.view"}} {
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)`, staffID, permissions); err != nil {
+		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=$2 WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, staffID, permissions); err != nil {
 			t.Fatal(err)
 		}
 		response := request(h, "GET", "/api/v1/admin/dashboard", nil, staff, "")

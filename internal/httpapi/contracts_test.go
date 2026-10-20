@@ -99,7 +99,7 @@ func TestContractPermissionsBulkRollbackAndRefund(t *testing.T) {
 	expect(t, w, 200)
 	id := int64(data(t, w)["id"].(float64))
 	path := fmt.Sprintf("/api/v1/admin/contracts/%d", id)
-	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	expect(t, request(h, "GET", "/api/v1/admin/contracts/available-templates", nil, staff, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/admin/contract-templates", nil, staff, ""), 403)
 	expect(t, request(h, "POST", path+"/void", map[string]any{"reason": "测试", "expected_version": 1}, staff, "contract-security-denied"), 403)
@@ -112,9 +112,9 @@ func TestContractPermissionsBulkRollbackAndRefund(t *testing.T) {
 	}
 	db.Pool.Exec(t.Context(), "UPDATE invoices SET status='refunded' WHERE id=$1", iid)
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/contracts/%d/submit", id), map[string]any{"signer_name": "客户", "accepted": true, "expected_version": 1}, customer, "contract-refunded-submit"), 404)
-	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view','contracts.manage'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view','contracts.manage'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	expect(t, request(h, "POST", path+"/void", map[string]any{"reason": "测试", "expected_version": 1}, staff, "contract-security-replay"), 200)
-	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 	expect(t, request(h, "POST", path+"/void", map[string]any{"reason": "测试", "expected_version": 1}, staff, "contract-security-replay"), 403)
 }
 
@@ -290,7 +290,7 @@ func TestContractWaitRechecksSessionAndRoleIncludingReplay(t *testing.T) {
 					want = 401
 					_, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", staffID)
 				} else {
-					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['contracts.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -325,7 +325,7 @@ func TestContractOwnedAssignedScopesAndReceiptReplay(t *testing.T) {
 	staffID, staff := user(t, db, h, "contract-scope-staff", "admin")
 	otherID, _ := user(t, db, h, "contract-scope-other-admin", "admin")
 	contentRole(t, db, staffID, "contracts.view", "contracts.manage")
-	db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID)
 	db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=$1 WHERE id=$2", staffID, uid)
 	w := request(h, "POST", "/api/v1/contracts", map[string]any{"service_id": sid, "template_id": tid}, customer, "contract-scope-create")
 	expect(t, w, 200)
@@ -342,7 +342,7 @@ func TestContractOwnedAssignedScopesAndReceiptReplay(t *testing.T) {
 	if data(t, w)["total"] != float64(0) {
 		t.Fatal("owned list leaked")
 	}
-	db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='assigned' WHERE id=$1", staffID)
+	db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='assigned' WHERE id=$1", staffID)
 	expect(t, request(h, "GET", path, nil, staff, ""), 200)
 	expect(t, request(h, "POST", path+"/void", body, staff, "contract-scope-void"), 200)
 	db.Pool.Exec(t.Context(), "UPDATE users SET sales_owner_id=NULL WHERE id=$1", uid)
@@ -405,7 +405,7 @@ func TestContractSettingsWaitAuthorizationAndReplay(t *testing.T) {
 					want = 401
 					_, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", staffID)
 				} else {
-					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", staffID)
+					_, err = tx.Exec(ctx, "UPDATE admin_roles SET permissions=ARRAY['settings.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", staffID)
 				}
 				if err != nil {
 					t.Fatal(err)

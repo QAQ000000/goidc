@@ -34,7 +34,7 @@ func TestAdminJobsPermissionAndSafeSystemQueue(t *testing.T) {
 	if len(data(t, w)["items"].([]any)) != 0 {
 		t.Fatal(w.Body.String())
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['jobs.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['jobs.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id); err != nil {
 		t.Fatal(err)
 	}
 	w = request(h, "GET", "/api/v1/admin/jobs/queue", nil, staff, "")
@@ -42,7 +42,7 @@ func TestAdminJobsPermissionAndSafeSystemQueue(t *testing.T) {
 	if data(t, w)["total"].(float64) != 0 {
 		t.Fatal(w.Body.String())
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", id); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", id); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/admin/jobs", nil, staff, ""), 403)
@@ -55,7 +55,7 @@ func TestAdminJobsCustomerScope(t *testing.T) {
 	_, root := user(t, db, h, "scope-jobs-root", "super_admin")
 	staffID, staff := user(t, db, h, "scope-jobs-staff", "admin")
 	otherID, _ := user(t, db, h, "scope-jobs-other", "admin")
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET sales_enabled=true WHERE role='admin'"); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET sales_enabled=true WHERE role='admin'"); err != nil {
 		t.Fatal(err)
 	}
 	pid := product(t, db, 12)
@@ -69,7 +69,7 @@ func TestAdminJobsCustomerScope(t *testing.T) {
 		expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customer), map[string]any{"amount_cents": 2000}, root, fmt.Sprintf("queue-credit-%d", n)), 201)
 		expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoice), map[string]any{}, cookie, fmt.Sprintf("queue-pay-%d", n)), 201)
 	}
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET customer_scope='owned',customer_ownerless=false WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `UPDATE provision_jobs SET last_error='SECRET_PASSWORD',result='{"token":"SECRET_TOKEN"}'`); err != nil {

@@ -295,7 +295,7 @@ func (s *Store) ReviewLegacy(ctx context.Context, actorID int64, entity string, 
 	}
 	defer tx.Rollback(ctx)
 	var allowed bool
-	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND status='active' AND role='super_admin')", actorID).Scan(&allowed); err != nil {
+	if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM administrators WHERE id=$1 AND status='active' AND role='super_admin')", actorID).Scan(&allowed); err != nil {
 		return out, err
 	}
 	if !allowed {

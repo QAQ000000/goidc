@@ -27,7 +27,7 @@ func ticketStorageFixture(t *testing.T) (*store.Store, http.Handler, string, str
 	dept := request(h, "POST", "/api/v1/admin/ticket-departments", map[string]string{"name": "Storage support", "slug": "storage-support"}, root, "")
 	expect(t, dept, 201)
 	department := int64(data(t, dept)["id"].(float64))
-	if _, err := db.Pool.Exec(t.Context(), "UPDATE users SET ticket_scope='departments' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET ticket_scope='departments' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO admin_ticket_departments(user_id,department_id) VALUES($1,$2)", staffID, department); err != nil {
@@ -40,7 +40,7 @@ func ticketStorageFixture(t *testing.T) (*store.Store, http.Handler, string, str
 }
 
 func TestFileStorageTicketUploadRechecksAuthorityAfterPut(t *testing.T) {
-	for _, scenario := range []string{"disabled_customer", "disabled_admin", "manage_revoked", "role_revoked", "department_revoked", "customer_department_hidden", "session_revoked"} {
+	for _, scenario := range []string{"disabled_customer", "disabled_admin", "manage_revoked", "admin_role_disabled", "department_revoked", "customer_department_hidden", "session_revoked"} {
 		t.Run(scenario, func(t *testing.T) {
 			db, h, _, customer, staff, owner, staffID, department, ticketID, dir := ticketStorageFixture(t)
 			actor, actorID := staff, staffID
@@ -76,13 +76,18 @@ func TestFileStorageTicketUploadRechecksAuthorityAfterPut(t *testing.T) {
 			}
 			want := 404
 			switch scenario {
-			case "disabled_customer", "disabled_admin":
+			case "disabled_customer":
 				_, err = gate.Exec(t.Context(), "UPDATE users SET status='disabled' WHERE id=$1", actorID)
 				want = 401
+			case "disabled_admin":
+				_, err = gate.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", actorID)
+				want = 401
 			case "manage_revoked":
-				_, err = gate.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", actorID)
-			case "role_revoked":
-				_, err = gate.Exec(t.Context(), "UPDATE users SET role='customer',admin_role_id=NULL WHERE id=$1", actorID)
+				_, err = gate.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['tickets.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", actorID)
+			case "admin_role_disabled":
+				// Administrators must retain a valid role reference. Disabling that
+				// role is the supported way to withdraw all of its authority.
+				_, err = gate.Exec(t.Context(), "UPDATE admin_roles SET active=false WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", actorID)
 			case "department_revoked":
 				_, err = gate.Exec(t.Context(), "DELETE FROM admin_ticket_departments WHERE user_id=$1 AND department_id=$2", actorID, department)
 			case "customer_department_hidden":

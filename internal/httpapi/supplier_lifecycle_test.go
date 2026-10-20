@@ -539,7 +539,7 @@ func TestSupplierLifecycleVerificationRechecksPermissionAfterSync(t *testing.T) 
 	case <-time.After(8 * time.Second):
 		t.Fatal("verification did not reach read-only sync")
 	}
-	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM users WHERE id=$1)", uid); err != nil {
+	if _, err := f.db.Pool.Exec(t.Context(), "UPDATE admin_roles SET permissions=ARRAY['services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)", uid); err != nil {
 		t.Fatal(err)
 	}
 	release()

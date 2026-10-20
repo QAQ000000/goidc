@@ -58,135 +58,29 @@ func logPageArgs(r *http.Request) (int, int) { return pagination(r) }
 
 func (s *Server) adminSMSLog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"TRUE"}}
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if !validOutboxStatus(status) {
-			writeError(w, http.StatusBadRequest, "invalid_sms_status", "短信状态无效")
-			return
-		}
-		f.add(status, "j.status=$%d")
-	}
-	if kind := strings.TrimSpace(r.URL.Query().Get("kind")); kind != "" {
-		f.add(kind, "j.kind=$%d")
-	}
-	if recipient := strings.TrimSpace(r.URL.Query().Get("phone")); recipient != "" {
-		f.add("%"+recipient+"%", "j.recipient ILIKE $%d")
-	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		f.add("%"+q+"%", "(j.recipient ILIKE $%d OR j.kind ILIKE $%d OR coalesce(e.display_name,'') ILIKE $%d OR coalesce(e.username,'') ILIKE $%d OR coalesce(e.email,'') ILIKE $%d)")
-		// Repeat the same parameter number so one search value covers all fields.
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(j.recipient ILIKE $%d OR j.kind ILIKE $%d OR coalesce(e.display_name,'') ILIKE $%d OR coalesce(e.username,'') ILIKE $%d OR coalesce(e.email,'') ILIKE $%d)", idx, idx, idx, idx, idx)
-	}
-	if err := addLogDateFilters(r, &f, "j.created_at"); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+	page, err := s.db.AccountSMSLog(r.Context(), r.URL.Query(), identityFrom(r).ID, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
-		f.add("%"+username+"%", "(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)", idx, idx, idx)
-	}
-	if !addTicketNotificationLogFilters(w, r, &f, "sms") {
-		return
-	}
-	where := strings.Join(f.where, " AND ")
-	base := ` FROM sms_outbox j LEFT JOIN LATERAL (
- SELECT n.user_id FROM notification_delivery_events n WHERE n.sms_outbox_id=j.id ORDER BY n.id LIMIT 1
-) ev ON true LEFT JOIN LATERAL (
- SELECT te.ticket_id,te.event_key,te.kind AS event_kind,td.recipient_kind,td.customer_id,t.department_id
- FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
- WHERE td.sms_outbox_id=j.id ORDER BY td.id LIMIT 1
- ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
-	s.writeListPage(w, r, "SELECT count(*)"+base,
-		`SELECT j.id,j.created_at,j.recipient,j.recipient AS phone,j.kind,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
- j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
- tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success,
- CASE WHEN j.body_encrypted<>''::bytea THEN '[已加密]' ELSE '' END AS content`+base+
-			" ORDER BY j.id DESC", f.args, limit, offset)
+	write(w, 200, page)
 }
 
 func (s *Server) adminEmailLog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"TRUE"}}
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if !validOutboxStatus(status) {
-			writeError(w, http.StatusBadRequest, "invalid_email_status", "邮件状态无效")
-			return
-		}
-		f.add(status, "j.status=$%d")
-	}
-	if recipient := strings.TrimSpace(r.URL.Query().Get("recipient")); recipient != "" {
-		f.add("%"+recipient+"%", "j.recipient ILIKE $%d")
-	}
-	if subject := strings.TrimSpace(r.URL.Query().Get("subject")); subject != "" {
-		f.add("%"+subject+"%", "j.subject ILIKE $%d")
-	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		f.add("%"+q+"%", "(j.recipient ILIKE $%d OR j.subject ILIKE $%d OR j.kind ILIKE $%d OR coalesce(e.display_name,'') ILIKE $%d OR coalesce(e.username,'') ILIKE $%d OR coalesce(e.email,'') ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(j.recipient ILIKE $%d OR j.subject ILIKE $%d OR j.kind ILIKE $%d OR coalesce(e.display_name,'') ILIKE $%d OR coalesce(e.username,'') ILIKE $%d OR coalesce(e.email,'') ILIKE $%d)", idx, idx, idx, idx, idx, idx)
-	}
-	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
-		f.add("%"+username+"%", "(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(e.display_name ILIKE $%d OR e.username ILIKE $%d OR e.email ILIKE $%d)", idx, idx, idx)
-	}
-	if err := addLogDateFilters(r, &f, "j.created_at"); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+	page, err := s.db.AccountEmailLog(r.Context(), r.URL.Query(), identityFrom(r).ID, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	if !addTicketNotificationLogFilters(w, r, &f, "email") {
-		return
-	}
-	where := strings.Join(f.where, " AND ")
-	base := ` FROM email_outbox j LEFT JOIN LATERAL (
- SELECT n.user_id FROM notification_delivery_events n WHERE n.email_outbox_id=j.id ORDER BY n.id LIMIT 1
-) ev ON true LEFT JOIN LATERAL (
- SELECT te.ticket_id,te.event_key,te.kind AS event_kind,td.recipient_kind,td.customer_id,t.department_id
- FROM ticket_notification_deliveries td JOIN ticket_notification_events te ON te.id=td.event_id JOIN tickets t ON t.id=te.ticket_id
- WHERE td.email_outbox_id=j.id
- UNION ALL SELECT t.id,NULL::text,NULL::text,NULL::text,t.user_id,t.department_id FROM tickets t WHERE t.id=j.ticket_id LIMIT 1
- ) tv ON true LEFT JOIN users e ON e.id=coalesce(ev.user_id,tv.customer_id) WHERE ` + where
-	s.writeListPage(w, r, "SELECT count(*)"+base,
-		`SELECT j.id,j.created_at,j.subject,j.recipient,j.status,j.attempts,j.max_attempts,j.last_error,j.last_error AS failure_reason,
- j.sent_at,j.dead_letter_at,e.display_name AS username,NULL::inet AS remote_ip,NULL::inet AS ip,
- tv.ticket_id,tv.event_key,tv.event_kind,tv.recipient_kind,(j.status='sent') AS success`+base+
-			" ORDER BY j.id DESC", f.args, limit, offset)
+	write(w, 200, page)
 }
 
 func (s *Server) adminInboxLog(w http.ResponseWriter, r *http.Request) {
 	limit, offset := logPageArgs(r)
-	f := adminLogFilters{where: []string{"admin_customer_allowed($1,m.user_id)"}, args: []any{identityFrom(r).ID}}
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if status != "sent" && status != "read" && status != "failed" {
-			writeError(w, http.StatusBadRequest, "invalid_inbox_status", "站内信状态无效")
-			return
-		}
-		f.add(status, "m.status=$%d")
-	}
-	if subject := strings.TrimSpace(r.URL.Query().Get("subject")); subject != "" {
-		f.add("%"+subject+"%", "m.subject ILIKE $%d")
-	}
-	if username := strings.TrimSpace(r.URL.Query().Get("username")); username != "" {
-		f.add("%"+username+"%", "(u.display_name ILIKE $%d OR u.username ILIKE $%d OR u.email ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(u.display_name ILIKE $%d OR u.username ILIKE $%d OR u.email ILIKE $%d)", idx, idx, idx)
-	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		f.add("%"+q+"%", "(m.subject ILIKE $%d OR m.body ILIKE $%d OR u.display_name ILIKE $%d)")
-		idx := len(f.args)
-		f.where[len(f.where)-1] = fmt.Sprintf("(m.subject ILIKE $%d OR m.body ILIKE $%d OR u.display_name ILIKE $%d)", idx, idx, idx)
-	}
-	if err := addLogDateFilters(r, &f, "m.created_at"); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_log_date", err.Error())
+	page, err := s.db.AccountInboxLog(r.Context(), r.URL.Query(), identityFrom(r).ID, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	where := strings.Join(f.where, " AND ")
-	base := " FROM admin_inbox_messages m JOIN users u ON u.id=m.user_id WHERE " + where
-	s.writeListPage(w, r, "SELECT count(*)"+base,
-		`SELECT m.id,m.created_at,m.subject,m.status,m.user_id,u.display_name AS username,m.read_at`+base+
-			" ORDER BY m.id DESC", f.args, limit, offset)
+	write(w, 200, page)
 }
 
 func (s *Server) adminAPILog(w http.ResponseWriter, r *http.Request) {

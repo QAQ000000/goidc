@@ -27,7 +27,7 @@ func newOrderRefundFixture(t *testing.T, infinite bool) orderRefundFixture {
 			t.Fatal(e)
 		}
 	}
-	must(db.Pool.QueryRow(ctx, `INSERT INTO users(username,email,password_hash,display_name,role) VALUES('order-reviewer','order-reviewer@example.test','unused','reviewer','super_admin') RETURNING id`).Scan(&f.reviewer))
+	must(db.Pool.QueryRow(ctx, `INSERT INTO administrators(username,email,password_hash,display_name,role) VALUES('order-reviewer','order-reviewer@example.test','unused','reviewer','super_admin') RETURNING id`).Scan(&f.reviewer))
 	_, e := db.Pool.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('order-refund-request',$1,now()+interval '1 hour'),('order-refund-review',$2,now()+interval '1 hour');`, actor, f.reviewer)
 	must(e)
 	stock := any(12)
