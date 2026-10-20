@@ -74,12 +74,16 @@ func (s *Server) adminTopUp(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
+	if len(r.Header.Values("Idempotency-Key")) > 1 {
+		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "请只提供一个幂等键")
+		return
+	}
 	input.Note = strings.TrimSpace(input.Note)
 	if len(input.Note) > 240 {
 		writeError(w, 400, "invalid_topup", "备注过长")
 		return
 	}
-	balance, replayed, err := s.db.TopUp(r.Context(), identityFrom(r).ID, id, input.AmountCents, r.Header.Get("Idempotency-Key"), input.Note)
+	balance, replayed, err := s.db.TopUp(requestFileContext(r), identityFrom(r).ID, id, input.AmountCents, r.Header.Get("Idempotency-Key"), input.Note)
 	if err != nil {
 		s.fail(w, r, err)
 		return

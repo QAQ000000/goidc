@@ -110,6 +110,8 @@ staff 创建和更新接受 `customer_scope`、`customer_ownerless` 和 `sales_e
 | `GET /api/v1/admin/services?customer_id={id}` | 管理端可选客户筛选；仍执行 `services.view` 和客户范围；服务列表只返回该客户资源 |
 | `GET /api/v1/admin/orders?customer_id={id}` | 管理端可选客户筛选；仍执行 `orders.view` 和客户范围；订单列表只返回该客户订单 |
 | `GET /api/v1/admin/invoices?customer_id={id}` | 管理端可选客户筛选；仍执行 `invoices.view` 和客户范围；账单列表只返回该客户账单 |
+| `GET /api/v1/admin/credit`、`/admin/credit/consumptions`、`/admin/credit/repayments` | `credit.view`及客户范围；精确customer_id严格解析，非法400、非客户或范围外404，省略保留授权全局；消费和到账历史保持各自日期口径 |
+| `GET /api/v1/admin/customers/{id}/balance-operation` | `balance.manage`及客户范围；原key放请求头，事务复核当前凭据/权限，只查询人工充值账本事实，未确认不授权新key重试；响应private/no-store |
 | `GET /api/v1/admin/tickets?customer_id={id}` | 管理端可选客户筛选；仍执行 `tickets.view` 和工单部门范围；工单列表只返回该客户工单 |
 | `GET /api/v1/admin/sales-owners` | 超级管理员会话；仅启用的普通管理员、启用角色、`customers.view` 且 `sales_enabled`；返回 ID、登录名、姓名 |
 | `PUT /api/v1/admin/customers/{id}/sales-owner` | 超级管理员会话；必须显式传 `sales_owner_id`（正整数或 `null`）与 `expected_version`；错误版本 409；成功返回递增 `sales_version` |

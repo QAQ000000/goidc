@@ -576,6 +576,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/invoices/merge", s.auth(s.mergeManualInvoices, true))
 	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/refund", s.auth(s.adminRefundInvoice, true))
 	mux.HandleFunc("POST /api/v1/admin/customers/{id}/balance", s.auth(s.adminTopUp, true))
+	mux.HandleFunc("GET /api/v1/admin/customers/{id}/balance-operation", privateBalanceOperation(s.auth(s.adminBalanceOperation, true)))
 	mux.HandleFunc("POST /api/v1/admin/customers/{id}/password", s.auth(s.adminSetCustomerPassword, true))
 	mux.HandleFunc("PATCH /api/v1/admin/customers/{id}", s.auth(s.adminUpdateCustomer, true))
 	mux.HandleFunc("GET /api/v1/admin/customers/{id}/contacts", s.auth(s.contacts, true))

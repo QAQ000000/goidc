@@ -79,24 +79,20 @@ func creditFilters(w http.ResponseWriter, r *http.Request) (*int64, *time.Time, 
 	return customer, from, to, status, true
 }
 func (s *Server) creditConsumptions(w http.ResponseWriter, r *http.Request) {
-	customer, from, to, status, ok := creditFilters(w, r)
-	if !ok {
+	limit, offset := pagination(r)
+	page, err := s.db.AdminCreditConsumptionsPage(r.Context(), identityFrom(r).ID, r.URL.Query(), limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	limit, offset := pagination(r)
-	s.adminListPage(w, r, `SELECT c.invoice_id AS id,c.user_id,u.display_name AS customer_name,i.invoice_no,c.amount_cents,c.remaining_cents,c.status,c.version,c.created_at FROM credit_invoice_payments c JOIN users u ON u.id=c.user_id JOIN invoices i ON i.id=c.invoice_id WHERE admin_customer_allowed($1,c.user_id) AND (u.display_name ILIKE $2 OR i.invoice_no ILIKE $2 OR i.id::text ILIKE $2) AND ($3::bigint IS NULL OR c.user_id=$3) AND ($4::timestamptz IS NULL OR c.created_at>=$4) AND ($5::timestamptz IS NULL OR c.created_at<$5) AND ($6='' OR c.status=$6)`, "created_at DESC,id DESC", limit, offset, identityFrom(r).ID, "%"+r.URL.Query().Get("q")+"%", customer, from, to, status)
+	write(w, http.StatusOK, page)
 }
 func (s *Server) creditRepayments(w http.ResponseWriter, r *http.Request) {
-	customer, from, to, status, ok := creditFilters(w, r)
-	if !ok {
-		return
-	}
-	if status != "" {
-		writeError(w, 400, "invalid_repayment_status", "还款记录仅包含已确认到账记录")
-		return
-	}
 	limit, offset := pagination(r)
-	s.adminListPage(w, r, `SELECT p.id,p.invoice_id,p.user_id,u.display_name AS customer_name,i.invoice_no,p.amount_cents,p.receipt,p.received_at,p.note,p.created_at FROM credit_repayments p JOIN users u ON u.id=p.user_id JOIN invoices i ON i.id=p.invoice_id WHERE admin_customer_allowed($1,p.user_id) AND (u.display_name ILIKE $2 OR i.invoice_no ILIKE $2 OR p.receipt ILIKE $2) AND ($3::bigint IS NULL OR p.user_id=$3) AND ($4::timestamptz IS NULL OR p.received_at>=$4) AND ($5::timestamptz IS NULL OR p.received_at<$5)`, "received_at DESC,id DESC", limit, offset, identityFrom(r).ID, "%"+r.URL.Query().Get("q")+"%", customer, from, to)
+	page, err := s.db.AdminCreditRepaymentsPage(r.Context(), identityFrom(r).ID, r.URL.Query(), limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, page)
 }
 func (s *Server) creditRepay(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)

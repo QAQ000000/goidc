@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -266,7 +267,8 @@ VALUES($1,'payment',$2,$3,'invoice',$4,$5,'账单支付')`, userID, -out.AmountC
 func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, note string) (int64, bool, error) {
 	// The hardcoded bounds stay in place as the last line of defence: they keep
 	// the ledger arithmetic safe even if finance_settings is misconfigured.
-	if actorID < 1 || userID < 1 || amount < 1 || amount > 10000000000 || len(key) < 8 || len(key) > 128 {
+	note = strings.TrimSpace(note)
+	if actorID < 1 || userID < 1 || amount < 1 || amount > 10000000000 || len(key) < 8 || len(key) > 128 || len(note) > 240 {
 		return 0, false, conflict("invalid_topup", "充值金额或幂等键无效")
 	}
 	tx, err := s.Pool.Begin(ctx)
@@ -274,26 +276,27 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 		return 0, false, err
 	}
 	defer tx.Rollback(ctx)
-	if err = lockOperationKey(ctx, tx, "topup", fmt.Sprintf("%d:%s", userID, key)); err != nil {
+	if err = lockAdminBalanceIntent(ctx, tx, actorID, userID, key); err != nil {
 		return 0, false, err
 	}
 	var balance int64
 	var previousTopUp int64
-	if err = LockAdminCustomer(ctx, tx, actorID, userID); err != nil {
-		return 0, false, err
-	}
 	// Match online admission: customer funds before finance settings. Waiting
 	// settings writers must not create a settings -> customer reverse edge.
 	if err = LockFinancialCustomer(ctx, tx, userID); err != nil {
 		return 0, false, err
 	}
-	if err = tx.QueryRow(ctx, `SELECT delta_cents,balance_after FROM balance_ledger WHERE user_id=$1 AND entry_type='topup' AND idempotency_key=$2`, userID, key).Scan(&previousTopUp, &balance); err == nil {
+	var previousNote, previousSource string
+	if err = tx.QueryRow(ctx, `SELECT delta_cents,balance_after,note,reference_type FROM balance_ledger WHERE user_id=$1 AND entry_type='topup' AND idempotency_key=$2`, userID, key).Scan(&previousTopUp, &balance, &previousNote, &previousSource); err == nil {
 		// A replay of an already-committed top-up returns the recorded result
 		// even if the financial settings have changed since: the balance was
 		// already credited and re-validating would strand the client without a
 		// usable idempotency answer.
-		if previousTopUp != amount {
-			return 0, false, conflict("idempotency_conflict", "相同幂等键对应不同的充值金额")
+		if err = requireAdminBalanceAuthority(ctx, tx, actorID, userID); err != nil {
+			return 0, false, err
+		}
+		if previousSource != "admin_topup" || previousTopUp != amount || strings.TrimSpace(previousNote) != note {
+			return 0, false, conflict("idempotency_conflict", "相同幂等键对应不同的充值请求")
 		}
 		return balance, true, tx.Commit(ctx)
 	} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -312,6 +315,9 @@ func (s *Store) TopUp(ctx context.Context, actorID, userID, amount int64, key, n
 	var topupEnabled, requireActiveOrder bool
 	var minTopup, maxTopup, maxBalance int64
 	if err = tx.QueryRow(ctx, `SELECT topup_enabled,min_topup_cents,max_topup_cents,max_balance_cents,require_active_order FROM finance_settings WHERE id=1 FOR SHARE`).Scan(&topupEnabled, &minTopup, &maxTopup, &maxBalance, &requireActiveOrder); err != nil {
+		return 0, false, err
+	}
+	if err = requireAdminBalanceAuthority(ctx, tx, actorID, userID); err != nil {
 		return 0, false, err
 	}
 	if !topupEnabled {
@@ -356,6 +362,11 @@ VALUES($1,'topup',$2,$3,'admin_topup',$4,$5)`, userID, amount, balance, key, not
 		return 0, false, err
 	}
 	if err = Audit(ctx, tx, actorID, "balance.topped_up", "user", userID, map[string]any{"amount_cents": amount, "balance_cents": balance}); err != nil {
+		return 0, false, err
+	}
+	// A statement/trigger can wait after admission. Recheck natural credential
+	// expiry before committing the ledger, balance and audit atomically.
+	if err = lockStorageCredential(ctx, tx, actorID); err != nil {
 		return 0, false, err
 	}
 	return balance, false, tx.Commit(ctx)

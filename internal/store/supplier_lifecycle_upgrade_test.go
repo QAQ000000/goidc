@@ -35,9 +35,7 @@ func supplierLifecycleUpgradeHistory(t *testing.T, db *Store) supplierLifecycleU
 	t.Helper()
 	f := supplierLifecycleUpgradeFixture{}
 	actor, customer := topUpFixture(t, db)
-	if _, _, err := db.TopUp(t.Context(), actor, customer, 8000, "lifecycle-upgrade-funding", "isolated schema169 funding"); err != nil {
-		t.Fatal(err)
-	}
+	seedUpgradeFixtureAdminTopUp(t, db, actor, customer, 8000, "lifecycle-upgrade-funding", "isolated schema169 funding")
 	if err := db.Pool.QueryRow(t.Context(), `INSERT INTO supplier_accounts(name,provider,base_url,username,credentials_encrypted,version)
 VALUES('Legacy lifecycle account',$1,'https://lifecycle-upgrade.example.test','legacy',''::bytea,8) RETURNING id`, supplier.ProviderZJMF).Scan(&f.account); err != nil {
 		t.Fatal(err)

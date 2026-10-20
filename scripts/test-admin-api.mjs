@@ -8,6 +8,25 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 export const integrationSuites = {
   'internal/httpapi': [
     'TestAdminRBACRouteCoverage',
+    'TestAdminCreditReadsStrictCustomerContext',
+    'TestAdminCreditReadsPreserveDatesFiltersAndFields',
+    'TestAdminCreditReadsRecheckCurrentAuthority',
+    'TestAdminCreditPageAndLimitAdjustment',
+    'TestAdminCreditConcurrentReplayAndRevocation',
+    'TestCreditLifecycle',
+    'TestCustomerCreditPortalFiltersDatesAndPaging',
+    'TestAdminBalanceOperationConfirmationAndLegacyReplay',
+    'TestAdminBalanceOperationPermissionsScopeAndHeaders',
+    'TestAdminBalanceOperationConcurrentReplayAndAuditRollback',
+    'TestAdminBalanceOperationRechecksAfterKeyWait',
+    'TestAdminBalanceOperationRechecksAfterFinancialWaits',
+    'TestAdminBalanceOperationPasswordRotationLockOrder',
+    'TestAdminBalanceOperationCredentialExpiryAfterWait',
+    'TestAdminBalanceOperationCredentialExpiryBeforeCommit',
+    'TestAdminBalanceOperationRecoversLostCommitAcknowledgement',
+    'TestTopUpHonorsFinanceSettings',
+    'TestTopUpRequiresActiveOrderWhenConfigured',
+    'TestBalancePaymentAndRefundAreAtomicAndIdempotent',
     'TestTicketAttachmentUploadIdempotencyReplayAndScope',
     'TestTicketAttachmentUploadConcurrentSameKey',
     'TestTicketAttachmentUploadHeadersAndLegacyCompatibility',
@@ -45,6 +64,10 @@ export const integrationSuites = {
     'TestImpersonationCannotCreateIndependentAPIKey',
     'TestImpersonationAPIKeyGuardUsesExactSelectedSession',
     'TestImpersonationAPIKeyBindingLookupFailsClosed',
+  ],
+  'internal/store': [
+    'TestTopUpEnforcesFinanceSettingsTransactionally',
+    'TestTopUpRequireActiveOrderAndHardcodedDefences',
   ],
 };
 

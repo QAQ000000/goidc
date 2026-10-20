@@ -10,42 +10,12 @@ import (
 )
 
 func (s *Server) adminCreditPage(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	var customerID *int64
-	if raw := r.URL.Query().Get("customer_id"); raw != "" {
-		id, err := parsePositiveID(raw)
-		if err != nil {
-			writeError(w, 400, "invalid_customer", "客户筛选无效")
-			return
-		}
-		customerID = &id
-	}
-	status := r.URL.Query().Get("status")
-	if status != "" && status != "active" && status != "disabled" {
-		writeError(w, 400, "invalid_status", "客户状态无效")
-		return
-	}
 	limit, offset := pagination(r)
-	like := "%" + q + "%"
-	rows, err := s.db.Pool.Query(r.Context(), `WITH filtered AS (
- SELECT u.id,u.username,u.display_name,u.email,u.status,a.limit_cents,a.used_cents,
-  GREATEST(a.limit_cents-a.used_cents,0)::bigint AS available_cents,a.version,a.updated_at,a.frozen
- FROM users u JOIN customer_credit_accounts a ON a.user_id=u.id
- WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
- AND ($2='' OR u.status=$2) AND ($3='' OR u.username ILIKE $3 OR u.display_name ILIKE $3 OR u.email ILIKE $3 OR u.id::text ILIKE $3)
- AND ($6::bigint IS NULL OR u.id=$6)
- ) SELECT (SELECT count(*) FROM filtered) AS total, COALESCE((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $4 OFFSET $5) page),'[]'::jsonb) AS items`, identityFrom(r).ID, status, like, limit, offset, customerID)
-	if err != nil {
-		s.fail(w, r, err)
+	page, err := s.db.AdminCreditAccountPage(r.Context(), identityFrom(r).ID, r.URL.Query(), limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	result, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result["limit"], result["offset"] = limit, offset
-	write(w, 200, result)
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) adminCreditLimit(w http.ResponseWriter, r *http.Request) {

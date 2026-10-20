@@ -49,6 +49,26 @@ type cancellationUpgradeFixture struct {
 	actor, customer, service, request, job, invoice, payment int64
 }
 
+// Upgrade and database-guard fixtures share explicit funding facts on both
+// predecessor and current schemas. Seed them in a transaction, independently of
+// today's authenticated API and the schema's administrator identity model.
+func seedUpgradeFixtureAdminTopUp(t *testing.T, db *Store, actor, customer, amount int64, key, note string) {
+	t.Helper()
+	err := db.WithTx(t.Context(), func(tx pgx.Tx) error {
+		var balance int64
+		if err := tx.QueryRow(t.Context(), "UPDATE users SET balance_cents=balance_cents+$2,updated_at=now() WHERE id=$1 AND role='customer' RETURNING balance_cents", customer, amount).Scan(&balance); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(t.Context(), `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,idempotency_key,note) VALUES($1,'topup',$2,$3,'admin_topup',$4,$5)`, customer, amount, balance, key, note); err != nil {
+			return err
+		}
+		return Audit(t.Context(), tx, actor, "balance.topped_up", "user", customer, map[string]any{"amount_cents": amount, "balance_cents": balance})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Seed a small, explicit historical service. Historical receipt settlement uses
 // the real schema168 DB trigger, not current Go admission code or fabricated
 // renewal_effect rows. No external merchant or provisioner is contacted.
@@ -56,9 +76,7 @@ func cancellationUpgradeService(t *testing.T, db *Store) cancellationUpgradeFixt
 	t.Helper()
 	f := cancellationUpgradeFixture{}
 	f.actor, f.customer = topUpFixture(t, db)
-	if _, _, err := db.TopUp(t.Context(), f.actor, f.customer, 5000, "cancellation-upgrade-funding", "isolated upgrade fixture"); err != nil {
-		t.Fatal(err)
-	}
+	seedUpgradeFixtureAdminTopUp(t, db, f.actor, f.customer, 5000, "cancellation-upgrade-funding", "isolated upgrade fixture")
 	var product, order, item int64
 	queries := []struct {
 		query string

@@ -124,6 +124,7 @@ node scripts/admin-api-consumers.mjs
 | 编辑资料读取 | `GET /admin/customers/{id}` | `customers.view`；读取profile_version及原资料，缺失值保留null |
 | 编辑/启停客户 | `PATCH /admin/customers/{id}` | `customers.manage`；稳定key、`expected_version`，以及至少一个 `display_name/email/status/profile` |
 | 充值到钱包 | `POST /admin/customers/{id}/balance` | `balance.manage`；稳定key；`amount_cents`为正整数、`note`≤240；受财务充值开关/上下限限制 |
+| 查询充值结果 | `GET /admin/customers/{id}/balance-operation` | `balance.manage`；原 `Idempotency-Key` 放请求头；按客户及key查询人工充值账本事实，不触发充值 |
 | 修改客户分组 | `PUT /admin/customers/{id}/group` | `customer_groups.manage`；按[分组定价](../domain/customer-group-pricing.md)契约传 `group_id`，null表示移出分组 |
 | 分配销售 | `PUT /admin/customers/{id}/sales-owner` | 超级管理员浏览器会话；`sales_owner_id`可空，`expected_version`使用sales_version |
 | 重置密码 | `POST /admin/customers/{id}/password` | `customers.manage`；仅提交新 `password`，不读取/显示旧密码；撤销客户旧会话/API密钥及未完成MFA挑战 |
@@ -161,7 +162,27 @@ Content-Type: application/json
 
 首次更新和重放均200；同key异请求409。未传版本为 `409 customer_version_required`，过期版本为 `409 stale_customer_profile`；key无效400。修改资料中的custom_fields还必须传正确的字段目录版本，字段定义变化返回 `stale_customer_fields`。`profile`只合并明确提交的字段；不要把未知字段、null资料对象或全页状态直接提交。
 
-充值首次201、重放200，数据均为 `{user_id,balance_cents,replayed}`。断网不能以新UUID重新充值：保留原body/key重放，成功后刷新wallet与交易；`balance_cents`不是此次充值金额。同一用户主动再次充值是新的意图，才用新key。批量动作、退款、支付核验各自遵循领域契约，不把本表模式套到未要求幂等key的所有PUT/PATCH。
+充值首次201、重放200，数据均为 `{user_id,balance_cents,replayed}`；同一客户/key的金额或去除首尾空白后的备注变化均409 `idempotency_conflict`，包括历史账本重放。原幂等范围仍是客户/key，不改成管理员/key；另一位当前有充值权限且可访问该客户的管理员可以核验同一充值事实，不能把它当作新的充值。事务在资金、设置及请求锁等待后重新验证当前管理员、角色、客户范围及实际会话/API密钥，成功写入与审计同事务提交。
+
+### 钱包充值结果恢复
+
+断网或5xx后，使用 `GET /admin/customers/{id}/balance-operation` 查询原key；不传请求体，不把key放URL。结果查询及其错误响应使用 `Cache-Control: private, no-store`。入口与事务均要求当前 `balance.manage`，客户不存在、不是普通客户或范围外404；无登录401、无权限403、key缺失/重复/长度非法400。查询不读取或变更当前充值开关、金额限额和余额，不产生充值、审计或回执。
+
+查到人工充值账本返回200：
+
+```json
+{"data":{"state":"confirmed","user_id":123,"amount_cents":2000,"balance_cents":5000,"ledger_id":456,"created_at":"2026-10-20T08:00:00Z"}}
+```
+
+`balance_cents` 为该次入账保存的余额，不是当前余额，也不是充值金额。只确认 `reference_type=admin_topup` 的账本事实，在线充值不冒充人工充值。返回不含备注、原始key、支付凭据或推断出的原操作人；查询身份是当前获授权管理员，不表示其就是历史操作者。
+
+没有已提交的匹配事实时返回200 `{"state":"unconfirmed","user_id":123}`。查询与同客户/key的在途人工充值串行，仍不能把未确认解释为“此前从未执行”或允许换key：原请求可能尚未到达或仍在其他阶段。前端核对confirmed结果的客户和金额，保留原body/key及未确认状态；核验后如需重放仍使用原key及原请求体，成功后刷新wallet与交易。同一用户主动再次充值是新的意图，才用新key。批量动作、退款、支付核验各自遵循领域契约，不把本表模式套到未要求幂等key的所有PUT/PATCH。
+
+### 信用账户与历史的客户上下文
+
+`GET /admin/credit`、`GET /admin/credit/consumptions`、`GET /admin/credit/repayments` 均要求 `credit.view`，不额外要求 `customers.view`。三个入口的 `customer_id` 遵循本节严格解析、范围外404和不回退全局规则；省略时仍列出当前授权客户范围，合法但无信用账户/记录返回空页。客户核验、总数和当前页使用同一个只读快照，最终SQL保留当前客户范围约束。
+
+返回通用分页 `{items,total,limit,offset}`，保留现有字段。账户支持 `q/status`，status为active或disabled，表示客户状态；消费支持 `q/status/date_from/date_to`，status为outstanding、repaid或refunded；还款支持 `q/date_from/date_to`，不接受status，因为只列已确认到账记录。日期为上海自然日，起止均包含当天；消费按 `created_at`，还款按实际 `received_at`，不改用凭证录入时间。日期/状态错误保留原错误码，精确客户与其他筛选取交集。
 
 ## 统一交易分页
 
@@ -294,7 +315,11 @@ node scripts/check-doc-links.mjs
 
 integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/pass零skip；不是业务数据库。本轮新增行为的必需测试在 [`test-admin-api.mjs`](../../scripts/test-admin-api.mjs)，代登录签发边界还纳入原认证严格门禁。生成器及源码声明仅E0，独立数据库行为E1；页面候选、TypeScript编译和既有截图不能替代新UI浏览器E2、真实渠道E3或发布E4。
 
-本批在隔离PG18以race分组实跑并严格核对后台API的38个必需入口、文件存储的53个必需入口，全部run/pass、零跳过。文件存储由原42个入口与冻结版11个附件入口合并核对；后台由37个入口与这11个附件入口合并核对，覆盖最后增加的回执锁等待后撤权；两组有交集，不相加为独立用例数。另29个存储单元入口、16个静态盘点/消费者夹具、全仓Go编译、相关包vet、架构约束与文档治理/链接/契约门禁检查通过。架构基线从692减至676条，仅移除已下沉的16条豁免，不放行新越界。机器日志、清单和源文件哈希保存在忽略的output制品中。
+上一批在隔离PG18以race分组实跑并严格核对后台API的38个必需入口、文件存储的53个必需入口，全部run/pass、零跳过。文件存储由原42个入口与冻结版11个附件入口合并核对；后台由37个入口与这11个附件入口合并核对，覆盖最后增加的回执锁等待后撤权；两组有交集，不相加为独立用例数。另29个存储单元入口、16个静态盘点/消费者夹具、全仓Go编译、相关包vet、架构约束与文档治理/链接/契约门禁检查通过。该批架构基线从692减至676条，仅移除已下沉的16条豁免，不放行新越界。机器日志、清单和源文件哈希保存在忽略的output制品中。
+
+本轮严格后台入口扩为59个（HTTP 57、Store 2），在独立PG18的UTC会话以race串行实际运行，全部run/pass、零跳过。新增覆盖严格信用客户上下文及上海日期、充值8并发单次入账、旧人工账本与跨管理员原key核验、网关记录隔离、审计回滚、锁等待后角色/范围/会话/API密钥撤销、凭据自然过期、真实密码轮换锁序，以及PostgreSQL已提交但COMMIT确认报文丢失后的查询与原key重放。信用读取又下沉4条HTTP持久化调用，基线由676减至672，未增加豁免。充值结果查询和固定信用上下文的前端交互尚未浏览器验收；不把API测试当作页面闭环。
+
+另15个充值/退款/资金锁序与历史升级入口在同一隔离PG18以race串行通过且零跳过，覆盖在线充值与管理员加款/余额消费/退款的竞争、资金→设置锁序及真实schema168/169起点升级。历史测试资金使用专用事务夹具保留余额、账本和审计事实，生产鉴权不回退旧身份表。
 
 本批没有重跑完整认证/通知业务门禁，也没有执行新UI浏览器、真实对象存储或部署；既有验收只保留其原范围。完整后台各领域仍按需求清单中的API/UI/验证状态推进。
 

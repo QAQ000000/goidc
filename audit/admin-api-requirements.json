@@ -369,12 +369,14 @@
         "/admin/customers/new",
         "/admin/customers/[id]"
       ],
-      "reason": "复用客户列表和档案；摘要真实指标、状态修改并发、充值重试与客户上下文需要完善。",
+      "reason": "客户摘要、固定客户上下文和充值只读结果查询已补；充值按原客户/key核验账本，锁等待后复核权限及凭据。分组/销售归属等写动作继续分别核对，不把UI待接线标成API缺失。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/customers",
           "GET /api/v1/admin/customers/{id}",
-          "POST /api/v1/admin/customers"
+          "POST /api/v1/admin/customers",
+          "POST /api/v1/admin/customers/{id}/balance",
+          "GET /api/v1/admin/customers/{id}/balance-operation"
         ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
@@ -410,10 +412,14 @@
       "evidence": [
         "internal/httpapi/admin.go",
         "internal/store/customer_account_reads.go",
-        "web/src/components/admin-customer-detail.tsx"
+        "web/src/components/admin-customer-detail.tsx",
+        "internal/store/admin_balance_operations.go",
+        "internal/httpapi/admin_balance_operations.go",
+        "internal/httpapi/admin_balance_operations_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "充值查询只确认人工账本事实，未确认不授权换key；重放绑定金额和规范化备注，审计与资金同事务，真实会话/API密钥撤销和锁序须独立PG18回归。"
       ]
     },
     {
@@ -945,7 +951,7 @@
         "/admin/credit",
         "/admin/credit-settings"
       ],
-      "reason": "复用额度、冻结、消费、人工还款；在线还款和账期合并另列待决策。",
+      "reason": "复用额度、冻结、消费、人工还款；账户/消费/还款读取已补严格customer_id和同快照分页，保留上海消费/实际到账日期。在线还款和账期合并另列待决策。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/credit",
@@ -985,10 +991,13 @@
       },
       "evidence": [
         "internal/httpapi/admin_credit.go",
-        "internal/httpapi/credit_lifecycle.go"
+        "internal/httpapi/credit_lifecycle.go",
+        "internal/store/admin_credit_reads.go",
+        "internal/httpapi/admin_credit_context_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "三个信用读取入口省略客户保留授权全局，显式空/重复/非法客户400，范围外404，不额外依赖customers.view；总数与列表同快照，原状态、字段与日期口径保持。"
       ]
     },
     {

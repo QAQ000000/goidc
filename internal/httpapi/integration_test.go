@@ -1396,7 +1396,8 @@ func TestBalancePaymentAndRefundAreAtomicAndIdempotent(t *testing.T) {
 
 	topup := request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID), map[string]any{"amount_cents": 2000, "note": "integration"}, admin, "finance-topup")
 	expect(t, topup, 201)
-	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID), map[string]any{"amount_cents": 2000}, admin, "finance-topup"), 200)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID), map[string]any{"amount_cents": 2000}, admin, "finance-topup"), 409)
+	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", customerID), map[string]any{"amount_cents": 2000, "note": "integration"}, admin, "finance-topup"), 200)
 
 	paid := request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay", invoiceID), map[string]any{}, customer, "finance-pay")
 	expect(t, paid, 201)
