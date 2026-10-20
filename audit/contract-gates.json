@@ -186,13 +186,22 @@
       "implementation": [
         "internal/httpapi",
         "internal/store",
-        "web/src/app/admin"
+        "web/src/app/admin",
+        "internal/store/admin_customer_summary.go",
+        "internal/httpapi/admin_customer_summary.go",
+        "audit/admin-api-requirements.json",
+        "scripts/admin-api-inventory.mjs",
+        "scripts/admin-api-consumers.mjs"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'",
-        "node scripts/admin-page-contracts.mjs"
+        "node scripts/admin-page-contracts.mjs",
+        "node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs",
+        "node scripts/admin-api-consumers.mjs",
+        "node scripts/test-admin-api.mjs --integration"
       ],
       "evaluation": [
+        "isolated PostgreSQL 18 exact run/pass with zero skips: per-section summary grants, customer and ticket scopes, immutable notification ownership, credit cash events, auto-renew lock-wait authorization and no durable credentials derived from impersonation",
         "browser acceptance with an isolated test account"
       ],
       "review": {

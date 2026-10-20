@@ -1,5 +1,7 @@
 # 旧接口兼容性与路由审计白皮书
 
+本文记录历史兼容性审计口径与封存基线。当前后台需求、真实源码路由采集及前端接入协议以[后台 API 需求](admin/api-requirements.md)和[API 契约](admin/api.md)为入口；下文旧副本、固定数量和missing_candidate不作为当前待开发接口统计。
+
 审计基线为 `output/audit-inputs/legacy-inventory.json`，参考源码目录为
 `/www/wwwroot/zjmf-manger-decoded-副本`。审计只读旧目录，没有修改旧 PHP
 文件。每一条清单记录以 `file:line:method` 和旧表达式指纹固定，结果保存在

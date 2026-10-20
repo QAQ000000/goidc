@@ -231,16 +231,7 @@ func (s *Store) notificationDeliveries(ctx context.Context, actorID, userID int6
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT d.id,e.id,e.user_id,e.kind,
- CASE WHEN d.channel='mail' THEN 'email' ELSE d.channel END,coalesce(d.instance_id,''),
- CASE WHEN (d.channel='mail' AND m.id IS NULL) OR (d.channel='sms' AND s.id IS NULL) THEN 'archived'
- WHEN d.channel='mail' THEN CASE m.status WHEN 'sent' THEN 'accepted' WHEN 'sending' THEN 'sending' WHEN 'pending' THEN 'pending' WHEN 'failed' THEN 'failed' WHEN 'dead_letter' THEN 'failed' ELSE 'skipped' END
- WHEN d.channel='sms' THEN CASE s.status WHEN 'sent' THEN 'accepted' WHEN 'sending' THEN 'sending' WHEN 'pending' THEN 'pending' WHEN 'failed' THEN 'failed' WHEN 'dead_letter' THEN 'failed' ELSE 'skipped' END ELSE d.status END,
- CASE WHEN (d.channel='mail' AND m.id IS NULL) OR (d.channel='sms' AND s.id IS NULL) THEN 'legacy_log_removed' ELSE d.code END,
- CASE WHEN d.channel='mail' THEN coalesce(m.attempts,d.attempts) WHEN d.channel='sms' THEN coalesce(s.attempts,d.attempts) ELSE d.attempts END,
- d.provider_message_id,d.created_at,d.expires_at
- FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
- LEFT JOIN email_outbox m ON m.id=d.legacy_email_outbox_id LEFT JOIN sms_outbox s ON s.id=d.legacy_sms_outbox_id
+	rows, err := s.Pool.Query(ctx, notificationDeliveryProjection+`
  WHERE (($1>0 AND admin_customer_allowed($1,e.user_id)) OR ($2>0 AND e.user_id=$2 AND EXISTS(SELECT 1 FROM account_identities u WHERE u.id=$2 AND u.status='active'))) AND ($5='' OR e.kind=$5) ORDER BY d.id DESC LIMIT $3 OFFSET $4`, actorID, userID, limit, offset, kind)
 	if err != nil {
 		return nil, err

@@ -1,0 +1,3324 @@
+{
+  "schemaVersion": 1,
+  "purpose": "受控后台需求声明；不是机器审计输入或运行证据。",
+  "classification": {
+    "required": "当前批准范围的必需项；与处置分类独立。",
+    "disposition": {
+      "reuse": "复用现有领域 API；并不表示 UI 或运行验收完成。",
+      "optimize": "改进现有 API/接线/验证，避免重建平行领域。",
+      "add": "现有接口不能完整表达批准需求，需新增或扩展。",
+      "excluded": "用户或稳定契约明确排除，不恢复。",
+      "deferred": "待产品口径、协议或外部条件确定。"
+    },
+    "axes": "api / ui / verification 各自独立；source-reviewed 仅是静态来源审查，所有本声明未执行的运行检查均为 not-run。"
+  },
+  "legacySource": {
+    "id": "zjmf-manger-decoded",
+    "configuration": "inventory --legacy-root 显式参数（可由调用方传入 GOIDC_LEGACY_ROOT）",
+    "paths": "legacy.evidence 相对旧源码根；来源是历史需求，非当前部署配置或完成证明。"
+  },
+  "domains": [
+    {
+      "id": "dashboard",
+      "title": "控制台与经营概览",
+      "pages": [
+        "/admin"
+      ]
+    },
+    {
+      "id": "customers",
+      "title": "客户档案、列表与创建",
+      "pages": [
+        "/admin/customers",
+        "/admin/customers/new",
+        "/admin/customers/[id]"
+      ]
+    },
+    {
+      "id": "customer-groups",
+      "title": "客户分组、等级与分组定价",
+      "pages": [
+        "/admin/customer-groups",
+        "/admin/customer-levels"
+      ]
+    },
+    {
+      "id": "customer-fields",
+      "title": "客户自定义字段",
+      "pages": [
+        "/admin/customer-fields"
+      ]
+    },
+    {
+      "id": "customer-files",
+      "title": "客户文件与固定客户上下文",
+      "pages": [
+        "/admin/customer-files",
+        "/admin/customers/[id]/files"
+      ]
+    },
+    {
+      "id": "resources",
+      "title": "资源记录与客户资源",
+      "pages": [
+        "/admin/resources",
+        "/admin/customer-resources"
+      ]
+    },
+    {
+      "id": "catalog",
+      "title": "商品、分组、配置项与服务导航",
+      "pages": [
+        "/admin/products",
+        "/admin/products/new",
+        "/admin/products/[id]",
+        "/admin/catalog-groups",
+        "/admin/catalog-groups/new",
+        "/admin/configurable-options",
+        "/admin/service-groups"
+      ]
+    },
+    {
+      "id": "orders",
+      "title": "订单与管理员代下单",
+      "pages": [
+        "/admin/orders",
+        "/admin/orders/new",
+        "/admin/orders/[id]",
+        "/admin/order-settings"
+      ]
+    },
+    {
+      "id": "invoices",
+      "title": "账单、人工账单与支付核验",
+      "pages": [
+        "/admin/invoices",
+        "/admin/invoices/new",
+        "/admin/invoices/[id]",
+        "/admin/invoices/[id]/edit"
+      ]
+    },
+    {
+      "id": "invoice-applications",
+      "title": "发票申请、审核与业务文件",
+      "pages": [
+        "/admin/invoice-applications",
+        "/admin/invoice-applications/[id]",
+        "/admin/invoice-settings"
+      ]
+    },
+    {
+      "id": "finance",
+      "title": "流水、收支配置与币种展示",
+      "pages": [
+        "/admin/transactions",
+        "/admin/finance-settings",
+        "/admin/currencies",
+        "/admin/payment-settings"
+      ]
+    },
+    {
+      "id": "credit",
+      "title": "信用额度与还款",
+      "pages": [
+        "/admin/credit",
+        "/admin/credit-settings"
+      ]
+    },
+    {
+      "id": "services",
+      "title": "服务管理、生命周期与取消处置",
+      "pages": [
+        "/admin/services",
+        "/admin/services/[id]",
+        "/admin/cancellations"
+      ]
+    },
+    {
+      "id": "suppliers",
+      "title": "供应商、商品导入、任务和续费",
+      "pages": [
+        "/admin/suppliers",
+        "/admin/suppliers/api-settings",
+        "/admin/suppliers/catalog",
+        "/admin/suppliers/jobs",
+        "/admin/suppliers/orders",
+        "/admin/suppliers/renewals",
+        "/admin/suppliers/tasks"
+      ]
+    },
+    {
+      "id": "traffic",
+      "title": "流量商品、订单与人工交付",
+      "pages": [
+        "/admin/traffic-products",
+        "/admin/traffic-orders",
+        "/admin/traffic-orders/[id]"
+      ]
+    },
+    {
+      "id": "tickets",
+      "title": "工单处理、部门、状态、规则与预设",
+      "pages": [
+        "/admin/tickets",
+        "/admin/tickets/new",
+        "/admin/tickets/[id]",
+        "/admin/ticket-departments",
+        "/admin/ticket-statuses",
+        "/admin/ticket-rules",
+        "/admin/ticket-presets"
+      ]
+    },
+    {
+      "id": "notifications",
+      "title": "通知编排、渠道和投递历史",
+      "pages": [
+        "/admin/notifications",
+        "/admin/notifications/new",
+        "/admin/channels",
+        "/admin/smtp-settings",
+        "/admin/sms-settings",
+        "/admin/logs/email",
+        "/admin/logs/sms",
+        "/admin/logs/inbox"
+      ]
+    },
+    {
+      "id": "marketing",
+      "title": "营销活动与优惠券",
+      "pages": [
+        "/admin/marketing",
+        "/admin/promo-codes"
+      ]
+    },
+    {
+      "id": "affiliate",
+      "title": "推广及提现审核",
+      "pages": [
+        "/admin/affiliate",
+        "/admin/affiliate/settings"
+      ]
+    },
+    {
+      "id": "sales",
+      "title": "销售设置与确认结算",
+      "pages": [
+        "/admin/sales-settings",
+        "/admin/sales-settlements"
+      ]
+    },
+    {
+      "id": "reports",
+      "title": "经营报表及现金费用台账",
+      "pages": [
+        "/admin/reports"
+      ]
+    },
+    {
+      "id": "contracts",
+      "title": "合同和合同设置",
+      "pages": [
+        "/admin/contracts",
+        "/admin/contract-settings"
+      ]
+    },
+    {
+      "id": "certification",
+      "title": "实名认证与提供方设置",
+      "pages": [
+        "/admin/certifications",
+        "/admin/certification-settings"
+      ]
+    },
+    {
+      "id": "access",
+      "title": "员工、角色、账号和安全",
+      "pages": [
+        "/admin/access",
+        "/admin/access/staff/[id]",
+        "/admin/account",
+        "/admin/security/mfa",
+        "/admin/auth-settings",
+        "/admin/blacklist"
+      ]
+    },
+    {
+      "id": "content",
+      "title": "内容、下载、文件分类与导航",
+      "pages": [
+        "/admin/content",
+        "/admin/downloads",
+        "/admin/file-groups",
+        "/admin/navigation",
+        "/admin/friendly-links"
+      ]
+    },
+    {
+      "id": "site",
+      "title": "站点、主题与自定义站点字段",
+      "pages": [
+        "/admin/settings",
+        "/admin/site-settings",
+        "/admin/theme-settings",
+        "/admin/site-fields"
+      ]
+    },
+    {
+      "id": "scheduler",
+      "title": "内部调度、队列、任务日志和趋势",
+      "pages": [
+        "/admin/jobs",
+        "/admin/jobs/queue",
+        "/admin/job-settings",
+        "/admin/logs/jobs"
+      ]
+    },
+    {
+      "id": "audit",
+      "title": "审计、操作和访问日志",
+      "pages": [
+        "/admin/audit",
+        "/admin/logs/[kind]",
+        "/admin/logs/admin-login",
+        "/admin/logs/api",
+        "/admin/logs/cleanup"
+      ]
+    },
+    {
+      "id": "runtime",
+      "title": "运行状态、数据库、升级与编译模块",
+      "pages": [
+        "/admin/apps",
+        "/admin/apps/store",
+        "/admin/system/runtime",
+        "/admin/system/database",
+        "/admin/system/about",
+        "/admin/system/upgrade"
+      ]
+    },
+    {
+      "id": "migration",
+      "title": "迁移管理与旧数据映射",
+      "pages": [
+        "/admin/migrations"
+      ]
+    }
+  ],
+  "requirements": [
+    {
+      "id": "dashboard.core",
+      "domain": "dashboard",
+      "title": "控制台与经营概览",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin"
+      ],
+      "reason": "复用现有控制台指标；商品和员工销售排行占位另列待定口径。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/dashboard"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:56",
+          "data/route/admin.php:120"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/searchlist",
+            "handler": "admin/index/search",
+            "source": "data/route/admin.php",
+            "line": 120
+          }
+        ]
+      },
+      "api": {
+        "status": "partial"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "web/src/components/admin-dashboard.tsx",
+        "internal/httpapi/admin.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customers.core",
+      "domain": "customers",
+      "title": "客户档案、列表与创建",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customers",
+        "/admin/customers/new",
+        "/admin/customers/[id]"
+      ],
+      "reason": "复用客户列表和档案；摘要真实指标、状态修改并发、充值重试与客户上下文需要完善。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/customers",
+          "GET /api/v1/admin/customers/{id}",
+          "POST /api/v1/admin/customers"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "partial"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin.go",
+        "internal/store/customer_account_reads.go",
+        "web/src/components/admin-customer-detail.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customer-groups.core",
+      "domain": "customer-groups",
+      "title": "客户分组、等级与分组定价",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/customer-groups",
+        "/admin/customer-levels"
+      ],
+      "reason": "复用客户分组、等级及既有分组定价规则；不增加平行折扣模型。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/customer-groups",
+          "GET /api/v1/admin/customer-levels"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:635",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/customer_levels.go",
+        "docs/domain/customer-group-pricing.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customer-fields.core",
+      "domain": "customer-fields",
+      "title": "客户自定义字段",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/customer-fields"
+      ],
+      "reason": "复用字段、选项、启用、校验和客户填写链路，保留版本及权限边界。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/customer-fields"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:579",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/customer_custom_fields.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customer-files.core",
+      "domain": "customer-files",
+      "title": "客户文件与固定客户上下文",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customer-files",
+        "/admin/customers/[id]/files"
+      ],
+      "reason": "后台跨客户管理可筛选；客户详情内固定归属，不允许筛到其他客户；私有下载授权继续复用。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/customer-files",
+          "POST /api/v1/admin/customer-files",
+          "GET /api/v1/admin/customer-files/{id}/file"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:352"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/upload_author",
+            "handler": "admin/upload/uploadAuthor",
+            "source": "data/route/admin.php",
+            "line": 352
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/customer_files.go",
+        "web/src/components/customer-files.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "resources.core",
+      "domain": "resources",
+      "title": "资源记录与客户资源",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/resources",
+        "/admin/customer-resources"
+      ],
+      "reason": "资源已有独立入口；成本、备注和上下游操作完整性按能力逐项复核，不以页面布局推断缺失。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/resources"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:107",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "partial"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/resources.go",
+        "docs/replacement-gap-audit.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "catalog.core",
+      "domain": "catalog",
+      "title": "商品、分组、配置项与服务导航",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/products",
+        "/admin/products/new",
+        "/admin/products/[id]",
+        "/admin/catalog-groups",
+        "/admin/catalog-groups/new",
+        "/admin/configurable-options",
+        "/admin/service-groups"
+      ],
+      "reason": "复用商品多账期、可选规格、价格和分类；旧版十页签不能逐项等同接口缺失。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/products",
+          "POST /api/v1/admin/products"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1473",
+          "data/route/admin.php:409"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/product_list_page",
+            "handler": "admin/product/getProuductlistPage",
+            "source": "data/route/admin.php",
+            "line": 409
+          }
+        ]
+      },
+      "api": {
+        "status": "partial"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/catalog_manage.go",
+        "web/src/components/product-editor.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "orders.core",
+      "domain": "orders",
+      "title": "订单与管理员代下单",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/orders",
+        "/admin/orders/new",
+        "/admin/orders/[id]",
+        "/admin/order-settings"
+      ],
+      "reason": "复用订单状态机与统一回执；增强指定客户上下文及未知写结果恢复，不增加直接状态写入。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/orders",
+          "POST /api/v1/admin/orders",
+          "GET /api/v1/admin/order-settings"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:195",
+          "data/route/admin.php:105"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/order/getTotal",
+            "handler": "admin/order/getTotal/",
+            "source": "data/route/admin.php",
+            "line": 105
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/transactions.md",
+        "internal/httpapi/admin.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "invoices.core",
+      "domain": "invoices",
+      "title": "账单、人工账单与支付核验",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/invoices",
+        "/admin/invoices/new",
+        "/admin/invoices/[id]",
+        "/admin/invoices/[id]/edit"
+      ],
+      "reason": "复用人工账单和支付/退款核验；创建与详情须保持客户、版本、幂等和回执上下文。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/invoices",
+          "POST /api/v1/admin/invoices",
+          "GET /api/v1/admin/invoices/{id}"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:310",
+          "data/route/admin.php:511"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/invoices_createnew",
+            "handler": "admin/invoice/createRenew",
+            "source": "data/route/admin.php",
+            "line": 511
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/manual_invoices.go",
+        "docs/payments.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "invoice-applications.core",
+      "domain": "invoice-applications",
+      "title": "发票申请、审核与业务文件",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/invoice-applications",
+        "/admin/invoice-applications/[id]",
+        "/admin/invoice-settings"
+      ],
+      "reason": "复用审核、调整、上传和授权下载；不能因移除数据导出删除业务文件。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/invoice-applications",
+          "POST /api/v1/admin/invoice-applications/{id}/review",
+          "GET /api/v1/admin/invoice-settings"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:380",
+          "data/route/admin.php:24"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/clientsinvoices",
+            "handler": "admin/ViewClients/clientsinvoices",
+            "source": "data/route/admin.php",
+            "line": 24
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/invoice_applications.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "finance.core",
+      "domain": "finance",
+      "title": "流水、收支配置与币种展示",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/transactions",
+        "/admin/finance-settings",
+        "/admin/currencies",
+        "/admin/payment-settings"
+      ],
+      "reason": "复用整数分、账本与编译支付渠道；本轮新增信用消费/还款事件，消费非现金，还款按 received_at 计现金，避免账单fallback重复。UI待补新来源和现金汇总展示。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/transactions/page",
+          "GET /api/v1/admin/finance-settings",
+          "GET /api/v1/admin/currencies",
+          "GET /api/v1/admin/payment-settings",
+          "GET /api/v1/admin/transactions/summary"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:287",
+          "data/route/admin.php:559"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/search_page",
+            "handler": "admin/account/searchPage",
+            "source": "data/route/admin.php",
+            "line": 559
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/payments.md",
+        "internal/httpapi/credit_settings.go",
+        "internal/store/customer_account_transactions.go",
+        "internal/httpapi/transaction_credit_entries_test.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "credit.core",
+      "domain": "credit",
+      "title": "信用额度与还款",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/credit",
+        "/admin/credit-settings"
+      ],
+      "reason": "复用额度、冻结、消费、人工还款；在线还款和账期合并另列待决策。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/credit",
+          "GET /api/v1/admin/credit/consumptions",
+          "GET /api/v1/admin/credit/repayments"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:330",
+          "data/route/admin.php:570"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/credit_limit",
+            "handler": "admin/credit_limit/index",
+            "source": "data/route/admin.php",
+            "line": 570
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin_credit.go",
+        "internal/httpapi/credit_lifecycle.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "services.core",
+      "domain": "services",
+      "title": "服务管理、生命周期与取消处置",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/services",
+        "/admin/services/[id]",
+        "/admin/cancellations"
+      ],
+      "reason": "复用生命周期、版本冲突、外部未知结果与管理员取消；客户申请退款/停用已明确排除。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/services",
+          "GET /api/v1/admin/services/{id}"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:246",
+          "data/route/admin.php:600"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/clients_services/get_product_list",
+            "handler": "admin/clients_services/getProductList",
+            "source": "data/route/admin.php",
+            "line": 600
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/transactions.md",
+        "docs/architecture/supplier-module-development.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "suppliers.core",
+      "domain": "suppliers",
+      "title": "供应商、商品导入、任务和续费",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/suppliers",
+        "/admin/suppliers/api-settings",
+        "/admin/suppliers/catalog",
+        "/admin/suppliers/jobs",
+        "/admin/suppliers/orders",
+        "/admin/suppliers/renewals",
+        "/admin/suppliers/tasks"
+      ],
+      "reason": "复用商品批量导入、多账期与规格；仅展示适配器声明能力，重试必须符合未知结果核验边界。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/suppliers",
+          "GET /api/v1/admin/supplier-jobs",
+          "POST /api/v1/admin/supplier-jobs/{id}/retry"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1866",
+          "data/route/admin.php:752"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/zjmf_finance_api",
+            "handler": "admin/zjmfFinanceApi/createApi",
+            "source": "data/route/admin.php",
+            "line": 752
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/architecture/supplier-module-development.md",
+        "web/src/components/supplier-jobs.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "traffic.core",
+      "domain": "traffic",
+      "title": "流量商品、订单与人工交付",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/traffic-products",
+        "/admin/traffic-orders",
+        "/admin/traffic-orders/[id]"
+      ],
+      "reason": "已有人工交付契约，自动资源交付为独立候选，不能暴露虚假成功动作。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/traffic-products",
+          "GET /api/v1/admin/traffic-orders"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:228",
+          "data/route/admin.php:637"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/dcim/flowpacket",
+            "handler": "admin/dcim/addFlowPacket",
+            "source": "data/route/admin.php",
+            "line": 637
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "tickets.core",
+      "domain": "tickets",
+      "title": "工单处理、部门、状态、规则与预设",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/tickets",
+        "/admin/tickets/new",
+        "/admin/tickets/[id]",
+        "/admin/ticket-departments",
+        "/admin/ticket-statuses",
+        "/admin/ticket-rules",
+        "/admin/ticket-presets"
+      ],
+      "reason": "复用创建、处理人、公开/内部回复、评分和部门权限；客户关联及附件失败恢复单列优化。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/tickets",
+          "POST /api/v1/admin/tickets"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:426",
+          "data/route/admin.php:488"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/add_ticket_page",
+            "handler": "admin/ticket/createPage",
+            "source": "data/route/admin.php",
+            "line": 488
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/tickets.go",
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "notifications.core",
+      "domain": "notifications",
+      "title": "通知编排、渠道和投递历史",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/notifications",
+        "/admin/notifications/new",
+        "/admin/channels",
+        "/admin/smtp-settings",
+        "/admin/sms-settings",
+        "/admin/logs/email",
+        "/admin/logs/sms",
+        "/admin/logs/inbox"
+      ],
+      "reason": "通知事件与渠道保持分离；复用目录、实例、模板、订阅和 outbox，客户精确历史另列优化。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/channel-catalogue",
+          "GET /api/v1/admin/channel-instances",
+          "GET /api/v1/admin/smtp-settings",
+          "GET /api/v1/admin/sms-settings"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1072",
+          "data/route/admin.php:356"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/config_message/config_mobile",
+            "handler": "admin/config_message/configMobile",
+            "source": "data/route/admin.php",
+            "line": 356
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/notification-architecture.md",
+        "internal/httpapi/admin_notification_logs.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "marketing.core",
+      "domain": "marketing",
+      "title": "营销活动与优惠券",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/marketing",
+        "/admin/promo-codes"
+      ],
+      "reason": "复用受众预览和分组优惠券；显式客户分组时折上折，留空旧券不自动叠加。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/marketing",
+          "GET /api/v1/admin/marketing/options",
+          "POST /api/v1/admin/marketing/audience-count"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:146",
+          "data/route/admin.php:778"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/sm_type",
+            "handler": "admin/sendMessageBatch/getSearchParams",
+            "source": "data/route/admin.php",
+            "line": 778
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/domain/customer-group-pricing.md",
+        "internal/httpapi/server.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "affiliate.core",
+      "domain": "affiliate",
+      "title": "推广及提现审核",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/affiliate",
+        "/admin/affiliate/settings"
+      ],
+      "reason": "复用资格、佣金、来源、审核与打款证据，不从客户详情另建佣金台账。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/affiliate/withdrawals",
+          "POST /api/v1/admin/affiliate/withdrawals/{id}/review"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:176",
+          "data/route/admin.php:699"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/aff",
+            "handler": "admin/affiliate/index",
+            "source": "data/route/admin.php",
+            "line": 699
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/affiliate_pages.go",
+        "internal/httpapi/affiliate_withdrawals.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "sales.core",
+      "domain": "sales",
+      "title": "销售设置与确认结算",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/sales-settings",
+        "/admin/sales-settlements"
+      ],
+      "reason": "预计佣金与历史确认并列；正式确认保留现有新购范围，不称为已发放。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/sales-settings",
+          "GET /api/v1/admin/sales-settlements",
+          "POST /api/v1/admin/sales-settlements/preview"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:128",
+          "data/route/admin.php:677"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/salegroup",
+            "handler": "admin/sale/groupList",
+            "source": "data/route/admin.php",
+            "line": 677
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/sales_settings.go",
+        "internal/httpapi/sales_settlements.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "reports.core",
+      "domain": "reports",
+      "title": "经营报表及现金费用台账",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/reports"
+      ],
+      "reason": "旧版明细、提成、工单评分、现金收支和商品分类已有恢复；逐项验证是证据缺口，不应再宣称缺 API。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/reports/income",
+          "GET /api/v1/admin/reports/customer-ranking"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:443",
+          "data/route/admin.php:402"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/year_reports",
+            "handler": "admin/reports/getYearIncomeStatistics",
+            "source": "data/route/admin.php",
+            "line": 402
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/reports.go",
+        "internal/httpapi/reports_extra.go",
+        "docs/report-restoration-contract.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "contracts.core",
+      "domain": "contracts",
+      "title": "合同和合同设置",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/contracts",
+        "/admin/contract-settings"
+      ],
+      "reason": "复用模板、提交、审核、寄送、作废和 HTML 打印；PDF/e-sign、强制签约等另行确认。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/contracts",
+          "GET /api/v1/admin/contract-settings",
+          "GET /api/v1/admin/contracts/{id}/document"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:403",
+          "data/route/admin.php:384"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/contract/setting",
+            "handler": "admin/contract/setting",
+            "source": "data/route/admin.php",
+            "line": 384
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/domain/contract-settings.md",
+        "docs/admin-contract-lifecycle-plan.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "certification.core",
+      "domain": "certification",
+      "title": "实名认证与提供方设置",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/certifications",
+        "/admin/certification-settings"
+      ],
+      "reason": "复用人工/编译提供方、资格校验、未知结果和转企业流程。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/certifications",
+          "GET /api/v1/admin/certification-settings"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:87",
+          "data/route/admin.php:344"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/certifi_alipay_detail",
+            "handler": "admin/config_certifi/detail",
+            "source": "data/route/admin.php",
+            "line": 344
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/certification.go",
+        "internal/httpapi/certification_settings.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "access.core",
+      "domain": "access",
+      "title": "员工、角色、账号和安全",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/access",
+        "/admin/access/staff/[id]",
+        "/admin/account",
+        "/admin/security/mfa",
+        "/admin/auth-settings",
+        "/admin/blacklist"
+      ],
+      "reason": "管理员与客户已物理分表；账号安全 API 由 portal 区分，显式代登录须审计并禁止持久化客户凭据。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/auth-settings",
+          "GET /api/v1/admin/security/mfa",
+          "GET /api/v1/admin/blacklist",
+          "GET /api/v1/api-keys"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1001",
+          "data/route/admin.php:128"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/rbac",
+            "handler": "admin/rbac/index",
+            "source": "data/route/admin.php",
+            "line": 128
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/admin-rbac.md",
+        "internal/store/account_api_keys.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "content.core",
+      "domain": "content",
+      "title": "内容、下载、文件分类与导航",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/content",
+        "/admin/downloads",
+        "/admin/file-groups",
+        "/admin/navigation",
+        "/admin/friendly-links"
+      ],
+      "reason": "复用内容维护、分类、产品绑定和私有文件下载，不恢复通用数据导出。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/downloads",
+          "GET /api/v1/admin/file-groups",
+          "GET /api/v1/admin/navigation",
+          "GET /api/v1/admin/friendly-links"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1743",
+          "data/route/admin.php:583"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "DELETE",
+            "path": "/{legacy_admin}/downloads/cat/:id",
+            "handler": "admin/Downloads/deleteCat",
+            "source": "data/route/admin.php",
+            "line": 583
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/server.go",
+        "docs/admin-frontend-design.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "site.core",
+      "domain": "site",
+      "title": "站点、主题与自定义站点字段",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/settings",
+        "/admin/site-settings",
+        "/admin/theme-settings",
+        "/admin/site-fields"
+      ],
+      "reason": "复用站点设置和公开主题契约；旧配置文档中的过期缺口不能代替当前源码盘点。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/site-settings",
+          "GET /api/v1/admin/theme-settings",
+          "GET /api/v1/admin/site-fields"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:897",
+          "data/route/admin.php:300"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/config_general/header",
+            "handler": "admin/config_general/getHeader",
+            "source": "data/route/admin.php",
+            "line": 300
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/server.go",
+        "docs/admin-configuration.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "scheduler.core",
+      "domain": "scheduler",
+      "title": "内部调度、队列、任务日志和趋势",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/jobs",
+        "/admin/jobs/queue",
+        "/admin/job-settings",
+        "/admin/logs/jobs"
+      ],
+      "reason": "趋势接口已经存在；按执行证据、权限、租约和可核验重试边界验收，不重新声明为缺失。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/jobs",
+          "GET /api/v1/admin/jobs/queue",
+          "GET /api/v1/admin/logs/jobs/trend",
+          "GET /api/v1/admin/scheduler-settings"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:530",
+          "data/route/admin.php:509"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/cron_page",
+            "handler": "admin/cron/detail",
+            "source": "data/route/admin.php",
+            "line": 509
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin_scheduler.go",
+        "internal/httpapi/scheduler_settings.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "audit.core",
+      "domain": "audit",
+      "title": "审计、操作和访问日志",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/audit",
+        "/admin/logs/[kind]",
+        "/admin/logs/admin-login",
+        "/admin/logs/api",
+        "/admin/logs/cleanup"
+      ],
+      "reason": "动态日志路由包含 system；审计 actor 与客户 subject 必须区分，客户精确筛选另列需求。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/audit",
+          "GET /api/v1/admin/logs/admin-login",
+          "GET /api/v1/admin/logs/api"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1326",
+          "data/route/admin.php:620"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/log_record/systemlog",
+            "handler": "admin/log_record/getSystemLog",
+            "source": "data/route/admin.php",
+            "line": 620
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin.go",
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "runtime.core",
+      "domain": "runtime",
+      "title": "运行状态、数据库、升级与编译模块",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/apps",
+        "/admin/apps/store",
+        "/admin/system/runtime",
+        "/admin/system/database",
+        "/admin/system/about",
+        "/admin/system/upgrade"
+      ],
+      "reason": "复用 API/worker 运行状态与编译清单；不要求恢复运行时插件安装或修改部署配置。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/system/runtime",
+          "GET /api/v1/admin/system/database",
+          "GET /api/v1/admin/apps"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:563",
+          "data/route/admin.php:399"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/report/base_info",
+            "handler": "admin/report/baseInfo",
+            "source": "data/route/admin.php",
+            "line": 399
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/compiled-module-architecture.md",
+        "internal/httpapi/server.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "migration.core",
+      "domain": "migration",
+      "title": "迁移管理与旧数据映射",
+      "required": true,
+      "disposition": "reuse",
+      "pages": [
+        "/admin/migrations"
+      ],
+      "reason": "复用映射、预检和冻结/回退规则；外部源与真实切换需要独立证据。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/migrations/reviews"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1252",
+          "data/route/admin.php:221"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/password_reset",
+            "handler": "admin/set/passwordPost",
+            "source": "data/route/admin.php",
+            "line": 221
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "wired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md",
+        "docs/migration/README.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customers.summary",
+      "domain": "customers",
+      "title": "真实客户摘要",
+      "required": true,
+      "disposition": "add",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "汇总身份、认证、末次登录、推荐人、未付/到期服务、工单和真实财务指标；无权限值必须明确 null 或 unavailable。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/customers/{id}/summary"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。",
+        "tests": [
+          "TestAdminCustomerSummaryRealFactsAndPermissionSections",
+          "TestAdminCustomerSummaryScopeAndEmptyFacts"
+        ],
+        "testCommand": "./scripts/go.sh test ./internal/httpapi -run '^TestAdminCustomerSummary(RealFactsAndPermissionSections|ScopeAndEmptyFacts)$' -count=1"
+      },
+      "legacy": {
+        "evidence": [
+          "app/admin/controller/UserManageController.php:292",
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "unwired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/store/customer_account_reads.go",
+        "web/src/components/admin-customer-detail.tsx",
+        "internal/httpapi/admin_customer_summary.go",
+        "internal/httpapi/admin_customer_summary_test.go"
+      ],
+      "acceptance": [
+        "返回 profile_version、认证、email_verified、last_login、referrer、真实服务组。",
+        "ticket_scope 与 customer_scope 按调用者重读；无权金额/计数不得假零。",
+        "现金收入退款与钱包流入流出分开；上海时区与整数分。"
+      ],
+      "verificationNote": "测试入口仅登记来源；本声明不保存运行结果。实际 E1 执行及浏览器边界见 docs/admin/api.md。"
+    },
+    {
+      "id": "customers.context-links",
+      "domain": "customers",
+      "title": "固定客户的列表与创建上下文",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customers/[id]",
+        "/admin/invoices/new",
+        "/admin/orders/new",
+        "/admin/tickets/new"
+      ],
+      "reason": "账单、订单、工单和文件复用现有查询及创建；保持 customer_id、返回上下文及权限重读。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/orders",
+          "GET /api/v1/admin/invoices",
+          "GET /api/v1/admin/tickets"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "public/admin/js/CustomerBill~31ecd969.d789c6a3.js:1",
+          "public/admin/js/CustomerProductList~31ecd969.c2931c5c.js:1",
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "web/src/components/admin-customer-detail.tsx",
+        "web/src/components/manual-invoices.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customers.mutation-recovery",
+      "domain": "customers",
+      "title": "客户状态并发与充值重试恢复",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "状态写入应发送 expected_version；同次充值重试复用原幂等 key，未知结果先查询，不生成新 key 重扣。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "public/admin/js/CustomerPerson~f71cff67.abc0d2f9.js:1",
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "web/src/components/admin-customer-detail.tsx",
+        "docs/transactions.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customers.group-sales-password",
+      "domain": "customers",
+      "title": "客户分组、销售归属与重置密码入口",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "已存在后端能力，客户详情需接入；重置密码不得显示或保留原密码。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "public/admin/js/CustomerPerson~f71cff67.abc0d2f9.js:1",
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "unwired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "web/src/components/admin-customer-detail.tsx",
+        "internal/httpapi/customer_sales.go",
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "customers.notification-activity",
+      "domain": "customers",
+      "title": "指定客户通知与活动历史",
+      "required": true,
+      "disposition": "add",
+      "pages": [
+        "/admin/customers/[id]",
+        "/admin/notifications",
+        "/admin/audit"
+      ],
+      "reason": "本轮已增加统一11类业务事件、全部已装配渠道的精确客户分页历史，并给旧email/sms/inbox/audit日志增加customer_id；工单/营销保留独立日志。UI待接。",
+      "current": {
+        "endpoints": [
+          "GET /api/v1/admin/logs/email",
+          "GET /api/v1/admin/logs/sms",
+          "GET /api/v1/admin/logs/inbox",
+          "GET /api/v1/admin/audit",
+          "GET /api/v1/admin/notification-deliveries/page"
+        ],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。",
+        "filters": [
+          "customer_id",
+          "event_kind",
+          "channel",
+          "status",
+          "from",
+          "to",
+          "limit",
+          "offset"
+        ],
+        "tests": [
+          "TestAdminNotificationDeliveryPageScopeAndValidation",
+          "TestAdminNotificationDeliveryPageFiltersPaginationAndPrivacy",
+          "TestAdminNotificationDeliveryPageLegacyStatusProjection"
+        ]
+      },
+      "legacy": {
+        "evidence": [
+          "public/admin/js/CustomerAbstract~31ecd969.19267574.js:1",
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "unwired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin_notification_logs.go",
+        "internal/httpapi/admin.go",
+        "web/src/components/admin-notification-logs.tsx",
+        "internal/store/customer_account_logs.go",
+        "internal/store/admin_notification_delivery_page.go",
+        "internal/httpapi/admin_notification_delivery_page.go",
+        "internal/httpapi/admin_notification_delivery_page_test.go"
+      ],
+      "acceptance": [
+        "统一目录11类事件覆盖email/sms/inbox/Telegram/Web Push；不把工单、营销或未关联旧记录猜作已覆盖。",
+        "customer_id严格单值正整数并校验真实客户范围；通知读取权限独立。",
+        "统一状态投影后筛选，上海日界；总数与分页使用同一只读RR快照。",
+        "只返回安全索引；不返回body、target、payload、原始渠道响应或密钥。"
+      ]
+    },
+    {
+      "id": "customers.credit-affiliate-context",
+      "domain": "customers",
+      "title": "客户信用和推广上下文",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/customers/[id]",
+        "/admin/credit",
+        "/admin/affiliate"
+      ],
+      "reason": "复用信用和推广领域，增加客户上下文展示；不复制独立台账。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/admin_credit.go",
+        "internal/httpapi/affiliate_pages.go",
+        "web/src/components/admin-customer-detail.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "dashboard.rankings",
+      "domain": "dashboard",
+      "title": "商品与人员销售排名口径",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin"
+      ],
+      "reason": "目前 UI 占位；需先决定期间、支付/退款口径、商品件数/订单数和人员归属再设计接口。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:56",
+          "data/route/admin.php:120"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/searchlist",
+            "handler": "admin/index/search",
+            "source": "data/route/admin.php",
+            "line": 120
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "web/src/components/admin-dashboard.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "credit.extended-lifecycle",
+      "domain": "credit",
+      "title": "在线还款、周期账单、授信审批和信用退款",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/credit"
+      ],
+      "reason": "属于信用业务扩展，尚未确认协议与业务口径，不凭旧版控件自动恢复。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:330",
+          "data/route/admin.php:570"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/credit_limit",
+            "handler": "admin/credit_limit/index",
+            "source": "data/route/admin.php",
+            "line": 570
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md",
+        "internal/httpapi/credit_lifecycle.go"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "contracts.pdf-sign-policy",
+      "domain": "contracts",
+      "title": "PDF、电子签及强制签约政策",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/contracts",
+        "/admin/contract-settings"
+      ],
+      "reason": "需明确提供方、产品绑定、强制签约、到期策略及取消寄送；HTML 打印不能作为 PDF/e-sign 完成证据。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:403",
+          "data/route/admin.php:384"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/contract/setting",
+            "handler": "admin/contract/setting",
+            "source": "data/route/admin.php",
+            "line": 384
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/admin-contract-lifecycle-plan.md",
+        "docs/domain/contract-settings.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "catalog.legacy-extra-options",
+      "domain": "catalog",
+      "title": "试用、推广、下载和链接的旧版配置范围",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/products/[id]"
+      ],
+      "reason": "部分功能在独立领域已有实现；试用和其余配置需先判定是否仍有业务需求。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1473",
+          "data/route/admin.php:409"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/product_list_page",
+            "handler": "admin/product/getProuductlistPage",
+            "source": "data/route/admin.php",
+            "line": 409
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md",
+        "web/src/components/product-editor.tsx"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "traffic.auto-delivery",
+      "domain": "traffic",
+      "title": "自动上游流量交付",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/traffic-orders/[id]"
+      ],
+      "reason": "保留人工交付，真实上游自动交付要先确定协议、幂等、查询核验和测试条件。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:228",
+          "data/route/admin.php:637"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "POST",
+            "path": "/{legacy_admin}/dcim/flowpacket",
+            "handler": "admin/dcim/addFlowPacket",
+            "source": "data/route/admin.php",
+            "line": 637
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "finance.multi-currency",
+      "domain": "finance",
+      "title": "真正多币种结算",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/currencies"
+      ],
+      "reason": "当前币种配置与展示不等于币种化账本；汇率、币种整数精度和历史结算需单独设计。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:287",
+          "data/route/admin.php:559"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/search_page",
+            "handler": "admin/account/searchPage",
+            "source": "data/route/admin.php",
+            "line": 559
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "access.phone-action-mfa",
+      "domain": "access",
+      "title": "独立手机注册和高风险动作二次认证",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/auth-settings",
+        "/admin/access"
+      ],
+      "reason": "沿用现有登录/MFA；手机号体系和动作级二次认证需产品与安全契约。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1001",
+          "data/route/admin.php:128"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/rbac",
+            "handler": "admin/rbac/index",
+            "source": "data/route/admin.php",
+            "line": 128
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/admin-rbac.md",
+        "docs/replacement-gap-audit.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "access.staff-preferences",
+      "domain": "access",
+      "title": "员工签名与邮件偏好",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/access/staff/[id]"
+      ],
+      "reason": "先核对工单签名和通知偏好的领域归属，再决定是否新增员工接口字段。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1001",
+          "data/route/admin.php:128"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/rbac",
+            "handler": "admin/rbac/index",
+            "source": "data/route/admin.php",
+            "line": 128
+          }
+        ]
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/replacement-gap-audit.md",
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "tickets.attachment-reconcile",
+      "domain": "tickets",
+      "title": "附件失败与未知上传恢复",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/tickets/[id]"
+      ],
+      "reason": "工单回复与附件失败不能误报整体成功；复用文件存储结果核验和回收机制。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:426",
+          "data/route/admin.php:488"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/add_ticket_page",
+            "handler": "admin/ticket/createPage",
+            "source": "data/route/admin.php",
+            "line": 488
+          }
+        ]
+      },
+      "api": {
+        "status": "unverified"
+      },
+      "ui": {
+        "status": "unverified"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/tickets.go",
+        "docs/architecture/engineering-governance.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "reports.restore-verification",
+      "domain": "reports",
+      "title": "报表已恢复范围的逐项验收",
+      "required": true,
+      "disposition": "optimize",
+      "pages": [
+        "/admin/reports"
+      ],
+      "reason": "金额、账单去重、上海时区、权限语义、评分、人员、商品分页以及旧版对账需按真实证据验收。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:443",
+          "data/route/admin.php:402"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/year_reports",
+            "handler": "admin/reports/getYearIncomeStatistics",
+            "source": "data/route/admin.php",
+            "line": 402
+          }
+        ]
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "partial"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/reports_regression_test.go",
+        "internal/httpapi/sales_report_details_test.go",
+        "docs/report-restoration-contract.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.data-exports",
+      "domain": "reports",
+      "title": "通用报表与数据导出",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/reports",
+        "/admin/transactions"
+      ],
+      "reason": "用户已确认移除数据导出；只保留 JSON 读取和业务文件下载。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:443",
+          "data/route/admin.php:402"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/year_reports",
+            "handler": "admin/reports/getYearIncomeStatistics",
+            "source": "data/route/admin.php",
+            "line": 402
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/admin-frontend-design.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.customer-refund-applications",
+      "domain": "services",
+      "title": "客户自助退款和停用申请状态机",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/cancellations",
+        "/admin/services/[id]"
+      ],
+      "reason": "用户通过工单提出诉求，管理员从账单/服务人工处置；不恢复客户申请 API。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:246",
+          "data/route/admin.php:600"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/clients_services/get_product_list",
+            "handler": "admin/clients_services/getProductList",
+            "source": "data/route/admin.php",
+            "line": 600
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/transactions.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.admin-commerce-identity",
+      "domain": "access",
+      "title": "管理员直接购物与 URL 凭据",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/access",
+        "/admin/customers/[id]"
+      ],
+      "reason": "管理员仅负责后台；客户商事操作使用客户身份；仅允许显式受控审计代登录，禁止把会话或长期凭据放 URL。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:1001",
+          "data/route/admin.php:128"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/rbac",
+            "handler": "admin/rbac/index",
+            "source": "data/route/admin.php",
+            "line": 128
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.financial-history-delete",
+      "domain": "customers",
+      "title": "物理删除客户及财务历史",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "保留不可变财务、资源与审计历史，以状态和受控匿名化处理合法生命周期。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:73",
+          "data/route/admin.php:171"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/get_user",
+            "handler": "admin/user_manage/getUser",
+            "source": "data/route/admin.php",
+            "line": 171
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/transactions.md",
+        "docs/admin-rbac.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.runtime-plugins",
+      "domain": "runtime",
+      "title": "运行时插件上传安装",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/apps",
+        "/admin/apps/store"
+      ],
+      "reason": "当前采用编译期装配和能力目录；新增适配器随源码构建发布，不恢复运行时安装器。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:563",
+          "data/route/admin.php:399"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/report/base_info",
+            "handler": "admin/report/baseInfo",
+            "source": "data/route/admin.php",
+            "line": 399
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/compiled-module-architecture.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "excluded.unsafe-retry-refund",
+      "domain": "finance",
+      "title": "通用队列重试与无协议自动退款关单",
+      "required": false,
+      "disposition": "excluded",
+      "pages": [
+        "/admin/jobs/queue",
+        "/admin/invoices/[id]"
+      ],
+      "reason": "未知外部结果须查询和人工核验；只有可信协议声明并验收后才暴露自动退款或关单能力。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:287",
+          "data/route/admin.php:559"
+        ],
+        "interpretation": "旧版仅为需求来源；不按同名路径或接口数量推断兼容完成。",
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/search_page",
+            "handler": "admin/account/searchPage",
+            "source": "data/route/admin.php",
+            "line": 559
+          }
+        ]
+      },
+      "api": {
+        "status": "excluded"
+      },
+      "ui": {
+        "status": "excluded"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/payments.md",
+        "docs/architecture/supplier-module-development.md"
+      ],
+      "acceptance": [
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+      ]
+    },
+    {
+      "id": "services.admin-auto-renew",
+      "domain": "services",
+      "title": "管理员设置服务自动续费",
+      "required": true,
+      "disposition": "add",
+      "pages": [
+        "/admin/services/[id]"
+      ],
+      "reason": "本轮提供管理员专属设置入口；复用续费资格、取消互斥和审计，并在等待资源锁后重验权限、客户范围和请求凭据。UI尚未接入。",
+      "current": {
+        "endpoints": [
+          "PATCH /api/v1/admin/services/{id}/auto-renew"
+        ],
+        "tests": [
+          "TestAdminAutoRenewPermissionsScopeAndAudit",
+          "TestAdminAutoRenewWaitingRechecksAuthority"
+        ]
+      },
+      "legacy": {
+        "evidence": [
+          "docs/frontend/admin-full-ui-interaction-specification.md:246",
+          "data/route/admin.php:600"
+        ],
+        "representativeRoutes": [
+          {
+            "method": "GET",
+            "path": "/{legacy_admin}/clients_services/get_product_list",
+            "handler": "admin/clients_services/getProductList",
+            "source": "data/route/admin.php",
+            "line": 600
+          }
+        ],
+        "interpretation": "旧服务管理行为的显式管理员入口，未复用客户普通身份。"
+      },
+      "api": {
+        "status": "implemented"
+      },
+      "ui": {
+        "status": "unwired"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "internal/httpapi/auto_renew.go",
+        "internal/store/auto_renew.go",
+        "internal/httpapi/admin_auto_renew_test.go"
+      ],
+      "acceptance": [
+        "管理员身份、services.manage与客户范围同时满足；事务锁后重验。",
+        "一次性/未复核/取消互斥/供应商能力规则沿用现有续费约束。",
+        "审计actor为管理员；不触发付款或上游续费。"
+      ]
+    },
+    {
+      "id": "services.legacy-manual-management",
+      "domain": "services",
+      "title": "旧服务的人工改价改期、立即代续费与归属转移",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/services",
+        "/admin/services/[id]"
+      ],
+      "reason": "管理员自动续费开关不等于立即代续费、批量续费、任改期限/价格/状态或转移服务客户。须先冻结版本、资金/权益、未决外部任务、审计和幂等口径；不照搬旧transfer删除未付账单后修改owner。",
+      "current": {
+        "endpoints": []
+      },
+      "legacy": {
+        "evidence": [
+          "data/route/admin.php:598",
+          "data/route/admin.php:601",
+          "data/route/admin.php:602",
+          "data/route/admin.php:603",
+          "app/admin/controller/ClientsServicesController.php:560",
+          "app/admin/controller/ClientsServicesController.php:807",
+          "app/admin/controller/ClientsServicesController.php:927",
+          "app/admin/controller/ClientsServicesController.php:1085"
+        ],
+        "handlers": [
+          "admin/ClientsServices/postInfo",
+          "admin/ClientsServices/postTransfer",
+          "admin/clients_services/hostRenew",
+          "admin/clients_services/postBatchRenew"
+        ],
+        "interpretation": "controller声明的动作不能猜成已展开显式路由；旧破坏性行为不作新实现模板。"
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-run",
+        "database": "not-run",
+        "browser": "not-run",
+        "external": "not-run"
+      },
+      "evidence": [
+        "docs/transactions.md",
+        "docs/replacement-gap-audit.md",
+        "internal/store/auto_renew.go"
+      ],
+      "acceptance": [
+        "先确认各动作是否仍属必需业务及是否仅生成账单或立即收款；现有自动续费API只改变开关。",
+        "转移不得删除或改写既有财务历史，必须定义未付账单、抵扣、信用、取消和外部未决任务归属。",
+        "任何未来写入必须具备版本、幂等、权限锁后重验、审计与未知结果恢复契约。"
+      ]
+    }
+  ]
+}

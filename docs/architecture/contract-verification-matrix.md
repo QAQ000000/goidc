@@ -13,6 +13,7 @@
 
 | 领域 | 必须回答的问题 | 测试/审计入口 | 证据边界 |
 | --- | --- | --- | --- |
+| 后台 API 与客户详情 | 全部生产注册和旧显式/动态声明是否准确区分？实际页面候选是否保留未知表达式？摘要是否按分区权限返回真实事实、工单部门和客户范围？现金与钱包是否分离，信用还款是否可追溯且不重复？客户日志是否按实体归属？管理员续费是否锁后撤权并保持账号→凭据锁序？代登录能否派生长期密钥？ | [后台需求](../admin/api-requirements.md)、[API契约](../admin/api.md)、`scripts/test-admin-api.mjs --integration`、`scripts/test-captcha.mjs --integration`、`scripts/admin-api-inventory.test.mjs`、`scripts/admin-api-consumers.test.mjs` | E0盘点与E1独立PG18分开；需求组、候选请求和注册数均不作为业务完成率；UI接入、浏览器、外部通知与发布分别验收 |
 | 编译模块与配置 | 二进制实际模块是否匹配 profile 声明且不读配置或联网？配置/凭据是否按 schema 校验并隔离？缺失实现能否安全停用？新增同类适配器能否复用运行链路？ | [模块契约与测试](../compiled-module-architecture.md#验证入口与发布边界)、`scripts/check-module-binaries.mjs`、`TestDefaultProfileMatchesCompiledModules`、`scripts/test-compiled-notifications.mjs` 的 unit/integration 严格入口、渠道组件测试 | 完整清单以 `audit/module-build-profile.json` 为准，不固定数量/位置；必需入口缺失或跳过须失败；清单不证明外部健康，组件事件不代表浏览器 |
 | 验证码与认证 | 图片/点击/widget 是否经服务端验证？动作、浏览器、过期、并发和配置轮换是否拒绝绕过？登录/MFA 是否按物理客户/管理员实表与入口认证？跨表相同标识是否必须指定入口，省略时是否仅唯一匹配可登录？bootstrap 是否只建管理员，密码/MFA/API 密钥归属是否独立？ | [验证码接入契约](../auth-captcha.md)、`scripts/test-captcha.mjs --unit/--integration`、验证码组件测试 | 本轮严格独立 PG18 race 实际运行 82 项，全部通过且零跳过；schema182 登录入口与客户下单的独立库真实 Chrome 为既有验收，本轮未重跑；测试提供方不证明真实厂商，MFA 浏览器、SDK 和生产配置另验 |
 | 订单与支付 | 金额是否以整数分计算？幂等是否绑定实例？原快照是否抵抗当前配置轮换/损坏？流水与退款商户是否隔离？外部未知是否继续冻结？ | `scripts/test-compiled-payments.mjs` 的 unit/integration 严格入口；`./scripts/test-all.sh`；[支付契约](../payments.md)与[开发契约](payment-module-development.md) | 第二协议仅测试装配，隔离 PG18 的真实 run/pass 不代表真实商户付款/到账；查询组件与浏览器分开验收 |

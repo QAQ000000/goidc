@@ -1,6 +1,8 @@
 # 后台与权限
 
-- [后台 105 项台账](../admin-full-ui-restore-ledger.md)：页面范围、实现状态、API、权限和未完成差异。
+- [后台 API 需求取舍](api-requirements.md)：全域功能组、旧版来源、复用/优化/新增与明确排除范围。
+- [后台 API 契约](api.md)：接口目录生成、前端共同协议、客户摘要/交易/日志及续费的字段、权限和失败状态。
+- [后台 105 项台账](../admin-full-ui-restore-ledger.md)：旧恢复批次的范围和证据参考；不能替代当前实际页面和逐动作接口盘点。
 - [页面契约索引](../admin-page-contracts.md)：短入口；详细 Markdown 和机器 JSON 由生成器写入 `output/audit/`。
 - [配置与站点设置](../admin-configuration.md)：后台配置边界。
 - [RBAC](../admin-rbac.md)：角色、权限、范围和撤权规则。

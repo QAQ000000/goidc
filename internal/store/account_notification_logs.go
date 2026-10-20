@@ -20,14 +20,34 @@ func (f *accountLogFilters) add(value any, clause string) {
 	f.where = append(f.where, fmt.Sprintf(clause, len(f.args)))
 }
 func accountLogDateFilters(filters url.Values, f *accountLogFilters, column string) error {
+	dates := make(map[string]time.Time, 2)
 	for _, key := range []string{"from", "to"} {
-		raw := strings.TrimSpace(filters.Get(key))
+		values, present := filters[key]
+		if !present {
+			continue
+		}
+		if len(values) != 1 {
+			return fmt.Errorf("%s日期不能重复", key)
+		}
+		raw := strings.TrimSpace(values[0])
 		if raw == "" {
 			continue
 		}
-		d, err := time.Parse("2006-01-02", raw)
+		d, err := time.ParseInLocation("2006-01-02", raw, notificationShanghai)
 		if err != nil {
 			return fmt.Errorf("%s日期无效", key)
+		}
+		dates[key] = d
+	}
+	if from, ok := dates["from"]; ok {
+		if to, present := dates["to"]; present && from.After(to) {
+			return fmt.Errorf("开始日期不能晚于结束日期")
+		}
+	}
+	for _, key := range []string{"from", "to"} {
+		d, present := dates[key]
+		if !present {
+			continue
 		}
 		op := ">="
 		if key == "to" {
@@ -73,7 +93,15 @@ func accountLogPage(ctx context.Context, q interface {
 	return map[string]any{"items": items, "total": total, "limit": limit, "offset": offset}, nil
 }
 func (s *Store) AccountSMSLog(ctx context.Context, filters url.Values, actor int64, limit, offset int) (map[string]any, error) {
+	customer, err := s.accountLogCustomer(ctx, filters, actor)
+	if err != nil {
+		return nil, err
+	}
 	f := accountLogFilters{where: []string{"TRUE"}}
+	if customer != nil {
+		f.args = append(f.args, *customer, actor)
+		f.where = append(f.where, "admin_customer_allowed($2,$1)", accountOutboxCustomerSQL("sms", "$1"))
+	}
 	if status := strings.TrimSpace(filters.Get("status")); status != "" {
 		if !accountOutboxStatus(status) {
 			return nil, &AccountBusinessError{400, "invalid_sms_status", "短信状态无效"}
@@ -119,7 +147,15 @@ func (s *Store) AccountSMSLog(ctx context.Context, filters url.Values, actor int
 			" ORDER BY j.id DESC", f.args, limit, offset)
 }
 func (s *Store) AccountEmailLog(ctx context.Context, filters url.Values, actor int64, limit, offset int) (map[string]any, error) {
+	customer, err := s.accountLogCustomer(ctx, filters, actor)
+	if err != nil {
+		return nil, err
+	}
 	f := accountLogFilters{where: []string{"TRUE"}}
+	if customer != nil {
+		f.args = append(f.args, *customer, actor)
+		f.where = append(f.where, "admin_customer_allowed($2,$1)", accountOutboxCustomerSQL("email", "$1"))
+	}
 	if status := strings.TrimSpace(filters.Get("status")); status != "" {
 		if !accountOutboxStatus(status) {
 			return nil, &AccountBusinessError{400, "invalid_email_status", "邮件状态无效"}
@@ -164,7 +200,14 @@ func (s *Store) AccountEmailLog(ctx context.Context, filters url.Values, actor i
 			" ORDER BY j.id DESC", f.args, limit, offset)
 }
 func (s *Store) AccountInboxLog(ctx context.Context, filters url.Values, actor int64, limit, offset int) (map[string]any, error) {
+	customer, err := s.accountLogCustomer(ctx, filters, actor)
+	if err != nil {
+		return nil, err
+	}
 	f := accountLogFilters{where: []string{"admin_customer_allowed($1,m.user_id)"}, args: []any{actor}}
+	if customer != nil {
+		f.add(*customer, "m.user_id=$%d")
+	}
 	if status := strings.TrimSpace(filters.Get("status")); status != "" {
 		if status != "sent" && status != "read" && status != "failed" {
 			return nil, &AccountBusinessError{400, "invalid_inbox_status", "站内信状态无效"}

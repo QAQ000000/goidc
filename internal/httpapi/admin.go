@@ -295,9 +295,8 @@ func (s *Server) adminLogPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_log_kind", "请使用对应的专用日志接口")
 		return
 	}
-	page, err := s.db.AdminAuditLogPage(r.Context(), strings.TrimSpace(r.URL.Query().Get("q")), limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
+	page, err := s.db.AdminAuditLogPage(r.Context(), r.URL.Query(), identityFrom(r).ID, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
 	write(w, 200, page)

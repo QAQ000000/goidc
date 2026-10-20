@@ -12,8 +12,10 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/customers/{id}/summary"] = "customers.view"
 	m["GET /api/v1/admin/account-history/{id}"] = "audit.view"
 	m["GET /api/v1/admin/notification-center"] = "notifications.view"
+	m["GET /api/v1/admin/notification-deliveries/page"] = "notifications.view"
 	m["PATCH /api/v1/admin/notification-center/rules/{id}"] = "notifications.manage"
 	m["PATCH /api/v1/admin/notification-center/templates/{id}"] = "notifications.manage"
 	m["POST /api/v1/admin/notification-center/channels/{id}/webhook"] = "settings.manage"
@@ -53,6 +55,7 @@ var adminRoutePermissions = func() map[string]string {
 	m["GET /api/v1/admin/provision-profiles"] = "products.view"
 	m["POST /api/v1/admin/services/{id}/delivery-verification"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/credentials"] = "services.manage"
+	m["PATCH /api/v1/admin/services/{id}/auto-renew"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/vnc"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/reset-password"] = "services.manage"
 	m["POST /api/v1/admin/services/{id}/reinstall"] = "services.manage"

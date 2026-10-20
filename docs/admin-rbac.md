@@ -30,7 +30,7 @@
 | 审计 | `audit.view` | 无 |
 | 迁移复核 | `migrations.view` | 受保护的超级管理员会话 |
 
-schema063 的 35 项业务能力覆盖当前 147 条 `/api/v1/admin/*` 路由。读取和操作独立校验，操作能力必须同时包含对应读取能力（充值使用独立财务能力）。新闻与知识库的 `content.view/manage` 对应读取和修改，完整契约见 [内容管理](content-management.md)；购买目录分组、服务导航分组/商品归属、商品编辑、价格、配置及购买字段维护使用 `products.view/manage`，见 [商品维护](catalog-management.md)、[购买字段](product-purchase-fields.md) 与 [服务导航](service-navigation.md)。新管理路由没有登记权限时拒绝访问，包括超级管理员。站点设置读写同角色、管理员及销售转交一样要求超级管理员浏览器会话，API 密钥不能访问。
+完整能力以 `store.AdminPermissions`、路由权限以 `adminRoutePermissions` 为准；不再把 schema063 的旧能力与路由数量当作当前统计。用[后台 API 目录](admin/api.md#生成接口目录)采集全部生产注册并由 `TestAdminRBACRouteCoverage` 双向验证。读取和操作独立校验，操作能力必须同时包含对应读取能力（充值使用独立财务能力）。新闻与知识库的 `content.view/manage` 对应读取和修改，完整契约见 [内容管理](content-management.md)；购买目录分组、服务导航分组/商品归属、商品编辑、价格、配置及购买字段维护使用 `products.view/manage`，见 [商品维护](catalog-management.md)、[购买字段](product-purchase-fields.md) 与 [服务导航](service-navigation.md)。新管理路由没有登记权限时拒绝访问，包括超级管理员。角色、管理员及销售转交要求超级管理员浏览器会话；其他配置按具体路由权限、入口包装和 Store 检查执行，不从菜单名称推断必须超管或允许 API 密钥。
 
 共用的 `/api/v1/tickets/{id}`、回复、状态和附件接口：读取跨客户工单需要 `tickets.view` 及对应部门范围，跨客户写入需要 `tickets.manage` 及对应部门范围；客户会话按本人所有权访问；历史管理员名下工单仅保留既有兼容访问，越权对象返回 404。内部备注仅对授权管理员返回。工单处理人目录和分派校验仅接受已启用且具有工单操作能力的管理员或超级管理员。
 

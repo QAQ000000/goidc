@@ -45,8 +45,7 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	secret := "zjmfgo_" + hex.EncodeToString(raw)
 	prefix := "zjmfgo_" + hex.EncodeToString(raw[:8])
 	id, err := s.db.CreateAccountAPIKey(r.Context(), identityFrom(r).ID, accountSessionHash(r), store.AccountAPIKeyInput{Name: input.Name, Prefix: prefix, SecretHash: tokenHash(secret), ExpiresAt: expiresAt})
-	if err != nil {
-		s.fail(w, r, err)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
 	write(w, http.StatusCreated, map[string]any{"id": id, "name": input.Name, "prefix": prefix, "secret": secret, "expires_at": expiresAt})

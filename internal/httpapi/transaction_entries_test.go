@@ -99,7 +99,7 @@ func TestTransactionEntriesPageFiltersAndRecordedSources(t *testing.T) {
 		}
 		if row["invoice_id"] == float64(f.creditInvoice) {
 			credit++
-			if row["source"] != "invoice" || row["channel"] != "credit" || row["direction"] != "neutral" {
+			if row["source"] != "credit_consumption" || row["channel"] != "credit" || row["direction"] != "neutral" {
 				t.Fatal("credit incorrectly counted as cash", row)
 			}
 		}

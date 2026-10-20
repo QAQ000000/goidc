@@ -66,15 +66,6 @@ func customerAccountReadPage(ctx context.Context, q interface {
 	page["limit"], page["offset"] = limit, offset
 	return page, nil
 }
-func (s *Store) AdminAuditLogPage(ctx context.Context, query string, limit, offset int) (map[string]any, error) {
-	args := []any{}
-	where := "TRUE"
-	if query != "" {
-		args = append(args, "%"+query+"%")
-		where = "(a.action ILIKE $1 OR a.entity_type ILIKE $1 OR a.entity_id::text ILIKE $1 OR u.display_name ILIKE $1)"
-	}
-	return customerAccountReadPage(ctx, s.Pool, "SELECT a.id,a.created_at,a.action,a.entity_type,a.entity_id,a.actor_id,u.display_name AS actor_name FROM audit_events a LEFT JOIN account_identities u ON u.id=a.actor_id WHERE "+where, "id DESC", args, limit, offset)
-}
 func (s *Store) AdminCustomerDirectoryPage(ctx context.Context, actor int64, q string, group, owner *int64, status string, limit, offset int) (map[string]any, error) {
 	query := customerListSelect + ` WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
  AND (u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.email ILIKE $2)

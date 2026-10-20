@@ -30,6 +30,7 @@ func (s *Server) registerNotificationCenterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/me/notification-web-push/subscriptions", s.accountAuth(s.saveWebPushSubscription, true))
 	mux.HandleFunc("DELETE /api/v1/me/notification-web-push/subscriptions/{id}", s.accountAuth(s.deleteWebPushSubscription, true))
 	mux.HandleFunc("GET /api/v1/admin/notification-center", s.sessionAuth(s.notificationCenter, true))
+	mux.HandleFunc("GET /api/v1/admin/notification-deliveries/page", s.sessionAuth(s.adminNotificationDeliveriesPage, true))
 	mux.HandleFunc("PATCH /api/v1/admin/notification-center/rules/{id}", s.sessionAuth(s.updateNotificationCenterRule, true))
 	mux.HandleFunc("PATCH /api/v1/admin/notification-center/templates/{id}", s.sessionAuth(s.updateNotificationCenterTemplate, true))
 	mux.HandleFunc("POST /api/v1/admin/notification-center/channels/{id}/webhook", s.sessionAuth(s.configureNotificationWebhook, true))

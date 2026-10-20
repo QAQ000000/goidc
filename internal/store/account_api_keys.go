@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,13 @@ func (s *Store) CreateAccountAPIKey(ctx context.Context, owner int64, sessionHas
 			return err
 		}
 		if role == "customer" {
+			// Delegation is a temporary credential bound to an administrator's
+			// session and grants. It must not mint an independent credential.
+			if _, bindingErr := readImpersonationBinding(ctx, tx, sessionHash); bindingErr == nil {
+				return &AccountBusinessError{Status: 403, Code: "impersonation_credential_forbidden", Message: "以客户身份登录期间不能创建独立 API 密钥"}
+			} else if !errors.Is(bindingErr, pgx.ErrNoRows) {
+				return bindingErr
+			}
 			if err = s.CheckCustomerAPIKeyEligibilityTx(ctx, tx, owner); err != nil {
 				return err
 			}

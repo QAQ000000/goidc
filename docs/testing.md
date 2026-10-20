@@ -12,6 +12,7 @@
 | --- | --- | --- |
 | 编译全部 Go 测试 | `./scripts/go.sh test ./... -run '^$'` | Go 依赖可用；不执行测试 |
 | 架构依赖与持久化增量门禁 | `./scripts/go.sh test ./internal/archtest -count=1` | Go 依赖可用；不连接数据库；CI 用 `GOIDC_ARCH_BASE_REF` 与文档相同基准核对基线只能缩减，规则见[架构边界](architecture/engineering-governance.md#架构依赖与存量持久化边界) |
+| 后台 API 目录与客户详情契约 | `node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs`；`node scripts/test-admin-api.mjs --integration` | 盘点只验证静态采集；集成强制独立回环PG18、race及逐项run/pass零skip，覆盖摘要分区授权、客户/工单范围、现金与信用事件、客户精确日志、代登录禁止派生长期凭据、自动续费与换密锁序；前端新接线和真实渠道另验，见[API契约](admin/api.md) |
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
 | 报表 JSON 查询 | `./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'`；集成入口 `TestReportEndpointsJSONOnlyFormatsAndPermissions`，金额、权限和分页见[报表回归](credit-cash-reporting.md#回归入口) | 格式解析可独立验证；接口权限/范围仍须独立 PG18 回归 |
 | 服务取消与续费 | `node scripts/test-service-cancellations.mjs --integration` | 显式回环 PG18 `_test` URL；串行 race、逐入口 run/pass 零 skip；API/资金兼容、执行围栏及真实 schema168→169，规则与部署边界见[交易契约](transactions.md#服务取消与续费互斥) |

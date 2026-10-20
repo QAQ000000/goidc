@@ -31,14 +31,27 @@ const transactionEntries = `(
  WHEN l.entry_type='payment' AND i.order_id IS NOT NULL THEN 'product' ELSE 'other' END,l.balance_after
  FROM balance_ledger l LEFT JOIN invoices i ON l.reference_type IN ('invoice','gateway_topup') AND i.id=l.reference_id AND i.user_id=l.user_id
  UNION ALL
+ SELECT 'credit-consumption:'||cp.invoice_id,'credit_consumption',cp.invoice_id,cp.user_id,i.id,i.invoice_no,cp.created_at,
+ 'credit',cp.amount_cents,'neutral',i.invoice_no,'信用消费 · '||i.invoice_no,
+ CASE WHEN EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
+ WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END,NULL::bigint
+ FROM credit_invoice_payments cp JOIN invoices i ON i.id=cp.invoice_id AND i.user_id=cp.user_id
+ UNION ALL
+ SELECT 'credit-repayment:'||r.id,'credit_repayment',r.id,r.user_id,i.id,i.invoice_no,r.received_at,
+ 'credit_repayment',r.amount_cents,'income','CR-'||r.id,'信用还款到账 · '||i.invoice_no,
+ CASE WHEN EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
+ WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END,NULL::bigint
+ FROM credit_repayments r JOIN invoices i ON i.id=r.invoice_id AND i.user_id=r.user_id
+ UNION ALL
  SELECT 'invoice:'||i.id,'invoice',i.id,i.user_id,i.id,i.invoice_no,i.paid_at,
- CASE WHEN EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id) THEN 'credit' ELSE 'unrecorded' END,
+ 'unrecorded',
  i.amount_cents,'neutral',i.invoice_no,'已付账单 · '||i.invoice_no,
  CASE WHEN EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
  WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END,NULL::bigint
  FROM invoices i WHERE i.status='paid' AND i.paid_at IS NOT NULL
  AND NOT EXISTS(SELECT 1 FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.user_id=i.user_id AND pt.status='succeeded')
  AND NOT EXISTS(SELECT 1 FROM balance_ledger l WHERE l.reference_type='invoice' AND l.reference_id=i.id AND l.user_id=i.user_id AND l.entry_type='payment')
+ AND NOT EXISTS(SELECT 1 FROM credit_invoice_payments cp WHERE cp.invoice_id=i.id AND cp.user_id=i.user_id)
 ) e JOIN users u ON u.id=e.user_id LEFT JOIN administrators owner ON owner.id=u.sales_owner_id`
 
 type AdminTransactionFilter struct {
@@ -79,14 +92,20 @@ func (s *Store) AdminTransactionEntryPage(ctx context.Context, actor int64, in A
 	return map[string]any{"items": items, "total": total, "limit": limit, "offset": offset}, nil
 }
 
-// Balance movement and credit settlement are account events, not new cash.
+// Wallet movements and credit consumption are account events. Confirmed credit
+// repayments are external receipts, separate from gateway receipts.
 func (s *Store) AdminTransactionEntrySummary(ctx context.Context, actor int64, in AdminTransactionFilter) (map[string]any, error) {
 	from, args := adminTransactionEntryFilter(actor, in)
-	var income, refunds int64
+	var income, refunds, creditRepayments int64
 	err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(e.amount_cents) FILTER (WHERE e.source='payment'),0)::bigint,
- coalesce(sum(e.amount_cents) FILTER (WHERE e.source='external_refund'),0)::bigint`+from, args...).Scan(&income, &refunds)
+ coalesce(sum(e.amount_cents) FILTER (WHERE e.source='external_refund'),0)::bigint,
+ coalesce(sum(e.amount_cents) FILTER (WHERE e.source='credit_repayment'),0)::bigint`+from, args...).Scan(&income, &refunds, &creditRepayments)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"gateway_income_cents": income, "external_refund_cents": refunds, "net_gateway_cents": income - refunds, "currency": "CNY"}, nil
+	return map[string]any{
+		"gateway_income_cents": income, "external_refund_cents": refunds, "net_gateway_cents": income - refunds,
+		"credit_repayment_cents": creditRepayments, "cash_income_cents": income + creditRepayments,
+		"net_cash_cents": income + creditRepayments - refunds, "currency": "CNY",
+	}, nil
 }

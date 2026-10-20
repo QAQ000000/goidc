@@ -94,6 +94,11 @@ jobs:
       - name: Install web dependencies
         run: npm ci --prefix web
 
+      - name: Check admin API inventory and consumer declarations
+        run: |
+          node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs
+          node scripts/admin-api-consumers.mjs
+
       - name: Check web
         run: |
           npm --prefix web run lint
@@ -190,6 +195,9 @@ jobs:
 
       - name: Require admin order receipts, historical replay and mutation safety on PostgreSQL 18
         run: node scripts/test-admin-orders.mjs --integration
+
+      - name: Require admin API summaries, customer logs and lifecycle permissions on PostgreSQL 18
+        run: node scripts/test-admin-api.mjs --integration
 
       - name: Require customer group pricing, financial snapshots and upgrade safety on PostgreSQL 18
         run: node scripts/test-customer-group-pricing.mjs --integration

@@ -16,11 +16,51 @@ func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enab
 		var err error
 		var ownerID int64
 		var status, cycle string
+		var scopedOwnerID int64
+		var scopeErr error
+		if admin {
+			if err = tx.QueryRow(ctx, "SELECT user_id FROM services WHERE id=$1", serviceID).Scan(&scopedOwnerID); err != nil {
+				return err
+			}
+			// Match other service mutations: customer assignment before service.
+			// Credential/role locks are acquired after the service wait so a
+			// revocation committed during that wait is still observed.
+			scopeErr = LockAdminCustomer(ctx, tx, actorID, scopedOwnerID)
+			if scopeErr != nil && !errors.Is(scopeErr, pgx.ErrNoRows) {
+				return scopeErr
+			}
+		}
 		if err = tx.QueryRow(ctx, "SELECT user_id,status,billing_cycle FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&ownerID, &status, &cycle); err != nil {
 			return err
 		}
 		if !admin && ownerID != actorID {
 			return pgx.ErrNoRows
+		}
+		if admin {
+			// The service lock and customer-assignment lock can both wait. The
+			// middleware's role/scope snapshot cannot authorize a later write.
+			if err = RequireAdministratorPermission(ctx, tx, actorID, "services.manage"); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					return conflict("unauthorized", "登录已失效，请重新登录")
+				}
+				return err
+			}
+			// Account mutations (password/staff/API-key management) lock the
+			// administrator before its credentials. Keep that same order here.
+			if err = lockStorageCredential(ctx, tx, actorID); err != nil {
+				return err
+			}
+			// Holding the current administrator and role now prevents another
+			// scope or permission change until this mutation commits.
+			if scopeErr != nil {
+				return scopeErr
+			}
+			if ownerID != scopedOwnerID {
+				return conflict("service_owner_changed", "服务客户已变更，请刷新后重试")
+			}
+			if err = LockAdminCustomer(ctx, tx, actorID, ownerID); err != nil {
+				return err
+			}
 		}
 		if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {
 			return err
@@ -45,6 +85,11 @@ func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enab
 		}
 		if status != "active" && status != "suspended" {
 			return conflict("invalid_auto_renew_state", "只有已启用或已暂停的服务可以设置自动续费")
+		}
+		if _, bound := ctx.Value(storageCredentialKey{}).(storageCredential); admin && bound {
+			if err = ticketFileCredentialCurrent(ctx, tx, actorID); err != nil {
+				return err
+			}
 		}
 		if _, err = tx.Exec(ctx, "UPDATE services SET auto_renew=$2,auto_renew_error='',updated_at=now() WHERE id=$1", serviceID, enabled); err != nil {
 			return err
