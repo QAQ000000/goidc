@@ -2,8 +2,57 @@ package store
 
 import (
 	"context"
+	"errors"
+
 	"github.com/jackc/pgx/v5"
 )
+
+// Customer writes lock the authoritative administrator before the original
+// credential, matching password rotation. Keep this scoped to customer account
+// mutations instead of changing the older helper used by other domains.
+func lockCustomerAccountManager(ctx context.Context, tx pgx.Tx, actor int64) (super, group, sales bool, err error) {
+	credential, ok := ctx.Value(storageCredentialKey{}).(storageCredential)
+	if !ok || credential.Hash == "" {
+		err = conflict("unauthorized", "该操作需要有效的原始会话或 API 密钥")
+		return
+	}
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		return
+	}
+	if err = RequireAdministratorPermission(ctx, tx, actor, "customers.manage"); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = conflict("unauthorized", "登录已失效，请重新登录")
+		}
+		return
+	}
+	err = tx.QueryRow(ctx, `SELECT u.role='super_admin',
+ COALESCE(u.role='super_admin' OR (u.role='admin' AND r.active AND 'customer_groups.manage'=ANY(r.permissions)),false),u.sales_enabled
+ FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1`, actor).Scan(&super, &group, &sales)
+	if err == nil {
+		err = recheckCustomerAccountCredential(ctx, tx, actor)
+	}
+	return
+}
+
+func recheckCustomerAccountCredential(ctx context.Context, tx pgx.Tx, actor int64) error {
+	credential, ok := ctx.Value(storageCredentialKey{}).(storageCredential)
+	if !ok || credential.Hash == "" {
+		return conflict("unauthorized", "该操作需要有效的原始会话或 API 密钥")
+	}
+	if err := lockStorageCredential(ctx, tx, actor); err != nil {
+		return err
+	}
+	// An unchanged row may have been locked across its natural expiry. A fresh
+	// statement evaluates clock_timestamp after the wait rather than before it.
+	return lockStorageCredential(ctx, tx, actor)
+}
+
+func commitCustomerAccountMutation(ctx context.Context, tx pgx.Tx, actor int64) error {
+	if err := recheckCustomerAccountCredential(ctx, tx, actor); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
 
 func LockCustomerManager(ctx context.Context, tx pgx.Tx, actor int64) (super, group, sales bool, err error) {
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -10,6 +11,22 @@ import (
 
 	"github.com/codex/zjmfgo/internal/store"
 )
+
+func maintenanceSiteSettings(t *testing.T, h http.Handler, cookie string) store.SiteSettings {
+	t.Helper()
+	w := request(h, "GET", "/api/v1/admin/site-settings", nil, cookie, "")
+	expect(t, w, http.StatusOK)
+	var body struct {
+		Data store.SiteSettings `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Data.Version < 1 {
+		t.Fatal("site settings response omitted its current version", w.Body.String())
+	}
+	return body.Data
+}
 
 func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	db, h := testServer(t)
@@ -25,15 +42,12 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	key = request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "maintenance-admin-key"}, root, "")
 	expect(t, key, 201)
 	adminKey := data(t, key)["secret"].(string)
-	settings, err := db.SiteSettings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	settings := maintenanceSiteSettings(t, h, root)
 	profile := settings.SiteProfile
 	profile.MaintenanceEnabled = true
 	profile.MaintenanceMessage = "系统维护\r\n预计稍后恢复"
 	profile.MaintenanceURL = "https://status.example.test/"
-	w := request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 1), root, "")
+	w := request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, "")
 	expect(t, w, 200)
 	if data(t, w)["maintenance_message"] != "系统维护\n预计稍后恢复" {
 		t.Fatal("maintenance newline normalization")
@@ -73,11 +87,11 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 		expect(t, request(h, "GET", "/api/v1/catalog", nil, cookie, ""), 503)
 		expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, cookie, ""), 200)
 	}
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()-interval '1 second' WHERE user_id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/catalog", nil, staff, ""), 503)
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()+interval '1 hour' WHERE user_id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE sessions SET expires_at=now()+interval '1 hour' WHERE user_id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, requestBearer(h, "GET", "/api/v1/admin/dashboard", nil, adminKey), 200)
@@ -89,13 +103,14 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 	expect(t, request(h, "GET", "/api/v1/me", nil, customer, ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/login", map[string]any{"identifier": "maintenance-customer@example.test", "password": "integration-password"}, "", ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/password-reset/request", map[string]any{"identifier": "maintenance-super"}, "", ""), 202)
-	if _, err = db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE administrators SET status='disabled' WHERE id=$1", staffID); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, request(h, "GET", "/api/v1/catalog", nil, staff, ""), 503)
 	expect(t, request(h, "GET", "/api/v1/admin/dashboard", nil, staff, ""), 401)
 	profile.MaintenanceEnabled = false
-	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 2), root, ""), 200)
+	settings = maintenanceSiteSettings(t, h, root)
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, ""), 200)
 	expect(t, request(h, "GET", "/api/v1/catalog", nil, "", ""), 200)
 	expect(t, request(h, "GET", "/api/v1/cart", nil, customer, ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/logout", nil, customer, ""), 200)
@@ -104,26 +119,23 @@ func TestMaintenanceCustomerGateAndAdminRecovery(t *testing.T) {
 func TestMaintenanceSettingsValidation(t *testing.T) {
 	db, h := testServer(t)
 	_, root := user(t, db, h, "maintenance-validation", "super_admin")
-	settings, err := db.SiteSettings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	missing := siteInput(settings.SiteProfile, 1)
+	settings := maintenanceSiteSettings(t, h, root)
+	missing := siteInput(settings.SiteProfile, settings.Version)
 	delete(missing, "maintenance_enabled")
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", missing, root, ""), 400)
 	for _, target := range []string{"/news", "//status.example.test", "http://status.example.test", "https://user:password@status.example.test", "https://localhost:3088/news", "https://LOCALHOST.:3088/news", "https://status.example.test/with space", "https://status.example.test/\\path"} {
 		p := settings.SiteProfile
 		p.MaintenanceURL = target
-		expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, 1), root, ""), 409)
+		expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, settings.Version), root, ""), 409)
 	}
 	for _, message := range []string{"bad\x00text", strings.Repeat("长", 1001)} {
 		p := settings.SiteProfile
 		p.MaintenanceMessage = message
-		expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, 1), root, ""), 409)
+		expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, settings.Version), root, ""), 409)
 	}
 	settings.MaintenanceEnabled = true
 	settings.MaintenanceMessage = ""
-	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(settings.SiteProfile, 1), root, ""), 200)
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(settings.SiteProfile, settings.Version), root, ""), 200)
 	w := request(h, "GET", "/api/v1/catalog", nil, "", "")
 	expect(t, w, 503)
 	if errorData(t, w)["message"] != "站点维护中，请稍后再试。" {
@@ -146,18 +158,15 @@ func TestMaintenancePaymentWebhookAndMFALogin(t *testing.T) {
 	expect(t, enroll, 200)
 	secret := data(t, enroll)["secret"].(string)
 	expect(t, request(h, "POST", "/api/v1/account/mfa/confirm", map[string]string{"code": testTOTP(secret, time.Now())}, root, ""), 200)
-	settings, err := db.SiteSettings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
+	settings := maintenanceSiteSettings(t, h, root)
 	settings.MaintenanceEnabled = true
-	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(settings.SiteProfile, 1), root, ""), 200)
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(settings.SiteProfile, settings.Version), root, ""), 200)
 	body, _ := json.Marshal(map[string]any{"event_id": "maintenance-event", "payment_id": data(t, intent)["provider_payment_id"], "invoice_id": invoice, "amount_cents": 1333, "status": "succeeded"})
 	expect(t, signedWebhook(h, body, "invalid"), 401)
 	expect(t, signedWebhook(h, body, paymentSignature(body)), 201)
 	expect(t, signedWebhook(h, body, paymentSignature(body)), 200)
 	var status string
-	if err = db.Pool.QueryRow(t.Context(), "SELECT status FROM invoices WHERE id=$1", invoice).Scan(&status); err != nil || status != "paid" {
+	if err := db.Pool.QueryRow(t.Context(), "SELECT status FROM invoices WHERE id=$1", invoice).Scan(&status); err != nil || status != "paid" {
 		t.Fatal("callback did not settle during maintenance", err)
 	}
 	login := request(h, "POST", "/api/v1/auth/login", map[string]string{"username": "maintenance-mfa-admin", "password": "integration-password"}, "", "")
@@ -184,14 +193,15 @@ func TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery(t *testing.T)
 			t.Fatal("missing configuration must fail closed without caching", path, w.Body.String(), w.Header())
 		}
 	}
-	// Exempt management and identity routes remain reachable; their own resource
-	// semantics are unchanged, including a genuinely missing settings resource.
-	expect(t, request(h, "GET", "/api/v1/admin/credit-settings", nil, root, ""), 200)
+	// Exempt management and identity routes remain reachable; the retired module
+	// remains gone while the genuinely missing active settings resource is 404.
+	expect(t, request(h, "GET", "/api/v1/admin/credit-settings", nil, root, ""), 410)
 	expect(t, request(h, "GET", "/api/v1/admin/site-settings", nil, root, ""), 404)
 	expect(t, request(h, "GET", "/api/v1/me", nil, root, ""), 200)
-	// Restore the singleton to prove real missing invoice resources still use 404.
+	// Restore the singleton: active missing invoices use 404; credit stays gone.
 	if _, err := db.Pool.Exec(t.Context(), "INSERT INTO site_settings(id) VALUES(1)"); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, request(h, "GET", "/api/v1/invoices/999999999/credit", nil, customer, ""), 404)
+	expect(t, request(h, "GET", "/api/v1/invoices/999999999", nil, customer, ""), 404)
+	expect(t, request(h, "GET", "/api/v1/invoices/999999999/credit", nil, customer, ""), 410)
 }

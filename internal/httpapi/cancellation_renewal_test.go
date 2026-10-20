@@ -223,7 +223,11 @@ func TestCancellationRenewalApprovedRejectsNewInvoiceAndAllPaymentMethods(t *tes
 			} {
 				t.Run(method.name, func(t *testing.T) {
 					w := request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/%s", invoiceID, method.suffix), method.body, f.customer, "cancel-renew-blocked-"+method.name)
-					cancellationRenewalConflict(t, w, "service_cancellation_approved")
+					if method.name == "credit" {
+						expect(t, w, 410)
+					} else {
+						cancellationRenewalConflict(t, w, "service_cancellation_approved")
+					}
 					f.unchanged(t, invoiceID, before)
 				})
 			}
@@ -491,7 +495,11 @@ func TestCancellationRenewalConcurrentApprovalAndPayment(t *testing.T) {
 				{"online", "payments", map[string]any{"provider": "epay_alipay", "expected_version": 1}},
 			} {
 				w := request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/%s", invoiceID, method.suffix), method.body, f.customer, "cancel-renew-concurrent-"+method.name)
-				cancellationRenewalConflict(t, w, "service_action_pending")
+				if method.name == "credit" {
+					expect(t, w, 410)
+				} else {
+					cancellationRenewalConflict(t, w, "service_action_pending")
+				}
 				f.unchanged(t, invoiceID, before)
 				var stillBlocked bool
 				if err = observer.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND $2=ANY(pg_blocking_pids(pid)))`, approvalPID, barrierPID).Scan(&stillBlocked); err != nil || !stillBlocked {

@@ -1,5 +1,6 @@
 # 管理员、角色与 API 权限
 
+当前范围：信用与合同已退役。活动权限目录及超级管理员 `/me` 隐藏 `credit.*`、`contracts.*`；旧角色权限ID仍可识别，防止编辑旧角色失败。旧注册沿用原入口鉴权，通过后410，不恢复历史业务访问，见[后台API](admin/api.md#信用额度与合同退役)。
 ## 源系统依据
 
 旧 PHP 副本的 `app/admin/controller/RbacController.php` 管理角色名称、描述、启用状态和 `auth_access`，有关联管理员的角色不能删除。`UserController.php` 为普通管理员指定单个角色，并保护自身停用；`AdminBaseController.php::checkAccess` 用控制器动作查找 `auth_rule`，超级管理员有独立豁免。`docs/frontend/14-admin-permission-matrix.md` 还记录了工单部门、销售范围和部分二次验证规则。
@@ -8,7 +9,7 @@
 
 ## 当前能力
 
-`GET /api/v1/me` 返回所选入口的当前身份（默认客户，后台通过 `X-Auth-Portal: admin` 选择）、`permissions` 字符串数组、工单范围元数据 `ticket_scope/ticket_unassigned` 和客户范围 `customer_scope/customer_ownerless/sales_enabled`。客户权限数组为空；超级管理员返回全部业务能力，角色、管理员和销售归属管理还要求超级管理员浏览器会话。API 密钥不支持这些管理接口，也不支持提交迁移复核决定。
+`GET /api/v1/me` 返回所选入口的当前身份（默认客户，后台通过 `X-Auth-Portal: admin` 选择）、`permissions` 字符串数组、工单范围元数据 `ticket_scope/ticket_unassigned` 和客户范围 `customer_scope/customer_ownerless/sales_enabled`。客户权限数组为空；超级管理员返回全部当前活动业务能力，角色、管理员和销售归属管理还要求超级管理员浏览器会话。API 密钥不支持这些管理接口，也不支持提交迁移复核决定。
 
 | 领域 | 读取 | 操作 |
 | --- | --- | --- |
@@ -30,7 +31,7 @@
 | 审计 | `audit.view` | 无 |
 | 迁移复核 | `migrations.view` | 受保护的超级管理员会话 |
 
-完整能力以 `store.AdminPermissions`、路由权限以 `adminRoutePermissions` 为准；不再把 schema063 的旧能力与路由数量当作当前统计。用[后台 API 目录](admin/api.md#生成接口目录)采集全部生产注册并由 `TestAdminRBACRouteCoverage` 双向验证。读取和操作独立校验，操作能力必须同时包含对应读取能力（充值使用独立财务能力）。新闻与知识库的 `content.view/manage` 对应读取和修改，完整契约见 [内容管理](content-management.md)；购买目录分组、服务导航分组/商品归属、商品编辑、价格、配置及购买字段维护使用 `products.view/manage`，见 [商品维护](catalog-management.md)、[购买字段](product-purchase-fields.md) 与 [服务导航](service-navigation.md)。新管理路由没有登记权限时拒绝访问，包括超级管理员。角色、管理员及销售转交要求超级管理员浏览器会话；其他配置按具体路由权限、入口包装和 Store 检查执行，不从菜单名称推断必须超管或允许 API 密钥。
+活动能力以 `store.ActiveAdminPermissions`、路由权限以 `adminRoutePermissions` 为准；`store.AdminPermissions` 另识别旧角色ID，仅作历史授权兼容；不再把 schema063 的旧能力与路由数量当作当前统计。用[后台 API 目录](admin/api.md#生成接口目录)采集全部生产注册并由 `TestAdminRBACRouteCoverage` 双向验证。读取和操作独立校验，操作能力必须同时包含对应读取能力（充值使用独立财务能力）。新闻与知识库的 `content.view/manage` 对应读取和修改，完整契约见 [内容管理](content-management.md)；购买目录分组、服务导航分组/商品归属、商品编辑、价格、配置及购买字段维护使用 `products.view/manage`，见 [商品维护](catalog-management.md)、[购买字段](product-purchase-fields.md) 与 [服务导航](service-navigation.md)。新管理路由没有登记权限时拒绝访问，包括超级管理员。角色、管理员及销售转交要求超级管理员浏览器会话；其他配置按具体路由权限、入口包装和 Store 检查执行，不从菜单名称推断必须超管或允许 API 密钥。
 
 共用的 `/api/v1/tickets/{id}`、回复、状态和附件接口：读取跨客户工单需要 `tickets.view` 及对应部门范围，跨客户写入需要 `tickets.manage` 及对应部门范围；客户会话按本人所有权访问；历史管理员名下工单仅保留既有兼容访问，越权对象返回 404。内部备注仅对授权管理员返回。工单处理人目录和分派校验仅接受已启用且具有工单操作能力的管理员或超级管理员。
 
@@ -110,7 +111,7 @@ staff 创建和更新接受 `customer_scope`、`customer_ownerless` 和 `sales_e
 | `GET /api/v1/admin/services?customer_id={id}` | 管理端可选客户筛选；仍执行 `services.view` 和客户范围；服务列表只返回该客户资源 |
 | `GET /api/v1/admin/orders?customer_id={id}` | 管理端可选客户筛选；仍执行 `orders.view` 和客户范围；订单列表只返回该客户订单 |
 | `GET /api/v1/admin/invoices?customer_id={id}` | 管理端可选客户筛选；仍执行 `invoices.view` 和客户范围；账单列表只返回该客户账单 |
-| `GET /api/v1/admin/credit`、`/admin/credit/consumptions`、`/admin/credit/repayments` | `credit.view`及客户范围；精确customer_id严格解析，非法400、非客户或范围外404，省略保留授权全局；消费和到账历史保持各自日期口径 |
+| 原信用13条、合同23条API | 保留原认证/权限/会话/CSRF包装，鉴权通过后410；不访问Store、不保留独立历史查询/还款/key恢复/合同下载，详见[退役边界](admin/api.md#信用额度与合同退役) |
 | `GET /api/v1/admin/customers/{id}/balance-operation` | `balance.manage`及客户范围；原key放请求头，事务复核当前凭据/权限，只查询人工充值账本事实，未确认不授权新key重试；响应private/no-store |
 | `GET /api/v1/admin/tickets?customer_id={id}` | 管理端可选客户筛选；仍执行 `tickets.view` 和工单部门范围；工单列表只返回该客户工单 |
 | `GET /api/v1/admin/sales-owners` | 超级管理员会话；仅启用的普通管理员、启用角色、`customers.view` 且 `sales_enabled`；返回 ID、登录名、姓名 |

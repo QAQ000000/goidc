@@ -334,6 +334,9 @@ func (s *Store) ConvertAffiliateClickTx(ctx context.Context, tx pgx.Tx, userID i
 	if userID < 1 || len(code) < 12 || len(code) > 32 || !validAffiliateSessionHash(sessionHash) {
 		return nil
 	}
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('affiliate-referral-graph',0))"); err != nil {
+		return err
+	}
 	if err := lockOperationKey(ctx, tx, "affiliate-convert", sessionHash); err != nil {
 		return err
 	}
@@ -386,7 +389,7 @@ func (s *Store) AffiliateOverview(ctx context.Context, userID int64) (AffiliateO
  COALESCE((SELECT sum(reserved_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
  COALESCE((SELECT sum(paid_cents) FROM affiliate_commission_entries WHERE account_id=a.id),0),
  p.min_withdraw_cents,p.fee_cents,
- COALESCE((SELECT count(*) FROM affiliate_attributions WHERE account_id=a.id),0)
+ COALESCE((SELECT count(*) FROM affiliate_attributions WHERE account_id=a.id AND status='active'),0)
 FROM affiliate_accounts a JOIN affiliate_programs p ON p.id=a.program_id WHERE a.user_id=$1`, userID).
 		Scan(&out.AccountID, &out.AccountType, &out.AccountStatus, &out.ProgramID, &out.ProgramName, &out.PendingCents, &out.AvailableCents, &out.ReservedCents, &out.PaidCents, &out.MinWithdrawCents, &out.FeeCents, &out.ReferredCount)
 	if err == pgx.ErrNoRows {
@@ -449,7 +452,7 @@ func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoic
 	var referredUser int64
 	var invoiceStatus string
 	var invoiceSnapshot json.RawMessage
-	if err := tx.QueryRow(ctx, "SELECT user_id,status,to_jsonb(i) FROM invoices i WHERE id=$1 FOR SHARE", invoiceID).Scan(&referredUser, &invoiceStatus, &invoiceSnapshot); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT i.user_id,i.status,to_jsonb(i) FROM invoices i JOIN invoice_affiliate_attributions birth ON birth.invoice_id=i.id AND birth.user_id=i.user_id WHERE i.id=$1 FOR SHARE OF i", invoiceID).Scan(&referredUser, &invoiceStatus, &invoiceSnapshot); err != nil {
 		return err
 	}
 	var creditOutstanding bool
@@ -473,11 +476,11 @@ func (s *Store) QueueAffiliateCommissions(ctx context.Context, tx pgx.Tx, invoic
 	var accountID, programID int64
 	var holdDays int
 	if err := tx.QueryRow(ctx, `SELECT a.id,a.program_id,p.hold_days
-FROM affiliate_attributions at JOIN affiliate_accounts a ON a.id=at.account_id
+FROM invoice_affiliate_attributions birth JOIN affiliate_accounts a ON a.id=birth.account_id
 JOIN users owner ON owner.id=a.user_id JOIN affiliate_programs p ON p.id=a.program_id
-WHERE at.user_id=$1 AND at.status='active' AND a.status='approved' AND p.status='active'
- AND a.user_id<>$1 AND owner.status='active'
-FOR SHARE OF at,a,p`, referredUser).Scan(&accountID, &programID, &holdDays); err != nil {
+WHERE birth.invoice_id=$1 AND birth.user_id=$2 AND a.status='approved' AND p.status='active'
+ AND a.user_id<>$2 AND a.user_id=birth.referrer_user_id AND owner.status='active'
+FOR SHARE OF a,p`, invoiceID, referredUser).Scan(&accountID, &programID, &holdDays); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
 		}

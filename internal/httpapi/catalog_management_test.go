@@ -360,7 +360,7 @@ func TestCatalogWaitingWriterRevocation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(context.Background())
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108197)"); err != nil {
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108190)"); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan int, 1)
@@ -369,7 +369,7 @@ func TestCatalogWaitingWriterRevocation(t *testing.T) {
 	}()
 	for {
 		var waiting bool
-		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT pg_advisory_xact_lock(70108197)')").Scan(&waiting); err != nil {
+		if err = db.Pool.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE wait_event_type='Lock' AND query='SELECT pg_advisory_xact_lock_shared(70108190)')").Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
@@ -377,7 +377,7 @@ func TestCatalogWaitingWriterRevocation(t *testing.T) {
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatal("editor never waited on catalogue lock")
+			t.Fatal("editor never waited on RBAC lock")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}

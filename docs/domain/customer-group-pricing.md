@@ -39,6 +39,16 @@
 
 迁移183以独立元数据表为既有客户初始化成员版本1，此后数据库触发器覆盖API、创建和导入等成员写入，不追溯历史次数或改写购买快照。版本锁不使用users行，避免管理员代下单先持客户共享行锁、再等定价锁时与分组写入形成环。新API先取得RBAC/客户范围及管理员权限锁，再取定价写锁，最后复核实际凭据；新旧成员writer不能混跑。
 
+## 配置写入的授权与锁序
+
+本批仅收口customer_group、customer_product_group、promo_create、promo_update四类规则配置入口：RBAC shared advisory→管理员/角色principal→GroupPricingWriteLock→实际credential。先锁管理员再锁实际会话或API密钥，保持与密码轮换一致；凭据执行两次locking读取，锁等待后用clock_timestamp重新判断自然过期。审计/回执写入后、提交前再次核验，等待中凭据过期则整事务回滚，不能只在入口或事务开始时验证。
+
+客户创建先锁管理员/角色及原凭据；新建且指定分组时，在成功回执查询之后、分组行锁之前显式取得同一定价写锁，等待后重新核验凭据。不能只依赖成员 INSERT 的触发器迟取定价锁，否则会与先持定价锁的分组修改形成行锁环。成功回执不重新检查已变化的分组事实，仍须通过当前权限、客户范围和原凭据核验。
+
+相关测试为 `TestAdminPricingMutationPasswordRotationLockOrder`、`TestAdminPricingMutationCreationPasswordLockOrder`、`TestAdminPricingMutationCredentialExpiry`。创建/配置/换密测试在同一分组上观察真实阻塞链，不依赖 PostgreSQL 兼容共享锁的排队公平性；精确断言已授权写入成功、单次副作用及换密后旧凭据401。实际执行结果与成员分配或定价计算回归分开，见[后台验收](../admin/api.md#契约验证与前端交付)。
+
+生产仍有4处 `CheckAdminCreationPermission` 旧调用：`supplier_catalog_import.go`、`catalog.go`、`product_upgrades.go`、`configuration_upgrades.go`。这四类入口均在 CatalogTx 内调用：目录事务先锁管理员/角色，再锁目录及原凭据，并在等待后及提交前复核；具体边界和回执协议见[商品 API](../admin/catalog-api.md)。不把这些已有调用等同于旁路，也不宣称其他未审查 writer 的全域锁序已收口。成员分配、折扣计算和本节配置授权是不同验证范围。
+
 ## 事务、迁移与发布
 
 定价读持有共享事务锁，分组/规则/券范围写持有独占锁，覆盖首次成员和首次规则插入；应用写入口在行锁前取得独占锁，数据库语句触发器提供补充保护。购物车先锁自身，再取定价和目录锁；价格和优惠的读取、快照、订单、服务、库存、发票、核销、审计及通知原子提交。失败不消耗库存或优惠次数，已成功同键重放不重新定价。

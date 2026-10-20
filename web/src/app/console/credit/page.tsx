@@ -1,2 +1,5 @@
-import { CustomerCreditView } from "@/components/customer-credit";
-export default function Page() { return <CustomerCreditView />; }
+import { notFound } from "next/navigation";
+
+export default function Page() {
+  notFound();
+}

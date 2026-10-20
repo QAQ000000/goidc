@@ -41,11 +41,7 @@ func (s *Store) beginCustomerGroupAdmin(ctx context.Context, actor int64) (pgx.T
 	if err != nil {
 		return nil, err
 	}
-	// This must precede credential, receipt and group row locks. The statement
-	// trigger alone would acquire it after existing SELECT ... FOR UPDATE calls.
-	if err = GroupPricingWriteLock(ctx, tx); err == nil {
-		err = CheckAdminCreationPermission(ctx, tx, actor, "customer_groups")
-	}
+	err = lockAdminPricingMutation(ctx, tx, actor, "customer_groups")
 	if err != nil {
 		tx.Rollback(ctx)
 		return nil, err
@@ -65,7 +61,7 @@ func (s *Store) CreateAdminCustomerGroup(ctx context.Context, actor int64, key s
 		return nil, false, err
 	}
 	if replay {
-		return out, true, tx.Commit(ctx)
+		return out, true, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var id, version int64
 	if err = tx.QueryRow(ctx, "INSERT INTO customer_groups(name,color,discount_percent,suspend_delete_exempt,separate_invoices) VALUES($1,$2,$3,$4,$5) RETURNING id,version", in.Name, in.Color, in.DiscountPercent, in.SuspendDeleteExempt, in.SeparateInvoices).Scan(&id, &version); err != nil {
@@ -78,7 +74,7 @@ func (s *Store) CreateAdminCustomerGroup(ctx context.Context, actor int64, key s
 	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, out); err != nil {
 		return nil, false, err
 	}
-	return out, false, tx.Commit(ctx)
+	return out, false, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func (s *Store) UpdateAdminCustomerGroup(ctx context.Context, actor, id int64, key string, in CustomerGroupPatchInput) (map[string]any, error) {
@@ -96,7 +92,7 @@ func (s *Store) UpdateAdminCustomerGroup(ctx context.Context, actor, id int64, k
 		return nil, err
 	}
 	if replay {
-		return out, tx.Commit(ctx)
+		return out, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var current int64
 	if err = tx.QueryRow(ctx, "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
@@ -119,7 +115,7 @@ func (s *Store) UpdateAdminCustomerGroup(ctx context.Context, actor, id int64, k
 	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, out); err != nil {
 		return nil, err
 	}
-	return out, tx.Commit(ctx)
+	return out, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func (s *Store) DeleteAdminCustomerGroup(ctx context.Context, actor, id int64, key string, in CustomerGroupDeleteInput) (map[string]any, error) {
@@ -137,7 +133,7 @@ func (s *Store) DeleteAdminCustomerGroup(ctx context.Context, actor, id int64, k
 		return nil, err
 	}
 	if replay {
-		return out, tx.Commit(ctx)
+		return out, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var current int64
 	if err = tx.QueryRow(ctx, "SELECT version FROM customer_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
@@ -163,5 +159,5 @@ func (s *Store) DeleteAdminCustomerGroup(ctx context.Context, actor, id int64, k
 	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, out); err != nil {
 		return nil, err
 	}
-	return out, tx.Commit(ctx)
+	return out, commitAdminPricingMutation(ctx, tx, actor)
 }

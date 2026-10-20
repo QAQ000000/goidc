@@ -23,6 +23,8 @@ type Permission struct {
 }
 
 // These are new API capabilities, not aliases for PHP auth_rule IDs.
+// AdminPermissions also recognizes retired identifiers when validating old
+// roles. They no longer appear in the assignable permission catalog.
 var AdminPermissions = []Permission{
 	{"finance.manage", "财务", "登记和冲正全局经营费用"},
 	{"payment_anomalies.view", "财务", "读取迟到收款责任及退回"}, {"payment_anomalies.create", "财务", "登记迟到收款实际退回证据"}, {"payment_anomalies.review", "财务", "独立复核迟到收款责任退回"},

@@ -314,7 +314,7 @@
       "pages": [
         "/admin"
       ],
-      "reason": "复用现有控制台指标；商品和员工销售排行占位另列待定口径。",
+      "reason": "复用现有控制台指标；商品和人员月度排名API另列已新增，首页排名卡片尚未接线。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/dashboard"
@@ -338,7 +338,7 @@
         ]
       },
       "api": {
-        "status": "partial"
+        "status": "implemented"
       },
       "ui": {
         "status": "partial"
@@ -369,19 +369,38 @@
         "/admin/customers/new",
         "/admin/customers/[id]"
       ],
-      "reason": "客户摘要、精确上下文与充值核验已补；成员分组使用独立版本及统一回执，销售归属补真实超级管理员会话锁后校验与可选key重放。客户详情整体接线及其余动作仍分别核对。",
+      "reason": "已按旧44条路由归并34组动作核对批准范围；补高级筛选、未付充值代建与仅后续账单推荐人变更，客户/联系人/字段写入补原凭据与提交前复核。独立跟进、旧资料扩展及API三态明确未恢复，UI独立接线。",
       "current": {
         "endpoints": [
+          "DELETE /api/v1/admin/customers/{id}/contacts/{contact_id}",
+          "GET /api/v1/admin/customer-field-definitions",
           "GET /api/v1/admin/customers",
+          "GET /api/v1/admin/customers/page",
           "GET /api/v1/admin/customers/{id}",
+          "GET /api/v1/admin/customers/{id}/affiliate",
+          "GET /api/v1/admin/customers/{id}/affiliate/page",
+          "GET /api/v1/admin/customers/{id}/balance-operation",
+          "GET /api/v1/admin/customers/{id}/contacts",
+          "GET /api/v1/admin/customers/{id}/group",
+          "GET /api/v1/admin/customers/{id}/referrer",
+          "GET /api/v1/admin/customers/{id}/referrer/history",
+          "GET /api/v1/admin/customers/{id}/referrer/options",
+          "GET /api/v1/admin/customers/{id}/summary",
+          "GET /api/v1/admin/customers/{id}/topup-options",
+          "GET /api/v1/admin/sales-owners",
+          "PATCH /api/v1/admin/customers/{id}",
+          "PATCH /api/v1/admin/customers/{id}/contacts/{contact_id}",
           "POST /api/v1/admin/customers",
           "POST /api/v1/admin/customers/{id}/balance",
-          "GET /api/v1/admin/customers/{id}/balance-operation",
-          "GET /api/v1/admin/customers/{id}/group",
+          "POST /api/v1/admin/customers/{id}/contacts",
+          "POST /api/v1/admin/customers/{id}/impersonate",
+          "POST /api/v1/admin/customers/{id}/password",
+          "POST /api/v1/admin/customers/{id}/topups",
           "PUT /api/v1/admin/customers/{id}/group",
+          "PUT /api/v1/admin/customers/{id}/referrer",
           "PUT /api/v1/admin/customers/{id}/sales-owner"
         ],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "客户核心逐动作入口；字段/分组/认证/文件等跨域契约单列，见docs/admin/customer-api.md；不是UI或运行完成率。"
       },
       "legacy": {
         "evidence": [
@@ -400,7 +419,7 @@
         ]
       },
       "api": {
-        "status": "partial"
+        "status": "implemented"
       },
       "ui": {
         "status": "partial"
@@ -423,12 +442,31 @@
         "internal/store/customer_sales_assignment.go",
         "db/migrations/183_customer_group_membership_versions.sql",
         "internal/httpapi/customer_group_assignment_test.go",
-        "internal/httpapi/customer_sales_assignment_test.go"
+        "internal/httpapi/customer_sales_assignment_test.go",
+        "docs/admin/customer-api.md",
+        "internal/store/customer_contacts.go",
+        "internal/store/customer_custom_field_mutations.go",
+        "internal/store/admin_customer_topups.go",
+        "internal/store/customer_referrer.go",
+        "internal/httpapi/customer_referrer_test.go",
+        "internal/httpapi/customer_directory_filters_test.go",
+        "db/migrations/186_customer_contact_versions.sql",
+        "db/migrations/187_customer_referrer_invoice_snapshots.sql",
+        "internal/httpapi/customer_account_authority_test.go",
+        "internal/httpapi/customer_contacts_authority_test.go",
+        "internal/httpapi/customer_custom_field_authority_test.go",
+        "internal/httpapi/admin_customer_topups_test.go",
+        "internal/store/customer_contacts_upgrade_test.go",
+        "internal/store/customer_referrer_upgrade_test.go"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
         "充值查询只确认人工账本事实，未确认不授权换key；重放绑定金额和规范化备注，审计与资金同事务，真实会话/API密钥撤销和锁序须独立PG18回归。",
-        "分组漏传不得清空，独立成员版本跨清空保留；原body/key重放不得重复审计，等待后撤权/范围/会话/API密钥及自然过期均重新校验。销售仍仅超级管理员浏览器会话。"
+        "分组漏传不得清空，独立成员版本跨清空保留；原body/key重放不得重复审计，等待后撤权/范围/会话/API密钥及自然过期均重新校验。销售仍仅超级管理员浏览器会话。",
+        "高级筛选复用现有字段和等级规则；资料手机不冒充登录手机，客户范围与total/items同快照。",
+        "代建充值账单只产生未付账单，签名收款后经原在线充值入账；统一回执与审计同事务。",
+        "推荐人双权限、CAS、原因和统一回执；禁止自荐/循环，新账单捕获不可变归因，未付旧单/佣金/提现/退款不回溯；越界回执重放脱敏。",
+        "187升级保留全局身份的历史管理员账单；归因关系及账单出生写入只接受READ COMMITTED，拒绝RR/Serializable以免旧快照静默错归因。"
       ]
     },
     {
@@ -606,10 +644,16 @@
         "/admin/resources",
         "/admin/customer-resources"
       ],
-      "reason": "服务资源视图已补精确客户/商品筛选、商品名称和到期时间；独立人工资源成本/备注与上游动作仍按适配器和产品口径复核。",
+      "reason": "保留已购服务只读视图，新增独立人工库存、成本及上游到期管理；通过已有人工开通任务原子绑定，人工终止后显式释放。成本不生成财务支出，上游期限不覆盖客户期限；库存UI待接。",
       "current": {
         "endpoints": [
-          "GET /api/v1/admin/resources"
+          "GET /api/v1/admin/resources",
+          "GET /api/v1/admin/manual-resources",
+          "POST /api/v1/admin/manual-resources",
+          "GET /api/v1/admin/manual-resources/{id}",
+          "PATCH /api/v1/admin/manual-resources/{id}",
+          "POST /api/v1/admin/manual-resources/{id}/release",
+          "POST /api/v1/admin/services/{id}/delivery"
         ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
@@ -630,7 +674,7 @@
         ]
       },
       "api": {
-        "status": "partial"
+        "status": "implemented"
       },
       "ui": {
         "status": "partial"
@@ -646,11 +690,19 @@
         "internal/httpapi/resources.go",
         "docs/replacement-gap-audit.md",
         "internal/store/admin_resources.go",
-        "internal/httpapi/admin_resource_catalog_test.go"
+        "internal/httpapi/admin_resource_catalog_test.go",
+        "internal/httpapi/manual_resources.go",
+        "internal/store/manual_resources.go",
+        "db/migrations/185_manual_server_resources.sql",
+        "internal/httpapi/manual_resources_test.go",
+        "docs/domain/manual-resources.md"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
-        "精确customer_id/product_id过滤及商品名称/到期时间已实现；当前资源是服务视图，不伪造独立库存、成本或未声明上游动作。"
+        "已购服务视图保留精确客户/商品筛选；独立库存不从services或订单JSON推断，库存页及交付选择器UI待接。",
+        "成本为CNY整数分元数据，上游到期与客户服务期限分离，账号密码仅写入加密交付，库存列表、详情、回执与审计不得泄密。",
+        "人工开通任务内按服务和库存版本原子绑定；资源/服务各最多一个有效绑定，同任务原请求只完成一次，运行中及待人工终止服务不能释放。",
+        "仅真实人工终止后管理员显式释放；统一回执重放仍核对当前凭据、权限及客户范围，真实184起点升级不改旧业务事实或checksum。"
       ]
     },
     {
@@ -668,14 +720,50 @@
         "/admin/configurable-options",
         "/admin/service-groups"
       ],
-      "reason": "复用商品多账期、可选规格、价格和分类；旧版十页签不能逐项等同接口缺失。",
+      "reason": "已按旧十页签23动作映射商品、定价、交付、配置、升级、购买字段、推广、下载和快捷链接；CatalogTx原凭据首尾复核、创建/复制可选统一回执；未恢复扩展另列deferred。",
       "current": {
         "endpoints": [
+          "DELETE /api/v1/admin/catalog-groups/{kind}/{id}",
+          "DELETE /api/v1/admin/global-configuration-groups/{id}",
+          "DELETE /api/v1/admin/products/{id}/configuration-rules/{rule_id}",
+          "DELETE /api/v1/admin/products/{id}/option-groups/{group_id}",
+          "DELETE /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}",
+          "DELETE /api/v1/admin/service-groups/{id}",
+          "GET /api/v1/admin/catalog-groups/{kind}",
+          "GET /api/v1/admin/catalog-groups/{kind}/page",
+          "GET /api/v1/admin/global-configuration-groups",
+          "GET /api/v1/admin/global-configuration-groups/{id}",
           "GET /api/v1/admin/products",
+          "GET /api/v1/admin/products/page",
+          "GET /api/v1/admin/products/{id}",
+          "GET /api/v1/admin/products/{id}/supplier-binding",
+          "GET /api/v1/admin/products/{id}/upgrade-targets",
+          "GET /api/v1/admin/service-groups",
+          "PATCH /api/v1/admin/products/{id}",
+          "POST /api/v1/admin/catalog-groups/{kind}",
+          "POST /api/v1/admin/global-configuration-groups",
+          "POST /api/v1/admin/global-configuration-groups/copy",
           "POST /api/v1/admin/products",
-          "GET /api/v1/admin/catalog-groups/{kind}/page"
+          "POST /api/v1/admin/products/{id}/configuration-rules",
+          "POST /api/v1/admin/products/{id}/duplicate",
+          "POST /api/v1/admin/products/{id}/option-groups",
+          "POST /api/v1/admin/products/{id}/option-groups/{group_id}/options",
+          "POST /api/v1/admin/products/{id}/pricing",
+          "POST /api/v1/admin/service-groups",
+          "PUT /api/v1/admin/catalog-groups/{kind}/{id}",
+          "PUT /api/v1/admin/global-configuration-groups/{id}",
+          "PUT /api/v1/admin/global-configuration-groups/{id}/assignments",
+          "PUT /api/v1/admin/products/{id}/configuration-rules/{rule_id}",
+          "PUT /api/v1/admin/products/{id}/configuration-upgrade-policy",
+          "PUT /api/v1/admin/products/{id}/option-groups/{group_id}",
+          "PUT /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}",
+          "PUT /api/v1/admin/products/{id}/option-groups/{group_id}/options/{option_id}/price-tiers",
+          "PUT /api/v1/admin/products/{id}/purchase-fields",
+          "PUT /api/v1/admin/products/{id}/service-group",
+          "PUT /api/v1/admin/products/{id}/upgrade-targets",
+          "PUT /api/v1/admin/service-groups/{id}"
         ],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "批准商品核心逐动作入口；推广及业务文件复用各自领域权限，完整字段和未知恢复见docs/admin/catalog-api.md。"
       },
       "legacy": {
         "evidence": [
@@ -694,7 +782,7 @@
         ]
       },
       "api": {
-        "status": "partial"
+        "status": "implemented"
       },
       "ui": {
         "status": "partial"
@@ -711,11 +799,18 @@
         "web/src/components/product-editor.tsx",
         "internal/store/catalog_group_reads.go",
         "internal/store/catalog_projection.go",
-        "internal/httpapi/admin_resource_catalog_test.go"
+        "internal/httpapi/admin_resource_catalog_test.go",
+        "docs/admin/catalog-api.md",
+        "internal/store/catalog.go",
+        "internal/store/catalog_pricing.go",
+        "internal/httpapi/catalog_authority_test.go",
+        "internal/httpapi/catalog_context_test.go"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
-        "分组分页保留原数组；商品及全局配置备注省略保留、显式空清除，仅后台投影可见，复制/同步/脱离保持边界。"
+        "分组分页保留原数组；商品及全局配置备注省略保留、显式空清除，仅后台投影可见，复制/同步/脱离保持边界。",
+        "所有CatalogTx HTTP调用绑定实际凭据，锁等待后及提交前重核自然到期；新事务不允许已撤销session/APIkey写入。",
+        "商品创建/复制可选稳定key统一回执；未带key及其余CAS writer不承诺未知写自动重放。供应商只读探测撤权后的pending不能冒充成功。"
       ]
     },
     {
@@ -902,7 +997,7 @@
         "/admin/currencies",
         "/admin/payment-settings"
       ],
-      "reason": "复用整数分、账本与编译支付渠道；本轮新增信用消费/还款事件，消费非现金，还款按 received_at 计现金，避免账单fallback重复。UI待补新来源和现金汇总展示。",
+      "reason": "复用整数分、账本与编译支付渠道；通用交易财务投影保留历史信用消费/实际还款事实，消费非现金、还款按received_at计现金并排除fallback重复。信用专属入口已退役，不恢复信用账户或还款能力。UI待接新来源和现金汇总。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/transactions/page",
@@ -944,9 +1039,9 @@
       },
       "evidence": [
         "docs/payments.md",
-        "internal/httpapi/credit_settings.go",
         "internal/store/customer_account_transactions.go",
-        "internal/httpapi/transaction_credit_entries_test.go"
+        "internal/httpapi/transaction_credit_entries_test.go",
+        "internal/httpapi/retired_credit.go"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
@@ -956,20 +1051,20 @@
       "id": "credit.core",
       "domain": "credit",
       "title": "信用额度与还款",
-      "required": true,
-      "disposition": "reuse",
+      "required": false,
+      "disposition": "excluded",
       "pages": [
         "/admin/credit",
         "/admin/credit-settings"
       ],
-      "reason": "复用额度、冻结、消费、人工还款；账户/消费/还款读取已补严格customer_id和同快照分页，保留上海消费/实际到账日期。在线还款和账期合并另列待决策。",
+      "reason": "用户确认信用额度整体退出产品范围；前后台入口关闭，13个旧信用API鉴权后返回410 credit_retired，不保留历史查询、还款或付款原键恢复入口。仅保留迁移和财务SQL兼容结构，本批不物理清库。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/credit",
           "GET /api/v1/admin/credit/consumptions",
           "GET /api/v1/admin/credit/repayments"
         ],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "旧注册保留用于明确退役响应，不代表可用功能或新增需求；完整路由和鉴权见生成inventory。"
       },
       "legacy": {
         "evidence": [
@@ -988,10 +1083,10 @@
         ]
       },
       "api": {
-        "status": "implemented"
+        "status": "excluded"
       },
       "ui": {
-        "status": "wired"
+        "status": "excluded"
       },
       "verification": {
         "static": "source-reviewed",
@@ -1001,14 +1096,13 @@
         "external": "not-run"
       },
       "evidence": [
-        "internal/httpapi/admin_credit.go",
-        "internal/httpapi/credit_lifecycle.go",
-        "internal/store/admin_credit_reads.go",
-        "internal/httpapi/admin_credit_context_test.go"
+        "internal/httpapi/retired_credit.go",
+        "db/migrations/184_retire_credit_and_contracts.sql",
+        "docs/customer-credit-portal-contract.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
-        "三个信用读取入口省略客户保留授权全局，显式空/重复/非法客户400，范围外404，不额外依赖customers.view；总数与列表同快照，原状态、字段与日期口径保持。"
+        "原有鉴权先执行；已授权旧请求返回410且不能读取、下载、重放或写入模块业务，页面404且菜单无入口。",
+        "迁移184关闭总开关和前台信用显示；先停旧writer，迁移/API/worker/Web成套发布；不改旧checksum、不删除表或金额证据。本批退役、升级及浏览器结果按实际执行分别登记。"
       ]
     },
     {
@@ -1532,20 +1626,20 @@
       "id": "contracts.core",
       "domain": "contracts",
       "title": "合同和合同设置",
-      "required": true,
-      "disposition": "reuse",
+      "required": false,
+      "disposition": "excluded",
       "pages": [
         "/admin/contracts",
         "/admin/contract-settings"
       ],
-      "reason": "复用模板、提交、审核、寄送、作废和 HTML 打印；PDF/e-sign、强制签约等另行确认。",
+      "reason": "用户确认合同整体退出产品范围；前后台页面关闭，23个旧合同API鉴权后返回410 contracts_retired，包含读取、模板、设置、状态处理与下载；PDF、电子签和强制签约不再是待办。本批不物理清库。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/contracts",
           "GET /api/v1/admin/contract-settings",
           "GET /api/v1/admin/contracts/{id}/document"
         ],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "旧注册保留用于明确退役响应，不代表可用功能或新增需求；完整路由和鉴权见生成inventory。"
       },
       "legacy": {
         "evidence": [
@@ -1564,10 +1658,10 @@
         ]
       },
       "api": {
-        "status": "implemented"
+        "status": "excluded"
       },
       "ui": {
-        "status": "wired"
+        "status": "excluded"
       },
       "verification": {
         "static": "source-reviewed",
@@ -1577,11 +1671,14 @@
         "external": "not-run"
       },
       "evidence": [
-        "docs/domain/contract-settings.md",
-        "docs/admin-contract-lifecycle-plan.md"
+        "internal/httpapi/retired_contracts.go",
+        "internal/httpapi/retired_contracts_test.go",
+        "db/migrations/184_retire_credit_and_contracts.sql",
+        "docs/domain/contract-settings.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "原有鉴权先执行；已授权旧请求返回410且不能读取、下载、重放或写入模块业务，页面404且菜单无入口。",
+        "迁移184关闭总开关和前台信用显示；先停旧writer，迁移/API/worker/Web成套发布；不改旧checksum、不删除表或金额证据。本批退役、升级及浏览器结果按实际执行分别登记。"
       ]
     },
     {
@@ -2058,7 +2155,7 @@
       "pages": [
         "/admin/customers/[id]"
       ],
-      "reason": "汇总身份、认证、末次登录、推荐人、未付/到期服务、工单和真实财务指标；无权限值必须明确 null 或 unavailable。",
+      "reason": "汇总身份、认证、末次登录、推荐人、未付/到期服务、工单和真实财务指标；固定7个section，不提供信用额度/债务分区，无权限值必须明确null或unavailable。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/customers/{id}/summary"
@@ -2104,12 +2201,14 @@
         "internal/store/customer_account_reads.go",
         "web/src/components/admin-customer-detail.tsx",
         "internal/httpapi/admin_customer_summary.go",
-        "internal/httpapi/admin_customer_summary_test.go"
+        "internal/httpapi/admin_customer_summary_test.go",
+        "internal/store/admin_customer_summary.go"
       ],
       "acceptance": [
         "返回 profile_version、认证、email_verified、last_login、referrer、真实服务组。",
         "ticket_scope 与 customer_scope 按调用者重读；无权金额/计数不得假零。",
-        "现金收入退款与钱包流入流出分开；上海时区与整数分。"
+        "现金收入退款与钱包流入流出分开；上海时区与整数分。",
+        "信用模块退役后不再返回credit section、额度或债务详情；现金历史回款仍遵守原财务事实口径。"
       ],
       "verificationNote": "测试入口仅登记来源；本声明不保存运行结果。实际 E1 执行及浏览器边界见 docs/admin/api.md。"
     },
@@ -2378,20 +2477,16 @@
     {
       "id": "customers.credit-affiliate-context",
       "domain": "customers",
-      "title": "客户信用和推广上下文",
+      "title": "客户推广上下文与历史资金事实",
       "required": true,
       "disposition": "optimize",
       "pages": [
         "/admin/customers/[id]",
-        "/admin/credit",
         "/admin/affiliate"
       ],
-      "reason": "信用与推广读取支持精确客户上下文；推广归因显式区分推荐人/被推荐人，客户活动新增分页且保留原数组，前端整体详情待接。",
+      "reason": "推广读取支持精确客户及推荐人/被推荐人角色，客户活动分页保留原数组；信用模块已整体下线，旧信用金额仅作现有交易/现金报表的财务兼容事实，不恢复专用读取、还款或授信入口。客户详情整体仍待接线。",
       "current": {
         "endpoints": [
-          "GET /api/v1/admin/credit",
-          "GET /api/v1/admin/credit/consumptions",
-          "GET /api/v1/admin/credit/repayments",
           "GET /api/v1/admin/affiliate/accounts/page",
           "GET /api/v1/admin/affiliate/attributions/page",
           "GET /api/v1/admin/affiliate/withdrawals/page",
@@ -2430,12 +2525,12 @@
         "external": "not-run"
       },
       "evidence": [
-        "internal/httpapi/admin_credit.go",
         "internal/httpapi/affiliate_pages.go",
         "web/src/components/admin-customer-detail.tsx",
         "internal/store/affiliate_pages.go",
         "internal/store/customer_affiliate.go",
-        "internal/httpapi/admin_affiliate_context_test.go"
+        "internal/httpapi/admin_affiliate_context_test.go",
+        "docs/customer-credit-portal-contract.md"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
@@ -2446,14 +2541,17 @@
       "id": "dashboard.rankings",
       "domain": "dashboard",
       "title": "商品与人员销售排名口径",
-      "required": false,
-      "disposition": "deferred",
+      "required": true,
+      "disposition": "add",
       "pages": [
         "/admin"
       ],
-      "reason": "目前 UI 占位；需先决定期间、支付/退款口径、商品件数/订单数和人员归属再设计接口。",
+      "reason": "已新增上海自然月商品与人员销售排名，只读复用完整行分摊与业务收款事实、当前客户范围；金额包含余额消费，不能冒充外部现金或利润。首页UI仍为占位。",
       "current": {
-        "endpoints": [],
+        "endpoints": [
+          "GET /api/v1/admin/reports/product-ranking",
+          "GET /api/v1/admin/reports/staff-ranking"
+        ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
       "legacy": {
@@ -2473,7 +2571,7 @@
         ]
       },
       "api": {
-        "status": "deferred"
+        "status": "implemented"
       },
       "ui": {
         "status": "partial"
@@ -2486,10 +2584,16 @@
         "external": "not-run"
       },
       "evidence": [
-        "web/src/components/admin-dashboard.tsx"
+        "internal/httpapi/dashboard_rankings.go",
+        "internal/store/dashboard_rankings.go",
+        "internal/httpapi/dashboard_rankings_test.go",
+        "web/src/components/admin-dashboard.tsx",
+        "docs/admin/api.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "month=YYYY-MM按上海自然月，limit默认5且仅1–20；严格拒绝未知、空、重复和非法查询，支持JSON且不提供导出。",
+        "reports.view及当前客户范围在同一只读快照核验，稳定排序后截取前N，total为完整候选数量；商品金额沿用产品收入，人员按客户当前销售归属、不含未分配和无正收款人员。",
+        "业务收款包含余额消费及历史信用实际回款，外部退款不抵减且余额退款账单排除；人员排名不计算或确认提成；UI、浏览器和数据库验收分开登记。"
       ]
     },
     {
@@ -2497,14 +2601,14 @@
       "domain": "credit",
       "title": "在线还款、周期账单、授信审批和信用退款",
       "required": false,
-      "disposition": "deferred",
+      "disposition": "excluded",
       "pages": [
         "/admin/credit"
       ],
-      "reason": "属于信用业务扩展，尚未确认协议与业务口径，不凭旧版控件自动恢复。",
+      "reason": "用户确认信用额度整体退出产品范围；前后台入口关闭，13个旧信用API鉴权后返回410 credit_retired，不保留历史查询、还款或付款原键恢复入口。仅保留迁移和财务SQL兼容结构，本批不物理清库。",
       "current": {
         "endpoints": [],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "旧注册保留用于明确退役响应，不代表可用功能或新增需求；完整路由和鉴权见生成inventory。"
       },
       "legacy": {
         "evidence": [
@@ -2523,10 +2627,10 @@
         ]
       },
       "api": {
-        "status": "deferred"
+        "status": "excluded"
       },
       "ui": {
-        "status": "deferred"
+        "status": "excluded"
       },
       "verification": {
         "static": "source-reviewed",
@@ -2536,11 +2640,13 @@
         "external": "not-run"
       },
       "evidence": [
-        "docs/replacement-gap-audit.md",
-        "internal/httpapi/credit_lifecycle.go"
+        "internal/httpapi/retired_credit.go",
+        "db/migrations/184_retire_credit_and_contracts.sql",
+        "docs/customer-credit-portal-contract.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "原有鉴权先执行；已授权旧请求返回410且不能读取、下载、重放或写入模块业务，页面404且菜单无入口。",
+        "迁移184关闭总开关和前台信用显示；先停旧writer，迁移/API/worker/Web成套发布；不改旧checksum、不删除表或金额证据。本批退役、升级及浏览器结果按实际执行分别登记。"
       ]
     },
     {
@@ -2548,15 +2654,15 @@
       "domain": "contracts",
       "title": "PDF、电子签及强制签约政策",
       "required": false,
-      "disposition": "deferred",
+      "disposition": "excluded",
       "pages": [
         "/admin/contracts",
         "/admin/contract-settings"
       ],
-      "reason": "需明确提供方、产品绑定、强制签约、到期策略及取消寄送；HTML 打印不能作为 PDF/e-sign 完成证据。",
+      "reason": "用户确认合同整体退出产品范围；前后台页面关闭，23个旧合同API鉴权后返回410 contracts_retired，包含读取、模板、设置、状态处理与下载；PDF、电子签和强制签约不再是待办。本批不物理清库。",
       "current": {
         "endpoints": [],
-        "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
+        "endpointsScope": "旧注册保留用于明确退役响应，不代表可用功能或新增需求；完整路由和鉴权见生成inventory。"
       },
       "legacy": {
         "evidence": [
@@ -2575,10 +2681,10 @@
         ]
       },
       "api": {
-        "status": "deferred"
+        "status": "excluded"
       },
       "ui": {
-        "status": "deferred"
+        "status": "excluded"
       },
       "verification": {
         "static": "source-reviewed",
@@ -2588,11 +2694,14 @@
         "external": "not-run"
       },
       "evidence": [
-        "docs/admin-contract-lifecycle-plan.md",
+        "internal/httpapi/retired_contracts.go",
+        "internal/httpapi/retired_contracts_test.go",
+        "db/migrations/184_retire_credit_and_contracts.sql",
         "docs/domain/contract-settings.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "原有鉴权先执行；已授权旧请求返回410且不能读取、下载、重放或写入模块业务，页面404且菜单无入口。",
+        "迁移184关闭总开关和前台信用显示；先停旧writer，迁移/API/worker/Web成套发布；不改旧checksum、不删除表或金额证据。本批退役、升级及浏览器结果按实际执行分别登记。"
       ]
     },
     {
@@ -3383,6 +3492,91 @@
         "先确认各动作是否仍属必需业务及是否仅生成账单或立即收款；现有自动续费API只改变开关。",
         "转移不得删除或改写既有财务历史，必须定义未付账单、抵扣、信用、取消和外部未决任务归属。",
         "任何未来写入必须具备版本、幂等、权限锁后重验、审计与未知结果恢复契约。"
+      ]
+    },
+    {
+      "id": "customers.crm-followup",
+      "domain": "customers",
+      "title": "独立客户跟进",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "用户确认暂不恢复多条跟进、补充说明与跟进状态；内部备注继续使用profile.admin_note，不能作为等价替代。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "产品明确暂缓，无活动接口。"
+      },
+      "legacy": {
+        "evidence": [
+          "data/route/admin.php:191",
+          "data/route/admin.php:194"
+        ],
+        "interpretation": "旧行为仅定位来源，不作为当前规则。",
+        "representativeRoutes": []
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-applicable",
+        "database": "not-applicable",
+        "browser": "not-applicable",
+        "external": "not-applicable"
+      },
+      "evidence": [
+        "docs/admin/customer-api.md",
+        "internal/store/customer_account_profile.go"
+      ],
+      "acceptance": [
+        "不得用内部备注、联系人或API key数量伪造独立旧功能。"
+      ]
+    },
+    {
+      "id": "customers.legacy-profile-extras",
+      "domain": "customers",
+      "title": "旧客户资料扩展",
+      "required": false,
+      "disposition": "deferred",
+      "pages": [
+        "/admin/customers/[id]"
+      ],
+      "reason": "旧客户头像、职业、签名及额外地域字段当前无客户资料等价模型；本轮只补已批准搜索，不扩展此范围。旧API三态继续不恢复，沿现有密钥与权限。",
+      "current": {
+        "endpoints": [],
+        "endpointsScope": "产品明确暂缓，无活动接口。"
+      },
+      "legacy": {
+        "evidence": [
+          "data/route/admin.php:196"
+        ],
+        "interpretation": "旧行为仅定位来源，不作为当前规则。",
+        "representativeRoutes": []
+      },
+      "api": {
+        "status": "deferred"
+      },
+      "ui": {
+        "status": "deferred"
+      },
+      "verification": {
+        "static": "source-reviewed",
+        "unit": "not-applicable",
+        "database": "not-applicable",
+        "browser": "not-applicable",
+        "external": "not-applicable"
+      },
+      "evidence": [
+        "docs/admin/customer-api.md",
+        "internal/store/customer_account_profile.go"
+      ],
+      "acceptance": [
+        "不得用内部备注、联系人或API key数量伪造独立旧功能。"
       ]
     }
   ]

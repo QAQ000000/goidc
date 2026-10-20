@@ -34,18 +34,6 @@ func validateCustomerLevel(in *customerLevelInput, create bool) bool {
 	return in.ExpectedVersion > 0
 }
 
-func customerLevelProjection() string {
-	return `cl.id,cl.name,cl.min_income_cents,cl.min_purchase_count,cl.min_login_count,cl.min_recent_login_count,
-cl.min_renewal_count,cl.min_recent_renewal_count,cl.sort_order,cl.active,cl.version,cl.created_at,cl.updated_at,
-(SELECT count(*) FROM users u WHERE u.role='customer' AND u.status='active' AND admin_customer_allowed($1,u.id)
- AND (SELECT coalesce(sum(i.amount_cents),0) FROM invoices i WHERE i.user_id=u.id AND i.status='paid') >= cl.min_income_cents
- AND (SELECT coalesce(sum(oi.quantity),0) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.user_id=u.id AND o.status IN ('paid','active')) >= cl.min_purchase_count
- AND (SELECT count(*) FROM audit_events a WHERE a.actor_id=u.id AND a.action='auth.login_succeeded') >= cl.min_login_count
- AND (SELECT count(*) FROM audit_events a WHERE a.actor_id=u.id AND a.action='auth.login_succeeded' AND a.created_at >= now()-interval '30 days') >= cl.min_recent_login_count
- AND (SELECT count(*) FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE i.user_id=u.id AND i.status='paid' AND ii.item_type='renew') >= cl.min_renewal_count
- AND (SELECT count(*) FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id WHERE i.user_id=u.id AND i.status='paid' AND ii.item_type='renew' AND i.paid_at >= now()-interval '30 days') >= cl.min_recent_renewal_count) AS matching_customer_count`
-}
-
 func (s *Server) adminCustomerLevels(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -54,26 +42,11 @@ func (s *Server) adminCustomerLevels(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_active", "启用状态无效")
 		return
 	}
-	where := ` FROM customer_levels cl WHERE ($2='' OR cl.name ILIKE '%'||$2||'%') AND ($3='' OR cl.active=($3='true'))`
-	var total int64
-	if err := s.db.Pool.QueryRow(r.Context(), "SELECT count(*) FROM customer_levels cl WHERE ($1='' OR cl.name ILIKE '%'||$1||'%') AND ($2='' OR cl.active=($2='true'))", q, active).Scan(&total); err != nil {
-		s.fail(w, r, err)
+	page, err := s.db.AdminCustomerLevels(r.Context(), identityFrom(r).ID, q, active, limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), "SELECT "+customerLevelProjection()+where+" ORDER BY cl.sort_order,cl.id LIMIT $4 OFFSET $5", identityFrom(r).ID, q, active, limit, offset)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	write(w, http.StatusOK, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset, "recent_window_days": 30})
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) createCustomerLevel(w http.ResponseWriter, r *http.Request) {

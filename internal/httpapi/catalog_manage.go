@@ -92,7 +92,7 @@ func (s *Server) deleteCatalogGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	if err := s.db.DeleteCatalogGroup(r.Context(), identityFrom(r).ID, id, input.ExpectedVersion, kind); err != nil {
+	if err := s.db.DeleteCatalogGroup(requestFileContext(r), identityFrom(r).ID, id, input.ExpectedVersion, kind); err != nil {
 		s.fail(w, r, err)
 		return
 	}

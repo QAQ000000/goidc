@@ -4,12 +4,15 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/codex/zjmfgo/internal/notify"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func webPushKeys(t *testing.T) (string, string) {
@@ -213,12 +216,44 @@ func TestWebPushAPIHistoryWorksWithoutInboxAndRechecksOwnership(t *testing.T) {
 	if len(data(t, otherState)["items"].([]any)) != 0 {
 		t.Fatal("other customer could read notification history")
 	}
-	if _, err := db.Pool.Exec(t.Context(), `UPDATE invoices SET user_id=$2 WHERE id=$1`, latestInvoice, otherID); err != nil {
+	// Schema187 makes the invoice owner immutable. Prove the normal mutation
+	// fails, then construct a malformed legacy fact in this isolated fixture to
+	// retain the HTTP history's independent ownership filtering coverage.
+	_, err := db.Pool.Exec(t.Context(), `UPDATE invoices SET user_id=$2 WHERE id=$1`, latestInvoice, otherID)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "P0001" || pgErr.Message != "invoice referral owner is immutable" {
+		t.Fatal("invoice ownership guard did not reject the normal transfer", err)
+	}
+	var unchanged bool
+	if err := db.Pool.QueryRow(t.Context(), `SELECT i.user_id=$2 AND birth.user_id=$2 FROM invoices i JOIN invoice_affiliate_attributions birth ON birth.invoice_id=i.id WHERE i.id=$1`, latestInvoice, uid).Scan(&unchanged); err != nil || !unchanged {
+		t.Fatal("rejected invoice transfer changed its owner or birth fact", unchanged, err)
+	}
+	if err := db.WithTx(t.Context(), func(tx pgx.Tx) error {
+		if _, err := tx.Exec(t.Context(), "ALTER TABLE invoices DISABLE TRIGGER invoice_referral_owner"); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(t.Context(), `UPDATE invoices SET user_id=$2 WHERE id=$1`, latestInvoice, otherID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(t.Context(), "ALTER TABLE invoices ENABLE TRIGGER invoice_referral_owner")
+		return err
+	}); err != nil {
 		t.Fatal(err)
+	}
+	var fixtureReady bool
+	if err := db.Pool.QueryRow(t.Context(), `SELECT i.user_id=$2 AND birth.user_id=$3
+ AND (SELECT tgenabled='O' FROM pg_trigger WHERE tgrelid='invoices'::regclass AND tgname='invoice_referral_owner')
+ FROM invoices i JOIN invoice_affiliate_attributions birth ON birth.invoice_id=i.id WHERE i.id=$1`, latestInvoice, otherID, uid).Scan(&fixtureReady); err != nil || !fixtureReady {
+		t.Fatal("legacy fixture failed to retain its original birth fact or restore the production guard", fixtureReady, err)
 	}
 	state = request(h, "GET", path, nil, customer, "")
 	expect(t, state, 200)
-	if strings.Contains(state.Body.String(), "PUSH-HISTORY-1") || data(t, state)["has_more"] != false {
+	if len(data(t, state)["items"].([]any)) != 1 || !strings.Contains(state.Body.String(), "PUSH-HISTORY-0") || strings.Contains(state.Body.String(), "PUSH-HISTORY-1") || data(t, state)["has_more"] != false {
 		t.Fatal("history retained access after resource reassignment")
+	}
+	otherState = request(h, "GET", path, nil, other, "")
+	expect(t, otherState, 200)
+	if len(data(t, otherState)["items"].([]any)) != 0 || data(t, otherState)["has_more"] != false {
+		t.Fatal("malformed legacy transfer exposed the old owner's notification history to its new owner")
 	}
 }

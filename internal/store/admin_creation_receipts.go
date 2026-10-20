@@ -15,6 +15,13 @@ func CheckAdminCreationPermission(ctx context.Context, tx pgx.Tx, actor int64, d
 	if err := LockFileCredential(ctx, tx, actor); err != nil {
 		return err
 	}
+	return lockAdminCreationPrincipal(ctx, tx, actor, domain)
+}
+
+// lockAdminCreationPrincipal preserves the creation grant predicate without
+// taking a credential. Pricing writers need the account lock before pricing;
+// otherwise personal password rotation can close a credential/account cycle.
+func lockAdminCreationPrincipal(ctx context.Context, tx pgx.Tx, actor int64, domain string) error {
 	var role string
 	var roleID *int64
 	if err := tx.QueryRow(ctx, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE", actor).Scan(&role, &roleID); err != nil {

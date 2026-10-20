@@ -885,10 +885,13 @@ UPDATE products p SET stock=stock+1,updated_at=now() FROM released r WHERE p.id=
 }
 
 type ManualCompletion struct {
-	JobID      int64  `json:"job_id"`
-	UpstreamID string `json:"upstream_id"`
-	Username   string `json:"username"`
-	Note       string `json:"note"`
+	JobID                   int64  `json:"job_id"`
+	UpstreamID              string `json:"upstream_id"`
+	Username                string `json:"username"`
+	Note                    string `json:"note"`
+	ManualResourceID        int64  `json:"manual_resource_id,omitempty"`
+	ResourceExpectedVersion int64  `json:"resource_expected_version,omitempty"`
+	ExpectedVersion         int64  `json:"expected_version,omitempty"`
 }
 
 func (s *Store) CompleteManualServiceJob(ctx context.Context, actorID, serviceID int64, input ManualCompletion) (ServiceActionResult, error) {
@@ -899,19 +902,45 @@ func (s *Store) CompleteManualServiceJob(ctx context.Context, actorID, serviceID
 	if input.JobID < 1 || len(input.Note) < 3 || len(input.Note) > 2000 || len(input.UpstreamID) > 256 || len(input.Username) > 256 {
 		return out, conflict("invalid_delivery", "请填写有效任务和交付凭据")
 	}
+	bindResource := input.ManualResourceID > 0
+	if input.ManualResourceID < 0 || (!bindResource && (input.ResourceExpectedVersion != 0 || input.ExpectedVersion != 0)) ||
+		(bindResource && (input.ResourceExpectedVersion < 1 || input.ExpectedVersion < 1 || input.UpstreamID != "" || input.Username != "")) {
+		return out, conflict("invalid_delivery", "绑定人工库存需要服务及资源版本，不能覆盖库存交付字段")
+	}
+	if bindResource {
+		credential, ok := ctx.Value(storageCredentialKey{}).(storageCredential)
+		if !ok || credential.Hash == "" {
+			return out, conflict("unauthorized", "库存交付需要有效的原始登录凭据")
+		}
+	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return out, err
 	}
 	defer tx.Rollback(ctx)
 	var mode, current string
+	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+		return out, err
+	}
+	if err = lockAdminCreationPrincipal(ctx, tx, actorID, "services"); err != nil {
+		return out, err
+	}
+	if bindResource {
+		if err = lockAdminCreationPrincipal(ctx, tx, actorID, "resources"); err != nil {
+			return out, err
+		}
+	}
+	if err = recheckManualDeliveryCredential(ctx, tx, actorID); err != nil {
+		return out, err
+	}
 	if err = LockAdminResourceCustomer(ctx, tx, actorID, "service", serviceID); err != nil {
 		return out, err
 	}
 	if err = lockConfigurationChangeBalance(ctx, tx, input.JobID, serviceID); err != nil {
 		return out, err
 	}
-	if err = tx.QueryRow(ctx, "SELECT provision_mode,status FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&mode, &current); err != nil {
+	var serviceVersion int64
+	if err = tx.QueryRow(ctx, "SELECT provision_mode,status,version FROM services WHERE id=$1 FOR UPDATE", serviceID).Scan(&mode, &current, &serviceVersion); err != nil {
 		return out, err
 	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
@@ -934,27 +963,61 @@ func (s *Store) CompleteManualServiceJob(ctx context.Context, actorID, serviceID
 			return out, conflict("delivery_conflict", "任务已使用不同的交付凭据完成")
 		}
 		out.Replayed = true
-		return out, tx.Commit(ctx)
+		return out, commitManualDelivery(ctx, tx, actorID)
 	}
 	if mode != "manual" || status != "waiting_manual" || !allowedServiceAction(current, job.Action) {
 		return out, conflict("invalid_delivery_state", "任务当前不可人工确认")
+	}
+	if bindResource && (job.Action != "create" || serviceVersion != input.ExpectedVersion) {
+		if job.Action != "create" {
+			return out, conflict("invalid_delivery_state", "仅人工开通任务可以绑定库存")
+		}
+		return out, conflict("stale_service", "服务已更新，请刷新后交付")
 	}
 	proceed, err := reviewCancellationJob(ctx, tx, job)
 	if err != nil {
 		return out, err
 	}
 	if !proceed {
-		if err = tx.Commit(ctx); err != nil {
+		if err = commitManualDelivery(ctx, tx, actorID); err != nil {
 			return out, err
 		}
 		return out, conflict("cancellation_job_blocked", "取消任务已停止或重新安排，请刷新任务并核验服务权益")
 	}
 	if job.Action == "create" {
-		if input.UpstreamID == "" {
+		upstream, username := input.UpstreamID, input.Username
+		var sealed []byte
+		address := ""
+		if bindResource {
+			var reviewed bool
+			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM services s JOIN orders o ON o.id=s.order_id JOIN invoices i ON i.order_id=o.id WHERE s.id=$1 AND o.review_status='approved' AND o.status IN ('paid','active') AND i.status='paid')`, serviceID).Scan(&reviewed); err != nil {
+				return out, err
+			}
+			if !reviewed {
+				return out, conflict("order_not_deliverable", "订单尚未完成付款及审核，不能绑定库存")
+			}
+			delivery, bindErr := s.BindManualResourceForDelivery(ctx, tx, actorID, input.ManualResourceID, serviceID, input.ResourceExpectedVersion)
+			if bindErr != nil {
+				return out, bindErr
+			}
+			upstream, username, address = delivery.UpstreamID, delivery.Username, delivery.Address
+			sealed, err = provision.Seal(s.ProvisionEncryptionKey, serviceID, delivery.Credentials)
+			if err != nil {
+				return out, conflict("credentials_unavailable", "人工库存凭据无法安全交付")
+			}
+		}
+		// Check after every service/job/resource wait, before any service or job
+		// fact is written. A failed check rolls back the provisional binding too.
+		if err = recheckManualDeliveryCredential(ctx, tx, actorID); err != nil {
+			return out, err
+		}
+		if upstream == "" {
 			return out, conflict("resource_required", "开通确认必须填写实际资源标识")
 		}
 		if _, err = tx.Exec(ctx, `UPDATE services SET status='active',upstream_id=$2,username=$3,last_error='',version=version+1,updated_at=now(),
-next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN 'quarterly' THEN now()+interval '3 months' WHEN 'annually' THEN now()+interval '1 year' ELSE NULL END WHERE id=$1`, serviceID, input.UpstreamID, input.Username); err != nil {
+credentials_encrypted=CASE WHEN $4::bytea IS NULL THEN credentials_encrypted ELSE $4 END,
+resource_info=CASE WHEN $5::bigint>0 THEN resource_info||jsonb_build_object('manual_resource_id',$5::bigint,'dedicated_ip',$6::text) ELSE resource_info END,
+next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN 'quarterly' THEN now()+interval '3 months' WHEN 'annually' THEN now()+interval '1 year' ELSE NULL END WHERE id=$1`, serviceID, upstream, username, sealed, input.ManualResourceID, address); err != nil {
 			return out, err
 		}
 	} else if err = applyLocalServiceAction(ctx, tx, job, current); err != nil {
@@ -979,5 +1042,21 @@ next_due_at=CASE billing_cycle WHEN 'monthly' THEN now()+interval '1 month' WHEN
 	if err = Audit(ctx, tx, actorID, "service.manual.completed", "service", serviceID, input); err != nil {
 		return out, err
 	}
-	return out, tx.Commit(ctx)
+	return out, commitManualDelivery(ctx, tx, actorID)
+}
+
+// A credential can expire while any earlier row is locked. The second statement
+// evaluates the clock after the locking SELECT actually finishes waiting.
+func recheckManualDeliveryCredential(ctx context.Context, tx pgx.Tx, actor int64) error {
+	if err := lockStorageCredential(ctx, tx, actor); err != nil {
+		return err
+	}
+	return lockStorageCredential(ctx, tx, actor)
+}
+
+func commitManualDelivery(ctx context.Context, tx pgx.Tx, actor int64) error {
+	if err := recheckManualDeliveryCredential(ctx, tx, actor); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

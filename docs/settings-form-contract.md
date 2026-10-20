@@ -1,5 +1,6 @@
 # 设置表单保存契约
 
+信用和合同设置已随模块整体退役：专属API鉴权后410、页面404，通用站点设置不再提供前台信用显示开关。迁移184只关闭旧开关，保留结构不表示可恢复功能；当前规则见[信用退役](customer-credit-portal-contract.md)及[合同退役](domain/contract-settings.md)。
 `/admin/settings`、`/admin/site-settings` 和 `/admin/auth-settings` 共用站点设置表单与真实 `GET/PUT /api/v1/admin/site-settings` 接口。管理读取要求 `settings.view`，写入要求 `settings.manage`；保留浏览器会话、同源请求和版本检查。
 
 - 切换分区保留当前内存草稿；会话草稿恢复行为见下文。

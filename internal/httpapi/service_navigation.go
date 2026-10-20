@@ -22,7 +22,7 @@ func (s *Server) saveServiceGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	saved, err := s.db.SaveServiceGroup(r.Context(), identityFrom(r).ID, id, in)
+	saved, err := s.db.SaveServiceGroup(requestFileContext(r), identityFrom(r).ID, id, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -45,7 +45,7 @@ func (s *Server) deleteServiceGroup(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := s.db.DeleteServiceGroup(r.Context(), identityFrom(r).ID, id, in.ExpectedVersion, in.TargetGroupID); err != nil {
+	if err := s.db.DeleteServiceGroup(requestFileContext(r), identityFrom(r).ID, id, in.ExpectedVersion, in.TargetGroupID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -63,7 +63,7 @@ func (s *Server) assignProductServiceGroup(w http.ResponseWriter, r *http.Reques
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := s.db.AssignProductServiceGroup(r.Context(), identityFrom(r).ID, id, in.ExpectedRevision, in.GroupID); err != nil {
+	if err := s.db.AssignProductServiceGroup(requestFileContext(r), identityFrom(r).ID, id, in.ExpectedRevision, in.GroupID); err != nil {
 		s.fail(w, r, err)
 		return
 	}

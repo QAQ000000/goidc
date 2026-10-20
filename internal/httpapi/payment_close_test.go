@@ -329,7 +329,11 @@ func TestPaymentCloseLateSuccessCreatesFrozenMoneyFact(t *testing.T) {
 		if suffix == "payments" {
 			body["provider"] = "epay_alipay"
 		}
-		expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/%s", invoice, suffix), body, f.customer, "close-late-protected-"+suffix), 409)
+		status := 409
+		if suffix == "pay-credit" {
+			status = 410
+		}
+		expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/%s", invoice, suffix), body, f.customer, "close-late-protected-"+suffix), status)
 	}
 	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/admin/invoices/%d/cancel", invoice), map[string]any{"expected_version": 2, "reason": "attempt cancel anomaly"}, f.root, "close-late-cancel"), 409)
 	read := request(f.h, "GET", closePath(invoice, pid), nil, f.root, "")

@@ -529,7 +529,11 @@ func TestCompiledPaymentTrustedCloseAndLateReceipt(t *testing.T) {
 	compiledPaymentAccepted(t, f.callback(body, "close-account-webhook-private"))
 	f.assertState(t, in, "unpaid", "closed", 2)
 	for _, operation := range []string{"pay", "pay-credit"} {
-		expect(t, request(f.h, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/%s", in.invoice, operation), map[string]any{"expected_version": 2}, f.customer, "compiled-anomaly-"+operation), http.StatusConflict)
+		status := http.StatusConflict
+		if operation == "pay-credit" {
+			status = http.StatusGone
+		}
+		expect(t, request(f.h, http.MethodPost, fmt.Sprintf("/api/v1/invoices/%d/%s", in.invoice, operation), map[string]any{"expected_version": 2}, f.customer, "compiled-anomaly-"+operation), status)
 	}
 	var anomalies, amount int
 	var external string

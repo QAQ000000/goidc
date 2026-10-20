@@ -2,6 +2,8 @@
 
 - [后台 API 需求取舍](api-requirements.md)：全域功能组、旧版来源、复用/优化/新增与明确排除范围。
 - [后台 API 契约](api.md)：接口目录生成、前端共同协议、客户摘要/交易/日志及续费的字段、权限和失败状态。
+- [客户管理 API](customer-api.md)：客户核心逐动作协议、高级筛选、资料/联系人、未付充值代建及仅后续新建账单的推荐人调整。
+- [商品管理 API](catalog-api.md)：旧商品页签逐动作映射、字段/版本、目录授权、创建/复制回执和未知结果恢复。
 - [后台 105 项台账](../admin-full-ui-restore-ledger.md)：旧恢复批次的范围和证据参考；不能替代当前实际页面和逐动作接口盘点。
 - [页面契约索引](../admin-page-contracts.md)：短入口；详细 Markdown 和机器 JSON 由生成器写入 `output/audit/`。
 - [配置与站点设置](../admin-configuration.md)：后台配置边界。
@@ -9,6 +11,10 @@
 - [定时任务日志与目录](../architecture/scheduler.md)：后台筛选、执行频率、审计语义及权限。
 - [后台前端设计](../admin-frontend-design.md)：页面交互和响应式约束。
 - 报表：[当前统计与 JSON 查询口径](../credit-cash-reporting.md)、[旧版完整恢复契约](../report-restoration-contract.md)。API/页面已补，独立PG18竞态回归与Next/Chrome模拟API浏览器分别通过；真实Go API浏览器全链路、旧全量迁移/对账和外部凭证未验收，台账继续部分完成。
-- [合同设置](../domain/contract-settings.md)：合同设置及模板管理的当前规则和验收边界。
+- [商品与人员排名](api.md#商品与人员业务收款排名)：按上海月、当前客户范围、业务收款及当前销售归属；API已补，控制台UI待接。
+- [独立人工库存](../domain/manual-resources.md)：未分配机器、成本与上游到期管理，复用人工交付绑定及终止后显式释放；库存UI待接。
+- 已退役：[信用额度](../customer-credit-portal-contract.md)、[合同与设置](../domain/contract-settings.md)。旧查询/写入/下载均鉴权后410，页面404，不再作为恢复待办。
 
 旧批次计划、浏览器验收和截图摘要放在 [归档快照](../archive/snapshots/)，不覆盖当前台账。
+
+当前批准的 38 组必要 API 已具备实现，其中客户与商品核心的字段、权限、版本和恢复方式已形成稳定契约；接口实现、页面接线及数据库/浏览器/外部/发布证据分别维护，不将接口存在计为前端完成。推荐人归因迁移 187 须停旧 writer 后与配套程序成套发布。

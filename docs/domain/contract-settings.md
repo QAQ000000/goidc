@@ -1,26 +1,25 @@
-# 合同设置
+# 合同退役边界
 
-这是合同设置与模板管理的当前契约。它只覆盖旧规范 #38 的总开关、模板列表和模板编辑；合同生命周期、PDF、第三方电子签章、商品绑定和逾期暂停策略仍是独立能力。
+状态：已退役。合同及合同设置整体退出当前产品范围；模板、申请、客户确认、审核、邮寄、作废、状态、打印和下载均不再开放，不保留独立历史查询或回执恢复入口。
 
-## 当前行为
+## HTTP 与页面
 
-- 设置和模板均使用真实 Go API，保留版本、幂等、事务、权限和审计约束。
-- 模板支持名称/正文搜索、启停筛选、25/50/100 页大小、跨页总数、空结果和越界回第一页；URL 保存 `template_q`、`template_status`、`template_limit`、`template_page`。
-- 客户侧只返回启用模板的公开摘要，不返回模板正文。历史合同冻结正文，不因模板修改或停用改变。
-- 确定校验错误保留草稿；版本冲突保留原草稿，只有用户显式载入最新事实才替换，不自动覆盖或重发。
-- 未确认写请求保留原 path、method、body 和幂等键。刷新不自动写，显式重试才重放原请求；撤权、只读和账号切换均重新检查身份与权限。
-- `sessionStorage` 失败时在发 API 前停止；成功、取消和载入最新会清理对应草稿及待处理请求。
+原有23个合同 API 保留路由及原认证、权限、会话与 CSRF 包装，通过入口鉴权后统一返回 `410 contracts_retired`。处理器不调用 Store、不读取对象或文件、不重放成功结果，也不写合同、资金、回执和审计。匿名、错误 Cookie、无权、禁用 Bearer 及跨站写入仍先执行原安全规则。完整注册见 [server.go](../../internal/httpapi/server.go)，覆盖见 [退役路由测试](../../internal/httpapi/retired_contracts_test.go)。
 
-## API 与数据边界
+`/admin/contracts`、`/admin/contract-settings`、`/console/contracts` 页面返回404，前后台菜单和合同设置组件移除。`GET /admin/permissions` 与超级管理员 `/me` 权限目录隐藏 `credit.*`、`contracts.*`；旧角色ID继续被服务端识别，仅为兼容存量角色保存，不赋予恢复模块的能力。新前端不接入这些路由；旧客户端收到410后停止重试及下载。
 
-设置接口位于 `internal/httpapi/financial_settings.go`，合同及模板生命周期位于 `internal/httpapi/contracts.go`。迁移 `132_contract_lifecycle.sql` 保存合同、客户、服务和提供方快照；本批不新增另一套插件机制。
+订单条款、隐私政策、发票申请、电子发票文件、工单附件、客户文件及下载中心是独立能力，继续按各自授权处理。“移除数据导出、保留业务文件下载”的决定不包含已退役合同下载。
 
-旧控制器中的单位、联系人、地址、邮费、印章、PDF 和外部签章不在当前能力内。纯文本 HTML 打印不等于 PDF 或电子签章。生产切换仍需按 [正式接管契约](../release-readiness-next-contract.md) 单独验收。
+## 数据与发布
 
-## 已验证范围
+迁移 [184](../../db/migrations/184_retire_credit_and_contracts.sql) 关闭合同、信用及前台信用显示开关。通用设置不重新开放这些字段；修改旧设置值也不能重新启用退役 handler。
 
-隔离 PG18 的合同专项覆盖搜索、分页、空/越界、双编辑冲突、幂等、撤权重放、审计失败回滚和关闭总开关后的拒绝边界。独立前端构建、Go race 和四尺寸浏览器批次记录保留在 [历史快照](../archive/snapshots/)。这些记录是批次证据，不替代当前代码和测试。
+用户确认没有合同历史需要保留；本批仍不做物理清表，不重写旧迁移及文件存储结构。遗留结构不是活动功能或待办。若部署前发现真实合同、在途任务或文件，应先人工核查，不直接在生产清除。
 
-## 维护
+停止旧 API、worker、导入等 writer 后，迁移、API、worker、Web 成套发布；不得新旧混跑或直接降级旧程序，见[工程治理契约](../architecture/engineering-governance.md)。
 
-本文件只更新当前规则、实际差异和可复现验证入口。过程日志和逐次截图放 `output/`；若新增验收，更新本页的范围和证据链接，不再新增同一主题的日期微契约。
+## 验证与历史
+
+[退役测试](../../internal/httpapi/retired_contracts_test.go)覆盖23条路由、原鉴权与CSRF、无 Store 依赖以及历史合同/账务/回执/审计不变；[迁移测试](../../internal/store/retired_features_migration_test.go)覆盖关闭开关及保留事实。严格入口为 `node scripts/test-admin-api.mjs --integration`，须独立 PostgreSQL 18、逐项 run/pass、零 skip。
+
+[旧生命周期设计](../admin-contract-lifecycle-plan.md)和[历史验收](../admin-contract-lifecycle-acceptance.md)仅解释过去实现，PDF、电子签署、强制签约等旧差距不再计为当前待办。数据库、浏览器、外部文件及部署分别按实际执行证据判断。

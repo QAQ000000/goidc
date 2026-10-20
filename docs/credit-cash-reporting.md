@@ -1,5 +1,6 @@
 # 经营报表与现金口径
 
+信用业务已整体退役，旧专属查询/额度/付款/还款及原key恢复均不再开放，见[退役边界](customer-credit-portal-contract.md)。本文继续约束活动报表与通用财务投影中的历史信用实际回款，不表示保留信用门户或新增还款能力。
 兼容业务消费报表、销售收入和仪表盘经营收入使用两类来源：未使用信用的已支付业务账单（按 paid_at、排除充值账单），以及信用还款凭证中的真实金额（按 received_at）。它包含余额消费，不能统称全部外部现金；信用消费本身不算收款，部分还款计实际到账，完全还款状态不重复计整张账单金额。新增年度现金报表按独立外部收退款事实统计，详见下文。全部客户来源执行当前管理员客户范围。
 
 ## 账单数与期间
@@ -38,6 +39,7 @@
 | 年度现金 | `/admin/reports/annual-cash` | 所选年与上年各12个月、年度合计和差额；真实/模拟/待核验收款分列，全局费用不可见时为 `null` |
 | 每日运营 | `/admin/reports/new-clients` | 所选上海自然月全部日期；无权查看的工单字段为 `null` |
 | 客户排名 | `/admin/reports/customer-ranking` | 当前客户范围的全历史前十名，不受年月筛选影响 |
+| 商品/人员排名 | `/admin/reports/product-ranking`、`/admin/reports/staff-ranking` | 按上海month与limit统计业务收款，商品按完整行折后分摊、人员按当前归属；退款及字段见[API契约](admin/api.md#商品与人员业务收款排名)，控制台UI待接 |
 | 产品收入 | `/admin/reports/product-income` | 所选年月的产品新购净额、续费金额及现有订单/账单数量 |
 | 分类产品收入 | `/admin/reports/product-income/groups` | 分类分页，汇总覆盖完整筛选结果 |
 | 销售汇总兼容接口 | `/admin/reports/sales` | 当前查询期间的销售归属汇总 |
@@ -45,7 +47,7 @@
 | 工单统计 | `/admin/reports/tickets` | 所选上海自然月的创建量和当前待处理量，保留工单权限及部门范围 |
 | 工单处理人 | `/admin/reports/tickets/handlers` | 当前期间、处理人、排序和分页，公开管理员消息评分按消息创建时间归期 |
 
-前端只加载当前标签，加载失败与重试只影响当前报表；其他报表接口失败不阻塞当前内容，旧请求不能覆盖新查询，详见[前端契约](admin-frontend-design.md#71-报表独立加载与查询)。合同、电子发票、工单附件、客户文件及下载中心等业务文件下载继续保留，相关浏览器保存行为见[下载契约](download-resume.md)。
+前端只加载当前标签，加载失败与重试只影响当前报表；其他报表接口失败不阻塞当前内容，旧请求不能覆盖新查询，详见[前端契约](admin-frontend-design.md#71-报表独立加载与查询)。电子发票、工单附件、客户文件及下载中心等活动业务文件下载继续保留；合同下载已随模块退役，相关浏览器保存行为见[下载契约](download-resume.md)。
 
 ## 本轮已补代码与边界
 
@@ -68,6 +70,8 @@
 上述为代码恢复事实。隔离PG18最终 `-race` 回归32个顶层测试通过、0跳过；浏览器另用隔离Next+Chrome+受控Node模拟API完成43条显式断言，4个恢复页×6宽度共24组均无页面水平溢出，年度/销售图无NaN，320宽费用弹窗和评分可操作。费用未知结果刷新保留原摘要/body/key并成功清空pending；评分恢复原星级、重试保留原body/key。证据见 `output/playwright/report-acceptance/summary.json` 和 `SUMMARY.md`。浏览器未连接真实Go API，不能与独立PG结果拼接称Go浏览器全链路；真实旧全量迁移/对账与外部凭证核验仍未验收，台账继续部分完成。
 
 ## 回归入口
+
+新增商品/人员排名由 `TestDashboardRankingQueryValidation`、`TestDashboardRankingAmountsScopeAndShanghaiPeriod`、`TestDashboardRankingCreditReceiptsCurrentOwnerAndStableOrder` 保护，纳入后台严格runner；旧全历史客户排名与这两个按月接口分别验收。
 
 现金与信用范围对应 `internal/httpapi/credit_cash_reports_test.go`；产品净额、期间账单去重和 UTC 会话月界对应 `internal/httpapi/reports_regression_test.go`；排名入榜条件、工单指标空值和撤权对应 `internal/httpapi/reports_permissions_test.go`；合并来源对应 `internal/httpapi/reports_extra_test.go`。
 

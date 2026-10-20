@@ -43,9 +43,8 @@ func TestFinancialSettingsContracts(t *testing.T) {
 		t.Fatalf("currency stale update: %d %s", conflict.Code, conflict.Body.String())
 	}
 	for path, values := range map[string][2]any{
-		"/api/v1/admin/finance-settings":  {map[string]any{"topup_enabled": true, "min_topup_cents": 100, "max_topup_cents": 10000, "max_balance_cents": 0, "require_active_order": false, "expected_version": 1}, "finance-settings-1"},
-		"/api/v1/admin/invoice-settings":  {map[string]any{"enabled": true, "rate_percent": 1.5, "expected_version": 1}, "invoice-settings-1"},
-		"/api/v1/admin/contract-settings": {map[string]any{"enabled": true, "expected_version": 1}, "contract-settings-1"},
+		"/api/v1/admin/finance-settings": {map[string]any{"topup_enabled": true, "min_topup_cents": 100, "max_topup_cents": 10000, "max_balance_cents": 0, "require_active_order": false, "expected_version": 1}, "finance-settings-1"},
+		"/api/v1/admin/invoice-settings": {map[string]any{"enabled": true, "rate_percent": 1.5, "expected_version": 1}, "invoice-settings-1"},
 	} {
 		w := request(h, "PUT", path, values[0], admin, values[1].(string))
 		if w.Code != 200 {
@@ -72,18 +71,6 @@ func TestFinancialSettingsContracts(t *testing.T) {
 	removed := request(h, "DELETE", fmt.Sprintf("/api/v1/admin/invoice-shipping-methods/%d", shippingBody.Data.ID), map[string]any{"expected_version": shippingBody.Data.Version}, admin, "shipping-delete-1")
 	if removed.Code != 200 {
 		t.Fatalf("shipping delete: %d %s", removed.Code, removed.Body.String())
-	}
-	credit := request(h, "GET", "/api/v1/admin/credit-settings", nil, admin, "")
-	if credit.Code != 200 {
-		t.Fatalf("credit settings: %d %s", credit.Code, credit.Body.String())
-	}
-	creditUpdate := request(h, "PUT", "/api/v1/admin/credit-settings", map[string]any{"enabled": true, "limit_cents": 50000, "auto_recharge": false, "expected_version": 1}, admin, "credit-settings-1")
-	if creditUpdate.Code != 200 {
-		t.Fatalf("credit update: %d %s", creditUpdate.Code, creditUpdate.Body.String())
-	}
-	replay := request(h, "PUT", "/api/v1/admin/credit-settings", map[string]any{"enabled": true, "limit_cents": 50000, "auto_recharge": false, "expected_version": 1}, admin, "credit-settings-1")
-	if replay.Code != 200 || !containsJSON(replay.Body.Bytes(), "replayed") {
-		t.Fatalf("credit replay: %d %s", replay.Code, replay.Body.String())
 	}
 }
 

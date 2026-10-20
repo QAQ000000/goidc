@@ -62,7 +62,7 @@ func TestOnlineTopupHTTPAuthReplayAndCancel(t *testing.T) {
 	expect(t, request(f.h, "GET", invoice, nil, f.other, ""), 404)
 	expect(t, request(f.h, "POST", cancel, map[string]any{"expected_version": 1, "note": "topup-other"}, f.other, "topup-other"), 404)
 	expect(t, request(f.h, "POST", invoice+"/pay", map[string]any{"expected_version": 1}, f.customer, "topup-balance"), 409)
-	expect(t, request(f.h, "POST", invoice+"/pay-credit", map[string]any{"expected_version": 1}, f.customer, "topup-credit"), 409)
+	expect(t, request(f.h, "POST", invoice+"/pay-credit", map[string]any{"expected_version": 1}, f.customer, "topup-credit"), 410)
 	expect(t, request(f.h, "POST", invoice+"/payments", map[string]any{"provider": "mock", "expected_version": 1}, f.customer, "topup-mock"), 409)
 	expect(t, request(f.h, "POST", cancel, map[string]any{"expected_version": 99, "note": "topup-stale"}, f.customer, "cancel-stale"), 409)
 	var balanceBefore int64

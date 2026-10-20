@@ -64,7 +64,11 @@ func TestAdminCustomerSummaryRealFactsAndPermissionSections(t *testing.T) {
 		t.Helper()
 		w := request(h, "GET", path, nil, cookie, "")
 		expect(t, w, 200)
-		return data(t, w)
+		result := data(t, w)
+		if _, exists := result["sections"].(map[string]any)["credit"]; exists {
+			t.Fatal("retired credit account remains available through customer summary")
+		}
+		return result
 	}
 	result := get(root)
 	identity := result["customer"].(map[string]any)
@@ -89,12 +93,16 @@ func TestAdminCustomerSummaryRealFactsAndPermissionSections(t *testing.T) {
 	if part("wallet")["balance_cents"] != float64(800) || part("wallet")["debits_cents"] != float64(200) || part("cash")["receipts_cents"] != float64(1100) || part("cash")["net_receipts_cents"] != float64(1100) {
 		t.Fatalf("cash/wallet: %v", sections)
 	}
-	if part("certification")["status"] != "approved" || part("credit")["used_cents"] != float64(500) || part("credit")["frozen"] != true || part("referral")["attributed"] != false {
-		t.Fatalf("credit/certification/referral: %v", sections)
+	if part("certification")["status"] != "approved" || part("referral")["attributed"] != false {
+		t.Fatalf("certification/referral: %v", sections)
 	}
 	if part("tickets")["total"] != float64(3) || part("tickets")["open"] != float64(2) || part("tickets")["merged_sources"] != float64(1) {
 		t.Fatalf("ticket history: %v", sections)
 	}
+	// Saved pre-retirement grants must not expose the historical account's
+	// nonzero limit, usage or frozen status through this general-purpose API.
+	contentRole(t, db, staffID, "customers.view", "credit.view", "credit.manage")
+	get(staff)
 	// A permission is not implied by customers.view, and denial must not be a
 	// fabricated zero or leak data through the summary endpoint.
 	contentRole(t, db, staffID, "customers.view")

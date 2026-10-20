@@ -152,7 +152,7 @@ type SalesReportDetailFilter struct {
 // All receipt amounts use the same current-customer scope. The tier turnover
 // deliberately uses visible purchase receipts, before optional search filters;
 // it is a labelled estimate, never a replacement for a confirmation snapshot.
-const salesDetailCTE = `WITH invoices_scope AS (
+const salesReceiptFactsCTE = `WITH invoices_scope AS (
  SELECT i.*,c.display_name customer_name,c.sales_owner_id,u.display_name sales_owner_name,coalesce(o.status IN ('cancelled','refunded'),false) order_invalid,
  g.id rule_group_id,g.name rule_group_name,g.version rule_version,g.purchase_rate_bps,g.renewal_rate_bps,g.upgrade_rate_bps,g.include_renewal,g.include_upgrade
  FROM invoices i JOIN account_identities c ON c.id=i.user_id LEFT JOIN administrators u ON u.id=c.sales_owner_id LEFT JOIN orders o ON o.id=i.order_id AND o.user_id=i.user_id
@@ -193,7 +193,11 @@ const salesDetailCTE = `WITH invoices_scope AS (
  -div(least(r.prior_received,i.amount_cents::numeric)*w.cumulative,nullif(w.gross_total,0))+div(least(r.prior_received,i.amount_cents::numeric)*(w.cumulative-w.gross),nullif(w.gross_total,0)),0)::bigint
  ELSE coalesce(div(least(r.amount_cents::numeric,w.gross_total)*w.cumulative,nullif(w.gross_total,0))-div(least(r.amount_cents::numeric,w.gross_total)*(w.cumulative-w.gross),nullif(w.gross_total,0)),0)::bigint END amount
  FROM invoices_scope i JOIN weighted w ON w.invoice_id=i.id JOIN receipts r ON r.invoice_id=i.id
-), turnover AS (
+)`
+
+// Detailed reports extend the same line-level receipt facts with estimates,
+// filtering and presentation; dashboard rankings consume only the facts.
+const salesDetailCTE = salesReceiptFactsCTE + `, turnover AS (
  SELECT sales_owner_id,to_char(received_at AT TIME ZONE 'Asia/Shanghai','YYYY-MM') month_key,sum(amount) turnover_cents FROM amounts WHERE kind='purchase' AND status='paid' AND NOT order_invalid GROUP BY 1,2
 ), priced AS (
  SELECT a.*,coalesce(t.extra_rate_bps,0) tier_extra_rate_bps,t.id tier_id,t.version tier_version,

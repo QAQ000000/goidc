@@ -215,9 +215,8 @@ func (s *Server) serviceDelivery(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &input) {
 		return
 	}
-	result, err := s.db.CompleteManualServiceJob(r.Context(), identityFrom(r).ID, id, input)
-	if err != nil {
-		s.fail(w, r, err)
+	result, err := s.db.CompleteManualServiceJob(requestFileContext(r), identityFrom(r).ID, id, input)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
 	write(w, http.StatusOK, result)

@@ -50,9 +50,16 @@ node scripts/admin-api-consumers.mjs
 | 幂等 | 要求 `Idempotency-Key` 的操作按一次用户意图生成8–128字符的稳定 key；超时、断网和同次重试保留 key 与原请求体。变更请求体后才开始新意图 |
 | 外部未知结果 | `unknown`、等待核验、人工处置不是失败后可任意重试。按对应查询/核验接口恢复，不把新 key 当作安全重试 |
 | 分区状态 | 分区分别加载、错误和重试。`null`/无权限/尚未加载与真实零值分开；不得写固定0、固定绿色认证标记或假成功 |
-| 文件 | 数据导出不恢复；附件/合同/发票等业务文件仍使用授权上传下载接口，不用报表 JSON 拼下载地址 |
+| 文件 | 数据导出不恢复；附件/发票等业务文件；合同已退役，其他文件仍使用授权上传下载接口，不用报表 JSON 拼下载地址 |
 
 权限完整定义见[RBAC](../admin-rbac.md)。目录中 `@super` 表示超级管理员；`sessionAuth` 等包装可能另要求浏览器会话，不能仅根据权限字符串推断允许 API 密钥。
+
+## 客户与商品的逐动作契约
+
+- [客户管理 API](customer-api.md)：旧客户路由按批准动作映射；包含高级筛选、新建/资料/启停、字段目录、联系人、分组/销售、未付充值代建、推荐人调整及受控代登录。资料手机与登录手机号分开，客户等级筛选复用现有规则；独立 CRM、旧资料扩展暂缓，旧 API 三态不恢复。
+- [商品管理 API](catalog-api.md)：旧十页签逐项映射商品、定价、交付、配置、升级、购买字段、推广、业务文件和快捷链接，列出实际输入/输出、权限、版本、错误及未知结果恢复。创建/复制可选回执和其他 CAS writer 的恢复保证不同，前端不能统一猜测。
+
+两组本轮新增实现已补齐，需求声明的 API 状态为 `implemented`；该字段只表示批准范围的接口已实现，运行验收仍以独立门禁结果为准。前端据领域契约接线，接口实现状态、页面状态、数据库/浏览器/外部及发布证据各自维护。完成必要 API 不等于所有后台 UI 已完成。
 
 ## 客户摘要
 
@@ -95,22 +102,21 @@ node scripts/admin-api-consumers.mjs
 }
 ```
 
-示例省略其余 section；实际总是返回下表全部8个 section。`available=false` 时 `reason="permission_denied"`、`data=null`；有权但无业务事实返回真实零值/空数组，资料关系不存在时字段可为null。`last_login_at` 来自该客户成功认证审计的最近时间，缺记录为null，不包含IP或凭据；`login_phone/phone_verified` 对应登录账号的手机号，不能给联系人或资料中的另一个号码加验证标记。`profile_version` 用于客户修改，`sales_version` 用于销售归属，不相互替代。
+示例省略其余 section；实际总是返回下表全部7个 section。`available=false` 时 `reason="permission_denied"`、`data=null`；有权但无业务事实返回真实零值/空数组，资料关系不存在时字段可为null。`last_login_at` 来自该客户成功认证审计的最近时间，缺记录为null，不包含IP或凭据；`login_phone/phone_verified` 对应登录账号的手机号，不能给联系人或资料中的另一个号码加验证标记。`profile_version` 用于客户修改，`sales_version` 用于销售归属，不相互替代。
 
 | section | 读取权限 | `data` 字段与口径 |
 | --- | --- | --- |
 | `services` | `services.view` | `total/active/suspended/overdue/expiring_30_days` 均为服务件数；`groups:[{group_id,group_name,total,active}]` 按真实服务导航组分组，未分组的id/name为null；不归类到固定“魔方云” |
-| `invoices` | `invoices.view` | `unpaid_count/unpaid_cents/overdue_count/overdue_cents`；仅status=unpaid，逾期为 `due_at<as_of`；信用未还金额另见credit，不重复当作未付账单 |
+| `invoices` | `invoices.view` | `unpaid_count/unpaid_cents/overdue_count/overdue_cents`；仅status=unpaid，逾期为 `due_at<as_of`；不把历史信用债务当作未付账单，信用额度/债务分区已移除 |
 | `tickets` | `tickets.view` | `total/merged_sources/open/pending/resolved/closed`；同时执行工单部门范围；total保留合并来源，四种当前状态数排除来源工单，所以四种状态数之和可小于total |
 | `wallet` | `invoices.view` 或 `balance.manage` | `balance_cents/credits_cents/debits_cents`；后两者是全历史余额账本正/负变动，含赠款、退款和余额消费，不能称外部收入/支出 |
 | `cash` | `invoices.view` | `gateway_receipts_cents/credit_repayment_cents/external_refunds_cents/receipts_cents/net_receipts_cents`；支付成功＋已登记信用还款为收款，已确认外部退款为退款；净收款=收款－外部退款；不含余额消费或赠款，不是利润 |
-| `credit` | `credit.view` | `account_exists/limit_cents/used_cents/available_cents/frozen/version/enabled`；available=limit-used，冻结及全局关闭须另外判断；账户不存在时金额/版本为null，不推断为可用零额度 |
 | `certification` | `certifications.view` | `profile_id/status/certification_type/version/updated_at`；无档案status=unverified，其余可空；不返回证件原文或提供方结果 |
 | `referral` | `affiliates.view` | `attributed/status/referrer_customer_id/referrer_name/registered_at`；推荐人不在当前客户范围时，其id/name为null，不能通过归因跨范围查看另一个客户 |
 
 服务逾期/即将到期仅包含active、suspended，前者 `next_due_at<as_of`，后者 `[as_of,as_of+30天)`；一次性或无到期时间不进入期限计数。所有财务累计均为快照中已经登记的全历史事实，受权限和客户归属约束，未记录的线下现金/费用不会被推断补齐。
 
-原 `GET /admin/customers/{id}` 继续提供编辑资料；其中旧 `income_cents/expense_cents` 是余额账本汇总。新详情页使用 summary 的wallet/cash区分展示，不能再把旧字段标为实收/退款。编辑字段定义见[客户字段契约](../customer-registration-fields-contract.md)。
+原 `GET /admin/customers/{id}` 继续提供编辑资料；其中旧 `income_cents/expense_cents` 是余额账本汇总。新详情页使用 summary 的wallet/cash区分展示，不能再把旧字段标为实收/退款。编辑协议见[客户管理 API](customer-api.md)，字段定义规则见[客户字段契约](../customer-registration-fields-contract.md)。
 
 ## 客户详情的关联接口与写操作
 
@@ -120,11 +126,15 @@ node scripts/admin-api-consumers.mjs
 
 | 用途 | 方法与路径 | 权限/关键输入 |
 | --- | --- | --- |
-| 客户列表 | `GET /admin/customers/page` | `customers.view`；`q/group_id/sales_owner_id/status/limit/offset`；group/owner可用 `none` 筛未分配，status=active或disabled |
+| 客户列表 | `GET /admin/customers/page` | `customers.view`；基础筛选及新增 `company/phone/qq/certification_status/level_id/custom_fields`；完整类型、字面匹配及范围规则见[客户管理 API](customer-api.md#客户列表和高级筛选) |
+| 创建客户 | `POST /admin/customers` | `customers.manage`；必填稳定key、email/password；资料及额外分组/销售权限见[客户管理 API](customer-api.md#新建编辑启停和字段定义) |
 | 编辑资料读取 | `GET /admin/customers/{id}` | `customers.view`；读取profile_version及原资料，缺失值保留null |
 | 编辑/启停客户 | `PATCH /admin/customers/{id}` | `customers.manage`；稳定key、`expected_version`，以及至少一个 `display_name/email/status/profile` |
+| 联系人 | `GET/POST /admin/customers/{id}/contacts`、`PATCH/DELETE .../{contact_id}` | 读取 `customers.view`、写 `customers.manage`；原客户端可选key/版本兼容，新UI总是显式发送；详见[客户管理 API](customer-api.md#分组销售归属和联系人) |
 | 充值到钱包 | `POST /admin/customers/{id}/balance` | `balance.manage`；稳定key；`amount_cents`为正整数、`note`≤240；受财务充值开关/上下限限制 |
 | 查询充值结果 | `GET /admin/customers/{id}/balance-operation` | `balance.manage`；原 `Idempotency-Key` 放请求头；按客户及key查询人工充值账本事实，不触发充值 |
+| 代建未付充值账单 | `GET /admin/customers/{id}/topup-options`、`POST .../topups` | `invoices.view`与`invoices.manage`；设置version、amount_cents、必填note/key；创建时不入钱包，见[客户管理 API](customer-api.md#代建未付充值账单) |
+| 推荐人调整 | `GET/PUT /admin/customers/{id}/referrer`、`GET .../referrer/options`、`GET .../referrer/history` | `customers.manage`与`affiliates.manage`；原因、关系版本、稳定key及当前范围；仅后续新建账单生效 |
 | 读取客户分组成员版本 | `GET /admin/customers/{id}/group` | `customer_groups.manage`；返回客户、当前组及独立 `group_membership_version`，私有且不缓存 |
 | 修改客户分组 | `PUT /admin/customers/{id}/group` | `customer_groups.manage`；显式 `group_id`、`expected_version`及稳定key，null仅表示主动移出分组 |
 | 分配销售 | `PUT /admin/customers/{id}/sales-owner` | 超级管理员浏览器会话；显式 `sales_owner_id`可空，`expected_version`使用sales_version；新增稳定key重放，旧无key CAS兼容 |
@@ -179,11 +189,9 @@ Content-Type: application/json
 
 没有已提交的匹配事实时返回200 `{"state":"unconfirmed","user_id":123}`。查询与同客户/key的在途人工充值串行，仍不能把未确认解释为“此前从未执行”或允许换key：原请求可能尚未到达或仍在其他阶段。前端核对confirmed结果的客户和金额，保留原body/key及未确认状态；核验后如需重放仍使用原key及原请求体，成功后刷新wallet与交易。同一用户主动再次充值是新的意图，才用新key。批量动作、退款、支付核验各自遵循领域契约，不把本表模式套到未要求幂等key的所有PUT/PATCH。
 
-### 信用账户与历史的客户上下文
+### 信用业务入口已退役
 
-`GET /admin/credit`、`GET /admin/credit/consumptions`、`GET /admin/credit/repayments` 均要求 `credit.view`，不额外要求 `customers.view`。三个入口的 `customer_id` 遵循本节严格解析、范围外404和不回退全局规则；省略时仍列出当前授权客户范围，合法但无信用账户/记录返回空页。客户核验、总数和当前页使用同一个只读快照，最终SQL保留当前客户范围约束。
-
-返回通用分页 `{items,total,limit,offset}`，保留现有字段。账户支持 `q/status`，status为active或disabled，表示客户状态；消费支持 `q/status/date_from/date_to`，status为outstanding、repaid或refunded；还款支持 `q/date_from/date_to`，不接受status，因为只列已确认到账记录。日期为上海自然日，起止均包含当天；消费按 `created_at`，还款按实际 `received_at`，不改用凭证录入时间。日期/状态错误保留原错误码，精确客户与其他筛选取交集。
+`/admin/credit` 及消费/还款列表等信用专属 API 已全部退出，不再提供客户详情的历史查询、额度管理、还款或原key恢复。通过原入口鉴权后统一410；具体边界见[下线契约](../customer-credit-portal-contract.md)及下文退役说明。客户摘要或统一交易保留的财务兼容字段不能用于重建信用门户；summary不再返回`credit` section及额度/债务信息，新界面不再提供信用分区或付款入口。
 
 ### 客户分组的版本与结果恢复
 
@@ -208,6 +216,8 @@ Content-Type: application/json
 归因可在指定customer_id时另传单个 `customer_role=promoter|referred|either`，默认either，分别表示推荐人、被推荐人、任一端；其他列表或未指定客户时提供该参数返回400。被推荐客户仍须在当前范围；推荐人越界时account_id、affiliate_user_id、affiliate_username及link_id均为null，搜索也不能匹配其姓名。可见推荐人不能据此读取范围外被推荐客户的记录。
 
 客户详情另提供 `GET /admin/customers/{id}/affiliate/page`，保持原 `customers.view` 权限，返回 `{items,total,limit,offset}`；旧 `/affiliate` 继续返回活动数组。两者包含客户作为推广人或被推荐人的既有活动，佣金自身金额保留，但关联账单客户越界时invoice_no为空。两种入口权限互不隐含。权限、客户核验、总数及数据均在同一只读快照，最终查询保留客户范围，空页不扩大查询。
+
+推荐人写入使用专属 `/admin/customers/{id}/referrer`，不是 generic 客户 PATCH。它要求 `customers.manage` 与 `affiliates.manage`，显式目标客户ID或null、关系版本、原因及稳定key；候选和历史按当前范围脱敏。`effective_scope=future_invoices_only`，不回改旧未付/已付账单、佣金、提现或退款。迁移187冻结账单归因，已有资金证据优先、冲突阻断；先停旧 API、worker、导入等 writer 后成套升级数据库与配套程序，不能混跑。完整请求、回执/no-op及历史协议见[客户管理 API](customer-api.md#推荐人调整和历史归因)。
 
 ## 统一交易分页
 
@@ -280,6 +290,8 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 
 ## 资源与商品读取
 
+商品写入与旧页签的完整字段、目录事务授权及创建/复制恢复见[商品管理 API](catalog-api.md)。下文只保留资源读取、分组分页及配置备注的关联入口，不能代替该领域契约。
+
 `GET /admin/resources` 要求 `resources.view`，返回 `{items,total,limit,offset,suppliers}`。除原有 `q/ip/supplier_id/status`，新增精确 `customer_id/product_id`。customer_id遵循本页共同规则；product_id显式空、重复、非纯正十进制或溢出400 `invalid_product`，合法但无匹配商品返回空页。分页数据和计数处于同一快照。
 
 资源项新增 `product_id,product_name,next_due_at`，原有 `id,name,domain,status,username,upstream_id,resource_info,user_id,customer_name,supplier_id,supplier_name` 保留；resource_info仅返回已有白名单。到期时间可为null。suppliers仅包含当前客户范围及所选客户/商品所涉及的供应商，不根据搜索、IP或状态进一步缩减。该资源模型是已登记服务，不能当作独立库存池或完整成本台账。
@@ -289,6 +301,29 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 items保留原数组接口的分组字段（含id、name、slug、description、active、sort_order、version、member_count）；category另含section_id、section_name、section_active。原 `GET /admin/catalog-groups/{kind}` 继续返回完整数组。
 
 商品配置组创建/修改输入新增可选 `notes`，最多5000字符；省略或null保留原备注，显式空字符串清空，新建省略为空。仅后台商品投影返回notes，公开商品和订单创建商品选项不返回。全局配置定义也保存备注，更新省略时按slug保留；分配同步、复制和脱离规则见[商品配置](../product-configuration.md)。仍需原expected_revision/版本及写权限，备注不能绕过共享组/供应商配置保护。
+
+## 独立人工库存
+
+原 `/admin/resources` 保留已购服务视图。独立库存以[人工库存契约](../domain/manual-resources.md)为准，以下路径均省略 `/api/v1`：
+
+| 操作 | 方法与路径 | 权限与输入 |
+| --- | --- | --- |
+| 库存分页 | `GET /admin/manual-resources` | `resources.view`；`q/status/binding/limit/offset` |
+| 库存详情 | `GET /admin/manual-resources/{id}` | 同上，范围外404 |
+| 新建库存 | `POST /admin/manual-resources` | `resources.view/manage`、全客户范围、必填稳定key |
+| 修改/停用/退役 | `PATCH /admin/manual-resources/{id}` | 同上管理权限、资源范围、`expected_version`、稳定key |
+| 显式释放 | `POST /admin/manual-resources/{id}/release` | 同上管理权限、资源范围、`expected_version,note`、稳定key；仅已终止人工服务 |
+| 开通绑定 | `POST /admin/services/{id}/delivery` | 原服务交付权限及资源管理权限，原任务与服务/库存版本，见下文 |
+
+分页默认25、offset0；该新接口严格拒绝非法分页、未知或重复参数，不沿用旧列表的静默回退。`q`最多120字符，按名称、地址、上游标识和提供方匹配；`status`为available/disabled/retired，`binding`为bound/unbound；省略包含全部有权记录。items与total使用同一只读快照，按ID倒序。未分配库存仅全客户范围管理员可见；已分配项按实际客户范围可见。
+
+创建字段：`name`必填，`resource_type`默认server，另可提供`provider,region,address,upstream_id,cost_cents,upstream_expires_at,status,notes,username,password`。name最多120字符、resource_type40、provider/region各120、address/upstream_id各256、notes4000；username最多256字节、password4096字节。成本为CNY整数分，默认0，有效0–9000000000000000；上游期限为2000–2200年的RFC3339或空，独立于客户服务期限。status默认available，retired不可恢复；address为单个IP/主机名文本、无内嵌空白，不能据其推断上游能力。修改为局部PATCH，省略或null字段保留，空字符串清除可空文本或上游期限；`expected_version`必填。已绑定时不能修改resource_type/address/upstream_id/username/password或库存状态，先完成原服务终止及显式释放。
+
+列表和详情包含上述公开元数据及`id,currency,version,created_at,updated_at,has_credentials,binding_id,service_id,customer_id,bound_at`；无绑定的关联字段为null。账号和密码不返回。创建成功201，原请求重放200；修改与释放成功200，返回`id,version,replayed`等本次结果。首次创建、修改与释放均要求单值8–128字符的`Idempotency-Key`，重放仍核对当前权限、范围和真实凭据；同key异请求返回`idempotency_conflict`，不新增平行回执表。审计失败不留下库存、占用或回执。
+
+交付请求为`{job_id,manual_resource_id,resource_expected_version,expected_version,note}`；`expected_version`取服务版本，另一个取库存版本。库存负责提供实际资源标识与账号，选库存时不同时传`upstream_id/username`。成功后原子写占用、开通服务、任务、通知及审计，密码按服务重新加密，不写入任务或审计。未选择库存的旧手工交付继续兼容。服务终止不自动释放库存，release的note为3–2000字符，释放不改服务状态或抹除交付历史。服务本人凭据读取继续使用已有授权接口，不提供库存密码GET。
+
+主要错误：400 `invalid_manual_resource`/`invalid_manual_resource_query`/`invalid_manual_resource_filter`/`invalid_manual_resource_release`/`invalid_idempotency_key`；401凭据失效；403权限不足；404对象不存在或范围外；409 `manual_resource_version_required`/`manual_resource_version_conflict`/`manual_resource_binding_changed`/`manual_resource_bound_identity`/`manual_resource_bound_status`/`manual_resource_retired`/`manual_resource_unavailable`/`manual_resource_identity_required`/`manual_resource_credentials_invalid`/`manual_resource_not_bound`/`manual_resource_release_requires_termination`/`manual_resource_release_pending_job`，以及绑定的`stale_service`/`order_not_deliverable`及原交付状态错误；503 `manual_resource_encryption_unconfigured`。未知结果保持原key/body，冲突不静默更新版本。新增库存UI及人工交付选择器尚未接入。
 
 ## 工单附件上传恢复
 
@@ -306,19 +341,51 @@ items保留原数组接口的分组字段（含id、name、slug、description、
 
 断网、5xx和明确的上传未知错误都先查原key；查不到回执不证明可以安全重试。413/415等预约前的确定输入错误可修正文件后重新提交；预约后的审计回滚、外部Put超时、进程退出或提交确认丢失保守保留未确认意图，人工核验原存储及journal，不能用SHA相同推定是此次上传。对象路径、存储profile和原始外部错误不返回。工单/回复创建成功与附件未确认必须分别展示；当前UI尚未接入此恢复协议。
 
+## 商品与人员业务收款排名
+
+`GET /admin/reports/product-ranking`、`GET /admin/reports/staff-ranking` 要求 `reports.view`，按当前管理员客户范围统计；事务使用只读 Repeatable Read 同快照复核授权和结果。控制台原有排名组件仍为占位，API 完成不表示 UI 已接入。
+
+只接受下列查询参数，每项最多出现一次；未知参数、重复值或编码异常返回 `400 invalid_ranking_query`。
+
+| 参数 | 规则 |
+| --- | --- |
+| `month` | 默认当前上海月份；严格 `YYYY-MM`，年份2000至当前上海年+1；非法为 `400 invalid_report_period` |
+| `limit` | 默认5，严格1–20；空值、非法或越界为 `400 invalid_ranking_limit` |
+| `format` | 省略或 `json`；其他为 `400 invalid_report_format`，不提供导出 |
+
+响应为 `{items,total,month,limit,currency:"CNY",timezone:"Asia/Shanghai",amount_basis,activity_basis,refund_basis,attribution_basis?}`。`total` 是截断前全部候选组数，`items` 只有前 `limit`，无 offset。金额均为整数分。
+
+共同 `amount_basis=business_receipts_including_balance_and_actual_credit_repayments`：非信用业务付款（包含余额消费）与历史信用实际回款，排除充值；不能标为外部现金、净销售额、提成或利润。`refund_basis=confirmed_external_refunds_not_deducted_balance_refunded_invoices_excluded`：已确认外部退款不从本成交指标扣减，纯余额退款账单排除，与现有产品/销售报表一致；真实退款另外进入年度现金支出。
+
+| 接口 | `items` 字段 | 口径及排序 |
+| --- | --- | --- |
+| 商品 | `product_id,name,new_order_amount_cents,new_order_count,renewal_amount_cents,renewal_order_count,total_amount_cents,new_quantity,renewal_quantity` | 复用完整订单行折后分摊后汇总；非信用新购按paid_at、信用按实际received_at，归属新购/续费，不囊括全部手工/混合账单或升级。件数与订单数、续费项目数与账单数独立；免费成交可保留零金额候选。按total_amount_cents降序、product_id升序 |
+| 人员 | `sales_owner_id,sales_owner_name,amount_cents,invoice_count,customer_count,purchase_amount_cents,renewal_amount_cents,upgrade_amount_cents,other_amount_cents` | 期间按实际业务收款；四分类之和等于amount_cents，账单与客户distinct。按查询时客户sales_owner_id归属，变更归属会移动历史排名；未分配及无正收款人员排除。按amount_cents降序、sales_owner_id升序；不估算或确认提成 |
+
+商品 `activity_basis=new_purchase_and_renewal_separate_units_and_distinct_orders`；人员 `activity_basis=purchase_renewal_upgrade_and_other_business`、`attribution_basis=current_customer_sales_owner_unassigned_excluded`。客户原 `/admin/reports/customer-ranking` 仍是独立的全历史余额流水前十名，不能将其期间或指标套用到这两个接口。
+
+验证入口：`TestDashboardRankingQueryValidation`、`TestDashboardRankingAmountsScopeAndShanghaiPeriod`、`TestDashboardRankingCreditReceiptsCurrentOwnerAndStableOrder`，纳入后台严格数据库 runner。新增排名不自动关闭控制台接线、浏览器和旧数据对账。
+
+## 信用额度与合同退役
+
+信用13条、合同23条旧注册全部保留原认证、权限、会话及CSRF包装，通过入口鉴权后分别返回 `410 credit_retired`、`410 contracts_retired`。退休处理器不读 Store/对象/文件、不重放历史回执、不登记还款或写入资金、合同、审计；无登录/错误入口/无权限/跨站写入先执行原安全错误。包括旧查询、设置、状态与合同下载，不保留独立历史业务入口。
+
+相关前后台页面404、菜单与信用付款移除。`/admin/permissions` 及超级管理员 `/me` 使用活动权限目录，隐藏 `credit.*`、`contracts.*`；旧权限ID仍兼容存量角色保存，不代表模块可用。迁移184关闭信用、合同及前台信用显示开关；旧设置值不能恢复退役模块。用户确认无业务历史，本批仍不物理清库或重写既有财务SQL；通用资金投影保留历史口径。先停旧writer，成套升级迁移/API/worker/Web，发现真实历史先人工核查。完整规则见[信用](../customer-credit-portal-contract.md)与[合同](../domain/contract-settings.md)退役边界。
+
 ## 其余领域的权威字段和状态机
 
 以下文档与生成目录配套阅读；目录负责覆盖注册操作，领域文档负责业务输入、状态、冲突和错误。需求声明中 `partial/unverified/deferred` 的项目仍需补充逐动作契约或验收，不视为前端可无条件交付。
 
 | 领域 | 契约入口 |
 | --- | --- |
-| 商品、配置、购买字段 | [目录管理](../catalog-management.md)、[商品配置](../product-configuration.md)、[购买字段](../product-purchase-fields.md)、[配置联动](../native-configuration-rules.md) |
+| 商品、配置、购买字段 | [后台逐动作 API](catalog-api.md)、[目录管理](../catalog-management.md)、[商品配置](../product-configuration.md)、[购买字段](../product-purchase-fields.md)、[配置联动](../native-configuration-rules.md) |
 | 折扣和优惠码 | [分组定价](../domain/customer-group-pricing.md)、[优惠码](../promo-code-restoration-contract.md) |
 | 订单与服务状态 | [交易](../transactions.md)、[变更](../service-configuration-changes.md)、[活动记录](../service-activity.md)、[导航](../service-navigation.md) |
-| 支付、退款、信用 | [支付](../payments.md)、[人工账单](../manual-invoices.md)、[现金口径](../credit-cash-reporting.md)、[退款操作](../payment-operations-runbook.md) |
-| 发票和合同 | [发票申请](../invoice-applications.md)、[合同状态机](../admin-contract-lifecycle-plan.md)、[合同设置](../domain/contract-settings.md) |
-| 客户档案和文件 | [客户字段](../customer-registration-fields-contract.md)、[后台字段管理](../customer-field-admin-restoration-contract.md)、[客户文件](../customer-files.md) |
-| 供应商与资源 | [供应商协议](../supplier-protocol.md)、[客户资源操作](../supplier-customer-operations-contract.md)、[NOKVM](../nokvm-delivery.md) |
+| 支付、退款与历史收款 | [支付](../payments.md)、[人工账单](../manual-invoices.md)、[现金口径](../credit-cash-reporting.md)、[退款操作](../payment-operations-runbook.md) |
+| 发票 | [发票申请](../invoice-applications.md) |
+| 已退役模块 | [信用退役边界](../customer-credit-portal-contract.md)、[合同退役边界](../domain/contract-settings.md)；旧实现仅历史参考 |
+| 客户档案和文件 | [客户逐动作 API](customer-api.md)、[客户字段](../customer-registration-fields-contract.md)、[后台字段管理](../customer-field-admin-restoration-contract.md)、[客户文件](../customer-files.md) |
+| 供应商与资源 | [供应商协议](../supplier-protocol.md)、[客户资源操作](../supplier-customer-operations-contract.md)、[NOKVM](../nokvm-delivery.md)、[人工库存](../domain/manual-resources.md) |
 | 工单与通知 | [工单](../legacy-tickets.md)、[工单通知](../ticket-notification-contract.md)、[统一通知](../notification-architecture.md) |
 | 推广与销售/报表 | [推广API](../affiliate-rules-api.md)、[推广核心](../affiliate-core.md)、[完整报表](../report-restoration-contract.md) |
 | 内容与下载 | [内容](../content-management.md)、[分类](../content-taxonomy.md)、[下载](../download-center.md) |
@@ -342,12 +409,10 @@ node scripts/check-doc-links.mjs
 
 integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/pass零skip；不是业务数据库。本轮新增行为的必需测试在 [`test-admin-api.mjs`](../../scripts/test-admin-api.mjs)，代登录签发边界还纳入原认证严格门禁。生成器及源码声明仅E0，独立数据库行为E1；页面候选、TypeScript编译和既有截图不能替代新UI浏览器E2、真实渠道E3或发布E4。
 
-当前严格后台入口为87个（HTTP 84、Store 3），在任务自有PG18的UTC会话以race串行实际运行，全部run/pass、零跳过。覆盖客户摘要与精确上下文、现金/信用读取及人工充值结果恢复、附件上传恢复、自动续费授权及代登录凭据边界；本批新增独立成员版本、分组与销售原请求重放、审计回滚、锁等待后撤权及自然过期、真实密码轮换及三方锁序、PostgreSQL已提交但COMMIT确认丢失的恢复，以及推广双主体隐私、同快照分页和真实schema182→183升级。成员分配与旧规则配置的锁序风险分别记录，不能据此声称全部旧writer已验收。
+客户摘要、精确上下文、交易/通知历史、成员/销售分配、钱包充值恢复、目录定价、库存和退役边界的实际数据库、组件与历史升级结果集中在[领域验收矩阵](../architecture/contract-verification-matrix.md)及本轮门禁产物。旧信用读取结果仅保留历史范围，不能替代退役测试；既有运行结果不能覆盖本轮新增高级筛选、原凭据自然过期、目录回执或账单归因。
 
-同一隔离库的严格分组定价入口53项（Store 9、HTTP 44）以race串行通过且零跳过，覆盖报价、优惠叠加、结账、折后续费合同价、历史退款证据及旧回执升级；另2项客户范围及联系人/分组归属兼容测试通过且零跳过。这组定价验收不等于旧规则配置与换密的共享授权锁序已验证。
+规则配置由管理员/角色→定价锁→原实际凭据的顺序保护；目录 writer 统一通过 `CatalogTx`，在目录锁前锁主体，等待后和提交前复核自然过期。供应商导入、目录创建、商品升级及配置升级中的创建权限 helper 已处于目录事务边界内，不再用旧调用数量描述为未收口旁路。具体协议见[商品管理 API](catalog-api.md)与[分组定价](../domain/customer-group-pricing.md#配置写入的授权与锁序)；源代码调用边界和数据库锁序须分别证明。
 
-另41项相关组件测试及16项静态盘点/消费者夹具通过；Go全仓编译、相关包vet、架构约束、TypeScript与文档门禁通过。Web全量lint零错误、6条既有警告，修改文件定向lint零警告。分组成员写入又下沉4次HTTP持久化调用，删除3个基线条目，条目数由672降至669，未增加豁免。客户列表的资料/分组表单及列表、资源池的销售归属共用稳定原请求恢复；组件验证不代替浏览器。机器日志、清单和源文件哈希放在忽略的output制品中。
-
-文件存储、完整认证/通知及其余资金历史升级保留既有验收范围，本批未重跑其完整门禁；本批也未执行新UI浏览器、真实对象存储、外部渠道或部署。客户详情整体仍未接入，完整后台各领域继续按需求清单中的API/UI/验证状态推进。
+客户列表资料/分组及列表、资源池销售归属已有稳定原请求恢复接线；客户详情整体、高级筛选、未付充值/推荐人、排名和库存 UI 继续分别实施。文件存储、认证、通知和其余资金历史升级的既有验收只覆盖各自原范围；新增 UI 浏览器、真实对象存储/其他外部渠道及候选发布未执行时不得标记通过。机器日志、清单和源文件哈希放在忽略的 output 制品中，不在本页累加历史 PASS 数字。
 
 前端实施先完成客户详情：固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误，再按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。

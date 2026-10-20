@@ -447,43 +447,6 @@ func (s *Server) deleteInvoiceShippingMethod(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-func (s *Server) contractSettings(w http.ResponseWriter, r *http.Request) {
-	var enabled bool
-	var version int64
-	var updated any
-	if err := s.db.Pool.QueryRow(r.Context(), `SELECT enabled,version,updated_at FROM contract_settings WHERE id=1`).Scan(&enabled, &version, &updated); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"enabled": enabled, "version": version, "updated_at": updated})
-}
-func (s *Server) updateContractSettings(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Enabled         *bool `json:"enabled"`
-		ExpectedVersion int64 `json:"expected_version"`
-	}
-	if !decode(w, r, &in) {
-		return
-	}
-	if in.Enabled == nil || in.ExpectedVersion < 1 {
-		writeError(w, 400, "invalid_contract_settings", "合同设置无效")
-		return
-	}
-	audit := map[string]any{"enabled": *in.Enabled}
-	s.updateSingletonSettings(w, r, settingsUpdate{
-		action: "contract.settings_updated", entity: "contract_settings", operation: "contract_settings", request: audit,
-		begin: func() (pgx.Tx, bool) {
-			tx, _, ok := s.contractTx(w, r, true, true)
-			return tx, ok
-		},
-		apply: func(tx pgx.Tx) (any, any, error) {
-			next, err := updateSettingsVersion(r, tx, "contract_settings", in.ExpectedVersion, "设置已变更，请重新加载",
-				"UPDATE contract_settings SET enabled=$1,version=version+1,updated_at=now() WHERE id=1 RETURNING version", *in.Enabled)
-			return map[string]any{"version": next}, audit, err
-		},
-	})
-}
-
 func loadSettingReplayTx(r *http.Request, tx pgx.Tx, actor int64, operation, key, hash string) (map[string]any, bool, error) {
 	var out map[string]any
 	replayed, err := store.ReplayOperation(r.Context(), tx, actor, "admin:"+operation, key, hash, &out)

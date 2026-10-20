@@ -286,9 +286,6 @@ export function AdminCustomersView() {
                       <TableHead className="text-xs font-semibold text-[#909399] py-3">
                         销售
                       </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        信用额（已用/总计）
-                      </TableHead>
                       <TableHead className="text-xs font-semibold text-[#909399] py-3 text-right">
                         操作
                       </TableHead>
@@ -297,7 +294,7 @@ export function AdminCustomersView() {
                   <TableBody>
                     {filteredData.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="h-32 text-center text-xs text-[#909399]">
+                        <TableCell colSpan={10} className="h-32 text-center text-xs text-[#909399]">
                           暂无客户记录
                         </TableCell>
                       </TableRow>
@@ -386,12 +383,6 @@ export function AdminCustomersView() {
                           {/* 销售 */}
                           <TableCell className="py-3 text-xs text-[#606266]">
                             {cust.sales_owner_name || "-"}
-                          </TableCell>
-
-                          {/* 信用额 */}
-                          <TableCell className="py-3 text-xs text-[#909399]">
-                            <div>¥0</div>
-                            <div className="text-[11px]">¥0.00</div>
                           </TableCell>
 
                           {/* 操作 */}

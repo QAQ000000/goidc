@@ -443,7 +443,7 @@ export async function runInner() {
         await me(plan.publicOrigin, actor[who]);
         const permission = await record(plan.publicOrigin, '/api/v1/admin/site-settings', { headers: { Cookie: actor[who].cookie } }, `${who}-permission`);
         check(permission.status === (who === 'customer' ? 403 : 200), 'Admin permission boundary differs');
-        const route = who === 'customer' ? '/console/contracts' : '/admin';
+        const route = who === 'customer' ? '/console/account' : '/admin';
         const ssr = await record(plan.publicOrigin, route, { headers: { Cookie: actor[who].cookie } }, `${who}-protected-ssr`);
         check(ssr.status === 200 && ssr.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Authenticated SSR failed or fallback');
       }
@@ -452,7 +452,7 @@ export async function runInner() {
       for (const invalid of [undefined, 'zjmfgo_session=invalid_acceptance_cookie']) {
         const headers = invalid ? { Cookie: invalid } : {};
         const unauth = await record(plan.publicOrigin, '/api/v1/me', { headers }, 'anonymous-invalid-api'); check(unauth.status === 401, 'Anonymous/invalid API accepted');
-        for (const [route, destination] of [['/console/contracts', '/login'], ['/admin', '/admin-login']]) {
+        for (const [route, destination] of [['/console/account', '/login'], ['/admin', '/admin-login']]) {
           const denied = await record(plan.publicOrigin, route, { headers }, 'anonymous-invalid-ssr');
           check([302, 303, 307, 308].includes(denied.status) && new URL(denied.headers.location, plan.publicOrigin).pathname === destination, 'Anonymous/invalid SSR accepted');
         }
@@ -470,7 +470,7 @@ export async function runInner() {
         check(result.status === 200 && data.id === actor[who].id && data.role === actor[who].role, 'Spoofed forwarding changed session identity');
         const permission = await record(plan.publicOrigin, '/api/v1/admin/site-settings', { headers: { ...spoofed, Cookie: actor[who].cookie } }, 'spoofed-forwarding-permission');
         check(permission.status === (who === 'customer' ? 403 : 200), 'Spoofed forwarding changed permission');
-        const route = who === 'customer' ? '/console/contracts' : '/admin';
+        const route = who === 'customer' ? '/console/account' : '/admin';
         const ssr = await record(plan.publicOrigin, route, { headers: { ...spoofed, Cookie: actor[who].cookie } }, 'spoofed-forwarding-ssr');
         check(ssr.status === 200 && ssr.body.toString().includes(`<title>${prepared.siteMarker}</title>`), 'Spoofed forwarding changed real SSR');
       }
@@ -481,7 +481,7 @@ export async function runInner() {
       await verifyStaticAndPages(name); await verifyNegative(name);
       await waitFor(async () => {
         const log = (await readFile('/mutable/access.log')).subarray(logOffset).toString();
-        return accessUpstream(log, name, '/api/v1/me', active.api) && accessUpstream(log, name, '/api/v1/admin/site-settings', active.api) && accessUpstream(log, name, '/console/contracts', active.web) && accessUpstream(log, name, '/admin', active.web);
+        return accessUpstream(log, name, '/api/v1/me', active.api) && accessUpstream(log, name, '/api/v1/admin/site-settings', active.api) && accessUpstream(log, name, '/console/account', active.web) && accessUpstream(log, name, '/admin', active.web);
       }, 5, 'real public API/Web upstream logs');
       const identity = evidence.identities.find(row => row.name === `${key}-web`);
       const trace = await readFile(`/mutable/logs/${key}-web.trace.${identity.pid}`, 'utf8');
@@ -552,7 +552,7 @@ export async function runInner() {
     }
     for (const key of ['old', 'next']) for (const who of ['customer', 'admin']) {
       await me(plan[key].api, actor[who], 401);
-      for (const [route, destination] of [['/console/contracts', '/login'], ['/admin', '/admin-login']]) {
+      for (const [route, destination] of [['/console/account', '/login'], ['/admin', '/admin-login']]) {
         const result = await record(plan[key].web, route, { headers: { Cookie: actor[who].cookie } }, 'logged-out-direct-web');
         check([302, 303, 307, 308].includes(result.status) && new URL(result.headers.location, plan[key].web).pathname === destination, 'Direct Web accepted logged out session');
       }

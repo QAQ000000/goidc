@@ -18,9 +18,6 @@ func TestAdminCreditSupplierBrowserFixture(t *testing.T) {
 		if _, err := db.Pool.Exec(t.Context(), `UPDATE admin_roles SET permissions=ARRAY['credit.view','orders.view','products.view','jobs.view','services.view'] WHERE id=(SELECT admin_role_id FROM administrators WHERE id=$1)`, reader); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := db.Pool.Exec(t.Context(), `UPDATE credit_settings SET enabled=true; UPDATE customer_credit_accounts SET limit_cents=50000`); err != nil {
-			t.Fatal(err)
-		}
 		pid := product(t, db, 10)
 		v, item := add(t, h, customer, pid, 1)
 		checkout := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: v, ItemIDs: []int64{item}}, customer, "next-browser-checkout")

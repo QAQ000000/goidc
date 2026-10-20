@@ -14,7 +14,7 @@ func (s *Server) savePurchaseFields(w http.ResponseWriter, r *http.Request) {
 	if !decodeLimit(w, r, &in, 64<<10) {
 		return
 	}
-	if err := s.db.SavePurchaseFields(r.Context(), identityFrom(r).ID, id, in); err != nil {
+	if err := s.db.SavePurchaseFields(requestFileContext(r), identityFrom(r).ID, id, in); err != nil {
 		s.fail(w, r, err)
 		return
 	}

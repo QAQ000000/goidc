@@ -53,7 +53,6 @@ const customerNav = [
   { href: "/console/orders", label: "我的订单", icon: ClipboardList },
   { href: "/console/services", label: "我的服务", icon: Server },
   { href: "/console/invoices", label: "我的账单", icon: Receipt },
-  { href: "/console/contracts", label: "我的合同", icon: Receipt },
   { href: "/console/invoice-applications", label: "发票申请", icon: Receipt },
   { href: "/console/account", label: "账户余额", icon: WalletCards },
   { href: "/console/affiliate", label: "推广返利", icon: WalletCards },

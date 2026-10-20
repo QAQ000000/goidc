@@ -64,7 +64,7 @@ func (s *Server) createCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	result, replayed, err := s.db.CreateCustomerProductGroup(r.Context(), identityFrom(r).ID, key, in)
+	result, replayed, err := s.db.CreateCustomerProductGroup(requestFileContext(r), identityFrom(r).ID, key, in)
 	if err != nil {
 		s.failCustomerPricing(w, r, err)
 		return
@@ -93,7 +93,7 @@ func (s *Server) updateCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	result, err := s.db.UpdateCustomerProductGroup(r.Context(), identityFrom(r).ID, id, key, in)
+	result, err := s.db.UpdateCustomerProductGroup(requestFileContext(r), identityFrom(r).ID, id, key, in)
 	if err != nil {
 		s.failCustomerPricing(w, r, err)
 		return
@@ -118,7 +118,7 @@ func (s *Server) deleteCustomerProductGroup(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	result, err := s.db.DeleteCustomerProductGroup(r.Context(), identityFrom(r).ID, id, key, in)
+	result, err := s.db.DeleteCustomerProductGroup(requestFileContext(r), identityFrom(r).ID, id, key, in)
 	if err != nil {
 		s.failCustomerPricing(w, r, err)
 		return
@@ -181,7 +181,7 @@ func (s *Server) saveCustomerProductDiscount(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	result, err := s.db.SaveCustomerProductDiscount(r.Context(), identityFrom(r).ID, key, in)
+	result, err := s.db.SaveCustomerProductDiscount(requestFileContext(r), identityFrom(r).ID, key, in)
 	if err != nil {
 		s.failCustomerPricing(w, r, err)
 		return

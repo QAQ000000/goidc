@@ -1,12 +1,12 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/codex/zjmfgo/internal/supplier"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -108,7 +108,7 @@ func (s *Server) createProduct(w http.ResponseWriter, r *http.Request) {
 	if !decodeLimit(w, r, &input, 256<<10) {
 		return
 	}
-	saved, err := s.db.SaveProduct(r.Context(), identityFrom(r).ID, id, input)
+	saved, err := s.db.SaveProduct(requestFileContext(r), identityFrom(r).ID, id, input, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -130,7 +130,7 @@ func (s *Server) duplicateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.SourceProductID = source
-	id, err := s.db.DuplicateProduct(r.Context(), identityFrom(r).ID, in)
+	id, err := s.db.DuplicateProduct(requestFileContext(r), identityFrom(r).ID, in, r.Header.Get("Idempotency-Key"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -143,88 +143,19 @@ func (s *Server) upsertProductPricing(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var input struct {
-		BillingCycle     string `json:"billing_cycle"`
-		PriceCents       int64  `json:"price_cents"`
-		SetupFeeCents    int64  `json:"setup_fee_cents"`
-		Active           *bool  `json:"active"`
-		Default          bool   `json:"default"`
-		ExpectedRevision *int64 `json:"expected_revision"`
-	}
+	var input store.ProductPricingInput
 	if !decode(w, r, &input) {
 		return
 	}
-	if !supplier.IsBillingCycle(input.BillingCycle) {
-		writeError(w, 400, "invalid_cycle", "账期无效")
-		return
-	}
-	if input.PriceCents < 0 || input.PriceCents > 100000000 || input.SetupFeeCents < 0 || input.SetupFeeCents > 100000000 {
-		writeError(w, 400, "invalid_pricing", "价格或初装费无效")
-		return
-	}
-	active := true
-	if input.Active != nil {
-		active = *input.Active
-	}
-	if input.Default && !active {
-		writeError(w, 400, "invalid_pricing", "默认账期不能停用")
-		return
-	}
-	tx, err := s.db.CatalogTx(r.Context(), identityFrom(r).ID)
+	out, err := s.db.SaveProductPricing(requestFileContext(r), identityFrom(r).ID, id, input)
 	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var productID, revision int64
-	var defaultCycle, provisionMode string
-	if err = tx.QueryRow(r.Context(), "SELECT id,revision,billing_cycle,provision_mode FROM products WHERE id=$1 FOR UPDATE", id).Scan(&productID, &revision, &defaultCycle, &provisionMode); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if provisionMode != "supplier" && input.BillingCycle != "monthly" && input.BillingCycle != "quarterly" && input.BillingCycle != "annually" && input.BillingCycle != "once" {
-		writeError(w, 400, "invalid_cycle", "该商品不支持此账期")
-		return
-	}
-	if input.ExpectedRevision != nil && *input.ExpectedRevision != revision {
-		writeError(w, 409, "version_conflict", "商品已变更，请重新加载")
-		return
-	}
-	if !active && defaultCycle == input.BillingCycle {
-		writeError(w, 400, "invalid_pricing", "默认账期不能停用，请先切换默认账期")
-		return
-	}
-	if active {
-		if err = store.RequireSupplierProductCycle(r.Context(), tx, id, input.BillingCycle); err != nil {
-			s.fail(w, r, err)
+		var business *store.AccountBusinessError
+		if errors.As(err, &business) {
+			writeError(w, business.Status, business.Code, business.Message)
 			return
 		}
-	}
-	var priceID int64
-	err = tx.QueryRow(r.Context(), `INSERT INTO product_prices(product_id,billing_cycle,price_cents,setup_fee_cents,active)
-VALUES($1,$2,$3,$4,$5)
-ON CONFLICT(product_id,billing_cycle) DO UPDATE SET price_cents=EXCLUDED.price_cents,setup_fee_cents=EXCLUDED.setup_fee_cents,active=EXCLUDED.active,updated_at=now()
-RETURNING id`, id, input.BillingCycle, input.PriceCents, input.SetupFeeCents, active).Scan(&priceID)
-	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if input.Default || input.BillingCycle == defaultCycle {
-		if _, err = tx.Exec(r.Context(), "UPDATE products SET billing_cycle=$2,price_cents=$3,setup_fee_cents=$4,revision=revision+1,updated_at=now() WHERE id=$1", id, input.BillingCycle, input.PriceCents, input.SetupFeeCents); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	} else if _, err = tx.Exec(r.Context(), "UPDATE products SET revision=revision+1,updated_at=now() WHERE id=$1", id); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "product.pricing.updated", "product", id, input); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"id": priceID, "product_id": id, "billing_cycle": input.BillingCycle, "price_cents": input.PriceCents, "setup_fee_cents": input.SetupFeeCents, "active": active, "default": input.Default || input.BillingCycle == defaultCycle})
+	write(w, 200, out)
 }

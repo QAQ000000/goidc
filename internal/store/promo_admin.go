@@ -178,10 +178,7 @@ func (s *Store) CreateAdminPromoCode(ctx context.Context, actor int64, key strin
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	if err = GroupPricingWriteLock(ctx, tx); err != nil {
-		return nil, err
-	}
-	if err = CheckAdminCreationPermission(ctx, tx, actor, "promos"); err != nil {
+	if err = lockAdminPricingMutation(ctx, tx, actor, "promos"); err != nil {
 		return nil, err
 	}
 	out := map[string]any{}
@@ -190,7 +187,7 @@ func (s *Store) CreateAdminPromoCode(ctx context.Context, actor int64, key strin
 		return nil, err
 	}
 	if replay {
-		return out, tx.Commit(ctx)
+		return out, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	if err = lockPromoCustomerGroups(ctx, tx, in.AppliesCustomerGroupIDs); err != nil {
 		return nil, err
@@ -222,7 +219,7 @@ func (s *Store) CreateAdminPromoCode(ctx context.Context, actor int64, key strin
 	if err = Audit(ctx, tx, actor, "promo_code.created", "promo_code", id, map[string]any{"code": in.Code, "discount_type": in.DiscountType, "applies_customer_group_ids": in.AppliesCustomerGroupIDs}); err != nil {
 		return nil, err
 	}
-	return out, tx.Commit(ctx)
+	return out, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func (s *Store) UpdateAdminPromoCode(ctx context.Context, actor, id int64, key string, in PromoPatchInput) (map[string]any, error) {
@@ -244,10 +241,7 @@ func (s *Store) UpdateAdminPromoCode(ctx context.Context, actor, id int64, key s
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	if err = GroupPricingWriteLock(ctx, tx); err != nil {
-		return nil, err
-	}
-	if err = CheckAdminCreationPermission(ctx, tx, actor, "promos"); err != nil {
+	if err = lockAdminPricingMutation(ctx, tx, actor, "promos"); err != nil {
 		return nil, err
 	}
 	out := map[string]any{}
@@ -257,7 +251,7 @@ func (s *Store) UpdateAdminPromoCode(ctx context.Context, actor, id int64, key s
 		return nil, err
 	}
 	if replay {
-		return out, tx.Commit(ctx)
+		return out, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var start, expire *time.Time
 	var version int64
@@ -298,5 +292,5 @@ func (s *Store) UpdateAdminPromoCode(ctx context.Context, actor, id int64, key s
 	if err = SaveCreationReceipt(ctx, tx, actor, operation, key, hash, out); err != nil {
 		return nil, err
 	}
-	return out, tx.Commit(ctx)
+	return out, commitAdminPricingMutation(ctx, tx, actor)
 }

@@ -41,9 +41,8 @@ func (s *Server) serviceCredentials(w http.ResponseWriter, r *http.Request) {
 	if !s.authLimit(w, r, "service-credentials", 30) {
 		return
 	}
-	result, err := s.db.ServiceCredentials(r.Context(), identityFrom(r).ID, id, adminRoute(r))
-	if err != nil {
-		s.fail(w, r, err)
+	result, err := s.db.ServiceCredentials(requestFileContext(r), identityFrom(r).ID, id, adminRoute(r))
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")

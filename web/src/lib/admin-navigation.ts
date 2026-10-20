@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog, WalletCards, Megaphone, Percent, Gauge } from "lucide-react";
+import { LayoutDashboard, Users, Tag, Package, ClipboardList, Server, ClipboardCheck, Receipt, MessageSquare, MessagesSquare, History, BarChart3, Mail, ShieldCheck, Settings, BookOpen, Download, FileCheck, Network, Plug, BadgeCheck, HandCoins, UserRoundCog, Megaphone, Percent, Gauge } from "lucide-react";
 import type { User } from "./api";
 
 export const adminNavigation = [
@@ -58,10 +58,6 @@ export const adminNavigation = [
   { href: "/admin/currencies", label: "货币配置", icon: Settings, permission: "settings.view", group: "finance" },
   { href: "/admin/finance-settings", label: "充值与财务", icon: Settings, permission: "settings.view", group: "finance" },
   { href: "/admin/invoice-settings", label: "发票设置", icon: Receipt, permission: "settings.view", group: "finance" },
-  { href: "/admin/contracts", label: "合同列表", icon: FileCheck, permission: "contracts.view", group: "finance" },
-  { href: "/admin/contract-settings", label: "合同设置", icon: Receipt, permission: "settings.view", group: "finance" },
-  { href: "/admin/credit-settings", label: "信用额设置", icon: WalletCards, permission: "settings.view", group: "finance" },
-  { href: "/admin/credit", label: "信用额管理", icon: WalletCards, permission: "credit.view", group: "finance" },
   { href: "/admin/channels", label: "渠道实例", icon: Plug, permission: "@super", group: "system" },
   { href: "/admin/apps", label: "我的应用", icon: Package, permission: "@super", group: "resources_store" },
   { href: "/admin/apps/store", label: "应用商店", icon: Download, permission: "@super", group: "resources_store" },

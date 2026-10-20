@@ -1056,6 +1056,7 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
   const root = adminCustomerId ? `/admin/customers/${adminCustomerId}/contacts` : "/contacts";
   const { data, error, refresh } = useResource<Contact[]>(root);
   const [editing, setEditing] = useState<number | null>(null);
+  const [editingVersion, setEditingVersion] = useState<number | null>(null);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -1068,6 +1069,7 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
 
   function reset() {
     setEditing(null);
+    setEditingVersion(null);
     setUsername("");
     setEmail("");
     setCompanyName("");
@@ -1079,6 +1081,7 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
 
   function edit(contact: Contact) {
     setEditing(contact.id);
+    setEditingVersion(contact.version);
     setUsername(contact.username);
     setEmail(contact.email);
     setCompanyName(contact.company_name);
@@ -1095,6 +1098,7 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
     setMessage("");
     try {
       const body = JSON.stringify({
+        ...(editing ? { expected_version: editingVersion } : {}),
         username,
         email,
         company_name: companyName,
@@ -1120,7 +1124,9 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
     setBusy(true);
     setMessage("");
     try {
-      await api(`${root}/${id}`, { method: "DELETE", body: "{}" });
+      const contact = data?.find((item) => item.id === id);
+      if (!contact) throw new Error("联系人已变更，请刷新后重试");
+      await api(`${root}/${id}`, { method: "DELETE", body: JSON.stringify({ expected_version: contact.version }) });
       if (editing === id) reset();
       refresh();
     } catch (e) {

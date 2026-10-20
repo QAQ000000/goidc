@@ -522,6 +522,32 @@ func (s *Store) ServiceCredentials(ctx context.Context, actorID, serviceID int64
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	var manual bool
+	if err = tx.QueryRow(ctx, "SELECT provision_mode='manual' FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3)", serviceID, admin, actorID).Scan(&manual); err != nil {
+		return nil, err
+	}
+	if manual {
+		credential, ok := ctx.Value(storageCredentialKey{}).(storageCredential)
+		if !ok || credential.Hash == "" {
+			return nil, conflict("unauthorized", "查看人工交付凭据需要有效的原始登录凭据")
+		}
+		if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err != nil {
+			return nil, err
+		}
+		if admin {
+			if err = lockAdminCreationPrincipal(ctx, tx, actorID, "services"); err != nil {
+				return nil, err
+			}
+		} else {
+			var active int64
+			if err = tx.QueryRow(ctx, "SELECT id FROM users WHERE id=$1 AND role='customer' AND status='active' FOR SHARE", actorID).Scan(&active); err != nil {
+				return nil, err
+			}
+		}
+		if err = recheckManualDeliveryCredential(ctx, tx, actorID); err != nil {
+			return nil, err
+		}
+	}
 	if admin {
 		if err = requireDeliveryManage(ctx, tx, actorID); err != nil {
 			return nil, err
@@ -531,9 +557,21 @@ func (s *Store) ServiceCredentials(ctx context.Context, actorID, serviceID int64
 		}
 	}
 	var username string
+	var mode string
 	var sealed []byte
-	if err = tx.QueryRow(ctx, "SELECT username,credentials_encrypted FROM services WHERE id=$1 AND ($2::boolean OR user_id=$3) AND status IN ('active','suspended') AND provision_mode IN ('nokvm','supplier') FOR SHARE", serviceID, admin, actorID).Scan(&username, &sealed); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT username,credentials_encrypted,provision_mode FROM services s WHERE id=$1 AND ($2::boolean OR user_id=$3) AND status IN ('active','suspended')
+ AND (provision_mode='manual')=$4::boolean
+ AND (provision_mode IN ('nokvm','supplier') OR (provision_mode='manual' AND EXISTS(SELECT 1 FROM manual_resource_bindings b WHERE b.service_id=s.id AND b.released_at IS NULL))) FOR SHARE`, serviceID, admin, actorID, manual).Scan(&username, &sealed, &mode); err != nil {
 		return nil, err
+	}
+	if mode == "manual" {
+		credential, ok := ctx.Value(storageCredentialKey{}).(storageCredential)
+		if !ok || credential.Hash == "" {
+			return nil, conflict("unauthorized", "查看人工交付凭据需要有效的原始登录凭据")
+		}
+		if err = recheckManualDeliveryCredential(ctx, tx, actorID); err != nil {
+			return nil, err
+		}
 	}
 	var resetting bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM provision_jobs WHERE service_id=$1
@@ -549,6 +587,11 @@ func (s *Store) ServiceCredentials(ctx context.Context, actorID, serviceID int64
 	}
 	if err = Audit(ctx, tx, actorID, "service.credentials.viewed", "service", serviceID, map[string]any{}); err != nil {
 		return nil, err
+	}
+	if mode == "manual" {
+		if err = recheckManualDeliveryCredential(ctx, tx, actorID); err != nil {
+			return nil, err
+		}
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return nil, err

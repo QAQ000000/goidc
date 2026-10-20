@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 编译全部 Go 测试 | `./scripts/go.sh test ./... -run '^$'` | Go 依赖可用；不执行测试 |
 | 架构依赖与持久化增量门禁 | `./scripts/go.sh test ./internal/archtest -count=1` | Go 依赖可用；不连接数据库；CI 用 `GOIDC_ARCH_BASE_REF` 与文档相同基准核对基线只能缩减，规则见[架构边界](architecture/engineering-governance.md#架构依赖与存量持久化边界) |
-| 后台 API 目录与客户详情契约 | `node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs`；`node scripts/test-admin-api.mjs --integration` | 盘点只验证静态采集；集成强制独立回环PG18、race及逐项run/pass零skip，覆盖摘要分区授权、客户/工单范围、现金与信用事件、客户精确日志、代登录禁止派生长期凭据、自动续费与换密锁序；前端新接线和真实渠道另验，见[API契约](admin/api.md) |
+| 后台 API 目录与客户详情契约 | `node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs`；`node scripts/test-admin-api.mjs --integration` | 盘点只验证静态采集；集成强制独立回环PG18、race及逐项run/pass零skip，覆盖摘要分区授权、客户/工单范围、历史信用/现金投影、商品/人员月排名、信用/合同退役及183→184保留升级、独立人工库存及184→185升级/并发绑定/终止后释放/凭据保护、四类定价授权与换密/过期、客户精确日志、代登录禁止派生长期凭据、自动续费与换密锁序；前端新接线和真实渠道另验，见[API契约](admin/api.md) |
 | Go 单元及可用集成测试 | `./scripts/go.sh test ./...` | 无测试 DSN 时数据库用例会跳过，不能声称集成验收通过 |
 | 报表 JSON 查询 | `./scripts/go.sh test ./internal/httpapi -run '^TestWriteReportJSONOnlyFormats$'`；集成入口 `TestReportEndpointsJSONOnlyFormatsAndPermissions`，金额、权限和分页见[报表回归](credit-cash-reporting.md#回归入口) | 格式解析可独立验证；接口权限/范围仍须独立 PG18 回归 |
 | 服务取消与续费 | `node scripts/test-service-cancellations.mjs --integration` | 显式回环 PG18 `_test` URL；串行 race、逐入口 run/pass 零 skip；API/资金兼容、执行围栏及真实 schema168→169，规则与部署边界见[交易契约](transactions.md#服务取消与续费互斥) |
@@ -97,7 +97,7 @@ node scripts/test-compiled-notifications.mjs --integration
 
 存储密文共用 `internal/secure.Seal/Open`，格式保持 `nonce || ciphertext || tag`。调用方继续负责 AAD、JSON/base64 编码、配置密钥长度及业务错误；已有密文无需迁移。`./scripts/go.sh test -race ./internal/secure ./internal/provision` 验证标准向量、旧格式互通、篡改/截断及凭据域隔离，store 和 HTTP 的渠道、支付、MFA、验证码、实名认证及敏感购买字段测试继续验证业务绑定。
 
-9 个设置写接口共用 `internal/httpapi/settings_mutation.go` 的幂等重放、审计、回执和提交流程，版本锁通过共同函数校验；调度保留重放前锁设置行再校验凭据的顺序，登录/MFA、实名认证及合同保留各自权限检查。操作 scope、请求 hash 和响应字段沿用原约定。支付、SMTP/SMS、站点、订单及供应商 API 设置由已有 store 事务负责，继续保留密钥保留/清除、渠道同步、会话复核等不同契约。独立 PG18 用例 `TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt` 对全部 9 个入口注入审计故障，验证业务/版本/回执一起回滚，随后同键重试成功且重放只产生一次审计。
+当前7个活动设置写接口共用 `internal/httpapi/settings_mutation.go` 的幂等重放、审计、回执和提交流程，版本锁通过共同函数校验；调度保留重放前锁设置行再校验凭据的顺序，登录/MFA、实名认证保留各自权限检查；信用/合同设置现已退役，不能再调用原业务写入。操作 scope、请求 hash 和响应字段沿用原约定。支付、SMTP/SMS、站点、订单及供应商 API 设置由已有 store 事务负责，继续保留密钥保留/清除、渠道同步、会话复核等不同契约。独立 PG18 用例 `TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt` 当前列出7个活动入口，注入审计故障验证业务/版本/回执一起回滚，随后同键重试成功且重放只产生一次审计。该用例已随本批补充兼容33项在任务自有PG18 UTC会话以race串行通过、零跳过；历史9入口不作为活动范围恢复，完整结果见[后台验收](admin/api.md#契约验证与前端交付)。
 
 普通两次查询的分页共用 `internal/httpapi/list_page.go`：调用方保留计数/列表 SQL、投影、筛选和排序，助手绑定分页参数并统一空数组及分页信封。调用方继续选择连接池或已有事务及隔离级别；已有单条 CTE/JSON 列表保持原查询。`TestListPageFiltersBindingEmptyPagesAndErrors` 覆盖筛选、参数绑定、越界页总数、空数组、类型化结果和查询失败。
 

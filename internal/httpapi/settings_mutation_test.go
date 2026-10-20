@@ -21,7 +21,6 @@ func TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt(t *testing.T) {
 		input                  map[string]any
 	}{
 		{"sales-settings", "sales_settings", "sales.settings", map[string]any{"order_assignment": "random", "registration_assignment": "none"}},
-		{"credit-settings", "credit_settings", "credit.settings", map[string]any{"enabled": true, "limit_cents": 12345, "auto_recharge": false}},
 		{"scheduler-settings", "scheduler_task_settings", "scheduler.settings", map[string]any{"enabled": false, "settings": map[string]any{"expiry_days": []int{3}, "billing_grace_days": 5}}},
 		{"certification-settings", "certification_settings", "certification.settings", map[string]any{
 			"enabled": true, "require_for_purchase": true, "default_provider_id": "manual", "advanced_enabled": true,
@@ -31,7 +30,6 @@ func TestSingletonSettingsAuditFailureLeavesNoMutationOrReceipt(t *testing.T) {
 		{"security/mfa", "mfa_settings", "mfa.settings", map[string]any{"customer_enabled": false, "admin_enabled": false}},
 		{"finance-settings", "finance_settings", "finance_settings", map[string]any{"topup_enabled": false, "min_topup_cents": 123, "max_topup_cents": 456, "max_balance_cents": 0, "require_active_order": true}},
 		{"invoice-settings", "invoice_settings", "invoice_settings", map[string]any{"enabled": true, "rate_percent": 3.5}},
-		{"contract-settings", "contract_settings", "contract_settings", map[string]any{"enabled": true}},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			path := "/api/v1/admin/" + tc.path

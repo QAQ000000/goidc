@@ -36,17 +36,14 @@ func (e *CustomerPricingResourceNotFound) Error() string {
 	return "商品分组不存在"
 }
 
-// Writers take the pricing lock before credentials, receipts, group rows, or
-// foreign-key locks. Readers take its shared counterpart before catalog locks.
-// The statement trigger is a backstop, not a substitute for this lock order.
+// Accounts/roles precede pricing; credentials, receipts and business rows follow
+// pricing. Statement triggers remain a backstop for non-API writers.
 func (s *Store) beginCustomerPricingMutation(ctx context.Context, actor int64, operation, key, hash string) (pgx.Tx, map[string]any, bool, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, false, err
 	}
-	if err = GroupPricingWriteLock(ctx, tx); err == nil {
-		err = CheckAdminCreationPermission(ctx, tx, actor, "customer_groups")
-	}
+	err = lockAdminPricingMutation(ctx, tx, actor, "customer_groups")
 	if err != nil {
 		tx.Rollback(ctx)
 		return nil, nil, false, err
@@ -72,7 +69,7 @@ func (s *Store) CreateCustomerProductGroup(ctx context.Context, actor int64, key
 	}
 	defer tx.Rollback(ctx)
 	if replayed {
-		return result, true, tx.Commit(ctx)
+		return result, true, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var id, version int64
 	if err = tx.QueryRow(ctx, "INSERT INTO customer_product_groups(name) VALUES($1) RETURNING id,version", in.Name).Scan(&id, &version); err != nil {
@@ -88,7 +85,7 @@ func (s *Store) CreateCustomerProductGroup(ctx context.Context, actor int64, key
 	if err = SaveOperation(ctx, tx, actor, "admin:"+operation, key, hash, result); err != nil {
 		return nil, false, err
 	}
-	return result, false, tx.Commit(ctx)
+	return result, false, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func (s *Store) UpdateCustomerProductGroup(ctx context.Context, actor, id int64, key string, in CustomerProductGroupInput) (map[string]any, error) {
@@ -103,7 +100,7 @@ func (s *Store) UpdateCustomerProductGroup(ctx context.Context, actor, id int64,
 	}
 	defer tx.Rollback(ctx)
 	if replayed {
-		return result, tx.Commit(ctx)
+		return result, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var current int64
 	if err = tx.QueryRow(ctx, "SELECT version FROM customer_product_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
@@ -131,7 +128,7 @@ func (s *Store) UpdateCustomerProductGroup(ctx context.Context, actor, id int64,
 	if err = SaveOperation(ctx, tx, actor, "admin:"+operation, key, hash, result); err != nil {
 		return nil, err
 	}
-	return result, tx.Commit(ctx)
+	return result, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func (s *Store) DeleteCustomerProductGroup(ctx context.Context, actor, id int64, key string, in CustomerProductGroupDeleteInput) (map[string]any, error) {
@@ -146,7 +143,7 @@ func (s *Store) DeleteCustomerProductGroup(ctx context.Context, actor, id int64,
 	}
 	defer tx.Rollback(ctx)
 	if replayed {
-		return result, tx.Commit(ctx)
+		return result, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var current int64
 	if err = tx.QueryRow(ctx, "SELECT version FROM customer_product_groups WHERE id=$1 FOR UPDATE", id).Scan(&current); err != nil {
@@ -169,7 +166,7 @@ func (s *Store) DeleteCustomerProductGroup(ctx context.Context, actor, id int64,
 	if err = SaveOperation(ctx, tx, actor, "admin:"+operation, key, hash, result); err != nil {
 		return nil, err
 	}
-	return result, tx.Commit(ctx)
+	return result, commitAdminPricingMutation(ctx, tx, actor)
 }
 
 func ensureCustomerProductGroupProducts(ctx context.Context, tx pgx.Tx, groupID int64, productIDs []int64) error {
@@ -200,7 +197,7 @@ func (s *Store) SaveCustomerProductDiscount(ctx context.Context, actor int64, ke
 	}
 	defer tx.Rollback(ctx)
 	if replayed {
-		return result, tx.Commit(ctx)
+		return result, commitAdminPricingMutation(ctx, tx, actor)
 	}
 	var exists int
 	if err = tx.QueryRow(ctx, "SELECT count(*) FROM customer_groups WHERE id=$1", in.CustomerGroupID).Scan(&exists); err != nil {
@@ -249,5 +246,5 @@ func (s *Store) SaveCustomerProductDiscount(ctx context.Context, actor int64, ke
 	if err = SaveOperation(ctx, tx, actor, "admin:"+operation, key, hash, result); err != nil {
 		return nil, err
 	}
-	return result, tx.Commit(ctx)
+	return result, commitAdminPricingMutation(ctx, tx, actor)
 }

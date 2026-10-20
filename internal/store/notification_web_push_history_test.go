@@ -114,7 +114,23 @@ func TestNotificationWebPushHistoryRechecksCurrentOwnershipOfEveryResource(t *te
 			}
 			switch changed {
 			case "invoice":
-				f.exec(t, `UPDATE invoices SET user_id=$1 WHERE id=$2`, f.other, resources.invoice)
+				// Keep defensive history filtering for a deliberately corrupted
+				// legacy fact while verifying normal transfers are blocked.
+				if _, err := f.db.Pool.Exec(f.ctx, "UPDATE invoices SET user_id=$1 WHERE id=$2", f.other, resources.invoice); err == nil {
+					t.Fatal("invoice owner guard allowed transfer")
+				}
+				if err := f.db.WithTx(f.ctx, func(tx pgx.Tx) error {
+					if _, err := tx.Exec(f.ctx, "ALTER TABLE invoices DISABLE TRIGGER invoice_referral_owner"); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(f.ctx, "UPDATE invoices SET user_id=$1 WHERE id=$2", f.other, resources.invoice); err != nil {
+						return err
+					}
+					_, err := tx.Exec(f.ctx, "ALTER TABLE invoices ENABLE TRIGGER invoice_referral_owner")
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
 			case "order":
 				f.exec(t, `UPDATE orders SET user_id=$1 WHERE id=$2`, f.other, resources.order)
 			case "service":

@@ -3,6 +3,7 @@
 - [工程治理契约](engineering-governance.md)：项目生命周期、架构依赖门禁与存量债务、Agent 上下文、证据等级和发布安全边界。
 - [领域验收矩阵](contract-verification-matrix.md)：契约到测试、审计入口和证据边界。
 - [项目状态与开发入口](../reconstruction.md)：当前实现、边界和入口。
+- [信用/合同退役与排名API](../admin/api.md)：184迁移关闭开关，旧路由鉴权后410；商品/人员排名与四类定价授权的验证边界分别登记。
 - [编译期模块架构](../compiled-module-architecture.md)：适配器和模块注册约束。
 - [支付模块开发契约](payment-module-development.md)：方式注册、回调协议、历史快照、查询与资金安全验收。
 - [供应商模块开发契约](supplier-module-development.md)：不可变账户身份、配置 schema、命名凭据、持久交付与兼容验收。

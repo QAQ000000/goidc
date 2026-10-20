@@ -23,7 +23,6 @@ export const integrationSuites = {
     'TestServiceCancellationApprovalAndWithdrawal',
     'TestServiceRenewalInvoiceAndPayment',
     'TestBalancePaymentAndRefundAreAtomicAndIdempotent',
-    'TestCreditRenewalAndBalanceRace',
     'TestEpayPendingGuardsAndServiceSettlement',
     'TestEpayUpgradeCallbackWaitsForConcurrentCancellation',
     'TestLocalRenewalExternalRefundHTTPRoundTrip',

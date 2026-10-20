@@ -13,7 +13,7 @@ type ProductDuplicateInput struct {
 
 // DuplicateProduct copies catalog-owned state only. Orders, services, carts,
 // legacy identities, and audit history always remain attached to the source.
-func (s *Store) DuplicateProduct(ctx context.Context, actor int64, in ProductDuplicateInput) (int64, error) {
+func (s *Store) DuplicateProduct(ctx context.Context, actor int64, in ProductDuplicateInput, keys ...string) (int64, error) {
 	in.Name, in.Slug = strings.TrimSpace(in.Name), strings.ToLower(strings.TrimSpace(in.Slug))
 	if in.SourceProductID < 1 || in.Name == "" || !contentTextValid(in.Name, 180, false) || !productSlugPattern.MatchString(in.Slug) {
 		return 0, conflict("invalid_product_duplicate", "源商品、名称或标识无效")
@@ -23,6 +23,20 @@ func (s *Store) DuplicateProduct(ctx context.Context, actor int64, in ProductDup
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	key := ""
+	if len(keys) > 0 {
+		key = keys[0]
+	}
+	receipt := struct {
+		ID int64 `json:"id"`
+	}{}
+	hash, replay, err := CreationReceipt(ctx, tx, actor, "product.duplicate", key, in, &receipt)
+	if err != nil {
+		return 0, err
+	}
+	if replay {
+		return receipt.ID, tx.Commit(ctx)
+	}
 
 	var sourceID int64
 	err = tx.QueryRow(ctx, `SELECT id FROM products WHERE id=$1 FOR SHARE`, in.SourceProductID).Scan(&sourceID)
@@ -186,6 +200,10 @@ SELECT download_id,$2 FROM download_products WHERE product_id=$1 ON CONFLICT DO 
 		return 0, err
 	}
 	if err = Audit(ctx, tx, actor, "product.duplicated", "product", productID, map[string]any{"source_product_id": sourceID, "name": in.Name, "slug": in.Slug}); err != nil {
+		return 0, err
+	}
+	receipt.ID = productID
+	if err = SaveCreationReceipt(ctx, tx, actor, "product.duplicate", key, hash, receipt); err != nil {
 		return 0, err
 	}
 	if err = tx.Commit(ctx); err != nil {

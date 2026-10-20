@@ -2,15 +2,15 @@
 
 来源：`/www/wwwroot/zjmf-manger-decoded/docs/frontend/admin-full-ui-interaction-specification.md`。
 
-状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面、交互或关键验收仍有未闭合项；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备。登记状态不是全量浏览器或生产验收结论。
+状态定义：`已完成` 表示已有真实页面和 API，且没有已登记的旧版关键能力缺口；`部分完成` 表示页面、交互或关键验收仍有未闭合项；`待实现` 表示没有对应页面/API；`后端阻塞` 表示 UI 可排版但业务契约尚未具备；`已排除` 表示用户确认退出当前产品范围，旧差距不再是待办。登记状态不是全量浏览器或生产验收结论。
 
-当前登记：105 项中 **43 项已完成、62 项部分完成、0 项待实现、0 项后端阻塞**。报表复核将 #5 我的业绩、#20 工单统计由已完成改为部分完成；本轮已补业绩明细/趋势/提成、处理人评分、年度现金/费用与产品分类数量，并通过隔离PG18专项与报表综合回归，详见[恢复契约](report-restoration-contract.md)。隔离Next+Chrome+模拟API浏览器已通过43条断言、四恢复页×六宽度共24组布局检查；该证据与独立PG32项竞态回归分开，真实Go API浏览器全链路、旧全量迁移/对账与外部凭证未验收，因此不提升完成数。此前按已知能力缺口将36/38/103三项降为部分完成；#36现已补齐并通过[本批验收](archive/README.md#f-11554f6d96b2)。下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](archive/README.md#f-8c06b4a33b88)。
+当前登记：信用及合同整体退役，#15/#18/#38/#39标已排除；#1商品/人员排名API已补但UI仍占位，降为部分完成。105 项中 **41 项已完成、60 项部分完成、4 项已排除、0 项待实现、0 项后端阻塞**。报表复核将 #5 我的业绩、#20 工单统计由已完成改为部分完成；本轮已补业绩明细/趋势/提成、处理人评分、年度现金/费用与产品分类数量，并通过隔离PG18专项与报表综合回归，详见[恢复契约](report-restoration-contract.md)。隔离Next+Chrome+模拟API浏览器已通过43条断言、四恢复页×六宽度共24组布局检查；该证据与独立PG32项竞态回归分开，真实Go API浏览器全链路、旧全量迁移/对账与外部凭证未验收，因此不提升完成数。此前按已知能力缺口将36/38/103三项降为部分完成；#36现已补齐并通过[本批验收](archive/README.md#f-11554f6d96b2)。下方各批次数字保留为当时的历史快照。历史浏览器 PASS 的范围仍以原检查项为准；截图摘要复核发现 143 项匹配、6 项失配需重验、8 项摘要未建立，详见[本次证据范围验收](archive/README.md#f-8c06b4a33b88)。
 
 所有新版路径保持 `/admin/*` 稳定路由。列表页统一使用 `items/total/limit/offset`，设置页统一使用 `version/expected_version`，写操作必须经过权限、审计、幂等和版本冲突校验。
 
 | # | 旧版页面 / hash | 新版路由 | 状态 | 主要 API | 权限 / 验收 |
 |---:|---|---|---|---|---|
-| 1 | 控制台概览 `#/login` | `/admin` | 已完成 | `GET /admin/dashboard` | `dashboard.view` / 四尺寸工作台 |
+| 1 | 控制台概览 `#/login` | `/admin` | 部分完成 | `GET /admin/dashboard`、`GET /admin/reports/product-ranking`、`GET /admin/reports/staff-ranking` | 卡片dashboard.view、排名reports.view及客户范围；排名API已补，UI仍占位；[期间/归属/退款口径](admin/api.md#商品与人员业务收款排名)；旧工作台浏览器不覆盖新增排名 |
 | 2 | 客户列表 `#/customer-list` | `/admin/customers` | 已完成 | `GET /admin/customers/page` | `customers.view` / 搜索分页返回 |
 | 3 | 实名认证 `#/customer-authentication` | `/admin/certifications`、`/console/certification` | 已完成 | `GET /admin/certifications/page`、`GET /admin/certifications/{id}`、`GET /admin/certifications/{id}/history`、`POST /admin/certifications/{id}/review`、`POST /account/certification/convert-company` | `certifications.view/manage` / 状态、类型、接口筛选；审批历史；个人转企业事务、幂等和版本冲突 |
 | 4 | 客户资源池 `#/customer-resources` | `/admin/customer-resources` | 已完成 | `GET /admin/customers/page` + `PUT /admin/customers/{id}/sales-owner` | `@super` / 真实资源池、版本冲突、审计 |
@@ -24,10 +24,10 @@
 | 12 | 产品暂停请求 `#/customer-cancelreq` | `/admin/cancellations` | 已完成 | `GET/POST /admin/cancellations` | `services.view/manage` / 决策审计 |
 | 13 | 交易流水 `#/business-statement` | `/admin/transactions` | 部分完成 | `GET /admin/transactions/page` | `invoices.view` / 成功支付、余额与已付账单事件分页；整数分金额/渠道/方向/上海日期筛选、客户范围、URL与详情回跳；不提供混合现金汇总；[本批验收](archive/README.md#f-c0b07f02ff9a) |
 | 14 | 账单管理 `#/bill-management` | `/admin/invoices` | 已完成 | `GET /admin/invoices/page`；`GET /admin/invoices/{id}/topup-liability`、`POST /admin/invoices/{id}/topup-liability/resolve` | `invoices.view/manage` / 合并和取消；补账另需`balance.topup.resolve`及客户范围，见[增量验收](archive/README.md#f-c2807dad8f80) |
-| 15 | 信用额管理 `#/credit-management` | `/admin/credit` | 部分完成 | `GET /admin/credit` + `PUT /admin/credit/{id}/limit` + `GET /admin/credit/consumptions` + `GET /admin/credit/repayments` + `POST /admin/credit/consumptions/{id}/repay` + `PUT /admin/credit/{id}/freeze` + `POST /invoices/{id}/pay-credit` + `GET /credit/account` + `GET /credit/consumptions` + `GET /credit/repayments` + `GET /invoices/{id}/credit` | `credit.view/manage`、客户会话本人归属 / 独立账户、信用消费/真实线下还款/冻结、客户/日期/债务状态分页、余额隔离、权限/范围/版本/幂等/审计；三标签四尺寸与未知结果恢复；客户门户4API、实际额度/消费/还款/债务、显示开关和原请求恢复已通过[146张四尺寸/短屏及资金验收](archive/README.md#f-d383850d251d)；线上还款、账期合账、已还款现金退付、授信审批仍待补；[既有后台验收](archive/README.md#f-de61a3567672) |
+| 15 | 信用额管理 `#/credit-management` | `/admin/credit`已404 | 已排除 | 原信用查询/额度/冻结/还款/付款及原key恢复统一鉴权后410 | [信用退役](customer-credit-portal-contract.md)；权限仅兼容存量、无独立历史入口，旧门户验收仅历史背景 |
 | 16 | 提现审核 `#/customer-withdrawal` | `/admin/affiliate?tab=withdrawals` | 部分完成 | `GET/POST /admin/affiliate/withdrawals` | `affiliates.view/manage` / 审核打款 |
 | 17 | 发票列表 `#/invoice-audit` | `/admin/invoice-applications` | 已完成 | `GET/POST /admin/invoice-applications` | `invoice_applications.view/manage` |
-| 18 | 合同列表 `#/contracts_audit` | `/admin/contracts` | 部分完成 | `GET/POST /admin/contracts` + `GET /admin/contracts/{id}` + `POST /admin/contracts/{id}/review` + `PUT /admin/contracts/{id}/shipping` + `POST /admin/contracts/bulk-void` | `contracts.view/manage` / 真实服务合同快照、客户确认→审核→邮寄→作废、分页筛选、权限范围、版本幂等和审计；列表及邮寄弹窗四尺寸通过；PDF/第三方电子签章、取消邮寄、模板强制签订策略仍待补；[验收](admin-contract-lifecycle-acceptance.md) |
+| 18 | 合同列表 `#/contracts_audit` | `/admin/contracts`已404 | 已排除 | 原合同读写/历史/状态/打印/下载统一鉴权后410 | [合同退役](domain/contract-settings.md)；不恢复PDF/电子签章、强制签订或其他旧扩展 |
 | 19 | 工单列表 `#/support-ticket` | `/admin/tickets` | 已完成 | `GET /admin/tickets` | `tickets.view/manage` / 部门范围 |
 | 20 | 工单统计 `#/support-statistics` | `/admin/reports?tab=tickets` | 部分完成 | `GET /admin/reports/tickets/handlers`及每日兼容接口；`POST /tickets/{id}/ratings` | `reports.view`及`tickets.view`、当前部门范围 / 处理人/消息原作者统计、星级、筛选排序分页和客户每消息一次评分已补；历史合并量保留，unknown旧身份不倒推，旧评分时间缺失为null；专项PG/导入夹具及模拟API浏览器处理人/评分断言通过，六宽度布局及320评分可操作；真实Go API浏览器全链路与旧全量迁移未验收 |
 | 21 | 年度收入统计 `#/annual-statistics` | `/admin/reports?tab=annual` | 部分完成 | `GET /admin/reports/annual-cash`及income兼容接口；费用GET/POST及void | `reports.view`及客户范围；全局费用另需全部客户范围、写入finance.manage / 真实现金/模拟/待核验分列，退款凭证发生月、12月/上年比较、费用追加登记/撤销已补；source/evidence唯一，撤销重述原月；专项PG及六宽度模拟API浏览器通过，320费用弹窗/未知结果刷新重试通过；不称全部成本或利润，真实Go API浏览器全链路与外部凭证未验收 |
@@ -47,8 +47,8 @@
 | 35 | 充值与财务 `#/general-settings/finance` | `/admin/finance-settings` | 已完成 | `GET/PUT /admin/finance-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
 | 36 | 优惠码 `#/promo-code` | `/admin/promo-codes` | 已完成 | `GET /admin/promo-codes/page`、`POST/PATCH /admin/promo-codes` | `promos.view/manage` / 原九列及状态、标签/六状态筛选、搜索分页/URL恢复、新增取消、日期编辑清空；147版本/日期约束、幂等/冲突/审计；原请求恢复与账号隔离；隔离PG18全量/race及四尺寸37张最终截图通过；旧客户端仍兼容无键/版本；[验收](archive/README.md#f-11554f6d96b2) |
 | 37 | 发票设置 `#/voucher-setting` | `/admin/invoice-settings` | 已完成 | `GET/PUT /admin/invoice-settings` | `settings.view` / `settings.manage`；版本、幂等、审计；快递读取 |
-| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings` | 部分完成 | `GET/PUT /admin/contract-settings` + `GET/POST /admin/contract-templates` + `GET/PUT /admin/contract-templates/{id}` | `settings.view/manage`；模板名称/正文检索、启停筛选、真实分页/页大小及URL恢复；设置/模板409保留草稿、显式最新，身份/撤权隔离、旧新待确认请求逐项原样重放，版本/幂等/审计；本批隔离全量/race及四尺寸49张截图通过；强制签订/商品绑定/PDF签章及旧完整字段仍未实现；[当前契约](domain/contract-settings.md)、[历史批次](archive/snapshots/contract-settings-restoration-acceptance.md) |
-| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings` | 已完成 | `GET/PUT /admin/credit-settings` | `settings.view` / `settings.manage`；版本、幂等、审计 |
+| 38 | 合同设置 `#/contracts_setting` | `/admin/contract-settings`已404 | 已排除 | 原合同设置及模板API统一鉴权后410 | [合同退役](domain/contract-settings.md)；设置不再提供重启模块入口，旧设置验收仅历史背景 |
+| 39 | 信用额设置 `#/credit-setting` | `/admin/credit-settings`已404 | 已排除 | 原GET/PUT信用设置鉴权后410 | [信用退役](customer-credit-portal-contract.md)；不新增授信、还款或前台显示开关 |
 | 40 | 工单部门 `#/work-order-dept` | `/admin/ticket-departments` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-departments` | `@super` / 删除保护 |
 | 41 | 工单状态 `#/work-order-status` | `/admin/ticket-statuses` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-statuses` | `tickets.view/manage` / 默认状态保护、创建编辑删除确认、幂等、版本冲突、审计；四尺寸浏览器验收 |
 | 42 | 工单传递 `#/work-order-rules` | `/admin/ticket-rules` | 已完成 | `GET/POST/PATCH/DELETE /admin/ticket-rules` | `tickets.view/manage` / 真实空态、创建编辑删除确认、幂等、关联校验、版本冲突、审计；四尺寸浏览器验收 |
@@ -100,7 +100,7 @@
 | 88 | 商品管理 `#/commodity-list` | `/admin/suppliers/catalog` | 部分完成 | `GET /admin/suppliers` + `POST /admin/suppliers/{id}/catalog` + `GET /admin/suppliers/{id}/products/{product_id}` + `POST /admin/suppliers/{id}/import` | `products.view/manage` / 独立目录、账户选择、真实空态；拉取、详情与导入保持manage；目录快照本地筛选分页，URL恢复与真实账户新入口导入浏览器验收待补；[本批验收](archive/README.md#f-c0b07f02ff9a) |
 | 89 | 产品管理 `#/commodity-product` | `/admin/products` | 部分完成 | `GET/POST/PATCH /admin/products` | `products.view/manage` |
 | 90 | 任务队列 `#/commodity-taskQueue` | `/admin/suppliers/jobs` | 部分完成 | `GET /admin/supplier-jobs` + `POST /admin/supplier-jobs/{id}/retry` | `products.view`；重试另需 `services.manage/view` / 真实供应商交付任务、8列、客户/供应商/动作/状态/日期/关键词分页、URL恢复与四尺寸；只重试未外调失败同步，未知结果原请求恢复；危险写任务须核验；[验收](archive/README.md#f-de61a3567672) |
-| 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 部分完成 | `GET /admin/resources` | `resources.view` / 真实服务资源分页、IP/供应商/状态筛选、URL恢复；客户范围、脱敏白名单、交付快照绑定；四尺寸、真实筛选/空态/URL恢复/错误恢复已验收；独立资源增改、成本/配置/备注和资源动作弹窗待补 |
+| 91 | 服务器列表 `#/munual-resource` | `/admin/resources` | 部分完成 | `GET /admin/resources` | `resources.view` / 真实服务资源分页、IP/供应商/状态筛选、URL恢复；客户范围、脱敏白名单、交付快照绑定；四尺寸、真实筛选/空态/URL恢复/错误恢复已验收；独立人工库存及人工交付绑定API按[库存契约](domain/manual-resources.md)补齐，库存UI及真实新流程浏览器待接，不把原服务视图验收扩为库存验收 |
 | 92 | 订单列表 `#/supplier-order-list` | `/admin/suppliers/orders` | 部分完成 | `GET /admin/supplier-orders` | `orders.view/manage` / 交付快照供应商归属、客户范围与真实分页、完整订单金额/已证明成本、筛选及详情/创建取消返回上下文、四尺寸；上游订单操作和完整旧版成本结算仍待补；[验收](archive/README.md#f-de61a3567672) |
 | 93 | 续费订单 `#/supplier-renewal-order` | `/admin/suppliers/renewals` | 部分完成 | `GET /admin/supplier-renewals` | `orders.view`；账单详情另需 `invoices.view` / 真实本地供应商服务续费记录、客户/供应商/日期/付款状态分页与返回上下文、四尺寸；成本未知为null，上游续费调用未支持；[验收](archive/README.md#f-de61a3567672) |
 | 94 | 任务队列 `#/task-queue` | `/admin/suppliers/tasks` | 部分完成 | `GET /admin/supplier-tasks` + `POST /admin/supplier-jobs/{id}/retry` | `jobs.view`；重试另需 `services.manage/view` / 与90页使用同一真实队列，安全字段/客户范围、筛选/分页/URL/错误恢复和四尺寸；仅安全同步重排、危险任务人工核验；[验收](archive/README.md#f-de61a3567672) |
@@ -116,7 +116,7 @@
 | 104 | 编辑管理员 `#/admin-edit` | `/admin/access/staff/{id}` | 部分完成 | `GET/PATCH /admin/staff/{id}` | `@super` / 独立详情、共用账号/角色/范围字段、密码确认、提交重置确认、会话复核/版本/幂等/审计、保护超级管理员；旧版语言、工单签名与业务邮件偏好待补；[本批验收](archive/README.md#f-c0b07f02ff9a) |
 | 105 | 创建短信模板 `#/sms-create-template` | `/admin/notifications/new?channel=sms` | 部分完成 | `POST /admin/notification-templates` | `notifications.manage` / 独立创建复用模板编辑器、真实列表回跳、变量/供应商模板ID、payload绑定幂等、权限凭据重查、审计version1；真实供应商模板发送本批未测；[本批验收](archive/README.md#f-c0b07f02ff9a) |
 
-当前数据导出不属于产品范围：报表仅提供 JSON 查询；CSV 等非 JSON 格式明确拒绝。合同、电子发票、工单附件、客户文件与下载中心等业务文件下载保留。
+当前数据导出不属于产品范围：报表仅提供 JSON 查询；CSV 等非 JSON 格式明确拒绝。电子发票、工单附件、客户文件与下载中心等活动业务文件下载保留；合同下载已退役。
 
 ## 批次验收记录
 
@@ -125,12 +125,12 @@
 | 第一批 | 设置、渠道、短信、邮件、验证码、通知 | 进行中 | 设置与营销页面的历史验收已收进封存索引；渠道和通知深度仍在补齐 |
 | 第二批 | 客户扩展 | 进行中 | 客户资源池、实名审批、等级已有能力；业绩明细/趋势/预计及历史确认已有代码、专项PG和模拟API浏览器证据；真实Go API浏览器全链路与旧数据对账未验收；营销、返佣和注册字段联动继续补齐 |
 | 第三批 | 业务与订单 | 进行中 | 普通/续费分页、流量包付款→待人工交付、后台报价创建/延期出账、订单版本化操作/批量/审计删除、客户资料备注、订单提成只读预估已交付；自动流量交付待补；[订单验收](archive/README.md#f-bf9b577744e3)、[流量包验收](archive/README.md#f-774baca14c7d) |
-| 第四批 | 财务与合同 | 进行中 | 独立授信、信用消费、线下还款和冻结已补；线上还款/已还款退付、授信审批继续补齐；合同基础生命周期已补，PDF/电子签章和高级模板策略待补 |
+| 第四批 | 财务及已退役模块 | 范围已修订 | 信用与合同核心/扩展全部退出，不再补线上还款、授信审批或PDF/电子签署。当前鉴权后410、页面404；184只关开关、不物理清表。其他活动财务与发票继续按各自契约验收 |
 | 第五批 | 工单与通知 | 进行中 | 新建工单页面和真实创建 API 已接入并完成四尺寸浏览器验收；工单统计/设置已有部分能力；通知队列、模板和发送日志继续补齐；[验收](archive/README.md#f-43a541711de8) |
 | 第六批 | 报表与任务运维 | 进行中 | [报表恢复](report-restoration-contract.md)已补销售明细/预计与历史确认、处理人/客户消息评分、年度真实现金与费用、独立商品分类/数量；报表综合PG、权限与导入夹具通过，编译/vet、Web静态及代理检查通过；独立PG32项竞态回归与模拟API浏览器43条断言、四页×六宽度24组布局分别通过；真实Go API浏览器全链路、旧全量迁移/对账和外部凭证未验收，历史截图只保留原范围。任务/日志已接API，更多运维能力单列 |
 | 第七批 | 权限、员工与销售 | 进行中 | 注册登录/MFA设置本批收口；销售设置、商品/阶梯规则和销售结算已补并完成隔离 PG18、四尺寸及冲突/未知结果验收；完整权限页面与真实浏览器退款展示仍待补；[本批验收](archive/README.md#f-ed88b40abed4) |
 | 第八批 | 内容与官网配置 | 进行中 | 主题/字段/导航/友情链接/文件分组已有真实CRUD及四尺寸；新闻/帮助完整还原继续补齐 |
-| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立资源CRUD、上游续费/复杂配置和应用目录待补 |
+| 第九批 | 供应商与资源商店 | 进行中 | 资源只读清单、供应商订单/本地续费记录及真实任务队列已补；第95页资源 API 设置、供应商目录/账户摘要及只读连通性测试已验收；独立人工库存及交付绑定按[库存契约](domain/manual-resources.md)补API，库存UI待接；其余供应商/目录按当前契约验收 |
 | 第十批 | 创建与编辑页 | 进行中 | 新建订单优惠码目录/新增弹窗与真实分页 API 已补；订单创建/延期出账及新增弹窗均完成四尺寸浏览器验收；其余创建编辑页继续补齐；[验收](archive/README.md#f-bf9b577744e3) |
 
 2026-10-12 独立分支资源/信用/认证批次已集成并检验；台账仍为47项已完成、48项部分完成、10项待实现，表示登记状态而非功能完成率。[本批验收与边界](archive/README.md#f-cc55b44761e8)。

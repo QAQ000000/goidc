@@ -12,6 +12,12 @@ import (
 // Every new route must make its authority explicit here.
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
+	m["GET /api/v1/admin/customers/{id}/referrer"] = "customers.manage"
+	m["PUT /api/v1/admin/customers/{id}/referrer"] = "customers.manage"
+	m["GET /api/v1/admin/customers/{id}/referrer/options"] = "customers.manage"
+	m["GET /api/v1/admin/customers/{id}/referrer/history"] = "customers.manage"
+	m["GET /api/v1/admin/customers/{id}/topup-options"] = "invoices.manage"
+	m["POST /api/v1/admin/customers/{id}/topups"] = "invoices.manage"
 	m["GET /api/v1/admin/customers/{id}/summary"] = "customers.view"
 	m["GET /api/v1/admin/catalog-groups/{kind}/page"] = "products.view"
 	m["GET /api/v1/admin/account-history/{id}"] = "audit.view"
@@ -21,6 +27,8 @@ var adminRoutePermissions = func() map[string]string {
 	m["PATCH /api/v1/admin/notification-center/templates/{id}"] = "notifications.manage"
 	m["POST /api/v1/admin/notification-center/channels/{id}/webhook"] = "settings.manage"
 	m["GET /api/v1/admin/reports/product-income/groups"] = "reports.view"
+	m["GET /api/v1/admin/reports/product-ranking"] = "reports.view"
+	m["GET /api/v1/admin/reports/staff-ranking"] = "reports.view"
 	m["GET /api/v1/admin/reports/tickets/handlers"] = "reports.view"
 	m["GET /api/v1/admin/reports/annual-cash"] = "reports.view"
 	m["GET /api/v1/admin/reports/expenses"] = "reports.view"
@@ -203,6 +211,11 @@ var adminRoutePermissions = func() map[string]string {
 	m["PUT /api/v1/admin/products/{id}/service-group"] = "products.manage"
 	m["GET /api/v1/admin/services/page"] = "services.view"
 	m["GET /api/v1/admin/resources"] = "resources.view"
+	m["GET /api/v1/admin/manual-resources"] = "resources.view"
+	m["GET /api/v1/admin/manual-resources/{id}"] = "resources.view"
+	m["POST /api/v1/admin/manual-resources"] = "resources.manage"
+	m["PATCH /api/v1/admin/manual-resources/{id}"] = "resources.manage"
+	m["POST /api/v1/admin/manual-resources/{id}/release"] = "resources.manage"
 	m["GET /api/v1/admin/customers/page"] = "customers.view"
 	m["GET /api/v1/admin/certifications/page"] = "certifications.view"
 	m["GET /api/v1/admin/contract-templates"] = "settings.view"
@@ -293,7 +306,7 @@ func (id identity) can(permission string) bool {
 }
 
 func (s *Server) permissionCatalogue(w http.ResponseWriter, r *http.Request) {
-	write(w, 200, store.AdminPermissions)
+	write(w, 200, store.ActiveAdminPermissions())
 }
 func (s *Server) adminRoles(w http.ResponseWriter, r *http.Request) {
 	items, err := s.db.AdminRoleDirectory(r.Context())

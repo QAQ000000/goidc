@@ -36,10 +36,16 @@ func setupTransactionEntries(t *testing.T, db *store.Store, h http.Handler) tran
 	}
 	pending := manualInvoiceCreate(t, h, f.root, manualInvoiceInput(f.uid), "entries-pending-create")
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/payments", pending), map[string]any{"provider": "mock", "expected_version": 1}, f.customer, "entries-pending-intent"), 201)
-	expect(t, request(h, "PUT", "/api/v1/admin/credit-settings", map[string]any{"enabled": true, "limit_cents": 50000, "auto_recharge": false, "expected_version": 1}, f.root, "entries-credit-settings"), 200)
-	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/credit/%d/limit", f.uid), map[string]any{"limit_cents": 50000, "expected_version": 1}, f.root, "entries-credit-limit"), 201)
+	// The transaction reader still recognises historical credit facts, without
+	// reopening the retired HTTP settings, authorisation or payment endpoints.
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE credit_settings SET enabled=true WHERE id=1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE customer_credit_accounts SET limit_cents=50000 WHERE user_id=$1", f.uid); err != nil {
+		t.Fatal(err)
+	}
 	credit := manualInvoiceCreate(t, h, f.root, manualInvoiceInput(f.uid), "entries-credit-create")
-	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", credit), map[string]any{"expected_version": 1}, f.customer, "entries-credit-pay"), 201)
+	seedHistoricalCreditPayment(t, db, f.uid, credit, f.customer, "entries-credit-pay")
 	var otherID int64
 	if err := db.Pool.QueryRow(t.Context(), "SELECT id FROM users WHERE username='upgrade-other'").Scan(&otherID); err != nil {
 		t.Fatal(err)

@@ -50,6 +50,24 @@ function text(tree) {
 class ApiError extends Error { constructor(status, code, message) { super(message); Object.assign(this, { status, code }); } }
 const user = role => ({ id: 7, display_name: 'Fixture', role, permissions: [] });
 
+test('retired credit and contract pages stop before rendering or loading business data', () => {
+  for (const route of ['admin/credit', 'admin/credit-settings', 'console/credit', 'admin/contracts', 'admin/contract-settings', 'console/contracts']) {
+    const missing = Symbol('not found');
+    let calls = 0;
+    const Page = load(`web/src/app/${route}/page.tsx`, { 'next/navigation': { notFound() { calls++; throw missing; } } }).default;
+    assert.throws(() => Page(), error => error === missing);
+    assert.equal(calls, 1);
+  }
+});
+
+test('administrator navigation excludes the retired finance modules', () => {
+  const { adminNavigation } = load('web/src/lib/admin-navigation.ts');
+  for (const href of ['/admin/credit', '/admin/credit-settings', '/admin/contracts', '/admin/contract-settings']) {
+    assert(!adminNavigation.some(item => item.href === href));
+  }
+  assert(adminNavigation.some(item => item.href === '/admin/invoices'));
+});
+
 test('server session guard reads only the selected portal cookie and forwards the matching header', async () => {
   for (const admin of [false, true]) for (const role of admin ? ['admin', 'super_admin'] : ['customer']) {
     const redirect = Symbol('redirect');
@@ -485,40 +503,6 @@ test('real resource hook aborts the old portal request and ignores its late resp
     assert.equal(view.render('customer').data, null);
     replies[1].resolve(Response.json({ data: user('customer') })); await flushResources();
     assert.equal(view.render('customer').data.role, 'customer');
-  } finally { view.unmount(); }
-});
-test('customer credit keeps its snapshot after administrator expiry and pins all asynchronous reads to the customer portal', async () => {
-  const replies = [], browser = new EventTarget();
-  const client = clientAPI('/console/credit', (_url, options) => new Promise(resolve => replies.push({ resolve, options })));
-  const view = statefulHook(hooks => load('web/src/components/customer-credit.tsx', {
-    react: hooks, '@/lib/api': client.helpers,
-    'next/link': { default: Link }, 'next/navigation': { useRouter() {}, useSearchParams() {} },
-    './workspace': { Workspace: primitive('main') }, './common': { Failure: primitive('div'), Loading: primitive('div') },
-    './admin-pagination': { AdminPagination: primitive('nav') },
-  }, { window: browser }).useCustomerCreditResource);
-  try {
-    assert.equal(view.render('/credit/account').data, null);
-    client.browser.location.pathname = '/admin/account';
-    replies[0].resolve(Response.json({ data: user('customer') })); await flushResources();
-    const snapshot = { available_cents: 12000, used_cents: 8000 };
-    replies[1].resolve(Response.json({ data: snapshot })); await flushResources();
-    replies[2].resolve(Response.json({ data: user('customer') })); await flushResources();
-    assert.equal(client.calls.length, 3);
-    assert.deepEqual(client.calls.map(call => call.url), ['/api/v1/me', '/api/v1/credit/account', '/api/v1/me']);
-    for (const call of client.calls) assert.equal(new Headers(call.options.headers).get('X-Auth-Portal'), 'customer');
-    assert.deepEqual(view.render('/credit/account').data, snapshot);
-
-    browser.dispatchEvent(new CustomEvent('zjmfgo:unauthorized', { detail: { portal: 'admin', path: '/me' } }));
-    const retained = view.render('/credit/account');
-    assert.deepEqual(retained.data, snapshot);
-    assert.equal(retained.error, null);
-    assert.equal(client.calls.length, 3, 'administrator expiry must not reload customer credit');
-
-    browser.dispatchEvent(new CustomEvent('zjmfgo:unauthorized', { detail: { portal: 'customer', path: '/me' } }));
-    const revoked = view.render('/credit/account');
-    assert.equal(revoked.data, null);
-    assert.match(revoked.error.message, /登录已失效/);
-    assert.equal(client.calls.length, 3, 'customer expiry must not request more credit data');
   } finally { view.unmount(); }
 });
 test('unauthorized redirects ignore failures from the other portal and redirect only once for their own session', () => {

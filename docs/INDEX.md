@@ -14,8 +14,8 @@
 | 领域 | 入口 | 主要内容 |
 | --- | --- | --- |
 | 架构与验证 | [architecture](architecture/README.md) | 生命周期治理、契约到测试、项目状态、容量和发布验证 |
-| 业务契约 | [domain](domain/README.md) | 商品、交易、支付、服务、供应商、NOKVM、合同 |
-| 后台与权限 | [admin](admin/README.md) | 页面台账、配置、RBAC、合同设置和后台 API |
+| 业务契约 | [domain](domain/README.md) | 商品、交易、支付、服务、供应商、NOKVM及退役边界 |
+| 后台与权限 | [admin](admin/README.md) | 页面台账、配置、RBAC、报表和后台 API |
 | 迁移与切换 | [migration](migration/README.md) | 旧数据、切换、回退和历史审计 |
 
 ## 审计输入与输出

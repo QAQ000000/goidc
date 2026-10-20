@@ -48,7 +48,7 @@ func (s *Store) AdminCreateCustomer(ctx context.Context, actor int64, input Admi
 	}
 	defer tx.Rollback(ctx)
 
-	super, groupAllowed, salesEnabled, err := LockCustomerManager(ctx, tx, actor)
+	super, groupAllowed, salesEnabled, err := lockCustomerAccountManager(ctx, tx, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +68,22 @@ func (s *Store) AdminCreateCustomer(ctx context.Context, actor int64, input Admi
 		if e = LockAdminCustomer(ctx, tx, actor, customerID); e != nil {
 			return nil, e
 		}
-		if e = tx.Commit(ctx); e != nil {
+		if e = commitCustomerAccountMutation(ctx, tx, actor); e != nil {
 			return nil, e
 		}
 		return replay, nil
 	}
 	if input.GroupID != nil {
+		// Membership writes also acquire this lock through their statement
+		// trigger. Take it before the group row, as group/pricing writers do,
+		// so a concurrent group edit cannot hold pricing while waiting for our
+		// group SHARE lock. Keep successful replay ahead of mutable group state.
+		if err = GroupPricingWriteLock(ctx, tx); err != nil {
+			return nil, err
+		}
+		if err = recheckCustomerAccountCredential(ctx, tx, actor); err != nil {
+			return nil, err
+		}
 		var groupID int64
 		if err = tx.QueryRow(ctx, "SELECT id FROM customer_groups WHERE id=$1 FOR SHARE", *input.GroupID).Scan(&groupID); err != nil {
 			if err == pgx.ErrNoRows {
@@ -110,6 +120,9 @@ func (s *Store) AdminCreateCustomer(ctx context.Context, actor int64, input Admi
 	}
 	if !scopeAllowed {
 		return nil, &AccountBusinessError{Status: 403, Code: "permission_denied", Message: "当前客户范围不允许创建无归属客户，请联系管理员开启销售身份"}
+	}
+	if err = recheckCustomerAccountCredential(ctx, tx, actor); err != nil {
+		return nil, err
 	}
 
 	var id int64
@@ -155,7 +168,7 @@ func (s *Store) AdminCreateCustomer(ctx context.Context, actor int64, input Admi
 	if err = saveCustomerAccountOperation(ctx, tx, actor, "customer.create", key, payloadHash, result); err != nil {
 		return nil, err
 	}
-	if err = tx.Commit(ctx); err != nil {
+	if err = commitCustomerAccountMutation(ctx, tx, actor); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -167,10 +180,13 @@ func (s *Store) AdminUpdateCustomer(ctx context.Context, actor, id int64, input 
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	if _, _, _, err = LockCustomerManager(ctx, tx, actor); err != nil {
+	if _, _, _, err = lockCustomerAccountManager(ctx, tx, actor); err != nil {
 		return nil, err
 	}
 	if err = LockAdminCustomer(ctx, tx, actor, id); err != nil {
+		return nil, err
+	}
+	if err = recheckCustomerAccountCredential(ctx, tx, actor); err != nil {
 		return nil, err
 	}
 	// Resolve the customer scope before validating concurrency or idempotency
@@ -200,7 +216,7 @@ func (s *Store) AdminUpdateCustomer(ctx context.Context, actor, id int64, input 
 	if replay, replayed, e := loadAccountBusinessReplay(ctx, tx, actor, operation, key, payloadHash); e != nil {
 		return nil, e
 	} else if replayed {
-		if e = tx.Commit(ctx); e != nil {
+		if e = commitCustomerAccountMutation(ctx, tx, actor); e != nil {
 			return nil, e
 		}
 		return replay, nil
@@ -242,6 +258,9 @@ func (s *Store) AdminUpdateCustomer(ctx context.Context, actor, id int64, input 
 			profile.CustomFields = nil
 		}
 	}
+	if err = recheckCustomerAccountCredential(ctx, tx, actor); err != nil {
+		return nil, err
+	}
 	if _, err = tx.Exec(ctx, `UPDATE users SET display_name=COALESCE($2,display_name),email=COALESCE($3,email),status=COALESCE($4,status),updated_at=now() WHERE id=$1`, id, input.DisplayName, input.Email, input.Status); err != nil {
 		return nil, err
 	}
@@ -267,7 +286,7 @@ func (s *Store) AdminUpdateCustomer(ctx context.Context, actor, id int64, input 
 	if err = saveCustomerAccountOperation(ctx, tx, actor, operation, key, payloadHash, result); err != nil {
 		return nil, err
 	}
-	if err = tx.Commit(ctx); err != nil {
+	if err = commitCustomerAccountMutation(ctx, tx, actor); err != nil {
 		return nil, err
 	}
 	return result, nil

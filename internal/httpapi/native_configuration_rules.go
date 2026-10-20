@@ -28,7 +28,7 @@ func (s *Server) saveNativeConfigurationRule(w http.ResponseWriter, r *http.Requ
 		if !decode(w, r, &in) {
 			return
 		}
-		if err := s.db.DeleteNativeConfigurationRule(r.Context(), identityFrom(r).ID, product, rule, in.ExpectedRevision); err != nil {
+		if err := s.db.DeleteNativeConfigurationRule(requestFileContext(r), identityFrom(r).ID, product, rule, in.ExpectedRevision); err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -39,7 +39,7 @@ func (s *Server) saveNativeConfigurationRule(w http.ResponseWriter, r *http.Requ
 	if !decodeLimit(w, r, &in, 64<<10) {
 		return
 	}
-	saved, err := s.db.SaveNativeConfigurationRule(r.Context(), identityFrom(r).ID, product, rule, in)
+	saved, err := s.db.SaveNativeConfigurationRule(requestFileContext(r), identityFrom(r).ID, product, rule, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return

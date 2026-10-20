@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// Purchase credit authorizes the invoice before any cash is received. These
-// flows exercise the real payment/repayment APIs rather than fabricating the
-// service invoice_items that purchase checkout does not create.
+// Pre-retirement purchase credit authorized an invoice before cash arrived.
+// Historical payments and receipt fixtures preserve report allocation coverage
+// without depending on retired HTTP routes or fabricated service invoice_items.
 func TestProductIncomeCreditPurchasesUseSnapshotsAndLegacyAllocation(t *testing.T) {
 	for _, snapshot := range []bool{true, false} {
 		name := "legacy-no-pricing-snapshot"
@@ -95,7 +95,7 @@ func TestProductIncomeCreditPurchasesUseSnapshotsAndLegacyAllocation(t *testing.
 			}
 			exec(`UPDATE credit_settings SET enabled=true`)
 			exec(`UPDATE customer_credit_accounts SET limit_cents=20000 WHERE user_id=$1`, f.customerID)
-			expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", invoice), map[string]any{"expected_version": 1}, f.customer, "credit-purchase-payment"), 201)
+			seedHistoricalCreditPayment(t, f.db, f.customerID, invoice, f.customer, "credit-purchase-payment")
 			exec(`UPDATE invoices SET paid_at='2024-01-05T12:00:00+08' WHERE id=$1`, invoice)
 			for _, endpoint := range []string{"product-income", "sales/details"} {
 				response := request(f.h, "GET", "/api/v1/admin/reports/"+endpoint+"?year=2024&month=1", nil, f.root, "")
@@ -160,10 +160,12 @@ func TestProductIncomeCreditPurchasesUseSnapshotsAndLegacyAllocation(t *testing.
 					amount = 3
 				}
 				receipt := fmt.Sprintf("purchase-credit-receipt-%d", n)
-				response := request(f.h, "POST", fmt.Sprintf("/api/v1/admin/credit/consumptions/%d/repay", invoice), map[string]any{
-					"amount_cents": amount, "expected_version": n + 1, "receipt": receipt, "received_at": day + "T12:00:00+08:00",
-				}, f.root, receipt)
-				expect(t, response, 201)
+				// Retired credit HTTP routes cannot create repayments. Seed
+				// immutable historical receipts for the cash-report read model.
+				exec(`WITH paid AS (UPDATE credit_invoice_payments SET remaining_cents=remaining_cents-$2,version=version+1,status=CASE WHEN remaining_cents=$2 THEN 'repaid' ELSE 'outstanding' END WHERE invoice_id=$1 RETURNING user_id,remaining_cents,version)
+INSERT INTO credit_repayments(invoice_id,user_id,actor_id,amount_cents,receipt,received_at,idempotency_key,expected_version,version_after,remaining_after)
+SELECT $1,user_id,$3,$2,$4,$5::timestamptz,$4,version-1,version,remaining_cents FROM paid`, invoice, amount, f.staffID, receipt, day+"T12:00:00+08:00")
+				exec("UPDATE customer_credit_accounts SET used_cents=used_cents-$2,version=version+1 WHERE user_id=$1", f.customerID, amount)
 				if n < 2 {
 					assertPeriod("year=2024&month=1", 0, int64(n+1))
 				}

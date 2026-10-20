@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/codex/zjmfgo/internal/provision"
 	"github.com/codex/zjmfgo/internal/supplier"
@@ -22,21 +23,57 @@ func (s *Store) CatalogTx(ctx context.Context, actor int64) (pgx.Tx, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Lock principals before the catalog and credentials. Personal password
+	// changes take the account before invalidating its sessions/API keys; taking
+	// them in reverse order would deadlock with a waiting catalog writer.
 	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock_shared(70108190)"); err == nil {
+		err = lockAdminCreationPrincipal(ctx, tx, actor, "products")
+		if err == pgx.ErrNoRows {
+			err = conflict("permission_denied", "没有管理商品目录的权限")
+		}
+	}
+	if err == nil {
 		_, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(70108197)")
 	}
 	if err == nil {
-		var allowed bool
-		err = tx.QueryRow(ctx, `SELECT coalesce(u.role='super_admin' OR (u.role='admin' AND r.active AND 'products.view'=ANY(r.permissions) AND 'products.manage'=ANY(r.permissions)),false) FROM administrators u LEFT JOIN admin_roles r ON r.id=u.admin_role_id WHERE u.id=$1 AND u.status='active'`, actor).Scan(&allowed)
-		if err == nil && !allowed {
-			err = conflict("permission_denied", "没有管理商品目录的权限")
-		}
+		err = recheckCatalogCredential(ctx, tx, actor)
 	}
 	if err != nil {
 		tx.Rollback(ctx)
 		return nil, err
 	}
-	return tx, nil
+	return &catalogTransaction{Tx: tx, authority: ctx, actor: actor}, nil
+}
+
+type catalogTransaction struct {
+	pgx.Tx
+	authority context.Context
+	actor     int64
+}
+
+func recheckCatalogCredential(ctx context.Context, tx pgx.Tx, actor int64) error {
+	if err := LockFileCredential(ctx, tx, actor); err != nil {
+		return err
+	}
+	// A locking SELECT may wait beyond natural expiry without the row changing.
+	// A fresh statement evaluates the database clock after that wait.
+	return LockFileCredential(ctx, tx, actor)
+}
+
+func (tx *catalogTransaction) Commit(ctx context.Context) error {
+	// Preserve the original authenticated credential even if a caller supplies a
+	// fresh cancellation context when committing. Actor-only internal callers
+	// retain their existing explicit principal authorization contract.
+	if credential, ok := tx.authority.Value(storageCredentialKey{}).(storageCredential); ok {
+		ctx = WithStorageCredential(ctx, credential.Hash, credential.APIKey)
+	}
+	if err := recheckCatalogCredential(ctx, tx.Tx, tx.actor); err != nil {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		_ = tx.Tx.Rollback(cleanup)
+		return err
+	}
+	return tx.Tx.Commit(ctx)
 }
 
 type CatalogGroupInput struct {
@@ -189,7 +226,7 @@ type ProductInput struct {
 
 var productSlugPattern = regexp.MustCompile(`^[a-z0-9-]{1,120}$`)
 
-func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInput) (int64, error) {
+func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInput, keys ...string) (int64, error) {
 	in.Name, in.Description = strings.TrimSpace(in.Name), strings.TrimSpace(in.Description)
 	if in.ProvisionMode == "" {
 		in.ProvisionMode = "manual"
@@ -203,7 +240,7 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 	}
 	deliveryJSON := []byte(`{}`)
 	if in.ProvisionMode == "nokvm" {
-		if in.DeliveryConfig == nil || in.DeliveryConfig.Validate() != nil || s.Provisioners[in.DeliveryConfig.ProfileID] == nil || len(s.ProvisionEncryptionKey) != 32 {
+		if in.DeliveryConfig == nil || in.DeliveryConfig.Validate() != nil {
 			return 0, conflict("invalid_delivery_config", "请选择已配置的 NOKVM 供应商并填写有效资源规格")
 		}
 		deliveryJSON, _ = json.Marshal(in.DeliveryConfig)
@@ -215,6 +252,25 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		return 0, err
 	}
 	defer tx.Rollback(ctx)
+	key := ""
+	if id == 0 && len(keys) > 0 {
+		key = keys[0]
+	}
+	receipt := struct {
+		ID int64 `json:"id"`
+	}{}
+	hash, replay, err := CreationReceipt(ctx, tx, actor, "product.create", key, in, &receipt)
+	if err != nil {
+		return 0, err
+	}
+	if replay {
+		return receipt.ID, tx.Commit(ctx)
+	}
+	// Recover a committed creation before applying mutable deployment checks:
+	// a provider removed after success cannot erase the original receipt.
+	if in.ProvisionMode == "nokvm" && (s.Provisioners[in.DeliveryConfig.ProfileID] == nil || len(s.ProvisionEncryptionKey) != 32) {
+		return 0, conflict("invalid_delivery_config", "请选择已配置的 NOKVM 供应商并填写有效资源规格")
+	}
 	if in.ProvisionMode == "nokvm" && id != 0 {
 		var configurable bool
 		if err = tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM product_option_groups WHERE product_id=$1 AND active)", id).Scan(&configurable); err != nil {
@@ -287,6 +343,10 @@ func (s *Store) SaveProduct(ctx context.Context, actor, id int64, in ProductInpu
 		return 0, err
 	}
 	if err = Audit(ctx, tx, actor, action, "product", id, map[string]any{"revision": revision + 1, "category_id": in.CategoryID, "active": *in.Active, "price_cents": in.PriceCents, "stock": in.Stock, "require_verified_phone": in.RequireVerifiedPhone, "require_certification": in.RequireCertification}); err != nil {
+		return 0, err
+	}
+	receipt.ID = id
+	if err = SaveCreationReceipt(ctx, tx, actor, "product.create", key, hash, receipt); err != nil {
 		return 0, err
 	}
 	return id, tx.Commit(ctx)

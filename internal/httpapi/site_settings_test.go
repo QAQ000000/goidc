@@ -31,7 +31,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if settings.Version != 1 || settings.Name != "智简魔方" || !settings.RegistrationEnabled {
+	if settings.Version < 1 || settings.Name != "智简魔方" || !settings.RegistrationEnabled {
 		t.Fatal("site defaults")
 	}
 	path := "/api/v1/admin/site-settings"
@@ -42,14 +42,14 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 			expected = 401
 		}
 		expect(t, request(h, "GET", path, nil, cookie, ""), expected)
-		expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, 1), cookie, ""), expected)
+		expect(t, request(h, "PUT", path, siteInput(settings.SiteProfile, settings.Version), cookie, ""), expected)
 	}
 	key := request(h, "POST", "/api/v1/api-keys", map[string]any{"name": "site-key"}, root, "")
 	expect(t, key, 201)
 	secret := data(t, key)["secret"].(string)
 	expect(t, requestBearer(h, "GET", path, nil, secret), 403)
-	expect(t, requestBearer(h, "PUT", path, siteInput(settings.SiteProfile, 1), secret), 403)
-	missing := siteInput(settings.SiteProfile, 1)
+	expect(t, requestBearer(h, "PUT", path, siteInput(settings.SiteProfile, settings.Version), secret), 403)
+	missing := siteInput(settings.SiteProfile, settings.Version)
 	delete(missing, "registration_enabled")
 	expect(t, request(h, "PUT", path, missing, root, ""), 400)
 	for _, tc := range []struct{ field, value string }{
@@ -58,7 +58,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 		{"support_url", "https://user:secret@example.test"}, {"logo_url", "/\\evil.test/logo.png"},
 		{"support_phone", "one\x00two"}, {"terms_url", "relative-path"},
 	} {
-		input := siteInput(settings.SiteProfile, 1)
+		input := siteInput(settings.SiteProfile, settings.Version)
 		input[tc.field] = tc.value
 		expect(t, request(h, "PUT", path, input, root, ""), 409)
 	}
@@ -71,9 +71,9 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	profile.SupportURL = "/console/tickets"
 	profile.Description = "云管理\n服务"
 	profile.Address = "上海\n测试地址"
-	w := request(h, "PUT", path, siteInput(profile, 1), root, "")
+	w := request(h, "PUT", path, siteInput(profile, settings.Version), root, "")
 	expect(t, w, 200)
-	if data(t, w)["version"] != float64(2) {
+	if data(t, w)["version"] != float64(settings.Version+1) {
 		t.Fatal("site version")
 	}
 	w = request(h, "GET", "/api/v1/site", nil, "", "")
@@ -86,7 +86,7 @@ func TestSiteSettingsPermissionsValidationAndPublicProfile(t *testing.T) {
 	if err = db.Pool.QueryRow(t.Context(), "SELECT count(*) FROM audit_events WHERE action='site.settings_updated'").Scan(&count); err != nil || count != 1 {
 		t.Fatal("invalid save wrote audit", err)
 	}
-	expect(t, request(h, "PUT", path, siteInput(profile, 1), root, ""), 409)
+	expect(t, request(h, "PUT", path, siteInput(profile, settings.Version), root, ""), 409)
 }
 
 func TestSiteSettingsConcurrentUpdateAndAuditRollback(t *testing.T) {
@@ -104,7 +104,7 @@ func TestSiteSettingsConcurrentUpdateAndAuditRollback(t *testing.T) {
 			defer wg.Done()
 			p := settings.SiteProfile
 			p.Name = fmt.Sprintf("Site %d", i)
-			statuses <- request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, 1), root, "").Code
+			statuses <- request(h, "PUT", "/api/v1/admin/site-settings", siteInput(p, settings.Version), root, "").Code
 		}(i)
 	}
 	wg.Wait()
@@ -116,9 +116,13 @@ func TestSiteSettingsConcurrentUpdateAndAuditRollback(t *testing.T) {
 	if counts[200] != 1 || counts[409] != 1 {
 		t.Fatal("settings race", counts)
 	}
+	previousVersion := settings.Version
 	settings, err = db.SiteSettings(t.Context())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if settings.Version != previousVersion+1 {
+		t.Fatal("concurrent settings save did not advance exactly one version")
 	}
 	if _, err = db.Pool.Exec(t.Context(), `CREATE FUNCTION reject_site_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='site.settings_updated' THEN RAISE EXCEPTION 'injected site audit failure'; END IF; RETURN NEW; END $$;
 CREATE TRIGGER reject_site_audit BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION reject_site_audit();`); err != nil {
@@ -128,7 +132,7 @@ CREATE TRIGGER reject_site_audit BEFORE INSERT ON audit_events FOR EACH ROW EXEC
 	profile.Name = "Must roll back"
 	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, ""), 500)
 	after, err := db.SiteSettings(t.Context())
-	if err != nil || after.Name != settings.Name || after.Version != 2 {
+	if err != nil || after.Name != settings.Name || after.Version != settings.Version {
 		t.Fatal("audit failure left settings changed", err)
 	}
 }
@@ -142,7 +146,7 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 	}
 	profile := settings.SiteProfile
 	profile.RegistrationEnabled = false
-	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 1), root, ""), 200)
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, ""), 200)
 	registration := map[string]any{"email": "site-new@example.test", "display_name": "New customer", "password": "integration-password"}
 	w := request(h, "POST", "/api/v1/auth/register", registration, "", "")
 	expect(t, w, 403)
@@ -150,7 +154,11 @@ func TestSiteRegistrationToggleAndWaitingRequest(t *testing.T) {
 		t.Fatal("wrong registration rejection")
 	}
 	profile.RegistrationEnabled = true
-	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, 2), root, ""), 200)
+	settings, err = db.SiteSettings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	expect(t, request(h, "PUT", "/api/v1/admin/site-settings", siteInput(profile, settings.Version), root, ""), 200)
 	expect(t, request(h, "POST", "/api/v1/auth/register", registration, "", ""), 201)
 	ctx, cancel := context.WithTimeout(t.Context(), 7*time.Second)
 	defer cancel()
@@ -382,6 +390,9 @@ func TestSiteAdminSettingsAreVersionedAndNotPublic(t *testing.T) {
 	response := request(h, "PUT", "/api/v1/admin/site-settings", input, root, "")
 	expect(t, response, 200)
 	updated := data(t, response)
+	if updated["admin_settings"].(map[string]any)["frontend_credit_enabled"] != false {
+		t.Fatal("retired credit display was re-enabled")
+	}
 	if updated["admin_settings"].(map[string]any)["default_language"] != "en_US" || updated["version"] != float64(settings.Version+1) {
 		t.Fatal("admin preferences were not persisted")
 	}

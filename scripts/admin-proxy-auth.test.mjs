@@ -45,14 +45,14 @@ function redirect(response, destination, origin = publicOrigin) {
 }
 
 test('console missing/invalid sessions receive HTTP login redirects before rendering', async () => {
-  for (const path of ['/console', '/console/contracts', '/cart', '/cart/']) {
+  for (const path of ['/console', '/console/account', '/cart', '/cart/']) {
     const anonymous = harness(); redirect(await anonymous.invoke(path), '/login');
     assert.equal(anonymous.calls.filter(row => row.url.endsWith('/me')).length, 0);
     const invalid = harness({ meStatus: 401 }); redirect(await invalid.invoke(path, 'invalid'), '/login');
   }
 });
 test('customer workspaces use the customer cookie even when the browser also has an administrator cookie', async () => {
-  for (const path of ['/console/contracts', '/cart']) {
+  for (const path of ['/console/account', '/cart']) {
     const role = 'customer';
     const h = harness({ role }); assert.equal((await h.invoke(path, { zjmfgo_session: 'session', zjmfgo_admin_session: 'other-admin' })).next, true);
     const call = h.calls.find(row => row.url.endsWith('/me'));
@@ -84,16 +84,16 @@ test('a wrong-role customer cookie is rejected in its own portal without borrowi
 });
 test('console account failures return uncached 503 rather than render or masquerade as logout', async () => {
   for (const options of [{ meStatus: 500 }, { meStatus: 403 }, { meError: true }, { malformed: true }]) {
-    const response = await harness(options).invoke('/console/contracts', 'session');
+    const response = await harness(options).invoke('/console/account', 'session');
     assert.equal(response.status, 503); assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.equal(response.headers.get('Retry-After'), '60'); assert.equal(response.next, undefined);
   }
 });
 test('maintenance blocks every public portal even with an administrator cookie while retaining the external maintenance URL', async () => {
   for (const [cookie, options] of [[undefined, {}], ['customer', {}], ['invalid', { meStatus: 401 }]]) {
-    const h = harness({ maintenance: true, ...options }); const response = await h.invoke('/console/contracts', cookie);
+    const h = harness({ maintenance: true, ...options }); const response = await h.invoke('/console/account', cookie);
     assert.equal(response.status, 503); assert.equal(response.headers.get('Cache-Control'), 'no-store'); assert.match(await response.text(), /maintenance/);
     const target = 'https://status.example.test/window';
-    const external = await harness({ maintenance: true, maintenanceURL: target, ...options }).invoke('/console/contracts', cookie);
+    const external = await harness({ maintenance: true, maintenanceURL: target, ...options }).invoke('/console/account', cookie);
     assert.equal(external.status, 307); assert.equal(external.headers.get('Location'), target); assert.equal(external.headers.get('Cache-Control'), 'no-store');
   }
   for (const adminRole of ['admin', 'super_admin']) for (const path of ['/', '/products/1', '/news', '/knowledgebase', '/downloads']) for (const cookies of [undefined, { zjmfgo_session: 'customer' }, { zjmfgo_admin_session: 'staff' }, { zjmfgo_session: 'customer', zjmfgo_admin_session: 'staff' }]) {
@@ -108,8 +108,8 @@ test('maintenance blocks every public portal even with an administrator cookie w
     assert.equal(external.status, 307); assert.equal(external.headers.get('Location'), target);
     assert.equal(external.headers.get('Cache-Control'), 'no-store');
   }
-  assert.equal((await harness({ siteError: true }).invoke('/console/contracts')).status, 503);
-  for (const options of [{ meStatus: 500 }, { meError: true }]) assert.equal((await harness({ maintenance: true, ...options }).invoke('/console/contracts', 'session')).status, 503);
+  assert.equal((await harness({ siteError: true }).invoke('/console/account')).status, 503);
+  for (const options of [{ meStatus: 500 }, { meError: true }]) assert.equal((await harness({ maintenance: true, ...options }).invoke('/console/account', 'session')).status, 503);
 });
 test('admin guard keeps staff bypass and existing customer/missing/401/500/network outcomes', async () => {
   for (const maintenance of [false, true]) {
@@ -126,12 +126,12 @@ test('admin guard keeps staff bypass and existing customer/missing/401/500/netwo
 });
 test('auth redirects use configured public origin despite hostile forwarding/Host and request origin', async () => {
   const headers = { Host: 'hostile.example', Forwarded: 'host=hostile.example;proto=http', 'X-Forwarded-Host': 'hostile.example', 'X-Forwarded-Proto': 'http', 'X-Forwarded-For': '203.0.113.1' };
-  for (const [path, destination] of [['/admin', '/admin-login'], ['/console/contracts', '/login']]) {
+  for (const [path, destination] of [['/admin', '/admin-login'], ['/console/account', '/login']]) {
     redirect(await harness().invoke(path, undefined, headers, 'http://hostile.example'), destination);
     for (const configuredOrigin of ['https://user:password@public.example', 'https://public.example/path', 'https://public.example/?query=1', 'https://public.example/#fragment', 'file:///tmp/x', 'invalid', '']) await assert.rejects(harness({ configuredOrigin }).invoke(path), /Invalid|URL/);
   }
-  await assert.rejects(harness({ configuredOrigin: 'https://user:password@hostile.example', meStatus: 401 }).invoke('/console/contracts', 'invalid', headers, 'http://hostile.example'), /Invalid/);
-  redirect(await harness({ configuredOrigin: undefined }).invoke('/console/contracts', undefined, {}, 'http://127.0.0.1:53088'), '/login', 'http://127.0.0.1:53088');
+  await assert.rejects(harness({ configuredOrigin: 'https://user:password@hostile.example', meStatus: 401 }).invoke('/console/account', 'invalid', headers, 'http://hostile.example'), /Invalid/);
+  redirect(await harness({ configuredOrigin: undefined }).invoke('/console/account', undefined, {}, 'http://127.0.0.1:53088'), '/login', 'http://127.0.0.1:53088');
 });
 test('API rewrite and public/exempt pages remain independent of console auth', async () => {
   const h = harness({ maintenance: true });

@@ -419,7 +419,23 @@ func TestNotificationCenterClaimRechecksCurrentConsentAndOwnership(t *testing.T)
 			case "bot_disabled":
 				f.exec(t, `UPDATE channel_instances SET enabled=false WHERE id='bot-fixture'`)
 			case "invoice_owner_changed":
-				f.exec(t, `UPDATE invoices SET user_id=$2 WHERE id=$1`, invoiceID, f.other)
+				// Simulate pre-187 malformed ownership with a scoped fixture bypass;
+				// the production trigger must reject the same change first.
+				if _, err := f.db.Pool.Exec(f.ctx, "UPDATE invoices SET user_id=$2 WHERE id=$1", invoiceID, f.other); err == nil {
+					t.Fatal("invoice owner guard allowed a transfer")
+				}
+				if err := f.db.WithTx(f.ctx, func(tx pgx.Tx) error {
+					if _, err := tx.Exec(f.ctx, "ALTER TABLE invoices DISABLE TRIGGER invoice_referral_owner"); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(f.ctx, "UPDATE invoices SET user_id=$2 WHERE id=$1", invoiceID, f.other); err != nil {
+						return err
+					}
+					_, err := tx.Exec(f.ctx, "ALTER TABLE invoices ENABLE TRIGGER invoice_referral_owner")
+					return err
+				}); err != nil {
+					t.Fatal(err)
+				}
 			case "route_disabled_and_reenabled":
 				f.route(t, "telegram", false, 2)
 				f.route(t, "telegram", true, 3)

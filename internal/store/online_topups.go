@@ -150,14 +150,8 @@ func (s *Store) CreateOnlineTopup(ctx context.Context, uid int64, in OnlineTopup
 	if err = validateTopupOptions(o, in.AmountCents, in.ExpectedVersion); err != nil {
 		return out, err
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,amount_cents,due_at) VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,'topup',$2,now()+interval '1 day') RETURNING id,invoice_no,version`, uid, in.AmountCents).Scan(&out.InvoiceID, &out.InvoiceNo, &out.Version)
+	out, err = insertOnlineTopupInvoice(ctx, tx, uid, in, key, hash, o.Version)
 	if err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents) VALUES($1,'账户余额充值','topup',$2)`, out.InvoiceID, in.AmountCents); err != nil {
-		return out, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO balance_topups(invoice_id,user_id,amount_cents,settings_version,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6)`, out.InvoiceID, uid, in.AmountCents, o.Version, key, hash); err != nil {
 		return out, err
 	}
 	if err = Audit(ctx, tx, uid, "balance.topup.created", "invoice", out.InvoiceID, map[string]any{"amount_cents": in.AmountCents}); err != nil {
@@ -333,4 +327,22 @@ func (s *Store) CancelOnlineTopup(ctx context.Context, uid, invoice int64, in On
 		return out, err
 	}
 	return out, tx.Commit(ctx)
+}
+
+func insertOnlineTopupInvoice(ctx context.Context, tx pgx.Tx, uid int64, in OnlineTopupInput, key, hash string, settingsVersion int64) (OnlineTopupResult, error) {
+	var out OnlineTopupResult
+	err := tx.QueryRow(ctx, `INSERT INTO invoices(invoice_no,user_id,invoice_kind,amount_cents,due_at) VALUES('T-'||replace(gen_random_uuid()::text,'-',''),$1,'topup',$2,now()+interval '1 day') RETURNING id,invoice_no,version`, uid, in.AmountCents).Scan(&out.InvoiceID, &out.InvoiceNo, &out.Version)
+	if err != nil {
+		return out, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO invoice_items(invoice_id,description,item_type,amount_cents) VALUES($1,'账户余额充值','topup',$2)`, out.InvoiceID, in.AmountCents); err != nil {
+		return out, err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO balance_topups(invoice_id,user_id,amount_cents,settings_version,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6)`, out.InvoiceID, uid, in.AmountCents, settingsVersion, key, hash); err != nil {
+		return out, err
+	}
+	out.AmountCents = in.AmountCents
+	out.Status = "created"
+	out.SettingsVersion = settingsVersion
+	return out, nil
 }

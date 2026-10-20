@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/codex/zjmfgo/internal/store"
+	"github.com/jackc/pgx/v5"
 	"sync"
 	"testing"
 	"time"
@@ -135,7 +136,7 @@ func TestAffiliateRulesCreditCashMonthAndReplay(t *testing.T) {
 	order := request(f.h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version, ItemIDs: []int64{item}}, f.customer, "credit-monthly-order")
 	expect(t, order, 201)
 	invoice := int64(data(t, order)["invoice_id"].(float64))
-	expect(t, request(f.h, "POST", fmt.Sprintf("/api/v1/invoices/%d/pay-credit", invoice), map[string]any{"expected_version": 1}, f.customer, "credit-monthly-payment"), 201)
+	seedHistoricalCreditPayment(t, f.db, f.customerID, invoice, f.customer, "credit-monthly-payment")
 	var n int
 	check := func(want int) {
 		t.Helper()
@@ -145,14 +146,43 @@ func TestAffiliateRulesCreditCashMonthAndReplay(t *testing.T) {
 	}
 	check(0)
 	received := time.Now().UTC().Add(-24 * time.Hour).Truncate(time.Microsecond)
-	repayment := fmt.Sprintf("/api/v1/admin/credit/consumptions/%d/repay", invoice)
-	partial := map[string]any{"amount_cents": 333, "expected_version": 1, "receipt": "monthly-credit-partial", "received_at": received.Format(time.RFC3339Nano)}
-	expect(t, request(f.h, "POST", repayment, partial, f.admin, "credit-monthly-partial"), 201)
+	// Credit HTTP is retired. Seed historical receipts atomically and exercise
+	// only the surviving commission consumer against those persisted facts.
+	var actor int64
+	if err := f.db.Pool.QueryRow(t.Context(), "SELECT user_id FROM sessions WHERE token_hash=$1", tokenHash(cookieValue(f.admin))).Scan(&actor); err != nil {
+		t.Fatal(err)
+	}
+	record := func(amount, version int64, key string) {
+		t.Helper()
+		if err := f.db.WithTx(t.Context(), func(tx pgx.Tx) error {
+			inserted, err := tx.Exec(t.Context(), `WITH account AS (
+ UPDATE customer_credit_accounts SET used_cents=used_cents-$3,version=version+1 WHERE user_id=$2
+ ), debt AS (
+ UPDATE credit_invoice_payments SET remaining_cents=remaining_cents-$3,version=version+1,
+ status=CASE WHEN remaining_cents=$3 THEN 'repaid' ELSE 'outstanding' END
+ WHERE invoice_id=$1 AND user_id=$2 AND version=$5 RETURNING version,remaining_cents
+ ) INSERT INTO credit_repayments(invoice_id,user_id,actor_id,amount_cents,receipt,received_at,idempotency_key,expected_version,version_after,remaining_after)
+ SELECT $1,$2,$4,$3,$6,$7,$6,$5,version,remaining_cents FROM debt`, invoice, f.customerID, amount, actor, version, key, received)
+			if err != nil {
+				return err
+			}
+			if inserted.RowsAffected() != 1 {
+				return fmt.Errorf("historical repayment version %d was not seeded", version)
+			}
+			return f.db.QueueAffiliateCommissions(t.Context(), tx, invoice, 0)
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	record(333, 1, "monthly-credit-partial")
 	check(0)
-	final := map[string]any{"amount_cents": 1000, "expected_version": 2, "receipt": "monthly-credit-final", "received_at": received.Format(time.RFC3339Nano)}
-	expect(t, request(f.h, "POST", repayment, final, f.admin, "credit-monthly-final"), 201)
+	record(1000, 2, "monthly-credit-final")
 	check(1)
-	expect(t, request(f.h, "POST", repayment, final, f.admin, "credit-monthly-final"), 200)
+	if err := f.db.WithTx(t.Context(), func(tx pgx.Tx) error {
+		return f.db.QueueAffiliateCommissions(t.Context(), tx, invoice, 0)
+	}); err != nil {
+		t.Fatal(err)
+	}
 	check(1)
 	var paid time.Time
 	var amount int64

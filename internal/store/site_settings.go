@@ -77,6 +77,7 @@ func scanSite(row pgx.Row) (SiteSettings, error) {
 		if unmarshalErr := json.Unmarshal(rawPreferences, &out.AdminSettings); unmarshalErr != nil {
 			err = unmarshalErr
 		}
+		out.AdminSettings.FrontendCreditEnabled = false
 	}
 	return out, err
 }
@@ -145,6 +146,8 @@ func validateSite(in *SiteProfile) error {
 }
 
 func normalizeAdminSettings(in *SiteAdminSettings) error {
+	// Ignore the obsolete display toggle from old clients without re-enabling it.
+	in.FrontendCreditEnabled = false
 	if in.DefaultLanguage == "" {
 		in.DefaultLanguage = "zh_CN"
 	}

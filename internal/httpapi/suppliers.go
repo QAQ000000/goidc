@@ -52,7 +52,7 @@ func (s *Server) updateSupplierAPISettings(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusUnauthorized, "unauthorized", "请先登录")
 		return
 	}
-	out, err := s.db.UpdateResourceAPISettings(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), r.Header.Get("Idempotency-Key"), in)
+	out, err := s.db.UpdateResourceAPISettings(requestFileContext(r), identityFrom(r).ID, tokenHash(cookie.Value), r.Header.Get("Idempotency-Key"), in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -82,7 +82,7 @@ func (s *Server) testSupplierConnection(w http.ResponseWriter, r *http.Request) 
 	if !decode(w, r, &in) {
 		return
 	}
-	out, err := s.db.TestSupplierConnectionSchema(r.Context(), identityFrom(r).ID, tokenHash(cookie.Value), id, in.ExpectedVersion, in.ExpectedSchemaVersion, key)
+	out, err := s.db.TestSupplierConnectionSchema(requestFileContext(r), identityFrom(r).ID, tokenHash(cookie.Value), id, in.ExpectedVersion, in.ExpectedSchemaVersion, key)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -118,7 +118,7 @@ func (s *Server) saveSupplier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in.SessionHash = tokenHash(cookie.Value)
-	saved, err := s.db.SaveSupplier(r.Context(), identityFrom(r).ID, id, in)
+	saved, err := s.db.SaveSupplier(requestFileContext(r), identityFrom(r).ID, id, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -169,7 +169,7 @@ func (s *Server) importSupplierProduct(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	pid, err := s.db.ImportSupplierProduct(r.Context(), identityFrom(r).ID, id, in)
+	pid, err := s.db.ImportSupplierProduct(requestFileContext(r), identityFrom(r).ID, id, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return

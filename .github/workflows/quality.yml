@@ -118,7 +118,9 @@ jobs:
   compiled-notification-pg18:
     name: Compiled channels and notifications on isolated PG18
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # Strict domain suites run sequentially against this disposable database.
+    # The admin suite alone permits 50 minutes including process cleanup.
+    timeout-minutes: 90
     env:
       # Disposable CI-only credentials. No repository or production secrets.
       ZJMFGO_TEST_DATABASE_URL: postgres://goidc_ci:goidc_ci_fixture@127.0.0.1:15432/goidc_ci_test?sslmode=disable
@@ -182,7 +184,7 @@ jobs:
           ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestSiteContentVersionedCRUDAndPermissions|TestSiteThemeValidationPermissionsAndReplay|TestSiteSettingsPermissionsValidationAndPublicProfile|TestSiteAdminSettingsAreVersionedAndNotPublic|TestMaintenanceCustomerGateAndAdminRecovery|TestMaintenanceSettingsValidation|TestMaintenancePaymentWebhookAndMFALogin|TestMaintenanceMissingSettingsFailsClosedAndPreservesRecovery)$'
 
       - name: Check report JSON boundaries and retained business file downloads
-        run: ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestReportEndpointsJSONOnlyFormatsAndPermissions|TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth|TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope|TestSalesReportDetailsAmountsScopeAndSnapshot|TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination|TestDownloadsLifecycleBytesCategoriesAndSources|TestTicketAttachmentsAreOwnedAndBounded|TestNOKVMMonitoringHTTPPermissionsAndRedaction|TestCustomerFilesLifecycleOwnershipAndByteIntegrity|TestInvoiceElectronicFileAndAdjustmentControls|TestContractLifecycleSecurityAndSnapshots)$'
+        run: ./scripts/go.sh test -race -count=1 -p=1 -parallel=1 ./internal/httpapi -run '^(TestReportEndpointsJSONOnlyFormatsAndPermissions|TestAnnualCashSeparatesReceiptsConsumptionAndRefundMonth|TestProductIncomeGroupsQuantitiesFiltersPaginationAndScope|TestSalesReportDetailsAmountsScopeAndSnapshot|TestTicketHandlerReportPeriodAssignmentStarsScopeAndPagination|TestDownloadsLifecycleBytesCategoriesAndSources|TestTicketAttachmentsAreOwnedAndBounded|TestNOKVMMonitoringHTTPPermissionsAndRedaction|TestCustomerFilesLifecycleOwnershipAndByteIntegrity|TestInvoiceElectronicFileAndAdjustmentControls)$'
 
       - name: Require CAPTCHA provider and authentication boundaries on PostgreSQL 18
         run: node scripts/test-captcha.mjs --integration

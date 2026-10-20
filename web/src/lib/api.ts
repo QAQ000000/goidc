@@ -230,6 +230,7 @@ export type ApiKey = {
 };
 export type Contact = {
   id: number;
+  version: number;
   customer_id: number;
   username: string;
   sex: number;

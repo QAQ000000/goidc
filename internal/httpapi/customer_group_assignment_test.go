@@ -489,9 +489,6 @@ func TestAdminCustomerGroupAssignmentCreationPasswordPricingLockOrder(t *testing
 		t.Fatal(err)
 	}
 	defer blocker.Rollback(context.Background())
-	if _, err = blocker.Exec(t.Context(), "SELECT pg_advisory_xact_lock(70108206)"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err = blocker.Exec(t.Context(), "SELECT id FROM customer_groups WHERE id=$1 FOR UPDATE", f.group); err != nil {
 		t.Fatal(err)
 	}
@@ -499,26 +496,45 @@ func TestAdminCustomerGroupAssignmentCreationPasswordPricingLockOrder(t *testing
 	go func() {
 		creation <- request(f.h, "POST", "/api/v1/admin/customers", map[string]any{"username": "assignment-lock-created", "email": "assignment-lock-created@example.test", "password": "customer-password", "group_id": f.group}, f.cookie, "group-assignment-create-wait")
 	}()
-	// Creation already owns its original credential and is paused before it
-	// requests pricing. Password owns the account and waits for that credential.
+	// Creation owns its administrator and pricing before waiting for the same
+	// selected group. Assignment must wait for creation's pricing lock.
 	waitQueryLock(t, f.db, "SELECT id FROM customer_groups WHERE id=$1 FOR SHARE")
-	rotation := make(chan *httptest.ResponseRecorder, 1)
-	go func() {
-		rotation <- portalRequest(f.h, "PUT", "/api/v1/account/password", map[string]string{"current_password": "integration-password", "new_password": "rotated-creation-group-password"}, rotationCookie, "admin")
-	}()
-	waitQueryLock(t, f.db, "DELETE FROM sessions WHERE user_id=$1 AND ($2='' OR token_hash<>$2)")
 	assignment := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
 		assignment <- f.groupCall("PUT", "group-assignment-create-password", map[string]any{"group_id": f.group, "expected_version": 1}, "")
 	}()
-	// Assignment must wait for the administrator before owning or queuing for
-	// pricing. Otherwise releasing this blocker forms a three-transaction cycle.
-	waitQueryLock(t, f.db, "SELECT role,admin_role_id FROM administrators WHERE id=$1 AND status='active' FOR SHARE")
+	waitPricingCreationRotationChain(t, f.db, blocker.Conn().PgConn().PID(), false)
+	rotation := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		rotation <- portalRequest(f.h, "PUT", "/api/v1/account/password", map[string]string{"current_password": "integration-password", "new_password": "rotated-creation-group-password"}, rotationCookie, "admin")
+	}()
+	// Assignment already owns its administrator SHARE and waits for pricing
+	// before rotation begins; both initial writes therefore remain authorized.
+	waitPricingCreationRotationChain(t, f.db, blocker.Conn().PgConn().PID(), true)
 	if err = blocker.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 	expect(t, awaitBalanceResponse(t, creation), 201)
+	expect(t, awaitBalanceResponse(t, assignment), 200)
 	expect(t, awaitBalanceResponse(t, rotation), 200)
-	expect(t, awaitBalanceResponse(t, assignment), 401)
-	f.assertMembership(t, 1, nil, 0, 0)
+	f.assertMembership(t, 2, f.group, 1, 1)
+	snapshot := func() string {
+		var facts string
+		err := f.db.Pool.QueryRow(t.Context(), `SELECT jsonb_build_object(
+ 'version',(SELECT to_jsonb(v) FROM customer_group_membership_versions v WHERE customer_id=$1),
+ 'membership',(SELECT to_jsonb(m) FROM customer_group_members m WHERE customer_id=$1),
+ 'audits',(SELECT coalesce(jsonb_agg(to_jsonb(a) ORDER BY id),'[]'::jsonb) FROM audit_events a WHERE action='customer_group.assigned' AND entity_id=$1::bigint::text),
+ 'receipts',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY idempotency_key),'[]'::jsonb) FROM mutation_operations m WHERE scope='admin:customer_group.assign:'||$1::bigint::text))::text`, f.customer).Scan(&facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return facts
+	}
+	committed := snapshot()
+	expect(t, f.groupCall("PUT", "group-assignment-create-password", map[string]any{"group_id": f.group, "expected_version": 1}, ""), 401)
+	f.assertMembership(t, 2, f.group, 1, 1)
+	if after := snapshot(); after != committed {
+		t.Fatalf("revoked assignment retry changed committed facts\nbefore=%s\nafter=%s", committed, after)
+	}
+	assertPricingCreationRotationFacts(t, f.adminBalanceFixture, "assignment-lock-created", "group-assignment-create-wait", f.group, rotationCookie, "rotated-creation-group-password")
 }

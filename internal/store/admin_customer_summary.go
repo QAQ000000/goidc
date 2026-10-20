@@ -107,10 +107,6 @@ func (s *Store) AdminCustomerSummary(ctx context.Context, actor, customer int64)
  SELECT *,gateway_receipts_cents+credit_repayment_cents AS receipts_cents,
  gateway_receipts_cents+credit_repayment_cents-external_refunds_cents AS net_receipts_cents
  FROM totals WHERE admin_customer_allowed($1,$2)`},
-		{"credit", can("credit.view"), `SELECT c.user_id IS NOT NULL AS account_exists,c.limit_cents,c.used_cents,
- c.limit_cents-c.used_cents AS available_cents,c.frozen,c.version,
- (SELECT enabled FROM credit_settings WHERE id=1) AS enabled
- FROM users u LEFT JOIN customer_credit_accounts c ON c.user_id=u.id WHERE u.id=$2 AND admin_customer_allowed($1,u.id)`},
 		{"certification", can("certifications.view"), `SELECT c.id AS profile_id,coalesce(c.status,'unverified') AS status,
  c.certification_type,c.version,c.updated_at
  FROM users u LEFT JOIN certification_profiles c ON c.user_id=u.id WHERE u.id=$2 AND admin_customer_allowed($1,u.id)`},
@@ -118,7 +114,7 @@ func (s *Store) AdminCustomerSummary(ctx context.Context, actor, customer int64)
  CASE WHEN admin_customer_allowed($1,a.user_id) THEN a.user_id END AS referrer_customer_id,
  CASE WHEN admin_customer_allowed($1,a.user_id) THEN ref.display_name END AS referrer_name,
  at.registered_at
- FROM users u LEFT JOIN affiliate_attributions at ON at.user_id=u.id
+ FROM users u LEFT JOIN affiliate_attributions at ON at.user_id=u.id AND at.status='active'
  LEFT JOIN affiliate_accounts a ON a.id=at.account_id LEFT JOIN users ref ON ref.id=a.user_id
  WHERE u.id=$2 AND admin_customer_allowed($1,u.id)`},
 	} {

@@ -42,7 +42,7 @@ func (s *Server) saveConfigurationGroup(w http.ResponseWriter, r *http.Request) 
 	if !decodeLimit(w, r, &in, 256<<10) {
 		return
 	}
-	saved, err := s.db.SaveProductOptionGroup(r.Context(), identityFrom(r).ID, product, group, in)
+	saved, err := s.db.SaveProductOptionGroup(requestFileContext(r), identityFrom(r).ID, product, group, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -66,7 +66,7 @@ func (s *Server) saveConfigurationOption(w http.ResponseWriter, r *http.Request)
 	if !decodeLimit(w, r, &in, 256<<10) {
 		return
 	}
-	saved, err := s.db.SaveProductOption(r.Context(), identityFrom(r).ID, product, group, option, in)
+	saved, err := s.db.SaveProductOption(requestFileContext(r), identityFrom(r).ID, product, group, option, in)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -87,7 +87,7 @@ func (s *Server) replaceOptionPriceTiers(w http.ResponseWriter, r *http.Request)
 	if !decodeLimit(w, r, &in, 64<<10) {
 		return
 	}
-	if err := s.db.ReplaceOptionPriceTiers(r.Context(), identityFrom(r).ID, product, group, option, in); err != nil {
+	if err := s.db.ReplaceOptionPriceTiers(requestFileContext(r), identityFrom(r).ID, product, group, option, in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -100,7 +100,7 @@ func (s *Server) deleteConfiguration(w http.ResponseWriter, r *http.Request, pro
 	if !decode(w, r, &in) {
 		return
 	}
-	if err := s.db.DeleteProductConfiguration(r.Context(), identityFrom(r).ID, product, group, option, in.ExpectedRevision); err != nil {
+	if err := s.db.DeleteProductConfiguration(requestFileContext(r), identityFrom(r).ID, product, group, option, in.ExpectedRevision); err != nil {
 		s.fail(w, r, err)
 		return
 	}

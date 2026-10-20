@@ -194,8 +194,30 @@
         "scripts/admin-api-consumers.mjs",
         "db/migrations/183_customer_group_membership_versions.sql",
         "web/src/components/admin-customers.tsx",
-      "web/src/components/admin-customer-resources.tsx",
-        "web/src/hooks/use-customer-mutation.ts"
+        "web/src/components/admin-customer-resources.tsx",
+        "web/src/hooks/use-customer-mutation.ts",
+        "db/migrations/184_retire_credit_and_contracts.sql",
+        "internal/httpapi/retired_credit.go",
+        "internal/httpapi/retired_contracts.go",
+        "internal/httpapi/dashboard_rankings.go",
+        "internal/store/dashboard_rankings.go",
+        "internal/store/admin_pricing_authority.go",
+        "db/migrations/185_manual_server_resources.sql",
+        "internal/store/manual_resources.go",
+        "internal/httpapi/manual_resources.go",
+        "docs/domain/manual-resources.md",
+        "docs/admin/customer-api.md",
+        "docs/admin/catalog-api.md",
+        "internal/store/customer_account_permissions.go",
+        "internal/store/customer_contacts.go",
+        "internal/store/customer_custom_field_mutations.go",
+        "internal/store/admin_customer_topups.go",
+        "internal/httpapi/admin_customer_topups.go",
+        "internal/store/customer_referrer.go",
+        "internal/httpapi/customer_referrer.go",
+        "internal/store/catalog_pricing.go",
+        "db/migrations/186_customer_contact_versions.sql",
+        "db/migrations/187_customer_referrer_invoice_snapshots.sql"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'",
@@ -208,7 +230,11 @@
       "evaluation": [
         "isolated PostgreSQL 18 exact run/pass with zero skips: per-section summary grants, customer and ticket scopes, immutable notification ownership, credit cash events, auto-renew lock-wait authorization and no durable credentials derived from impersonation",
         "browser acceptance with an isolated test account",
-        "independent group membership versions and unified receipt replay; authoritative browser-only sales assignment with post-wait revocation/expiry and COMMIT acknowledgement recovery; exact affiliate customer roles, counterparty privacy and repeatable-read page consistency; genuine schema182 upgrade preserves history"
+        "independent group membership versions and unified receipt replay; authoritative browser-only sales assignment with post-wait revocation/expiry and COMMIT acknowledgement recovery; exact affiliate customer roles, counterparty privacy and repeatable-read page consistency; genuine schema182 upgrade preserves history",
+        "retired credit 13 and contract 23 routes retain authentication and CSRF before 410, with no Store access, history read, repayment, key recovery or download; genuine schema183 upgrade disables switches without rewriting debts, documents, receipts or old checksums; six Web pages return not found",
+        "Shanghai month and current customer scope product/staff business-receipt rankings reuse full-line net allocations, explicit current owner attribution and refund basis; UI remains pending; only four pricing configuration families share RBAC/principal/pricing/actual-credential lock order with post-wait and precommit expiry checks, while CatalogTx later covers the retained catalog helper calls with principal-first locking and original-credential checks after waits and before commit",
+        "independent manual inventory with write-only encrypted credentials, full-scope unassigned visibility, CAS and unified receipts; existing manual create job atomically binds one resource per service with service and inventory versions; manual termination does not automatically release inventory; explicit terminated-only release, audit/credential rollback and genuine schema184 upgrade preserve existing facts; inventory UI remains pending",
+        "customer and catalog action-level contracts: profile and existing-level search share one scoped snapshot; contact CAS, original credentials, unified receipts and real schema185 upgrade; unpaid topup creation has no ledger entry before signed settlement; manual referrer changes use dual permissions, CAS, reason and unified receipt with counterparty masking, immutable invoice-birth attribution and genuine schema186 upgrade/conflict rollback; customer and CatalogTx writers recheck actual credential expiry after waits and before commit; browser and external channels require separate acceptance; historical administrator invoice owners remain global principals, and referral/invoice trigger writers explicitly reject snapshot isolation instead of capturing stale attribution"
       ],
       "review": {
         "required": true,
@@ -481,7 +507,7 @@
       ],
       "evaluation": [
         "report APIs accept JSON only and reject CSV/unsupported formats without attachment headers; money, permissions, filters and pagination retained",
-        "isolated PostgreSQL18 with required test run/pass and zero skips; business attachment, contract, invoice and file downloads remain in scope; real browser requires separate verification"
+        "isolated PostgreSQL18 with required test run/pass and zero skips; business attachment, invoice and file downloads remain in scope; contract downloads are retired; real browser requires separate verification"
       ],
       "review": {
         "required": true,

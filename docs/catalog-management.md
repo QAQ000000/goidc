@@ -1,6 +1,6 @@
 # 商品目录与维护
 
-源行为参考旧 `app/admin/controller/ProductController.php` 的一级/二级分组、排序、关联删除保护和商品编辑，以及 `app/home/controller/CartController.php` 的目录可见性。`ConfigGeneralController.php` 中的 `nav_group` 是已购服务导航，schema039已单独实现，见 [服务导航](service-navigation.md)。schema063新增五种普通[购买字段](product-purchase-fields.md)，商品复制包含其定义；旧购买模板、分组支付网关、密码/管理员专用字段、别名路由和供应商同步仍待实现。
+源行为参考旧 `app/admin/controller/ProductController.php` 的一级/二级分组、排序、关联删除保护和商品编辑，以及 `app/home/controller/CartController.php` 的目录可见性。后台逐分区接线、字段来源、版本、未知结果恢复和旧版取舍见[商品 API](admin/catalog-api.md)。当前已支持全局共享配置、原生规则、层级与数量阶梯；[购买字段](product-purchase-fields.md)已支持敏感加密及管理员/客户作用域；供应商批量导入支持所能解释的多账期与客户选配，不能笼统标为未实现。已购服务导航与购买分组独立，见[服务导航](service-navigation.md)。旧购买模板、分组支付网关、别名购买路由、多币种、试用和主机名/密码生成策略尚未等价恢复；无法无损解释的旧高级联动仍明确拒绝。
 
 ## 分组与商品接口
 
@@ -22,13 +22,13 @@
 
 原目录及后台商品数组接口保留。category_id=0 表示未分类，section_id 必须为正整数。搜索名称、标识、描述，按 sort_order/id 排序；后台页面每页 20，购买页面每页 12。页面筛选使用组件状态，暂不提供可书签化筛选 URL 或旧别名兼容。
 
-后台读取要求 products.view，修改同时要求 products.view/manage。商品、价格和分组修改在事务中先获得管理员管理共享锁，再获得目录互斥锁，等待后重新验证账号及当前角色。购物车修改和结算先获取目录共享锁再锁商品，确保等待后检查最新可售状态。修改与审计原子提交，冲突不留下半成品。
+后台读取要求 products.view，修改同时要求 products.view/manage。商品、价格、分组及其它CatalogTx修改按RBAC共享锁→管理员/角色主体锁→目录互斥锁→请求原始会话/API key顺序鉴权，等待后和提交前重新检查数据库真实时间，凭据撤销或自然过期拒绝提交。创建商品和复制支持可选稳定Idempotency-Key，同key同请求返回原id，不同请求返回409；无key保留兼容行为，新前端应使用key恢复未知结果。购物车修改和结算先获取目录共享锁再锁商品，确保等待后检查最新可售状态。修改与审计原子提交，冲突不留下半成品。
 
 商品字段为 name/slug/description/category_id/sort_order/active/billing_cycle/price_cents/setup_fee_cents/stock/provision_mode/approval_required。金额为整数分，0–100000000；库存 null 为不限量，整数范围 0–2147483647；排序 0–1000000。名称最长 180 字符、说明 10000；商品标识沿用小写字母、数字、短横线，最长 120。分组名称 255、说明 1000、分类标题/标语 255，标识以小写字母开头。商品 JSON 限 256 KiB。商品不提供删除，保留历史关联。
 
 编辑商品推进 revision，并同步启用默认账期价格。即使价格接口 default=false，修改当前默认账期也同步商品展示金额；当前默认账期不能停用，必须先切换。界面切换默认账期预填已有金额。checkout 消耗库存不推进商品 revision，因此后台同时比对 expected_stock，过时库存返回 409 stock_changed；版本冲突返回 409 version_conflict，页面提供重载。此保护避免后台保存覆盖已售库存。旧服务的周期价格仍遵循服务/原订单项快照。
 
-入口 `/admin/products`、`/admin/products/new`、`/admin/products/{id}`、`/admin/catalog-groups`，只读管理员可查看但不可保存。客户首页提供一级导航、分类介绍、搜索及分页；列表只展示商品摘要、库存、默认账期基础价和独立详情入口，账期、选配和购买资料统一在 `/products/{id}` 配置。后续 schema 038 已补齐当前单选配置组编辑/启停/排序/删除保护及禁用组公共过滤，见 [商品配置维护](product-configuration.md)，旧复杂配置类型/联动/共享组仍待迁移。
+入口 `/admin/products`、`/admin/products/new`、`/admin/products/{id}`、`/admin/catalog-groups`，只读管理员可查看但不可保存。客户首页提供一级导航、分类介绍、搜索及分页；列表只展示商品摘要、库存、默认账期基础价和独立详情入口，账期、选配和购买资料统一在 `/products/{id}` 配置。当前支持配置组编辑/启停/排序/删除保护、数量阶梯、层级、原生关系及全局共享组投影，见[商品配置维护](product-configuration.md)和[全局配置](product-configuration.md)；并非任意旧复杂联动均已等价恢复。
 
 ## 客户选购与购物车
 
@@ -44,6 +44,8 @@
 组件回归入口为 `node --test scripts/product-purchase-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/purchase-discount-components.test.mjs`。真实浏览器使用独立测试库的 `TestProductPurchaseBrowserFixture`，覆盖目录进入详情、账期/规格/资料/多件加购、购物车编辑及最终订单快照；浏览器与数据库证据放 `output/`，不等同于已部署或真实上游开通。
 
 ## 验证边界
+
+本节保留既有阶段的验证背景，不表示最新CatalogTx凭据守卫、创建/复制回执或当前部署已被这些历史结果覆盖。新增验收入口和待验证范围见[商品 API](admin/catalog-api.md#验证入口与证据边界)；最终以当前门禁证据为准。
 
 2026-10-05 强制隔离 PG18 和真实旧库只读演练的全量 `go test ./... -count=1` 通过（HTTP API 包 40.042s、legacy import 4.439s），`go vet ./...` 通过。前端 lint、类型检查、Turbopack 主目录构建和 webpack 隔离预览构建通过。
 

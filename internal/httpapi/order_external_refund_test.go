@@ -65,7 +65,11 @@ func setupOrderExternalRefundHTTPFixture(t *testing.T, db *store.Store, h http.H
 	// Seed a real positive balance independently of the externally paid order, so
 	// an accidental positive/negative balance refund cannot hide behind zero.
 	expect(t, request(h, "POST", fmt.Sprintf("/api/v1/admin/customers/%d/balance", uid), map[string]any{"amount_cents": 12345}, root, "order-refund-initial-balance"), 201)
-	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/credit/%d/limit", uid), map[string]any{"limit_cents": 100000, "expected_version": 1, "note": "isolated account unchanged proof"}, root, "order-refund-initial-credit-limit"), 201)
+	// Historical credit state remains an unchanged-data oracle; retired HTTP
+	// authorisation endpoints must not prepare a live business fixture.
+	if _, err := db.Pool.Exec(t.Context(), "UPDATE customer_credit_accounts SET limit_cents=100000 WHERE user_id=$1", uid); err != nil {
+		t.Fatal(err)
+	}
 	return f
 }
 
