@@ -221,8 +221,9 @@ func (s *Store) CompleteAuthenticationMFA(ctx context.Context, challengeHash, po
 	defer tx.Rollback(ctx)
 	var secretEnc []byte
 	var method, frozenPortal string
+	var frozenOwner int64
 	var attempts int
-	if err = tx.QueryRow(ctx, "SELECT login_portal FROM mfa_challenges WHERE token_hash=$1 AND expires_at>now()", challengeHash).Scan(&frozenPortal); errors.Is(err, pgx.ErrNoRows) {
+	if err = tx.QueryRow(ctx, "SELECT user_id,login_portal FROM mfa_challenges WHERE token_hash=$1 AND expires_at>now()", challengeHash).Scan(&frozenOwner, &frozenPortal); errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	} else if err != nil {
 		return out, err
@@ -231,7 +232,20 @@ func (s *Store) CompleteAuthenticationMFA(ctx context.Context, challengeHash, po
 	if err != nil {
 		return out, nil
 	}
-	err = tx.QueryRow(ctx, `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,''),c.login_portal FROM mfa_challenges c JOIN `+table+` u ON u.id=c.user_id WHERE c.token_hash=$1 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true FOR UPDATE`, challengeHash).Scan(&out.User.ID, &attempts, &out.User.Username, &out.User.Email, &out.User.Name, &out.User.Role, &secretEnc, &method, &frozenPortal)
+	// Password rotation and MFA enrollment lock the actual account before its
+	// challenges. Follow that order explicitly rather than relying on the join
+	// plan, which can lock a challenge first and deadlock with invalidation.
+	var lockedOwner int64
+	err = tx.QueryRow(ctx, "SELECT id FROM "+table+" WHERE id=$1 AND status='active' AND mfa_enabled=true FOR UPDATE", frozenOwner).Scan(&lockedOwner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	// The initial lookup is only a lock locator. After any wait, re-read and lock
+	// the same challenge, owner and portal before consuming attempts or recovery.
+	err = tx.QueryRow(ctx, `SELECT c.user_id,c.attempts,u.username,u.email,u.display_name,u.role,u.mfa_secret_enc,coalesce(c.login_method,''),c.login_portal FROM mfa_challenges c JOIN `+table+` u ON u.id=c.user_id WHERE c.token_hash=$1 AND c.user_id=$2 AND c.login_portal=$3 AND c.expires_at>now() AND u.status='active' AND u.mfa_enabled=true FOR UPDATE OF c`, challengeHash, lockedOwner, frozenPortal).Scan(&out.User.ID, &attempts, &out.User.Username, &out.User.Email, &out.User.Name, &out.User.Role, &secretEnc, &method, &frozenPortal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}

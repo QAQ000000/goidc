@@ -266,7 +266,7 @@ func (s *Store) AdminTicketAccountPage(ctx context.Context, actor int64, status,
 	query := `SELECT t.id,t.ticket_no,t.legacy_ticket_no,t.user_id,u.display_name AS customer_name,
 t.department_id,d.name AS department_name,t.assignee_id,a.display_name AS assignee_name,
 t.subject,t.status,t.priority,t.version,t.created_at,t.updated_at
-FROM tickets t JOIN users u ON u.id=t.user_id
+FROM tickets t JOIN account_identities u ON u.id=t.user_id
 LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN administrators a ON a.id=t.assignee_id
 WHERE t.merged_ticket_id IS NULL
 AND admin_ticket_department_allowed($1,t.department_id)

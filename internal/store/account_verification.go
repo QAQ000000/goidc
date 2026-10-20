@@ -164,13 +164,7 @@ func (s *Store) ConfirmAccountPasswordReset(ctx context.Context, challengeID, co
 		if _, err = tx.Exec(ctx, "UPDATE "+table+" SET password_hash=$2,password_reset_required=false,admin_version=admin_version+1,updated_at=now() WHERE id=$1", *uid, string(hash)); err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, "DELETE FROM sessions WHERE user_id=$1", *uid); err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, "DELETE FROM mfa_challenges WHERE user_id=$1", *uid); err != nil {
-			return err
-		}
-		if _, err = tx.Exec(ctx, "UPDATE api_keys SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL", *uid); err != nil {
+		if err = invalidatePasswordCredentials(ctx, tx, *uid, ""); err != nil {
 			return err
 		}
 		if err = Audit(ctx, tx, *uid, "auth.password_reset_completed", "user", *uid, map[string]any{"channel": channel}); err != nil {

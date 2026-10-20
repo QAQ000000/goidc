@@ -30,8 +30,8 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 		return fmt.Errorf("invalid ticket notification reply")
 	}
 	var owner int64
-	var number, subject, body, author, customerName, department string
-	err := tx.QueryRow(ctx, `SELECT t.user_id,t.ticket_no,t.subject,CASE WHEN $2::bigint=0 THEN t.body ELSE r.body END,a.display_name,u.display_name,coalesce(d.name,'') FROM tickets t JOIN users u ON u.id=t.user_id JOIN account_identities a ON a.id=$3 LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN ticket_replies r ON r.id=$2 AND r.ticket_id=t.id AND r.author_id=$3 WHERE t.id=$1 AND ($2=0 OR r.id IS NOT NULL)`, ticketID, replyID, actorID).Scan(&owner, &number, &subject, &body, &author, &customerName, &department)
+	var number, subject, body, author, customerName, department, ownerRole string
+	err := tx.QueryRow(ctx, `SELECT t.user_id,t.ticket_no,t.subject,CASE WHEN $2::bigint=0 THEN t.body ELSE r.body END,a.display_name,u.display_name,coalesce(d.name,''),u.role FROM tickets t JOIN account_identities u ON u.id=t.user_id JOIN account_identities a ON a.id=$3 LEFT JOIN ticket_departments d ON d.id=t.department_id LEFT JOIN ticket_replies r ON r.id=$2 AND r.ticket_id=t.id AND r.author_id=$3 WHERE t.id=$1 AND ($2=0 OR r.id IS NOT NULL)`, ticketID, replyID, actorID).Scan(&owner, &number, &subject, &body, &author, &customerName, &department, &ownerRole)
 	if err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 	if err != nil {
 		return err
 	}
-	query := `SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0),u.status='active' FROM users u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=$2`
+	query := `SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0),u.status='active' FROM account_identities u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=$2`
 	if eventKind != "staff_replied" {
 		query = `WITH legal AS (SELECT u.* FROM administrators u LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id JOIN tickets t ON t.id=$1 WHERE u.id<>$3 AND u.status='active' AND admin_ticket_department_allowed(u.id,t.department_id) AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.manage'=ANY(ar.permissions)))) SELECT 'user',u.id,$2::bigint,u.email,coalesce(u.phone,''),u.email_verified,u.phone_verified,coalesce(p.email_enabled,true),coalesce(p.sms_enabled,false),coalesce(p.version,0),u.status='active' FROM legal u LEFT JOIN user_ticket_notification_preferences p ON p.user_id=u.id WHERE u.id=(SELECT assignee_id FROM tickets WHERE id=$1) OR NOT EXISTS(SELECT 1 FROM legal a JOIN tickets t ON t.assignee_id=a.id WHERE t.id=$1) ORDER BY u.id`
 	}
@@ -100,7 +100,7 @@ func (s *Store) QueueTicketNotification(ctx context.Context, tx pgx.Tx, ticketID
 	ticketURL := ""
 	if parseErr == nil && (origin.Scheme == "https" || origin.Scheme == "http") && origin.Host != "" && origin.User == nil {
 		ticketURL = strings.TrimRight(origin.Scheme+"://"+origin.Host, "/") + fmt.Sprintf("/console/tickets/%d", ticketID)
-		if eventKind != "staff_replied" {
+		if eventKind != "staff_replied" || ownerRole != "customer" {
 			ticketURL = strings.Replace(ticketURL, "/console/tickets/", "/admin/tickets/", 1)
 		}
 	}

@@ -407,7 +407,14 @@
         "internal/httpapi/mfa.go",
         "internal/httpapi/server.go",
         "internal/store/auth_login.go",
+        "internal/store/account_passwords.go",
+        "internal/store/accounts.go",
+        "internal/store/account_verification.go",
+        "internal/store/ticket_account_reads.go",
+        "internal/store/ticket_account_admin.go",
+        "internal/store/ticket_notifications.go",
         "db/migrations/181_auth_login_portal.sql",
+        "db/migrations/182_separate_administrator_accounts.sql",
         "web/src/app/admin/account",
         "web/src/proxy.ts",
         "internal/httpapi/session_portals.go",
@@ -422,7 +429,7 @@
       ],
       "evaluation": [
         "isolated PostgreSQL 18; actual run/pass and zero skip; legacy PNG, image/click/widget, durable consume before verification, concurrent replay and profile rotation",
-        "independent customer and administrator cookies, explicit shared API portal, no cross-cookie fallback, role-bound login/MFA and independent logout; shared personal security, scoped staff tickets and verifiably bound customer impersonation; real schema180 upgrade preserves accounts and sessions",
+        "independent customer and administrator cookies, explicit shared API portal, no cross-cookie fallback, role-bound login/MFA and independent logout; shared personal security, scoped staff tickets and verifiably bound customer impersonation; real schema180 and schema181 upgrades preserve accounts, sessions and historical administrator tickets; administrator password resets revoke sessions, API keys and pending MFA with authorization rechecks and audit rollback; concurrent MFA completion and password rotation lock the physical account before its challenge and reject stale challenges without consuming recovery codes",
         "local renderer fixtures; real browser, external vendor and production configuration remain separate"
       ],
       "review": {

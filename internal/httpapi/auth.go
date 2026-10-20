@@ -403,35 +403,11 @@ func (s *Server) adminSetCustomerPassword(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid_password", "密码长度必须为 8 到 72 个字符")
 		return
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
-	if err != nil {
+	if err := s.db.AdminResetCustomerPassword(requestFileContext(r), identityFrom(r).ID, id, input.Password); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		var exists bool
-		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, id); err != nil {
-			return txResponse{}, err
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='customer')", id).Scan(&exists); err != nil {
-			return txResponse{}, err
-		}
-		if !exists {
-			return txResponse{}, &txHTTPError{http.StatusNotFound, "not_found", "客户不存在"}
-		}
-		if _, err = tx.Exec(r.Context(), "UPDATE users SET password_hash=$2,password_reset_required=false,updated_at=now() WHERE id=$1", id, string(hash)); err != nil {
-			return txResponse{}, err
-		}
-		if _, err = tx.Exec(r.Context(), "DELETE FROM sessions WHERE user_id=$1", id); err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer.password_reset", "user", id, map[string]string{"reason": "admin_reset"}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{http.StatusOK, map[string]any{"user_id": id, "password_reset_required": false}}, nil
-	})
+	write(w, http.StatusOK, map[string]any{"user_id": id, "password_reset_required": false})
 }
 
 func (s *Server) authLimit(w http.ResponseWriter, r *http.Request, scope string, limit int) bool {
