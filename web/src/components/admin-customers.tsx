@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -17,13 +17,14 @@ import {
 } from "lucide-react";
 import { api, type CustomerGroup } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
+import { useCustomerMutation } from "@/hooks/use-customer-mutation";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
 import { Failure, Loading } from "./common";
-import { Workspace, PermissionGate, useAdminPermission } from "./workspace";
+import { Workspace, PermissionGate, useAdminPermission, useAdminIdentity } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
 
 type SalesOwner = { id: number; username: string; display_name: string };
@@ -422,7 +423,13 @@ export function AdminCustomersView() {
   );
 }
 
-function CustomerActions({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
+export function CustomerActions({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
+  const actor = useAdminIdentity();
+  if (!actor) return null;
+  return <CustomerActionsForActor key={`${actor.id}:${row.id}`} row={row} refresh={refresh} />;
+}
+
+function CustomerActionsForActor({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
   const detailHref = `/admin/customers/${row.id}`;
   return (
     <div className="flex items-center justify-end gap-1.5">
@@ -525,225 +532,134 @@ function CustomerActionDialog({
   );
 }
 
-function CustomerSalesAction({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
+function useCustomerActorValue<T>(actorID: number | undefined, initial: T): [T, (value: T) => void] {
+  const [state, setState] = useState({ actorID, value: initial });
+  return [state.actorID === actorID ? state.value : initial, value => setState({ actorID, value })];
+}
+
+export function CustomerSalesAction({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
+  const actor = useAdminIdentity();
   const [open, setOpen] = useState(false);
-  const [owner, setOwner] = useState("none");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [owner, setOwner] = useCustomerActorValue<string | null>(actor?.id, null);
+  const mutation = useCustomerMutation(actor?.id, row.id, "sales-owner", `/admin/customers/${row.id}/sales-owner`, "PUT");
   const directory = useResource<SalesOwner[]>(open ? "/admin/sales-owners" : null, false);
-  const currentOwner = row.sales_owner_id == null ? "none" : String(row.sales_owner_id);
+  const detail = useResource<AdminCustomer>(open ? `/admin/customers/${row.id}` : null, false);
+  const currentOwner = (detail.data ?? row).sales_owner_id == null ? "none" : String((detail.data ?? row).sales_owner_id);
+  const selectedOwner = owner ?? currentOwner;
+  const frozen = mutation.pending ? JSON.parse(mutation.pending.body) as { sales_owner_id: number | null } : null;
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || owner === currentOwner) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api(`/admin/customers/${row.id}/sales-owner`, {
-        method: "PUT",
-        body: JSON.stringify({
-          sales_owner_id: owner === "none" ? null : Number(owner),
-          expected_version: Number(row.sales_version),
-        }),
-      });
+    if (!mutation.pending && (!detail.data || selectedOwner === currentOwner)) return;
+    if (await mutation.submit({ sales_owner_id: selectedOwner === "none" ? null : Number(selectedOwner), expected_version: Number(detail.data?.sales_version) })) {
       setOpen(false);
       refresh();
-    } catch (e) {
-      setError((e as Error).message);
-      refresh();
-    } finally {
-      setBusy(false);
+      detail.refresh();
     }
   }
 
-  return (
-    <>
-      <Button
-        size="icon-sm"
-        variant="outline"
-        title="调整销售归属"
-        aria-label={`调整 ${row.display_name} 的销售归属`}
-        onClick={() => {
-          setOwner(currentOwner);
-          setError("");
-          setOpen(true);
-        }}
-        className="h-7 w-7 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"
-      >
-        <UserRoundCog size={13} />
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={(value) => {
-          if (!busy) setOpen(value);
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>销售归属</DialogTitle>
-            <DialogDescription className="text-xs text-[#909399]">
-              调整客户 #{row.id} 的专属销售顾问
-            </DialogDescription>
-          </DialogHeader>
-          {directory.error ? (
-            <Failure error={directory.error} retry={directory.refresh} />
-          ) : !directory.data ? (
-            <Loading />
-          ) : (
-            <form onSubmit={save} className="space-y-4">
-              <Select value={owner} onValueChange={setOwner} disabled={busy}>
-                <SelectTrigger className="w-full text-xs border-[#dcdfe6]" aria-label="销售管理员">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">无归属</SelectItem>
-                  {directory.data.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.display_name} · {item.username}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {error && <p role="alert" className="text-destructive text-xs">{error}</p>}
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setOpen(false)}
-                  className="text-xs border-[#dcdfe6]"
-                >
-                  取消
-                </Button>
-                <Button
-                  disabled={busy || owner === currentOwner}
-                  size="sm"
-                  className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
-                >
-                  <Save size={13} className="mr-1" />
-                  {busy ? "保存中" : "保存归属"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  return <>
+    <Button size="icon-sm" variant="outline" title="调整销售归属" aria-label={`调整 ${row.display_name} 的销售归属`}
+      onClick={() => { setOwner(null); setOpen(true); detail.refresh(); }}
+      className="h-7 w-7 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"><UserRoundCog size={13} /></Button>
+    <Dialog open={open} onOpenChange={value => { if (!mutation.busy) setOpen(value); }}>
+      <DialogContent className="max-w-md"><DialogHeader><DialogTitle>销售归属</DialogTitle><DialogDescription className="text-xs text-[#909399]">调整客户 #{row.id} 的专属销售顾问</DialogDescription></DialogHeader>
+        {directory.error && !mutation.pending ? <Failure error={directory.error} retry={directory.refresh} /> : detail.error && !mutation.pending ? <Failure error={detail.error} retry={detail.refresh} /> : (!directory.data || !detail.data) && !mutation.pending ? <Loading /> :
+          <form onSubmit={save} className="space-y-4">
+            <Select value={frozen ? (frozen.sales_owner_id == null ? "none" : String(frozen.sales_owner_id)) : selectedOwner} onValueChange={setOwner} disabled={mutation.busy || !!mutation.pending}>
+              <SelectTrigger className="w-full text-xs border-[#dcdfe6]" aria-label="销售管理员"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="none">无归属</SelectItem>{directory.data?.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.display_name} · {item.username}</SelectItem>)}</SelectContent>
+            </Select>
+            {frozen && <p className="text-xs text-muted-foreground">原请求销售归属：{frozen.sales_owner_id == null ? "无归属" : `管理员 #${frozen.sales_owner_id}`}</p>}
+            <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setOwner(null); detail.refresh(); refresh(); } }} />
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={mutation.busy} onClick={() => setOpen(false)} className="text-xs border-[#dcdfe6]">取消</Button>
+              <Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && (!detail.data || selectedOwner === currentOwner))} size="sm" className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存归属"}</Button>
+            </div>
+          </form>}
+      </DialogContent>
+    </Dialog>
+  </>;
 }
 
-function CustomerProfileAction({
-  row,
-  refresh,
-  onBusyChange,
-}: {
-  row: AdminCustomer;
-  refresh: () => void;
-  onBusyChange: (busy: boolean) => void;
-}) {
-  const canAssignGroup = useAdminPermission("customer_groups.manage");
-  const [displayName, setDisplayName] = useState(row.display_name || "");
-  const [email, setEmail] = useState(row.email || "");
-  const [status, setStatus] = useState(row.status || "active");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const { data: groups } = useResource<CustomerGroup[]>(canAssignGroup ? "/admin/customer-groups?options=true" : null);
-  const [groupID, setGroupID] = useState(String(row.group_id ?? "none"));
+type CustomerMutation = ReturnType<typeof useCustomerMutation>;
+function CustomerMutationNotice({ mutation, reload }: { mutation: CustomerMutation; reload: () => void }) {
+  return <>
+    {mutation.pending && <p role="status" className="text-xs text-muted-foreground">上次操作尚未确认，已保留原请求。重试使用原内容和操作编号，确认前不能改成另一项操作。</p>}
+    {mutation.error && <p role="alert" className="text-destructive text-xs">{mutation.error}</p>}
+    {mutation.rejected && mutation.pending && <Button type="button" size="sm" variant="outline" disabled={mutation.busy} onClick={reload}>请求已拒绝，重新读取并编辑</Button>}
+    {!mutation.ready && mutation.error && !mutation.pending && <Button type="button" size="sm" variant="outline" onClick={mutation.reload}>重新读取恢复信息</Button>}
+  </>;
+}
 
+type GroupMembership = { customer_id: number; group_id: number | null; group_membership_version: number };
+export function CustomerGroupAction({ row, refresh, onBusyChange }: { row: AdminCustomer; refresh: () => void; onBusyChange: (busy: boolean) => void }) {
+  const actor = useAdminIdentity();
+  const membership = useResource<GroupMembership>(`/admin/customers/${row.id}/group`, false);
+  const groups = useResource<CustomerGroup[]>("/admin/customer-groups?options=true", false);
+  const mutation = useCustomerMutation(actor?.id, row.id, "group", `/admin/customers/${row.id}/group`, "PUT");
+  const [groupID, setGroupID] = useCustomerActorValue<string | null>(actor?.id, null);
+  const [saved, setSaved] = useCustomerActorValue(actor?.id, false);
+  useEffect(() => { onBusyChange(mutation.busy); }, [mutation.busy, onBusyChange]);
+  const frozen = mutation.pending ? JSON.parse(mutation.pending.body) as { group_id: number | null } : null;
+  const current = membership.data?.group_id == null ? "none" : String(membership.data.group_id);
+  const selected = frozen ? (frozen.group_id == null ? "none" : String(frozen.group_id)) : groupID ?? current;
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy(true);
-    onBusyChange(true);
-    setMessage("");
-    try {
-      await api(`/admin/customers/${row.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ display_name: displayName, email, status }),
-      });
-      if (canAssignGroup) {
-        await api(`/admin/customers/${row.id}/group`, {
-          method: "PUT",
-          body: JSON.stringify({ group_id: groupID === "none" ? null : Number(groupID) }),
-        });
-      }
-      setMessage("已保存");
-      refresh();
-    } catch (e) {
-      setMessage((e as Error).message);
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
+    if (!mutation.pending && !membership.data) return;
+    setSaved(false);
+    if (await mutation.submit({ group_id: selected === "none" ? null : Number(selected), expected_version: membership.data?.group_membership_version })) {
+      setSaved(true); setGroupID(null); membership.refresh(); refresh();
     }
   }
+  return <form className="space-y-3 border-t pt-4" onSubmit={submit}>
+    <label className="block text-xs text-[#606266]">客户分组（单独保存）</label>
+    {membership.error && !mutation.pending ? <Failure error={membership.error} retry={membership.refresh} /> : groups.error && !mutation.pending ? <Failure error={groups.error} retry={groups.refresh} /> : (!membership.data || !groups.data) && !mutation.pending ? <Loading /> : <>
+      <Select value={selected} onValueChange={value => { setGroupID(value); setSaved(false); }} disabled={mutation.busy || !!mutation.pending}>
+        <SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]" aria-label="客户分组"><SelectValue placeholder="客户分组" /></SelectTrigger>
+        <SelectContent><SelectItem value="none">未分组</SelectItem>{groups.data?.map(group => <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>)}</SelectContent>
+      </Select>
+      <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setGroupID(null); membership.refresh(); } }} />
+      <div className="flex justify-end"><Button type="submit" size="sm" disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && (!membership.data || selected === current))}>{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存分组"}</Button></div>
+      {saved && <p role="status" className="text-xs text-[#67c23a]">分组已保存</p>}
+    </>}
+  </form>;
+}
 
-  return (
+export function CustomerProfileAction({ row, refresh, onBusyChange }: { row: AdminCustomer; refresh: () => void; onBusyChange: (busy: boolean) => void }) {
+  const actor = useAdminIdentity();
+  const canAssignGroup = useAdminPermission("customer_groups.manage");
+  const detail = useResource<AdminCustomer & { profile_version: number }>(`/admin/customers/${row.id}`, false);
+  const [displayName, setDisplayName] = useCustomerActorValue<string | null>(actor?.id, null);
+  const [email, setEmail] = useCustomerActorValue<string | null>(actor?.id, null);
+  const [status, setStatus] = useCustomerActorValue<string | null>(actor?.id, null);
+  const [groupBusy, setGroupBusy] = useState(false);
+  const [saved, setSaved] = useCustomerActorValue(actor?.id, false);
+  const mutation = useCustomerMutation(actor?.id, row.id, "profile", `/admin/customers/${row.id}`, "PATCH");
+  const frozen = mutation.pending ? JSON.parse(mutation.pending.body) as { display_name: string; email: string; status: string } : null;
+  useEffect(() => { onBusyChange(mutation.busy || groupBusy); }, [mutation.busy, groupBusy, onBusyChange]);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!mutation.pending && !detail.data) return;
+    setSaved(false);
+    if (await mutation.submit({ display_name: displayName ?? detail.data?.display_name, email: email ?? detail.data?.email, status: status ?? detail.data?.status, expected_version: detail.data?.profile_version })) {
+      setSaved(true); detail.refresh(); refresh();
+    }
+  }
+  return <div className="space-y-4">
     <form className="space-y-4" onSubmit={submit}>
-      <fieldset disabled={busy} className="space-y-4">
-        <div>
-          <label className="block text-xs text-[#606266] mb-1">姓名</label>
-          <Input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="text-xs h-8 border-[#dcdfe6]"
-            maxLength={120}
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-[#606266] mb-1">邮箱</label>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="text-xs h-8 border-[#dcdfe6]"
-            maxLength={254}
-            required
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-[#606266] mb-1">状态</label>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">正常</SelectItem>
-              <SelectItem value="disabled">已停用</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {canAssignGroup && (
-          <div>
-            <label className="block text-xs text-[#606266] mb-1">客户分组</label>
-            <Select value={groupID} onValueChange={setGroupID}>
-              <SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]">
-                <SelectValue placeholder="客户分组" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">未分组</SelectItem>
-                {groups?.map((group) => (
-                  <SelectItem key={group.id} value={String(group.id)}>
-                    {group.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="flex justify-end pt-2">
-          <Button
-            disabled={busy}
-            size="sm"
-            className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
-          >
-            <Save size={13} className="mr-1" />
-            保存资料
-          </Button>
-        </div>
-        {message && <p role="status" className="text-xs text-[#67c23a]">{message}</p>}
+      <fieldset disabled={mutation.busy || !!mutation.pending} className="space-y-4">
+        <div><label className="block text-xs text-[#606266] mb-1">姓名</label><Input aria-label="客户姓名" value={frozen?.display_name ?? displayName ?? detail.data?.display_name ?? ""} onChange={event => { setDisplayName(event.target.value); setSaved(false); }} className="text-xs h-8 border-[#dcdfe6]" maxLength={120} required /></div>
+        <div><label className="block text-xs text-[#606266] mb-1">邮箱</label><Input aria-label="客户邮箱" type="email" value={frozen?.email ?? email ?? detail.data?.email ?? ""} onChange={event => { setEmail(event.target.value); setSaved(false); }} className="text-xs h-8 border-[#dcdfe6]" maxLength={254} required /></div>
+        <div><label className="block text-xs text-[#606266] mb-1">状态</label><Select value={frozen?.status ?? status ?? detail.data?.status ?? "active"} onValueChange={value => { setStatus(value); setSaved(false); }}><SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]" aria-label="客户状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">正常</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select></div>
       </fieldset>
+      {!mutation.pending && detail.error && <Failure error={detail.error} retry={detail.refresh} />}
+      {!mutation.pending && !detail.data && !detail.error && <Loading />}
+      <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setDisplayName(null); setEmail(null); setStatus(null); detail.refresh(); } }} />
+      <div className="flex justify-end pt-2"><Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && !detail.data)} size="sm" className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存资料"}</Button></div>
+      {saved && <p role="status" className="text-xs text-[#67c23a]">资料已保存</p>}
     </form>
-  );
+    {canAssignGroup && <CustomerGroupAction key={`${actor?.id ?? "unavailable"}:${row.id}`} row={row} refresh={refresh} onBusyChange={setGroupBusy} />}
+  </div>;
 }
 
 function CustomerPasswordAction({

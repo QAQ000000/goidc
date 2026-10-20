@@ -19,7 +19,11 @@ func purchasePricingGroup(t *testing.T, f mutationOrderFixture, name string, per
 
 func purchasePricingMembership(t *testing.T, f mutationOrderFixture, group int64) {
 	t.Helper()
-	expect(t, request(f.h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", f.customerID), map[string]any{"group_id": group}, f.root, ""), 200)
+	path := fmt.Sprintf("/api/v1/admin/customers/%d/group", f.customerID)
+	current := request(f.h, "GET", path, nil, f.root, "")
+	expect(t, current, 200)
+	version := int64(data(t, current)["group_membership_version"].(float64))
+	expect(t, request(f.h, "PUT", path, map[string]any{"group_id": group, "expected_version": version}, f.root, fmt.Sprintf("pricing-membership-%d-%d-%d", f.customerID, group, version)), 200)
 }
 
 func purchasePricingRule(t *testing.T, f mutationOrderFixture, group int64, name, kind string, value int64) int64 {

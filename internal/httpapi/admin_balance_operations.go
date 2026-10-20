@@ -2,9 +2,9 @@ package httpapi
 
 import "net/http"
 
-// Wrap authentication as well, so rejected requests never cache a financial
-// operation result. The idempotency key belongs in the header, never a URL.
-func privateBalanceOperation(next http.HandlerFunc) http.HandlerFunc {
+// Wrap authentication as well, so rejected requests never cache private
+// operation state. Idempotency keys belong in headers, never URLs.
+func privateAdminOperation(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "private, no-store")
 		next(w, r)

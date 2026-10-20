@@ -125,8 +125,9 @@ node scripts/admin-api-consumers.mjs
 | 编辑/启停客户 | `PATCH /admin/customers/{id}` | `customers.manage`；稳定key、`expected_version`，以及至少一个 `display_name/email/status/profile` |
 | 充值到钱包 | `POST /admin/customers/{id}/balance` | `balance.manage`；稳定key；`amount_cents`为正整数、`note`≤240；受财务充值开关/上下限限制 |
 | 查询充值结果 | `GET /admin/customers/{id}/balance-operation` | `balance.manage`；原 `Idempotency-Key` 放请求头；按客户及key查询人工充值账本事实，不触发充值 |
-| 修改客户分组 | `PUT /admin/customers/{id}/group` | `customer_groups.manage`；按[分组定价](../domain/customer-group-pricing.md)契约传 `group_id`，null表示移出分组 |
-| 分配销售 | `PUT /admin/customers/{id}/sales-owner` | 超级管理员浏览器会话；`sales_owner_id`可空，`expected_version`使用sales_version |
+| 读取客户分组成员版本 | `GET /admin/customers/{id}/group` | `customer_groups.manage`；返回客户、当前组及独立 `group_membership_version`，私有且不缓存 |
+| 修改客户分组 | `PUT /admin/customers/{id}/group` | `customer_groups.manage`；显式 `group_id`、`expected_version`及稳定key，null仅表示主动移出分组 |
+| 分配销售 | `PUT /admin/customers/{id}/sales-owner` | 超级管理员浏览器会话；显式 `sales_owner_id`可空，`expected_version`使用sales_version；新增稳定key重放，旧无key CAS兼容 |
 | 重置密码 | `POST /admin/customers/{id}/password` | `customers.manage`；仅提交新 `password`，不读取/显示旧密码；撤销客户旧会话/API密钥及未完成MFA挑战 |
 | 账单/订单/服务 | `GET /admin/invoices/page`、`/admin/orders/page`、`/admin/services/page` | 分别要求invoices/orders/services.view；均使用精确customer_id和分页，不按姓名搜索代替归属 |
 | 工单 | `GET /admin/tickets/page` | `tickets.view`；customer_id、分页及部门范围，见[工单契约](../legacy-tickets.md) |
@@ -183,6 +184,30 @@ Content-Type: application/json
 `GET /admin/credit`、`GET /admin/credit/consumptions`、`GET /admin/credit/repayments` 均要求 `credit.view`，不额外要求 `customers.view`。三个入口的 `customer_id` 遵循本节严格解析、范围外404和不回退全局规则；省略时仍列出当前授权客户范围，合法但无信用账户/记录返回空页。客户核验、总数和当前页使用同一个只读快照，最终SQL保留当前客户范围约束。
 
 返回通用分页 `{items,total,limit,offset}`，保留现有字段。账户支持 `q/status`，status为active或disabled，表示客户状态；消费支持 `q/status/date_from/date_to`，status为outstanding、repaid或refunded；还款支持 `q/date_from/date_to`，不接受status，因为只列已确认到账记录。日期为上海自然日，起止均包含当天；消费按 `created_at`，还款按实际 `received_at`，不改用凭证录入时间。日期/状态错误保留原错误码，精确客户与其他筛选取交集。
+
+### 客户分组的版本与结果恢复
+
+`GET /admin/customers/{id}/group` 返回 `{customer_id,group_id,group_membership_version}`。读取与写入都要求 `customer_groups.manage` 和当前客户范围，不额外要求 `customers.view`；读取的认证错误也不缓存。`PUT` 必须明确提交 `group_id`（正整数或null）、`expected_version`及单个8–128字符的 `Idempotency-Key`。漏传group_id为400 `invalid_group`，漏传成员版本为409 `group_membership_version_required`，过期版本409 `version_conflict`，无效/重复key为400。成功200，返回上述三个字段及 `replayed`。
+
+成员版本独立于客户资料、销售归属和分组规则版本，清空后仍保留。迁移183为既有客户初始化1，不推断历史修改次数；此后成员新增、移出或换组由数据库触发器递增，同组无变化不递增。每个新意图仍只记一次审计和统一回执。`expected_version`取成员读取结果，不取分组规则的version或sales_version。
+
+回执按当前管理员、客户和key隔离，绑定原group_id及expected_version。相同body/key可恢复未知提交，返回当时结果，即使当前已被后续操作改组；不能拿新的GET结果代替原请求，不能因当前组恰好相同就认定原请求成功。同key异body为409 `idempotency_conflict`。重放仍校验当前权限、客户范围和原实际凭据，审计、成员变化和回执同事务；不改历史订单和服务合同价。分组写锁在成员、规则及版本行锁前取得，版本元数据独立于users，避免与下单的客户行共享锁互相等待。先停旧成员writer，再配套部署迁移、API和Web，旧无版本写接口不再接受。
+
+### 销售归属的会话与重放
+
+销售分配继续仅允许真实、启用的超级管理员后台浏览器会话；普通管理员、API密钥及未绑定真实会话的内部调用均不能借用该能力。取得归属、客户、人员或回执锁后重新验证实际管理员和会话，审计/回执后再次核对自然过期；管理员账号先于凭据加锁，与换密顺序一致。目标销售仍须为启用、有客户读取权限且可销售的普通管理员。
+
+`Idempotency-Key`可选，提供时必须为单值8–128字符，不能含首尾空白；新前端始终提供。新请求200 `{customer_id,sales_owner_id,sales_version,replayed:false}`，原body/key重放返回原版本及 `replayed:true`，不重复分配或审计；同一管理员和客户下，同key异归属或异原版本冲突。回执按管理员及客户隔离，不创建平行回执表。旧无key请求保持原CAS响应和冲突行为，只能读取当前状态人工核对，不具备历史结果恢复能力。未知结果保留原body/key，不自动换键或更新expected_version。
+
+客户列表与资源池共用销售归属组件，待确认原body/key按实际管理员、客户和动作保存在当前浏览器会话，可跨这两个入口恢复。资料与分组各自保存请求；恢复期间不能改为另一意图。确认响应必须匹配客户、原目标、版本及replayed标记，缺失或不匹配继续保留原请求；401/403/404不表示旧请求必然未执行。切换管理员时重挂载读取与动作子树，旧异步响应不能覆盖新身份界面。这些组件行为另以测试核验，不替代真实浏览器。
+
+### 推广列表的客户上下文
+
+`GET /admin/affiliate/accounts/page`、`/attributions/page`、`/withdrawals/page` 仍要求 `affiliates.view`，新增严格 `customer_id`，不额外要求customers.view。非法查询编码不允许被丢弃后退回全局；客户非法400，不存在、非客户或范围外404。原search/status、items/total/pending_count及分页行为保留。账户和提现的customer_id指推广账户所属客户；提现pending_count忽略search/status，保留原徽标含义，但受精确客户及当前范围限制。
+
+归因可在指定customer_id时另传单个 `customer_role=promoter|referred|either`，默认either，分别表示推荐人、被推荐人、任一端；其他列表或未指定客户时提供该参数返回400。被推荐客户仍须在当前范围；推荐人越界时account_id、affiliate_user_id、affiliate_username及link_id均为null，搜索也不能匹配其姓名。可见推荐人不能据此读取范围外被推荐客户的记录。
+
+客户详情另提供 `GET /admin/customers/{id}/affiliate/page`，保持原 `customers.view` 权限，返回 `{items,total,limit,offset}`；旧 `/affiliate` 继续返回活动数组。两者包含客户作为推广人或被推荐人的既有活动，佣金自身金额保留，但关联账单客户越界时invoice_no为空。两种入口权限互不隐含。权限、客户核验、总数及数据均在同一只读快照，最终查询保留客户范围，空页不扩大查询。
 
 ## 统一交易分页
 
@@ -305,6 +330,8 @@ items保留原数组接口的分组字段（含id、name、slug、description、
 ```bash
 node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs
 node scripts/test-admin-api.mjs --integration
+node scripts/test-customer-group-pricing.mjs --integration
+node --test scripts/admin-customer-mutation-components.test.mjs scripts/customer-admin-isolation-components.test.mjs scripts/customer-group-pricing-components.test.mjs
 node scripts/test-file-storage.mjs --unit
 node scripts/test-file-storage.mjs --integration
 node scripts/test-captcha.mjs --integration
@@ -315,12 +342,12 @@ node scripts/check-doc-links.mjs
 
 integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/pass零skip；不是业务数据库。本轮新增行为的必需测试在 [`test-admin-api.mjs`](../../scripts/test-admin-api.mjs)，代登录签发边界还纳入原认证严格门禁。生成器及源码声明仅E0，独立数据库行为E1；页面候选、TypeScript编译和既有截图不能替代新UI浏览器E2、真实渠道E3或发布E4。
 
-上一批在隔离PG18以race分组实跑并严格核对后台API的38个必需入口、文件存储的53个必需入口，全部run/pass、零跳过。文件存储由原42个入口与冻结版11个附件入口合并核对；后台由37个入口与这11个附件入口合并核对，覆盖最后增加的回执锁等待后撤权；两组有交集，不相加为独立用例数。另29个存储单元入口、16个静态盘点/消费者夹具、全仓Go编译、相关包vet、架构约束与文档治理/链接/契约门禁检查通过。该批架构基线从692减至676条，仅移除已下沉的16条豁免，不放行新越界。机器日志、清单和源文件哈希保存在忽略的output制品中。
+当前严格后台入口为87个（HTTP 84、Store 3），在任务自有PG18的UTC会话以race串行实际运行，全部run/pass、零跳过。覆盖客户摘要与精确上下文、现金/信用读取及人工充值结果恢复、附件上传恢复、自动续费授权及代登录凭据边界；本批新增独立成员版本、分组与销售原请求重放、审计回滚、锁等待后撤权及自然过期、真实密码轮换及三方锁序、PostgreSQL已提交但COMMIT确认丢失的恢复，以及推广双主体隐私、同快照分页和真实schema182→183升级。成员分配与旧规则配置的锁序风险分别记录，不能据此声称全部旧writer已验收。
 
-本轮严格后台入口扩为59个（HTTP 57、Store 2），在独立PG18的UTC会话以race串行实际运行，全部run/pass、零跳过。新增覆盖严格信用客户上下文及上海日期、充值8并发单次入账、旧人工账本与跨管理员原key核验、网关记录隔离、审计回滚、锁等待后角色/范围/会话/API密钥撤销、凭据自然过期、真实密码轮换锁序，以及PostgreSQL已提交但COMMIT确认报文丢失后的查询与原key重放。信用读取又下沉4条HTTP持久化调用，基线由676减至672，未增加豁免。充值结果查询和固定信用上下文的前端交互尚未浏览器验收；不把API测试当作页面闭环。
+同一隔离库的严格分组定价入口53项（Store 9、HTTP 44）以race串行通过且零跳过，覆盖报价、优惠叠加、结账、折后续费合同价、历史退款证据及旧回执升级；另2项客户范围及联系人/分组归属兼容测试通过且零跳过。这组定价验收不等于旧规则配置与换密的共享授权锁序已验证。
 
-另15个充值/退款/资金锁序与历史升级入口在同一隔离PG18以race串行通过且零跳过，覆盖在线充值与管理员加款/余额消费/退款的竞争、资金→设置锁序及真实schema168/169起点升级。历史测试资金使用专用事务夹具保留余额、账本和审计事实，生产鉴权不回退旧身份表。
+另41项相关组件测试及16项静态盘点/消费者夹具通过；Go全仓编译、相关包vet、架构约束、TypeScript与文档门禁通过。Web全量lint零错误、6条既有警告，修改文件定向lint零警告。分组成员写入又下沉4次HTTP持久化调用，删除3个基线条目，条目数由672降至669，未增加豁免。客户列表的资料/分组表单及列表、资源池的销售归属共用稳定原请求恢复；组件验证不代替浏览器。机器日志、清单和源文件哈希放在忽略的output制品中。
 
-本批没有重跑完整认证/通知业务门禁，也没有执行新UI浏览器、真实对象存储或部署；既有验收只保留其原范围。完整后台各领域仍按需求清单中的API/UI/验证状态推进。
+文件存储、完整认证/通知及其余资金历史升级保留既有验收范围，本批未重跑其完整门禁；本批也未执行新UI浏览器、真实对象存储、外部渠道或部署。客户详情整体仍未接入，完整后台各领域继续按需求清单中的API/UI/验证状态推进。
 
 前端实施先完成客户详情：固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误，再按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。

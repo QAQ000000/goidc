@@ -41,39 +41,5 @@ func (s *Store) SalesReportOwnerOptions(ctx context.Context, actor int64) ([]map
 }
 
 func (s *Store) AssignCustomerSalesOwner(ctx context.Context, actor, id, expectedVersion int64, owner *int64) (map[string]any, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('customer-sales:'||$1::bigint::text,0))", id); err != nil {
-		return nil, err
-	}
-	var previous *int64
-	var version int64
-	if err = tx.QueryRow(ctx, "SELECT sales_owner_id,sales_version FROM users WHERE id=$1 AND role='customer' FOR UPDATE", id).Scan(&previous, &version); err != nil {
-		return nil, err
-	}
-	if version != expectedVersion {
-		return nil, conflict("version_conflict", "客户归属已变更，请重新加载")
-	}
-	if owner != nil {
-		var ownerID int64
-		if err = tx.QueryRow(ctx, `SELECT u.id FROM administrators u JOIN admin_roles ar ON ar.id=u.admin_role_id WHERE u.id=$1 AND u.role='admin' AND u.status='active' AND u.sales_enabled AND ar.active AND 'customers.view'=ANY(ar.permissions) FOR SHARE OF u,ar`, *owner).Scan(&ownerID); err != nil {
-			if err == pgx.ErrNoRows {
-				return nil, conflict("invalid_sales_owner", "请选择已启用的销售管理员及客户读取角色")
-			}
-			return nil, err
-		}
-	}
-	if _, err = tx.Exec(ctx, "UPDATE users SET sales_owner_id=$2,sales_version=sales_version+1,updated_at=now() WHERE id=$1", id, owner); err != nil {
-		return nil, err
-	}
-	if err = Audit(ctx, tx, actor, "customer.sales_assigned", "user", id, map[string]any{"previous_owner_id": previous, "sales_owner_id": owner}); err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return map[string]any{"customer_id": id, "sales_owner_id": owner, "sales_version": version + 1}, nil
+	return s.AssignCustomerSalesOwnerWithKey(ctx, actor, id, expectedVersion, owner, "")
 }

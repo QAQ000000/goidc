@@ -8,6 +8,33 @@ const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 export const integrationSuites = {
   'internal/httpapi': [
     'TestAdminRBACRouteCoverage',
+    'TestAdminCustomerGroupAssignmentExplicitInputAndHistoricalReplay',
+    'TestAdminCustomerGroupAssignmentConcurrentReplayAndAuditRollback',
+    'TestAdminCustomerGroupAssignmentExactScopeAndMinimalPermission',
+    'TestAdminCustomerGroupAssignmentCredentialRevocationAfterReceiptWait',
+    'TestAdminCustomerGroupAssignmentCredentialExpiryAfterWait',
+    'TestAdminCustomerGroupAssignmentDoesNotUpgradeCustomerOrderLock',
+    'TestAdminCustomerGroupAssignmentRecoversLostCommitAcknowledgement',
+    'TestAdminCustomerGroupAssignmentRechecksPolicyAndScopeAfterWaits',
+    'TestAdminCustomerGroupAssignmentPasswordRotationLockOrder',
+    'TestAdminCustomerGroupAssignmentCredentialExpiryBeforeCommit',
+    'TestAdminCustomerGroupAssignmentCreationPasswordPricingLockOrder',
+    'TestCustomerSalesAssignmentUnifiedReplayAndCAS',
+    'TestCustomerSalesAssignmentStrictHeadersAndStoreBoundary',
+    'TestCustomerSalesAssignmentConcurrentReplayAndAuditRollback',
+    'TestCustomerSalesAssignmentWaitingRevocation',
+    'TestCustomerSalesAssignmentOwnerWaitAndCommitExpiry',
+    'TestCustomerSalesAssignmentPasswordRotationLockOrder',
+    'TestCustomerSalesAssignmentProfilePasswordThreeWayLockOrder',
+    'TestCustomerSalesAssignmentRecoversLostCommitAcknowledgement',
+    'TestCustomerSalesAssignmentAndStaffRevocation',
+    'TestAdminAffiliatePagesStrictCustomerContext',
+    'TestAdminAffiliateAttributionsCustomerRoleAndCounterpartyScope',
+    'TestAdminCustomerAffiliatePageCompatibilityAndInvoiceScope',
+    'TestAdminAffiliateReadsKeepEntryPermissionsSeparateAndCurrent',
+    'TestAdminAffiliateReadsUseOneSnapshotForTotalAndRows',
+    'TestAdminAffiliatePagesSearchStatusCountAndOffset',
+    'TestAdminCustomerAffiliateActivityEndpoint',
     'TestAdminCreditReadsStrictCustomerContext',
     'TestAdminCreditReadsPreserveDatesFiltersAndFields',
     'TestAdminCreditReadsRecheckCurrentAuthority',
@@ -66,6 +93,7 @@ export const integrationSuites = {
     'TestImpersonationAPIKeyBindingLookupFailsClosed',
   ],
   'internal/store': [
+    'TestCustomerGroupMembershipUpgrade182PreservesHistoryAndInitializesIndependentVersions',
     'TestTopUpEnforcesFinanceSettingsTransactionally',
     'TestTopUpRequireActiveOrderAndHardcodedDefences',
   ],
@@ -76,7 +104,7 @@ export async function testAdminAPI() {
   env.ZJMFGO_TEST_DATABASE_URL = validateIntegrationURL(process.env.ZJMFGO_TEST_DATABASE_URL);
   env.REQUIRE_INTEGRATION = '1';
   const names = [...new Set(Object.values(integrationSuites).flat())];
-  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', '-timeout=10m', ...Object.keys(integrationSuites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
+  const result = await runContractCommand('bash', ['scripts/go.sh', 'test', '-json', '-count=1', '-race', '-p=1', '-parallel=1', '-timeout=15m', ...Object.keys(integrationSuites).map(pkg => `./${pkg}`), '-run', `^(${names.join('|')})$`], {
     cwd: repository, env, timeoutMs: 1200000, maxBytes: 32 * 1024 * 1024, label: 'admin API contracts and customer scope tests',
   });
   process.stdout.write(result.stdout);

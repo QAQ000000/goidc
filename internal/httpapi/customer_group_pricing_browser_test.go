@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"testing"
@@ -19,7 +18,7 @@ func TestCustomerGroupPricingBrowserFixture(t *testing.T) {
 		group := request(h, "POST", "/api/v1/admin/customer-groups", map[string]any{"name": "浏览器会员组", "discount_percent": 20}, root, "group-browser-group")
 		expect(t, group, 201)
 		gid := int64(data(t, group)["id"].(float64))
-		expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", uid), map[string]any{"group_id": gid}, root, ""), 200)
+		purchasePricingMembership(t, mutationOrderFixture{db: db, h: h, root: root, customerID: uid}, gid)
 		first, second := product(t, db, 12), product(t, db, 12)
 		if _, err := db.Pool.Exec(t.Context(), "UPDATE products SET name=CASE id WHEN $1 THEN '会员优惠云主机' ELSE '保留在购物车的云主机' END WHERE id=ANY($2)", first, []int64{first, second}); err != nil {
 			t.Fatal(err)

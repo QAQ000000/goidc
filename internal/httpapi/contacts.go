@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/mail"
 	"strconv"
@@ -446,35 +447,25 @@ func (s *Server) assignCustomerGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		GroupID *int64 `json:"group_id"`
+		GroupID         json.RawMessage `json:"group_id"`
+		ExpectedVersion int64           `json:"expected_version"`
 	}
 	if !decode(w, r, &input) {
 		return
 	}
-	s.withTx(w, r, func(tx pgx.Tx) (txResponse, error) {
-		var err error
-		var exists bool
-		if err = store.LockAdminCustomer(r.Context(), tx, identityFrom(r).ID, customerID); err != nil {
-			return txResponse{}, err
-		}
-		if err = tx.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND role='customer')", customerID).Scan(&exists); err != nil {
-			return txResponse{}, err
-		}
-		if !exists {
-			return txResponse{}, &txHTTPError{404, "not_found", "客户不存在"}
-		}
-		if input.GroupID == nil {
-			_, err = tx.Exec(r.Context(), "DELETE FROM customer_group_members WHERE customer_id=$1", customerID)
-		} else {
-			_, err = tx.Exec(r.Context(), "INSERT INTO customer_group_members(customer_id,group_id) VALUES($1,$2) ON CONFLICT(customer_id) DO UPDATE SET group_id=EXCLUDED.group_id", customerID, *input.GroupID)
-		}
-		if err != nil {
-			return txResponse{}, err
-		}
-		if err = store.Audit(r.Context(), tx, identityFrom(r).ID, "customer_group.assigned", "user", customerID, map[string]any{"group_id": input.GroupID}); err != nil {
-			return txResponse{}, err
-		}
-
-		return txResponse{200, map[string]any{"customer_id": customerID, "group_id": input.GroupID}}, nil
-	})
+	in := store.AdminCustomerGroupAssignmentInput{ExpectedVersion: input.ExpectedVersion, GroupIDPresent: input.GroupID != nil}
+	if input.GroupID != nil && json.Unmarshal(input.GroupID, &in.GroupID) != nil {
+		writeError(w, http.StatusBadRequest, "invalid_group", "客户分组必须为正整数或 null")
+		return
+	}
+	keys := r.Header.Values("Idempotency-Key")
+	if len(keys) > 1 {
+		writeError(w, http.StatusBadRequest, "invalid_idempotency_key", "请提供单个幂等键")
+		return
+	}
+	out, err := s.db.AssignAdminCustomerGroup(requestFileContext(r), identityFrom(r).ID, customerID, r.Header.Get("Idempotency-Key"), in)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, out)
 }

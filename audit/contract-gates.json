@@ -191,18 +191,24 @@
         "internal/httpapi/admin_customer_summary.go",
         "audit/admin-api-requirements.json",
         "scripts/admin-api-inventory.mjs",
-        "scripts/admin-api-consumers.mjs"
+        "scripts/admin-api-consumers.mjs",
+        "db/migrations/183_customer_group_membership_versions.sql",
+        "web/src/components/admin-customers.tsx",
+      "web/src/components/admin-customer-resources.tsx",
+        "web/src/hooks/use-customer-mutation.ts"
       ],
       "tests": [
         "./scripts/go.sh test ./... -run 'Admin|RBAC|Permission'",
         "node scripts/admin-page-contracts.mjs",
         "node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs",
         "node scripts/admin-api-consumers.mjs",
-        "node scripts/test-admin-api.mjs --integration"
+        "node scripts/test-admin-api.mjs --integration",
+        "node --test scripts/admin-customer-mutation-components.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18 exact run/pass with zero skips: per-section summary grants, customer and ticket scopes, immutable notification ownership, credit cash events, auto-renew lock-wait authorization and no durable credentials derived from impersonation",
-        "browser acceptance with an isolated test account"
+        "browser acceptance with an isolated test account",
+        "independent group membership versions and unified receipt replay; authoritative browser-only sales assignment with post-wait revocation/expiry and COMMIT acknowledgement recovery; exact affiliate customer roles, counterparty privacy and repeatable-read page consistency; genuine schema182 upgrade preserves history"
       ],
       "review": {
         "required": true,

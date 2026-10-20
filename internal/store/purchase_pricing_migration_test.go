@@ -150,6 +150,13 @@ func purchasePricingHistoricalRefund179(t *testing.T, db *Store, actor, customer
 		if err != nil {
 			return err
 		}
+		// The replay contract is this persisted JSON representation. PostgreSQL's
+		// to_jsonb uses +00:00; Marshal emits Z for the same UTC instant. Decode
+		// the original receipt now so DeepEqual compares every historical field
+		// without comparing incidental time.Location objects across that boundary.
+		if err = json.Unmarshal(resultJSON, &pending); err != nil {
+			return err
+		}
 		_, err = tx.Exec(ctx, `INSERT INTO mutation_operations(actor_id,scope,idempotency_key,request_hash,result)
  VALUES($1,'external-refund','pricing-upgrade-refund-create',$2,$3)`, actor, hex.EncodeToString(requestHash[:]), resultJSON)
 		return err
@@ -209,6 +216,13 @@ func TestPurchasePricingUpgrade179PreservesRefundEvidenceAndReplay(t *testing.T)
 	wantRefund := pending
 	wantRefund.Replayed = true
 	if err != nil || !reflect.DeepEqual(replayed, wantRefund) {
+		gotJSON, _ := json.Marshal(replayed)
+		wantJSON, _ := json.Marshal(wantRefund)
+		t.Logf("refund replay wire result: got=%s want=%s", gotJSON, wantJSON)
+		t.Logf("refund replay representations: got=%#v want=%#v", replayed.Refund, wantRefund.Refund)
+		if replayed.Refund.OrderReversal != nil && wantRefund.Refund.OrderReversal != nil {
+			t.Logf("refund order reversal representations: got=%#v want=%#v", *replayed.Refund.OrderReversal, *wantRefund.Refund.OrderReversal)
+		}
 		t.Fatal("pricing upgrade invalidated historical pending-refund replay", replayed, err)
 	}
 	changed := in

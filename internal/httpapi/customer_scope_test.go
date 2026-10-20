@@ -100,7 +100,7 @@ func TestCustomerScopeCommercialBoundaries(t *testing.T) {
 			{"PATCH", customerPath, map[string]any{"display_name": "blocked"}, ""},
 			{"POST", customerPath + "/password", map[string]any{"password": "changed-password"}, ""},
 			{"POST", customerPath + "/balance", map[string]any{"amount_cents": 10}, "sales-blocked-credit"},
-			{"PUT", customerPath + "/group", map[string]any{"group_id": nil}, ""},
+			{"PUT", customerPath + "/group", map[string]any{"group_id": nil, "expected_version": 1}, "sales-blocked-group"},
 			{"GET", customerPath + "/contacts", nil, ""},
 			{"POST", customerPath + "/contacts", map[string]any{"email": "sales-root@example.test"}, ""},
 			{"PATCH", fmt.Sprintf("%s/contacts/%d", customerPath, r.contact), map[string]any{"email": "sales-root@example.test"}, ""},

@@ -369,14 +369,17 @@
         "/admin/customers/new",
         "/admin/customers/[id]"
       ],
-      "reason": "客户摘要、固定客户上下文和充值只读结果查询已补；充值按原客户/key核验账本，锁等待后复核权限及凭据。分组/销售归属等写动作继续分别核对，不把UI待接线标成API缺失。",
+      "reason": "客户摘要、精确上下文与充值核验已补；成员分组使用独立版本及统一回执，销售归属补真实超级管理员会话锁后校验与可选key重放。客户详情整体接线及其余动作仍分别核对。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/customers",
           "GET /api/v1/admin/customers/{id}",
           "POST /api/v1/admin/customers",
           "POST /api/v1/admin/customers/{id}/balance",
-          "GET /api/v1/admin/customers/{id}/balance-operation"
+          "GET /api/v1/admin/customers/{id}/balance-operation",
+          "GET /api/v1/admin/customers/{id}/group",
+          "PUT /api/v1/admin/customers/{id}/group",
+          "PUT /api/v1/admin/customers/{id}/sales-owner"
         ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
@@ -415,11 +418,17 @@
         "web/src/components/admin-customer-detail.tsx",
         "internal/store/admin_balance_operations.go",
         "internal/httpapi/admin_balance_operations.go",
-        "internal/httpapi/admin_balance_operations_test.go"
+        "internal/httpapi/admin_balance_operations_test.go",
+        "internal/store/customer_group_assignment.go",
+        "internal/store/customer_sales_assignment.go",
+        "db/migrations/183_customer_group_membership_versions.sql",
+        "internal/httpapi/customer_group_assignment_test.go",
+        "internal/httpapi/customer_sales_assignment_test.go"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
-        "充值查询只确认人工账本事实，未确认不授权换key；重放绑定金额和规范化备注，审计与资金同事务，真实会话/API密钥撤销和锁序须独立PG18回归。"
+        "充值查询只确认人工账本事实，未确认不授权换key；重放绑定金额和规范化备注，审计与资金同事务，真实会话/API密钥撤销和锁序须独立PG18回归。",
+        "分组漏传不得清空，独立成员版本跨清空保留；原body/key重放不得重复审计，等待后撤权/范围/会话/API密钥及自然过期均重新校验。销售仍仅超级管理员浏览器会话。"
       ]
     },
     {
@@ -432,7 +441,7 @@
         "/admin/customer-groups",
         "/admin/customer-levels"
       ],
-      "reason": "复用客户分组、等级及既有分组定价规则；不增加平行折扣模型。",
+      "reason": "复用分组、等级及定价；客户成员分配新增独立版本、显式清空与统一回执，不建立平行折扣模型。既有规则配置共享授权 helper 与个人换密的锁序风险仍需独立核验和修正，不纳入成员分配验收结论。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/customer-groups",
@@ -471,7 +480,9 @@
       },
       "evidence": [
         "internal/httpapi/customer_levels.go",
-        "docs/domain/customer-group-pricing.md"
+        "docs/domain/customer-group-pricing.md",
+        "internal/store/customer_group_assignment.go",
+        "db/migrations/183_customer_group_membership_versions.sql"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
@@ -2375,9 +2386,18 @@
         "/admin/credit",
         "/admin/affiliate"
       ],
-      "reason": "复用信用和推广领域，增加客户上下文展示；不复制独立台账。",
+      "reason": "信用与推广读取支持精确客户上下文；推广归因显式区分推荐人/被推荐人，客户活动新增分页且保留原数组，前端整体详情待接。",
       "current": {
-        "endpoints": [],
+        "endpoints": [
+          "GET /api/v1/admin/credit",
+          "GET /api/v1/admin/credit/consumptions",
+          "GET /api/v1/admin/credit/repayments",
+          "GET /api/v1/admin/affiliate/accounts/page",
+          "GET /api/v1/admin/affiliate/attributions/page",
+          "GET /api/v1/admin/affiliate/withdrawals/page",
+          "GET /api/v1/admin/customers/{id}/affiliate",
+          "GET /api/v1/admin/customers/{id}/affiliate/page"
+        ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
       "legacy": {
@@ -2412,10 +2432,14 @@
       "evidence": [
         "internal/httpapi/admin_credit.go",
         "internal/httpapi/affiliate_pages.go",
-        "web/src/components/admin-customer-detail.tsx"
+        "web/src/components/admin-customer-detail.tsx",
+        "internal/store/affiliate_pages.go",
+        "internal/store/customer_affiliate.go",
+        "internal/httpapi/admin_affiliate_context_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "精确客户和畸形query不得回退全局；归因角色不扩大客户范围，范围外对端标识及搜索均遮蔽；客户核验、total和items在同一只读快照。"
       ]
     },
     {

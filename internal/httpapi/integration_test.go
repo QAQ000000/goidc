@@ -533,7 +533,7 @@ func TestContactsAndCustomerGroupsOwnership(t *testing.T) {
 	if groupPageData["total"] != float64(1) || len(groupPageData["items"].([]any)) != 1 {
 		t.Fatalf("customer group page contract missing: %s", groupPage.Body.String())
 	}
-	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", firstID), map[string]any{"group_id": groupID}, admin, ""), 200)
+	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", firstID), map[string]any{"group_id": groupID, "expected_version": 1}, admin, "customer-membership-assign-integration"), 200)
 	customers := request(h, "GET", "/api/v1/admin/customers?q=contacts-first", nil, admin, "")
 	expect(t, customers, 200)
 	rows := listData(t, customers)
@@ -541,7 +541,7 @@ func TestContactsAndCustomerGroupsOwnership(t *testing.T) {
 		t.Fatalf("customer group assignment missing: %s", customers.Body.String())
 	}
 	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/customer-groups/%d", groupID), map[string]any{"expected_version": 1}, admin, "customer-group-delete-in-use"), 409)
-	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", firstID), map[string]any{"group_id": nil}, admin, ""), 200)
+	expect(t, request(h, "PUT", fmt.Sprintf("/api/v1/admin/customers/%d/group", firstID), map[string]any{"group_id": nil, "expected_version": 2}, admin, "customer-membership-clear-integration"), 200)
 	expect(t, request(h, "DELETE", fmt.Sprintf("/api/v1/admin/customer-groups/%d", groupID), map[string]any{"expected_version": 1}, admin, "customer-group-delete-integration"), 200)
 	_ = secondID
 }
