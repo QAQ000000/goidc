@@ -273,7 +273,7 @@ AND admin_ticket_department_allowed($1,t.department_id)
 AND admin_ticket_customer_allowed($1,t.user_id)
 AND ($2='' OR t.status=$2) AND ($3='' OR t.priority=$3)
 AND ($4='' OR t.subject ILIKE '%'||$4||'%' OR t.ticket_no ILIKE '%'||$4||'%' OR t.legacy_ticket_no ILIKE '%'||$4||'%' OR u.display_name ILIKE '%'||$4||'%' OR u.email ILIKE '%'||$4||'%')
-AND ($5::bigint IS NULL OR t.user_id=$5)
+AND ($5::bigint IS NULL OR (t.user_id=$5 AND admin_customer_allowed($1,t.user_id)))
 AND (NOT $6::boolean OR (($7::bigint=0 AND t.department_id IS NULL) OR t.department_id=$7))`
 	return customerAccountReadPage(ctx, s.Pool, query, "updated_at DESC,id DESC", []any{actor, status, priority, q, customerID, departmentFilter, departmentID}, limit, offset)
 }

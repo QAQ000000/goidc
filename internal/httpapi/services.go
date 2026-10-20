@@ -29,13 +29,12 @@ func (s *Server) servicesPage(w http.ResponseWriter, r *http.Request) { s.servic
 func (s *Server) servicesList(w http.ResponseWriter, r *http.Request, paged bool) {
 	var group *int64
 	var customerID *int64
-	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
-		id, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-		if err != nil || id < 1 {
-			writeError(w, 400, "invalid_customer", "客户筛选无效")
+	if adminRoute(r) {
+		var err error
+		customerID, err = s.db.AdminCustomerFilter(r.Context(), identityFrom(r).ID, r.URL.Query())
+		if accountBusinessFailure(s, w, r, err) {
 			return
 		}
-		customerID = &id
 	}
 	if raw := r.URL.Query().Get("group_id"); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
@@ -51,31 +50,14 @@ func (s *Server) servicesList(w http.ResponseWriter, r *http.Request, paged bool
 		return
 	}
 	limit, offset := pagination(r)
-	// import_review_required is a services boolean flag, not a status value: the
-	// status CHECK never contains it. Filtering by it returns the legacy-import
-	// services still awaiting review instead of an always-empty result.
-	where := serviceJoins + ` WHERE (($1::boolean AND admin_customer_allowed($2,s.user_id)) OR (NOT $1::boolean AND s.user_id=$2))
-	 AND ($3::bigint IS NULL OR coalesce(p.service_group_id,0)=$3)
-	 AND (CASE WHEN $4='import_review_required' THEN s.import_review_required ELSE ($4='' OR s.status=$4) END)
-	 AND (s.name ILIKE $5 OR s.domain ILIKE $5) AND ($6::bigint IS NULL OR s.user_id=$6)`
-	args := []any{adminRoute(r), identityFrom(r).ID, group, state, "%" + strings.TrimSpace(r.URL.Query().Get("q")) + "%", customerID}
-	// Count and items share one statement snapshot, including empty pages.
-	if !paged {
-		s.list(w, r, "SELECT "+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+where+" ORDER BY s.id DESC LIMIT $7 OFFSET $8", append(args, limit, offset)...)
+	result, err := s.db.ServiceAccountList(r.Context(), store.ServiceAccountListFilter{
+		Actor: identityFrom(r).ID, Admin: adminRoute(r), Page: paged,
+		CustomerID: customerID, GroupID: group, Status: state,
+		Query: strings.TrimSpace(r.URL.Query().Get("q")), Limit: limit, Offset: offset,
+	})
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	rows, err := s.db.Pool.Query(r.Context(), `WITH filtered AS (SELECT `+serviceColumns+`,u.display_name AS customer_name`+serviceGroupColumns+where+`)
- SELECT (SELECT count(*) FROM filtered) AS total,coalesce((SELECT jsonb_agg(row_to_json(page)) FROM (SELECT * FROM filtered ORDER BY id DESC LIMIT $7 OFFSET $8) page),'[]'::jsonb) AS items`, append(args, limit, offset)...)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result, err := pgx.CollectExactlyOneRow(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	result["limit"], result["offset"] = limit, offset
 	write(w, 200, result)
 }
 

@@ -32,11 +32,23 @@ func (s *Server) adminCatalogGroups(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if kind == "section" {
-		s.list(w, r, `SELECT s.*,(SELECT count(*) FROM product_categories c WHERE c.section_id=s.id) AS member_count FROM product_sections s ORDER BY sort_order,id`)
-	} else {
-		s.list(w, r, `SELECT c.*,s.name AS section_name,coalesce(s.active,true) AS section_active,(SELECT count(*) FROM products p WHERE p.category_id=c.id) AS member_count FROM product_categories c LEFT JOIN product_sections s ON s.id=c.section_id ORDER BY c.sort_order,c.id`)
+	groups, err := s.db.AdminCatalogGroups(r.Context(), identityFrom(r).ID, kind)
+	if accountBusinessFailure(s, w, r, err) {
+		return
 	}
+	write(w, http.StatusOK, groups)
+}
+func (s *Server) adminCatalogGroupsPage(w http.ResponseWriter, r *http.Request) {
+	kind, ok := catalogGroupKind(w, r)
+	if !ok {
+		return
+	}
+	limit, offset := pagination(r)
+	page, err := s.db.AdminCatalogGroupsPage(r.Context(), identityFrom(r).ID, kind, r.URL.Query(), limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, page)
 }
 func (s *Server) saveCatalogGroup(w http.ResponseWriter, r *http.Request) {
 	kind, ok := catalogGroupKind(w, r)

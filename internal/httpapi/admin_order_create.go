@@ -3,11 +3,9 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/codex/zjmfgo/internal/store"
-	"github.com/jackc/pgx/v5"
 )
 
 func (s *Server) adminOrderQuote(w http.ResponseWriter, r *http.Request) {
@@ -86,8 +84,8 @@ func (s *Server) adminOrderCreateOptions(w http.ResponseWriter, r *http.Request)
 			s.fail(w, r, err)
 			return
 		}
-		var mailEnabled bool
-		if err := s.db.Pool.QueryRow(r.Context(), "SELECT EXISTS(SELECT 1 FROM channel_instances WHERE category='mail' AND enabled)").Scan(&mailEnabled); err != nil {
+		mailEnabled, err := s.db.AdminOrderMailEnabled(r.Context())
+		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
@@ -104,57 +102,17 @@ func (s *Server) adminOrderCreateOptions(w http.ResponseWriter, r *http.Request)
 		writeError(w, 400, "invalid_query", "搜索条件过长")
 		return
 	}
-	tx, err := s.db.Pool.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	var total int64
-	var rows pgx.Rows
+	var result map[string]any
+	var err error
 	if kind == "customers" {
-		where := `FROM users WHERE role='customer' AND status='active' AND admin_customer_allowed($1,id) AND ($2='' OR display_name ILIKE '%'||$2||'%' OR email ILIKE '%'||$2||'%' OR username ILIKE '%'||$2||'%')`
-		if err = tx.QueryRow(r.Context(), "SELECT count(*) "+where, identityFrom(r).ID, q).Scan(&total); err == nil {
-			rows, err = tx.Query(r.Context(), "SELECT id,display_name AS name,email,status "+where+" ORDER BY id DESC LIMIT $3 OFFSET $4", identityFrom(r).ID, q, limit, offset)
-		}
+		result, err = s.db.AdminCustomerCreateOptions(r.Context(), identityFrom(r).ID, r.URL.Query(), q, "order", limit, offset)
 	} else {
-		productID := int64(0)
-		if raw := r.URL.Query().Get("product_id"); raw != "" {
-			productID, err = strconv.ParseInt(raw, 10, 64)
-			if err != nil || productID < 1 {
-				writeError(w, 400, "invalid_product", "商品标识无效")
-				return
-			}
-		}
-		where := `FROM products WHERE active AND catalog_category_visible(category_id) AND ($1='' OR name ILIKE '%'||$1||'%') AND ($2=0 OR id=$2)`
-		if err = tx.QueryRow(r.Context(), "SELECT count(*) "+where, q, productID).Scan(&total); err == nil {
-			rows, err = tx.Query(r.Context(), "SELECT "+productProjection(false)+" "+where+" ORDER BY sort_order,id LIMIT $3 OFFSET $4", q, productID, limit, offset)
-		}
+		result, err = s.db.AdminOrderProductOptions(r.Context(), r.URL.Query(), q, limit, offset)
 	}
-	if err != nil {
-		s.fail(w, r, err)
+	if accountBusinessFailure(s, w, r, err) {
 		return
 	}
-	items, err := pgx.CollectRows(rows, pgx.RowToMap)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if items == nil {
-		items = []map[string]any{}
-	}
-	// Metadata may contain provider-side notes or opaque historical fields. The
-	// create page receives typed purchase definitions, never arbitrary metadata.
-	if kind == "products" {
-		for _, item := range items {
-			delete(item, "metadata")
-		}
-	}
-	if err = tx.Commit(r.Context()); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	write(w, 200, map[string]any{"items": items, "total": total, "limit": limit, "offset": offset})
+	write(w, 200, result)
 }
 
 // Share the existing provider listing contract without reproducing resolver

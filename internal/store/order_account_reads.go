@@ -94,3 +94,44 @@ func (s *Store) OrderAccountList(ctx context.Context, in OrderAccountListFilter)
 	rows, err := s.Pool.Query(ctx, query+fmt.Sprintf(" ORDER BY o.id DESC LIMIT $%d OFFSET $%d", len(args)-1, len(args)), args...)
 	return collectMaps(rows, err)
 }
+
+// RenewalAccountList reads renewal invoice lines; renewals do not create orders.
+func (s *Store) RenewalAccountList(ctx context.Context, in OrderAccountListFilter) (map[string]any, error) {
+	args := []any{true, in.Actor}
+	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2)) AND ii.item_type='renew'"
+	if in.Supplier {
+		proof := "EXISTS(SELECT 1 FROM services ss WHERE ss.id=ii.service_id AND ss.user_id=i.user_id AND ss.provision_mode='supplier' AND ss.delivery_snapshot->>'supplier_id' ~ '^[1-9][0-9]*$'"
+		if in.SupplierID != "" {
+			args = append(args, in.SupplierID)
+			proof += fmt.Sprintf(" AND ss.delivery_snapshot->>'supplier_id'=$%d", len(args))
+		}
+		where += " AND " + proof + ")"
+		if in.DateFrom != nil {
+			args = append(args, *in.DateFrom)
+			where += fmt.Sprintf(" AND i.created_at >= $%d", len(args))
+		}
+		if in.DateTo != nil {
+			args = append(args, *in.DateTo)
+			where += fmt.Sprintf(" AND i.created_at < $%d", len(args))
+		}
+	}
+	if in.CustomerID != nil {
+		args = append(args, *in.CustomerID)
+		where += fmt.Sprintf(" AND i.user_id=$%d", len(args))
+	}
+	if in.Status != "" {
+		args = append(args, in.Status)
+		where += fmt.Sprintf(" AND CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END=$%d", len(args))
+	}
+	if in.Query != "" {
+		args = append(args, "%"+in.Query+"%")
+		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR ii.description ILIKE $%d OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
+	}
+	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method"
+	if in.Supplier {
+		projection += ",s.resource_info->>'dedicated_ip' AS service_ips,s.delivery_snapshot->>'supplier_id' AS supplier_id,(SELECT name FROM supplier_accounts a WHERE a.id::text=s.delivery_snapshot->>'supplier_id') AS supplier_name,(SELECT (j.result->>'cost_cents')::bigint FROM provision_jobs j WHERE j.idempotency_key='supplier-renew-'||i.id::text AND j.service_id=s.id AND j.status='succeeded' AND j.result->>'currency'='CNY') AS cost_cents,(SELECT j.status FROM provision_jobs j WHERE j.idempotency_key='supplier-renew-'||i.id::text AND j.service_id=s.id) AS upstream_renewal_status,'local_renewal_invoice'::text AS record_kind"
+	}
+
+	query := "SELECT " + projection + " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id AND s.user_id=i.user_id WHERE " + where
+	return customerAccountReadPage(ctx, s.Pool, query, "id DESC", args, in.Limit, in.Offset)
+}

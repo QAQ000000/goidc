@@ -13,6 +13,7 @@ import (
 var adminRoutePermissions = func() map[string]string {
 	m := map[string]string{}
 	m["GET /api/v1/admin/customers/{id}/summary"] = "customers.view"
+	m["GET /api/v1/admin/catalog-groups/{kind}/page"] = "products.view"
 	m["GET /api/v1/admin/account-history/{id}"] = "audit.view"
 	m["GET /api/v1/admin/notification-center"] = "notifications.view"
 	m["GET /api/v1/admin/notification-deliveries/page"] = "notifications.view"

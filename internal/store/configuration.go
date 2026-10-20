@@ -37,6 +37,14 @@ type ProductOptionGroupInput struct {
 	QtyMaximum       int64                `json:"qty_maximum"`
 	QtyStage         int64                `json:"qty_stage"`
 	Unit             string               `json:"unit"`
+	Notes            *string              `json:"notes,omitempty"`
+}
+
+func validateConfigurationNotes(notes *string) error {
+	if notes != nil && !contentTextValid(*notes, 5000, true) {
+		return conflict("invalid_product_options", "配置备注不能超过5000个字符或包含控制字符")
+	}
+	return nil
 }
 
 func normalizeOption(in *ProductOptionInput, defaults bool) error {
@@ -89,6 +97,9 @@ func configurationCommit(ctx context.Context, tx pgx.Tx, actor, product, object 
 	return tx.Commit(ctx)
 }
 func (s *Store) SaveProductOptionGroup(ctx context.Context, actor, product, group int64, in ProductOptionGroupInput) (int64, error) {
+	if err := validateConfigurationNotes(in.Notes); err != nil {
+		return 0, err
+	}
 	if (in.ParentGroupID != nil && (*in.ParentGroupID < 0 || (*in.ParentGroupID > 0 && in.OptionType != 20))) || len(in.OptionParents) > 100 || (group == 0 && len(in.OptionParents) > 0) {
 		return 0, conflict("invalid_product_options", "多级父配置组或子选项映射无效")
 	}
@@ -154,7 +165,7 @@ func (s *Store) SaveProductOptionGroup(ctx context.Context, actor, product, grou
 	action := "product.option_group.updated"
 	if group == 0 {
 		action = "product.options.created"
-		err = tx.QueryRow(ctx, `INSERT INTO product_option_groups(product_id,name,slug,required,sort_order,active,option_type,qty_minimum,qty_maximum,qty_stage,unit) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, product, in.Name, in.Slug, in.Required, in.SortOrder, *in.Active, in.OptionType, in.QtyMinimum, in.QtyMaximum, in.QtyStage, in.Unit).Scan(&group)
+		err = tx.QueryRow(ctx, `INSERT INTO product_option_groups(product_id,name,slug,required,sort_order,active,option_type,qty_minimum,qty_maximum,qty_stage,unit,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,coalesce($12,'')) RETURNING id`, product, in.Name, in.Slug, in.Required, in.SortOrder, *in.Active, in.OptionType, in.QtyMinimum, in.QtyMaximum, in.QtyStage, in.Unit, in.Notes).Scan(&group)
 		if err == nil {
 			for _, o := range in.Options {
 				if _, err = tx.Exec(ctx, `INSERT INTO product_options(group_id,label,value,price_delta_cents,setup_delta_cents,sort_order,active,qty_minimum,qty_maximum,parent_option_id,upgrade_enabled) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,NULLIF($10::bigint,0),COALESCE($11,true))`, group, o.Label, o.Value, o.PriceDeltaCents, o.SetupDeltaCents, o.SortOrder, *o.Active, o.QtyMinimum, o.QtyMaximum, o.ParentOptionID, o.UpgradeEnabled); err != nil {
@@ -165,7 +176,7 @@ func (s *Store) SaveProductOptionGroup(ctx context.Context, actor, product, grou
 	} else {
 		_, err = tx.Exec(ctx, `UPDATE product_option_groups SET name=$2,slug=$3,required=$4,sort_order=$5,active=$6,option_type=$7,qty_minimum=$8,qty_maximum=$9,qty_stage=$10,unit=$11,
 parent_group_id=CASE WHEN $12::bigint IS NULL THEN parent_group_id ELSE NULLIF($12::bigint,0) END,
-hierarchy_native=hierarchy_native OR $12::bigint IS NOT NULL,updated_at=now() WHERE id=$1`, group, in.Name, in.Slug, in.Required, in.SortOrder, *in.Active, in.OptionType, in.QtyMinimum, in.QtyMaximum, in.QtyStage, in.Unit, in.ParentGroupID)
+hierarchy_native=hierarchy_native OR $12::bigint IS NOT NULL,notes=coalesce($13,notes),updated_at=now() WHERE id=$1`, group, in.Name, in.Slug, in.Required, in.SortOrder, *in.Active, in.OptionType, in.QtyMinimum, in.QtyMaximum, in.QtyStage, in.Unit, in.ParentGroupID, in.Notes)
 	}
 	if err != nil {
 		return 0, err

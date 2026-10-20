@@ -72,7 +72,7 @@ func TestAdminOrderPagesScopeFiltersAndTotals(t *testing.T) {
 		if row["user_id"] != float64(ownID) {
 			t.Fatal("scope leak", row)
 		}
-		check(staff, fmt.Sprintf("customer_id=%d", otherID), 0, 0, 0)
+		expect(t, request(h, "GET", base+fmt.Sprintf("?customer_id=%d", otherID), nil, staff, ""), 404)
 		check(root, fmt.Sprintf("customer_id=%d&limit=1", ownID), 2, 1, 0)
 		check(staff, "status=pending", 2, 2, 0)
 		check(staff, "status=paid", 0, 0, 0)

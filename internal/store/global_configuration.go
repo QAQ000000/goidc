@@ -46,6 +46,9 @@ func ValidateGlobalConfiguration(in *GlobalConfigurationInput) error {
 	slugs := map[string]bool{}
 	for i := range in.Definitions {
 		g := &in.Definitions[i]
+		if err := validateConfigurationNotes(g.Notes); err != nil {
+			return err
+		}
 		g.Name = strings.TrimSpace(g.Name)
 		g.Slug = strings.ToLower(strings.TrimSpace(g.Slug))
 		if g.Active == nil {
@@ -127,6 +130,21 @@ func MutateGlobalConfiguration(ctx context.Context, tx pgx.Tx, actor, id int64, 
 			}
 			if err := json.Unmarshal(raw, &in.Definitions); err != nil {
 				return nil, err
+			}
+		}
+		if operation == "save" && id != 0 {
+			var old []GlobalDefinition
+			if err := json.Unmarshal(previous, &old); err != nil {
+				return nil, err
+			}
+			notes := make(map[string]*string, len(old))
+			for _, definition := range old {
+				notes[definition.Slug] = definition.Notes
+			}
+			for i := range in.Definitions {
+				if in.Definitions[i].Notes == nil {
+					in.Definitions[i].Notes = notes[strings.ToLower(strings.TrimSpace(in.Definitions[i].Slug))]
+				}
 			}
 		}
 		if err := ValidateGlobalConfiguration(&in); err != nil {
@@ -305,7 +323,7 @@ func projectGlobalConfiguration(ctx context.Context, tx pgx.Tx, global, product 
 		var owner *int64
 		err = tx.QueryRow(ctx, "SELECT id,global_group_id FROM product_option_groups WHERE product_id=$1 AND slug=$2 FOR UPDATE", product, g.Slug).Scan(&group, &owner)
 		if err == pgx.ErrNoRows {
-			err = tx.QueryRow(ctx, `INSERT INTO product_option_groups(product_id,name,slug,required,sort_order,active,option_type,qty_minimum,qty_maximum,qty_stage,unit,global_group_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`, product, g.Name, g.Slug, g.Required, g.SortOrder, *g.Active, g.OptionType, g.QtyMinimum, g.QtyMaximum, g.QtyStage, g.Unit, global).Scan(&group)
+			err = tx.QueryRow(ctx, `INSERT INTO product_option_groups(product_id,name,slug,required,sort_order,active,option_type,qty_minimum,qty_maximum,qty_stage,unit,global_group_id,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,coalesce($13,'')) RETURNING id`, product, g.Name, g.Slug, g.Required, g.SortOrder, *g.Active, g.OptionType, g.QtyMinimum, g.QtyMaximum, g.QtyStage, g.Unit, global, g.Notes).Scan(&group)
 		} else if err == nil {
 			if owner == nil || *owner != global {
 				return conflict("global_configuration_slug_conflict", fmt.Sprintf("商品 %d 已存在独立或其它全局组配置 %s", product, g.Slug))
@@ -317,7 +335,7 @@ func projectGlobalConfiguration(ctx context.Context, tx pgx.Tx, global, product 
 			if oldType != g.OptionType {
 				return conflict("global_configuration_in_use", "分配后不能更改配置类型")
 			}
-			_, err = tx.Exec(ctx, `UPDATE product_option_groups SET name=$2,required=$3,sort_order=$4,active=$5,qty_minimum=$6,qty_maximum=$7,qty_stage=$8,unit=$9,updated_at=now() WHERE id=$1`, group, g.Name, g.Required, g.SortOrder, *g.Active, g.QtyMinimum, g.QtyMaximum, g.QtyStage, g.Unit)
+			_, err = tx.Exec(ctx, `UPDATE product_option_groups SET name=$2,required=$3,sort_order=$4,active=$5,qty_minimum=$6,qty_maximum=$7,qty_stage=$8,unit=$9,notes=coalesce($10,notes),updated_at=now() WHERE id=$1`, group, g.Name, g.Required, g.SortOrder, *g.Active, g.QtyMinimum, g.QtyMaximum, g.QtyStage, g.Unit, g.Notes)
 		}
 		if err != nil {
 			return err

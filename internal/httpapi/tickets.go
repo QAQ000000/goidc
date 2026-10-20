@@ -34,13 +34,12 @@ func (s *Server) tickets(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
 	filter := r.URL.Query().Get("department_id") != "" && r.URL.Query().Get("department_id") != "all"
 	var customerID *int64
-	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
-		id, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-		if err != nil || id < 1 {
-			writeError(w, 400, "invalid_customer", "客户筛选无效")
+	if adminRoute(r) {
+		var err error
+		customerID, err = s.db.AdminCustomerFilter(r.Context(), identityFrom(r).ID, r.URL.Query())
+		if accountBusinessFailure(s, w, r, err) {
 			return
 		}
-		customerID = &id
 	}
 	var department *int64
 	if filter {
@@ -205,6 +204,14 @@ func (s *Server) uploadTicketAttachment(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	if values := r.Header.Values("Idempotency-Key"); len(values) > 1 || (len(values) == 1 && strings.TrimSpace(values[0]) == "") {
+		writeError(w, 400, "invalid_idempotency_key", "请求键不能重复")
+		return
+	}
+	key, validKey := mutationKey(w, r, "", false)
+	if !validKey {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxTicketAttachmentBytes+1<<20)
 	if err := r.ParseMultipartForm(32 << 10); err != nil {
 		if strings.Contains(err.Error(), "request body too large") {
@@ -244,12 +251,21 @@ func (s *Server) uploadTicketAttachment(w http.ResponseWriter, r *http.Request) 
 	}
 	digest := sha256.Sum256(content)
 	hash := hex.EncodeToString(digest[:])
-	result, err := s.db.UploadTicketAccountAttachment(requestFileContext(r), identityFrom(r).ID, id, name, mimeType, hash, content)
+	var result map[string]any
+	if key == "" {
+		result, err = s.db.UploadTicketAccountAttachment(requestFileContext(r), identityFrom(r).ID, id, name, mimeType, hash, content)
+	} else {
+		result, err = s.db.UploadTicketAccountAttachmentWithKey(requestFileContext(r), identityFrom(r).ID, id, name, mimeType, hash, content, key)
+	}
 	if err != nil {
 		s.failTicketAccount(w, r, err)
 		return
 	}
-	write(w, 201, result)
+	status := http.StatusCreated
+	if result["replayed"] == true {
+		status = http.StatusOK
+	}
+	write(w, status, result)
 }
 
 func (s *Server) downloadTicketAttachment(w http.ResponseWriter, r *http.Request) {

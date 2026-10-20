@@ -18,10 +18,11 @@ func (s *Server) invoiceCustomers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, offset := pagination(r)
-	s.transactionPage(w, r, "u.id,u.username,u.display_name,u.email,u.status",
-		` FROM users u WHERE u.role='customer' AND admin_customer_allowed($1,u.id)
- AND ($2='' OR u.username ILIKE '%'||$2||'%' OR u.display_name ILIKE '%'||$2||'%' OR u.email ILIKE '%'||$2||'%')`,
-		"u.id", []any{identityFrom(r).ID, q}, limit, offset)
+	result, err := s.db.AdminCustomerCreateOptions(r.Context(), identityFrom(r).ID, r.URL.Query(), q, "invoice", limit, offset)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, 200, result)
 }
 
 func (s *Server) saveManualInvoice(w http.ResponseWriter, r *http.Request) {

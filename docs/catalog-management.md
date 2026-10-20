@@ -16,6 +16,7 @@
 | `PATCH /api/v1/admin/products/{id}` | 全量替换界面可编辑字段，要求 expected_revision 和 nullable expected_stock |
 | `POST /api/v1/admin/products/{id}/duplicate` | 复制目录状态（商品、账期价格、配置组/选项/账期价格、产品资料关联），使用新名称和标识；不复制订单、服务、购物车、旧身份或审计历史 |
 | `GET/POST /api/v1/admin/catalog-groups/{kind}` | kind 只允许 section/category；读取或创建 |
+| `GET /api/v1/admin/catalog-groups/{kind}/page` | 后台分组分页；q、active、limit/offset；category可用精确section_id，字段与错误见[后台API](admin/api.md#资源与商品读取) |
 | `PUT/DELETE /api/v1/admin/catalog-groups/{kind}/{id}` | 保存/删除要求 expected_version；有关联分类/商品拒绝删除 |
 | `POST /api/v1/admin/products/{id}/pricing` | 编辑账期价格/启用状态/默认账期；兼容可选 expected_revision |
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -264,13 +263,12 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if raw := r.URL.Query().Get("customer_id"); in.Admin && raw != "" {
-		value, err := strconv.ParseInt(raw, 10, 64)
-		if err != nil || value < 1 {
-			writeError(w, 400, "invalid_customer", "客户筛选无效")
+	if in.Admin {
+		var err error
+		in.CustomerID, err = s.db.AdminCustomerFilter(r.Context(), in.Actor, r.URL.Query())
+		if accountBusinessFailure(s, w, r, err) {
 			return
 		}
-		in.CustomerID = &value
 	}
 	in.Status = strings.TrimSpace(r.URL.Query().Get("status"))
 	if in.Status != "" {
@@ -330,84 +328,87 @@ func (s *Server) orders(w http.ResponseWriter, r *http.Request) {
 // the service/product joins provide the business context for the table.
 func (s *Server) renewalOrders(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	args := []any{true, identityFrom(r).ID}
-	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2)) AND ii.item_type='renew'"
-	supplierList := r.URL.Path == "/api/v1/admin/supplier-renewals"
-	if supplierList {
-		var ok bool
-		where, args, ok = supplierOrderWhere(w, r, where, args, true)
-		if !ok {
+	in := store.OrderAccountListFilter{Actor: identityFrom(r).ID, Admin: true, Page: true, Supplier: r.URL.Path == "/api/v1/admin/supplier-renewals", Limit: limit, Offset: offset}
+	var err error
+	in.CustomerID, err = s.db.AdminCustomerFilter(r.Context(), in.Actor, r.URL.Query())
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	if in.Supplier {
+		in.SupplierID = r.URL.Query().Get("supplier_id")
+		if in.SupplierID != "" {
+			if _, err := parsePositiveID(in.SupplierID); err != nil {
+				writeError(w, 400, "invalid_supplier", "供应商筛选无效")
+				return
+			}
+		}
+		zone := time.FixedZone("Asia/Shanghai", 8*3600)
+		var start, end time.Time
+		for _, field := range []string{"date_from", "date_to"} {
+			raw := r.URL.Query().Get(field)
+			if raw == "" {
+				continue
+			}
+			value, err := time.ParseInLocation("2006-01-02", raw, zone)
+			if err != nil {
+				writeError(w, 400, "invalid_order_date", "日期筛选无效")
+				return
+			}
+			if field == "date_from" {
+				start = value
+				in.DateFrom = &value
+			} else {
+				end = value
+				exclusive := value.AddDate(0, 0, 1)
+				in.DateTo = &exclusive
+			}
+		}
+		if !start.IsZero() && !end.IsZero() && end.Before(start) {
+			writeError(w, 400, "invalid_order_date", "结束日期不能早于开始日期")
 			return
 		}
 	}
-
-	if value := r.URL.Query().Get("customer_id"); value != "" {
-		customerID, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || customerID < 1 {
-			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
-			return
-		}
-		args = append(args, customerID)
-		where += fmt.Sprintf(" AND i.user_id=$%d", len(args))
+	in.Status = strings.TrimSpace(r.URL.Query().Get("status"))
+	if in.Status != "" && in.Status != "pending" && in.Status != "paid" && in.Status != "cancelled" && in.Status != "refunded" {
+		writeError(w, 400, "invalid_status", "续费订单状态无效")
+		return
 	}
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if status != "pending" && status != "paid" && status != "cancelled" && status != "refunded" {
-			writeError(w, http.StatusBadRequest, "invalid_status", "续费订单状态无效")
-			return
-		}
-		args = append(args, status)
-		where += fmt.Sprintf(" AND CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END=$%d", len(args))
+	in.Query = strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(in.Query) > 120 {
+		writeError(w, 400, "invalid_query", "搜索条件过长")
+		return
 	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		if len(q) > 120 {
-			writeError(w, http.StatusBadRequest, "invalid_query", "搜索条件过长")
-			return
-		}
-		args = append(args, "%"+q+"%")
-		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR ii.description ILIKE $%d OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args))
+	result, err := s.db.RenewalAccountList(r.Context(), in)
+	if accountBusinessFailure(s, w, r, err) {
+		return
 	}
-	projection := "ii.id,i.invoice_no AS order_no,i.user_id,u.display_name AS customer_name,CASE WHEN i.status='unpaid' THEN 'pending' WHEN i.status='cancelled' THEN 'cancelled' ELSE i.status END AS status,'approved'::text AS review_status,ii.amount_cents AS total_cents,'CNY'::text AS currency,i.created_at,i.id AS invoice_id,i.status AS invoice_status,i.due_at,ii.description AS product_name,ii.service_id,s.domain AS service_domain,COALESCE((SELECT pt.provider FROM payment_transactions pt WHERE pt.invoice_id=i.id AND pt.status='succeeded' ORDER BY pt.id DESC LIMIT 1),CASE WHEN i.status='paid' AND EXISTS(SELECT 1 FROM balance_ledger WHERE reference_type='invoice' AND reference_id=i.id AND entry_type='payment') THEN 'balance' ELSE '' END) AS payment_method"
-	if supplierList {
-		projection += ",s.resource_info->>'dedicated_ip' AS service_ips,s.delivery_snapshot->>'supplier_id' AS supplier_id,(SELECT name FROM supplier_accounts a WHERE a.id::text=s.delivery_snapshot->>'supplier_id') AS supplier_name,(SELECT (j.result->>'cost_cents')::bigint FROM provision_jobs j WHERE j.idempotency_key='supplier-renew-'||i.id::text AND j.service_id=s.id AND j.status='succeeded' AND j.result->>'currency'='CNY') AS cost_cents,(SELECT j.status FROM provision_jobs j WHERE j.idempotency_key='supplier-renew-'||i.id::text AND j.service_id=s.id) AS upstream_renewal_status,'local_renewal_invoice'::text AS record_kind"
-	}
-	from := " FROM invoice_items ii JOIN invoices i ON i.id=ii.invoice_id JOIN users u ON u.id=i.user_id LEFT JOIN services s ON s.id=ii.service_id AND s.user_id=i.user_id WHERE " + where
-	s.transactionPage(w, r, projection, from, "ii.id", args, limit, offset)
+	write(w, 200, result)
 }
 func (s *Server) invoices(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pagination(r)
-	args := []any{adminRoute(r), identityFrom(r).ID}
-	where := "(($1::boolean AND admin_customer_allowed($2,i.user_id)) OR (NOT $1::boolean AND i.user_id=$2))"
-	if adminRoute(r) && r.URL.Query().Get("customer_id") != "" {
-		customerID, err := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-		if err != nil || customerID < 1 {
-			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
+	in := store.InvoiceAccountListFilter{Actor: identityFrom(r).ID, Admin: adminRoute(r), Page: strings.HasSuffix(r.URL.Path, "/page"), Limit: limit, Offset: offset}
+	if in.Admin {
+		var err error
+		in.CustomerID, err = s.db.AdminCustomerFilter(r.Context(), in.Actor, r.URL.Query())
+		if accountBusinessFailure(s, w, r, err) {
 			return
 		}
-		args = append(args, customerID)
-		where += fmt.Sprintf(" AND i.user_id=$%d", len(args))
 	}
-	if status := strings.TrimSpace(r.URL.Query().Get("status")); status != "" {
-		if status != "unpaid" && status != "paid" && status != "cancelled" && status != "refunded" {
+	in.Status = strings.TrimSpace(r.URL.Query().Get("status"))
+	if in.Status != "" {
+		if in.Status != "unpaid" && in.Status != "paid" && in.Status != "cancelled" && in.Status != "refunded" {
 			writeError(w, 400, "invalid_status", "账单状态无效")
 			return
 		}
-		args = append(args, status)
-		where += fmt.Sprintf(" AND i.status=$%d", len(args))
 	}
-	if q := strings.TrimSpace(r.URL.Query().Get("q")); q != "" {
-		if len(q) > 120 {
-			writeError(w, 400, "invalid_query", "搜索条件过长")
-			return
-		}
-		args = append(args, "%"+q+"%")
-		where += fmt.Sprintf(" AND (i.invoice_no ILIKE $%d OR o.order_no ILIKE $%d OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.description ILIKE $%d) OR EXISTS(SELECT 1 FROM order_items oi WHERE oi.order_id=o.id AND oi.product_name ILIKE $%d) OR ($1::boolean AND (u.display_name ILIKE $%d OR u.email ILIKE $%d)))", len(args), len(args), len(args), len(args), len(args), len(args))
-	}
-	projection := "i.id,i.invoice_no,o.id AS order_id,o.order_no,i.user_id,u.display_name AS customer_name,i.status,i.amount_cents,i.due_at,i.paid_at,i.created_at,i.invoice_kind,i.version,i.import_review_required," + invoicePendingProjection
-	from := " FROM invoices i JOIN users u ON u.id=i.user_id LEFT JOIN orders o ON o.id=i.order_id AND o.user_id=i.user_id WHERE " + where
-	if strings.HasSuffix(r.URL.Path, "/page") {
-		s.transactionPage(w, r, projection, from, "i.id", args, limit, offset)
+	in.Query = strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(in.Query) > 120 {
+		writeError(w, 400, "invalid_query", "搜索条件过长")
 		return
 	}
-	args = append(args, limit, offset)
-	s.list(w, r, fmt.Sprintf("SELECT %s%s ORDER BY i.id DESC LIMIT $%d OFFSET $%d", projection, from, len(args)-1, len(args)), args...)
+	result, err := s.db.InvoiceAccountList(r.Context(), in)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, result)
 }

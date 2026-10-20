@@ -65,7 +65,13 @@ func (s *Server) customerFileOwners(w http.ResponseWriter, r *http.Request) {
 func (s *Server) customerFiles(w http.ResponseWriter, r *http.Request) {
 	admin := adminRoute(r)
 	var filter *int64
-	if raw := r.URL.Query().Get("customer_id"); raw != "" {
+	if admin {
+		var err error
+		filter, err = s.db.AdminCustomerFilter(r.Context(), identityFrom(r).ID, r.URL.Query())
+		if accountBusinessFailure(s, w, r, err) {
+			return
+		}
+	} else if raw := r.URL.Query().Get("customer_id"); raw != "" {
 		id, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil || id < 1 {
 			writeError(w, 400, "invalid_customer", "客户编号无效")

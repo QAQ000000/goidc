@@ -35,6 +35,10 @@ func ticketFileCredentialCurrent(ctx context.Context, tx pgx.Tx, actor int64) er
 	return nil
 }
 func (s *Store) UploadTicketAccountAttachment(ctx context.Context, actor, id int64, name, mimeType, hash string, content []byte) (map[string]any, error) {
+	return s.uploadTicketAccountAttachment(ctx, actor, id, name, mimeType, hash, content, "", "", "")
+}
+
+func (s *Store) uploadTicketAccountAttachment(ctx context.Context, actor, id int64, name, mimeType, hash string, content []byte, key, requestHash, objectKey string) (map[string]any, error) {
 	var result map[string]any
 	err := s.WithTx(ctx, func(tx pgx.Tx) error {
 
@@ -47,7 +51,8 @@ func (s *Store) UploadTicketAccountAttachment(ctx context.Context, actor, id int
 		const scope = `SELECT t.user_id,t.status FROM tickets t
  LEFT JOIN users c ON c.id=$2 LEFT JOIN administrators u ON u.id=$2 LEFT JOIN admin_roles ar ON ar.id=u.admin_role_id
  WHERE t.id=$1 AND t.merged_ticket_id IS NULL AND (
- (u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions) AND 'tickets.manage'=ANY(ar.permissions))) AND admin_ticket_department_allowed(u.id,t.department_id))
+	 (u.status='active' AND (u.role='super_admin' OR (u.role='admin' AND ar.active AND 'tickets.view'=ANY(ar.permissions) AND 'tickets.manage'=ANY(ar.permissions))) AND admin_ticket_department_allowed(u.id,t.department_id)
+ AND (NOT EXISTS(SELECT 1 FROM users owner WHERE owner.id=t.user_id) OR admin_customer_allowed(u.id,t.user_id)))
  OR (c.status='active' AND t.user_id=c.id AND coalesce((SELECT customer_visible FROM ticket_departments WHERE id=t.department_id),true))) FOR UPDATE OF t`
 		authorize := func() error {
 			if err := ticketFileCredentialCurrent(ctx, tx, actorID); err != nil {
@@ -66,7 +71,20 @@ func (s *Store) UploadTicketAccountAttachment(ctx context.Context, actor, id int
 		}
 		var attachmentID int64
 		var createdAt any
-		stored, err := s.PersistFile(ctx, tx, "ticket_attachments", content)
+		if key != "" {
+			var saved map[string]any
+			replayed, err := ReplayOperation(ctx, tx, actor, ticketUploadResultScope, key, requestHash, &saved)
+			if err != nil {
+				return err
+			}
+			if replayed {
+				return conflict("attachment_upload_unconfirmed", "附件上传结果需要核验")
+			}
+			if err := authorize(); err != nil {
+				return err
+			}
+		}
+		stored, err := s.persistFileWithKey(ctx, tx, "ticket_attachments", content, objectKey)
 		if err != nil {
 			return err
 		}
@@ -87,6 +105,12 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,created_at`, id, actor, name, mimeT
 		}
 
 		result = map[string]any{"id": attachmentID, "ticket_id": id, "uploader_id": actor, "filename": name, "mime_type": mimeType, "size_bytes": len(content), "sha256": hash, "created_at": createdAt}
+		if key != "" {
+			if err := SaveOperation(ctx, tx, actor, ticketUploadResultScope, key, requestHash, result); err != nil {
+				return err
+			}
+			result["state"], result["replayed"] = "confirmed", false
+		}
 		return nil
 	})
 	return result, err

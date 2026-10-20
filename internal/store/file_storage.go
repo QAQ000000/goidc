@@ -73,6 +73,13 @@ func (s *Store) fileJournal(ctx context.Context) (*pgxpool.Pool, error) {
 // PersistFile creates an upload intent before the first external write. It
 // never retries Put or deletes on failure: the business commit may be unknown.
 func (s *Store) PersistFile(ctx context.Context, tx pgx.Tx, kind string, content []byte) (FilePayload, error) {
+	return s.persistFileWithKey(ctx, tx, kind, content, "")
+}
+
+// A ticket upload reserves its private object key in mutation_operations before
+// entering the business transaction. Other file domains continue generating a
+// fresh key here; this method never resumes or repeats a prior Put.
+func (s *Store) persistFileWithKey(ctx context.Context, tx pgx.Tx, kind string, content []byte, objectKey string) (FilePayload, error) {
 	limit := fileKindLimit(kind)
 	if limit == 0 || len(content) == 0 || int64(len(content)) > limit {
 		return FilePayload{}, conflict("invalid_file", "文件类型或大小无效")
@@ -90,7 +97,14 @@ func (s *Store) PersistFile(ctx context.Context, tx pgx.Tx, kind string, content
 	if tx == nil || profile == "" || backend == nil || location == "" {
 		return FilePayload{}, conflict("file_storage_unavailable", "文件存储配置不可用")
 	}
-	return s.persistExternalFile(ctx, kind, content, profile, backend, location)
+	if objectKey == "" {
+		return s.persistExternalFile(ctx, kind, content, profile, backend, location)
+	}
+	decoded, keyErr := hex.DecodeString(objectKey)
+	if keyErr != nil || len(decoded) != 32 || objectKey != hex.EncodeToString(decoded) {
+		return FilePayload{}, conflict("file_storage_unavailable", "文件上传记录无效")
+	}
+	return s.persistExternalFileWithKey(ctx, kind, content, profile, backend, location, objectKey)
 }
 
 func (s *Store) persistExternalFile(ctx context.Context, kind string, content []byte, profile string, backend filestorage.Backend, location string) (FilePayload, error) {
@@ -98,6 +112,10 @@ func (s *Store) persistExternalFile(ctx context.Context, kind string, content []
 	if err != nil {
 		return FilePayload{}, conflict("file_storage_unavailable", "文件存储暂不可用")
 	}
+	return s.persistExternalFileWithKey(ctx, kind, content, profile, backend, location, key)
+}
+
+func (s *Store) persistExternalFileWithKey(ctx context.Context, kind string, content []byte, profile string, backend filestorage.Backend, location, key string) (FilePayload, error) {
 	digest := sha256.Sum256(content)
 	checksum := hex.EncodeToString(digest[:])
 	journalCtx, cancelJournal := context.WithTimeout(ctx, 10*time.Second)

@@ -589,7 +589,7 @@
         "/admin/resources",
         "/admin/customer-resources"
       ],
-      "reason": "资源已有独立入口；成本、备注和上下游操作完整性按能力逐项复核，不以页面布局推断缺失。",
+      "reason": "服务资源视图已补精确客户/商品筛选、商品名称和到期时间；独立人工资源成本/备注与上游动作仍按适配器和产品口径复核。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/resources"
@@ -627,10 +627,13 @@
       },
       "evidence": [
         "internal/httpapi/resources.go",
-        "docs/replacement-gap-audit.md"
+        "docs/replacement-gap-audit.md",
+        "internal/store/admin_resources.go",
+        "internal/httpapi/admin_resource_catalog_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "精确customer_id/product_id过滤及商品名称/到期时间已实现；当前资源是服务视图，不伪造独立库存、成本或未声明上游动作。"
       ]
     },
     {
@@ -652,7 +655,8 @@
       "current": {
         "endpoints": [
           "GET /api/v1/admin/products",
-          "POST /api/v1/admin/products"
+          "POST /api/v1/admin/products",
+          "GET /api/v1/admin/catalog-groups/{kind}/page"
         ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
@@ -687,10 +691,14 @@
       },
       "evidence": [
         "internal/httpapi/catalog_manage.go",
-        "web/src/components/product-editor.tsx"
+        "web/src/components/product-editor.tsx",
+        "internal/store/catalog_group_reads.go",
+        "internal/store/catalog_projection.go",
+        "internal/httpapi/admin_resource_catalog_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "分组分页保留原数组；商品及全局配置备注省略保留、显式空清除，仅后台投影可见，复制/同步/脱离保持边界。"
       ]
     },
     {
@@ -2097,12 +2105,20 @@
         "/admin/orders/new",
         "/admin/tickets/new"
       ],
-      "reason": "账单、订单、工单和文件复用现有查询及创建；保持 customer_id、返回上下文及权限重读。",
+      "reason": "关联列表、续费/供应商列表及创建客户选项已统一严格customer_id与最终查询范围；客户详情UI仍需保持固定客户及返回路径。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/orders",
           "GET /api/v1/admin/invoices",
-          "GET /api/v1/admin/tickets"
+          "GET /api/v1/admin/tickets",
+          "GET /api/v1/admin/orders/create-options",
+          "GET /api/v1/admin/invoice-customers",
+          "GET /api/v1/admin/tickets/create-options",
+          "GET /api/v1/admin/orders/page",
+          "GET /api/v1/admin/invoices/page",
+          "GET /api/v1/admin/services/page",
+          "GET /api/v1/admin/tickets/page",
+          "GET /api/v1/admin/customer-files"
         ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
@@ -2139,10 +2155,16 @@
       },
       "evidence": [
         "web/src/components/admin-customer-detail.tsx",
-        "web/src/components/manual-invoices.tsx"
+        "web/src/components/manual-invoices.tsx",
+        "internal/store/admin_customer_filter.go",
+        "internal/store/admin_create_options.go",
+        "internal/httpapi/admin_create_context_test.go",
+        "internal/httpapi/admin_customer_linked_lists_test.go"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "显式customer_id必须单个纯十进制正整数；非法400、真实客户不存在或范围外404、合法无记录空页；省略保留既有全局语义，最终SQL继续复核范围。",
+        "订单/账单/工单创建客户选项支持精确预选，仅返回动作所需字段，不另加customers.view；写入仍校验实时资格。"
       ]
     },
     {
@@ -2803,9 +2825,12 @@
       "pages": [
         "/admin/tickets/[id]"
       ],
-      "reason": "工单回复与附件失败不能误报整体成功；复用文件存储结果核验和回收机制。",
+      "reason": "已实现统一mutation_operations业务上传意图与原子结果回执、授权结果查询；未知结果保守停止重Put，原存储journal复用。UI待接稳定key与分离上传状态。",
       "current": {
-        "endpoints": [],
+        "endpoints": [
+          "GET /api/v1/tickets/{id}/attachment-upload",
+          "POST /api/v1/tickets/{id}/attachments"
+        ],
         "endpointsScope": "声明的代表入口；完整注册路由见生成 inventory，页面请求候选见生成 consumers，不据此推断完成率。"
       },
       "legacy": {
@@ -2825,10 +2850,10 @@
         ]
       },
       "api": {
-        "status": "unverified"
+        "status": "implemented"
       },
       "ui": {
-        "status": "unverified"
+        "status": "partial"
       },
       "verification": {
         "static": "source-reviewed",
@@ -2839,10 +2864,17 @@
       },
       "evidence": [
         "internal/httpapi/tickets.go",
-        "docs/architecture/engineering-governance.md"
+        "docs/architecture/engineering-governance.md",
+        "internal/store/ticket_attachment_uploads.go",
+        "internal/httpapi/ticket_attachment_upload_status.go",
+        "internal/httpapi/ticket_attachment_uploads_test.go",
+        "docs/architecture/file-storage.md"
       ],
       "acceptance": [
-        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。"
+        "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
+        "稳定key先提交上传意图，外部Put与最终业务回执分开；原始意图未确认不重Put，查询仍鉴权且不暴露存储位置。",
+        "接口及隔离数据库测试不代表现有上传UI已接入；无key旧客户端兼容但没有幂等恢复保证。",
+        "TestTicketAttachmentUpload*覆盖同键并发、跨actor/ticket、两类COMMIT确认丢失、审计回滚、外部写未知及Put/查询/回执锁等待后撤权；真实对象服务及浏览器另验。"
       ]
     },
     {

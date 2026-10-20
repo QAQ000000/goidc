@@ -116,6 +116,8 @@ node scripts/admin-api-consumers.mjs
 
 客户详情的固定身份来自URL中的客户id；切页签、刷新和重试均保留它。嵌入详情的文件、账单、订单、工单创建不提供可清空的客户归属选择器。全局管理页继续允许授权范围内筛选，服务端始终重新校验。
 
+本节的关联列表及创建客户选项统一接收精确 `customer_id`：省略保留全局范围；显式提供必须为单个纯十进制正整数，空值、重复、符号、非数字或溢出返回400 `invalid_customer`。真实客户不存在或不属于当前客户范围返回404 `not_found`，不降级为全局查询；范围内客户没有匹配记录返回空页。最终数据查询仍保留客户范围条件。客户门户沿用本人身份，不能用这些参数切换客户。
+
 | 用途 | 方法与路径 | 权限/关键输入 |
 | --- | --- | --- |
 | 客户列表 | `GET /admin/customers/page` | `customers.view`；`q/group_id/sales_owner_id/status/limit/offset`；group/owner可用 `none` 筛未分配，status=active或disabled |
@@ -130,6 +132,18 @@ node scripts/admin-api-consumers.mjs
 | 客户文件 | `GET /admin/customer-files` | `customer_files.view`；customer_id、q、分页；上传/编辑/删除/下载见[客户文件](../customer-files.md) |
 | 创建订单 | `POST /admin/orders/quote` → `POST /admin/orders` | `orders.manage`；真实管理员actor、customer_id、报价及稳定key，见[代下单契约](../transactions.md#管理员代下单与回执)；不借客户Cookie下单 |
 | 人工账单 | `/admin/invoices` 创建/编辑 | `invoices.manage`；固定客户、项目、due_at、版本和key，见[人工账单](../manual-invoices.md) |
+
+后台订单、账单、服务、工单的原数组入口同样支持上述精确筛选；续费订单 `/admin/renewal-orders` 和供应商订单/续费 `/admin/supplier-orders`、`/admin/supplier-renewals` 也遵循该规则。工单仍另受部门范围限制；省略客户筛选时保留旧全局工单契约。
+
+创建前读取预选客户，无请求体，成功200，返回通用分页结构；`q`继续限制结果，`limit/offset`继续有效。以下接口只返回操作所需的精简身份字段，不额外要求 `customers.view`，也不返回余额、内部备注、凭据或客户档案。
+
+| 方法与路径 | 权限 | `items` 字段及规则 |
+| --- | --- | --- |
+| `GET /admin/orders/create-options?kind=customers&customer_id=123` | `orders.manage` | `id,name,email,status`；仅active客户 |
+| `GET /admin/invoice-customers?customer_id=123` | `invoices.manage`及`invoices.view` | `id,username,display_name,email,status`；保留历史行为，允许读取disabled客户选项 |
+| `GET /admin/tickets/create-options?kind=customers&customer_id=123` | `tickets.manage` | `id,name,email`；仅active客户，保留工单客户范围 |
+
+合法但停用客户在订单/工单创建选项中返回空页；该读取不表示后续创建一定可提交，写入仍重新校验当前客户、部门、商品和价格。
 
 客户更新最小请求与响应：
 
@@ -218,6 +232,34 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 
 显式代登录沿用[身份边界](../admin-rbac.md#前后台身份边界)，真实actor与被代登录客户分开保留。代登录会话调用 `POST /account/api-keys` 一律403 `impersonation_credential_forbidden`，不创建key、不增加签发审计；绑定查询故障停止签发。判断只针对本次选中的客户会话绑定，不能因为浏览器同时有后台Cookie就禁用普通客户的独立登录。客户自身及管理员个人的正常密钥管理继续复用各自portal。
 
+## 资源与商品读取
+
+`GET /admin/resources` 要求 `resources.view`，返回 `{items,total,limit,offset,suppliers}`。除原有 `q/ip/supplier_id/status`，新增精确 `customer_id/product_id`。customer_id遵循本页共同规则；product_id显式空、重复、非纯正十进制或溢出400 `invalid_product`，合法但无匹配商品返回空页。分页数据和计数处于同一快照。
+
+资源项新增 `product_id,product_name,next_due_at`，原有 `id,name,domain,status,username,upstream_id,resource_info,user_id,customer_name,supplier_id,supplier_name` 保留；resource_info仅返回已有白名单。到期时间可为null。suppliers仅包含当前客户范围及所选客户/商品所涉及的供应商，不根据搜索、IP或状态进一步缩减。该资源模型是已登记服务，不能当作独立库存池或完整成本台账。
+
+`GET /admin/catalog-groups/{kind}/page` 要求 `products.view`，kind为 `section/category`；返回通用分页结构，按sort_order、id升序。支持 `q`（名称/标识/描述，最多120字符）、`active=true|false`、`limit/offset`；category还支持精确 `section_id`。重复筛选或无效active返回400 `invalid_catalog_filter`，无效/空/重复section_id或在section查询中使用section_id返回400 `invalid_section`。分组类型无效400 `invalid_catalog_group`。不传筛选包含停用分组；合法父分组无结果返回空页。
+
+items保留原数组接口的分组字段（含id、name、slug、description、active、sort_order、version、member_count）；category另含section_id、section_name、section_active。原 `GET /admin/catalog-groups/{kind}` 继续返回完整数组。
+
+商品配置组创建/修改输入新增可选 `notes`，最多5000字符；省略或null保留原备注，显式空字符串清空，新建省略为空。仅后台商品投影返回notes，公开商品和订单创建商品选项不返回。全局配置定义也保存备注，更新省略时按slug保留；分配同步、复制和脱离规则见[商品配置](../product-configuration.md)。仍需原expected_revision/版本及写权限，备注不能绕过共享组/供应商配置保护。
+
+## 工单附件上传恢复
+
+`POST /tickets/{id}/attachments` 使用multipart字段 `file`（兼容 `attachment`），保留类型和10 MiB限制。新前端应在首次上传前保存8–128字符的 `Idempotency-Key`，并保存文件名、类型、大小和SHA-256对应的原文件意图。后台共享工单接口带 `X-Auth-Portal: admin`；上传仍要求既有工单写权限、部门及当前凭据复核。
+
+带key上传先持久化意图，再写文件；最终附件、审计和成功回执同事务提交。同actor/key的文件或工单不同返回409 `idempotency_conflict`；首次成功201，成功重放200并返回原附件，不再次Put、插入或审计。成功响应保留 `id,ticket_id,uploader_id,filename,mime_type,size_bytes,sha256,created_at`，另含 `state:"confirmed",replayed`。没有key的旧客户端继续兼容，但不具备本协议的恢复保证。管理员有key/无key上传统一复核工单部门及真实客户范围；保留历史管理员归属工单的部门处理规则。
+
+结果查询使用 `GET /tickets/{id}/attachment-upload`，同一个 `Idempotency-Key` 放请求头，不进入URL，返回private/no-store：
+
+```json
+{"data":{"state":"confirmed","attachment":{"id":456,"ticket_id":123,"filename":"evidence.txt","mime_type":"text/plain","size_bytes":12,"sha256":"...","uploader_id":7,"created_at":"2026-10-20T08:00:00Z"}}}
+```
+
+仅有意图而没有已提交业务回执时，返回 `{state:"unconfirmed"}`；此时同key上传409 `attachment_upload_unconfirmed`，不得换key或自动重传。未知key、其他actor或其他工单的key返回404；查询仍验证当前工单可读权限和凭据，关单后可查已确认结果。确认成功表示业务上传曾提交，不证明附件仍未被删除、移动或能从外部存储下载，后续访问继续走原授权下载。
+
+断网、5xx和明确的上传未知错误都先查原key；查不到回执不证明可以安全重试。413/415等预约前的确定输入错误可修正文件后重新提交；预约后的审计回滚、外部Put超时、进程退出或提交确认丢失保守保留未确认意图，人工核验原存储及journal，不能用SHA相同推定是此次上传。对象路径、存储profile和原始外部错误不返回。工单/回复创建成功与附件未确认必须分别展示；当前UI尚未接入此恢复协议。
+
 ## 其余领域的权威字段和状态机
 
 以下文档与生成目录配套阅读；目录负责覆盖注册操作，领域文档负责业务输入、状态、冲突和错误。需求声明中 `partial/unverified/deferred` 的项目仍需补充逐动作契约或验收，不视为前端可无条件交付。
@@ -242,6 +284,8 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 ```bash
 node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs
 node scripts/test-admin-api.mjs --integration
+node scripts/test-file-storage.mjs --unit
+node scripts/test-file-storage.mjs --integration
 node scripts/test-captcha.mjs --integration
 ./scripts/go.sh test ./internal/archtest -count=1
 node scripts/check-doc-governance.mjs
@@ -250,6 +294,8 @@ node scripts/check-doc-links.mjs
 
 integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/pass零skip；不是业务数据库。本轮新增行为的必需测试在 [`test-admin-api.mjs`](../../scripts/test-admin-api.mjs)，代登录签发边界还纳入原认证严格门禁。生成器及源码声明仅E0，独立数据库行为E1；页面候选、TypeScript编译和既有截图不能替代新UI浏览器E2、真实渠道E3或发布E4。
 
-本轮在隔离PG18以race模式实际执行后台API门禁18个必需入口、认证门禁85个必需入口，以及统一通知分页/既有中心/生命周期/Web Push历史兼容13个入口，全部run/pass、零跳过；各组有共同测试，不相加为独立用例数。通知兼容的首次并发运行因测试库锁资源不足失败，保留失败证据后独占测试库重跑通过。静态盘点/消费者的16个夹具测试、全仓Go编译、相关包vet、架构约束与文档治理/链接检查均通过。范围仅限这些入口，完整后台各领域仍按需求清单中的API/UI/验证状态推进。
+本批在隔离PG18以race分组实跑并严格核对后台API的38个必需入口、文件存储的53个必需入口，全部run/pass、零跳过。文件存储由原42个入口与冻结版11个附件入口合并核对；后台由37个入口与这11个附件入口合并核对，覆盖最后增加的回执锁等待后撤权；两组有交集，不相加为独立用例数。另29个存储单元入口、16个静态盘点/消费者夹具、全仓Go编译、相关包vet、架构约束与文档治理/链接/契约门禁检查通过。架构基线从692减至676条，仅移除已下沉的16条豁免，不放行新越界。机器日志、清单和源文件哈希保存在忽略的output制品中。
+
+本批没有重跑完整认证/通知业务门禁，也没有执行新UI浏览器、真实对象存储或部署；既有验收只保留其原范围。完整后台各领域仍按需求清单中的API/UI/验证状态推进。
 
 前端实施先完成客户详情：固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误，再按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。

@@ -60,7 +60,7 @@ func (s *Store) TicketList(ctx context.Context, actor int64, admin bool, limit, 
  WHERE t.merged_ticket_id IS NULL AND (($1::boolean AND admin_ticket_department_allowed($2,t.department_id)) OR (NOT $1::boolean AND t.user_id=$2 AND coalesce(d.customer_visible,true)))
  AND (NOT $5::boolean OR t.department_id IS NOT DISTINCT FROM $6::bigint)
  AND ($7='' OR t.subject ILIKE '%'||$7||'%' OR t.ticket_no ILIKE '%'||$7||'%' OR t.legacy_ticket_no ILIKE '%'||$7||'%')
- AND ($8::bigint IS NULL OR t.user_id=$8) ORDER BY t.updated_at DESC,t.id DESC LIMIT $3 OFFSET $4`, admin, actor, limit, offset, filter, department, query, customer)
+ AND ($8::bigint IS NULL OR (t.user_id=$8 AND (NOT $1::boolean OR admin_customer_allowed($2,t.user_id)))) ORDER BY t.updated_at DESC,t.id DESC LIMIT $3 OFFSET $4`, admin, actor, limit, offset, filter, department, query, customer)
 	return collectMaps(rows, err)
 }
 func (s *Store) TicketDetail(ctx context.Context, id, actor int64, admin, customer bool) (map[string]any, error) {

@@ -36,14 +36,9 @@ func (s *Server) adminTicketsPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_query", "搜索条件过长")
 		return
 	}
-	var customerID *int64
-	if raw := strings.TrimSpace(r.URL.Query().Get("customer_id")); raw != "" {
-		id, err := parsePositiveID(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_customer", "客户筛选无效")
-			return
-		}
-		customerID = &id
+	customerID, err := s.db.AdminCustomerFilter(r.Context(), identityFrom(r).ID, r.URL.Query())
+	if accountBusinessFailure(s, w, r, err) {
+		return
 	}
 	departmentFilter := false
 	var departmentID int64
@@ -77,6 +72,14 @@ func (s *Server) adminTicketCreateOptions(w http.ResponseWriter, r *http.Request
 	}
 	if len(q) > 120 {
 		writeError(w, 400, "invalid_query", "搜索条件过长")
+		return
+	}
+	if kind == "customers" {
+		result, err := s.db.AdminCustomerCreateOptions(r.Context(), identityFrom(r).ID, r.URL.Query(), q, "ticket", limit, offset)
+		if accountBusinessFailure(s, w, r, err) {
+			return
+		}
+		write(w, 200, result)
 		return
 	}
 	var relation int64

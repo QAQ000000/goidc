@@ -44,6 +44,10 @@ func TestSupplierOrdersSnapshotScopeAndPagination(t *testing.T) {
 			total, count  int
 		}{{root, "", 2, 2}, {staff, "", 1, 1}, {root, "?limit=1&offset=1", 2, 1}, {root, "?offset=100", 2, 0}, {root, fmt.Sprintf("?supplier_id=%d", supplier), 2, 2}, {root, "?supplier_id=999999", 0, 0}, {root, "?q=missing", 0, 0}, {root, fmt.Sprintf("?customer_id=%d", other), 1, 1}, {staff, fmt.Sprintf("?customer_id=%d", other), 0, 0}, {root, "?date_from=2099-01-01", 0, 0}} {
 			response := request(h, "GET", path+tc.query, nil, tc.cookie, "")
+			if tc.cookie == staff && tc.query == fmt.Sprintf("?customer_id=%d", other) {
+				expect(t, response, 404)
+				continue
+			}
 			expect(t, response, 200)
 			result := data(t, response)
 			if result["total"] != float64(tc.total) || len(result["items"].([]any)) != tc.count {
