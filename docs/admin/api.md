@@ -57,7 +57,7 @@ node scripts/admin-api-consumers.mjs
 ## 客户、商品与服务的逐动作契约
 
 - [客户管理 API](customer-api.md)：旧客户路由按批准动作映射；包含高级筛选、新建/资料/启停、字段目录、联系人、分组/销售、未付充值代建、推荐人调整及受控代登录。资料手机与登录手机号分开，客户等级筛选复用现有规则；独立 CRM、旧资料扩展暂缓，旧 API 三态不恢复。
-- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；独立权限、服务/账单版本、报价窗口、统一回执和供应商pending。批量/人工价格与期限/状态纠错/可信人工收款/转移为后续批次，需求组状态为partial。
+- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；第二批同客户最多20项的批量报价、清单登记、进度查询与显式执行。保持独立权限、服务/账单版本、报价窗口、统一回执及供应商pending；人工价格与期限/状态纠错/可信人工收款/转移继续分批实施，需求组仍为partial。
 - [商品管理 API](catalog-api.md)：旧十页签逐项映射商品、定价、交付、配置、升级、购买字段、推广、业务文件和快捷链接，列出实际输入/输出、权限、版本、错误及未知结果恢复。创建/复制可选回执和其他 CAS writer 的恢复保证不同，前端不能统一猜测。
 
 两组本轮新增实现已补齐，需求声明的 API 状态为 `implemented`；该字段只表示批准范围的接口已实现，运行验收仍以独立门禁结果为准。前端据领域契约接线，接口实现状态、页面状态、数据库/浏览器/外部及发布证据各自维护。完成必要 API 不等于所有后台 UI 已完成。
@@ -283,7 +283,9 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 
 该接口只修改续费意图，不立即扣款或调用供应商。一次性服务拒绝 `nonrenewable_service`，非active/suspended拒绝 `invalid_auto_renew_state`，本地续费退款hold、未复核资源或不支持续费的供应商按领域错误拒绝。服务等待锁期间撤权、会话/密钥撤销、客户范围变化必须拒绝，不能复用HTTP进入时的缓存授权；服务归属并发变化可返回 `service_owner_changed`，应重新读取。
 
-前端成功后刷新服务详情，后续自动续费/上游回读仍按[交易与自动续费](../transactions.md)和[供应商协议](../supplier-protocol.md)执行。管理员代续费或批量立即续费不能通过改Cookie调用客户接口。首批代续费及后续价格/期限/纠错/归属批次见[服务管理契约](service-management-api.md)，不在本自动续费开关接口范围。
+前端成功后刷新服务详情，后续自动续费/上游回读仍按[交易与自动续费](../transactions.md)和[供应商协议](../supplier-protocol.md)执行。管理员代续费或批量立即续费不能通过改Cookie调用客户接口。单服务与同客户批量代续费及后续价格/期限/纠错/归属批次见[服务管理契约](service-management-api.md)，不在本自动续费开关接口范围。
+
+批量入口为 `POST /admin/service-renewal-batch-quotes`、`POST /admin/service-renewal-batches`、`GET /admin/service-renewal-batches/{batch_id}`、`POST /admin/service-renewal-batches/{batch_id}/execute`。报价只读，登记和查询均不建单或扣款；执行按冻结清单顺序处理明确子集，单项成功回执跨attempt复用。认证/范围变化及未知提交停止后续项目；未确认使用原execute key恢复，确定失败经管理员核对后用新execute key显式重试。只原actor可访问，create与pay_balance分别要求 `services.renew`、`services.renew.pay_balance`，并同时满足服务/账单读取与客户范围。完整字段、状态及协调会话容量见[批量契约](service-management-api.md#第二批同客户批量代续费)；UI与运行验收另记。
 
 ## 代登录与长期凭据
 

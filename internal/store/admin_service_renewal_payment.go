@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,6 +33,15 @@ type adminRenewalPaymentCommand struct {
 
 const adminRenewalPaymentScope = "admin:service.renewal.pay"
 
+func adminRenewalPaymentRequestHash(customer, service, invoice int64, in AdminRenewalPaymentInput) string {
+	return accountBusinessHash(struct {
+		ServiceID  int64                    `json:"service_id"`
+		InvoiceID  int64                    `json:"invoice_id"`
+		CustomerID int64                    `json:"customer_id"`
+		Input      AdminRenewalPaymentInput `json:"input"`
+	}{service, invoice, customer, in})
+}
+
 func (s *Store) AdminPayRenewalInvoice(ctx context.Context, actor, serviceID, invoiceID int64, in AdminRenewalPaymentInput, key string) (AdminRenewalPaymentResult, error) {
 	var out AdminRenewalPaymentResult
 	in.Reason = strings.TrimSpace(in.Reason)
@@ -51,6 +59,12 @@ func (s *Store) AdminPayRenewalInvoice(ctx context.Context, actor, serviceID, in
 	if err = tx.QueryRow(ctx, "SELECT i.user_id,s.user_id FROM invoices i CROSS JOIN services s WHERE i.id=$1 AND s.id=$2", invoiceID, serviceID).Scan(&customer, &serviceCustomer); err != nil {
 		return out, err
 	}
+	if err = requireAdminRenewalBatchCustomer(ctx, customer); err != nil {
+		return out, err
+	}
+	if err = requireAdminRenewalBatchCustomer(ctx, serviceCustomer); err != nil {
+		return out, err
+	}
 	if err = lockAdminRenewalAuthority(ctx, tx, actor, customer, "services.view", "invoices.view", "services.renew.pay_balance"); err != nil {
 		return out, err
 	}
@@ -62,17 +76,7 @@ func (s *Store) AdminPayRenewalInvoice(ctx context.Context, actor, serviceID, in
 	if err = LockFinancialCustomer(ctx, tx, customer); err != nil {
 		return out, err
 	}
-	raw, err := json.Marshal(struct {
-		ServiceID  int64                    `json:"service_id"`
-		InvoiceID  int64                    `json:"invoice_id"`
-		CustomerID int64                    `json:"customer_id"`
-		Input      AdminRenewalPaymentInput `json:"input"`
-	}{serviceID, invoiceID, customer, in})
-	if err != nil {
-		return out, err
-	}
-	digest := sha256.Sum256(raw)
-	hash := hex.EncodeToString(digest[:])
+	hash := adminRenewalPaymentRequestHash(customer, serviceID, invoiceID, in)
 	replayed, err := ReplayOperation(ctx, tx, actor, adminRenewalPaymentScope, key, hash, &out)
 	// The receipt lock may have waited while this exact credential was revoked
 	// or naturally expired. Even a conflicting key must not answer from stale

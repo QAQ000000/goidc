@@ -46,6 +46,13 @@ type AdminServiceRenewalResult struct {
 	Status     string `json:"status"`
 }
 
+func adminRenewalCreateRequestHash(customer, service int64, in AdminServiceRenewalInput) string {
+	return accountBusinessHash(struct {
+		CustomerID, ServiceID int64
+		Input                 AdminServiceRenewalInput
+	}{customer, service, in})
+}
+
 // Authority takes principal/role locks before any business or credential lock.
 // Password changes use that same principal -> credential order. The original
 // HTTP credential is checked here without locking and is locked only after
@@ -112,6 +119,9 @@ func commitAdminRenewal(ctx context.Context, tx pgx.Tx, actor int64) error {
 func (s *Store) lockAdminRenewalTerms(ctx context.Context, tx pgx.Tx, actor, serviceID int64) (renewalTerms, bool, error) {
 	var owner int64
 	if err := tx.QueryRow(ctx, "SELECT user_id FROM services WHERE id=$1", serviceID).Scan(&owner); err != nil {
+		return renewalTerms{}, false, err
+	}
+	if err := requireAdminRenewalBatchCustomer(ctx, owner); err != nil {
 		return renewalTerms{}, false, err
 	}
 	if err := lockAdminRenewalAuthority(ctx, tx, actor, owner, "services.view", "invoices.view", "services.renew"); err != nil {
@@ -321,10 +331,7 @@ func (s *Store) adminCreateRenewalInvoiceStep(ctx context.Context, actor, servic
 	if err != nil {
 		return out, nil, err
 	}
-	requestHash := accountBusinessHash(struct {
-		CustomerID, ServiceID int64
-		Input                 AdminServiceRenewalInput
-	}{terms.CustomerID, service, in})
+	requestHash := adminRenewalCreateRequestHash(terms.CustomerID, service, in)
 	replayed, err := ReplayOperation(ctx, tx, actor, adminRenewalCreateScope, key, requestHash, &out)
 	if err != nil {
 		// An application-level hash conflict can follow a long receipt wait.
