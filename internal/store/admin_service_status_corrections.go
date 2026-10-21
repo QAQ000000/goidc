@@ -135,8 +135,8 @@ func requireAdminServiceStatusCorrectionFresh(ctx context.Context, tx pgx.Tx, se
 	// This deliberately supports one-off services and does not reuse the
 	// recurring-only pricing/term admission functions.
 	if err := tx.QueryRow(ctx, `SELECT CASE
- WHEN NOT EXISTS(SELECT 1 FROM orders o WHERE o.id=s.order_id AND o.user_id=s.user_id AND o.review_status='approved' AND o.status IN ('paid','active'))
- OR NOT EXISTS(SELECT 1 FROM invoices i WHERE i.order_id=s.order_id AND i.user_id=s.user_id AND i.status='paid' AND NOT i.import_review_required) THEN 'service_order_not_deliverable'
+ WHEN NOT EXISTS(SELECT 1 FROM orders o WHERE o.id=s.order_id AND o.user_id=service_original_customer_id(s.id) AND o.review_status='approved' AND o.status IN ('paid','active'))
+ OR NOT EXISTS(SELECT 1 FROM invoices i WHERE i.order_id=s.order_id AND i.user_id=service_original_customer_id(s.id) AND i.status='paid' AND NOT i.import_review_required) THEN 'service_order_not_deliverable'
  WHEN external_refund_order_blocked(s.order_id) THEN 'external_refund_order_hold'
  WHEN EXISTS(SELECT 1 FROM external_refunds r JOIN invoices i ON i.id=r.invoice_id WHERE r.status='pending_review' AND
  (i.order_id=s.order_id OR EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id))) THEN 'service_refund_pending'

@@ -55,6 +55,7 @@ WHERE s.status IN ('active','suspended') AND u.status='active'
            SELECT 1 FROM channel_instances c WHERE c.category='sms' AND c.enabled)))
     AND NOT EXISTS(SELECT 1 FROM notification_delivery_events e
       WHERE e.service_id=s.id AND e.channel=t.channel AND e.kind=t.kind
+       AND e.ownership_generation=service_ownership_generation(s.id)
        AND e.stage=(s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-(now() AT TIME ZONE 'Asia/Shanghai')::date
        AND (e.resource_due_at=s.next_due_at OR (e.resource_due_at IS NULL
         AND e.due_date BETWEEN (s.next_due_at AT TIME ZONE 'Asia/Shanghai')::date-1
@@ -146,6 +147,7 @@ func (s *Store) enqueueServiceExpiryEmail(ctx context.Context, tx pgx.Tx, item e
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date,resource_due_at)
 SELECT $1,$2,'email','service_expiry_reminder',$3,$4::date,$5
 WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.service_id=$1
+ AND n.ownership_generation=service_ownership_generation($1)
  AND n.channel='email' AND n.kind='service_expiry_reminder' AND n.stage=$3
  AND (n.resource_due_at=$5 OR (n.resource_due_at IS NULL AND n.due_date BETWEEN $4::date-1 AND $4::date+1)))
 ON CONFLICT DO NOTHING
@@ -198,6 +200,7 @@ func (s *Store) enqueueServiceExpirySMS(ctx context.Context, tx pgx.Tx, item exp
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date,resource_due_at)
 SELECT $1,$2,'sms','service_expiry_reminder',$3,$4::date,$5
 WHERE NOT EXISTS(SELECT 1 FROM notification_delivery_events n WHERE n.service_id=$1
+ AND n.ownership_generation=service_ownership_generation($1)
  AND n.channel='sms' AND n.kind='service_expiry_reminder' AND n.stage=$3
  AND (n.resource_due_at=$5 OR (n.resource_due_at IS NULL AND n.due_date BETWEEN $4::date-1 AND $4::date+1)))
 ON CONFLICT DO NOTHING
@@ -514,7 +517,10 @@ func (s *Store) enqueueUnifiedServiceDeadlines(ctx context.Context, tx pgx.Tx, l
   WHERE r.event_kind=c.kind AND r.enabled AND m.active)
  AND NOT EXISTS(SELECT 1 FROM notification_events e WHERE e.dedupe_key=
   c.kind||':'||s.id::text||':'||(extract(epoch FROM s.next_due_at)*1000000)::bigint::text||':'||c.stage::text
+   ||CASE WHEN service_ownership_generation(s.id)>0
+     THEN ':ownership:'||service_ownership_generation(s.id)::text ELSE '' END
   OR (c.kind='service.expired' AND e.kind=c.kind AND e.service_id=s.id
+      AND coalesce(e.payload->>'ownership_generation','0')=service_ownership_generation(s.id)::text
       AND (e.payload->>'resource_due_at')::timestamptz=s.next_due_at))
  ORDER BY s.id FOR UPDATE OF s SKIP LOCKED LIMIT $1`, limit, stages)
 	if err != nil {

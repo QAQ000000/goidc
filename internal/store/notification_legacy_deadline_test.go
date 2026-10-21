@@ -380,7 +380,7 @@ func TestNotificationLegacyDeadlineUpgrade172PreservesFacts(t *testing.T) {
  'invoices',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoices x),
  'services',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM services x),
  'ledger',(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM balance_ledger x),
- 'events',(SELECT jsonb_agg(to_jsonb(x)-'resource_due_at' ORDER BY id) FROM notification_delivery_events x),
+ 'events',(SELECT jsonb_agg(to_jsonb(x)-ARRAY['resource_due_at','ownership_generation'] ORDER BY id) FROM notification_delivery_events x),
  'mail',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM email_outbox x WHERE status='sent' OR kind='system'),
  'sms',(SELECT jsonb_agg(to_jsonb(x)-'correlation_id' ORDER BY id) FROM sms_outbox x WHERE status='sent' OR kind='system'))::text`).Scan(&out); err != nil {
 			t.Fatal(err)
@@ -407,6 +407,9 @@ func TestNotificationLegacyDeadlineUpgrade172PreservesFacts(t *testing.T) {
 	}
 	if count := f.count(t, `SELECT count(*) FROM notification_delivery_events WHERE resource_due_at IS NOT NULL`); count != 0 {
 		t.Fatal("upgrade inferred a deadline from current resources", count)
+	}
+	if count := f.count(t, `SELECT (SELECT count(*) FROM notification_delivery_events WHERE ownership_generation<>0)+(SELECT count(*) FROM service_ownership_transfers)`); count != 0 {
+		t.Fatal("upgrade inferred ownership changes from legacy reminders", count)
 	}
 	if err := db.Migrate(f.ctx); err != nil || snapshot() != before {
 		t.Fatal("repeat migration changed preserved facts", err)

@@ -10,6 +10,7 @@ import (
 
 type monitoringBinding struct {
 	Owner             int64
+	OwnerGeneration   int64
 	Profile, Upstream string
 }
 
@@ -35,8 +36,8 @@ func (s *Store) monitoringBinding(ctx context.Context, actorID, serviceID int64,
 			}
 		}
 		var mode, status string
-		if err = tx.QueryRow(ctx, `SELECT s.user_id,s.provision_mode,s.status,coalesce(s.delivery_snapshot->>'profile_id',''),s.upstream_id
- FROM services s WHERE s.id=$1 AND ($2::boolean OR s.user_id=$3) FOR SHARE`, serviceID, admin, actorID).Scan(&binding.Owner, &mode, &status, &binding.Profile, &binding.Upstream); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT s.user_id,service_ownership_generation(s.id),s.provision_mode,s.status,coalesce(s.delivery_snapshot->>'profile_id',''),s.upstream_id
+ FROM services s WHERE s.id=$1 AND ($2::boolean OR s.user_id=$3) FOR SHARE`, serviceID, admin, actorID).Scan(&binding.Owner, &binding.OwnerGeneration, &mode, &status, &binding.Profile, &binding.Upstream); err != nil {
 			return binding, err
 		}
 		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {

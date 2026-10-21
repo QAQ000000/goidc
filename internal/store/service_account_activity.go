@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"strconv"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -15,6 +14,7 @@ var ServiceActivityAuditActions = []string{
 	"service.pricing.updated", "service.renewal.fixed", "service.term.correction", "service.term.compensation",
 	"service.status.corrected",
 	"service.renewal.manual_collected",
+	"service.ownership.transferred",
 	"service.configuration.retried", "service.billing_cycle.completed", "service.simulation.completed",
 	"service.cancellation.requested", "service.cancellation.withdrawn", "service.cancellation.approved", "service.cancellation.rejected",
 	"supplier.lifecycle.manual_requested", "supplier.lifecycle.manual_verified", "supplier.lifecycle.manual_cancelled",
@@ -125,7 +125,9 @@ SELECT 'audit'::text AS source,
 FROM audit_events a
 LEFT JOIN account_identities u ON u.id=a.actor_id
 LEFT JOIN provision_jobs aj ON aj.service_id=$1::bigint AND aj.id::text=a.payload->>'job_id'
-WHERE a.entity_type='service' AND a.entity_id=$1::text AND a.action=ANY($4::text[])
+WHERE a.entity_type='service' AND a.entity_id=$1::bigint::text AND a.action=ANY($4::text[])
+  AND (($3::boolean AND admin_customer_allowed($2,` + serviceOwnershipRecordCustomerSQL("$1::bigint", "a.id", "audit_floor_id") + `)) OR
+       (NOT $3::boolean AND a.id>coalesce((SELECT audit_floor_id FROM service_ownership_transfers WHERE service_id=$1::bigint ORDER BY generation DESC LIMIT 1),0)))
   AND (a.action<>'service.action.queued' OR a.payload->>'action'=ANY($5::text[]))
   AND NOT (a.action='service.action.queued' AND aj.id IS NOT NULL)
 UNION ALL
@@ -152,12 +154,14 @@ SELECT 'job'::text AS source,
 FROM provision_jobs j
 LEFT JOIN LATERAL (
   SELECT a.actor_id FROM audit_events a
-  WHERE a.entity_type='service' AND a.entity_id=$1::text AND a.action='service.action.queued'
+  WHERE a.entity_type='service' AND a.entity_id=$1::bigint::text AND a.action='service.action.queued'
     AND a.payload->>'job_id'=j.id::text
   ORDER BY a.id DESC LIMIT 1
 ) q ON true
 LEFT JOIN account_identities u ON u.id=q.actor_id
 	WHERE j.service_id=$1::bigint AND j.action=ANY($5::text[])
+  AND (($3::boolean AND admin_customer_allowed($2,` + serviceOwnershipRecordCustomerSQL("$1::bigint", "j.id", "job_floor_id") + `)) OR
+       (NOT $3::boolean AND j.id>coalesce((SELECT job_floor_id FROM service_ownership_transfers WHERE service_id=$1::bigint ORDER BY generation DESC LIMIT 1),0)))
 ), filtered AS (
 SELECT * FROM timeline
 WHERE ($6='' OR action=$6) AND ($7='' OR category=$7) AND ($8='' OR status=$8)
@@ -169,7 +173,7 @@ LIMIT $9 OFFSET $10
 )
 SELECT (SELECT count(*) FROM filtered) AS total,
 	COALESCE((SELECT jsonb_agg(to_jsonb(page)-'sequence' ORDER BY occurred_at DESC,source DESC,sequence DESC) FROM page),'[]'::jsonb) AS items`
-	rows, err := tx.Query(ctx, query, strconv.FormatInt(in.ServiceID, 10), in.Actor, in.Admin, ServiceActivityAuditActions, ServiceActivityJobActions, in.Action, in.Category, in.Status, in.Limit, in.Offset)
+	rows, err := tx.Query(ctx, query, in.ServiceID, in.Actor, in.Admin, ServiceActivityAuditActions, ServiceActivityJobActions, in.Action, in.Category, in.Status, in.Limit, in.Offset)
 	if err != nil {
 		return nil, err
 	}

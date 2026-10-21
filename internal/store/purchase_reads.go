@@ -106,7 +106,7 @@ FROM order_items WHERE order_id=$1 ORDER BY id`, id)
 		return nil, err
 	}
 	servicesRows, err := tx.Query(ctx, `SELECT id,order_item_id,product_id,name,domain,billing_cycle,status,next_due_at,username,upstream_id,last_error,provision_mode,unit_number,version,created_at,updated_at
-FROM services WHERE order_id=$1 ORDER BY id`, id)
+FROM services WHERE order_id=$1 AND admin_customer_allowed($2,user_id) ORDER BY id`, id, actor)
 	if err != nil {
 		return nil, err
 	}

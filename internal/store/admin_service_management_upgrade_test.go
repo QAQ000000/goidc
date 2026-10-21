@@ -133,6 +133,51 @@ func adminServiceManagementUpgradeMoney(t *testing.T, db *Store) string {
 	return raw
 }
 
+// Reproduce schema187's persisted balance-payment writes without calling the
+// current notification writer, which requires later ownership schema objects.
+// The paid transition still runs the genuine 155 settlement and its deferred
+// payment-proof checks; neither the service nor its renewal effect is fabricated.
+func adminServiceManagementHistoricalPayment187(t *testing.T, db *Store, customer, invoice int64) {
+	t.Helper()
+	ctx := t.Context()
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var balance, amount, version int64
+	var status string
+	var automaticRenewal bool
+	if err = tx.QueryRow(ctx, `SELECT balance_cents FROM users WHERE id=$1 FOR NO KEY UPDATE`, customer).Scan(&balance); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.QueryRow(ctx, `SELECT amount_cents,status,version,invoice_kind='automatic' AND order_id IS NULL
+ FROM invoices WHERE id=$1 AND user_id=$2 FOR UPDATE`, invoice, customer).Scan(&amount, &status, &version, &automaticRenewal); err != nil {
+		t.Fatal(err)
+	}
+	if amount != 1900 || version != 4 || status != "unpaid" || !automaticRenewal || balance < amount {
+		t.Fatal("unexpected historical balance-payment input", amount, version, status, automaticRenewal, balance)
+	}
+	balance -= amount
+	if _, err = tx.Exec(ctx, `UPDATE users SET balance_cents=$2,updated_at=now() WHERE id=$1`, customer, balance); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `UPDATE invoices SET status='paid',paid_at=now() WHERE id=$1`, invoice); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO balance_ledger(user_id,entry_type,delta_cents,balance_after,reference_type,reference_id,idempotency_key,note)
+ VALUES($1,'payment',$2,$3,'invoice',$4,'historical-renewal-payment-187','账单支付')`, customer, -amount, balance, invoice); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO audit_events(actor_id,action,entity_type,entity_id,payload)
+ VALUES($1,'invoice.paid','invoice',$2::bigint::text,jsonb_build_object('amount_cents',$3::bigint,'balance_cents',$4::bigint))`, customer, invoice, amount, balance); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdminServiceManagementUpgrade187PreservesFinancialEvidence(t *testing.T) {
 	db := adminServiceManagementSchema187(t)
 	ctx := t.Context()
@@ -182,12 +227,10 @@ func TestAdminServiceManagementUpgrade187PreservesFinancialEvidence(t *testing.T
 	if err = tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	// The unchanged balance settlement path runs against schema187 and its real
-	// triggers. Creating today's renewal invoice would read the new pricing table
-	// and would therefore invalidate the historical-fixture boundary.
-	if _, err = db.PayInvoice(ctx, customer, invoice, "historical-renewal-payment-187", 4); err != nil {
-		t.Fatal(err)
-	}
+	// Keep the historical writer bounded to schema187. Today's renewal and
+	// notification methods read later pricing/ownership objects and must not be
+	// invoked while constructing the predecessor's genuine financial history.
+	adminServiceManagementHistoricalPayment187(t, db, customer, invoice)
 	var oldSnapshot, oldConfig, oldReason string
 	var oldDue time.Time
 	var oldUsed, oldVersion, oldBalance int64

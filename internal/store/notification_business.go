@@ -243,7 +243,7 @@ func (s *Store) queueServiceProvisionEmail(ctx context.Context, tx pgx.Tx, servi
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
 VALUES($1,$2,'email','service_provision_success',0,CURRENT_DATE)
-ON CONFLICT (service_id,channel,kind) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
+ON CONFLICT (service_id,channel,kind,ownership_generation) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
 RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil
@@ -282,7 +282,7 @@ func (s *Store) queueServiceProvisionSMS(ctx context.Context, tx pgx.Tx, service
 	var eventID int64
 	if err := tx.QueryRow(ctx, `INSERT INTO notification_delivery_events(service_id,user_id,channel,kind,stage,due_date)
 VALUES($1,$2,'sms','service_provision_success',0,CURRENT_DATE)
-ON CONFLICT (service_id,channel,kind) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
+ON CONFLICT (service_id,channel,kind,ownership_generation) WHERE invoice_id IS NULL AND kind='service_provision_success' DO NOTHING
 RETURNING id`, serviceID, userID).Scan(&eventID); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil

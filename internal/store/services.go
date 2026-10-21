@@ -67,6 +67,7 @@ func (s *Store) enqueueServiceAction(ctx context.Context, actorID, serviceID int
 
 func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID int64, action, key string, admin bool, password string, templateID int64, storage *provision.StorageRequest, cdrom *provision.CDROMRequest, system int) (ServiceActionResult, error) {
 	var out ServiceActionResult
+	requestKey := key
 	nat, _ := ctx.Value(natRequestKey{}).(*provision.NATRequest)
 	if actorID < 1 || serviceID < 1 || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_service_action", "服务、动作或幂等键无效")
@@ -141,6 +142,16 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 	}
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
+	}
+	var ownershipGeneration int64
+	if err = tx.QueryRow(ctx, `SELECT service_ownership_generation($1)`, serviceID).Scan(&ownershipGeneration); err != nil {
+		return out, err
+	}
+	// Preserve every pre-transfer key and fingerprint byte. Later owners have
+	// their own key space, including when a service returns to its first owner.
+	if ownershipGeneration > 0 {
+		digest := sha256.Sum256([]byte(key))
+		key = fmt.Sprintf("ownership-service-%d-%d-%x", serviceID, ownershipGeneration, digest)
 	}
 	fingerprint := ""
 	if action == "reset_password" {
@@ -299,7 +310,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 				return out, pgx.ErrNoRows
 			}
 			cdrom.MountedID, cdrom.Prepared = listing.MountedID, true
-			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom)
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, requestKey, admin, password, templateID, storage, cdrom)
 		}
 		requestPayload, _ = json.Marshal(cdrom)
 	}
@@ -378,7 +389,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 				}
 			}
 			storage.Prepared = true
-			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom)
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, requestKey, admin, password, templateID, storage, cdrom)
 		}
 		requestPayload, _ = json.Marshal(storage)
 	}
@@ -447,7 +458,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 				}
 			}
 			nat.Prepared = true
-			return s.enqueueServiceAction(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom)
+			return s.enqueueServiceAction(ctx, actorID, serviceID, action, requestKey, admin, password, templateID, storage, cdrom)
 		}
 		requestPayload, _ = json.Marshal(nat)
 	}
@@ -470,7 +481,7 @@ func (s *Store) enqueueServiceActionFor(ctx context.Context, actorID, serviceID 
 					return out, readErr
 				}
 				ctx = context.WithValue(ctx, supplierReinstallKey{}, &listing)
-				return s.enqueueServiceActionFor(ctx, actorID, serviceID, action, key, admin, password, templateID, storage, cdrom, system)
+				return s.enqueueServiceActionFor(ctx, actorID, serviceID, action, requestKey, admin, password, templateID, storage, cdrom, system)
 			}
 			binding, bindingErr := s.supplierConsoleBindingTx(ctx, tx, actorID, serviceID, admin, true)
 			if bindingErr != nil {

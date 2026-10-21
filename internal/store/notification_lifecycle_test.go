@@ -90,6 +90,19 @@ func lifecycleQueue(t *testing.T, f notificationFixture, r lifecycleResources, k
 	}
 }
 
+// Ownership changes use the same guarded command as the admin API. Complete
+// the fixture's original delivery first; pending or uncertain send results are
+// deliberately left to the command's normal transfer fence.
+func lifecycleTransfer(t *testing.T, f notificationFixture, r lifecycleResources, target int64, key string) {
+	t.Helper()
+	f.exec(t, `UPDATE orders SET status='active',review_status='approved' WHERE id=$1`, r.order)
+	f.exec(t, `UPDATE invoices SET status='paid',paid_at=clock_timestamp() WHERE id=$1`, r.invoice)
+	f.exec(t, `UPDATE services SET provision_mode='simulation',upstream_id='notification-transfer-resource' WHERE id=$1`, r.service)
+	session := "notification-transfer-admin-" + key
+	f.exec(t, `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,clock_timestamp()+interval '1 hour')`, session, f.actor)
+	ownershipCompatibilityFixture{f, r, WithStorageCredential(f.ctx, session, false)}.transfer(t, target, key)
+}
+
 func lifecycleBusinessPreference(t *testing.T, f notificationFixture, ch string, version int64) NotificationPreference {
 	t.Helper()
 	var out NotificationPreference
@@ -221,13 +234,17 @@ func TestNotificationLifecycleSuppressesStaleRemindersAndOwnership(t *testing.T)
 			case "resumed":
 				f.exec(t, `UPDATE services SET status='active' WHERE id=$1`, r.service)
 			case "ownership":
-				f.exec(t, `UPDATE services SET user_id=$2 WHERE id=$1`, r.service, f.other)
+				lifecycleTransfer(t, f, r, f.other, "lifecycle-stale-owner-transfer")
 			}
 			_, err := f.db.ClaimNotificationJob(f.ctx)
 			if !errors.Is(err, pgx.ErrNoRows) {
 				t.Fatal(err)
 			}
-			if n := f.count(t, `SELECT count(*) FROM notification_deliveries WHERE status='skipped' AND code='eligibility_changed'`); n != 1 {
+			code := "eligibility_changed"
+			if scenario == "ownership" {
+				code = "service_owner_changed"
+			}
+			if n := f.count(t, `SELECT count(*) FROM notification_deliveries WHERE status='skipped' AND code=$1`, code); n != 1 {
 				t.Fatalf("stale delivery not suppressed=%d", n)
 			}
 			if n := f.count(t, `SELECT count(*) FROM admin_inbox_messages`); n != 0 {

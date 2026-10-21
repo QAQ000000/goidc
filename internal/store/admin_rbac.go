@@ -51,6 +51,7 @@ var AdminPermissions = []Permission{
 	{"services.pricing", "服务", "设置固定续费价或恢复合同定价"}, {"services.renew.override", "服务", "按本次确认金额代建续费账单"},
 	{"services.term.correct", "服务", "纠正客户服务期限"}, {"services.term.compensate", "服务", "免费补偿客户服务期限"},
 	{"services.status.correct", "服务", "依据已完成任务纠正本地服务状态"},
+	{"services.transfer", "服务", "核验凭据交接后转移服务客户归属"},
 	{"invoices.collect_manual", "账单", "核验线下到账并收取单服务续费账单"},
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
 	{"ticket_presets.view", "预设回复", "读取预设回复"}, {"ticket_presets.manage", "预设回复", "管理预设回复及分类"},

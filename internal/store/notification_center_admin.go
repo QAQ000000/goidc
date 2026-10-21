@@ -157,6 +157,14 @@ type NotificationInboxItem struct {
 	ReadAt    *time.Time `json:"read_at"`
 }
 
+// Standalone inbox messages remain personal history. Service-linked delivery
+// snapshots belong only to the ownership period in which they were received.
+const notificationInboxOwnershipEligible = `NOT EXISTS(
+ SELECT 1 FROM notification_deliveries d JOIN notification_events e ON e.id=d.event_id
+ WHERE d.inbox_message_id=m.id AND e.service_id IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=m.user_id
+  AND coalesce(e.payload->>'ownership_generation','0')=service_ownership_generation(s.id)::text))`
+
 func (s *Store) UserNotificationInbox(ctx context.Context, userID int64, limit, offset int) ([]NotificationInboxItem, error) {
 	if limit < 1 || limit > 101 {
 		limit = 20
@@ -164,7 +172,7 @@ func (s *Store) UserNotificationInbox(ctx context.Context, userID int64, limit, 
 	if offset < 0 {
 		offset = 0
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT m.id,m.subject,m.body,m.status,m.created_at,m.read_at FROM admin_inbox_messages m JOIN account_identities u ON u.id=m.user_id WHERE m.user_id=$1 AND u.status='active' ORDER BY m.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
+	rows, err := s.Pool.Query(ctx, `SELECT m.id,m.subject,m.body,m.status,m.created_at,m.read_at FROM admin_inbox_messages m JOIN account_identities u ON u.id=m.user_id WHERE m.user_id=$1 AND u.status='active' AND `+notificationInboxOwnershipEligible+` ORDER BY m.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +191,7 @@ func (s *Store) MarkNotificationInboxRead(ctx context.Context, tx pgx.Tx, userID
 	if err := activeNotificationUser(ctx, tx, userID); err != nil {
 		return err
 	}
-	tag, err := tx.Exec(ctx, `UPDATE admin_inbox_messages SET status='read',read_at=coalesce(read_at,now()) WHERE id=$1 AND user_id=$2 AND status IN ('sent','read')`, id, userID)
+	tag, err := tx.Exec(ctx, `UPDATE admin_inbox_messages m SET status='read',read_at=coalesce(read_at,now()) WHERE m.id=$1 AND m.user_id=$2 AND m.status IN ('sent','read') AND `+notificationInboxOwnershipEligible, id, userID)
 	if err != nil {
 		return err
 	}

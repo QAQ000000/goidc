@@ -49,7 +49,7 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 		return conflict("invalid_notification_resource", "通知资源无效")
 	}
 	values := map[string]string{}
-	var userID, invoiceUser, serviceUser, invoiceOrder int64
+	var userID, invoiceUser, serviceUser, invoiceOrder, ownershipGeneration int64
 	var due *time.Time
 	if invoiceID > 0 {
 		var number string
@@ -66,14 +66,25 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 	if serviceID > 0 {
 		var serviceOrder int64
 		var id, name, product, domain string
-		if err := tx.QueryRow(ctx, `SELECT s.user_id,s.order_id,s.id::text,s.name,p.name,s.domain,s.next_due_at FROM services s JOIN products p ON p.id=s.product_id WHERE s.id=$1`, serviceID).Scan(&serviceUser, &serviceOrder, &id, &name, &product, &domain, &due); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT s.user_id,s.order_id,s.id::text,s.name,p.name,s.domain,s.next_due_at,service_ownership_generation(s.id) FROM services s JOIN products p ON p.id=s.product_id WHERE s.id=$1`, serviceID).Scan(&serviceUser, &serviceOrder, &id, &name, &product, &domain, &due, &ownershipGeneration); err != nil {
 			return err
 		}
 		if (userID > 0 && userID != serviceUser) || (orderID > 0 && orderID != serviceOrder) {
 			return conflict("invalid_notification_resource", "通知资源归属不一致")
 		}
-		userID, orderID = serviceUser, serviceOrder
+		// The purchase order remains the original customer's financial fact
+		// after an ownership transfer. Preserve the historical purchase binding
+		// until the first transfer; later service events use the current owner.
+		if orderID == 0 && ownershipGeneration == 0 {
+			orderID = serviceOrder
+		}
+		userID = serviceUser
 		values["service_id"], values["service_name"], values["product_name"], values["domain"] = id, name, product, domain
+		if invoiceOrder > 0 && orderID == 0 {
+			// An invoice's actual order is still part of that invoice's
+			// provenance and must pass the strict owner check below.
+			orderID = invoiceOrder
+		}
 		if invoiceID > 0 && invoiceOrder != serviceOrder {
 			var linked bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoice_items WHERE invoice_id=$1 AND service_id=$2)`, invoiceID, serviceID).Scan(&linked); err != nil {
@@ -102,6 +113,12 @@ func (s *Store) QueueLifecycleNotification(ctx context.Context, tx pgx.Tx, kind 
 	// Keep exact instants separate from human dates. A renewal within the same
 	// Shanghai calendar day must invalidate an already queued reminder as well.
 	payload := map[string]string{}
+	if serviceID > 0 {
+		payload["ownership_generation"] = strconv.FormatInt(ownershipGeneration, 10)
+		if ownershipGeneration > 0 {
+			dedupeKey += ":ownership:" + strconv.FormatInt(ownershipGeneration, 10)
+		}
+	}
 	if due != nil {
 		values["due_date"] = due.In(notificationShanghai).Format("2006-01-02")
 		payload["resource_due_at"] = due.UTC().Format(time.RFC3339Nano)

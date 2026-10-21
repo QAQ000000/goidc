@@ -86,7 +86,7 @@ func (s *Store) AdminAuditLogPage(ctx context.Context, filters url.Values, actor
 func customerAuditEntitySQL(customer, actor string) string {
 	parts := []string{`(a.entity_type IN ('user','customer','customer_credit_account') AND a.entity_id=` + customer + `::bigint::text)`}
 	for _, entity := range []struct{ kind, table, owner string }{
-		{"order", "orders", "user_id"}, {"invoice", "invoices", "user_id"}, {"service", "services", "user_id"},
+		{"order", "orders", "user_id"}, {"invoice", "invoices", "user_id"},
 		{"api_key", "api_keys", "user_id"}, {"traffic_order", "traffic_orders", "user_id"},
 		{"external_refund", "external_refunds", "user_id"},
 		{"invoice_profile", "invoice_profiles", "user_id"}, {"invoice_address", "invoice_addresses", "user_id"},
@@ -98,6 +98,13 @@ func customerAuditEntitySQL(customer, actor string) string {
 	} {
 		parts = append(parts, `(a.entity_type='`+entity.kind+`' AND EXISTS(SELECT 1 FROM `+entity.table+` owned WHERE owned.id::text=a.entity_id AND owned.`+entity.owner+`=`+customer+`))`)
 	}
+	// A transfer audit belongs to both parties. Other service records retain the
+	// owner of their immutable ID interval instead of following today's owner.
+	parts = append(parts, `(a.entity_type='service' AND EXISTS(SELECT 1 FROM services owned WHERE owned.id::text=a.entity_id AND
+ ((a.action='service.ownership.transferred' AND EXISTS(SELECT 1 FROM service_ownership_transfers ownership
+   WHERE ownership.service_id=owned.id AND ownership.id::text=a.payload->>'transfer_id'
+   AND (ownership.source_customer_id=`+customer+` OR ownership.target_customer_id=`+customer+`))) OR
+  (a.action<>'service.ownership.transferred' AND `+serviceOwnershipRecordCustomerSQL("owned.id", "a.id", "audit_floor_id")+`=`+customer+`))))`)
 	for _, entity := range []struct{ kind, table string }{{"customer_contact", "customer_contacts"}, {"customer_file", "customer_files"}} {
 		// Deletions and file transfers retain their exact customer snapshots.
 		parts = append(parts, `(a.entity_type='`+entity.kind+`' AND (a.payload->>'customer_id'=`+customer+`::bigint::text OR `+

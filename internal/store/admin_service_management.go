@@ -11,6 +11,7 @@ type AdminServiceManagement struct {
 	ServiceID             int64      `json:"service_id"`
 	CustomerID            int64      `json:"customer_id"`
 	ServiceVersion        int64      `json:"service_version"`
+	OwnerGeneration       int64      `json:"owner_generation"`
 	Status                string     `json:"status"`
 	BillingCycle          string     `json:"billing_cycle"`
 	PricingMode           string     `json:"pricing_mode"`
@@ -40,12 +41,12 @@ func (s *Store) AdminServiceManagement(ctx context.Context, actor, service int64
 		return out, err
 	}
 	var benefit RenewalBenefit
-	err = tx.QueryRow(ctx, `SELECT s.id,s.user_id,s.version,s.status,s.billing_cycle,
+	err = tx.QueryRow(ctx, `SELECT s.id,s.user_id,s.version,service_ownership_generation(s.id),s.status,s.billing_cycle,
  coalesce(s.recurring_price_cents,oi.price_cents,p.price_cents),s.renewal_discount_percent,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,s.renewal_promo_code,
  rp.fixed_amount_cents,s.next_due_at,coalesce(t.mode,'follow_supplier'),t.supplier_next_due_at,t.supplier_observed_at
  FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON oi.id=s.order_item_id
  LEFT JOIN service_renewal_pricing rp ON rp.service_id=s.id LEFT JOIN service_term_management t ON t.service_id=s.id
- WHERE s.id=$1 FOR SHARE OF s`, service).Scan(&out.ServiceID, &out.CustomerID, &out.ServiceVersion, &out.Status, &out.BillingCycle,
+ WHERE s.id=$1 FOR SHARE OF s`, service).Scan(&out.ServiceID, &out.CustomerID, &out.ServiceVersion, &out.OwnerGeneration, &out.Status, &out.BillingCycle,
 		&out.ContractBaseCents, &benefit.Percent, &benefit.FixedCents, &benefit.Limit, &benefit.Used, &benefit.Code,
 		&out.FixedAmountCents, &out.NextDueAt, &out.TermMode, &out.SupplierNextDueAt, &out.SupplierObservedAt)
 	if err != nil {

@@ -200,7 +200,7 @@ func TestNotificationCatchupRechecksCurrentServiceState(t *testing.T) {
 		case "exact-due-changed":
 			f.exec(t, `UPDATE services SET next_due_at=next_due_at+interval '1 second' WHERE id=$1`, r.service)
 		case "ownership":
-			f.exec(t, `UPDATE services SET user_id=$2 WHERE id=$1`, r.service, f.other)
+			lifecycleTransfer(t, f, r, f.other, "catchup-stale-owner-transfer")
 		case "terminated":
 			f.exec(t, `UPDATE services SET status='terminated' WHERE id=$1`, r.service)
 		case "import-review":
@@ -217,8 +217,11 @@ func TestNotificationCatchupRechecksCurrentServiceState(t *testing.T) {
 	if _, err := f.db.ClaimNotificationJob(f.ctx); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("stale catchup reached adapter: %v", err)
 	}
-	if n := f.count(t, `SELECT count(*) FROM notification_deliveries WHERE status='skipped' AND code='eligibility_changed'`); n != len(scenarios) {
+	if n := f.count(t, `SELECT count(*) FROM notification_deliveries WHERE status='skipped' AND code='eligibility_changed'`); n != len(scenarios)-1 {
 		t.Fatalf("stale expiry catchup not suppressed=%d", n)
+	}
+	if n := f.count(t, `SELECT count(*) FROM notification_deliveries WHERE status='skipped' AND code='service_owner_changed'`); n != 1 {
+		t.Fatalf("ownership transfer did not terminate the old catchup delivery=%d", n)
 	}
 	if n := f.count(t, `SELECT count(*) FROM admin_inbox_messages`); n != 0 {
 		t.Fatalf("obsolete catchup inbox messages=%d", n)

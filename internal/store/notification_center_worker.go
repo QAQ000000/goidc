@@ -22,7 +22,8 @@ const notificationEligible = `EXISTS(SELECT 1 FROM notification_events e
  AND (e.kind='invoice.paid' OR p.event_scope='business')
  AND (e.invoice_id IS NULL OR EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.user_id=e.user_id))
  AND (e.order_id IS NULL OR EXISTS(SELECT 1 FROM orders o WHERE o.id=e.order_id AND o.user_id=e.user_id))
- AND (e.service_id IS NULL OR EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=e.user_id))
+	 AND (e.service_id IS NULL OR EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=e.user_id
+	  AND coalesce(e.payload->>'ownership_generation','0')=service_ownership_generation(s.id)::text))
  AND CASE
  WHEN e.kind='invoice.paid' THEN EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.status='paid')
  WHEN e.kind IN ('order.payment_reminder','invoice.overdue') THEN EXISTS(

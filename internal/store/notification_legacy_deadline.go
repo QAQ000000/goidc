@@ -32,15 +32,16 @@ func legacyRecipientCurrent(ctx context.Context, tx pgx.Tx, userID int64, recipi
 	return valid, err
 }
 
-// Only the three scheduler reminder families use this additional fence.
-// Verification, ticket and other legacy jobs retain their established rules.
+// Every legacy service message is bound to the current ownership period. The
+// three scheduler reminder families additionally recheck their exact deadline.
+// Verification, ticket and other jobs without a service retain their rules.
 // Names are private constants supplied by the email/SMS entry points.
 func legacyDeadlineEligibleSQL(alias, channelName string) string {
 	column, address, category := "email_outbox_id", "u.email_verified AND u.email="+alias+".recipient", "mail"
 	if channelName == "sms" {
 		column, address, category = "sms_outbox_id", "u.phone_verified AND u.phone="+alias+".recipient", "sms"
 	}
-	return fmt.Sprintf(`(%[1]s.kind NOT IN ('service_expiry_reminder','order_payment_reminder','invoice_overdue_reminder') OR EXISTS(
+	deadline := fmt.Sprintf(`(%[1]s.kind NOT IN ('service_expiry_reminder','order_payment_reminder','invoice_overdue_reminder') OR EXISTS(
  SELECT 1 FROM notification_delivery_events n JOIN users u ON u.id=n.user_id
  JOIN channel_instances c ON c.id=%[1]s.channel_instance_id
  JOIN notification_templates t ON t.channel='%[2]s' AND t.kind=n.kind
@@ -60,6 +61,11 @@ func legacyDeadlineEligibleSQL(alias, channelName string) string {
    AND n.due_date=(clock_timestamp() AT TIME ZONE 'Asia/Shanghai')::date
    AND ((n.kind='order_payment_reminder' AND o.status='pending' AND i.due_at>=clock_timestamp())
      OR (n.kind='invoice_overdue_reminder' AND i.due_at<clock_timestamp()))) END))`, alias, channelName, column, address, category)
+	return fmt.Sprintf(`(%[1]s AND NOT EXISTS(
+ SELECT 1 FROM notification_delivery_events n
+ WHERE n.%[2]s=%[3]s.id AND n.channel='%[4]s' AND n.service_id IS NOT NULL
+ AND NOT EXISTS(SELECT 1 FROM services s WHERE s.id=n.service_id AND s.user_id=n.user_id
+  AND n.ownership_generation=service_ownership_generation(s.id))))`, deadline, column, alias, channelName)
 }
 
 // Invalid reminders must reach a terminal state before stale-lease recovery.
@@ -73,7 +79,6 @@ func (s *Store) expireLegacyDeadlineJobs(ctx context.Context, table string) erro
 	_, err := s.Pool.Exec(ctx, fmt.Sprintf(`UPDATE %[1]s o SET status='expired',%[2]s,
  locked_at=NULL,dead_letter_at=NULL,last_error='deadline eligibility changed'
  WHERE o.status IN ('pending','sending','dead_letter')
- AND o.kind IN ('service_expiry_reminder','order_payment_reminder','invoice_overdue_reminder')
  AND NOT %[3]s`, table, body, legacyDeadlineEligibleSQL("o", channelName)))
 	return err
 }

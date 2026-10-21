@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -246,12 +247,9 @@ func TestServiceDownloadBrowserFixture(t *testing.T) {
 }
 
 func TestServiceDownloadRemoteAndChangedServiceOwner(t *testing.T) {
-	db, h := testServer(t)
-	_, root := user(t, db, h, "sd-remote-root", "super_admin")
-	uid, owner := user(t, db, h, "sd-remote-owner", "customer")
-	otherID, other := user(t, db, h, "sd-remote-other", "customer")
-	pid := product(t, db, 10)
-	sid := downloadService(t, db, h, uid, owner, pid, "sd-remote-order")
+	f := newServiceTransferFixture(t, false)
+	db, h, root := f.db, f.h, f.root
+	owner, other, pid, sid := f.customer, f.targetCookie, f.pid, f.sid
 	in := downloadInput()
 	in.ProductIDs = []int64{pid}
 	in.SourceType = "remote"
@@ -270,14 +268,27 @@ func TestServiceDownloadRemoteAndChangedServiceOwner(t *testing.T) {
 	if head.Body.Len() != 0 {
 		t.Fatal("remote HEAD bytes")
 	}
+	body := serviceTransferQuote(t, f, serviceTransferInput(t, f, f.uid, f.target, 0))
 	block, err := db.Pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer block.Rollback(t.Context())
-	if _, err = block.Exec(t.Context(), "UPDATE services SET user_id=$2 WHERE id=$1", sid, otherID); err != nil {
+	if _, err = block.Exec(t.Context(), "SELECT pg_advisory_xact_lock(71910322)"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.Pool.Exec(t.Context(), `CREATE FUNCTION sd_transfer_audit_gate() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.action='service.ownership.transferred' THEN PERFORM pg_advisory_xact_lock(71910322); END IF; RETURN NEW; END $$;
+ CREATE TRIGGER sd_transfer_audit_gate BEFORE INSERT ON audit_events FOR EACH ROW EXECUTE FUNCTION sd_transfer_audit_gate()`); err != nil {
+		t.Fatal(err)
+	}
+	transferred := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		transferred <- request(h, "POST", adminRenewalPath(sid)+"/transfers", body, f.staff, "sd-remote-ownership-transfer")
+	}()
+	// The legitimate transfer owns the service row while its audit waits. The
+	// download must wait behind that same row and recheck ownership on release.
+	waitUploadBlockedBy(t, db, block.Conn().PgConn().PID())
 	done := make(chan int, 1)
 	go func() { done <- request(h, "GET", filePath, nil, owner, "").Code }()
 	deadline := time.Now().Add(3 * time.Second)
@@ -297,6 +308,7 @@ func TestServiceDownloadRemoteAndChangedServiceOwner(t *testing.T) {
 	if err = block.Commit(t.Context()); err != nil {
 		t.Fatal(err)
 	}
+	expect(t, awaitBalanceResponse(t, transferred), 201)
 	select {
 	case status := <-done:
 		if status != 404 {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -70,6 +71,8 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 			}
 			f.consoleEntered = make(chan struct{})
 			f.consoleBlocked = make(chan struct{})
+			releaseConsole := sync.OnceFunc(func() { close(f.consoleBlocked) })
+			defer releaseConsole()
 			response := make(chan *httptest.ResponseRecorder, 1)
 			token, route := f.customer, fmt.Sprintf("/api/v1/services/%d/vnc", sid)
 			var adminID int64
@@ -92,8 +95,18 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 				query = `UPDATE supplier_accounts SET active=false WHERE id=$1`
 				id = f.supplierID
 			case "ownership":
-				query = `UPDATE services SET user_id=(SELECT id FROM users WHERE username='supplier-other') WHERE id=$1`
-				id = sid
+				var version, generation, target int64
+				if err := f.db.Pool.QueryRow(t.Context(), `SELECT version,service_ownership_generation(s.id),
+ (SELECT id FROM users WHERE username='supplier-other') FROM services s WHERE s.id=$1`, sid).Scan(&version, &generation, &target); err != nil {
+					t.Fatal(err)
+				}
+				body := map[string]any{"expected_version": version, "expected_owner_generation": generation,
+					"source_customer_id": f.uid, "target_customer_id": target, "credential_handover_confirmed": true,
+					"reason": "核验远程控制台等待中的客户归属变更", "handover_evidence": "fixture://resource-credentials-rotated"}
+				preview := request(f.h, "POST", adminRenewalPath(sid)+"/transfer-quotes", body, f.root, "")
+				expect(t, preview, 200)
+				body["quote_hash"] = data(t, preview)["quote_hash"]
+				expect(t, request(f.h, "POST", adminRenewalPath(sid)+"/transfers", body, f.root, "supplier-console-ownership-transfer"), 201)
 			case "service_version":
 				query = `UPDATE services SET version=version+1 WHERE id=$1`
 				id = sid
@@ -110,8 +123,11 @@ func TestSupplierCustomerConsoleFencesChanges(t *testing.T) {
 				query = `UPDATE users SET status='disabled' WHERE id=$1`
 				id = f.uid
 			}
-			_, err := f.db.Pool.Exec(t.Context(), query, id)
-			close(f.consoleBlocked)
+			var err error
+			if query != "" {
+				_, err = f.db.Pool.Exec(t.Context(), query, id)
+			}
+			releaseConsole()
 			w := <-response
 			if err != nil {
 				t.Fatal(err)

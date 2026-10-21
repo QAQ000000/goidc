@@ -39,7 +39,8 @@ func (s *Store) WebPushNotificationHistory(ctx context.Context, userID int64, li
  AND EXISTS(SELECT 1 FROM notification_deliveries d WHERE d.event_id=e.id AND d.channel='web_push' AND d.status IN ('accepted','unknown'))
  AND (e.invoice_id IS NULL OR EXISTS(SELECT 1 FROM invoices i WHERE i.id=e.invoice_id AND i.user_id=$1))
  AND (e.order_id IS NULL OR EXISTS(SELECT 1 FROM orders o WHERE o.id=e.order_id AND o.user_id=$1))
- AND (e.service_id IS NULL OR EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=$1))
+ AND (e.service_id IS NULL OR EXISTS(SELECT 1 FROM services s WHERE s.id=e.service_id AND s.user_id=$1
+  AND coalesce(e.payload->>'ownership_generation','0')=service_ownership_generation(s.id)::text))
  ORDER BY e.id DESC LIMIT $2 OFFSET $3`, userID, limit, offset)
 	if err != nil {
 		return nil, err

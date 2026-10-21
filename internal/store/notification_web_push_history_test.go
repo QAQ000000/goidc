@@ -134,7 +134,7 @@ func TestNotificationWebPushHistoryRechecksCurrentOwnershipOfEveryResource(t *te
 			case "order":
 				f.exec(t, `UPDATE orders SET user_id=$1 WHERE id=$2`, f.other, resources.order)
 			case "service":
-				f.exec(t, `UPDATE services SET user_id=$1 WHERE id=$2`, f.other, resources.service)
+				lifecycleTransfer(t, f.notificationFixture, resources, f.other, "push-history-owner-transfer")
 			case "inactive_user":
 				f.exec(t, `UPDATE users SET status='disabled' WHERE id=$1`, f.customer)
 			}
