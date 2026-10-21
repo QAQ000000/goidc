@@ -1,6 +1,6 @@
 # 后台商品、供应商与资源页面设计
 
-状态：前端实施设计。本文覆盖21条页面路由，其中20条已有页面文件，`/admin/manual-resources`为拟新增页面；已有路由不代表本文交互已接线或完成浏览器验收。只定义当前批准业务；API和数据约束以[商品API](catalog-api.md)、[后台API](api.md)、[供应商协议](../supplier-protocol.md)、[人工库存](../domain/manual-resources.md)及代码为准。
+状态：前端实施设计。本文覆盖21条页面路由，均有页面文件，包括独立人工库存 `/admin/manual-resources`；已有路由不代表本文交互已接线或完成浏览器验收。只定义当前批准业务；API和数据约束以[商品API](catalog-api.md)、[后台API](api.md)、[供应商协议](../supplier-protocol.md)、[人工库存](../domain/manual-resources.md)及代码为准。
 
 公共外壳、颜色、字号、表单、焦点、加载/空/错误/权限/冲突/未知结果与断点遵循[后台前端设计](../admin-frontend-design.md)。下文API省略`/api/v1`；页面路由和API路径分别列示。金额输入按元呈现，校验后提交整数分；无限库存使用null，不能转换成0。
 
@@ -11,7 +11,7 @@
 | 商品目录 | `/admin/products`、`/admin/products/new`、`/admin/products/[id]` | 商品与服务导航；列表进入创建/编辑；创建成功进入返回id的编辑页 |
 | 商品组织 | `/admin/catalog-groups`、`/admin/catalog-groups/new`、`/admin/configurable-options`、`/admin/service-groups` | 购买分组、共享配置、已购服务导航分别管理，三种ID不能互换 |
 | 供应商 | `/admin/suppliers`、`/admin/suppliers/catalog`、`/admin/suppliers/orders`、`/admin/suppliers/renewals`、`/admin/suppliers/jobs`、`/admin/suppliers/tasks`、`/admin/suppliers/api-settings` | 账户→目录导入→本地商品；订单、续费与任务回链服务/账单 |
-| 资源 | `/admin/resources`；拟新增`/admin/manual-resources` | 前者为已购服务只读视图；后者为独立人工库存，不能合成一个库存列表 |
+| 资源 | `/admin/resources`；`/admin/manual-resources` | 前者为已购服务只读视图；后者为独立人工库存，不能合成一个库存列表 |
 | 流量包 | `/admin/traffic-products`、`/admin/traffic-orders`、`/admin/traffic-orders/[id]` | 流量包商品→购买记录→资源端人工交付核验 |
 | 编译模块 | `/admin/apps`、`/admin/apps/store` | 已配置实例目录与当前构建模块目录；旧store URL兼容，不提供运行时安装 |
 
@@ -169,11 +169,11 @@ API为`/option-groups`、`/options`、`/price-tiers`与`/configuration-rules`的
 
 `GET /admin/resources`需`resources.view`，只返回当前客户范围；关联客户或服务入口再查`customers.view/services.view`。供应商选项来自响应的`suppliers`，不从无权对象补全。组件用可搜索ID选择、只读状态表、空值文本和分页；`next_due_at=null`显示未设置，不补成已过期。
 
-仅刷新、筛选与跳转，不给资源行添加无能力依据的电源、续费、改密或释放库存按钮。`resource_info`使用服务端白名单字段，隐藏未知结构；账号不等于授权密码读取。与拟新增库存页提供清楚的双向切换。手机卡片突出客户、IP、状态、到期日，更多元数据折叠。
+仅刷新、筛选与跳转，不给资源行添加无能力依据的电源、续费、改密或释放库存按钮。`resource_info`使用服务端白名单字段，隐藏未知结构；账号不等于授权密码读取。与库存页提供清楚的双向切换。手机卡片突出客户、IP、状态、到期日，更多元数据折叠。
 
-## 16. 独立人工库存 `/admin/manual-resources`（拟新增页面）
+## 16. 独立人工库存 `/admin/manual-resources`
 
-现有API已实现，但当前没有页面文件；本设计新增此列表页，创建/编辑/详情均用页内抽屉，无需额外拟造详情URL。入口资源导航“人工库存”，与已购资源并列；从人工交付选择器返回时保持服务/任务上下文。
+现有API与独立列表页已接线，创建/编辑/详情均用页内抽屉，无需额外拟造详情URL。入口资源导航“人工库存”，与已购资源并列；从人工交付选择器返回时保持服务/任务上下文。
 
 桌面上方关键词、库存状态available/disabled/retired、占用bound/unbound及刷新/新建；表列名称/ID、资源类型、IP或主机名、提供方/区域、库存状态、占用服务/客户、成本、上游到期、凭据已配置、version、操作。库存状态与占用是独立两列，available且bound不能显示为空闲。
 

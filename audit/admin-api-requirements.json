@@ -62,7 +62,8 @@
       "title": "资源记录与客户资源",
       "pages": [
         "/admin/resources",
-        "/admin/customer-resources"
+        "/admin/customer-resources",
+        "/admin/manual-resources"
       ]
     },
     {
@@ -642,9 +643,10 @@
       "disposition": "optimize",
       "pages": [
         "/admin/resources",
-        "/admin/customer-resources"
+        "/admin/customer-resources",
+        "/admin/manual-resources"
       ],
-      "reason": "保留已购服务只读视图，新增独立人工库存、成本及上游到期管理；通过已有人工开通任务原子绑定，人工终止后显式释放。成本不生成财务支出，上游期限不覆盖客户期限；库存UI待接。",
+      "reason": "保留已购服务只读视图，新增独立人工库存、成本及上游到期管理；通过已有人工开通任务原子绑定，人工终止后显式释放。成本不生成财务支出，上游期限不覆盖客户期限；库存列表、管理抽屉及交付选择器已接线，按领域验收矩阵区分验证边界。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/resources",
@@ -695,11 +697,14 @@
         "internal/store/manual_resources.go",
         "db/migrations/185_manual_server_resources.sql",
         "internal/httpapi/manual_resources_test.go",
-        "docs/domain/manual-resources.md"
+        "docs/domain/manual-resources.md",
+        "web/src/app/admin/manual-resources/page.tsx",
+        "web/src/components/admin-manual-resources.tsx",
+        "web/src/components/admin-manual-resource-mutation.ts"
       ],
       "acceptance": [
         "逐动作核对权限、资源范围、输入输出、分页和失败状态；源码存在不代表运行验收。",
-        "已购服务视图保留精确客户/商品筛选；独立库存不从services或订单JSON推断，库存页及交付选择器UI待接。",
+        "已购服务视图保留精确客户/商品筛选；独立库存不从services或订单JSON推断，库存页及交付选择器已接线，验证范围按领域验收矩阵单列。",
         "成本为CNY整数分元数据，上游到期与客户服务期限分离，账号密码仅写入加密交付，库存列表、详情、回执与审计不得泄密。",
         "人工开通任务内按服务和库存版本原子绑定；资源/服务各最多一个有效绑定，同任务原请求只完成一次，运行中及待人工终止服务不能释放。",
         "仅真实人工终止后管理员显式释放；统一回执重放仍核对当前凭据、权限及客户范围，真实184起点升级不改旧业务事实或checksum。"

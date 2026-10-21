@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Tabs } from "radix-ui";
 import { ArrowLeft, ExternalLink, Eye, EyeOff, FileText, RefreshCw, UserRound } from "lucide-react";
-import { api, date, money, type Service } from "@/lib/api";
-import { PermissionGate, useAdminPermission } from "./workspace";
+import { api, date, money, type Service, type User } from "@/lib/api";
+import { PermissionGate, useAdminIdentity, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Status, cycles as billingCycles } from "./common";
@@ -17,6 +17,7 @@ import { ServiceConfigurationChanges } from "./configuration-upgrades";
 import { PurchaseFieldDetails } from "./purchase-fields";
 import { RenewalBenefitDetails } from "./renewal-benefit";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { manualActorIdentity, positiveManualID, verifyManualDeliveryActor } from "./admin-manual-delivery-intent";
 import { useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 
 const serviceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
@@ -33,17 +34,26 @@ function Band({title,actions,children}:{title:string;actions?:ReactNode;children
 }
 
 function CredentialsField({service}:{service:Service}) {
+  const actor=useAdminIdentity();
+  return actor?<CredentialsForActor key={`${manualActorIdentity(actor)}:${service.id}:${service.version}`} service={service} actor={actor}/>:<Field label="系统密码" value="未读取"/>;
+}
+function CredentialsForActor({service,actor}:{service:Service;actor:User}) {
   const allowed=useAdminPermission("services.manage");
   const [password,setPassword]=useState<string|null>(null);
+  const active=useRef(true);
+  useEffect(()=>{active.current=true;return()=>{active.current=false;};},[]);
+  const manual=service.provision_mode==="manual";
+  const inventoryMarker=(service.resource_info as {manual_resource_id?:unknown}|undefined)?.manual_resource_id;
+  const capability=["nokvm","supplier"].includes(service.provision_mode)||(manual&&positiveManualID(inventoryMarker));
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   const blocked=service.jobs?.some(job=>["reset_password","reinstall","rescue_system","exit_rescue_system","snapshot_restore","backup_restore"].includes(job.action)&&["pending","running","waiting_verification"].includes(job.status));
   useEffect(()=>{if(!password)return;const timer=window.setTimeout(()=>setPassword(null),60000);return ()=>window.clearTimeout(timer);},[password]);
   async function reveal() {
     if (password) {setPassword(null);return;}
     setBusy(true);setError("");
-    try {const result=await api<{password:string}>(`/admin/services/${service.id}/credentials`,{method:"POST",body:"{}"});setPassword(result.password);} catch(e) {setError((e as Error).message);} finally {setBusy(false);}
+    try {await verifyManualDeliveryActor(actor,false);if(!active.current)return;const result=await api<{password:string}>(`/admin/services/${service.id}/credentials`,{method:"POST",body:"{}",portal:"admin"});if(!active.current)return;await verifyManualDeliveryActor(actor,false);if(!active.current)return;if(typeof result.password!=="string")throw new Error("凭据响应无效，请重新核验");setPassword(result.password);} catch(e) {if(active.current)setError((e as Error).message);} finally {if(active.current)setBusy(false);}
   }
-  return <Field label="系统密码"><div className="flex min-w-0 gap-2"><Input aria-label="系统密码" readOnly autoComplete="off" type={password?"text":"password"} value={password??"************"} className="min-w-0 bg-muted/30"/>{allowed&&<Button size="icon" variant="outline" title={password?"隐藏密码":"查看密码"} aria-label={password?"隐藏密码":"查看密码"} disabled={busy||!!blocked||!["active","suspended"].includes(service.status)||!["nokvm","supplier"].includes(service.provision_mode)} onClick={()=>void reveal()}>{password?<EyeOff size={16}/>:<Eye size={16}/>}</Button>}</div>{error&&<p role="alert" className="text-xs text-destructive mt-2 break-words">{error}</p>}</Field>;
+  return <Field label="系统密码"><div className="flex min-w-0 gap-2"><Input aria-label="系统密码" readOnly autoComplete="off" type={password?"text":"password"} value={password??"************"} className="min-w-0 bg-muted/30"/>{allowed&&capability&&<Button size="icon" variant="outline" title={password?"隐藏密码":manual?"核验库存绑定后查看密码":"查看密码"} aria-label={password?"隐藏密码":manual?"核验库存绑定后查看密码":"查看密码"} disabled={busy||!!blocked||!["active","suspended"].includes(service.status)||!capability} onClick={()=>void reveal()}>{password?<EyeOff size={16}/>:<Eye size={16}/>}</Button>}</div>{error&&<p role="alert" className="text-xs text-destructive mt-2 break-words">{error}</p>}</Field>;
 }
 
 export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanels}:{service:Service;refresh:()=>void;manualDelivery?:ReactNode;resourcePanels?:ReactNode}) {

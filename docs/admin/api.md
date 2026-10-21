@@ -331,7 +331,7 @@ items保留原数组接口的分组字段（含id、name、slug、description、
 
 交付请求为`{job_id,manual_resource_id,resource_expected_version,expected_version,note}`；`expected_version`取服务版本，另一个取库存版本。库存负责提供实际资源标识与账号，选库存时不同时传`upstream_id/username`。成功后原子写占用、开通服务、任务、通知及审计，密码按服务重新加密，不写入任务或审计。未选择库存的旧手工交付继续兼容。服务终止不自动释放库存，release的note为3–2000字符，释放不改服务状态或抹除交付历史。服务本人凭据读取继续使用已有授权接口，不提供库存密码GET。
 
-主要错误：400 `invalid_manual_resource`/`invalid_manual_resource_query`/`invalid_manual_resource_filter`/`invalid_manual_resource_release`/`invalid_idempotency_key`；401凭据失效；403权限不足；404对象不存在或范围外；409 `manual_resource_version_required`/`manual_resource_version_conflict`/`manual_resource_binding_changed`/`manual_resource_bound_identity`/`manual_resource_bound_status`/`manual_resource_retired`/`manual_resource_unavailable`/`manual_resource_identity_required`/`manual_resource_credentials_invalid`/`manual_resource_not_bound`/`manual_resource_release_requires_termination`/`manual_resource_release_pending_job`，以及绑定的`stale_service`/`order_not_deliverable`及原交付状态错误；503 `manual_resource_encryption_unconfigured`。未知结果保持原key/body，冲突不静默更新版本。新增库存UI及人工交付选择器尚未接入。
+主要错误：400 `invalid_manual_resource`/`invalid_manual_resource_query`/`invalid_manual_resource_filter`/`invalid_manual_resource_release`/`invalid_idempotency_key`；401凭据失效；403权限不足；404对象不存在或范围外；409 `manual_resource_version_required`/`manual_resource_version_conflict`/`manual_resource_binding_changed`/`manual_resource_bound_identity`/`manual_resource_bound_status`/`manual_resource_retired`/`manual_resource_unavailable`/`manual_resource_identity_required`/`manual_resource_credentials_invalid`/`manual_resource_not_bound`/`manual_resource_release_requires_termination`/`manual_resource_release_pending_job`，以及绑定的`stale_service`/`order_not_deliverable`及原交付状态错误；503 `manual_resource_encryption_unconfigured`。未知结果保持原key/body，冲突不静默更新版本。库存UI及人工交付选择器已接线；库存写入使用稳定key/body恢复，交付按原任务与完整body恢复，不将客户端key误当交付回执协议。浏览器及专项验证范围见[领域验收矩阵](../architecture/contract-verification-matrix.md)。
 
 ## 工单附件上传恢复
 
@@ -421,6 +421,6 @@ integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/
 
 规则配置由管理员/角色→定价锁→原实际凭据的顺序保护；目录 writer 统一通过 `CatalogTx`，在目录锁前锁主体，等待后和提交前复核自然过期。供应商导入、目录创建、商品升级及配置升级中的创建权限 helper 已处于目录事务边界内，不再用旧调用数量描述为未收口旁路。具体协议见[商品管理 API](catalog-api.md)与[分组定价](../domain/customer-group-pricing.md#配置写入的授权与锁序)；源代码调用边界和数据库锁序须分别证明。
 
-客户列表资料/分组及列表、资源池销售归属已有稳定原请求恢复接线；客户详情整体、高级筛选、未付充值/推荐人、排名和库存 UI 继续分别实施。文件存储、认证、通知和其余资金历史升级的既有验收只覆盖各自原范围；新增 UI 浏览器、真实对象存储/其他外部渠道及候选发布未执行时不得标记通过。机器日志、清单和源文件哈希放在忽略的 output 制品中，不在本页累加历史 PASS 数字。
+客户列表资料/分组及列表、资源池销售归属已有稳定原请求恢复接线；客户详情summary/按需页签、高级筛选、未付充值/推荐人、双排名及库存管理/交付选择器均已分批接线，验证边界按领域验收矩阵单列；服务六批管理及其他高级动作继续分别实施。文件存储、认证、通知和其余资金历史升级的既有验收只覆盖各自原范围；新增 UI 浏览器、真实对象存储/其他外部渠道及候选发布未执行时不得标记通过。机器日志、清单和源文件哈希放在忽略的 output 制品中，不在本页累加历史 PASS 数字。
 
-前端实施先完成客户详情：固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误，再按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。
+前端实施以已完成的客户详情固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误为样板，继续按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。

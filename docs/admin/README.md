@@ -14,7 +14,7 @@
 - [后台前端设计总契约](../admin-frontend-design.md)：页面排版、UI组件、交互/状态、响应式及现有系统/地域图标素材规范。
 - 报表：[当前统计与 JSON 查询口径](../credit-cash-reporting.md)、[旧版完整恢复契约](../report-restoration-contract.md)。API/页面已补，独立PG18竞态回归与Next/Chrome模拟API浏览器分别通过；真实Go API浏览器全链路、旧全量迁移/对账和外部凭证未验收，台账继续部分完成。
 - [商品与人员排名](api.md#商品与人员业务收款排名)：按上海月、当前客户范围、业务收款及当前销售归属；工作台已接真实双排名并独立加载、重试，首批验证边界见[设计实施状态](../admin-frontend-design.md#当前实施状态)。
-- [独立人工库存](../domain/manual-resources.md)：未分配机器、成本与上游到期管理，复用人工交付绑定及终止后显式释放；库存UI待接。
+- [独立人工库存](../domain/manual-resources.md)：未分配机器、成本与上游到期管理，复用人工交付绑定及终止后显式释放；库存列表、管理抽屉与人工交付选择器已接线，验证范围见领域验收矩阵。
 - 已退役：[信用额度](../customer-credit-portal-contract.md)、[合同与设置](../domain/contract-settings.md)。旧查询/写入/下载均鉴权后410，页面404，不再作为恢复待办。
 
 旧批次计划、浏览器验收和截图摘要放在 [归档快照](../archive/snapshots/)，不覆盖当前台账。

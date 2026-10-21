@@ -4,7 +4,7 @@
 
 ## 范围与使用方式
 
-当前源码 `web/src/app/admin/**/page.tsx` 共105个路由模式，其中4个信用/合同路由退役，101个其余路由含兼容入口和共享页面；另有独立 `/admin-login`。人工库存API已存在，本设计仅提出一个新增UI路由 `/admin/manual-resources`，新建/编辑/详情由同页抽屉承载。这些数字是路由覆盖范围，不能作为已实现页面数、菜单项数或验收通过数。
+当前源码 `web/src/app/admin/**/page.tsx` 共106个路由模式，其中4个信用/合同路由退役，102个其余路由含兼容入口和共享页面；另有独立 `/admin-login`。人工库存已有独立UI路由 `/admin/manual-resources`，新建/编辑/详情由同页抽屉承载。这些数字是路由覆盖范围，不能作为已实现页面数、菜单项数或验收通过数。
 
 当前39组批准必要API对应本轮设计范围；10组明确排除和7组暂缓项目沿用[需求取舍](api-requirements.md)，不因旧版截图出现而加入设计。客户自助退款诉求走工单，由管理员在账单处置；不增加自助申请页。保留业务文件下载，不增加报表导出。状态纠错是受限动作，不能画成任意状态下拉保存。
 
@@ -60,6 +60,7 @@
 | `/admin/products/new` | 新建商品 | 现有路由 |
 | `/admin/products` | 商品目录 | 现有路由 |
 | `/admin/resources` | 已购服务资源视图 | 现有路由 |
+| `/admin/manual-resources` | 独立人工库存列表及新建/编辑/详情/释放抽屉 | 现有路由 |
 | `/admin/service-groups` | 客户服务导航组 | 现有路由 |
 | `/admin/suppliers/api-settings` | 供应商协议与API设置 | 现有路由 |
 | `/admin/suppliers/catalog` | 供应商商品与导入 | 现有路由 |
@@ -154,12 +155,11 @@
 | `/admin/system/upgrade` | 升级检查 | 现有路由 |
 | `/admin/theme-settings` | 官网主题 | 现有路由 |
 
-### 独立登录与拟新增页面
+### 独立登录
 
 | 路由 | 状态 | 规格与承载方式 |
 | --- | --- | --- |
 | `/admin-login` | 现有独立登录入口，位于管理外壳之外 | [工作台与系统](frontend-system.md)：登录、验证码、MFA及安全跳转 |
-| `/admin/manual-resources` | 拟新增UI路由，当前没有对应page.tsx | [商品与资源](frontend-catalog-resources.md)：库存列表及新建/编辑/详情Sheet，复用已有人工交付绑定与释放API |
 
 ### 必须单独设计的子视图
 

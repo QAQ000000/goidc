@@ -31,6 +31,7 @@ export const adminNavigation = [
   { href: "/admin/traffic-orders", label: "流量包订单", icon: Gauge, permission: "orders.view", group: "orders" },
   { href: "/admin/services", label: "服务主机", icon: Server, permission: "services.view", group: "products" },
   { href: "/admin/resources", label: "服务器资源", icon: Server, permission: "resources.view", group: "products" },
+  { href: "/admin/manual-resources", label: "人工库存", icon: Server, permission: "resources.view", group: "products" },
   { href: "/admin/cancellations", label: "取消申请", icon: ClipboardCheck, permission: "services.view", group: "orders" },
   { href: "/admin/invoices", label: "财务账单", icon: Receipt, permission: "invoices.view", group: "finance" },
   { href: "/admin/transactions", label: "交易流水", icon: Receipt, permission: "invoices.view", group: "finance" },

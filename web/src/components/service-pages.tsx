@@ -3,6 +3,7 @@ import { ResourceTable } from "./resource-table";
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { SupplierServiceDelivery } from "./supplier-delivery";
 import { AdminServiceDetail } from "./admin-service-detail";
+import { ManualDelivery } from "./admin-manual-delivery";
 import { OrderRefundHoldLabel, orderRefundHold, orderRefundBlocksDelivery } from "./external-refund-order";
 import { NOKVMMonitoringPanel } from "./nokvm-monitoring";
 import { NOKVMStoragePanel } from "./nokvm-storage";
@@ -72,7 +73,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
     const timer = window.setInterval(refresh, 2000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
-  if (admin) return <Workspace title="服务详情" admin>{error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<AdminServiceDetail service={data} refresh={refresh} manualDelivery={data.provision_mode==="manual"&&data.jobs?.some(job=>job.status==="waiting_manual")?<PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh}/></PermissionGate>:null} resourcePanels={data.provision_mode==="nokvm"&&["active","suspended"].includes(data.status)?<><NOKVMMonitoringPanel service={data} admin/><NOKVMStoragePanel service={data} admin refresh={refresh}/><NOKVMNATPanel service={data} admin refresh={refresh}/><NOKVMCDROMPanel service={data} admin refresh={refresh}/></>:null}/>}</Workspace>;
+  if (admin) return <Workspace title="服务详情" admin>{error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<AdminServiceDetail service={data} refresh={refresh} manualDelivery={data.provision_mode==="manual"?<PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh}/></PermissionGate>:null} resourcePanels={data.provision_mode==="nokvm"&&["active","suspended"].includes(data.status)?<><NOKVMMonitoringPanel service={data} admin/><NOKVMStoragePanel service={data} admin refresh={refresh}/><NOKVMNATPanel service={data} admin refresh={refresh}/><NOKVMCDROMPanel service={data} admin refresh={refresh}/></>:null}/>}</Workspace>;
   return (
     <Workspace title="服务详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild><Link href={admin ? "/admin/services" : "/console/services"}><ArrowUpRight size={16} />返回服务列表</Link></Button>
@@ -122,7 +123,7 @@ export function ServiceDetailView({ id, admin = false }: { id: number; admin?: b
             ]}
           /></section>
           <ServiceActivityPanel serviceID={data.id} admin={admin} />
-          {admin && data.provision_mode === "manual" && data.jobs?.some((job) => job.status === "waiting_manual") && <PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh} /></PermissionGate>}
+          {admin && data.provision_mode === "manual" && <PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh} /></PermissionGate>}
           {data.provision_mode === "nokvm" && <NOKVMServiceDelivery key={`${data.id}:${data.version}`} service={data} admin={admin} refresh={refresh} />}
           {data.provision_mode === "supplier" && <SupplierServiceDelivery key={`${data.id}:${data.version}`} service={data} admin={admin} refresh={refresh} />}
           {data.provision_mode === "nokvm" && ["active","suspended"].includes(data.status) && <NOKVMMonitoringPanel key={data.id} service={data} admin={admin}/>}
@@ -197,26 +198,6 @@ function AutoRenewPanel({ service, refresh }: { service: Service; refresh: () =>
   return <section className="data-surface p-6 mt-5"><div className="surface-head"><div><h2 className="font-semibold">自动续费</h2><p className="text-xs text-muted-foreground mt-1">到期前 24 小时内尝试使用账户余额续费</p></div></div><label className="flex items-center gap-3 mt-4 text-sm"><Checkbox checked={service.auto_renew} disabled={busy} onCheckedChange={(value) => void change(value === true)} />启用自动续费</label>{service.auto_renew_error && <p className="text-xs text-destructive mt-3">最近一次尝试：{service.auto_renew_error}</p>}{error && <p className="text-xs text-destructive mt-3">{error}</p>}</section>;
 }
 
-function ManualDelivery({ service, refresh }: { service: Service; refresh: () => void }) {
-  const job = service.jobs?.find((item) => item.status === "waiting_manual");
-  const [upstreamId, setUpstreamId] = useState("");
-  const [username, setUsername] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  if (!job) return null;
-  const refundBlocked = orderRefundBlocksDelivery(service.external_refund_order_hold) || ["cancelled", "terminated"].includes(service.status) || service.invoice_status === "refunded";
-  const currentJob = job;
-  async function complete() {
-    if (refundBlocked) { setError("外部退款冻结或已取消的服务禁止交付，请刷新核实。"); return; }
-    setBusy(true); setError("");
-    try {
-      await api(`/admin/services/${service.id}/delivery`, { method: "POST", body: JSON.stringify({ job_id: currentJob.id, upstream_id: upstreamId, username, note }) });
-      refresh();
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }
-  return <section className="data-surface p-6 mt-5"><div className="surface-head"><div><h2 className="font-semibold">人工交付确认</h2><p className="text-xs text-muted-foreground mt-1">任务 #{currentJob.id} 已等待管理员登记实际资源</p></div></div><div className="grid md:grid-cols-3 gap-3"><Input value={upstreamId} onChange={(e) => setUpstreamId(e.target.value)} placeholder="实际资源标识" aria-label="实际资源标识" /><Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="登录用户名（可选）" aria-label="登录用户名" /><Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="交付凭据或核验记录" aria-label="交付凭据或核验记录" /></div><div className="flex items-center gap-3 mt-4"><Button disabled={busy || refundBlocked || note.trim().length < 3 || (currentJob.action === "create" && !upstreamId.trim())} onClick={complete}><Play size={14} />{busy ? "提交中" : "确认交付"}</Button>{refundBlocked && <span className="text-xs whitespace-normal">外部退款冻结或服务已取消，禁止交付。</span>}{error && <span className="text-xs text-destructive">{error}</span>}</div></section>;
-}
 
 function ServiceActions({ service, admin, refresh }: { service: Service; admin: boolean; refresh: () => void }) {
   const allowed = useAdminPermission("services.manage");
