@@ -284,6 +284,8 @@ summary返回整数分字段 `gateway_income_cents/manual_income_cents/manual_re
 
 该接口只修改续费意图，不立即扣款或调用供应商。一次性服务拒绝 `nonrenewable_service`，非active/suspended拒绝 `invalid_auto_renew_state`，本地续费退款hold、未复核资源或不支持续费的供应商按领域错误拒绝。服务等待锁期间撤权、会话/密钥撤销、客户范围变化必须拒绝，不能复用HTTP进入时的缓存授权；服务归属并发变化可返回 `service_owner_changed`，应重新读取。
 
+管理员可选同时提交`expected_customer_id`（正整数）及`expected_owner_generation`（非负整数）；必须成对，普通客户入口不接受这组字段。新页面固定携带原客户及归属代次，事务持服务行锁核对，归属变化（含转出后再转回）返回409 `service_owner_changed`且不改开关。旧无条件调用保持兼容；这不是服务version CAS或幂等回执，未知结果先读取当前状态核对，不自动重发。
+
 前端成功后刷新服务详情，后续自动续费/上游回读仍按[交易与自动续费](../transactions.md)和[供应商协议](../supplier-protocol.md)执行。管理员代续费或批量立即续费不能通过改Cookie调用客户接口。单服务与同客户批量代续费、第三批价格/期限及后续状态/收款/归属批次见[服务管理契约](service-management-api.md)，不在本自动续费开关接口范围。
 
 批量入口为 `POST /admin/service-renewal-batch-quotes`、`POST /admin/service-renewal-batches`、`GET /admin/service-renewal-batches/{batch_id}`、`POST /admin/service-renewal-batches/{batch_id}/execute`。报价只读，登记和查询均不建单或扣款；执行按冻结清单顺序处理明确子集，单项成功回执跨attempt复用。认证/范围变化及未知提交停止后续项目；未确认使用原execute key恢复，确定失败经管理员核对后用新execute key显式重试。只原actor可访问，create与pay_balance分别要求 `services.renew`、`services.renew.pay_balance`，并同时满足服务/账单读取与客户范围。完整字段、状态及协调会话容量见[批量契约](service-management-api.md#第二批同客户批量代续费)；UI与运行验收另记。
@@ -421,6 +423,6 @@ integration要求任务自有回环PostgreSQL 18、`_test`库及强制入口run/
 
 规则配置由管理员/角色→定价锁→原实际凭据的顺序保护；目录 writer 统一通过 `CatalogTx`，在目录锁前锁主体，等待后和提交前复核自然过期。供应商导入、目录创建、商品升级及配置升级中的创建权限 helper 已处于目录事务边界内，不再用旧调用数量描述为未收口旁路。具体协议见[商品管理 API](catalog-api.md)与[分组定价](../domain/customer-group-pricing.md#配置写入的授权与锁序)；源代码调用边界和数据库锁序须分别证明。
 
-客户列表资料/分组及列表、资源池销售归属已有稳定原请求恢复接线；客户详情summary/按需页签、高级筛选、未付充值/推荐人、双排名及库存管理/交付选择器均已分批接线，验证边界按领域验收矩阵单列；服务六批管理及其他高级动作继续分别实施。文件存储、认证、通知和其余资金历史升级的既有验收只覆盖各自原范围；新增 UI 浏览器、真实对象存储/其他外部渠道及候选发布未执行时不得标记通过。机器日志、清单和源文件哈希放在忽略的 output 制品中，不在本页累加历史 PASS 数字。
+客户列表资料/分组及列表、资源池销售归属已有稳定原请求恢复接线；客户详情summary/按需页签、高级筛选、未付充值/推荐人、双排名及库存管理/交付选择器均已分批接线，验证边界按领域验收矩阵单列；服务长期定价/客户期限及自动续费管理已接，其余代续费、批量、单次固定应付、状态纠错、收款和转移继续分别实施。文件存储、认证、通知和其余资金历史升级的既有验收只覆盖各自原范围；新增 UI 浏览器、真实对象存储/其他外部渠道及候选发布未执行时不得标记通过。机器日志、清单和源文件哈希放在忽略的 output 制品中，不在本页累加历史 PASS 数字。
 
 前端实施以已完成的客户详情固定身份、summary真实状态、相关列表与创建的customer_id、稳定写入key/版本及分区错误为样板，继续按[需求取舍](api-requirements.md)逐领域推进。每批交付记录其请求/响应、权限账号、冲突/未知结果和浏览器证据；未执行的新UI、真实外部链路和部署不得标记通过。

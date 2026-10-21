@@ -3392,7 +3392,7 @@
       "pages": [
         "/admin/services/[id]"
       ],
-      "reason": "本轮提供管理员专属设置入口；复用续费资格、取消互斥和审计，并在等待资源锁后重验权限、客户范围和请求凭据。UI尚未接入。",
+      "reason": "本轮提供管理员专属设置入口；复用续费资格、取消互斥和审计，并在等待资源锁后重验权限、客户范围和请求凭据。服务管理页已接确认、目标状态读取和未知核对；新页面携带客户/归属代次前置条件，不能借设置开关触发即时付款。",
       "current": {
         "endpoints": [
           "PATCH /api/v1/admin/services/{id}/auto-renew"
@@ -3422,7 +3422,7 @@
         "status": "implemented"
       },
       "ui": {
-        "status": "unwired"
+        "status": "wired"
       },
       "verification": {
         "static": "source-reviewed",
@@ -3434,7 +3434,9 @@
       "evidence": [
         "internal/httpapi/auto_renew.go",
         "internal/store/auto_renew.go",
-        "internal/httpapi/admin_auto_renew_test.go"
+        "internal/httpapi/admin_auto_renew_test.go",
+        "web/src/components/admin-service-auto-renew.tsx",
+        "scripts/admin-service-auto-renew-components.test.mjs"
       ],
       "acceptance": [
         "管理员身份、services.manage与客户范围同时满足；事务锁后重验。",
@@ -3452,7 +3454,7 @@
         "/admin/services",
         "/admin/services/[id]"
       ],
-      "reason": "已批准的六批服务人工管理API已具备实现：单服务/同客户批量代续费、人工价格及期限、受限本地状态纠错、可信人工收款和服务归属转移。各批权限、统一回执及运行验收独立记录，UI尚未接线。",
+      "reason": "已批准的六批服务人工管理API已具备实现：单服务/同客户批量代续费、人工价格及期限、受限本地状态纠错、可信人工收款和服务归属转移。各批权限、统一回执及运行验收独立记录，服务管理页已接长期定价和客户期限纠错/补偿，单次固定续费、单服务/批量续费、状态纠错、收款与转移仍待接线。",
       "verificationNote": "声明仅描述API实现范围；各批已执行测试及浏览器/外部/发布边界见 docs/admin/service-management-api.md 验收边界，不把API存在或历史批次数量当作全量验收。",
       "current": {
         "endpoints": [
@@ -3501,7 +3503,7 @@
         "status": "implemented"
       },
       "ui": {
-        "status": "unwired"
+        "status": "partial"
       },
       "verification": {
         "static": "source-reviewed",
@@ -3544,7 +3546,10 @@
         "internal/store/service_ownership_reads_test.go",
         "internal/store/service_ownership_compatibility_test.go",
         "internal/store/service_ownership_upgrade_test.go",
-        "db/migrations/191_service_ownership_transfers.sql"
+        "db/migrations/191_service_ownership_transfers.sql",
+        "web/src/components/admin-service-adjustments.tsx",
+        "web/src/components/admin-service-adjustment-mutation.ts",
+        "scripts/admin-service-adjustments-components.test.mjs"
       ],
       "acceptance": [
         "报价、未付建单与余额付款独立，真实管理员权限/客户范围/原凭据锁后及提交前复核；不改变auto-renew或长期价格。",

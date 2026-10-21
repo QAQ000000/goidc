@@ -19,6 +19,8 @@ import { RenewalBenefitDetails } from "./renewal-benefit";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { manualActorIdentity, positiveManualID, verifyManualDeliveryActor } from "./admin-manual-delivery-intent";
 import { useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
+import { AdminServiceAdjustments } from "./admin-service-adjustments";
+import { AdminServiceAutoRenew } from "./admin-service-auto-renew";
 
 const serviceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
@@ -78,7 +80,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
     {orderRefundHold(service.external_refund_order_hold) && <div className="mb-5"><OrderRefundImpact reversal={orderRefundHold(service.external_refund_order_hold)!} /></div>}
     <Tabs.Root value={tab} onValueChange={setTab}>
       <Tabs.List aria-label="服务详情" className="service-detail-tabs">
-        {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="service-detail-tab">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
+        {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"},{id:"management",label:"管理"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="service-detail-tab">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
       </Tabs.List>
       <Tabs.Content value="product" className="outline-none space-y-5">
         <Band title="产品" actions={<PermissionGate permission="orders.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/orders/${service.order_id}`}><FileText size={15}/>查看订单</Link></Button></PermissionGate>}>
@@ -109,7 +111,9 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
             <Field label="首期金额" value={service.first_price_cents===undefined?null:money(service.first_price_cents)}/>
             <Field label="初装费" value={service.setup_fee_cents===undefined?null:money(service.setup_fee_cents)}/>
             <Field label="付款周期" value={cycles[service.billing_cycle]||service.billing_cycle}/>
-            <Field label="周期金额" value={money(service.recurring_price_cents)}/>
+            <Field label="合同周期基价" value={money(service.recurring_price_cents)}/>
+            <Field label="当前续费应付" value={Number.isSafeInteger(service.renewal_amount_cents)?money(service.renewal_amount_cents):null}/>
+            <Field label="续费计价模式" value={service.renewal_pricing_mode==="fixed"?"管理员固定最终应付":service.renewal_pricing_mode==="contract"?"原合同及剩余优惠":null}/>
             <Field label="到期时间" value={due}/>
             <Field label="原始账单" value={service.invoice_no}/>
             <Field label="账单状态">{service.invoice_status?<div className="h-9 flex items-center"><Status value={service.invoice_status}/></div>:<Input readOnly value="暂无账单"/>}</Field>
@@ -125,6 +129,7 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>任务</TableHead><TableHead>动作</TableHead><TableHead>状态</TableHead><TableHead>尝试次数</TableHead><TableHead>错误</TableHead><TableHead>时间</TableHead></TableRow></TableHeader><TableBody>{jobs.length?jobs.map(job=><TableRow key={job.id}><TableCell>#{job.id}</TableCell><TableCell>{serviceActionLabels[job.action]??job.action}</TableCell><TableCell><Status value={job.status==="succeeded"&&(isPowerAction(job.action)||["rescue_system","exit_rescue_system","reinstall"].includes(job.action))?"command_accepted":job.status==="succeeded"&&job.action==="reset_password"?"credentials_confirmed":job.status}/></TableCell><TableCell>{job.attempts}</TableCell><TableCell className="max-w-80 whitespace-normal break-words text-destructive">{job.last_error||"-"}</TableCell><TableCell>{date(job.completed_at||job.created_at)}</TableCell></TableRow>):<TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">暂无任务记录</TableCell></TableRow>}</TableBody></Table></div>
       </Tabs.Content>
       <Tabs.Content value="history" className="outline-none"><ServiceActivityPanel serviceID={service.id} admin/></Tabs.Content>
+      <Tabs.Content value="management" className="outline-none space-y-5">{tab==="management"&&<><AdminServiceAdjustments service={service} refresh={refresh}/><AdminServiceAutoRenew service={service} refresh={refresh}/></>}</Tabs.Content>
     </Tabs.Root>
   </div>;
 }

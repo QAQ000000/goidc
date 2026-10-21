@@ -159,12 +159,12 @@
 
 ## 服务详情 `/admin/services/[id]`
 
-桌面头部服务身份、归属客户、状态和版本；主区“概览、运行、任务/活动、续费账单、管理”页签，右侧资源、期限与计价摘要。手机将摘要移到概览，管理动作逐项Dialog，不使用一个“任意改状态”的下拉框。
+桌面头部服务身份、归属客户、状态和版本；主区“概览、运行、任务/活动、续费账单、管理”页签，右侧资源、期限与计价摘要。手机将摘要移到概览，管理动作独立分区与确认，价格及期限使用各自服务端预览，不使用一个“任意改状态”的下拉框。
 
 - 读取：`GET /admin/services/{id}`、`GET /admin/services/{id}/management`要求services.view；活动 `GET /admin/services/{id}/activity`；运行页仅按实际适配器能力请求monitoring/storage/NAT/CDROM等接口，缺能力显示不适用，失败局部重试。
 - 概览：客户期限 `next_due_at`、上游观测 `supplier_next_due_at/supplier_observed_at`、term_mode分别展示；定价mode、固定最终应付、原合同估算、剩余优惠分开，不用“已修改上游”描述本地改期。
 - 常规动作：`POST /admin/services/{id}/actions`、`POST /admin/services/{id}/delivery`要求services.manage；显式读取凭据 `POST .../credentials`同样要求services.manage，不自动预载，离开清除展示；暂停/恢复、开关机、重装等按能力和状态决定，破坏性动作二次确认，任务受理不等于执行成功。
-- 自动续费：`PATCH /admin/services/{id}/auto-renew`，services.manage，明确enabled布尔；仅改意图不立即扣款。成功重读详情；该接口无回执/版本协议，未知先读取目标状态，不按金融操作声称恰好一次。
+- 自动续费：`PATCH /admin/services/{id}/auto-renew`，services.manage，明确enabled布尔；仅改意图不立即扣款。成功重读详情；该接口无幂等回执或服务版本协议；新页面携带expected_customer_id及expected_owner_generation，后台持服务锁校验归属。未知先读取目标状态，再明确结束核对，不盲重发，也不按金融操作声称恰好一次。
 - 人工交付引用原待人工任务，选择独立库存需resources.view/manage、服务/库存各自版本；库存绑定按[人工资源](../domain/manual-resources.md)，不能通过普通资源信息编辑绕过占用或释放。
 - 任务/活动只展示当前授权返回的安全投影。服务归属/owner_generation改变时，立即清理旧客户的任务、凭据、配置及财务缓存；未获旧客户范围不展示历史订单/购买字段，A→B→A也不恢复旧代次。
 

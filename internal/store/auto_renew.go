@@ -12,6 +12,21 @@ import (
 )
 
 func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enabled bool, admin bool) error {
+	return s.setAutoRenew(ctx, actorID, serviceID, enabled, admin, nil)
+}
+
+// SetAdminAutoRenewForOwner binds a setting intent to an ownership period.
+// It does not turn this setting into a versioned or replayable financial action.
+func (s *Store) SetAdminAutoRenewForOwner(ctx context.Context, actorID, serviceID int64, enabled bool, customerID, generation int64) error {
+	if customerID <= 0 || generation < 0 {
+		return conflict("invalid_auto_renew", "自动续费归属条件无效")
+	}
+	return s.setAutoRenew(ctx, actorID, serviceID, enabled, true, &autoRenewOwnerExpectation{customerID, generation})
+}
+
+type autoRenewOwnerExpectation struct{ customerID, generation int64 }
+
+func (s *Store) setAutoRenew(ctx context.Context, actorID, serviceID int64, enabled bool, admin bool, expected *autoRenewOwnerExpectation) error {
 	return s.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		var ownerID int64
@@ -60,6 +75,15 @@ func (s *Store) SetAutoRenew(ctx context.Context, actorID, serviceID int64, enab
 			}
 			if err = LockAdminCustomer(ctx, tx, actorID, ownerID); err != nil {
 				return err
+			}
+			if expected != nil {
+				var generation int64
+				if err = tx.QueryRow(ctx, "SELECT service_ownership_generation($1)", serviceID).Scan(&generation); err != nil {
+					return err
+				}
+				if ownerID != expected.customerID || generation != expected.generation {
+					return conflict("service_owner_changed", "服务客户或归属代次已变更，请刷新后重新确认")
+				}
 			}
 		}
 		if err = requireNoLocalRenewalHold(ctx, tx, serviceID); err != nil {

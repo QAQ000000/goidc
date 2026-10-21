@@ -67,13 +67,13 @@ function serviceDueLabel(service: Service) {
 }
 
 export function ServiceDetailView({ id, admin = false }: { id: number; admin?: boolean }) {
-  const { data, error, refresh } = useResource<Service>(`${admin ? "/admin" : ""}/services/${id}`);
+  const { data, error, refresh } = useResource<Service>(`${admin ? "/admin" : ""}/services/${id}`, !admin);
   useEffect(() => {
     if (!data?.jobs?.some((job) => job.status === "pending" || job.status === "running")) return;
     const timer = window.setInterval(refresh, 2000);
     return () => window.clearInterval(timer);
   }, [data, refresh]);
-  if (admin) return <Workspace title="服务详情" admin>{error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<AdminServiceDetail service={data} refresh={refresh} manualDelivery={data.provision_mode==="manual"?<PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh}/></PermissionGate>:null} resourcePanels={data.provision_mode==="nokvm"&&["active","suspended"].includes(data.status)?<><NOKVMMonitoringPanel service={data} admin/><NOKVMStoragePanel service={data} admin refresh={refresh}/><NOKVMNATPanel service={data} admin refresh={refresh}/><NOKVMCDROMPanel service={data} admin refresh={refresh}/></>:null}/>}</Workspace>;
+  if (admin) return <Workspace title="服务详情" admin>{error?<Failure error={error} retry={refresh}/>:!data?<Loading/>:<AdminServiceDetail key={`${data.id}:${data.user_id}:${data.owner_generation??"missing"}`} service={data} refresh={refresh} manualDelivery={data.provision_mode==="manual"?<PermissionGate permission="services.manage"><ManualDelivery service={data} refresh={refresh}/></PermissionGate>:null} resourcePanels={data.provision_mode==="nokvm"&&["active","suspended"].includes(data.status)?<><NOKVMMonitoringPanel service={data} admin/><NOKVMStoragePanel service={data} admin refresh={refresh}/><NOKVMNATPanel service={data} admin refresh={refresh}/><NOKVMCDROMPanel service={data} admin refresh={refresh}/></>:null}/>}</Workspace>;
   return (
     <Workspace title="服务详情" admin={admin}>
       <Button variant="ghost" className="mb-5" asChild><Link href={admin ? "/admin/services" : "/console/services"}><ArrowUpRight size={16} />返回服务列表</Link></Button>

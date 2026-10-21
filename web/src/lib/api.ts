@@ -603,6 +603,9 @@ export type Service = {
   service_group_id: number | null;
   service_group_name: string | null;
   user_id: number;
+  owner_generation?: number;
+  renewal_pricing_mode?: "contract" | "fixed";
+  fixed_renewal_amount_cents?: number | null;
   order_id: number;
   product_id: number;
   name: string;
