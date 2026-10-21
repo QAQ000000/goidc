@@ -93,10 +93,10 @@ export function useCustomerMutation() {
   }
   return { run, busy, uncertain, conflict, error, setError, frozen: busy || uncertain };
 }
-export function CustomerMutationMessage({ mutation }: { mutation: ReturnType<typeof useCustomerMutation> }) { return mutation.error ? <p role="alert" className="text-sm text-destructive break-words">{mutation.error}</p> : null; }
+export function CustomerMutationMessage({ mutation }: { mutation: { error: string } }) { return mutation.error ? <p role="alert" className="text-sm text-destructive break-words">{mutation.error}</p> : null; }
 export function customerListSuffix() {
   const source = new URLSearchParams(window.location.search), output = new URLSearchParams();
-  for (const key of ["q", "status", "page", "limit", "offset", "group_id", "sales_owner_id", "date_from", "date_to"]) { const value = source.get(key); if (value) output.set(key, value); }
+  for (const key of ["q", "status", "page", "limit", "offset", "group_id", "sales_owner_id", "company", "phone", "qq", "certification_status", "level_id", "custom_fields", "date_from", "date_to"]) { const value = source.get(key); if (value) output.set(key, value); }
   return output.size ? `?${output.toString()}` : "";
 }
 export function useCustomerDraft<T>(key: string | null, snapshot: T, dirty: boolean) {

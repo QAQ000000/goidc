@@ -2,6 +2,8 @@
 
 当前后台需求取舍从[全域 API 需求](admin/api-requirements.md)进入；精确协议见[后台 API 契约](admin/api.md)。受控需求声明、真实注册路由和实际页面消费候选分别维护，不以旧页面条目数衡量 API 完成度。
 
+前端实施先读[页面设计目录](admin/frontend-pages.md)及[设计总契约](admin-frontend-design.md)，逐页核对所需页面、区域排版、UI组件、交互逻辑、API/权限和完整状态；下列静态生成物仅提供候选与历史映射，不能代替人工页面设计。
+
 先生成当前路由和页面消费候选：
 
 ```bash

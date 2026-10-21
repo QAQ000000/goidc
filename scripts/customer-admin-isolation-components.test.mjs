@@ -292,6 +292,11 @@ function statefulHook(loadHook) {
       if (changed(previous?.dependencies, dependencies)) values[index] = { dependencies, callback };
       return values[index].callback;
     },
+    useMemo(factory, dependencies) {
+      const index = cursor++, previous = values[index];
+      if (changed(previous?.dependencies, dependencies)) values[index] = { dependencies, value: factory() };
+      return values[index].value;
+    },
     useRef(initial) {
       const index = cursor++;
       if (!(index in values)) values[index] = { current: initial };
@@ -307,7 +312,7 @@ function statefulHook(loadHook) {
 function resourceHook(helpers) {
   return statefulHook(hooks => {
     const { useResource } = load('web/src/hooks/use-resource.ts', { react: hooks, '@/lib/api': helpers });
-    return portal => useResource('/me', false, portal);
+    return (portal, resourcePath = '/me') => useResource(resourcePath, false, portal);
   });
 }
 const flushResources = () => new Promise(resolve => setImmediate(resolve));
@@ -324,6 +329,99 @@ test('real resource hook hides previous administrator data immediately when its 
     replies[1].resolve(Response.json({ data: user('customer') })); await flushResources();
     assert.equal(view.render('customer').data.role, 'customer');
   } finally { view.unmount(); }
+});
+
+test('resource refresh reports loading without restoring a failed administrator identity', async () => {
+  const replies = [];
+  const client = clientAPI('/admin/account', (_url, options) => new Promise(resolve => replies.push({ resolve, options })));
+  const view = resourceHook(client.helpers);
+  try {
+    const initial = view.render('admin');
+    assert.equal(initial.isLoading, true);
+    assert.equal(initial.updatedAt, null);
+    replies[0].resolve(Response.json({ data: user('admin') })); await flushResources();
+    const loaded = view.render('admin');
+    assert.equal(loaded.isLoading, false);
+    assert.equal(typeof loaded.updatedAt, 'number');
+    loaded.refresh();
+    assert.equal(view.render('admin').isLoading, true);
+    replies[1].resolve(Response.json({ error: { code: 'permission_denied', message: '身份不可用' } }, { status: 403 }));
+    await flushResources();
+    const failed = view.render('admin');
+    assert.equal(failed.isLoading, false);
+    assert.equal(failed.data, null);
+    assert.equal(failed.updatedAt, null);
+    assert.equal(failed.error.status, 403);
+    failed.refresh();
+    const retrying = view.render('admin');
+    assert.equal(retrying.isLoading, true);
+    assert.equal(retrying.error, failed.error, 'a pending identity retry must retain the prior denial');
+    assert.equal(retrying.data ?? (retrying.error ? null : user('admin')), null, 'AdminAccessProvider must not fall back to its initial identity');
+    replies[2].resolve(Response.json({ data: user('admin') })); await flushResources();
+    const restored = view.render('admin');
+    assert.equal(restored.isLoading, false);
+    assert.equal(restored.error, null);
+    assert.equal(restored.data.role, 'admin');
+    assert.equal(typeof restored.updatedAt, 'number');
+  } finally { view.unmount(); }
+});
+
+test('resource re-enabled at the same path reports a fresh load after being disabled', async () => {
+  const replies = [];
+  const client = clientAPI('/admin/account', (_url, options) => new Promise(resolve => replies.push({ resolve, options })));
+  const view = resourceHook(client.helpers);
+  try {
+    assert.equal(view.render('admin').isLoading, true);
+    replies[0].resolve(Response.json({ data: user('admin') })); await flushResources();
+    const loaded = view.render('admin');
+    assert.equal(loaded.isLoading, false);
+    assert.equal(loaded.data.role, 'admin');
+    const disabled = view.render('admin', null);
+    assert.equal(disabled.data, null);
+    assert.equal(disabled.error, null);
+    assert.equal(disabled.updatedAt, null);
+    assert.equal(disabled.isLoading, false);
+    assert.equal(replies[0].options.signal.aborted, true);
+    const resumed = view.render('admin');
+    assert.equal(resumed.isLoading, true, 'a new request at a previously completed path must be loading');
+    assert.equal(replies.length, 2);
+    replies[1].resolve(Response.json({ data: { ...user('admin'), display_name: '重新读取' } })); await flushResources();
+    const refreshed = view.render('admin');
+    assert.equal(refreshed.isLoading, false);
+    assert.equal(refreshed.error, null);
+    assert.equal(refreshed.data.display_name, '重新读取');
+    assert.equal(typeof refreshed.updatedAt, 'number');
+  } finally { view.unmount(); }
+});
+
+test('late success or failure from an aborted resource cannot finish or overwrite its replacement', async () => {
+  for (const lateFailure of [false, true]) {
+    const replies = [];
+    // This fetch deliberately ignores AbortSignal, so the actual hook must
+    // reject callbacks from an aborted generation even if the transport replies.
+    const client = clientAPI('/admin/account', (_url, options) => new Promise(resolve => replies.push({ resolve, options })));
+    const view = resourceHook(client.helpers);
+    try {
+      view.render('admin');
+      view.render('admin', null);
+      assert.equal(replies[0].options.signal.aborted, true);
+      assert.equal(view.render('admin').isLoading, true);
+      assert.equal(replies.length, 2);
+      replies[0].resolve(lateFailure
+        ? Response.json({ error: { code: 'permission_denied', message: '旧请求错误' } }, { status: 403 })
+        : Response.json({ data: { ...user('admin'), display_name: '旧请求结果' } }));
+      await flushResources();
+      const waiting = view.render('admin');
+      assert.equal(waiting.isLoading, true);
+      assert.equal(waiting.data, null);
+      assert.equal(waiting.error, null);
+      replies[1].resolve(Response.json({ data: { ...user('admin'), display_name: '当前请求结果' } })); await flushResources();
+      const complete = view.render('admin');
+      assert.equal(complete.isLoading, false);
+      assert.equal(complete.error, null);
+      assert.equal(complete.data.display_name, '当前请求结果');
+    } finally { view.unmount(); }
+  }
 });
 
 function impersonatedWorkspace({ active = true, send = async () => ({ restored: true }) } = {}) {

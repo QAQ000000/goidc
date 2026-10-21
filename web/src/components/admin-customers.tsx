@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Plus,
@@ -12,10 +13,12 @@ import {
   ContactRound,
   UserRoundCog,
   Save,
-  ArrowUpDown,
+  ChevronDown,
+  Filter,
+  RefreshCw,
   FileText,
 } from "lucide-react";
-import { api, type CustomerGroup } from "@/lib/api";
+import { api, date, money, type CustomerGroup } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { useCustomerMutation } from "@/hooks/use-customer-mutation";
 import { Button } from "./ui/button";
@@ -23,9 +26,11 @@ import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
-import { Failure, Loading } from "./common";
+import { Failure, Loading, Status } from "./common";
 import { Workspace, PermissionGate, useAdminPermission, useAdminIdentity } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
+import { useCustomerFieldDefinitions } from "./customer-field-inputs";
+import { DirectoryCustomFields, DirectoryOptionState, DirectorySelect, LevelRuleFilter, certificationLabels, customerDirectoryActorKey, directoryQuery, readDirectoryQuery, type DirectoryFilters } from "./admin-customer-directory-filters";
 
 type SalesOwner = { id: number; username: string; display_name: string };
 
@@ -51,367 +56,90 @@ type AdminCustomer = {
 };
 
 export function AdminCustomersView() {
-  const [query, setQuery] = useState("");
-  const [draftQuery, setDraftQuery] = useState("");
-  const [groupFilter, setGroupFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [salesFilter, setSalesFilter] = useState("all");
+  return <Workspace title="客户列表" admin><Suspense fallback={<Loading />}><CustomerDirectoryFromURL /></Suspense></Workspace>;
+}
+
+function CustomerDirectoryFromURL() {
+  const search = useSearchParams().toString();
+  const actor = useAdminIdentity();
+  return <CustomerDirectory key={`${customerDirectoryActorKey(actor)}:${search}`} source={search} />;
+}
+
+function CustomerDirectory({ source }: { source: string }) {
+  const initial = useMemo(() => readDirectoryQuery(source), [source]);
+  const applied = initial.filters;
+  const [draft, setDraft] = useState<DirectoryFilters>(applied);
   const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(50);
-
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [formError, setFormError] = useState("");
+  const canView = useAdminPermission("customers.view");
   const canReadGroups = useAdminPermission("customer_groups.view");
   const canReadSalesOwners = useAdminPermission("@super");
-  const groups = useResource<CustomerGroup[]>(canReadGroups ? "/admin/customer-groups?options=true" : null, false);
-  const salesOwners = useResource<SalesOwner[]>(canReadSalesOwners ? "/admin/sales-owners" : null, false);
+  const canReadLevels = useAdminPermission("customer_levels.view");
+  const groups = useResource<CustomerGroup[]>(canView && canReadGroups ? "/admin/customer-groups?options=true" : null, false);
+  const salesOwners = useResource<SalesOwner[]>(canView && canReadSalesOwners ? "/admin/sales-owners" : null, false);
+  const definitions = useCustomerFieldDefinitions(canView && (showAdvanced || mobileOpen || Object.keys(applied.customFields).length > 0));
+  const query = directoryQuery(applied, initial.limit, initial.offset);
+  const suffix = `?${query}`;
+  const resource = useResource<{ items: AdminCustomer[]; total: number; limit: number; offset: number }>(canView && !initial.error ? `/admin/customers/page?${query}` : null, false);
+  const pageSize = initial.limit;
+  const page = Math.floor(initial.offset / pageSize);
+  const lastOffset = resource.data ? Math.max(0, Math.ceil(resource.data.total / pageSize) - 1) * pageSize : null;
 
-  const endpoint = `/admin/customers/page?q=${encodeURIComponent(query)}&limit=${pageSize}&offset=${page * pageSize}&group_id=${groupFilter}&sales_owner_id=${salesFilter}${statusFilter === "all" ? "" : `&status=${statusFilter}`}`;
-  const { data, error, refresh } = useResource<{ items: AdminCustomer[]; total: number }>(endpoint, false);
-  const filteredData = data?.items ?? [];
-  const totalCount = data?.total ?? 0;
-  const lastPage = Math.max(0, Math.ceil(totalCount / pageSize) - 1);
-  if (data && page > lastPage) setPage(lastPage);
+  useEffect(() => {
+    if (lastOffset !== null && initial.offset > lastOffset) {
+      window.history.replaceState(null, "", `/admin/customers?${directoryQuery(applied, pageSize, lastOffset)}`);
+    }
+  }, [lastOffset, initial.offset, applied, pageSize]);
 
-  function handleSearch(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    setQuery(draftQuery.trim());
-    setPage(0);
+  function change(patch: Partial<DirectoryFilters>) { setDraft(current => ({ ...current, ...patch })); }
+  function navigate(filters: DirectoryFilters, limit = pageSize, offset = 0) {
+    window.history.pushState(null, "", `/admin/customers?${directoryQuery(filters, limit, offset)}`);
   }
-
-  function handleReset() {
-    setDraftQuery("");
-    setQuery("");
-    setGroupFilter("all");
-    setStatusFilter("all");
-    setSalesFilter("all");
-    setPage(0);
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (Object.keys(draft.customFields).length > 20) { setFormError("自定义字段最多同时筛选20项，请减少条件。"); return; }
+    if (draft.level_id && !/^[1-9]\d*$/.test(draft.level_id)) { setFormError("等级规则编号需为正整数。"); return; }
+    const size = new TextEncoder().encode(JSON.stringify(draft.customFields)).length;
+    if (size > 16384 || Object.values(draft.customFields).some(value => typeof value === "number" && !Number.isFinite(value))) { setFormError("自定义字段条件无效或过长，请检查输入。"); return; }
+    setFormError(""); setMobileOpen(false);
+    navigate(draft);
   }
+  function reset() { window.history.pushState(null, "", "/admin/customers"); setDraft(readDirectoryQuery("").filters); setFormError(""); setMobileOpen(false); }
 
-  return (
-    <Workspace title="客户列表" admin>
-      <div className="bg-white rounded border border-[#ebeef5] shadow-sm p-4 sm:p-5 space-y-4 max-w-full overflow-hidden">
-        {/* Top guide text matching MoFang */}
-        <div className="text-xs text-[#606266]">
-          系统内所有客户信息，点击姓名可查看更多详细信息并对客户进行管理。{" "}
-          <a href="#" className="text-[#409eff] hover:underline ml-1">
-            帮助文档
-          </a>
-        </div>
+  const summary = [
+    applied.q && `关键词：${applied.q}`,
+    applied.status && `状态：${applied.status === "active" ? "已启用" : "已停用"}`,
+    applied.group_id && `分组：${applied.group_id === "none" ? "未分组" : groups.data?.find(group => String(group.id) === applied.group_id)?.name ?? `#${applied.group_id}`}`,
+    applied.sales_owner_id && `销售：${applied.sales_owner_id === "none" ? "无归属" : salesOwners.data?.find(owner => String(owner.id) === applied.sales_owner_id)?.display_name ?? `#${applied.sales_owner_id}`}`,
+    applied.company && `公司：${applied.company}`, applied.phone && `资料手机：${applied.phone}`, applied.qq && `QQ：${applied.qq}`,
+    applied.certification_status && `认证：${certificationLabels[applied.certification_status] ?? applied.certification_status}`,
+    applied.level_id && `符合规则：#${applied.level_id}`,
+    ...Object.entries(applied.customFields).map(([key, value]) => `${definitions.fields.find(field => field.field_key === key)?.label ?? key}：${typeof value === "boolean" ? value ? "是" : "否" : value}`),
+  ].filter(Boolean);
 
-        {/* Action bar matching MoFang */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <PermissionGate permission="customers.manage">
-              <Button
-                asChild
-                className="bg-[#67c23a] hover:bg-[#85ce61] text-white text-xs h-8 px-3.5 rounded shadow-none font-normal"
-              >
-                <Link href="/admin/customers/new">
-                  <Plus size={14} className="mr-1" />
-                  添加客户
-                </Link>
-              </Button>
-            </PermissionGate>
-            <Button
-              variant="outline"
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] text-xs h-8 px-3.5 rounded font-normal"
-            >
-              高级搜索
-            </Button>
-            <Button
-              variant="outline"
-              asChild
-              className="border-[#dcdfe6] text-[#606266] hover:bg-[#f5f7fa] text-xs h-8 px-3.5 rounded font-normal"
-            >
-              <Link href="/admin/customer-groups">
-                <Users size={14} className="mr-1" />
-                管理客户分组
-              </Link>
-            </Button>
-          </div>
+  const basicFields = <>
+    <label className="min-w-0 space-y-1.5 text-sm text-muted-foreground"><span className="block">关键词</span><Input aria-label="客户关键词" placeholder="姓名、用户名或邮箱" value={draft.q} maxLength={120} onChange={event => change({ q: event.target.value })} className="h-9 rounded border-border bg-card" /></label>
+    <DirectorySelect label="账号状态" value={draft.status} onChange={status => change({ status })} options={[{ value: "active", label: "已启用" }, { value: "disabled", label: "已停用" }]} />
+    <div className="space-y-1.5"><DirectorySelect label="客户分组" value={draft.group_id} onChange={group_id => change({ group_id })} searchable options={[{ value: "none", label: "未分组" }, ...(groups.data ?? []).map(group => ({ value: String(group.id), label: group.name }))]} /><DirectoryOptionState allowed={canReadGroups} data={groups.data} error={groups.error} retry={groups.refresh} label="分组" /></div>
+    <div className="space-y-1.5"><DirectorySelect label="销售归属" value={draft.sales_owner_id} onChange={sales_owner_id => change({ sales_owner_id })} searchable options={[{ value: "none", label: "无销售归属" }, ...(salesOwners.data ?? []).map(owner => ({ value: String(owner.id), label: owner.display_name || owner.username }))]} /><DirectoryOptionState allowed={canReadSalesOwners} data={salesOwners.data} error={salesOwners.error} retry={salesOwners.refresh} label="销售" /></div>
+  </>;
+  const advancedFields = <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{([["company", "公司", 200], ["phone", "资料手机", 80], ["qq", "QQ", 40]] as const).map(([key, label, maxLength]) => <label key={key} className="space-y-1.5 text-sm text-muted-foreground"><span className="block">{label}</span><Input aria-label={label} maxLength={maxLength} placeholder="包含文字" value={draft[key]} onChange={event => change({ [key]: event.target.value })} className="h-9 rounded border-border bg-card" /></label>)}<DirectorySelect label="实名认证" value={draft.certification_status} onChange={certification_status => change({ certification_status })} options={Object.entries(certificationLabels).map(([value, label]) => ({ value, label }))} /><LevelRuleFilter value={draft.level_id} onChange={level_id => change({ level_id })} canReadLevels={canReadLevels} enabled={showAdvanced || mobileOpen} /></div><div className="space-y-3 border-t border-border pt-4"><h3 className="text-sm font-medium text-foreground">自定义字段条件</h3><p className="text-xs text-muted-foreground">文字按包含匹配，其余类型精确匹配；多个条件同时满足。</p>{definitions.error ? <div role="alert" className="text-sm text-destructive">字段定义加载失败。<button type="button" className="ml-2 underline" onClick={definitions.refresh}>重试</button></div> : !definitions.ready ? <p role="status" className="text-sm text-muted-foreground">正在加载字段定义…</p> : !definitions.fields.length && !Object.keys(draft.customFields).length ? <p className="text-sm text-muted-foreground">暂无启用字段</p> : <DirectoryCustomFields fields={definitions.fields} values={draft.customFields} onChange={customFields => change({ customFields })} />}</div></div>;
+  const filterButtons = <div className="flex flex-wrap items-center gap-2"><Button type="submit" className="rounded bg-primary hover:bg-primary/90"><Search size={16} />查询</Button><Button type="button" variant="outline" className="rounded shadow-none" onClick={reset}>清空</Button></div>;
+  const detailHref = (customer: AdminCustomer) => `/admin/customers/${customer.id}${suffix}`;
 
-          <form onSubmit={handleSearch} className="flex items-center gap-2">
-            <Input
-              value={draftQuery}
-              onChange={(e) => setDraftQuery(e.target.value)}
-              placeholder="搜索姓名、邮箱或账号..."
-              className="h-8 w-48 text-xs border-[#dcdfe6] focus-visible:border-[#409eff]"
-            />
-            <Button
-              type="submit"
-              size="sm"
-              className="h-8 bg-[#409eff] hover:bg-[#337ecc] text-white text-xs px-3"
-            >
-              <Search size={13} className="mr-1" />
-              搜索
-            </Button>
-          </form>
-        </div>
+  if (!canView) return <p role="alert">没有查看客户权限。</p>;
+  return <div className="min-w-0 space-y-5 text-foreground">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-[22px] font-semibold leading-[30px]">客户列表</h1><p className="mt-1 text-sm text-muted-foreground">查找客户，进入客户工作区管理资料与业务。</p></div><div className="flex gap-2"><Button type="button" variant="outline" className="rounded shadow-none" aria-label="刷新客户列表" disabled={resource.isLoading} onClick={resource.refresh}><RefreshCw size={16} className={resource.isLoading ? "animate-spin" : ""} />{resource.isLoading ? "刷新中" : "刷新"}</Button><PermissionGate permission="customers.manage"><Button asChild className="rounded bg-primary hover:bg-primary/90"><Link href={`/admin/customers/new${suffix}`}><Plus size={16} />新建客户</Link></Button></PermissionGate></div></div>
+    <section aria-label="客户筛选" className="rounded border border-border bg-card p-4 sm:p-5"><div className="flex items-center justify-between gap-3 sm:hidden"><span className="text-sm text-muted-foreground">按客户资料筛选</span><Button type="button" variant="outline" className="rounded shadow-none" onClick={() => setMobileOpen(true)}><Filter size={16} />筛选</Button></div><form onSubmit={submit} className="hidden space-y-4 sm:block"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">{basicFields}</div><div className="flex flex-wrap items-center justify-between gap-3"><Button type="button" variant="ghost" className="h-8 rounded px-0 text-primary hover:bg-transparent hover:text-primary/90" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced} aria-controls="customer-advanced-filters"><Filter size={14} />高级筛选<ChevronDown size={14} className={showAdvanced ? "rotate-180" : ""} /></Button>{filterButtons}</div>{showAdvanced && <div id="customer-advanced-filters" className="border-t border-border pt-5">{advancedFields}</div>}{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}</form></section>
+    <div aria-label="已应用的筛选条件" className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">当前条件</span>{summary.length ? <>{summary.map((label, index) => <span key={index} className="max-w-full break-all rounded border border-border bg-card px-2 py-1 text-muted-foreground">{label}</span>)}<button type="button" className="text-primary hover:underline" onClick={reset}>清空条件</button></> : <span className="text-muted-foreground">全部客户</span>}</div>
+    {initial.error ? <div role="alert" className="rounded border border-border bg-card p-5"><p className="mb-3 text-sm text-destructive">{initial.error}</p><Button variant="outline" onClick={reset}>清空条件</Button></div> : resource.error ? <div className="rounded border border-border bg-card"><Failure error={resource.error} retry={resource.refresh} /></div> : !resource.data ? <Loading /> : <section aria-label="客户查询结果" aria-busy={resource.isLoading} className="min-w-0 overflow-hidden rounded border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm"><span className="font-medium">客户记录{resource.isLoading && <span role="status" className="ml-2 text-xs font-normal text-muted-foreground">正在刷新…</span>}</span><span className="tabular-nums text-muted-foreground">共 {resource.data.total} 位客户</span></div>{!resource.data.items.length ? <div className="space-y-3 px-4 py-14 text-center"><Users size={28} className="mx-auto text-muted-foreground/60" /><p className="text-sm text-muted-foreground">{summary.length ? "没有符合条件的客户" : "暂无客户"}</p>{summary.length > 0 && <Button variant="outline" className="rounded shadow-none" onClick={reset}>清空筛选条件</Button>}</div> : <><div className="hidden md:block"><Table className="min-w-[940px]"><TableHeader className="bg-muted/50"><TableRow className="border-border">{["编号", "客户", "账号状态", "客户分组", "销售归属", "钱包余额", "注册时间", "操作"].map(label => <TableHead key={label} className={`h-10 px-4 text-xs text-muted-foreground ${label === "钱包余额" ? "text-right" : ""}`}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{resource.data.items.map(customer => <TableRow key={customer.id} className="border-border hover:bg-muted/50"><TableCell className="px-4 py-3 tabular-nums"><button type="button" className="text-primary hover:underline" title="复制客户编号" aria-label={`复制客户编号 ${customer.id}`} onClick={event => { const target = event.currentTarget; void navigator.clipboard.writeText(String(customer.id)).then(() => { target.title = "已复制"; }).catch(() => { target.title = "复制失败，请手动复制编号"; }); }}>#{customer.id}</button></TableCell><TableCell className="px-4 py-3"><Link href={detailHref(customer)} className="font-medium text-primary hover:underline">{customer.display_name || customer.username}</Link><div className="mt-1 text-xs text-muted-foreground">{customer.username} · {customer.email}</div>{customer.company_name && <div className="mt-1 text-xs text-muted-foreground">{customer.company_name}</div>}</TableCell><TableCell className="px-4 py-3"><CustomerDirectoryStatus status={customer.status} /></TableCell><TableCell className="px-4 py-3 text-muted-foreground">{customer.group_name || "未分组"}</TableCell><TableCell className="px-4 py-3 text-muted-foreground">{customer.sales_owner_name || "无归属"}</TableCell><TableCell className="px-4 py-3 text-right tabular-nums">{money(customer.balance_cents)}</TableCell><TableCell className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{date(customer.created_at)}</TableCell><TableCell className="px-4 py-3"><Link href={detailHref(customer)} className="text-sm text-primary hover:underline">查看客户</Link></TableCell></TableRow>)}</TableBody></Table></div><div className="divide-y divide-border md:hidden">{resource.data.items.map(customer => <article key={customer.id} className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><Link href={detailHref(customer)} className="break-words font-medium text-primary">{customer.display_name || customer.username}</Link><p className="mt-1 text-xs text-muted-foreground">#{customer.id} · {customer.username}</p></div><CustomerDirectoryStatus status={customer.status} /></div><p className="break-all text-sm text-muted-foreground">{customer.email}</p><dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs"><div><dt className="text-muted-foreground">客户分组</dt><dd className="mt-1 text-muted-foreground">{customer.group_name || "未分组"}</dd></div><div><dt className="text-muted-foreground">销售归属</dt><dd className="mt-1 text-muted-foreground">{customer.sales_owner_name || "无归属"}</dd></div><div><dt className="text-muted-foreground">钱包余额</dt><dd className="mt-1 tabular-nums">{money(customer.balance_cents)}</dd></div><div><dt className="text-muted-foreground">注册时间</dt><dd className="mt-1 text-muted-foreground">{date(customer.created_at)}</dd></div></dl><Button variant="outline" className="w-full rounded shadow-none" asChild><Link href={detailHref(customer)}>查看客户</Link></Button></article>)}</div></>}<div className="border-t border-border px-4 py-3"><AdminPagination total={resource.data.total} page={page} pageSize={pageSize} pageSizes={Array.from(new Set([25, 50, 100, pageSize])).sort((a, b) => a - b)} onPageChange={next => navigate(applied, pageSize, next * pageSize)} onPageSizeChange={limit => navigate(applied, limit)} /></div></section>}
+    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="fixed inset-y-0 right-0 left-auto top-0 h-dvh max-h-dvh w-[min(100%,400px)] translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:hidden"><DialogHeader><DialogTitle>筛选客户</DialogTitle><DialogDescription>查询后应用条件，返回客户列表仍保留。</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-5"><div className="grid gap-4">{basicFields}</div><div className="border-t border-border pt-4">{advancedFields}</div>{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}<div className="sticky bottom-0 border-t border-border bg-card py-3">{filterButtons}</div></form></DialogContent></Dialog>
+  </div>;
+}
 
-        {/* Advanced Search Drawer */}
-        {showAdvanced && (
-          <div className="bg-[#f5f7fa] p-4 rounded border border-[#e4e7ed] space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label className="block text-xs text-[#606266] mb-1">关键字搜索</label>
-                <Input
-                  value={draftQuery}
-                  onChange={(e) => setDraftQuery(e.target.value)}
-                  placeholder="姓名 / 邮箱 / 账号"
-                  className="h-8 text-xs bg-white border-[#dcdfe6]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#606266] mb-1">客户分组</label>
-                <Select value={groupFilter} onValueChange={(value) => { setGroupFilter(value); setPage(0); }}>
-                  <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
-                    <SelectValue placeholder="全部分组" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部分组</SelectItem>
-                    <SelectItem value="none">未分组</SelectItem>
-                    {groups.data?.map((g) => (
-                      <SelectItem key={g.id} value={String(g.id)}>
-                        {g.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#606266] mb-1">状态</label>
-                <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value); setPage(0); }}>
-                  <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
-                    <SelectValue placeholder="全部状态" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部状态</SelectItem>
-                    <SelectItem value="active">正常</SelectItem>
-                    <SelectItem value="disabled">已停用</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-[#606266] mb-1">销售归属</label>
-                <Select value={salesFilter} onValueChange={(value) => { setSalesFilter(value); setPage(0); }}>
-                  <SelectTrigger className="h-8 text-xs bg-white border-[#dcdfe6]">
-                    <SelectValue placeholder="全部销售" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部销售</SelectItem>
-                    <SelectItem value="none">无归属</SelectItem>
-                    {salesOwners.data?.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.display_name || s.username}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleReset}
-                className="h-7 text-xs border-[#dcdfe6]"
-              >
-                重置
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => handleSearch()}
-                className="h-7 text-xs bg-[#409eff] text-white hover:bg-[#337ecc]"
-              >
-                应用筛选
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Table Container */}
-        <div className="border border-[#ebeef5] rounded overflow-hidden">
-          {error ? (
-            <Failure error={error} retry={refresh} />
-          ) : !data ? (
-            <Loading />
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-[#f5f7fa]">
-                    <TableRow className="border-[#ebeef5] hover:bg-[#f5f7fa]">
-                      <TableHead className="w-16 text-xs font-semibold text-[#909399] py-3">
-                        <span className="inline-flex items-center gap-1">
-                          ID <ArrowUpDown size={11} className="opacity-60" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        <span className="inline-flex items-center gap-1">
-                          姓名 <ArrowUpDown size={11} className="opacity-60" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        手机号/邮箱
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        服务
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        <span className="inline-flex items-center gap-1">
-                          收入/支出 <ArrowUpDown size={11} className="opacity-60" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        <span className="inline-flex items-center gap-1">
-                          余额 <ArrowUpDown size={11} className="opacity-60" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        客户分组
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        <span className="inline-flex items-center gap-1">
-                          状态 <ArrowUpDown size={11} className="opacity-60" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3">
-                        销售
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold text-[#909399] py-3 text-right">
-                        操作
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredData.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={10} className="h-32 text-center text-xs text-[#909399]">
-                          暂无客户记录
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filteredData.map((cust) => (
-                        <TableRow
-                          key={cust.id}
-                          className="border-[#ebeef5] hover:bg-[#f5f7fa] transition-colors"
-                        >
-                          {/* ID */}
-                          <TableCell className="py-3 text-xs font-mono">
-                            <Link
-                              href={`/admin/customers/${cust.id}`}
-                              className="text-[#409eff] hover:underline"
-                            >
-                              {cust.id}
-                            </Link>
-                          </TableCell>
-
-                          {/* 姓名 */}
-                          <TableCell className="py-3 text-xs">
-                            <Link
-                              href={`/admin/customers/${cust.id}`}
-                              className="text-[#409eff] hover:underline font-medium"
-                            >
-                              {cust.display_name || cust.username}
-                            </Link>
-                            {cust.company_name && (
-                              <div className="text-[11px] text-[#909399] mt-0.5">
-                                {cust.company_name}
-                              </div>
-                            )}
-                          </TableCell>
-
-                          {/* 手机号/邮箱 */}
-                          <TableCell className="py-3 text-xs">
-                            {cust.phone_number && (
-                              <div className="text-[#303133]">{cust.phone_number}</div>
-                            )}
-                            <div className="text-[#909399] text-[11px]">{cust.email}</div>
-                          </TableCell>
-
-                          {/* 服务 */}
-                          <TableCell className="py-3 text-xs">
-                            <Link
-                              href={`/admin/customers/${cust.id}?tab=services`}
-                              className="text-[#409eff] hover:underline"
-                            >
-                              {cust.active_services_count ?? 0}({cust.total_services_count ?? 0})
-                            </Link>
-                          </TableCell>
-
-                          {/* 收入/支出 */}
-                          <TableCell className="py-3 text-xs">
-                            <div className="text-[#303133]">
-                              ¥{((cust.income_cents ?? 0) / 100).toFixed(2)}
-                            </div>
-                            <div className="text-[#909399] text-[11px]">
-                              ¥{((cust.expense_cents ?? 0) / 100).toFixed(2)}
-                            </div>
-                          </TableCell>
-
-                          {/* 余额 */}
-                          <TableCell className="py-3 text-xs font-medium text-[#303133]">
-                            ¥{(cust.balance_cents / 100).toFixed(2)}
-                          </TableCell>
-
-                          {/* 客户分组 */}
-                          <TableCell className="py-3 text-xs text-[#606266]">
-                            {cust.group_name || "-"}
-                          </TableCell>
-
-                          {/* 状态 */}
-                          <TableCell className="py-3 text-xs">
-                            {cust.status === "active" ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#f0f9eb] text-[#67c23a] border border-[#e1f3d8]">
-                                正常
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#f4f4f5] text-[#909399] border border-[#e9e9eb]">
-                                已停用
-                              </span>
-                            )}
-                          </TableCell>
-
-                          {/* 销售 */}
-                          <TableCell className="py-3 text-xs text-[#606266]">
-                            {cust.sales_owner_name || "-"}
-                          </TableCell>
-
-                          {/* 操作 */}
-                          <TableCell className="py-3 text-xs text-right whitespace-nowrap">
-                            <CustomerActions row={cust} refresh={refresh} />
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <AdminPagination
-                total={totalCount}
-                page={page}
-                pageSize={pageSize}
-                onPageChange={setPage}
-                onPageSizeChange={(ps) => {
-                  setPageSize(ps);
-                  setPage(0);
-                }}
-              />
-            </>
-          )}
-        </div>
-      </div>
-    </Workspace>
-  );
+function CustomerDirectoryStatus({ status }: { status: string }) {
+  return <span className="[&_[data-slot=badge]]:rounded"><Status value={status} /></span>;
 }
 
 export function CustomerActions({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {
@@ -428,7 +156,7 @@ function CustomerActionsForActor({ row, refresh }: { row: AdminCustomer; refresh
         size="sm"
         variant="outline"
         asChild
-        className="h-7 text-xs px-2 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"
+        className="h-7 text-xs px-2 border-border text-muted-foreground hover:text-primary hover:border-primary"
       >
         <Link href={`${detailHref}?tab=contacts`}>
           <ContactRound size={13} className="mr-1" />
@@ -441,7 +169,7 @@ function CustomerActionsForActor({ row, refresh }: { row: AdminCustomer; refresh
           size="sm"
           variant="outline"
           asChild
-          className="h-7 text-xs px-2 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"
+          className="h-7 text-xs px-2 border-border text-muted-foreground hover:text-primary hover:border-primary"
         >
           <Link href={`/admin/customers/${row.id}/files`}>
             <FileText size={13} className="mr-1" />
@@ -499,7 +227,7 @@ function CustomerActionDialog({
         title={title}
         aria-label={`${title} ${row.username}`}
         onClick={() => setOpen(true)}
-        className="h-7 w-7 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"
+        className="h-7 w-7 border-border text-muted-foreground hover:text-primary hover:border-primary"
       >
         <Icon size={13} />
       </Button>
@@ -512,7 +240,7 @@ function CustomerActionDialog({
         <DialogContent className="grid-cols-[minmax(0,1fr)] max-w-md">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
-            <DialogDescription className="break-all text-xs text-[#909399]">
+            <DialogDescription className="break-all text-xs text-muted-foreground">
               客户 #{row.id} · {row.display_name || row.username}
             </DialogDescription>
           </DialogHeader>
@@ -552,19 +280,19 @@ export function CustomerSalesAction({ row, refresh }: { row: AdminCustomer; refr
   return <>
     <Button size="icon-sm" variant="outline" title="调整销售归属" aria-label={`调整 ${row.display_name} 的销售归属`}
       onClick={() => { setOwner(null); setOpen(true); detail.refresh(); }}
-      className="h-7 w-7 border-[#dcdfe6] text-[#606266] hover:text-[#409eff] hover:border-[#409eff]"><UserRoundCog size={13} /></Button>
+      className="h-7 w-7 border-border text-muted-foreground hover:text-primary hover:border-primary"><UserRoundCog size={13} /></Button>
     <Dialog open={open} onOpenChange={value => { if (!mutation.busy) setOpen(value); }}>
-      <DialogContent className="max-w-md"><DialogHeader><DialogTitle>销售归属</DialogTitle><DialogDescription className="text-xs text-[#909399]">调整客户 #{row.id} 的专属销售顾问</DialogDescription></DialogHeader>
+      <DialogContent className="max-w-md"><DialogHeader><DialogTitle>销售归属</DialogTitle><DialogDescription className="text-xs text-muted-foreground">调整客户 #{row.id} 的专属销售顾问</DialogDescription></DialogHeader>
         {directory.error && !mutation.pending ? <Failure error={directory.error} retry={directory.refresh} /> : detail.error && !mutation.pending ? <Failure error={detail.error} retry={detail.refresh} /> : (!directory.data || !detail.data) && !mutation.pending ? <Loading /> :
           <form onSubmit={save} className="space-y-4">
             <Select value={frozen ? (frozen.sales_owner_id == null ? "none" : String(frozen.sales_owner_id)) : selectedOwner} onValueChange={setOwner} disabled={mutation.busy || !!mutation.pending}>
-              <SelectTrigger className="w-full text-xs border-[#dcdfe6]" aria-label="销售管理员"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full text-xs border-border" aria-label="销售管理员"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="none">无归属</SelectItem>{directory.data?.map(item => <SelectItem key={item.id} value={String(item.id)}>{item.display_name} · {item.username}</SelectItem>)}</SelectContent>
             </Select>
             {frozen && <p className="text-xs text-muted-foreground">原请求销售归属：{frozen.sales_owner_id == null ? "无归属" : `管理员 #${frozen.sales_owner_id}`}</p>}
             <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setOwner(null); detail.refresh(); refresh(); } }} />
-            <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={mutation.busy} onClick={() => setOpen(false)} className="text-xs border-[#dcdfe6]">取消</Button>
-              <Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && (!detail.data || selectedOwner === currentOwner))} size="sm" className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存归属"}</Button>
+            <div className="flex justify-end gap-2"><Button type="button" variant="outline" size="sm" disabled={mutation.busy} onClick={() => setOpen(false)} className="text-xs border-border">取消</Button>
+              <Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && (!detail.data || selectedOwner === currentOwner))} size="sm" className="bg-primary hover:bg-primary/90 text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存归属"}</Button>
             </div>
           </form>}
       </DialogContent>
@@ -603,15 +331,15 @@ export function CustomerGroupAction({ row, refresh, onBusyChange }: { row: Admin
     }
   }
   return <form className="space-y-3 border-t pt-4" onSubmit={submit}>
-    <label className="block text-xs text-[#606266]">客户分组（单独保存）</label>
+    <label className="block text-xs text-muted-foreground">客户分组（单独保存）</label>
     {membership.error && !mutation.pending ? <Failure error={membership.error} retry={membership.refresh} /> : groups.error && !mutation.pending ? <Failure error={groups.error} retry={groups.refresh} /> : (!membership.data || !groups.data) && !mutation.pending ? <Loading /> : <>
       <Select value={selected} onValueChange={value => { setGroupID(value); setSaved(false); }} disabled={mutation.busy || !!mutation.pending}>
-        <SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]" aria-label="客户分组"><SelectValue placeholder="客户分组" /></SelectTrigger>
+        <SelectTrigger className="w-full text-xs h-8 border-border" aria-label="客户分组"><SelectValue placeholder="客户分组" /></SelectTrigger>
         <SelectContent><SelectItem value="none">未分组</SelectItem>{groups.data?.map(group => <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>)}</SelectContent>
       </Select>
       <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setGroupID(null); membership.refresh(); } }} />
       <div className="flex justify-end"><Button type="submit" size="sm" disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && (!membership.data || selected === current))}>{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存分组"}</Button></div>
-      {saved && <p role="status" className="text-xs text-[#67c23a]">分组已保存</p>}
+      {saved && <p role="status" className="text-xs text-emerald-700">分组已保存</p>}
     </>}
   </form>;
 }
@@ -639,15 +367,15 @@ export function CustomerProfileAction({ row, refresh, onBusyChange }: { row: Adm
   return <div className="space-y-4">
     <form className="space-y-4" onSubmit={submit}>
       <fieldset disabled={mutation.busy || !!mutation.pending} className="space-y-4">
-        <div><label className="block text-xs text-[#606266] mb-1">姓名</label><Input aria-label="客户姓名" value={frozen?.display_name ?? displayName ?? detail.data?.display_name ?? ""} onChange={event => { setDisplayName(event.target.value); setSaved(false); }} className="text-xs h-8 border-[#dcdfe6]" maxLength={120} required /></div>
-        <div><label className="block text-xs text-[#606266] mb-1">邮箱</label><Input aria-label="客户邮箱" type="email" value={frozen?.email ?? email ?? detail.data?.email ?? ""} onChange={event => { setEmail(event.target.value); setSaved(false); }} className="text-xs h-8 border-[#dcdfe6]" maxLength={254} required /></div>
-        <div><label className="block text-xs text-[#606266] mb-1">状态</label><Select value={frozen?.status ?? status ?? detail.data?.status ?? "active"} onValueChange={value => { setStatus(value); setSaved(false); }}><SelectTrigger className="w-full text-xs h-8 border-[#dcdfe6]" aria-label="客户状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">正常</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select></div>
+        <div><label className="block text-xs text-muted-foreground mb-1">姓名</label><Input aria-label="客户姓名" value={frozen?.display_name ?? displayName ?? detail.data?.display_name ?? ""} onChange={event => { setDisplayName(event.target.value); setSaved(false); }} className="text-xs h-8 border-border" maxLength={120} required /></div>
+        <div><label className="block text-xs text-muted-foreground mb-1">邮箱</label><Input aria-label="客户邮箱" type="email" value={frozen?.email ?? email ?? detail.data?.email ?? ""} onChange={event => { setEmail(event.target.value); setSaved(false); }} className="text-xs h-8 border-border" maxLength={254} required /></div>
+        <div><label className="block text-xs text-muted-foreground mb-1">状态</label><Select value={frozen?.status ?? status ?? detail.data?.status ?? "active"} onValueChange={value => { setStatus(value); setSaved(false); }}><SelectTrigger className="w-full text-xs h-8 border-border" aria-label="客户状态"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">正常</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select></div>
       </fieldset>
       {!mutation.pending && detail.error && <Failure error={detail.error} retry={detail.refresh} />}
       {!mutation.pending && !detail.data && !detail.error && <Loading />}
       <CustomerMutationNotice mutation={mutation} reload={() => { if (mutation.editRejected()) { setDisplayName(null); setEmail(null); setStatus(null); detail.refresh(); } }} />
-      <div className="flex justify-end pt-2"><Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && !detail.data)} size="sm" className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存资料"}</Button></div>
-      {saved && <p role="status" className="text-xs text-[#67c23a]">资料已保存</p>}
+      <div className="flex justify-end pt-2"><Button disabled={mutation.busy || !mutation.ready || mutation.rejected || (!mutation.pending && !detail.data)} size="sm" className="bg-primary hover:bg-primary/90 text-white text-xs"><Save size={13} className="mr-1" />{mutation.busy ? "保存中" : mutation.pending ? "使用原请求重试" : "保存资料"}</Button></div>
+      {saved && <p role="status" className="text-xs text-emerald-700">资料已保存</p>}
     </form>
     {canAssignGroup && <CustomerGroupAction key={`${actor?.id ?? "unavailable"}:${row.id}`} row={row} refresh={refresh} onBusyChange={setGroupBusy} />}
   </div>;
@@ -691,7 +419,7 @@ function CustomerPasswordAction({
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div>
-        <label className="block text-xs text-[#606266] mb-1">新密码</label>
+        <label className="block text-xs text-muted-foreground mb-1">新密码</label>
         <Input
           type="password"
           value={password}
@@ -699,19 +427,19 @@ function CustomerPasswordAction({
           placeholder="请输入至少6位新密码"
           required
           minLength={6}
-          className="text-xs h-8 border-[#dcdfe6]"
+          className="text-xs h-8 border-border"
         />
       </div>
       <div className="flex justify-end pt-2">
         <Button
           disabled={busy || !password.trim()}
           size="sm"
-          className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
+          className="bg-primary hover:bg-primary/90 text-white text-xs"
         >
           {busy ? "重置中..." : "确认重置"}
         </Button>
       </div>
-      {message && <p role="status" className="text-xs text-[#67c23a]">{message}</p>}
+      {message && <p role="status" className="text-xs text-emerald-700">{message}</p>}
     </form>
   );
 }
@@ -759,7 +487,7 @@ function CustomerBalanceAction({
   return (
     <form className="space-y-4" onSubmit={submit}>
       <div>
-        <label className="block text-xs text-[#606266] mb-1">
+        <label className="block text-xs text-muted-foreground mb-1">
           充值金额（元）· 当前余额: ¥{(row.balance_cents / 100).toFixed(2)}
         </label>
         <Input
@@ -771,19 +499,19 @@ function CustomerBalanceAction({
           placeholder="请输入充值金额"
           required
           disabled={busy}
-          className="text-xs h-8 border-[#dcdfe6]"
+          className="text-xs h-8 border-border"
         />
       </div>
       <div className="flex justify-end pt-2">
         <Button
           disabled={busy || !amount}
           size="sm"
-          className="bg-[#409eff] hover:bg-[#337ecc] text-white text-xs"
+          className="bg-primary hover:bg-primary/90 text-white text-xs"
         >
           {busy ? "处理中..." : "确认充值"}
         </Button>
       </div>
-      {message && <p role="status" className="text-xs text-[#67c23a]">{message}</p>}
+      {message && <p role="status" className="text-xs text-emerald-700">{message}</p>}
     </form>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog, Tooltip } from "radix-ui";
-import { ArrowUpRight, ChevronDown, ChevronRight, Home, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
 import type { User } from "@/lib/api";
@@ -44,7 +44,7 @@ function Brand({ user }: { user: User | null }) {
     <img
       src="/assets/admin-header-logo.png"
       alt="智简魔方"
-      className="admin-header-logo h-[30px] w-auto max-w-[150px] object-contain"
+      className="admin-header-logo"
     />
     <span className="admin-brand-full sr-only"><SiteBrand compact /></span>
     <LayoutDashboard className="admin-brand-compact" size={24} aria-hidden="true" />
@@ -67,6 +67,7 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
   const home = path === "/admin";
   const [compact, setCompact] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 768px)");
@@ -75,8 +76,16 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
     return () => media.removeEventListener("change", closeOnDesktop);
   }, []);
 
-  return <Tooltip.Provider delayDuration={300}><div className={`admin-shell mf-admin-shell ${home ? "is-home" : ""} ${compact ? "is-compact" : ""}`}>
-    <div className="admin-global-header">
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try { await logout(); } finally { setLoggingOut(false); }
+  }
+
+  return <Tooltip.Provider delayDuration={300}><Dialog.Root open={drawer} onOpenChange={setDrawer}><div className={`admin-shell ${home ? "is-home" : ""} ${compact ? "is-compact" : ""}`}>
+    <a href="#admin-main" className="admin-skip-link">跳到主内容</a>
+    <header className="admin-global-header">
+      <Dialog.Trigger asChild><Button className="admin-menu-button" variant="ghost" size="icon" aria-label="打开管理菜单"><Menu /></Button></Dialog.Trigger>
       <Brand user={user} />
       <nav className="admin-domain-navigation" aria-label="业务域导航">
         {adminDomains.map(item => {
@@ -86,18 +95,16 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
         })}
       </nav>
       <div className="admin-global-account">
-        <img src="/assets/country/CN.png" alt="CN" className="h-4 w-6 rounded-sm object-cover hidden sm:inline-block" />
         {user ? <>
-          <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name)[0] || "A"}</span>
-          <Link href="/admin/account" className="admin-user-name" title="个人账户">{user.display_name}</Link>
-          <Link href="/admin" className="admin-header-home-btn text-white/80 hover:text-white hidden sm:inline-flex items-center" title="工作台" aria-label="工作台">
-            <Home size={18} />
+          <Button className="admin-front-button" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />查看官网</Link></Button>
+          <Link href="/admin/account" className="admin-account-link" aria-label="个人账户" title="个人账户">
+            <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name || user.username)[0] || "A"}</span>
+            <span className="admin-user-name">{user.display_name || user.username}</span>
           </Link>
-          <Button className="admin-front-button text-white hover:bg-white/10" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />查看官网</Link></Button>
-          <Button className="text-white hover:bg-white/10" variant="ghost" size="icon" aria-label="退出登录" title="退出登录" onClick={() => void logout()}><LogOut size={16} /></Button>
-        </> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-white/80" role="status">连接中</span>}
+          <Button variant="ghost" size="icon" aria-label="退出登录" title="退出登录" disabled={loggingOut} onClick={() => void handleLogout()}><LogOut size={16} /></Button>
+        </> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-muted-foreground" role="status">连接中</span>}
       </div>
-    </div>
+    </header>
     <aside className="admin-sidebar">
       <div className="admin-sidebar-domain">{domain.label}</div>
       <Navigation key={path} user={user} path={path} />
@@ -107,15 +114,6 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
       <header className="admin-topbar">
         <div className="admin-topbar-leading">
           <Button className="admin-collapse-button" variant="ghost" size="icon" title={compact ? "展开导航" : "收起导航"} aria-label={compact ? "展开导航" : "收起导航"} aria-expanded={!compact} onClick={() => setCompact(value => !value)}>{compact ? <PanelLeftOpen /> : <PanelLeftClose />}</Button>
-          <Dialog.Root open={drawer} onOpenChange={setDrawer}>
-            <Dialog.Trigger asChild><Button className="admin-menu-button" variant="ghost" size="icon" aria-label="打开管理菜单"><Menu /></Button></Dialog.Trigger>
-            <Dialog.Portal><Dialog.Overlay className="admin-drawer-overlay" /><Dialog.Content className="admin-drawer" aria-describedby={undefined}>
-              <Dialog.Title className="sr-only">管理导航</Dialog.Title>
-              <div className="admin-drawer-header"><Brand user={user} /><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label="关闭管理菜单"><X /></Button></Dialog.Close></div>
-              <Navigation key={path} user={user} path={path} close={() => setDrawer(false)} />
-              <Link href="/" className="admin-front-link" onClick={() => setDrawer(false)}><ArrowUpRight size={18} />查看官网</Link>
-            </Dialog.Content></Dialog.Portal>
-          </Dialog.Root>
           <nav className="admin-breadcrumbs" aria-label="面包屑">
             {group && <><span className="admin-breadcrumb-group">{group.label}</span><ChevronRight className="admin-breadcrumb-group" size={14} aria-hidden="true" /></>}
             {current && current.label !== title ? <><Link href={current.href}>{current.label}</Link><ChevronRight size={14} aria-hidden="true" /></> : null}
@@ -123,11 +121,18 @@ export function AdminShell({ children, title, user, error, refresh, logout, logo
           </nav>
         </div>
       </header>
-      <main className="admin-content">
+      <main id="admin-main" tabIndex={-1} className="admin-content">
         {logoutError && <p role="alert" className="text-destructive mb-4">{logoutError}</p>}
         {error && <p role="alert" className="text-destructive mb-4">身份读取失败：{error.message}</p>}
         {children}
       </main>
     </div>
-  </div></Tooltip.Provider>;
+  </div>
+    <Dialog.Portal><Dialog.Overlay className="admin-drawer-overlay" /><Dialog.Content className="admin-drawer" aria-describedby={undefined}>
+      <Dialog.Title className="sr-only">管理导航</Dialog.Title>
+      <div className="admin-drawer-header"><Brand user={user} /><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label="关闭管理菜单"><X /></Button></Dialog.Close></div>
+      <Navigation key={path} user={user} path={path} close={() => setDrawer(false)} />
+      <Link href="/" className="admin-front-link" onClick={() => setDrawer(false)}><ArrowUpRight size={18} />查看官网</Link>
+    </Dialog.Content></Dialog.Portal>
+  </Dialog.Root></Tooltip.Provider>;
 }

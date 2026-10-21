@@ -1,671 +1,135 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  ClipboardCheck,
-  FileText,
-  MoreHorizontal,
-  Settings,
-  UserCheck,
-  WalletCards,
-  RefreshCw,
-} from "lucide-react";
+import { ArrowUpRight, ClipboardList, FileText, MessageSquare, RefreshCw, ShieldCheck, WalletCards, type LucideIcon } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
-import { money, type User } from "@/lib/api";
-import { can as hasAdminPermission } from "@/lib/admin-navigation";
-import { Failure } from "./common";
-import { Workspace } from "./workspace";
+import { ApiError, money } from "@/lib/api";
+import { can } from "@/lib/admin-navigation";
+import { cn } from "@/lib/utils";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { Skeleton } from "./ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Workspace, useAdminIdentity } from "./workspace";
 
 type DashboardSummary = {
-  customers: number;
-  active_products: number;
-  pending_orders: number;
-  unpaid_invoices: number;
-  open_tickets: number;
-  unpaid_cents: number;
-  total_orders: number;
-  today_paid_orders: number;
-  month_paid_orders: number;
-  seven_days_paid_orders: number;
-  seven_days_pending_orders: number;
-  today_income_cents: number;
-  month_income_cents: number;
-  annual_income_cents: number;
-  total_income_cents: number;
-  pending_certifications: number;
-  pending_withdrawals: number;
-  today_new_clients: number;
-  expiring_services: ServiceItem[];
+  pending_orders: number; unpaid_invoices: number; open_tickets: number;
+  today_paid_orders: number; month_paid_orders: number; month_income_cents: number;
+  pending_certifications: number; pending_withdrawals: number; today_new_clients: number;
 };
+type ProductRanking = {
+  product_id: number; name: string; new_order_count: number; new_quantity: number;
+  renewal_order_count: number; renewal_quantity: number; total_amount_cents: number;
+};
+type StaffRanking = {
+  sales_owner_id: number; sales_owner_name: string; customer_count: number; invoice_count: number; amount_cents: number;
+};
+type Ranking<T> = { items: T[]; total: number; month: string; limit: number; currency: string; timezone: string };
 
-type DailyReport = {
-  year: number;
-  month: number;
-  ticket_metrics_available: boolean;
-  days: {
-    date: string;
-    new_clients: number;
-    new_orders: number;
-    paid_orders: number;
-    new_tickets: number | null;
-    ticket_replies: number | null;
-    cancellation_requests: number;
-  }[];
-};
+const panelClass = "min-w-0 rounded border border-border bg-card text-card-foreground";
+const compactControl = "h-11 rounded shadow-none md:h-9";
 
-type AuditEvent = {
-  id: number;
-  action: string;
-  actor_id: number | null;
-  actor_name: string | null;
-  entity_type: string;
-  entity_id: string;
-  created_at: string;
-  payload?: Record<string, unknown>;
-};
-
-type TicketItem = {
-  id: number;
-  ticket_no: string;
-  legacy_ticket_no?: string;
-  subject: string;
-  status: string;
-  created_at: string;
-  user_id: number;
-};
-
-type ServiceItem = {
-  id: number;
-  domain?: string;
-  product_name?: string;
-  status: string;
-  next_due_at?: string;
-  name?: string;
-  customer_name?: string;
-};
-
-const DEFAULT_CARDS: Record<string, boolean> = {
-  ordersOverview: true,
-  todos: true,
-  incomeOverview: true,
-  tradeStats: true,
-  systemLogs: true,
-  onlineAdmins: true,
-  expiringServices: true,
-  productRankings: true,
-  customerOverview: true,
-  staffRankings: true,
-  pendingTickets: true,
-};
+function shanghaiMonth() {
+  const parts = new Intl.DateTimeFormat("en", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+  return `${parts.find(part => part.type === "year")!.value}-${parts.find(part => part.type === "month")!.value}`;
+}
+function updateLabel(timestamp: number | null) {
+  if (!timestamp) return "尚未更新";
+  return `更新于 ${new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(timestamp)}`;
+}
+function SectionLoading({ label, rows = 3 }: { label: string; rows?: number }) {
+  return <div role="status" aria-label={label} className="space-y-3 p-5"><span className="sr-only">{label}</span>{Array.from({ length: rows }, (_, index) => <Skeleton key={index} className="h-9 w-full rounded" />)}</div>;
+}
+function SectionError({ error, retry, loading }: { error: Error; retry: () => void; loading: boolean }) {
+  return <div role="alert" className="space-y-3 p-5 text-sm">
+    <p className="break-words text-destructive">{error instanceof ApiError && error.status === 403 ? "当前账号无权查看此区域，请联系管理员核对权限。" : error.message}</p>
+    <Button type="button" variant="outline" disabled={loading} onClick={retry} className={compactControl}><RefreshCw aria-hidden="true" className={cn("size-4", loading && "animate-spin")} />{loading ? "正在重试" : "重新加载"}</Button>
+  </div>;
+}
+function PermissionNotice({ children }: { children: ReactNode }) {
+  return <p role="status" className="p-5 text-sm text-muted-foreground">{children}</p>;
+}
 
 export function AdminDashboard() {
-  return (
-    <Workspace title="工作台" admin>
-      <DashboardContent />
-    </Workspace>
-  );
+  const user = useAdminIdentity();
+  const accessKey = JSON.stringify([
+    user?.id, user?.role, user?.permissions, user?.customer_scope,
+    user?.customer_ownerless, user?.ticket_scope, user?.ticket_unassigned,
+  ]);
+  return <Workspace title="工作台" admin><DashboardContent key={accessKey} /></Workspace>;
 }
 
 function DashboardContent() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  const user = useResource<User>("/me");
-  const summary = useResource<DashboardSummary>("/admin/dashboard");
-  const can = (permission: string) => hasAdminPermission(user.data, permission);
-  const daily = useResource<DailyReport>(can("reports.view") ? `/admin/reports/new-clients?year=${year}&month=${month}` : null, false);
-  const audit = useResource<AuditEvent[]>(can("audit.view") ? "/admin/audit" : null, false);
-  const tickets = useResource<TicketItem[]>(can("tickets.view") ? "/admin/tickets?status=open" : null, false);
-
-  const [cardsVisible, setCardsVisible] = useState<Record<string, boolean>>(DEFAULT_CARDS);
-  const [showConfigPopover, setShowConfigPopover] = useState(false);
-
-  const refreshAll = () => {
-    summary.refresh();
-    daily.refresh();
-    audit.refresh();
-    tickets.refresh();
-  };
-
-  const weekdays = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
-  const formattedDate = `${year}年${month}月${now.getDate()}日，${weekdays[now.getDay()]}`;
-  const displayName = user.data?.display_name || user.data?.username || "";
-
-  // Calculate order counts
-  const todayPaidOrders = summary.data?.today_paid_orders;
-  const monthPaidOrders = summary.data?.month_paid_orders;
-
-  // Past 7 days paid
-
-  const sevenDaysPaidOrders = summary.data?.seven_days_paid_orders;
-  const sevenDaysPendingOrders = summary.data?.seven_days_pending_orders;
-  const totalOrders = summary.data?.total_orders;
-
-  // Income summary
-  const currentMonthIncome = summary.data?.month_income_cents ?? 0;
-  const totalIncomeCents = summary.data?.total_income_cents ?? 0;
-
-  // Real name certs pending count
-  const certsPendingCount = can("certifications.view") ? summary.data?.pending_certifications : "无权限";
-  const withdrawalsPendingCount = can("affiliates.view") ? summary.data?.pending_withdrawals : "无权限";
-
-  // Open tickets
-  const openTicketsList = (tickets.data ?? [])
-    .filter(t => t.status === "open" || t.status === "pending")
-    .slice(0, 5);
-
-  // Expiring services in next 30 days
-  const expiringServicesList = summary.data?.expiring_services ?? [];
-
-  // Today new customers
-  const todayNewClients = summary.data?.today_new_clients;
-
-  if (summary.error) {
-    return <Failure error={summary.error} retry={summary.refresh} />;
-  }
-  if (user.error) return <Failure error={user.error} retry={user.refresh} />;
-  if (!summary.data || !user.data) return <p role="status">正在加载工作台…</p>;
-
-  return (
-    <div className="w-full space-y-4">
-      {/* Top Greeting Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-[#666666] py-2 px-1">
-        <div>
-          您好，{displayName}！今日，{formattedDate}
-        </div>
-        <div className="relative flex items-center gap-2 mt-1 sm:mt-0">
-          <button
-            type="button"
-            className="p-1 hover:text-primary transition-colors"
-            title="个性化卡片设置"
-            aria-label="个性化卡片设置"
-            onClick={() => setShowConfigPopover(prev => !prev)}
-          >
-            <Settings size={15} />
-          </button>
-          <button
-            type="button"
-            className="p-1 hover:text-primary transition-colors ml-1"
-            title="刷新数据"
-            aria-label="刷新数据"
-            onClick={refreshAll}
-          >
-            <RefreshCw size={14} />
-          </button>
-
-          {/* Card visibility popover */}
-          {showConfigPopover && (
-            <div className="absolute right-0 top-7 z-50 w-44 rounded border border-border bg-white p-3 shadow-lg text-xs space-y-2">
-              <button
-                type="button"
-                className="w-full rounded bg-[#ebf1ff] py-1 text-center font-medium text-[#2e53e9] hover:bg-[#dce6ff]"
-                onClick={() => setCardsVisible(DEFAULT_CARDS)}
-              >
-                恢复默认
-              </button>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pt-1">
-                {[
-                  { key: "ordersOverview", label: "订单概览" },
-                  { key: "todos", label: "代办事项" },
-                  { key: "incomeOverview", label: "收入概览" },
-                  { key: "tradeStats", label: "交易统计" },
-                  { key: "systemLogs", label: "系统日志" },
-                  { key: "onlineAdmins", label: "在线管理员" },
-                  { key: "expiringServices", label: "即将到期" },
-                  { key: "productRankings", label: "本月销量排行" },
-                  { key: "customerOverview", label: "客户概况" },
-                  { key: "staffRankings", label: "本月员工销量排行" },
-                  { key: "pendingTickets", label: "待处理工单" },
-                ].map(item => (
-                  <label key={item.key} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-0.5 rounded">
-                    <input
-                      type="checkbox"
-                      checked={cardsVisible[item.key] ?? true}
-                      onChange={e => setCardsVisible(prev => ({ ...prev, [item.key]: e.target.checked }))}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+  const user = useAdminIdentity();
+  const canViewDashboard = can(user, "dashboard.view");
+  const canViewReports = can(user, "reports.view");
+  const summary = useResource<DashboardSummary>(canViewDashboard ? "/admin/dashboard" : null, false);
+  const [month, setMonth] = useState(shanghaiMonth);
+  const [monthDraft, setMonthDraft] = useState(month);
+  const [limit, setLimit] = useState("5");
+  const [maximumMonth] = useState(() => `${Number(shanghaiMonth().slice(0, 4)) + 1}-12`);
+  const validMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(monthDraft) && monthDraft >= "2000-01" && monthDraft <= maximumMonth;
+  const rankingQuery = `month=${month}&limit=${limit}`;
+  const products = useResource<Ranking<ProductRanking>>(canViewReports ? `/admin/reports/product-ranking?${rankingQuery}` : null, false);
+  const staff = useResource<Ranking<StaffRanking>>(canViewReports ? `/admin/reports/staff-ranking?${rankingQuery}` : null, false);
+  const refreshing = summary.isLoading || products.isLoading || staff.isLoading;
+  const refreshAll = () => { summary.refresh(); products.refresh(); staff.refresh(); };
+  const metrics = [
+    { label: "今日已付订单", value: summary.data?.today_paid_orders.toLocaleString("zh-CN"), description: "按今日创建时间统计" },
+    { label: "本月已付订单", value: summary.data?.month_paid_orders.toLocaleString("zh-CN"), description: "按本月创建时间统计" },
+    { label: "本月业务收款", value: summary.data ? money(summary.data.month_income_cents) : undefined, description: "含余额业务消费，排除充值 · CNY" },
+    { label: "今日新增客户", value: summary.data?.today_new_clients.toLocaleString("zh-CN"), description: "按上海自然日统计" },
+  ];
+  const todos: { label: string; count: number | undefined; permission: string; href: string; action: string; description: string; icon: LucideIcon }[] = [
+    { label: "待处理工单", count: summary.data?.open_tickets, permission: "tickets.view", href: "/admin/tickets", action: "查看工单", description: "处理中与待回复，不含合并来源；进入全部工单列表", icon: MessageSquare },
+    { label: "待付款订单", count: summary.data?.pending_orders, permission: "orders.view", href: "/admin/orders?status=pending", action: "查看待付款订单", description: "状态为待付款的订单", icon: ClipboardList },
+    { label: "待付款账单", count: summary.data?.unpaid_invoices, permission: "invoices.view", href: "/admin/invoices?status=unpaid", action: "查看待付款账单", description: "状态为未付款的账单", icon: FileText },
+    { label: "待审核实名", count: summary.data?.pending_certifications, permission: "certifications.view", href: "/admin/certifications", action: "进入实名审核", description: "进入实名列表后选择待审核", icon: ShieldCheck },
+    { label: "待审核提现", count: summary.data?.pending_withdrawals, permission: "affiliates.view", href: "/admin/affiliate", action: "进入推广管理", description: "已提交与审核中；进入推广后选择提现", icon: WalletCards },
+  ];
+  return <div className="space-y-6">
+    <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div><h1 className="text-[22px] font-semibold leading-[30px] text-foreground">工作台</h1><p className="mt-1 text-sm text-muted-foreground">运营概览与待处理事项</p></div>
+      <div className="flex flex-wrap items-center gap-3"><span className="text-xs text-muted-foreground" aria-live="polite">{summary.error ? "指标更新失败" : summary.isLoading ? "正在更新指标…" : updateLabel(summary.updatedAt)} · 上海时间</span><Button type="button" variant="outline" disabled={refreshing} onClick={refreshAll} className={compactControl}><RefreshCw aria-hidden="true" className={cn("size-4", refreshing && "animate-spin")} />{refreshing ? "正在刷新" : "刷新数据"}</Button></div>
+    </header>
+    <section aria-label="运营指标" aria-busy={summary.isLoading}>
+      {!canViewDashboard ? <div className={panelClass}><PermissionNotice>当前账号没有工作台查看权限。</PermissionNotice></div> : summary.error ? <div className={panelClass}><SectionError error={summary.error} retry={summary.refresh} loading={summary.isLoading} /></div> : <div className="grid grid-cols-1 gap-4 md:grid-cols-2 min-[75rem]:grid-cols-4">{metrics.map(metric => <article key={metric.label} className={cn(panelClass, "p-5")}><h2 className="text-sm text-muted-foreground">{metric.label}</h2>{summary.isLoading || !summary.data ? <Skeleton className="my-3 h-9 w-28 rounded" /> : <p className="my-2 text-[28px] font-semibold leading-10 tabular-nums tracking-tight">{metric.value}</p>}<p className="text-xs leading-5 text-muted-foreground">{metric.description}</p></article>)}</div>}
+    </section>
+    <section aria-labelledby="dashboard-todos" className={panelClass}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border px-5 py-4"><h2 id="dashboard-todos" className="text-base font-semibold">待处理事项</h2><span className="text-xs text-muted-foreground">当前授权范围 · {summary.error ? "更新失败" : summary.isLoading ? "正在更新…" : updateLabel(summary.updatedAt)}</span></div>
+      {!canViewDashboard ? <PermissionNotice>当前账号没有工作台查看权限。</PermissionNotice> : summary.error ? <SectionError error={summary.error} retry={summary.refresh} loading={summary.isLoading} /> : <div className="grid grid-cols-1 divide-y divide-border md:grid-cols-2 md:divide-y-0 min-[75rem]:grid-cols-5">{todos.map(({ label, count, permission, href, action, description, icon: Icon }) => <article key={label} className="flex min-w-0 flex-col gap-3 p-5"><div className="flex items-center gap-2 text-sm"><Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" /><h3>{label}</h3></div>{!can(user, permission) ? <p className="text-sm text-muted-foreground">无查看权限</p> : <>{summary.isLoading || !summary.data ? <Skeleton className="h-9 w-16 rounded" /> : <p className="text-[26px] font-semibold leading-9 tabular-nums">{count?.toLocaleString("zh-CN")}</p>}<p className="min-h-10 text-xs leading-5 text-muted-foreground">{description}</p><Link href={href} className="mt-auto inline-flex min-h-11 w-fit items-center gap-1 text-sm text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:min-h-9">{action}<ArrowUpRight aria-hidden="true" className="size-3.5" /></Link></>}</article>)}</div>}
+    </section>
+    <section aria-labelledby="dashboard-ranking" className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div><h2 id="dashboard-ranking" className="text-base font-semibold">业务收款排名</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">按上海自然月统计 · CNY · 月份与 Top N 仅影响排名</p></div>
+        {canViewReports && <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-sm" htmlFor="dashboard-ranking-month">月份<Input id="dashboard-ranking-month" type="month" value={monthDraft} min="2000-01" max={maximumMonth} aria-invalid={!validMonth} aria-describedby={!validMonth ? "dashboard-ranking-period-error" : undefined} onChange={event => { const value = event.target.value; setMonthDraft(value); if (/^\d{4}-(0[1-9]|1[0-2])$/.test(value) && value >= "2000-01" && value <= maximumMonth) setMonth(value); }} className={cn(compactControl, "w-44 bg-card")} /></label><Select value={limit} onValueChange={setLimit}><SelectTrigger aria-label="排名展示数量" className={cn(compactControl, "w-28 bg-card")}><SelectValue /></SelectTrigger><SelectContent>{[5, 10, 20].map(value => <SelectItem key={value} value={String(value)}>Top {value}</SelectItem>)}</SelectContent></Select></div>}
       </div>
-
-      {/* Row 1: 3 cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Card 1: 订单概览 */}
-        {cardsVisible.ordersOverview && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px] flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">订单概览</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center sm:text-left">
-              <div>
-                <div className="text-xs text-[#999999]">今日已付订单</div>
-                <div className="text-2xl text-[#316eea] font-normal mt-2.5 tabular-nums">{todayPaidOrders}</div>
-                <div className="text-xs text-[#666666] mt-2.5">总订单: {totalOrders}笔</div>
-              </div>
-              <div>
-                <div className="text-xs text-[#999999]">本月已付订单</div>
-                <div className="text-2xl text-[#316eea] font-normal mt-2.5 tabular-nums">{monthPaidOrders}</div>
-                <div className="text-xs text-[#666666] mt-2.5">总订单: {totalOrders}笔</div>
-              </div>
-              <div>
-                <div className="text-xs text-[#999999]">近7日已付订单</div>
-                <div className="text-2xl text-[#316eea] font-normal mt-2.5 tabular-nums">{sevenDaysPaidOrders}</div>
-                <div className="text-xs text-[#666666] mt-2.5">总订单: {totalOrders}笔</div>
-              </div>
-              <div>
-                <div className="text-xs text-[#999999]">近7日待付订单</div>
-                <div className="text-2xl text-[#316eea] font-normal mt-2.5 tabular-nums">{sevenDaysPendingOrders}</div>
-                <div className="text-xs text-[#666666] mt-2.5">总订单: {totalOrders}笔</div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Card 2: 代办事项 */}
-        {cardsVisible.todos && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">代办事项</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <Link href="/admin/tickets" className="bg-[#f9f9f9] rounded p-3 flex items-center hover:bg-slate-100 transition-colors">
-                <div className="h-11 w-11 rounded-full bg-[#0089f0] text-white flex items-center justify-center shrink-0">
-                  <FileText size={20} />
-                </div>
-                <div className="ml-4 min-w-0">
-                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{can("tickets.view") ? summary.data?.open_tickets : "无权限"}</div>
-                  <div className="text-xs text-[#999999] mt-0.5">待处理工单</div>
-                </div>
-              </Link>
-
-              <Link href="/admin/orders?status=pending" className="bg-[#f9f9f9] rounded p-3 flex items-center hover:bg-slate-100 transition-colors">
-                <div className="h-11 w-11 rounded-full bg-[#64b524] text-white flex items-center justify-center shrink-0">
-                  <ClipboardCheck size={20} />
-                </div>
-                <div className="ml-4 min-w-0">
-                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{summary.data?.pending_orders ?? 0}</div>
-                  <div className="text-xs text-[#999999] mt-0.5">待核验订单</div>
-                </div>
-              </Link>
-
-              <Link href="/admin/certifications" className="bg-[#f9f9f9] rounded p-3 flex items-center hover:bg-slate-100 transition-colors">
-                <div className="h-11 w-11 rounded-full bg-[#f38900] text-white flex items-center justify-center shrink-0">
-                  <UserCheck size={20} />
-                </div>
-                <div className="ml-4 min-w-0">
-                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{certsPendingCount}</div>
-                  <div className="text-xs text-[#999999] mt-0.5">实名认证</div>
-                </div>
-              </Link>
-
-              <Link href="/admin/affiliate" className="bg-[#f9f9f9] rounded p-3 flex items-center hover:bg-slate-100 transition-colors">
-                <div className="h-11 w-11 rounded-full bg-[#40c9c8] text-white flex items-center justify-center shrink-0">
-                  <WalletCards size={20} />
-                </div>
-                <div className="ml-4 min-w-0">
-                  <div className="text-2xl text-[#0000ee] font-normal leading-tight tabular-nums">{withdrawalsPendingCount}</div>
-                  <div className="text-xs text-[#999999] mt-0.5">提现申请</div>
-                </div>
-              </Link>
-            </div>
-          </section>
-        )}
-
-        {/* Card 3: 收入概览 */}
-        {cardsVisible.incomeOverview && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">收入概览</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="grid grid-cols-2 gap-y-4 gap-x-2">
-              <div>
-                <div className="text-2xl text-[#f38900] font-normal mb-1 tabular-nums">{money(summary.data.today_income_cents)}</div>
-                <div className="text-xs text-[#999999]">今日收入</div>
-              </div>
-              <div>
-                <div className="text-2xl text-[#0089f0] font-normal mb-1 tabular-nums">{money(currentMonthIncome)}</div>
-                <div className="text-xs text-[#999999]">本月收入</div>
-              </div>
-              <div>
-                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{money(summary.data.annual_income_cents)}</div>
-                <div className="text-xs text-[#999999]">今年收入</div>
-              </div>
-              <div>
-                <div className="text-2xl text-[#333333] font-normal mb-1 tabular-nums">{money(totalIncomeCents)}</div>
-                <div className="text-xs text-[#999999]">总收入</div>
-              </div>
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Row 2: 交易统计 (2 cols) & 系统日志 (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Card 4: 交易统计 */}
-        {cardsVisible.tradeStats && (
-          <section className="lg:col-span-2 bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">交易统计</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center justify-center gap-6 text-xs text-[#666666] mb-3">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-6 rounded-sm bg-[#2e53e9]" />
-                <span>已付订单(笔)</span>
-              </div>
-            </div>
-
-            {/* Interactive SVG Chart */}
-            {!can("reports.view") ? <p>无报表查看权限</p> : daily.error ? <Failure error={daily.error} retry={daily.refresh} /> : !daily.data ? <p>正在加载…</p> : <TradeStatsChart daily={daily.data} month={month} />}
-          </section>
-        )}
-
-        {/* Card 5: 系统日志 */}
-        {cardsVisible.systemLogs && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <Link href="/admin/audit" className="text-sm font-semibold text-[#333333] hover:text-[#2e53e9] transition-colors">
-                系统日志
-              </Link>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-
-            <div className="space-y-4">
-              {!can("audit.view") ? <p>无审计查看权限</p> : audit.error ? <Failure error={audit.error} retry={audit.refresh} /> : !audit.data ? <p>正在加载…</p> : audit.data.length > 0 ? (
-                audit.data.slice(0, 5).map(item => (
-                  <div key={item.id} className="text-xs border-b border-gray-50 pb-2.5 last:border-none last:pb-0">
-                    <div className="text-[#333333] font-normal leading-relaxed break-words">
-                      {formatAuditAction(item)}
-                    </div>
-                    <div className="flex items-center justify-between text-[#999999] mt-1.5">
-                      <span>{item.actor_name || "系统"}</span>
-                      <span>{formatDateTime(item.created_at)}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-xs text-[#999999] py-10">暂无系统日志</div>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Row 3: 在线管理员 (1 col) & 即将到期 (1 col) & 本月销量排行 (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Card 6: 在线管理员 */}
-        {cardsVisible.onlineAdmins && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-black">当前管理员</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="text-xs text-[#666666] mb-4">当前管理员</div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-[#ebf1ff] text-[#2e53e9] font-semibold text-base flex items-center justify-center shrink-0">
-                {Array.from(displayName)[0] || "A"}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm text-[#333333] font-normal">{displayName}</div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Card 7: 即将到期 */}
-        {cardsVisible.expiringServices && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-black">即将到期</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            {!can("services.view") ? <p>无服务查看权限</p> : expiringServicesList.length > 0 ? (
-              <div className="space-y-3">
-                {expiringServicesList.map(s => (
-                  <div key={s.id} className="flex items-center justify-between text-xs py-1 border-b border-gray-50 last:border-none">
-                    <span className="text-[#333333] truncate max-w-[180px]">{s.domain || s.name || `服务 #${s.id}`}</span>
-                    <span className="text-[#999999] shrink-0">{s.next_due_at ? new Date(s.next_due_at).toLocaleDateString("zh-CN", {timeZone:"Asia/Shanghai"}) : ""}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="h-32 flex items-center justify-center text-xs text-[#999999]">
-                暂无即将到期业务
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Card 8: 本月销量排行 */}
-        {cardsVisible.productRankings && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px] flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-black">本月销量排行</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center justify-center py-6">
-              <span className="text-xs text-[#999999]">销量排行暂未提供</span>
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Row 4: 客户概况 (1 col) & 本月员工销量排行 (1 col) & 待处理工单 (1 col) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Card 9: 客户概况 */}
-        {cardsVisible.customerOverview && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">客户概况</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="flex items-center justify-between text-xs text-[#666666] pt-1">
-              <div>
-                <span className="text-sm font-medium text-[#316eea] mr-1">{todayNewClients}</span>今日新增
-              </div>
-              <div>
-                <span className="text-sm font-medium text-[#f38900] mr-1">未提供</span>当前在线数量
-              </div>
-              <div>
-                <span className="text-sm font-medium text-[#333333] mr-1">{summary.data?.customers ?? 0}</span>系统总计数量
-              </div>
-            </div>
-            <div className="text-center text-xs text-[#999999] mt-16 pb-4">
-              暂无数据
-            </div>
-          </section>
-        )}
-
-        {/* Card 10: 本月员工销量排行 */}
-        {cardsVisible.staffRankings && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px] flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-black">本月员工销量排行</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="flex flex-col items-center justify-center py-6">
-              <span className="text-xs text-[#999999]">员工销量排行暂未提供</span>
-            </div>
-          </section>
-        )}
-
-        {/* Card 11: 待处理工单 */}
-        {cardsVisible.pendingTickets && (
-          <section className="bg-white rounded border border-[#ebeef5] shadow-[0_2px_12px_0_rgba(0,0,0,0.08)] p-5 min-h-[206px]">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-sm font-semibold text-black">待处理工单</span>
-              <MoreHorizontal size={16} className="text-[#999999] cursor-pointer" />
-            </div>
-            <div className="space-y-3">
-              {!can("tickets.view") ? <p>无工单查看权限</p> : tickets.error ? <Failure error={tickets.error} retry={tickets.refresh} /> : !tickets.data ? <p>正在加载…</p> : openTicketsList.length > 0 ? (
-                openTicketsList.map(t => (
-                  <div key={t.id} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
-                      <span className="shrink-0 rounded bg-[rgba(24,129,235,0.1)] px-1.5 py-0.5 text-[10px] text-[#1881eb]">
-                        开启中
-                      </span>
-                      <Link href="/admin/tickets" className="truncate text-[#333333] hover:underline hover:text-[#2e53e9]">
-                        #{t.ticket_no.slice(0, 8)} - {t.subject}
-                      </Link>
-                    </div>
-                    <span className="shrink-0 text-[#999999]">{formatMonthDay(t.created_at)}</span>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center text-xs text-[#999999] py-12">暂无待处理工单</div>
-              )}
-            </div>
-          </section>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="text-center text-xs text-[#999999] py-6">
-        重庆顺戴网络科技有限公司 智简魔方财务系统
-      </div>
-    </div>
-  );
+      {canViewReports && !validMonth && <p role="alert" id="dashboard-ranking-period-error" className="text-sm text-destructive">请选择 2000年1月至{maximumMonth.slice(0, 4)}年12月内的月份。当前仍展示 {month} 的排名。</p>}
+      {!canViewReports ? <div className={panelClass}><PermissionNotice>当前账号没有报表查看权限，商品与人员排名不可用。</PermissionNotice></div> : <div className="grid grid-cols-1 items-start gap-6 min-[75rem]:grid-cols-2">
+        <RankingPanel id="dashboard-product-ranking" title="商品业务收款排名" subtitle="仅新购与续费；件数与单数分别统计" updatedAt={products.updatedAt} loading={products.isLoading} error={products.error} retry={products.refresh} empty={products.data?.items.length === 0} total={products.data?.total} shown={products.data?.items.length} month={month}>
+          <Table className="min-w-[520px]"><TableHeader><TableRow><TableHead className="w-12 pl-5">排名</TableHead><TableHead>商品</TableHead><TableHead className="text-right">新购</TableHead><TableHead className="text-right">续费</TableHead><TableHead className="pr-5 text-right">业务收款</TableHead></TableRow></TableHeader><TableBody>{products.data?.items.map((item, index) => <TableRow key={item.product_id}><TableCell className="pl-5"><RankBadge rank={index + 1} /></TableCell><TableCell className="max-w-48 whitespace-normal"><span className="block break-words font-medium">{item.name}</span><span className="text-xs text-muted-foreground">#{item.product_id}</span></TableCell><TableCell className="text-right tabular-nums"><span className="block">{item.new_quantity.toLocaleString("zh-CN")} 件</span><span className="text-xs text-muted-foreground">{item.new_order_count.toLocaleString("zh-CN")} 单</span></TableCell><TableCell className="text-right tabular-nums"><span className="block">{item.renewal_quantity.toLocaleString("zh-CN")} 项</span><span className="text-xs text-muted-foreground">{item.renewal_order_count.toLocaleString("zh-CN")} 账单</span></TableCell><TableCell className="pr-5 text-right font-medium tabular-nums">{money(item.total_amount_cents)}</TableCell></TableRow>)}</TableBody></Table>
+        </RankingPanel>
+        <RankingPanel id="dashboard-staff-ranking" title="人员业务收款排名" subtitle="按客户当前销售归属统计，排除未分配" updatedAt={staff.updatedAt} loading={staff.isLoading} error={staff.error} retry={staff.refresh} empty={staff.data?.items.length === 0} total={staff.data?.total} shown={staff.data?.items.length} month={month}>
+          <Table className="min-w-[480px]"><TableHeader><TableRow><TableHead className="w-12 pl-5">排名</TableHead><TableHead>销售人员</TableHead><TableHead className="text-right">客户数</TableHead><TableHead className="text-right">账单数</TableHead><TableHead className="pr-5 text-right">业务收款</TableHead></TableRow></TableHeader><TableBody>{staff.data?.items.map((item, index) => <TableRow key={item.sales_owner_id}><TableCell className="pl-5"><RankBadge rank={index + 1} /></TableCell><TableCell className="max-w-40 whitespace-normal"><span className="block break-words font-medium">{item.sales_owner_name}</span><span className="text-xs text-muted-foreground">#{item.sales_owner_id}</span></TableCell><TableCell className="text-right tabular-nums">{item.customer_count.toLocaleString("zh-CN")}</TableCell><TableCell className="text-right tabular-nums">{item.invoice_count.toLocaleString("zh-CN")}</TableCell><TableCell className="pr-5 text-right font-medium tabular-nums">{money(item.amount_cents)}</TableCell></TableRow>)}</TableBody></Table>
+        </RankingPanel>
+      </div>}
+      {canViewReports && <p className="text-xs leading-5 text-muted-foreground">业务收款含余额消费及历史信用实际回款，排除充值，不等于外部现金、利润或提成。已确认外部退款不在此指标扣减；纯余额退款账单不计入。商品排名仅含新购与续费，人员排名还含升级等业务，二者合计可能不同。调整客户销售归属会改变人员历史排名。</p>}
+    </section>
+  </div>;
 }
 
-// Interactive SVG chart for 交易统计
-function TradeStatsChart({ daily, month }: { daily: DailyReport | null | undefined; month: number }) {
-  const days = daily?.days ?? [];
-  const count = Math.max(days.length, 2);
-  const maxOrder = Math.max(1, ...days.map(d => Math.max(d.new_orders || 0, d.paid_orders || 0)));
-
-  // SVG dimensions
-  const width = 860;
-  const height = 240;
-  const padLeft = 45;
-  const padRight = 45;
-  const padBottom = 35;
-  const padTop = 20;
-
-  const chartW = width - padLeft - padRight;
-  const chartH = height - padTop - padBottom;
-
-  const points = days.map((d, index) => {
-    const x = padLeft + (index / (count - 1)) * chartW;
-    const yVal = d.paid_orders || 0;
-    const y = padTop + chartH - (yVal / maxOrder) * chartH;
-    return { x, y, val: yVal, date: d.date, dayNum: index + 1 };
-  });
-
-  const pathD = points.length > 0
-    ? `M ${points.map(p => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L ")}`
-    : `M ${padLeft} ${padTop + chartH} L ${padLeft + chartW} ${padTop + chartH}`;
-
-  return (
-    <div className="w-full overflow-x-auto">
-      <div className="min-w-[600px] h-[260px]">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full text-xs">
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
-            const y = padTop + chartH * (1 - ratio);
-            const valLeft = (ratio * maxOrder).toFixed(0);
-            const valRight = (ratio * maxOrder).toFixed(0);
-            return (
-              <g key={i}>
-                <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke="#f0f2f5" strokeWidth="1" />
-                <text x={padLeft - 8} y={y + 4} textAnchor="end" fill="#999999" fontSize="10">
-                  {valLeft}
-                </text>
-                <text x={width - padRight + 8} y={y + 4} textAnchor="start" fill="#999999" fontSize="10">
-                  {valRight}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Axis Labels */}
-          <text x={padLeft - 8} y={padTop - 6} textAnchor="end" fill="#666666" fontSize="11">笔</text>
-          <text x={width - padRight + 8} y={padTop - 6} textAnchor="start" fill="#666666" fontSize="11">笔</text>
-
-          {/* X Axis bottom baseline */}
-          <line x1={padLeft} y1={padTop + chartH} x2={width - padRight} y2={padTop + chartH} stroke="#dcdfe6" strokeWidth="1" />
-
-          {/* Month Label */}
-          <text x={padLeft - 10} y={height - 10} textAnchor="end" fill="#333333" fontSize="11" fontWeight="500">
-            {month}月
-          </text>
-
-          {/* Days on X Axis */}
-          {Array.from({ length: days.length }, (_, i) => {
-            const dayNum = i + 1;
-            const x = padLeft + (i / (count - 1)) * chartW;
-            const isLabel = dayNum === 1 || dayNum % 3 === 0 || dayNum === days.length;
-            return (
-              <g key={i}>
-                <line x1={x} y1={padTop + chartH} x2={x} y2={padTop + chartH + 4} stroke="#dcdfe6" strokeWidth="1" />
-                {isLabel && (
-                  <text x={x} y={height - 10} textAnchor="middle" fill="#999999" fontSize="10">
-                    {String(dayNum).padStart(2, "0")}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-
-          {/* Paid Orders Line (Blue) */}
-          <path d={pathD} fill="none" stroke="#316eea" strokeWidth="2" />
-          {points.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r={p.val > 0 ? "3.5" : "1"} fill="#316eea" stroke="#ffffff" strokeWidth="1">
-              <title>{`${p.date}: ${p.val}笔已付`}</title>
-            </circle>
-          ))}
-        </svg>
-      </div>
-    </div>
-  );
+function RankBadge({ rank }: { rank: number }) {
+  return <span className={cn("inline-flex size-6 items-center justify-center rounded text-xs font-medium tabular-nums", rank <= 3 ? "bg-accent text-primary" : "text-muted-foreground")}>{rank}</span>;
 }
-
-function formatAuditAction(item: AuditEvent): string {
-  const action = item.action || "";
-  if (action === "supplier.delivery.succeeded") return `模块命令:交付成功#Host ID:${item.entity_id}`;
-  if (action === "supplier.delivery.failed") return `模块命令:交付失败#Host ID:${item.entity_id}`;
-  if (action.includes("customer.impersonated")) return `以该客户登录 - User ID:${item.entity_id} - 成功`;
-  if (action.includes("product")) return `${action} - Product ID:${item.entity_id}`;
-  if (action.includes("service")) return `主机配置修改 Host ID:${item.entity_id}`;
-  if (action.includes("order")) return `订单变更 Order ID:${item.entity_id}`;
-  if (action.includes("invoice")) return `账单变更 Invoice ID:${item.entity_id}`;
-  return `${action} #${item.entity_type}:${item.entity_id}`;
-}
-
-function formatDateTime(iso: string): string {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const h = String(d.getHours()).padStart(2, "0");
-    const min = String(d.getMinutes()).padStart(2, "0");
-    return `${y}-${m}-${day} ${h}:${min}`;
-  } catch {
-    return iso.slice(0, 16).replace("T", " ");
-  }
-}
-
-function formatMonthDay(iso: string): string {
-  if (!iso) return "";
-  try {
-    const d = new Date(iso);
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${m}月${day}日`;
-  } catch {
-    return "";
-  }
+function RankingPanel({ id, title, subtitle, updatedAt, loading, error, retry, empty, total, shown, month, children }: {
+  id: string; title: string; subtitle: string; updatedAt: number | null; loading: boolean; error: Error | null; retry: () => void;
+  empty: boolean; total: number | undefined; shown: number | undefined; month: string; children: ReactNode;
+}) {
+  return <section aria-labelledby={id} aria-busy={loading} className={panelClass}>
+    <div className="space-y-1 border-b border-border px-5 py-4"><div className="flex flex-wrap items-center justify-between gap-2"><h3 id={id} className="text-sm font-semibold">{title}</h3><Button type="button" variant="ghost" size="icon" disabled={loading} onClick={retry} aria-label={`刷新${title}`} className="size-11 rounded md:size-9"><RefreshCw aria-hidden="true" className={cn("size-4", loading && "animate-spin")} /></Button></div><p className="text-xs leading-5 text-muted-foreground">{subtitle}</p><p className="text-xs text-muted-foreground">{month} · {loading ? "正在更新…" : error ? "更新失败" : updateLabel(updatedAt)}</p></div>
+    {error ? <SectionError error={error} retry={retry} loading={loading} /> : loading || shown === undefined ? <SectionLoading label={`正在加载${title}`} rows={5} /> : empty ? <div role="status" className="px-5 py-12 text-center text-sm text-muted-foreground">{month} 当前授权范围内暂无符合口径的记录</div> : children}
+    {!error && !loading && shown !== undefined && <p className="border-t border-border px-5 py-3 text-xs text-muted-foreground">展示前 {shown} 名，共 {total} 个符合口径的对象</p>}
+  </section>;
 }

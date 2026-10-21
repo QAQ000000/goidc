@@ -224,9 +224,13 @@ test('actual resource hook retains the latest successful theme when a refresh fa
   const hooks = {
     useState(initialValue) { const index = cursor++; if (!(index in slots)) slots[index] = initialValue; return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }]; },
     useCallback: value => value,
+    useMemo(factory, deps) { const index = cursor++, previous = slots[index]; if (!previous || deps.some((dep, i) => dep !== previous.deps[i])) slots[index] = { deps, value: factory() }; return slots[index].value; },
     useEffect(effect, deps) { const index = cursor++; const previous = slots[index]; if (!previous || deps.some((dep, i) => dep !== previous[i])) { slots[index] = deps; effects.push(effect); } },
   };
-  const { useResource } = loader(new Map([['react', hooks], ['@/lib/api', { api: async () => { if (response instanceof Error) throw response; return response; } }]]))(path.join(web, 'src/hooks/use-resource.ts'));
+  const { useResource } = loader(new Map([['react', hooks], ['@/lib/api', {
+    authPortal: (_path, portal) => portal ?? 'customer',
+    api: async (endpoint, options) => { assert.equal(endpoint, '/site'); assert.equal(options.portal, 'customer'); if (response instanceof Error) throw response; return response; },
+  }]]))(path.join(web, 'src/hooks/use-resource.ts'));
   const render = () => { cursor = 0; return useResource('/site', true); };
   const flush = async () => { const pending = effects; effects = []; pending.forEach(effect => effect()); await new Promise(resolve => setImmediate(resolve)); };
   render(); await flush();

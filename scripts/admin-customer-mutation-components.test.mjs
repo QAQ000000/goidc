@@ -17,6 +17,7 @@ const react = {
   useCallback: callback => callback,
   useState(initial) { const state = current, index = state.cursor++; if (!(index in state.values)) state.values[index] = typeof initial === 'function' ? initial() : initial; return [state.values[index], next => { state.values[index] = typeof next === 'function' ? next(state.values[index]) : next; }]; },
   useRef(initial) { const state = current, index = state.cursor++; if (!(index in state.values)) state.values[index] = { current: initial }; return state.values[index]; },
+  useMemo(factory, deps) { const state = current, index = state.cursor++, old = state.values[index]; if (changed(old?.deps, deps)) state.values[index] = { deps, value: factory() }; return state.values[index].value; },
   useEffect(effect, deps) { const state = current, index = state.cursor++, old = state.values[index]; if (changed(old?.deps, deps)) state.effects.push(() => { old?.cleanup?.(); state.values[index] = { deps, cleanup: effect() }; }); },
 };
 class ApiError extends Error { constructor(status, code, message = code) { super(message); this.status = status; this.code = code; } }
