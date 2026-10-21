@@ -13,6 +13,7 @@ var ServiceActivityAuditActions = []string{
 	"service.nokvm.failed", "service.nokvm.waiting_verification", "service.nokvm.completed", "service.nokvm.verified",
 	"service.renewal.created", "service.auto_renew.updated", "service.configuration.submitted", "service.configuration.cancelled",
 	"service.pricing.updated", "service.renewal.fixed", "service.term.correction", "service.term.compensation",
+	"service.status.corrected",
 	"service.configuration.retried", "service.billing_cycle.completed", "service.simulation.completed",
 	"service.cancellation.requested", "service.cancellation.withdrawn", "service.cancellation.approved", "service.cancellation.rejected",
 	"supplier.lifecycle.manual_requested", "supplier.lifecycle.manual_verified", "supplier.lifecycle.manual_cancelled",

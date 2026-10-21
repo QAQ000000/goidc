@@ -50,6 +50,7 @@ var AdminPermissions = []Permission{
 	{"services.renew", "服务", "报价并代建客户续费账单"}, {"services.renew.pay_balance", "服务", "使用客户余额支付续费账单"},
 	{"services.pricing", "服务", "设置固定续费价或恢复合同定价"}, {"services.renew.override", "服务", "按本次确认金额代建续费账单"},
 	{"services.term.correct", "服务", "纠正客户服务期限"}, {"services.term.compensate", "服务", "免费补偿客户服务期限"},
+	{"services.status.correct", "服务", "依据已完成任务纠正本地服务状态"},
 	{"tickets.view", "工单", "读取授权部门工单、附件和内部备注"}, {"tickets.manage", "工单", "回复、分派、转移、合并和管理附件"},
 	{"ticket_presets.view", "预设回复", "读取预设回复"}, {"ticket_presets.manage", "预设回复", "管理预设回复及分类"},
 	{"notifications.view", "通知", "读取模板和邮件队列"}, {"notifications.manage", "通知", "修改模板和重试邮件"},

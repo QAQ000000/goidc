@@ -3447,7 +3447,7 @@
         "/admin/services",
         "/admin/services/[id]"
       ],
-      "reason": "已批准按独立动作恢复：单服务与同客户批量代续费已实现，第三批独立实现长期固定/恢复合同定价、本次固定应付及客户期限纠错/补偿；统一回执和运行证据逐批记录。状态纠错、可信人工收款及转移仍待后续批次，整组partial。",
+      "reason": "已批准按独立动作恢复：单服务与同客户批量代续费、人工价格/期限及第四批受限本地状态纠错已实现；统一回执和运行证据逐批记录。可信人工收款及转移仍待后续批次，整组partial。",
       "current": {
         "endpoints": [
           "POST /api/v1/admin/services/{id}/renewal-quotes",
@@ -3463,7 +3463,9 @@
           "POST /api/v1/admin/services/{id}/fixed-renewal-quotes",
           "POST /api/v1/admin/services/{id}/fixed-renewals",
           "POST /api/v1/admin/services/{id}/term-adjustment-quotes",
-          "POST /api/v1/admin/services/{id}/term-adjustments"
+          "POST /api/v1/admin/services/{id}/term-adjustments",
+          "POST /api/v1/admin/services/{id}/status-correction-quotes",
+          "POST /api/v1/admin/services/{id}/status-corrections"
         ]
       },
       "legacy": {
@@ -3516,7 +3518,9 @@
         "db/migrations/189_service_term_management.sql",
         "internal/store/admin_service_management_upgrade_test.go",
         "internal/store/service_terms_upgrade_test.go",
-        "internal/supplier/billing_test.go"
+        "internal/supplier/billing_test.go",
+        "internal/store/admin_service_status_corrections.go",
+        "internal/httpapi/admin_service_status_corrections_test.go"
       ],
       "acceptance": [
         "报价、未付建单与余额付款独立，真实管理员权限/客户范围/原凭据锁后及提交前复核；不改变auto-renew或长期价格。",
@@ -3526,7 +3530,8 @@
         "后续批次分离单次/长期价格与客户/上游期限，纠错不复活终态；转移保留历史财务并隔离旧客户隐私。",
         "长期fixed为最终应付且不改原合同及优惠已用次数；contract恢复原合同，单次fixed仅建未付单，不与普通报价互换。",
         "客户期限纠错/补偿独立权限、预览与统一回执；上游观测不猜测历史期限，managed同步不覆盖客户权益，仅确认续费按原job一次顺延。",
-        "迁移188/189不改变services整行形态，保留历史财务快照；旧writer停止后成套发布。"
+        "迁移188/189不改变services整行形态，保留历史财务快照；旧writer停止后成套发布。",
+        "状态纠错只允许已交付manual/simulation的active↔suspended，须引用最新生命周期尝试的成功暂停/恢复及完成审计；锁定来源绑定报价，业务围栏/原凭据/CAS/统一回执，不派发任务或重复通知；终态及远端模式禁止直接改状态。"
       ]
     },
     {

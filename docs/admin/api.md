@@ -57,7 +57,7 @@ node scripts/admin-api-consumers.mjs
 ## 客户、商品与服务的逐动作契约
 
 - [客户管理 API](customer-api.md)：旧客户路由按批准动作映射；包含高级筛选、新建/资料/启停、字段目录、联系人、分组/销售、未付充值代建、推荐人调整及受控代登录。资料手机与登录手机号分开，客户等级筛选复用现有规则；独立 CRM、旧资料扩展暂缓，旧 API 三态不恢复。
-- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；第二批同客户最多20项的批量报价、清单登记、进度查询与显式执行。保持独立权限、服务/账单版本、报价窗口、统一回执及供应商pending；人工价格与期限/状态纠错/可信人工收款/转移继续分批实施，需求组仍为partial。
+- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；第二批同客户最多20项的批量报价、清单登记、进度查询与显式执行。保持独立权限、服务/账单版本、报价窗口、统一回执及供应商pending；人工价格与期限、受限本地状态纠错已有独立协议，可信人工收款/转移继续分批实施，需求组仍为partial。
 - [商品管理 API](catalog-api.md)：旧十页签逐项映射商品、定价、交付、配置、升级、购买字段、推广、业务文件和快捷链接，列出实际输入/输出、权限、版本、错误及未知结果恢复。创建/复制可选回执和其他 CAS writer 的恢复保证不同，前端不能统一猜测。
 
 两组本轮新增实现已补齐，需求声明的 API 状态为 `implemented`；该字段只表示批准范围的接口已实现，运行验收仍以独立门禁结果为准。前端据领域契约接线，接口实现状态、页面状态、数据库/浏览器/外部及发布证据各自维护。完成必要 API 不等于所有后台 UI 已完成。
@@ -288,6 +288,8 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 批量入口为 `POST /admin/service-renewal-batch-quotes`、`POST /admin/service-renewal-batches`、`GET /admin/service-renewal-batches/{batch_id}`、`POST /admin/service-renewal-batches/{batch_id}/execute`。报价只读，登记和查询均不建单或扣款；执行按冻结清单顺序处理明确子集，单项成功回执跨attempt复用。认证/范围变化及未知提交停止后续项目；未确认使用原execute key恢复，确定失败经管理员核对后用新execute key显式重试。只原actor可访问，create与pay_balance分别要求 `services.renew`、`services.renew.pay_balance`，并同时满足服务/账单读取与客户范围。完整字段、状态及协调会话容量见[批量契约](service-management-api.md#第二批同客户批量代续费)；UI与运行验收另记。
 
 第三批入口及字段见[人工价格与客户期限](service-management-api.md#第三批人工价格与客户期限)：`GET /admin/services/{id}/management`、`POST /renewal-pricing/preview`、`PUT /renewal-pricing`、`POST /fixed-renewal-quotes`、`POST /fixed-renewals`、`POST /term-adjustment-quotes`、`POST /term-adjustments`（后六个均续接同一服务路径）。长期定价、单次最终应付与客户期限分权、预览、幂等及审计；原优惠计数保留，供应商实际期限只观测，不把本地调整当作远端执行。188/189须停旧writer成套发布，UI及本批运行证据另记。
+
+第四批 `POST /admin/services/{id}/status-correction-quotes` 与 `POST /admin/services/{id}/status-corrections` 要求独立 `services.status.correct` 及读取权限。仅依据最新已完成暂停/恢复任务及原审计纠正manual/simulation的active↔suspended，不开放远端模式或终态复活；报价、原凭据、版本、统一回执及副作用边界见[受限本地状态纠错](service-management-api.md#第四批受限本地状态纠错)。
 
 ## 代登录与长期凭据
 

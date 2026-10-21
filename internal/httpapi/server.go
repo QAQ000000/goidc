@@ -391,6 +391,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/fixed-renewals", privateAdminOperation(s.auth(s.adminCreateFixedRenewal, true)))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/term-adjustment-quotes", privateAdminOperation(s.auth(s.adminServiceTermQuote, true)))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/term-adjustments", privateAdminOperation(s.auth(s.adminAdjustServiceTerm, true)))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/status-correction-quotes", privateAdminOperation(s.auth(s.adminServiceStatusCorrectionQuote, true)))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/status-corrections", privateAdminOperation(s.auth(s.adminCorrectServiceStatus, true)))
 	mux.HandleFunc("POST /api/v1/services/{id}/cancellation", s.auth(s.requestCancellation, false))
 	mux.HandleFunc("DELETE /api/v1/services/{id}/cancellation", s.auth(s.withdrawCancellation, false))
 	mux.HandleFunc("GET /api/v1/me/ticket-notification-preferences", s.accountAuth(s.ticketNotificationPreferences, true))

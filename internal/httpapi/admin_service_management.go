@@ -150,3 +150,48 @@ func (s *Server) adminAdjustServiceTerm(w http.ResponseWriter, r *http.Request) 
 	}
 	write(w, http.StatusOK, out)
 }
+
+func (s *Server) adminServiceStatusCorrectionQuote(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in struct {
+		ExpectedVersion int64  `json:"expected_version"`
+		SourceJobID     int64  `json:"source_job_id"`
+		TargetStatus    string `json:"target_status"`
+		Reason          string `json:"reason"`
+		Evidence        string `json:"evidence"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	out, err := s.db.QuoteAdminServiceStatusCorrection(requestFileContext(r), identityFrom(r).ID, id, store.AdminServiceStatusCorrectionInput{
+		ExpectedVersion: in.ExpectedVersion, SourceJobID: in.SourceJobID, TargetStatus: in.TargetStatus,
+		Reason: in.Reason, Evidence: in.Evidence,
+	})
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, out)
+}
+
+func (s *Server) adminCorrectServiceStatus(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	var in store.AdminServiceStatusCorrectionInput
+	if !decode(w, r, &in) {
+		return
+	}
+	key, ok := adminRenewalMutationKey(w, r)
+	if !ok {
+		return
+	}
+	out, err := s.db.CorrectAdminServiceStatus(requestFileContext(r), identityFrom(r).ID, id, key, in)
+	if accountBusinessFailure(s, w, r, err) {
+		return
+	}
+	write(w, http.StatusOK, out)
+}

@@ -7,6 +7,13 @@ import { validateIntegrationURL, verifyRequiredGoTests } from './test-compiled-n
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const integrationSuites = {
   'internal/httpapi': [
+    'TestAdminServiceStatusCorrectionProofAndPreservedFacts',
+    'TestAdminServiceStatusCorrectionStrictInputsPermissionsAndScope',
+    'TestAdminServiceStatusCorrectionSourceAndLifecycleFences',
+    'TestAdminServiceStatusCorrectionBusinessHolds',
+    'TestAdminServiceStatusCorrectionReplayAndQuoteBinding',
+    'TestAdminServiceStatusCorrectionAuditAndReceiptRollback',
+    'TestAdminServiceStatusCorrectionOriginalCredentialRevocationAndExpiry',
     'TestAdminServiceManagementManagedAutoRenewalUsesCustomerDeadline',
     'TestAdminServiceManagementTermCorrectionInvalidatesDeferredRecovery',
     'TestAdminServiceManagementPricingModesAndRetainedBenefits',
