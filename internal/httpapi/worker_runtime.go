@@ -4,6 +4,9 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/codex/zjmfgo/internal/accesslog"
+	"github.com/codex/zjmfgo/internal/store"
 )
 
 // Diagnostic state is independent of API readiness: workers start after the
@@ -16,5 +19,8 @@ func (s *Server) workerRuntime(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, http.StatusOK, result)
+	write(w, http.StatusOK, struct {
+		store.WorkerRuntimeReport
+		AccessLogging accesslog.Stats `json:"access_logging"`
+	}{result, s.accessLogStats()})
 }

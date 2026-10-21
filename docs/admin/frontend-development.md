@@ -1,0 +1,88 @@
+# 后台前端开发与复用
+
+状态：当前实施规范。页面范围、视觉及业务动作分别遵循[页面目录](frontend-pages.md)、[设计总契约](../admin-frontend-design.md)和对应领域 API；本文规定代码如何复用，不增加业务能力。
+
+## 从已有样板开始
+
+新增常规列表先检查以下组件，不另起近似的表格、分页或整页请求状态框架。
+
+| 组件或模块 | 职责 | 调用方保留的职责 |
+| --- | --- | --- |
+| `AdminListPage` | 页头、动作区、筛选区、持续反馈及弹窗插槽 | 权限、筛选内容、业务操作和对话框状态 |
+| `AdminListRegion` | 数据区标题、加载、刷新、错误、无权限、无效输入及分页位置 | 是否允许读取、响应校验、重试函数和空态含义 |
+| `ResourceTable<T>` | 声明式列、稳定行键、表头/单元格样式、表格名称、移动卡片和空态 | 链接、金额、状态文案、业务动作及受控选择 |
+| `AdminPagination` | 服务端分页的页码、页大小和跳页交互 | URL 解析、参数白名单和 GET 请求 |
+| 领域读取及 mutation | 真实接口、响应类型、身份范围、版本和未知结果恢复 | 不由展示组件猜测 CRUD 接口 |
+
+公共实现位于 [admin-list-page.tsx](../../web/src/components/admin-list-page.tsx)、[resource-table.tsx](../../web/src/components/resource-table.tsx)及[admin-pagination.tsx](../../web/src/components/admin-pagination.tsx)。已有 `ResourceTable` 的 `headers/renderRow` 调用继续兼容；新列表优先使用带稳定 `id` 的 `columns`。
+
+样板一是[客户目录](../../web/src/components/admin-customers.tsx)：严格 URL 查询、高级及自定义字段、分权候选接口、返回上下文和移动卡片。样板二是[人工库存](../../web/src/components/admin-manual-resources.tsx)：库存与占用双状态、严格响应检查、编辑/释放抽屉及未知结果恢复。复制布局后仍须逐项对照领域 API，不复制另一领域的状态含义或写入协议。
+
+## 列表组合示例
+
+下面是可复用的展示组件形态。父级负责取得经校验的数据与权限，并将领域的 URL 导航函数传入分页；组件不发写请求。
+
+```tsx
+"use client";
+
+import type { ReactNode } from "react";
+import { AdminListPage, AdminListRegion } from "@/components/admin-list-page";
+import { AdminPagination } from "@/components/admin-pagination";
+import { ResourceTable, type ResourceColumn } from "@/components/resource-table";
+
+type Row = { id: number; name: string };
+type Page = { items: Row[]; total: number; limit: number; offset: number };
+type Props = {
+  allowed: boolean;
+  resource: { data: Page | null; error: Error | null; isLoading: boolean };
+  filters: ReactNode;
+  refresh: () => void;
+  navigate: (limit: number, offset: number) => void;
+};
+const columns: ResourceColumn<Row>[] = [
+  { id: "id", header: "编号", render: row => `#${row.id}` },
+  { id: "name", header: "名称", render: row => row.name },
+];
+
+export function Directory({ allowed, resource, filters, refresh, navigate }: Props) {
+  return <AdminListPage title="记录目录" filters={filters}>
+    <AdminListRegion title="查询结果" allowed={allowed}
+      resource={resource} retry={refresh}
+      pagination={page => <AdminPagination total={page.total}
+        page={Math.floor(page.offset / page.limit)} pageSize={page.limit}
+        onPageChange={index => navigate(page.limit, index * page.limit)}
+        onPageSizeChange={limit => navigate(limit, 0)} />}>
+      {page => <ResourceTable items={page.items} rowKey={row => row.id}
+        columns={columns} ariaLabel="记录目录"
+        renderMobile={row => <article className="p-4">#{row.id} · {row.name}</article>}
+        empty="当前查询没有记录" />}
+    </AdminListRegion>
+  </AdminListPage>;
+}
+```
+
+可选的 `actions`、`feedback`、`dialogs` 分别放页头动作、持续结果和领域弹窗。`AdminListRegion.invalid` 接收非法 URL 或非法响应的就地提示；禁止把非法响应当空数组。`summary` 是真实结果摘要；没有读取权限、请求失败或输入无效时不显示已有数据或旧总数。刷新只可保留相同查询已有的成功数据。
+
+## 读取、URL 与权限
+
+- 继续通过现有 `api()` 读取：它自动添加 `/api/v1`、门户、Cookie 和 CSRF 相关标头；客户分页目录是 `/admin/customers/page`，兼容的 `/admin/customers` 只返回数组。
+- URL schema、字段白名单、重复参数检查和动态字段类型属于领域。筛选草稿提交后回第一页，浏览器前进/后退及详情返回可恢复同一查询；不把任意组件 filter/sort 配置直接发给 API。
+- 服务端分页只呈现本页；不把本页排序或过滤伪装为全量结果。选择和批量操作的范围必须可见且得到 API 支持。
+- 当前样板继续使用 `useResource`，保留取消、旧响应保护、按实际管理员及权限/范围重挂和权限控制的候选读取。新查询缓存应另批实现门户、实际身份、权限/范围及查询隔离，且不得持久化敏感缓存。
+- 新页面必须区分初次加载、同查询刷新、无数据、筛选无结果、非法查询、401、403及可重试错误。后台401进入 `/admin-login`；持续的授权失败不伪装为空数据。
+
+## 表单与写入
+
+表单值、字段错误和脏状态可以由统一字段或后续的 React Hook Form/Zod 管理；本批未安装这些库。新增表单先复用现有 Input、Label、Select、Dialog 及领域编辑器，字段必须有 label、约束说明、错误关联及提交中状态。不为普通字段再实现一套表单框架。
+
+复杂动态选配、报价和付款确认继续遵循领域协议。字段 schema 只校验输入，不负责权限、服务端金额、CAS 版本、幂等键或请求恢复；空字符串、未传、显式清除及整数分要分别按 DTO 处理。
+
+写入继续调用 `useCustomerMutation`、`useManualResourceMutation` 等领域实现。写前及回执后即时身份检查不得由缓存 `/me` 代替；未知结果保持原 body/key，不因刷新、表单 reset 或新输入解除锁定。密码与敏感请求仅存内存，刷新后的安全核验标记不包含原文。退款、库存释放和服务操作不抽象成通用删除。
+
+## Agent 实施约束与验收
+
+新增常规业务列表使用上述组合；特殊合并表头、汇总或展开行可以保留明确的领域渲染，但需说明为何公共组件不适用。`ui/Table` 等底层原语可用原生表格；筛选草稿、跳页及弹窗允许局部 `useState`。不以禁用 Hook、文件行数或生成速度替代设计审查。
+
+颜色使用已有语义令牌。短暂且已确认的成功提示可以后续接统一 Toast；字段错误、403/409、结果未知和核对按钮必须持续可见，不用自动消失提示代替。
+
+运行 Web lint、typecheck、相关公共和领域组件测试，以及独立目录的生产构建；组件、API、浏览器及部署证据分别登记于[领域验收矩阵](../architecture/contract-verification-matrix.md)。浏览器至少检查桌面/手机、筛选和前进后退、分页、无权限、错误重试以及样板原有写入恢复。公共组件测试必须进入 CI，不能仅依赖字符串搜索或截图。

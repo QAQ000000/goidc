@@ -92,6 +92,7 @@ func TestCaptchaAndAdminAuditUseResolvedClientIP(t *testing.T) {
 	expect(t, requestFrom(h, "GET", "/api/v1/admin/dashboard", nil, "127.0.0.1:5000", admin,
 		map[string]string{"X-Forwarded-For": "198.51.100.77"}), 200)
 	var loggedIP string
+	waitAPIAccessLog(t, db, "actor_id=(SELECT id FROM administrators WHERE username='proxy-audit-admin') AND path='/api/v1/admin/dashboard'")
 	if err := db.Pool.QueryRow(t.Context(), "SELECT replace(host(remote_ip),'::ffff:','') FROM admin_api_logs WHERE actor_id=(SELECT id FROM administrators WHERE username='proxy-audit-admin') ORDER BY id DESC LIMIT 1").Scan(&loggedIP); err != nil {
 		t.Fatal(err)
 	}
@@ -117,6 +118,7 @@ func TestCaptchaAndAdminAuditUseResolvedClientIP(t *testing.T) {
 	}
 	expect(t, requestFrom(plain, "GET", "/api/v1/admin/dashboard", nil, "192.0.2.9:5000", plainAdmin,
 		map[string]string{"X-Forwarded-For": "203.0.113.99"}), 200)
+	waitAPIAccessLog(t, plainDB, "actor_id=(SELECT id FROM administrators WHERE username='proxy-audit-admin-plain') AND path='/api/v1/admin/dashboard'")
 	if err := plainDB.Pool.QueryRow(t.Context(), "SELECT replace(host(remote_ip),'::ffff:','') FROM admin_api_logs WHERE actor_id=(SELECT id FROM administrators WHERE username='proxy-audit-admin-plain') ORDER BY id DESC LIMIT 1").Scan(&loggedIP); err != nil {
 		t.Fatal(err)
 	}

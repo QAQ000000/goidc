@@ -226,6 +226,7 @@
         "node scripts/admin-api-consumers.mjs",
         "node scripts/test-admin-api.mjs --integration",
         "node --test scripts/admin-customer-mutation-components.test.mjs",
+        "node --test scripts/resource-components.test.mjs scripts/admin-list-components.test.mjs scripts/admin-customer-directory-components.test.mjs",
         "node --test scripts/admin-customer-create-mutation.test.mjs scripts/admin-customer-detail-mutation.test.mjs scripts/admin-customer-topup-components.test.mjs scripts/admin-customer-referrer-components.test.mjs scripts/admin-customer-business-actions.test.mjs scripts/admin-create-customer-context.test.mjs",
         "node --test scripts/manual-resource-components.test.mjs scripts/admin-manual-delivery-components.test.mjs",
         "node --test scripts/admin-service-adjustments-components.test.mjs scripts/admin-service-auto-renew-components.test.mjs"
@@ -530,10 +531,16 @@
       "contract": "docs/architecture/runtime-observability.md",
       "implementation": [
         "internal/correlation",
+        "internal/accesslog",
+        "internal/store/api_access_writer.go",
         "internal/store/correlation.go",
         "internal/store/worker_runtime.go",
         "internal/store/worker_runtime_queues.go",
         "internal/httpapi/request_correlation.go",
+        "internal/httpapi/access_logging.go",
+        "internal/httpapi/json_decode.go",
+        "internal/httpapi/routes_public_auth.go",
+        "cmd/api/main.go",
         "internal/httpapi/worker_runtime.go",
         "cmd/worker/runtime.go",
         "db/migrations/177_request_correlation.sql",
@@ -548,6 +555,8 @@
       ],
       "evaluation": [
         "isolated PG18 exact required run/pass without missing or skipped tests; lease reuse and canceled/concurrent correlation isolation, persisted async origins, real schema176 preservation",
+        "bounded access queue under blocked or failed writes, isolated one-connection persistence and retention budget, shutdown drain/cancellation, overload reporting and original event attribution",
+        "ordered route/auth/permission preservation, strict JSON diagnostic privacy, explicit input status semantics and a shrinking HTTP persistence baseline",
         "read-only queue windows and distinct readiness, startup grace, stall and multiworker assessment; real idle worker minute polls and TERM stop using owned child and random schema",
         "component and actual Next rewrite fixtures; real browser, remote CI, production network overhead and external monitoring are separate"
       ],

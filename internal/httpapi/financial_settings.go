@@ -240,16 +240,12 @@ func boolPtr(v bool) *bool { return &v }
 // Settings records use the same transaction and version contract as site and
 // payment settings while keeping their APIs grouped by the legacy pages.
 func (s *Server) financeSettings(w http.ResponseWriter, r *http.Request) {
-	var min, max, balance int64
-	var enabled, require bool
-	var version int64
-	var updated any
-	err := s.db.Pool.QueryRow(r.Context(), `SELECT topup_enabled,min_topup_cents,max_topup_cents,max_balance_cents,require_active_order,version,updated_at FROM finance_settings WHERE id=1`).Scan(&enabled, &min, &max, &balance, &require, &version, &updated)
+	settings, err := s.db.AdminFinanceSettings(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	write(w, 200, map[string]any{"topup_enabled": enabled, "min_topup_cents": min, "max_topup_cents": max, "max_balance_cents": balance, "require_active_order": require, "version": version, "updated_at": updated})
+	write(w, 200, settings)
 }
 
 func (s *Server) updateFinanceSettings(w http.ResponseWriter, r *http.Request) {

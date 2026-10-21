@@ -1,0 +1,55 @@
+package httpapi
+
+import "net/http"
+
+func (s *Server) registerAdminOrderRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/admin/orders/create-options", s.auth(s.adminOrderCreateOptions, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/quote", s.auth(s.adminOrderQuote, true))
+	mux.HandleFunc("POST /api/v1/admin/orders", s.auth(s.createAdminOrder, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/{id}/invoice", s.auth(s.createDeferredOrderInvoice, true))
+	mux.HandleFunc("DELETE /api/v1/admin/orders/{id}", s.auth(s.deleteOrder, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/bulk-review", s.auth(s.bulkReviewOrders, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/bulk-delete", s.auth(s.bulkDeleteOrders, true))
+	mux.HandleFunc("GET /api/v1/admin/orders", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-orders", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/supplier-renewals", s.auth(s.renewalOrders, true))
+	mux.HandleFunc("GET /api/v1/admin/orders/page", s.auth(s.orders, true))
+	mux.HandleFunc("GET /api/v1/admin/renewal-orders", s.auth(s.renewalOrders, true))
+	mux.HandleFunc("GET /api/v1/admin/traffic-products", s.auth(s.trafficProducts, true))
+	mux.HandleFunc("POST /api/v1/admin/traffic-products", s.auth(s.trafficProducts, true))
+	mux.HandleFunc("PATCH /api/v1/admin/traffic-products/{id}", s.auth(s.trafficProducts, true))
+	mux.HandleFunc("DELETE /api/v1/admin/traffic-products/{id}", s.auth(s.trafficProducts, true))
+	mux.HandleFunc("GET /api/v1/admin/traffic-orders", s.auth(s.trafficOrders, true))
+	mux.HandleFunc("GET /api/v1/admin/traffic-orders/{id}", s.auth(s.trafficOrders, true))
+	mux.HandleFunc("POST /api/v1/admin/traffic-orders/{id}/cancel", s.auth(s.trafficOrders, true))
+	mux.HandleFunc("POST /api/v1/admin/traffic-orders/{id}/delivery-verification", s.auth(s.verifyTrafficDelivery, true))
+	mux.HandleFunc("GET /api/v1/admin/orders/{id}", s.auth(s.adminOrderDetail, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/{id}/cancel", s.auth(s.cancelOrder, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/{id}/review", s.auth(s.reviewOrder, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/{id}/notes", s.auth(s.updateOrderNotes, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/commission", s.auth(s.adminOrderCommission, true))
+	mux.HandleFunc("POST /api/v1/admin/orders/bulk-cancel", s.auth(s.bulkCancelOrders, true))
+}
+
+func (s *Server) registerAdminInvoiceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/admin/invoices", s.auth(s.invoices, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/page", s.auth(s.invoices, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}", s.auth(s.invoiceDetail, true))
+	mux.HandleFunc("GET /api/v1/admin/invoice-customers", s.auth(s.invoiceCustomers, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/topup-liability", s.topupLiabilityHTTP(s.topupLiability, false))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/topup-liability/resolve", s.topupLiabilityHTTP(s.resolveTopupLiability, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refund-order-context", s.sessionAuth(s.externalRefundOrderContext, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refund-renewal-context", s.sessionAuth(s.externalRefundRenewalContext, true))
+	mux.HandleFunc("GET /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.externalRefunds, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds", s.sessionAuth(s.createExternalRefund, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/confirm", s.sessionAuth(func(w http.ResponseWriter, r *http.Request) {
+		r.SetPathValue("action", "confirm")
+		s.reviewExternalRefund(w, r)
+	}, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/external-refunds/{refund_id}/reject", s.sessionAuth(s.reviewExternalRefund, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices", s.auth(s.saveManualInvoice, true))
+	mux.HandleFunc("PUT /api/v1/admin/invoices/{id}", s.auth(s.saveManualInvoice, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/cancel", s.auth(s.cancelManualInvoice, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/merge", s.auth(s.mergeManualInvoices, true))
+	mux.HandleFunc("POST /api/v1/admin/invoices/{id}/refund", s.auth(s.adminRefundInvoice, true))
+}

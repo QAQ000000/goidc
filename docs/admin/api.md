@@ -35,6 +35,10 @@ node scripts/admin-api-consumers.mjs
 
 `correlation_id` 可选；同时读取响应头 `X-Request-ID`，向用户显示编号便于定位，不能显示原始 SQL、凭据、供应商响应或私有存储地址。
 
+自有JSON写入仍严格校验字段、类型、体积及单个JSON值；失败保持400 `invalid_json`，媒体类型不符保持415 `json_required`。`invalid_json`增加固定枚举`error.reason`：`unknown_field/type_mismatch/syntax_error/empty_body/body_too_large/trailing_data/read_error`；不返回原始解码错误、字段名或提交值，旧客户端可忽略新增字段。前后端渐进发布应按接口显式扩展协议，不用全局忽略未知字段放宽资金或权限输入。
+
+纯输入错误逐入口迁移：结账的`invalid_checkout/invalid_selection`及联系人创建的`invalid_contact`返回400，原code/message保留。版本、状态、幂等与业务冲突继续按领域返回409；不统一改成422或按错误码前缀猜测。认证401、授权403、缺失/范围外404及内部500语义保持。
+
 | 约束 | 前端实现要求 |
 | --- | --- |
 | 认证入口 | 后台只接受管理员身份；浏览器使用 `zjmfgo_admin_session`。客户使用独立 `zjmfgo_session`，不能互换或回退 |

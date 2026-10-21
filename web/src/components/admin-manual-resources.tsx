@@ -12,7 +12,8 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Checkbox } from "./ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
 import { AdminPagination } from "./admin-pagination";
 import { manualResourceAuthority, useManualResourceMutation, validManualResource, type ManualResource, type ManualResourceRequest } from "./admin-manual-resource-mutation";
 
@@ -103,38 +104,93 @@ function ManualResourceWorkspace({ actor }: { actor: User }) {
   function open(next: Drawer) { if (!mutation.pending) { setRecovery(null); setDrawer(next); setSuccess(""); } }
   function created(id: number) { resource.refresh(); setRecovery(null); setDrawer({ kind: "detail", id }); setSuccess("操作回执已确认；列表和详情正在重新读取当前事实。释放回执不表示资源当前空闲。"); }
   function close() { if (mutation.busy) return; if (drawer && ["create", "edit"].includes(drawer.kind) && !mutation.pending && !window.confirm("确认关闭编辑？未保存的输入将丢失。")) return; setDrawer(null); }
-  return <div className="min-w-0 space-y-5">
-    <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="page-title">人工库存</h1><p className="mt-2 text-sm text-muted-foreground">登记独立资源，通过服务的人工交付流程绑定。库存状态与占用分别管理。</p></div><div className="flex gap-2"><Button variant="outline" onClick={resource.refresh}><RefreshCw size={15} />刷新库存</Button>{manage && full && <Button disabled={mutation.frozen} onClick={() => open({ kind: "create" })}><Plus size={15} />新建库存</Button>}</div></header>
-    <nav aria-label="资源视图" className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/resources">已购服务资源</Link></Button><Button aria-current="page">人工库存</Button></nav>
-    {!full && <p className="text-sm text-muted-foreground">当前客户范围仅可查看范围内已占用库存；未分配库存不可见，不能新建。</p>}
-    <form className="flex flex-wrap items-end gap-3 rounded border bg-card p-4" onSubmit={event => { event.preventDefault(); const q = nav.draft.trim(); if (Array.from(q).length > 120) { setError("关键词最多120字。"); return; } setError(""); nav.setQuery(q); nav.setPage(0); }}>
-      <label className="min-w-0 flex-1 basis-64 space-y-2 text-sm"><span>关键词</span><Input aria-label="搜索人工库存" value={nav.draft} onChange={event => nav.setDraft(event.target.value)} placeholder="名称、地址、上游标识或提供方" /></label>
-      <label className="space-y-2 text-sm"><span>库存状态</span><select aria-label="库存状态筛选" className={selectClass} value={nav.status} onChange={event => { nav.setStatus(event.target.value); nav.setPage(0); }}><option value="">全部状态</option>{statuses.map(status => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
-      <label className="space-y-2 text-sm"><span>占用</span><select aria-label="库存占用筛选" className={selectClass} value={binding} onChange={event => { nav.setExtra({ ...nav.extra, binding: event.target.value }); nav.setPage(0); }}><option value="">全部占用</option><option value="bound">已占用</option><option value="unbound">未占用</option></select></label><Button type="submit">查询</Button><Button type="button" variant="outline" onClick={() => { nav.setDraft(""); nav.setQuery(""); nav.setStatus(""); nav.setExtra(defaults); nav.setPage(0); }}>重置</Button>
-    </form>
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{success && <p role="status" className="text-sm text-primary">{success}</p>}
-    {mutation.error && <p role="alert" className="break-words text-sm text-destructive">{mutation.error}</p>}
-    {mutation.pending && <section className="space-y-3 rounded border bg-muted/30 p-4 text-sm"><h2 className="font-semibold">{mutation.pending.phase === "rejected" ? "原库存请求已拒绝" : "原库存请求结果待核验"}</h2><p>{mutation.pending.kind === "create" ? "创建库存" : `库存 #${mutation.pending.target}`} · 请求键 {mutation.pending.key}</p>
-      {!mutation.pending.body && <p>原请求含只写凭据，刷新后仅保留安全标记，无法自动重试。请联系管理员核对原请求键与库存事实，当前账户的新操作已阻止。不要清空标记后重新创建。</p>}
-      {mutation.pending.phase === "uncertain" && mutation.pending.body && <Button variant="outline" disabled={mutation.busy || !manage} onClick={() => void mutation.run().then(result => { if (result) created(result.id); })}>使用原库存请求重试</Button>}
-      {mutation.pending.phase === "rejected" && <><Button variant="outline" disabled={mutation.busy || !manage} onClick={() => void mutation.review()}>读取当前库存事实</Button>{mutation.facts && <div className="space-y-3"><p>{mutation.facts.resource ? `当前版本 ${mutation.facts.resource.version} · ${labels[mutation.facts.resource.status]} · ${mutation.facts.resource.binding_id ? `占用服务 #${mutation.facts.resource.service_id}` : "未占用"}` : `当前有权库存 ${mutation.facts.total} 条；原创建已被确定拒绝。`}</p><Button variant="outline" disabled={mutation.busy || !manage} onClick={() => {
-        const original = mutation.pending;
-        if (original && window.confirm("已核对当前事实，确认结束被拒绝的原请求并重新编辑？")) void mutation.endRejected().then(facts => { if (facts) {
-          const body = original.body ? JSON.parse(original.body) as Record<string, unknown> : {};
-          delete body.username; delete body.password;
-          resource.refresh(); setRecovery({ resource: facts.resource, body }); setRevision(value => value + 1);
-          setDrawer(facts.resource ? { kind: original.kind === "release" ? "release" : "edit", id: facts.resource.id } : { kind: "create" });
-        } });
-      }}>已核对，结束旧请求并重新编辑</Button></div>}</>}
-    </section>}
-    {resource.error ? <ReadFailure error={resource.error.message} retry={resource.refresh} /> : !resource.data || resource.isLoading ? <p role="status">正在读取人工库存…</p> : !page ? <ReadFailure error="库存列表响应无效，请重新读取。" retry={resource.refresh} /> : <>
-      {!page.items.length ? <p className="rounded border p-10 text-center text-sm text-muted-foreground">暂无符合条件的人工库存。</p> : <><div className="hidden overflow-x-auto rounded border lg:block"><Table className="min-w-[1200px]"><TableHeader><TableRow>{["资源 / 类型", "地址 / 上游标识", "提供方 / 区域", "库存状态", "占用", "成本 CNY", "上游到期", "凭据 / 版本", "操作"].map(text => <TableHead key={text}>{text}</TableHead>)}</TableRow></TableHeader><TableBody>{page.items.map(item => <TableRow key={item.id}><TableCell><strong>{item.name}</strong><p className="text-xs text-muted-foreground">#{item.id} · {item.resource_type}</p></TableCell><TableCell className="max-w-48 whitespace-normal break-all">{item.address || "未填写地址"}<p className="text-xs text-muted-foreground">{item.upstream_id || "未填写标识"}</p></TableCell><TableCell>{item.provider || "—"}<p className="text-xs text-muted-foreground">{item.region || "—"}</p></TableCell><TableCell>{labels[item.status]}</TableCell><TableCell><Binding resource={item} actor={actor} /></TableCell><TableCell className="tabular-nums">{money(item.cost_cents)}</TableCell><TableCell>{item.upstream_expires_at ? date(item.upstream_expires_at) : "未设置"}</TableCell><TableCell>{item.has_credentials ? "已配置" : "未配置"}<p className="text-xs text-muted-foreground">版本 {item.version}</p></TableCell><TableCell><RowActions item={item} manage={manage} disabled={!!mutation.pending} open={open} /></TableCell></TableRow>)}</TableBody></Table></div>
-      <div className="space-y-3 lg:hidden">{page.items.map(item => <article key={item.id} className="space-y-3 rounded border bg-card p-4"><h2 className="flex items-center gap-2 font-semibold"><Server size={16} />{item.name} · #{item.id}</h2><p className="break-all text-sm">{item.address || "未填写地址"} · {item.resource_type}</p><p className="text-sm">库存：{labels[item.status]} · {item.binding_id ? "已占用" : "未占用"}</p><Binding resource={item} actor={actor} /><p className="text-sm">成本 {money(item.cost_cents)} · 上游到期 {item.upstream_expires_at ? date(item.upstream_expires_at) : "未设置"}</p><p className="text-xs text-muted-foreground">凭据{item.has_credentials ? "已配置" : "未配置"} · 版本 {item.version}</p><RowActions item={item} manage={manage} disabled={!!mutation.pending} open={open} /></article>)}</div></>}
-      <AdminPagination total={page.total} page={nav.page} pageSize={limit} pageSizes={[10, 25, 50, 100]} onPageChange={nav.setPage} onPageSizeChange={value => { nav.setExtra({ ...nav.extra, limit: String(value) }); nav.setPage(0); }} />
+  return <AdminListPage
+    title="人工库存"
+    description="登记独立资源，通过服务的人工交付流程绑定。库存状态与占用分别管理。"
+    actions={<div className="flex flex-wrap gap-2"><Button variant="outline" onClick={resource.refresh}><RefreshCw size={15} />刷新库存</Button>{manage && full && <Button disabled={mutation.frozen} onClick={() => open({ kind: "create" })}><Plus size={15} />新建库存</Button>}</div>}
+    filters={<>
+      <nav aria-label="资源视图" className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link href="/admin/resources">已购服务资源</Link></Button><Button aria-current="page">人工库存</Button></nav>
+      {!full && <p className="text-sm text-muted-foreground">当前客户范围仅可查看范围内已占用库存；未分配库存不可见，不能新建。</p>}
+      <form className="flex flex-wrap items-end gap-3 rounded border bg-card p-4" onSubmit={event => { event.preventDefault(); const q = nav.draft.trim(); if (Array.from(q).length > 120) { setError("关键词最多120字。"); return; } setError(""); nav.setQuery(q); nav.setPage(0); }}>
+        <label className="min-w-0 flex-1 basis-64 space-y-2 text-sm"><span>关键词</span><Input aria-label="搜索人工库存" value={nav.draft} onChange={event => nav.setDraft(event.target.value)} placeholder="名称、地址、上游标识或提供方" /></label>
+        <label className="space-y-2 text-sm"><span>库存状态</span><select aria-label="库存状态筛选" className={selectClass} value={nav.status} onChange={event => { nav.setStatus(event.target.value); nav.setPage(0); }}><option value="">全部状态</option>{statuses.map(status => <option key={status} value={status}>{labels[status]}</option>)}</select></label>
+        <label className="space-y-2 text-sm"><span>占用</span><select aria-label="库存占用筛选" className={selectClass} value={binding} onChange={event => { nav.setExtra({ ...nav.extra, binding: event.target.value }); nav.setPage(0); }}><option value="">全部占用</option><option value="bound">已占用</option><option value="unbound">未占用</option></select></label><Button type="submit">查询</Button><Button type="button" variant="outline" onClick={() => { nav.setDraft(""); nav.setQuery(""); nav.setStatus(""); nav.setExtra(defaults); nav.setPage(0); }}>重置</Button>
+      </form>
     </>}
-    <Dialog open={drawer !== null} onOpenChange={open => { if (!open) close(); }}><DialogContent showCloseButton={false} className="inset-y-0 right-0 left-auto h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:max-w-2xl"><DialogHeader><DialogTitle>{drawer?.kind === "create" ? "新建人工库存" : drawer?.kind === "edit" ? "编辑人工库存" : drawer?.kind === "release" ? "核实回收并释放" : "人工库存详情"}</DialogTitle><DialogDescription>成本仅管理元数据，不入账；上游期限独立于客户服务期限，账号密码只写不回显。</DialogDescription></DialogHeader>{drawer && <ResourceDrawer key={`${revision}:${drawer.kind}:${"id" in drawer ? drawer.id : "new"}`} drawer={drawer} recovery={recovery} actor={actor} mutation={mutation} onSuccess={created} />}<Button type="button" variant="outline" disabled={mutation.busy} onClick={close}>关闭抽屉</Button></DialogContent></Dialog>
-  </div>;
+    feedback={<>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}{success && <p role="status" className="text-sm text-primary">{success}</p>}
+      {mutation.error && <p role="alert" className="break-words text-sm text-destructive">{mutation.error}</p>}
+      {mutation.pending && <section className="space-y-3 rounded border bg-muted/30 p-4 text-sm"><h2 className="font-semibold">{mutation.pending.phase === "rejected" ? "原库存请求已拒绝" : "原库存请求结果待核验"}</h2><p>{mutation.pending.kind === "create" ? "创建库存" : `库存 #${mutation.pending.target}`} · 请求键 {mutation.pending.key}</p>
+        {!mutation.pending.body && <p>原请求含只写凭据，刷新后仅保留安全标记，无法自动重试。请联系管理员核对原请求键与库存事实，当前账户的新操作已阻止。不要清空标记后重新创建。</p>}
+        {mutation.pending.phase === "uncertain" && mutation.pending.body && <Button variant="outline" disabled={mutation.busy || !manage} onClick={() => void mutation.run().then(result => { if (result) created(result.id); })}>使用原库存请求重试</Button>}
+        {mutation.pending.phase === "rejected" && <><Button variant="outline" disabled={mutation.busy || !manage} onClick={() => void mutation.review()}>读取当前库存事实</Button>{mutation.facts && <div className="space-y-3"><p>{mutation.facts.resource ? `当前版本 ${mutation.facts.resource.version} · ${labels[mutation.facts.resource.status]} · ${mutation.facts.resource.binding_id ? `占用服务 #${mutation.facts.resource.service_id}` : "未占用"}` : `当前有权库存 ${mutation.facts.total} 条；原创建已被确定拒绝。`}</p><Button variant="outline" disabled={mutation.busy || !manage} onClick={() => {
+          const original = mutation.pending;
+          if (original && window.confirm("已核对当前事实，确认结束被拒绝的原请求并重新编辑？")) void mutation.endRejected().then(facts => { if (facts) {
+            const body = original.body ? JSON.parse(original.body) as Record<string, unknown> : {};
+            delete body.username; delete body.password;
+            resource.refresh(); setRecovery({ resource: facts.resource, body }); setRevision(value => value + 1);
+            setDrawer(facts.resource ? { kind: original.kind === "release" ? "release" : "edit", id: facts.resource.id } : { kind: "create" });
+          } });
+        }}>已核对，结束旧请求并重新编辑</Button></div>}</>}
+      </section>}
+    </>}
+    dialogs={
+      <Dialog open={drawer !== null} onOpenChange={open => { if (!open) close(); }}><DialogContent showCloseButton={false} className="inset-y-0 right-0 left-auto h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:max-w-2xl"><DialogHeader><DialogTitle>{drawer?.kind === "create" ? "新建人工库存" : drawer?.kind === "edit" ? "编辑人工库存" : drawer?.kind === "release" ? "核实回收并释放" : "人工库存详情"}</DialogTitle><DialogDescription>成本仅管理元数据，不入账；上游期限独立于客户服务期限，账号密码只写不回显。</DialogDescription></DialogHeader>{drawer && <ResourceDrawer key={`${revision}:${drawer.kind}:${"id" in drawer ? drawer.id : "new"}`} drawer={drawer} recovery={recovery} actor={actor} mutation={mutation} onSuccess={created} />}<Button type="button" variant="outline" disabled={mutation.busy} onClick={close}>关闭抽屉</Button></DialogContent></Dialog>
+    }
+  >
+    <AdminListRegion<Page>
+      title="人工库存列表"
+      resource={{ data: page, error: resource.error, isLoading: resource.isLoading }}
+      invalid={resource.data && !page ? "库存列表响应无效，请重新读取。" : undefined}
+      retry={resource.refresh}
+      pagination={data => <AdminPagination total={data.total} page={nav.page} pageSize={limit} pageSizes={[10, 25, 50, 100]} onPageChange={nav.setPage} onPageSizeChange={value => { nav.setExtra({ ...nav.extra, limit: String(value) }); nav.setPage(0); }} />}
+    >
+      {data => <InventoryList items={data.items} actor={actor} manage={manage} disabled={!!mutation.pending} open={open} />}
+    </AdminListRegion>
+  </AdminListPage>;
 }
+
+function InventoryList({ items, actor, manage, disabled, open }: { items: ManualResource[]; actor: User; manage: boolean; disabled: boolean; open: (value: Drawer) => void }) {
+  const columns: ResourceColumn<ManualResource>[] = [
+    { id: "identity", header: "资源 / 类型", render: item => <><strong className="break-words">{item.name}</strong><p className="text-xs text-muted-foreground">#{item.id} · {item.resource_type}</p></> },
+    { id: "address", header: "地址 / 上游标识", className: "max-w-48 whitespace-normal break-all", render: item => <>{item.address || "未填写地址"}<p className="text-xs text-muted-foreground">{item.upstream_id || "未填写标识"}</p></> },
+    { id: "provider", header: "提供方 / 区域", render: item => <>{item.provider || "—"}<p className="text-xs text-muted-foreground">{item.region || "—"}</p></> },
+    { id: "status", header: "库存状态", render: item => <InventoryStatus value={item.status} /> },
+    { id: "binding", header: "占用", render: item => <Binding resource={item} actor={actor} /> },
+    { id: "cost", header: "成本 CNY", className: "tabular-nums", render: item => money(item.cost_cents) },
+    { id: "expiry", header: "上游到期", render: item => item.upstream_expires_at ? date(item.upstream_expires_at) : "未设置" },
+    { id: "credentials", header: "凭据 / 版本", render: item => <>{item.has_credentials ? "已配置" : "未配置"}<p className="text-xs text-muted-foreground">版本 {item.version}</p></> },
+    { id: "actions", header: "操作", render: item => <RowActions item={item} manage={manage} disabled={disabled} open={open} /> },
+  ];
+  return <ResourceTable
+    items={items}
+    rowKey={item => item.id}
+    columns={columns}
+    ariaLabel="人工库存列表"
+    className="min-w-0"
+    tableClassName="min-w-[1200px]"
+    empty="暂无符合条件的人工库存。"
+    renderMobile={item => <article aria-label={`人工库存 ${item.name}`} className="min-w-0 space-y-4 rounded border border-border bg-card p-4">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><h3 className="flex min-w-0 items-start gap-2 font-semibold"><Server size={16} className="mt-0.5 shrink-0" /><span className="break-words">{item.name}</span></h3><p className="mt-1 text-xs text-muted-foreground">#{item.id} · {item.resource_type}</p></div><InventoryStatus value={item.status} /></div>
+      <dl className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">地址</dt><dd className="min-w-0 break-all">{item.address || "未填写地址"}</dd>
+        <dt className="text-muted-foreground">上游标识</dt><dd className="min-w-0 break-all">{item.upstream_id || "未填写标识"}</dd>
+        <dt className="text-muted-foreground">提供方</dt><dd className="min-w-0 break-words">{item.provider || "未填写"}</dd>
+        <dt className="text-muted-foreground">区域</dt><dd className="min-w-0 break-words">{item.region || "未填写"}</dd>
+        <dt className="text-muted-foreground">占用</dt><dd className="min-w-0 space-y-1">{item.binding_id && <p>已占用</p>}<Binding resource={item} actor={actor} /></dd>
+        <dt className="text-muted-foreground">成本 CNY</dt><dd className="tabular-nums">{money(item.cost_cents)}</dd>
+        <dt className="text-muted-foreground">上游到期</dt><dd className="break-words">{item.upstream_expires_at ? date(item.upstream_expires_at) : "未设置"}</dd>
+        <dt className="text-muted-foreground">凭据</dt><dd>{item.has_credentials ? "已配置" : "未配置"} · 版本 {item.version}</dd>
+      </dl>
+      <div className="border-t border-border pt-3"><RowActions item={item} manage={manage} disabled={disabled} open={open} /></div>
+    </article>}
+  />;
+}
+// Inventory availability describes stock; the global finance Status labels do not apply.
+function InventoryStatus({ value }: { value: ManualResource["status"] }) {
+  return <span className="inline-flex shrink-0 rounded border border-border bg-muted px-2 py-1 text-xs text-foreground">{labels[value]}</span>;
+}
+
 function Binding({ resource, actor }: { resource: ManualResource; actor: User }) { return resource.binding_id ? <div className="space-y-1 text-sm">{can(actor, "services.view") ? <Link href={`/admin/services/${resource.service_id}`} className="text-primary hover:underline">服务 #{resource.service_id}</Link> : <span>服务 #{resource.service_id}</span>}<p className="text-xs text-muted-foreground">客户 #{resource.customer_id} · 绑定 #{resource.binding_id}</p></div> : <span className="text-sm">未占用</span>; }
 function RowActions({ item, manage, disabled, open }: { item: ManualResource; manage: boolean; disabled: boolean; open: (value: Drawer) => void }) { return <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={disabled} onClick={() => open({ kind: "detail", id: item.id })}>详情</Button>{manage && <><Button size="sm" variant="outline" disabled={disabled} onClick={() => open({ kind: "edit", id: item.id })}>编辑</Button>{item.binding_id && <Button size="sm" variant="outline" disabled={disabled} onClick={() => open({ kind: "release", id: item.id })}>核实回收并释放</Button>}</>}</div>; }
 function ReadFailure({ error, retry }: { error: string; retry: () => void }) { return <div role="alert" className="space-y-2 text-sm"><p className="text-destructive">{error}</p><Button variant="outline" onClick={retry}>重新读取本区域</Button></div>; }

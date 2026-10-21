@@ -27,6 +27,7 @@ func TestAPIAccessCorrelationLogAndFiltering(t *testing.T) {
 	}
 	var path string
 	var status int
+	waitAPIAccessLog(t, db, "actor_id=$1 AND correlation_id=$2", adminID, id)
 	if err := db.Pool.QueryRow(t.Context(), `SELECT path,status_code FROM admin_api_logs WHERE actor_id=$1 AND correlation_id=$2`, adminID, id).Scan(&path, &status); err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +48,7 @@ func TestAPIAccessCorrelationLogAndFiltering(t *testing.T) {
 	// Customer access logs remain excluded even when their exact ID is known.
 	customer := request(h, "GET", "/api/v1/me", nil, customerCookie, "")
 	expect(t, customer, http.StatusOK)
+	waitAPIAccessLog(t, db, "correlation_id=$1", customer.Header().Get("X-Request-ID"))
 	filtered := request(h, "GET", "/api/v1/admin/logs/api?correlation_id="+customer.Header().Get("X-Request-ID"), nil, auditCookie, "")
 	expect(t, filtered, http.StatusOK)
 	if page := data(t, filtered); page["total"].(float64) != 0 || len(page["items"].([]any)) != 0 {
@@ -71,6 +73,7 @@ func TestAPIAccessLogSurvivesRequestCancellation(t *testing.T) {
 	r.RemoteAddr = "192.0.2.21:1234"
 	w := httptest.NewRecorder()
 	s := &Server{db: db, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	startTestAccessLogging(t, s)
 	s.authWith(func(w http.ResponseWriter, r *http.Request) {
 		cancel()
 		w.WriteHeader(http.StatusNoContent)
@@ -79,6 +82,7 @@ func TestAPIAccessLogSurvivesRequestCancellation(t *testing.T) {
 		t.Fatalf("response status=%d", w.Code)
 	}
 	var logged bool
+	waitAPIAccessLog(t, db, "actor_id=$1 AND correlation_id=$2 AND path='/api/v1/canceled-fixture' AND status_code=204", actor, id)
 	if err := db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM admin_api_logs WHERE actor_id=$1 AND correlation_id=$2 AND path='/api/v1/canceled-fixture' AND status_code=204)`, actor, id).Scan(&logged); err != nil || !logged {
 		t.Fatalf("request cancellation erased access diagnostic: logged=%v err=%v", logged, err)
 	}

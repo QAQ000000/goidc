@@ -120,6 +120,7 @@ func TestCompiledAppsHTTPContractFilteringAndRedaction(t *testing.T) {
 		expect(t, request(h, "GET", "/api/v1/admin/apps?"+query, nil, cookie, ""), http.StatusBadRequest)
 	}
 	var logged bool
+	waitAPIAccessLog(t, db, "actor_id=$1 AND path='/api/v1/admin/apps' AND status_code=200", adminID)
 	if err := db.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM admin_api_logs WHERE actor_id=$1 AND path='/api/v1/admin/apps' AND status_code=200)`, adminID).Scan(&logged); err != nil || !logged {
 		t.Fatalf("read access was not logged: %v", err)
 	}

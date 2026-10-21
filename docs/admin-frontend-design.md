@@ -328,6 +328,8 @@ Web lint/typecheck及隔离webpack生产构建已通过；独立PG18真实Go API
 
 ## 11. 组件与业务动作规范
 
+实施复用规则及组合示例见[后台前端开发与复用](admin/frontend-development.md)。常规列表复用 `AdminListPage`、`AdminListRegion`、`ResourceTable` 与受控分页，领域模块保留 URL 校验、权限、报价、版本和未知结果恢复；不以通用 CRUD 代替业务动作。
+
 现有基础组件位于 `web/src/components/ui/`：Button、Input、Textarea、Label、Select、Checkbox、Badge、Alert、Skeleton、Table、Dialog；Tooltip等使用现有Radix能力，图标使用lucide-react。不为本设计额外引入组件框架。
 
 下表定义复用目标，不表示这些业务组件已全部存在；实现前先检查当前组件，名称可沿现有约定。

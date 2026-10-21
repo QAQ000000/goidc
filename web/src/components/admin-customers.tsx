@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   Plus,
   Search,
-  Users,
   CreditCard,
   KeyRound,
   Pencil,
@@ -18,42 +17,22 @@ import {
   RefreshCw,
   FileText,
 } from "lucide-react";
-import { api, date, money, type CustomerGroup } from "@/lib/api";
+import { api, type CustomerGroup } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { useCustomerMutation } from "@/hooks/use-customer-mutation";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "./ui/table";
-import { Failure, Loading, Status } from "./common";
+import { Failure, Loading } from "./common";
 import { Workspace, PermissionGate, useAdminPermission, useAdminIdentity } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { CustomerDirectoryResults, type AdminCustomer, type CustomerDirectoryPage } from "./admin-customer-directory-results";
 import { useCustomerFieldDefinitions } from "./customer-field-inputs";
 import { DirectoryCustomFields, DirectoryOptionState, DirectorySelect, LevelRuleFilter, certificationLabels, customerDirectoryActorKey, directoryQuery, readDirectoryQuery, type DirectoryFilters } from "./admin-customer-directory-filters";
 
 type SalesOwner = { id: number; username: string; display_name: string };
-
-type AdminCustomer = {
-  id: number;
-  username: string;
-  email: string;
-  display_name: string;
-  status: string;
-  balance_cents: number;
-  created_at: string;
-  sales_owner_id: number | null;
-  sales_owner_name: string | null;
-  sales_version: number;
-  group_id: number | null;
-  group_name: string | null;
-  active_services_count?: number;
-  total_services_count?: number;
-  income_cents?: number;
-  expense_cents?: number;
-  company_name?: string | null;
-  phone_number?: string | null;
-};
 
 export function AdminCustomersView() {
   return <Workspace title="客户列表" admin><Suspense fallback={<Loading />}><CustomerDirectoryFromURL /></Suspense></Workspace>;
@@ -81,7 +60,7 @@ function CustomerDirectory({ source }: { source: string }) {
   const definitions = useCustomerFieldDefinitions(canView && (showAdvanced || mobileOpen || Object.keys(applied.customFields).length > 0));
   const query = directoryQuery(applied, initial.limit, initial.offset);
   const suffix = `?${query}`;
-  const resource = useResource<{ items: AdminCustomer[]; total: number; limit: number; offset: number }>(canView && !initial.error ? `/admin/customers/page?${query}` : null, false);
+  const resource = useResource<CustomerDirectoryPage>(canView && !initial.error ? `/admin/customers/page?${query}` : null, false);
   const pageSize = initial.limit;
   const page = Math.floor(initial.offset / pageSize);
   const lastOffset = resource.data ? Math.max(0, Math.ceil(resource.data.total / pageSize) - 1) * pageSize : null;
@@ -128,18 +107,26 @@ function CustomerDirectory({ source }: { source: string }) {
   const filterButtons = <div className="flex flex-wrap items-center gap-2"><Button type="submit" className="rounded bg-primary hover:bg-primary/90"><Search size={16} />查询</Button><Button type="button" variant="outline" className="rounded shadow-none" onClick={reset}>清空</Button></div>;
   const detailHref = (customer: AdminCustomer) => `/admin/customers/${customer.id}${suffix}`;
 
-  if (!canView) return <p role="alert">没有查看客户权限。</p>;
-  return <div className="min-w-0 space-y-5 text-foreground">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-[22px] font-semibold leading-[30px]">客户列表</h1><p className="mt-1 text-sm text-muted-foreground">查找客户，进入客户工作区管理资料与业务。</p></div><div className="flex gap-2"><Button type="button" variant="outline" className="rounded shadow-none" aria-label="刷新客户列表" disabled={resource.isLoading} onClick={resource.refresh}><RefreshCw size={16} className={resource.isLoading ? "animate-spin" : ""} />{resource.isLoading ? "刷新中" : "刷新"}</Button><PermissionGate permission="customers.manage"><Button asChild className="rounded bg-primary hover:bg-primary/90"><Link href={`/admin/customers/new${suffix}`}><Plus size={16} />新建客户</Link></Button></PermissionGate></div></div>
-    <section aria-label="客户筛选" className="rounded border border-border bg-card p-4 sm:p-5"><div className="flex items-center justify-between gap-3 sm:hidden"><span className="text-sm text-muted-foreground">按客户资料筛选</span><Button type="button" variant="outline" className="rounded shadow-none" onClick={() => setMobileOpen(true)}><Filter size={16} />筛选</Button></div><form onSubmit={submit} className="hidden space-y-4 sm:block"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">{basicFields}</div><div className="flex flex-wrap items-center justify-between gap-3"><Button type="button" variant="ghost" className="h-8 rounded px-0 text-primary hover:bg-transparent hover:text-primary/90" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced} aria-controls="customer-advanced-filters"><Filter size={14} />高级筛选<ChevronDown size={14} className={showAdvanced ? "rotate-180" : ""} /></Button>{filterButtons}</div>{showAdvanced && <div id="customer-advanced-filters" className="border-t border-border pt-5">{advancedFields}</div>}{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}</form></section>
-    <div aria-label="已应用的筛选条件" className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">当前条件</span>{summary.length ? <>{summary.map((label, index) => <span key={index} className="max-w-full break-all rounded border border-border bg-card px-2 py-1 text-muted-foreground">{label}</span>)}<button type="button" className="text-primary hover:underline" onClick={reset}>清空条件</button></> : <span className="text-muted-foreground">全部客户</span>}</div>
-    {initial.error ? <div role="alert" className="rounded border border-border bg-card p-5"><p className="mb-3 text-sm text-destructive">{initial.error}</p><Button variant="outline" onClick={reset}>清空条件</Button></div> : resource.error ? <div className="rounded border border-border bg-card"><Failure error={resource.error} retry={resource.refresh} /></div> : !resource.data ? <Loading /> : <section aria-label="客户查询结果" aria-busy={resource.isLoading} className="min-w-0 overflow-hidden rounded border border-border bg-card"><div className="flex items-center justify-between border-b border-border px-4 py-3 text-sm"><span className="font-medium">客户记录{resource.isLoading && <span role="status" className="ml-2 text-xs font-normal text-muted-foreground">正在刷新…</span>}</span><span className="tabular-nums text-muted-foreground">共 {resource.data.total} 位客户</span></div>{!resource.data.items.length ? <div className="space-y-3 px-4 py-14 text-center"><Users size={28} className="mx-auto text-muted-foreground/60" /><p className="text-sm text-muted-foreground">{summary.length ? "没有符合条件的客户" : "暂无客户"}</p>{summary.length > 0 && <Button variant="outline" className="rounded shadow-none" onClick={reset}>清空筛选条件</Button>}</div> : <><div className="hidden md:block"><Table className="min-w-[940px]"><TableHeader className="bg-muted/50"><TableRow className="border-border">{["编号", "客户", "账号状态", "客户分组", "销售归属", "钱包余额", "注册时间", "操作"].map(label => <TableHead key={label} className={`h-10 px-4 text-xs text-muted-foreground ${label === "钱包余额" ? "text-right" : ""}`}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{resource.data.items.map(customer => <TableRow key={customer.id} className="border-border hover:bg-muted/50"><TableCell className="px-4 py-3 tabular-nums"><button type="button" className="text-primary hover:underline" title="复制客户编号" aria-label={`复制客户编号 ${customer.id}`} onClick={event => { const target = event.currentTarget; void navigator.clipboard.writeText(String(customer.id)).then(() => { target.title = "已复制"; }).catch(() => { target.title = "复制失败，请手动复制编号"; }); }}>#{customer.id}</button></TableCell><TableCell className="px-4 py-3"><Link href={detailHref(customer)} className="font-medium text-primary hover:underline">{customer.display_name || customer.username}</Link><div className="mt-1 text-xs text-muted-foreground">{customer.username} · {customer.email}</div>{customer.company_name && <div className="mt-1 text-xs text-muted-foreground">{customer.company_name}</div>}</TableCell><TableCell className="px-4 py-3"><CustomerDirectoryStatus status={customer.status} /></TableCell><TableCell className="px-4 py-3 text-muted-foreground">{customer.group_name || "未分组"}</TableCell><TableCell className="px-4 py-3 text-muted-foreground">{customer.sales_owner_name || "无归属"}</TableCell><TableCell className="px-4 py-3 text-right tabular-nums">{money(customer.balance_cents)}</TableCell><TableCell className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{date(customer.created_at)}</TableCell><TableCell className="px-4 py-3"><Link href={detailHref(customer)} className="text-sm text-primary hover:underline">查看客户</Link></TableCell></TableRow>)}</TableBody></Table></div><div className="divide-y divide-border md:hidden">{resource.data.items.map(customer => <article key={customer.id} className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><Link href={detailHref(customer)} className="break-words font-medium text-primary">{customer.display_name || customer.username}</Link><p className="mt-1 text-xs text-muted-foreground">#{customer.id} · {customer.username}</p></div><CustomerDirectoryStatus status={customer.status} /></div><p className="break-all text-sm text-muted-foreground">{customer.email}</p><dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs"><div><dt className="text-muted-foreground">客户分组</dt><dd className="mt-1 text-muted-foreground">{customer.group_name || "未分组"}</dd></div><div><dt className="text-muted-foreground">销售归属</dt><dd className="mt-1 text-muted-foreground">{customer.sales_owner_name || "无归属"}</dd></div><div><dt className="text-muted-foreground">钱包余额</dt><dd className="mt-1 tabular-nums">{money(customer.balance_cents)}</dd></div><div><dt className="text-muted-foreground">注册时间</dt><dd className="mt-1 text-muted-foreground">{date(customer.created_at)}</dd></div></dl><Button variant="outline" className="w-full rounded shadow-none" asChild><Link href={detailHref(customer)}>查看客户</Link></Button></article>)}</div></>}<div className="border-t border-border px-4 py-3"><AdminPagination total={resource.data.total} page={page} pageSize={pageSize} pageSizes={Array.from(new Set([25, 50, 100, pageSize])).sort((a, b) => a - b)} onPageChange={next => navigate(applied, pageSize, next * pageSize)} onPageSizeChange={limit => navigate(applied, limit)} /></div></section>}
-    <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="fixed inset-y-0 right-0 left-auto top-0 h-dvh max-h-dvh w-[min(100%,400px)] translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:hidden"><DialogHeader><DialogTitle>筛选客户</DialogTitle><DialogDescription>查询后应用条件，返回客户列表仍保留。</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-5"><div className="grid gap-4">{basicFields}</div><div className="border-t border-border pt-4">{advancedFields}</div>{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}<div className="sticky bottom-0 border-t border-border bg-card py-3">{filterButtons}</div></form></DialogContent></Dialog>
-  </div>;
-}
-
-function CustomerDirectoryStatus({ status }: { status: string }) {
-  return <span className="[&_[data-slot=badge]]:rounded"><Status value={status} /></span>;
+  return <AdminListPage
+    title="客户列表"
+    description="查找客户，进入客户工作区管理资料与业务。"
+    actions={canView && <div className="flex gap-2"><Button type="button" variant="outline" className="rounded shadow-none" aria-label="刷新客户列表" disabled={resource.isLoading} onClick={resource.refresh}><RefreshCw size={16} className={resource.isLoading ? "animate-spin" : ""} />{resource.isLoading ? "刷新中" : "刷新"}</Button><PermissionGate permission="customers.manage"><Button asChild className="rounded bg-primary hover:bg-primary/90"><Link href={`/admin/customers/new${suffix}`}><Plus size={16} />新建客户</Link></Button></PermissionGate></div>}
+    filters={canView && <section aria-label="客户筛选" className="rounded border border-border bg-card p-4 sm:p-5"><div className="flex items-center justify-between gap-3 sm:hidden"><span className="text-sm text-muted-foreground">按客户资料筛选</span><Button type="button" variant="outline" className="rounded shadow-none" onClick={() => setMobileOpen(true)}><Filter size={16} />筛选</Button></div><form onSubmit={submit} className="hidden space-y-4 sm:block"><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">{basicFields}</div><div className="flex flex-wrap items-center justify-between gap-3"><Button type="button" variant="ghost" className="h-8 rounded px-0 text-primary hover:bg-transparent hover:text-primary/90" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced} aria-controls="customer-advanced-filters"><Filter size={14} />高级筛选<ChevronDown size={14} className={showAdvanced ? "rotate-180" : ""} /></Button>{filterButtons}</div>{showAdvanced && <div id="customer-advanced-filters" className="border-t border-border pt-5">{advancedFields}</div>}{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}</form></section>}
+    feedback={canView && <div aria-label="已应用的筛选条件" className="flex flex-wrap items-center gap-2 text-xs"><span className="text-muted-foreground">当前条件</span>{summary.length ? <>{summary.map((label, index) => <span key={index} className="max-w-full break-all rounded border border-border bg-card px-2 py-1 text-muted-foreground">{label}</span>)}<button type="button" className="text-primary hover:underline" onClick={reset}>清空条件</button></> : <span className="text-muted-foreground">全部客户</span>}</div>}
+    dialogs={canView && <Dialog open={mobileOpen} onOpenChange={setMobileOpen}><DialogContent className="fixed inset-y-0 right-0 left-auto top-0 h-dvh max-h-dvh w-[min(100%,400px)] translate-x-0 translate-y-0 overflow-y-auto rounded-none sm:hidden"><DialogHeader><DialogTitle>筛选客户</DialogTitle><DialogDescription>查询后应用条件，返回客户列表仍保留。</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-5"><div className="grid gap-4">{basicFields}</div><div className="border-t border-border pt-4">{advancedFields}</div>{formError && <p role="alert" className="text-sm text-destructive">{formError}</p>}<div className="sticky bottom-0 border-t border-border bg-card py-3">{filterButtons}</div></form></DialogContent></Dialog>}
+  >
+    <AdminListRegion
+      title="客户查询结果"
+      allowed={canView}
+      invalid={initial.error ? <><p className="mb-3">{initial.error}</p><Button variant="outline" onClick={reset}>清空条件</Button></> : null}
+      resource={resource}
+      retry={resource.refresh}
+      summary={resource.data && <span className="tabular-nums">共 {resource.data.total} 位客户</span>}
+      pagination={data => <AdminPagination total={data.total} page={page} pageSize={pageSize} pageSizes={Array.from(new Set([25, 50, 100, pageSize])).sort((a, b) => a - b)} onPageChange={next => navigate(applied, pageSize, next * pageSize)} onPageSizeChange={limit => navigate(applied, limit)} />}
+    >
+      {data => <CustomerDirectoryResults items={data.items} detailHref={detailHref} filtered={summary.length > 0} reset={reset} />}
+    </AdminListRegion>
+  </AdminListPage>;
 }
 
 export function CustomerActions({ row, refresh }: { row: AdminCustomer; refresh: () => void }) {

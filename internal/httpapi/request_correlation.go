@@ -1,17 +1,38 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/codex/zjmfgo/internal/correlation"
 )
+
+type requestRouteTrackerKey struct{}
+
+type requestRouteTracker struct{ pattern atomic.Pointer[string] }
+
+// Request clones share their context but not the Pattern field populated by
+// ServeMux. Carry only the matched template back to the outer diagnostic layer.
+func rememberRequestRoute(r *http.Request) {
+	tracker, _ := r.Context().Value(requestRouteTrackerKey{}).(*requestRouteTracker)
+	if tracker != nil && r.Pattern != "" {
+		pattern := r.Pattern
+		tracker.pattern.Store(&pattern)
+	}
+}
 
 // Only a matched route template is logged: URLs may contain customer data or
 // webhook secrets. Query strings, headers, bodies and panic values are omitted.
 func requestRoute(r *http.Request) string {
 	if r.Pattern != "" {
 		return r.Pattern
+	}
+	if tracker, _ := r.Context().Value(requestRouteTrackerKey{}).(*requestRouteTracker); tracker != nil {
+		if pattern := tracker.pattern.Load(); pattern != nil {
+			return *pattern
+		}
 	}
 	return "unmatched"
 }
@@ -21,7 +42,8 @@ func (s *Server) correlateRequests(next http.Handler) http.Handler {
 		// Generate at the API trust boundary. Caller supplied IDs never become
 		// an authoritative audit identity, even when they look well formed.
 		id := correlation.NewID()
-		r = r.WithContext(correlation.WithID(r.Context(), id))
+		ctx := context.WithValue(correlation.WithID(r.Context(), id), requestRouteTrackerKey{}, &requestRouteTracker{})
+		r = r.WithContext(ctx)
 		w.Header().Set("X-Request-ID", id)
 		recorder := &apiLogResponseWriter{ResponseWriter: w, status: http.StatusOK}
 		started := time.Now()

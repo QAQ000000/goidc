@@ -91,7 +91,23 @@ func testServerConfig(t *testing.T, mutate func(*config.Config)) (*store.Store, 
 	if mutate != nil {
 		mutate(&serverConfig)
 	}
-	return db, New(db, serverConfig, slog.New(slog.NewTextHandler(os.Stderr, nil))).Handler()
+	server := New(db, serverConfig, slog.New(slog.NewTextHandler(os.Stderr, nil)))
+	startTestAccessLogging(t, server)
+	return db, server.Handler()
+}
+
+func startTestAccessLogging(t *testing.T, server *Server) {
+	t.Helper()
+	if err := server.StartAccessLogging(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := server.CloseAccessLogging(ctx); err != nil {
+			t.Errorf("drain API access diagnostics: %v", err)
+		}
+	})
 }
 
 // requestFrom issues a request with an explicit socket peer address so tests
@@ -673,7 +689,11 @@ func TestCheckoutAtomicAndIdempotent(t *testing.T) {
 	_, cookie := user(t, db, h, "buyer", "customer")
 	pid := product(t, db, 5)
 	version, itemID := add(t, h, cookie, pid, 2)
-	expect(t, request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version}, cookie, "empty-key-1"), 409)
+	empty := request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version}, cookie, "empty-key-1")
+	expect(t, empty, http.StatusBadRequest)
+	if errorData(t, empty)["code"] != "invalid_checkout" {
+		t.Fatal("empty checkout lost its input error code")
+	}
 	expect(t, request(h, "POST", "/api/v1/orders", store.CheckoutInput{CartVersion: version - 1, ItemIDs: []int64{itemID}}, cookie, "stale-key-1"), 409)
 	input := store.CheckoutInput{CartVersion: version, ItemIDs: []int64{itemID}}
 	w := request(h, "POST", "/api/v1/orders", input, cookie, "same-key-123")

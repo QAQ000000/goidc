@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const web = fileURLToPath(new URL('../web/', import.meta.url));
 const require = createRequire(path.join(web, 'package.json'));
 const ts = require('typescript'), React = require('react'), cache = new Map();
-let current, actor, liveActor, calls, storage, resources, errors, reads, refreshed, respond, failStorage;
+let current, actor, liveActor, calls, storage, resources, errors, loadingReads, reads, refreshed, respond, failStorage;
 const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, index) => value !== b[index]);
 const hooks = {
   ...React,
@@ -30,7 +30,7 @@ function load(filename) {
     if (name === './workspace') return { Workspace: props => React.createElement('main', props, props.children), useAdminIdentity: () => actor, useAdminPermission: allowed };
     if (name.includes('/ui/')) return ui;
     if (name === './admin-pagination') return { AdminPagination: props => React.createElement('pagination', props) };
-    if (name === '@/hooks/use-resource') return { useResource: url => { if (url) reads.push(url); return { data: url ? resources.get(url) ?? null : null, error: errors.get(url) ?? null, isLoading: false, refresh() { refreshed.push(url); } }; } };
+    if (name === '@/hooks/use-resource') return { useResource: url => { if (url) reads.push(url); return { data: url ? resources.get(url) ?? null : null, error: errors.get(url) ?? null, isLoading: loadingReads.has(url), refresh() { refreshed.push(url); } }; } };
     if (name === '@/hooks/use-admin-list-navigation') return { useAdminListNavigation() {
       const [draft, setDraft] = hooks.useState(''), [query, setQuery] = hooks.useState(''), [status, setStatus] = hooks.useState(''), [page, setPage] = hooks.useState(0), [extra, setExtra] = hooks.useState({ binding: '', limit: '25' });
       return { ready: true, draft, setDraft, query, setQuery, status, setStatus, page, setPage, extra, setExtra };
@@ -58,7 +58,7 @@ const releaseInput = { kind: 'release', target: 11, serviceId: 31, bindingId: 19
 function receipt(call) { const body = JSON.parse(call.body); return { id: 11, version: body.expected_version ? body.expected_version + 1 : 1, replayed: false, ...(call.url.endsWith('/release') ? { service_id: 31, binding_id: 19 } : {}) }; }
 function reset() {
   actor = { id: 7, role: 'admin', permissions: ['resources.view', 'resources.manage', 'services.view'], customer_scope: 'all', customer_ownerless: true }; liveActor = actor;
-  calls = []; storage = new Map(); resources = new Map(); errors = new Map(); reads = []; refreshed = []; failStorage = false;
+  calls = []; storage = new Map(); resources = new Map(); errors = new Map(); loadingReads = new Set(); reads = []; refreshed = []; failStorage = false;
   resources.set('/admin/manual-resources?limit=25&offset=0', { items: [resource(), { ...bound(), id: 12 }], total: 27, limit: 25, offset: 0 });
   resources.set('/admin/manual-resources/11', resource());
   respond = async call => call.url === '/me' ? liveActor : call.method ? receipt(call) : resources.get(call.url) ?? { total: 27 };
@@ -107,6 +107,56 @@ test('inventory access, full-scope creation and dual status remain separate with
   view.label('库存状态筛选').onChange({ target: { value: 'available' } }); view.render(); view.label('库存占用筛选').onChange({ target: { value: 'unbound' } }); view.render();
   assert.ok(reads.includes('/admin/manual-resources?limit=25&offset=0&q=provider+%26+ip&status=available&binding=unbound'));
   view.unmount();
+});
+test('inventory read failures and invalid records fail closed with region recovery while filters remain usable', async () => {
+  const url = '/admin/manual-resources?limit=25&offset=0';
+  for (const failure of [new Error('inventory temporarily unavailable'), new ApiError(403, 'forbidden')]) {
+    reset(); errors.set(url, failure);
+    const view = new Renderer().render(); await settle(); view.render();
+    assert.ok(view.label('搜索人工库存'));
+    assert.equal(view.nodes.some(node => node.type === 'article' || node.type === 'pagination'), false);
+    assert.doesNotMatch(view.text(), /暂无符合条件|Test resource/);
+    if (failure.status === 403) assert.match(view.text(), /没有查看人工库存列表的权限/);
+    else { assert.match(view.text(), /inventory temporarily unavailable/); view.button('重新加载').onClick(); assert.ok(refreshed.includes(url)); }
+    view.unmount();
+  }
+  reset(); resources.set(url, { items: [resource({ currency: 'USD' })], total: 1, limit: 25, offset: 0 });
+  const invalid = new Renderer().render(); await settle(); invalid.render();
+  assert.match(invalid.text(), /库存列表响应无效/);
+  assert.equal(invalid.nodes.some(node => node.type === 'article' || node.type === 'pagination'), false);
+  assert.doesNotMatch(invalid.text(), /暂无符合条件/);
+  invalid.button('重新加载').onClick(); assert.ok(refreshed.includes(url)); invalid.unmount();
+});
+test('empty inventory is distinct from initial loading and retains server pagination', async () => {
+  const url = '/admin/manual-resources?limit=25&offset=0';
+  reset(); resources.delete(url); loadingReads.add(url);
+  const view = new Renderer().render(); await settle(); view.render();
+  assert.match(view.text(), /正在加载人工库存列表/);
+  assert.doesNotMatch(view.text(), /暂无符合条件/);
+  assert.equal(view.nodes.some(node => node.type === 'pagination'), false);
+  loadingReads.delete(url); resources.set(url, { items: [], total: 0, limit: 25, offset: 0 }); view.render();
+  assert.match(view.text(), /暂无符合条件的人工库存/); assert.equal(view.find('pagination').total, 0);
+  assert.equal(view.nodes.some(node => node.type === 'article'), false); view.unmount();
+});
+test('inventory mobile cards retain identity, occupancy, cost and credentials metadata without financial status labels', async () => {
+  reset(); const view = new Renderer().render(); await settle(); view.render();
+  const cards = view.nodes.filter(node => node.type === 'article');
+  assert.equal(cards.length, 2);
+  assert.match(view.text(cards[0]), /Test resource.*#11.*server/);
+  for (const expected of ['192.0.2.10', 'machine-11', 'Provider', 'CN', '可用', '未占用', '¥12.34', '凭据', '版本 3']) assert.ok(view.text(cards[0]).includes(expected), expected);
+  assert.match(view.text(cards[1]), /可用.*已占用.*服务 #31.*客户 #41/);
+  assert.doesNotMatch(view.text(), /可提现/);
+  assert.equal(view.label('人工库存列表')['aria-label'], '人工库存列表'); view.unmount();
+});
+test('authority changes remount the inventory workspace and discard unsent write-only fields', async () => {
+  reset(); const view = new Renderer().render(); await settle(); view.render(); view.button('新建库存').onClick(); view.render();
+  view.nodes.filter(node => node.type === 'checkbox')[1].props.onCheckedChange(true); view.render();
+  view.label('写入密码').onChange({ target: { value: 'private-unsent-password' } }); view.render();
+  actor = { ...actor, permissions: ['resources.view'], customer_scope: 'owned' }; liveActor = actor;
+  view.render(); await settle(); view.render();
+  assert.equal(view.nodes.some(node => node.props?.['aria-label'] === '写入密码'), false);
+  assert.equal(view.nodes.some(node => node.type === 'button' && view.text(node) === '新建库存'), false);
+  assert.equal(writes().length, 0); assert.equal(storage.size, 0); view.unmount();
 });
 test('actual creation preview is read-only, secret writes are not echoed or persisted, and success refreshes current facts', async () => {
   reset(); const view = new Renderer().render(); await settle(); view.render(); view.button('新建库存').onClick(); view.render();

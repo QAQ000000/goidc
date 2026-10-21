@@ -3,8 +3,9 @@ package store
 import (
 	"context"
 	"errors"
-	"net"
+	"time"
 
+	"github.com/codex/zjmfgo/internal/accesslog"
 	"github.com/codex/zjmfgo/internal/correlation"
 	"github.com/jackc/pgx/v5"
 )
@@ -71,18 +72,16 @@ func (s *Store) CustomerResourceAPIEnabled(ctx context.Context) (bool, error) {
 	return enabled, err
 }
 
-// APIAccessRecord intentionally contains no query, request body or credentials.
-type APIAccessRecord struct {
-	ActorID        int64
-	Method         string
-	Path           string
-	StatusCode     int
-	DurationMillis int64
-	RemoteIP       net.IP
-}
+// APIAccessRecord is retained for explicit synchronous callers. HTTP middleware
+// uses the bounded accesslog queue instead of occupying the business pool.
+type APIAccessRecord = accesslog.Record
 
 func (s *Store) RecordAPIAccess(ctx context.Context, record APIAccessRecord) error {
-	_, err := s.Pool.Exec(ctx, `INSERT INTO admin_api_logs(actor_id,method,path,status_code,duration_ms,remote_ip,correlation_id)
-VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,''))`, record.ActorID, record.Method, record.Path, record.StatusCode, record.DurationMillis, record.RemoteIP, correlation.ID(ctx))
-	return err
+	if record.OccurredAt.IsZero() {
+		record.OccurredAt = time.Now()
+	}
+	if record.CorrelationID == "" {
+		record.CorrelationID = correlation.ID(ctx)
+	}
+	return writeAPIAccessBatch(ctx, s.Pool, []accesslog.Record{record})
 }

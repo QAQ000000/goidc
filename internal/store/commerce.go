@@ -39,13 +39,13 @@ type CheckoutResult struct {
 func (s *Store) Checkout(ctx context.Context, userID int64, key string, input CheckoutInput) (CheckoutResult, error) {
 	var result CheckoutResult
 	if len(key) < 8 || len(key) > 128 || input.CartVersion < 1 || len(input.ItemIDs) == 0 || len(input.ItemIDs) > 100 {
-		return result, conflict("invalid_checkout", "请选择购物车项目并提供有效版本与幂等键")
+		return result, invalidInput("invalid_checkout", "请选择购物车项目并提供有效版本与幂等键")
 	}
 	ids := append([]int64(nil), input.ItemIDs...)
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	for i, id := range ids {
 		if id < 1 || (i > 0 && ids[i-1] == id) {
-			return result, conflict("invalid_selection", "购物车项目无效或重复")
+			return result, invalidInput("invalid_selection", "购物车项目无效或重复")
 		}
 	}
 	input.ItemIDs = ids

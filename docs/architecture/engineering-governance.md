@@ -78,7 +78,13 @@ GoIDC 是 Go API、Next.js/React、PostgreSQL 18 和 worker 组成的业务系�
 
 ### 架构依赖与存量持久化边界
 
+`Server.Handler()`只负责装配领域注册器及外层追踪/CSRF/Portal/维护管道；注册声明分布于`internal/httpapi/routes_*.go`和既有专用入口，继续使用标准库ServeMux。各路由的auth/sessionAuth/accountAuth包装及默认拒绝权限表保留，不按路径前缀自动赋予认证或权限。`TestRouteRegistrationContract`按Handler可达顺序比对全部method/path、完整handler/包装表达式和管理员权限，防止拆分时漏路由、重复注册或弱化包装。新增或修改API时须评审该声明夹具及RBAC行为，不能仅刷新夹具绕过检查；此夹具是测试输入，不是活动审计文档。
+
 `internal/archtest` 在 CI 中显式执行，约束核心 `internal` 包不得依赖 `internal/httpapi`，并检查 HTTP 层直接访问数据库的现存债务。它通过 Go 类型、窄接口签名和传递 SQL 字符串的辅助函数识别调用，不按 `tx`、`Pool` 等变量名或 SQL 文本前缀放行。HTTP 入口应调用 Store 导出方法，将数据库事务和持久化规则留在 Store。
+
+持久化边界按完整入口逐批迁移，本轮财务设置读取已转为`Store.AdminFinanceSettings`强类型七字段响应，HTTP不再直接QueryRow，缺少singleton仍返回404且不补造数据；相应基线只删一条。其他既有HTTP事务仍是待收口债务，路由分文件不代表业务层拆分完成。共同解码和错误映射独立测试：纯输入错误使用与HTTP无关的`store.ValidationError`逐入口改为400，版本、状态及幂等冲突继续保留409，具体适用范围见[API共同协议](../admin/api.md#共同协议)。不得全局替换冲突状态或重建基线来绕过旧入口迁移。
+
+自有写入协议与外部读取兼容分别处理：供应商响应不因新增非核心字段整体拒绝；账期及价格必须有明确映射，不能猜测收费期限。现有供应商导入保留可完整报价的正常付费账期，小时/日及试用条目通过`excluded_cycles`说明原因；只有这些未支持条目而无可用价格时仍不可导入。严格JSON写入校验不向外部响应解析扩散，也不能为容错而放开金额、权限或幂等字段。
 
 [`http-persistence-baseline.json`](../../internal/archtest/testdata/http-persistence-baseline.json) 只登记现存调用的受控上限，不是给旧文件或新领域的持久化许可。条目绑定文件、函数、数据库操作、完整声明的规范化 AST 哈希及引用常量值哈希。新增条目、修改绑定函数体或提高调用数量均阻断；移除调用、迁移到 Store 或删除源码后，必须同步减少或删除基线条目。现阶段以整函数收口：同一函数还有旧数据库访问时，局部修改也会阻断。空行和 Go 排版不影响哈希，变量改名及业务修改可能触发门禁，不能通过重建基线接受；应先把该函数的持久化抽到 Store，或单独评审架构策略变更。
 

@@ -29,14 +29,14 @@ export function PageHeading({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   children?: React.ReactNode;
 }) {
   return (
     <div className="admin-page-heading flex flex-wrap justify-between items-start gap-4 mb-8">
       <div className="min-w-0">
         <h1 className="page-title break-all">{title}</h1>
-        <p className="text-muted-foreground mt-2">{description}</p>
+        {description && <p className="text-muted-foreground mt-2">{description}</p>}
       </div>
       {children}
     </div>

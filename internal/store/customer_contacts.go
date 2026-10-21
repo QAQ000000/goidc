@@ -83,22 +83,22 @@ func normalizeContactInput(input *ContactInput) error {
 		input.Status = "inactive"
 	}
 	if input.Email == "" || len(input.Email) > 254 {
-		return &Conflict{Code: "invalid_contact", Message: "联系人邮箱无效"}
+		return invalidInput("invalid_contact", "联系人邮箱无效")
 	}
 	parsed, err := mail.ParseAddress(input.Email)
 	if err != nil || parsed.Address != input.Email {
-		return &Conflict{Code: "invalid_contact", Message: "联系人邮箱无效"}
+		return invalidInput("invalid_contact", "联系人邮箱无效")
 	}
 	if input.Sex < 0 || input.Sex > 2 || input.Status != "active" && input.Status != "inactive" && input.Status != "disabled" {
-		return &Conflict{Code: "invalid_contact", Message: "联系人字段无效"}
+		return invalidInput("invalid_contact", "联系人字段无效")
 	}
 	if len(input.Username) > 120 || len(input.CompanyName) > 160 || len(input.PhoneNumber) > 80 || len(input.Permissions) > 50 {
-		return &Conflict{Code: "invalid_contact", Message: "联系人字段长度无效"}
+		return invalidInput("invalid_contact", "联系人字段长度无效")
 	}
 	for i, permission := range input.Permissions {
 		input.Permissions[i] = strings.TrimSpace(permission)
 		if input.Permissions[i] == "" || len(input.Permissions[i]) > 80 {
-			return &Conflict{Code: "invalid_contact", Message: "联系人权限无效"}
+			return invalidInput("invalid_contact", "联系人权限无效")
 		}
 	}
 	return nil

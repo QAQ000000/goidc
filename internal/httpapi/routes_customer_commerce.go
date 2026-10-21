@@ -1,0 +1,36 @@
+package httpapi
+
+import "net/http"
+
+func (s *Server) registerCustomerCommerceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/cart", s.auth(s.cart, false))
+	mux.HandleFunc("POST /api/v1/cart/quote", s.auth(s.cartPurchaseQuote, false))
+	mux.HandleFunc("POST /api/v1/cart/items", s.auth(s.addCartItem, false))
+	mux.HandleFunc("PATCH /api/v1/cart/items/{id}", s.auth(s.updateCartItem, false))
+	mux.HandleFunc("DELETE /api/v1/cart/items/{id}", s.auth(s.removeCartItem, false))
+	mux.HandleFunc("POST /api/v1/cart/promo", s.auth(s.applyCartPromo, false))
+	mux.HandleFunc("DELETE /api/v1/cart/promo", s.auth(s.removeCartPromo, false))
+	mux.HandleFunc("POST /api/v1/orders", s.auth(s.createOrder, false))
+	mux.HandleFunc("POST /api/v1/orders/{id}/cancel", s.auth(s.cancelOrder, false))
+	mux.HandleFunc("GET /api/v1/orders", s.auth(s.orders, false))
+	mux.HandleFunc("GET /api/v1/orders/page", s.auth(s.orders, false))
+	mux.HandleFunc("GET /api/v1/orders/{id}", s.auth(s.customerOrderDetail, false))
+	mux.HandleFunc("GET /api/v1/invoices", s.auth(s.invoices, false))
+	mux.HandleFunc("GET /api/v1/invoices/page", s.auth(s.invoices, false))
+	mux.HandleFunc("GET /api/v1/invoices/{id}", s.auth(s.invoiceDetail, false))
+	mux.HandleFunc("GET /api/v1/account", s.auth(s.account, false))
+	mux.HandleFunc("POST /api/v1/affiliate/withdrawals", s.auth(s.affiliateWithdrawals, false))
+	mux.HandleFunc("GET /api/v1/affiliate/withdrawals", s.auth(s.affiliateWithdrawals, false))
+	mux.HandleFunc("GET /api/v1/affiliate/withdrawals/{id}", s.auth(s.affiliateWithdrawalDetail, false))
+	mux.HandleFunc("GET /api/v1/admin/affiliate/withdrawals", s.auth(s.adminAffiliateWithdrawals, true))
+	mux.HandleFunc("GET /api/v1/admin/affiliate/withdrawals/{id}", s.auth(s.affiliateWithdrawalDetail, true))
+	mux.HandleFunc("POST /api/v1/admin/affiliate/withdrawals/{id}/review", s.auth(s.reviewAffiliateWithdrawal, true))
+	mux.HandleFunc("POST /api/v1/admin/affiliate/withdrawals/{id}/payout", s.auth(s.payoutAffiliateWithdrawal, true))
+	mux.HandleFunc("POST /api/v1/admin/affiliate/withdrawals/{id}/target", s.auth(s.affiliatePayoutTarget, true))
+	mux.HandleFunc("GET /api/v1/affiliate/overview", s.auth(s.affiliateOverview, false))
+	mux.HandleFunc("GET /api/v1/affiliate/commissions", s.auth(s.affiliateCommissions, false))
+	mux.HandleFunc("POST /api/v1/affiliate/apply", s.auth(s.applyAffiliate, false))
+	mux.HandleFunc("GET /api/v1/affiliate/links", s.auth(s.affiliateLinks, false))
+	mux.HandleFunc("POST /api/v1/affiliate/links", s.auth(s.affiliateLinks, false))
+	mux.HandleFunc("PATCH /api/v1/affiliate/links/{id}", s.auth(s.updateAffiliateLink, false))
+}
