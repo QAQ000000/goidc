@@ -63,6 +63,24 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 可选的 `actions`、`feedback`、`dialogs` 分别放页头动作、持续结果和领域弹窗。`AdminListRegion.invalid` 接收非法 URL 或非法响应的就地提示；禁止把非法响应当空数组。`summary` 是真实结果摘要；没有读取权限、请求失败或输入无效时不显示已有数据或旧总数。刷新只可保留相同查询已有的成功数据。
 
+## 成品模板与业务接线
+
+后台外壳采用 [Next Shadcn Dashboard Starter 原生 Radix 版](https://github.com/Kiranism/next-shadcn-dashboard-starter/tree/21848bd2512523f7b1ecd78b217b08e9ea007d5e)，固定 v1.0.0 / `21848bd2512523f7b1ecd78b217b08e9ea007d5e`，不跟随上游自动更新。选用该版可复用当前 Radix、Next、React 和 Tailwind，不引入 Base UI 或更换技术栈。
+
+| 上游源码 | 本地实现及适配 |
+| --- | --- |
+| `ui/sidebar.tsx`、`ui/sheet.tsx`、`ui/tooltip.tsx`、`ui/dropdown-menu.tsx`、`ui/breadcrumb.tsx`、`ui/separator.tsx`、`ui/card.tsx` | 复用到 `web/src/components/ui/`，Radix独立包改用既有bundle，图标改用既有Lucide，交互文案中文化；骨架宽度固定以适应React纯度检查 |
+| `hooks/use-mobile.tsx` | 使用同一768px断点，改为 `useSyncExternalStore` 订阅，适应React19及服务端水合 |
+| `app/dashboard/layout.tsx`、`layout/app-sidebar.tsx`、`layout/header.tsx` | [后台layout](../../web/src/app/admin/layout.tsx)使用真实会话和模板SidebarProvider；[AdminShell](../../web/src/components/admin-shell.tsx)使用原Sidebar/Header/账户菜单结构，导航由现有权限配置提供，账户及退出接现有接口 |
+| `layout/page-container.tsx`、`ui/heading.tsx` | [AdminPageContainer](../../web/src/components/admin-page-container.tsx)保留页面头和动作插槽，标题使用h1，支持手机换行；外边距统一由外壳管理，去掉演示信息栏及整页请求状态 |
+| `styles/themes/vercel.css` | [后台主题](../../web/src/app/admin-dashboard-template.css)采用亮色中性令牌，作用于整个后台及其弹窗；公开站点不使用后台令牌，未提供暗色切换 |
+
+已删除原顶部业务域导航及对应旧外壳样式；业务域统一进入侧边栏折叠菜单，底部账户菜单保留个人设置、官网和退出。展开状态使用独立的 `goidc_admin_sidebar_state` 外观Cookie，不参与认证。手机使用模板Sheet，链接跳转关闭菜单，Escape关闭后焦点回到触发按钮；展开态及手机端不挂载隐藏Tooltip层，避免吞掉Escape。
+
+客户列表、详情使用模板页面容器、卡片和页签展示；常规列表继续组合 `AdminListPage`、`AdminListRegion`、`ResourceTable` 与服务端分页，不另起CRUD或查询框架。已有其他业务页现在使用新外壳，但内部复杂表单和业务交互仍保留领域实现，不能据此外推为全部页面重写完成。
+
+模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
+
 ## 读取、URL 与权限
 
 - 继续通过现有 `api()` 读取：它自动添加 `/api/v1`、门户、Cookie 和 CSRF 相关标头；客户分页目录是 `/admin/customers/page`，兼容的 `/admin/customers` 只返回数组。

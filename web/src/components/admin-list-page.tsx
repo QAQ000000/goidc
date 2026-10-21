@@ -4,9 +4,9 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { ApiError } from "@/lib/api";
-import { PageHeading } from "./resource-page";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
+import { AdminPageContainer } from "./admin-page-container";
 
 // These slots arrange a page; the domain retains its queries and write protocol.
 export function AdminListPage({ title, description, actions, filters, feedback, children, dialogs }: {
@@ -18,13 +18,9 @@ export function AdminListPage({ title, description, actions, filters, feedback, 
   children: ReactNode;
   dialogs?: ReactNode;
 }) {
-  return <div className="min-w-0 space-y-5 text-foreground">
-    <PageHeading title={title} description={description}>{actions}</PageHeading>
-    {filters}
-    {feedback}
-    {children}
-    {dialogs}
-  </div>;
+  return <AdminPageContainer pageTitle={title} pageDescription={description} pageHeaderAction={actions}>
+    {filters}{feedback}{children}{dialogs}
+  </AdminPageContainer>;
 }
 
 export function AdminListRegion<T>({ title, summary, allowed = true, invalid, resource, retry, children, pagination }: {

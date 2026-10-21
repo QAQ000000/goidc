@@ -116,13 +116,18 @@ test('admin shell keeps its personal account link and navigation for staff witho
     'next/link': { default: Link },
     'next/navigation': { usePathname: () => '/admin/account' },
     '@/lib/admin-navigation': navigation,
-    './site-provider': { SiteBrand: () => null },
+    './site-provider': { useSite: () => ({ site: null }) },
+    './ui/sidebar': new Proxy({}, { get: (_, name) => name === 'useSidebar' ? () => ({ state: 'expanded', isMobile: false, setOpenMobile() {} }) : primitive(String(name)) }),
   });
   const tree = AdminShell({ title: '个人账户', user: user('admin'), error: null, refresh() {}, logout: async () => {}, logoutError: '', children: 'security' });
   assert(nodes(tree).some(node => node.type === Link && node.props.href === '/admin/account'));
-  const sidebar = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'Navigation');
+  const sidebar = nodes(tree).find(node => typeof node.type === 'function' && node.type.name === 'AppSidebar');
   assert(sidebar);
-  const links = nodes(sidebar.type(sidebar.props)).filter(node => node.type === Link);
+  const content = sidebar.type(sidebar.props);
+  assert(nodes(content).some(node => node.type === Link && node.props.href === '/admin/account'), 'template account menu retains personal settings');
+  const navigationMenu = nodes(content).find(node => node.props['aria-label'] === '管理导航');
+  assert(navigationMenu);
+  const links = nodes(navigationMenu).filter(node => node.type === Link);
   assert.deepEqual(links.map(node => node.props.href), ['/admin/account']);
 });
 

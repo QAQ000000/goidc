@@ -303,6 +303,8 @@ flowchart TD
 
 ### 当前实施状态
 
+后台外壳现采用[Next Shadcn Dashboard Starter固定Radix版](admin/frontend-development.md#成品模板与业务接线)的Sidebar/Header结构，原顶部业务域导航已替换为侧边栏折叠菜单，账户菜单位于底部。客户列表、详情使用模板容器及卡片；其余业务页共用新外壳，内部复杂交互逐页接线，不能视作全部页面已重写。后台采用模板中性亮色主题，公开站点保持独立。
+
 首批已重构 `AdminShell`、工作台及客户列表、新建、详情。工作台使用4项真实指标、5项待办和商品/人员双排名，排名区域独立加载与重试；列表提供高级筛选、URL分页和返回上下文；新建提交前确认，初始密码仅存内存；详情接真实summary及10个按需页签，资料/联系人支持版本冲突和原请求恢复。管理员登录与独立Cookie、现有权限和写入协议继续复用。
 
 Web lint/typecheck及隔离webpack生产构建已通过；独立PG18真实Go API浏览器已验证1440/768/390px无横向溢出、手机菜单、顶栏吸顶、排名单区500与独立重试、返回列表筛选，以及客户创建、资料保存和联系人创建的持久化。后端相关专项30项取得RUN/PASS、零跳过；具体边界见[领域验收矩阵](architecture/contract-verification-matrix.md)。这些证据不覆盖全部后台、未测视口/权限/失败组合、真实外部渠道、部署或生产。
@@ -330,7 +332,7 @@ Web lint/typecheck及隔离webpack生产构建已通过；独立PG18真实Go API
 
 实施复用规则及组合示例见[后台前端开发与复用](admin/frontend-development.md)。常规列表复用 `AdminListPage`、`AdminListRegion`、`ResourceTable` 与受控分页，领域模块保留 URL 校验、权限、报价、版本和未知结果恢复；不以通用 CRUD 代替业务动作。
 
-现有基础组件位于 `web/src/components/ui/`：Button、Input、Textarea、Label、Select、Checkbox、Badge、Alert、Skeleton、Table、Dialog；Tooltip等使用现有Radix能力，图标使用lucide-react。不为本设计额外引入组件框架。
+现有基础组件位于 `web/src/components/ui/`：Button、Input、Textarea、Label、Select、Checkbox、Badge、Alert、Skeleton、Table、Dialog及模板Sidebar、Sheet、Card、Breadcrumb、DropdownMenu；Tooltip等使用现有Radix能力，图标使用lucide-react。不为本设计额外引入组件框架。
 
 下表定义复用目标，不表示这些业务组件已全部存在；实现前先检查当前组件，名称可沿现有约定。
 

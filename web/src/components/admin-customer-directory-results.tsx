@@ -49,14 +49,14 @@ function customerColumns(detailHref: (customer: AdminCustomer) => string): reado
       id: "customer",
       header: "客户",
       className: "px-4 py-3",
-      render: customer => <><Link href={detailHref(customer)} className="font-medium text-primary hover:underline">{customer.display_name || customer.username}</Link><div className="mt-1 text-xs text-muted-foreground">{customer.username} · {customer.email}</div>{customer.company_name && <div className="mt-1 text-xs text-muted-foreground">{customer.company_name}</div>}</>,
+      render: customer => <div className="flex items-center gap-3"><span aria-hidden="true" className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">{Array.from(customer.display_name || customer.username)[0]}</span><div className="min-w-0"><Link href={detailHref(customer)} className="font-medium text-foreground hover:underline">{customer.display_name || customer.username}</Link><div className="mt-1 text-xs text-muted-foreground">{customer.username} · {customer.email}</div>{customer.company_name && <div className="mt-1 text-xs text-muted-foreground">{customer.company_name}</div>}</div></div>,
     },
     { id: "status", header: "账号状态", className: "px-4 py-3", render: customer => <CustomerDirectoryStatus status={customer.status} /> },
-    { id: "group", header: "客户分组", className: "px-4 py-3 text-muted-foreground", render: customer => customer.group_name || "未分组" },
+    { id: "group", header: "客户分组", className: "px-4 py-3 text-muted-foreground", render: customer => customer.group_name ? <span className="rounded-md border border-border px-2 py-1 text-xs">{customer.group_name}</span> : "未分组" },
     { id: "sales", header: "销售归属", className: "px-4 py-3 text-muted-foreground", render: customer => customer.sales_owner_name || "无归属" },
     { id: "balance", header: "钱包余额", headerClassName: "text-right", className: "px-4 py-3 text-right tabular-nums", render: customer => money(customer.balance_cents) },
     { id: "created", header: "注册时间", className: "px-4 py-3 text-xs tabular-nums text-muted-foreground", render: customer => date(customer.created_at) },
-    { id: "actions", header: "操作", className: "px-4 py-3", render: customer => <Link href={detailHref(customer)} className="text-sm text-primary hover:underline">查看客户</Link> },
+    { id: "actions", header: "操作", className: "px-4 py-3", render: customer => <Button asChild variant="outline" size="sm"><Link href={detailHref(customer)}>查看客户</Link></Button> },
   ];
 }
 

@@ -1,138 +1,115 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// Layout, sidebar and account menu adapted from Next Shadcn Dashboard Starter
+// v1.0.0: app/dashboard/layout.tsx, components/layout/app-sidebar.tsx and header.tsx.
+// MIT; see web/licenses/next-shadcn-dashboard-starter.MIT.
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dialog, Tooltip } from "radix-ui";
-import { ArrowUpRight, ChevronDown, ChevronRight, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationGroups, adminNavigationItem, can } from "@/lib/admin-navigation";
+import { Collapsible } from "radix-ui";
+import { ArrowUpRight, ChevronRight, ChevronsUpDown, Layers3, LogOut, UserRound } from "lucide-react";
+import { adminDomain, adminDomains, adminEntry, adminNavigation, adminNavigationItem, can } from "@/lib/admin-navigation";
 import type { User } from "@/lib/api";
-import { SiteBrand } from "./site-provider";
+import { useSite } from "./site-provider";
+import { Button } from "./ui/button";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "./ui/breadcrumb";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
+import { Separator } from "./ui/separator";
+import { Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel, SidebarHeader, SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail, SidebarTrigger, useSidebar } from "./ui/sidebar";
 
-function Hint({ label, children }: { label: string; children: React.ReactNode }) {
-  return <Tooltip.Root><Tooltip.Trigger asChild>{children}</Tooltip.Trigger><Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="admin-tooltip">{label}</Tooltip.Content></Tooltip.Portal></Tooltip.Root>;
-}
-
-function Navigation({ user, path, close }: { user: User | null; path: string; close?: () => void }) {
-  const [collapsed, setCollapsed] = useState<string[]>([]);
-  const current = adminNavigationItem(path);
+function AppSidebar({ user, logout, busy }: { user: User | null; logout: () => void; busy: boolean }) {
+  const pathname = usePathname();
+  const current = adminNavigationItem(pathname);
+  const domain = adminDomain(pathname);
+  const { state, isMobile, setOpenMobile } = useSidebar();
+  const { site } = useSite();
   const allowed = adminNavigation.filter(item => can(user, item.permission));
-  const domain = adminDomain(path);
-  return <nav className="admin-navigation" aria-label="管理导航">
-    {adminNavigationGroups.map(group => {
-      const items = allowed.filter(item => item.group === group.id);
-      if (!items.length || (!close && !domain.groups.includes(group.id))) return null;
-      const expanded = !collapsed.includes(group.id);
-      return <div className="admin-nav-group" key={group.id}>
-        <button className="admin-group-toggle" aria-expanded={expanded} aria-controls={`admin-nav-${close ? "mobile" : "desktop"}-${group.id}`} onClick={() => setCollapsed(previous => expanded ? [...previous, group.id] : previous.filter(id => id !== group.id))}>
-          <span>{group.label}</span><ChevronDown size={12} className={expanded ? "" : "-rotate-90"} />
-        </button>
-        <div id={`admin-nav-${close ? "mobile" : "desktop"}-${group.id}`} className={`admin-group-items ${expanded ? "" : "collapsed"}`}>
-          {items.map(({ href, label, icon: Icon }) => <Hint key={href} label={label}><Link href={href} className={`admin-nav-link ${current?.href === href ? "active" : ""}`} aria-current={current?.href === href ? "page" : undefined} aria-label={label} onClick={close}>
-            <Icon size={18} aria-hidden="true" /><span className="admin-nav-label">{label}</span>
-          </Link></Hint>)}
-        </div>
-      </div>;
-    })}
-    {!user && <p className="admin-nav-loading" role="status">正在读取导航</p>}
-  </nav>;
-}
-
-function Brand({ user }: { user: User | null }) {
-  return <Link className="admin-brand" href={user ? adminEntry(user) : "/admin"} aria-label="管理控制台首页">
-    <img
-      src="/assets/admin-header-logo.png"
-      alt="智简魔方"
-      className="admin-header-logo"
-    />
-    <span className="admin-brand-full sr-only"><SiteBrand compact /></span>
-    <LayoutDashboard className="admin-brand-compact" size={24} aria-hidden="true" />
-  </Link>;
+  const close = () => setOpenMobile(false);
+  return <Sidebar collapsible="icon">
+    <SidebarHeader>
+      <SidebarMenu><SidebarMenuItem><SidebarMenuButton size="lg" asChild tooltip="管理控制台首页">
+        <Link href={user ? adminEntry(user) : "/admin"} prefetch={false} onClick={close}>
+          <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"><Layers3 className="size-4" /></span>
+          <span className="grid flex-1 text-left text-sm leading-tight"><span className="truncate font-semibold">{site?.site_name || "GoIDC"}</span><span className="truncate text-xs text-muted-foreground">管理控制台</span></span>
+        </Link>
+      </SidebarMenuButton></SidebarMenuItem></SidebarMenu>
+    </SidebarHeader>
+    <SidebarContent><SidebarGroup>
+      <SidebarGroupLabel>工作空间</SidebarGroupLabel>
+      <SidebarMenu aria-label="管理导航">
+        {adminDomains.map(item => {
+          const links = allowed.filter(link => item.groups.includes(link.group));
+          if (!links.length) return null;
+          const Icon = links[0].icon;
+          const active = domain.id === item.id;
+          if (links.length === 1 || state === "collapsed" && !isMobile) return <SidebarMenuItem key={item.id}>
+            <SidebarMenuButton asChild tooltip={item.label} isActive={active}><Link href={links[0].href} prefetch={false} onClick={close}><Icon /><span>{item.label}</span></Link></SidebarMenuButton>
+          </SidebarMenuItem>;
+          return <Collapsible.Root asChild key={`${item.id}:${active}`} defaultOpen={active} className="group/collapsible"><SidebarMenuItem>
+            <Collapsible.Trigger asChild><SidebarMenuButton tooltip={item.label} isActive={active}><Icon /><span>{item.label}</span><ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" /></SidebarMenuButton></Collapsible.Trigger>
+            <Collapsible.Content><SidebarMenuSub>{links.map(link => <SidebarMenuSubItem key={link.href}>
+              <SidebarMenuSubButton asChild isActive={current?.href === link.href}><Link href={link.href} prefetch={false} aria-current={current?.href === link.href ? "page" : undefined} onClick={close}><span>{link.label}</span></Link></SidebarMenuSubButton>
+            </SidebarMenuSubItem>)}</SidebarMenuSub></Collapsible.Content>
+          </SidebarMenuItem></Collapsible.Root>;
+        })}
+      </SidebarMenu>
+    </SidebarGroup></SidebarContent>
+    <SidebarFooter>
+      {user && <SidebarMenu><SidebarMenuItem><DropdownMenu>
+        <DropdownMenuTrigger asChild><SidebarMenuButton size="lg" aria-label="管理员账户菜单" className="data-[state=open]:bg-sidebar-accent">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted font-medium">{Array.from(user.display_name || user.username)[0] || "A"}</span>
+          <span className="grid flex-1 text-left text-sm leading-tight"><span className="truncate font-semibold">{user.display_name || user.username}</span><span className="truncate text-xs text-muted-foreground">{user.email}</span></span><ChevronsUpDown className="ml-auto size-4" />
+        </SidebarMenuButton></DropdownMenuTrigger>
+        <DropdownMenuContent className="min-w-56 rounded-lg" side={isMobile ? "top" : "right"} align="end" sideOffset={4}>
+          <DropdownMenuLabel className="max-w-64 truncate">{user.display_name || user.username}</DropdownMenuLabel><DropdownMenuSeparator />
+          <DropdownMenuItem asChild><Link href="/admin/account" prefetch={false} onClick={close}><UserRound />个人账户</Link></DropdownMenuItem>
+          <DropdownMenuItem asChild><Link href="/" onClick={close}><ArrowUpRight />查看官网</Link></DropdownMenuItem>
+          <DropdownMenuSeparator /><DropdownMenuItem disabled={busy} onSelect={logout}><LogOut />{busy ? "正在退出…" : "退出登录"}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu></SidebarMenuItem></SidebarMenu>}
+    </SidebarFooter>
+    <SidebarRail />
+  </Sidebar>;
 }
 
 export function AdminShell({ children, title, user, error, refresh, logout, logoutError }: {
-  children: React.ReactNode;
-  title: string;
-  user: User | null;
-  error: Error | null;
-  refresh: () => void;
-  logout: () => Promise<void>;
-  logoutError: string;
+  children: React.ReactNode; title: string; user: User | null; error: Error | null;
+  refresh: () => void; logout: () => Promise<void>; logoutError: string;
 }) {
   const path = usePathname();
   const current = adminNavigationItem(path);
-  const group = adminNavigationGroups.find(item => item.id === current?.group);
   const domain = adminDomain(path);
-  const home = path === "/admin";
-  const [compact, setCompact] = useState(false);
-  const [drawer, setDrawer] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 768px)");
-    const closeOnDesktop = () => { if (media.matches) setDrawer(false); };
-    media.addEventListener("change", closeOnDesktop);
-    return () => media.removeEventListener("change", closeOnDesktop);
-  }, []);
-
   async function handleLogout() {
     if (loggingOut) return;
     setLoggingOut(true);
     try { await logout(); } finally { setLoggingOut(false); }
   }
-
-  return <Tooltip.Provider delayDuration={300}><Dialog.Root open={drawer} onOpenChange={setDrawer}><div className={`admin-shell ${home ? "is-home" : ""} ${compact ? "is-compact" : ""}`}>
-    <a href="#admin-main" className="admin-skip-link">跳到主内容</a>
-    <header className="admin-global-header">
-      <Dialog.Trigger asChild><Button className="admin-menu-button" variant="ghost" size="icon" aria-label="打开管理菜单"><Menu /></Button></Dialog.Trigger>
-      <Brand user={user} />
-      <nav className="admin-domain-navigation" aria-label="业务域导航">
-        {adminDomains.map(item => {
-          const entry = adminNavigation.find(link => link.href === item.href && can(user, link.permission)) ?? adminNavigation.find(link => item.groups.includes(link.group) && can(user, link.permission));
-          if (!entry) return null;
-          return <Link key={item.id} href={entry.href} className={domain.id === item.id ? "active" : ""} aria-current={domain.id === item.id ? "true" : undefined}>{item.label}</Link>;
-        })}
-      </nav>
-      <div className="admin-global-account">
-        {user ? <>
-          <Button className="admin-front-button" variant="ghost" size="sm" asChild><Link href="/"><ArrowUpRight size={14} />查看官网</Link></Button>
-          <Link href="/admin/account" className="admin-account-link" aria-label="个人账户" title="个人账户">
-            <span className="admin-avatar" aria-hidden="true">{Array.from(user.display_name || user.username)[0] || "A"}</span>
-            <span className="admin-user-name">{user.display_name || user.username}</span>
-          </Link>
-          <Button variant="ghost" size="icon" aria-label="退出登录" title="退出登录" disabled={loggingOut} onClick={() => void handleLogout()}><LogOut size={16} /></Button>
-        </> : error ? <Button size="sm" variant="outline" onClick={refresh}>重试身份读取</Button> : <span className="text-xs text-muted-foreground" role="status">连接中</span>}
-      </div>
-    </header>
-    <aside className="admin-sidebar">
-      <div className="admin-sidebar-domain">{domain.label}</div>
-      <Navigation key={path} user={user} path={path} />
-      <Hint label="查看官网"><Link href="/" className="admin-front-link"><ArrowUpRight size={18} /><span className="admin-nav-label">查看官网</span></Link></Hint>
-    </aside>
-    <div className="admin-workarea">
-      <header className="admin-topbar">
-        <div className="admin-topbar-leading">
-          <Button className="admin-collapse-button" variant="ghost" size="icon" title={compact ? "展开导航" : "收起导航"} aria-label={compact ? "展开导航" : "收起导航"} aria-expanded={!compact} onClick={() => setCompact(value => !value)}>{compact ? <PanelLeftOpen /> : <PanelLeftClose />}</Button>
-          <nav className="admin-breadcrumbs" aria-label="面包屑">
-            {group && <><span className="admin-breadcrumb-group">{group.label}</span><ChevronRight className="admin-breadcrumb-group" size={14} aria-hidden="true" /></>}
-            {current && current.label !== title ? <><Link href={current.href}>{current.label}</Link><ChevronRight size={14} aria-hidden="true" /></> : null}
-            <span aria-current="page">{title}</span>
-          </nav>
+  return <>
+    <a href="#admin-main" className="fixed -top-20 left-3 z-[100] rounded border border-ring bg-card px-4 py-2 focus:top-2">跳到主内容</a>
+    <AppSidebar user={user} logout={() => void handleLogout()} busy={loggingOut} />
+    <SidebarInset className="min-w-0" id="admin-main" tabIndex={-1}>
+      <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/90 backdrop-blur-md">
+        <div className="flex min-w-0 items-center gap-2 px-4">
+          <SidebarTrigger className="-ml-1 shrink-0" />
+          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+          <Breadcrumb><BreadcrumbList className="flex-nowrap">
+            <BreadcrumbItem className="hidden shrink-0 md:flex"><BreadcrumbLink asChild><Link href={user ? adminEntry(user) : "/admin"}>{domain.label}</Link></BreadcrumbLink></BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden md:block" />
+            {current && current.label !== title && <><BreadcrumbItem className="hidden md:flex"><BreadcrumbLink asChild><Link href={current.href}>{current.label}</Link></BreadcrumbLink></BreadcrumbItem><BreadcrumbSeparator className="hidden md:block" /></>}
+            <BreadcrumbItem className="min-w-0"><BreadcrumbPage className="truncate">{title}</BreadcrumbPage></BreadcrumbItem>
+          </BreadcrumbList></Breadcrumb>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 px-4">
+          <Button asChild variant="ghost" size="sm"><Link href="/"><ArrowUpRight /><span className="hidden sm:inline">查看官网</span><span className="sr-only sm:hidden">查看官网</span></Link></Button>
+          {error && <Button variant="outline" size="sm" onClick={refresh}>重试身份读取</Button>}
         </div>
       </header>
-      <main id="admin-main" tabIndex={-1} className="admin-content">
-        {logoutError && <p role="alert" className="text-destructive mb-4">{logoutError}</p>}
-        {error && <p role="alert" className="text-destructive mb-4">身份读取失败：{error.message}</p>}
+      <div className="dashboard-content min-w-0 flex-1 p-4 md:p-6">
+        {logoutError && <p role="alert" className="mb-4 text-destructive">{logoutError}</p>}
+        {error && <p role="alert" className="mb-4 text-destructive">身份读取失败：{error.message}</p>}
         {children}
-      </main>
-    </div>
-  </div>
-    <Dialog.Portal><Dialog.Overlay className="admin-drawer-overlay" /><Dialog.Content className="admin-drawer" aria-describedby={undefined}>
-      <Dialog.Title className="sr-only">管理导航</Dialog.Title>
-      <div className="admin-drawer-header"><Brand user={user} /><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label="关闭管理菜单"><X /></Button></Dialog.Close></div>
-      <Navigation key={path} user={user} path={path} close={() => setDrawer(false)} />
-      <Link href="/" className="admin-front-link" onClick={() => setDrawer(false)}><ArrowUpRight size={18} />查看官网</Link>
-    </Dialog.Content></Dialog.Portal>
-  </Dialog.Root></Tooltip.Provider>;
+      </div>
+    </SidebarInset>
+  </>;
 }

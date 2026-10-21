@@ -1,0 +1,73 @@
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+/* Next Shadcn Dashboard Starter v1.0.0 (MIT), styles/themes/vercel.css.
+   Neutral light palette scoped to the administrator layout.
+   See web/licenses/next-shadcn-dashboard-starter.MIT. */
+.admin-theme:has(.dashboard-shell),
+body:has(.admin-theme .dashboard-shell) {
+  --admin-bg: oklch(0.99 0 0);
+  --admin-surface: oklch(1 0 0);
+  --admin-text: oklch(0.16 0 0);
+  --admin-text-secondary: oklch(0.40 0 0);
+  --admin-primary: oklch(0.20 0 0);
+  --admin-primary-soft: oklch(0.94 0 0);
+  --admin-border: oklch(0.92 0 0);
+  --background: var(--admin-bg);
+  --foreground: var(--admin-text);
+  --primary: var(--admin-primary);
+  --primary-foreground: oklch(1 0 0);
+  --card: var(--admin-surface);
+  --card-foreground: var(--admin-text);
+  --popover: var(--admin-surface);
+  --popover-foreground: var(--admin-text);
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.44 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: var(--foreground);
+  --border: var(--admin-border);
+  --input: oklch(0.86 0 0);
+  --ring: var(--admin-primary);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --radius: 0.5rem;
+  --control-radius-sm: 4px;
+  --control-radius-md: 6px;
+  --control-radius-lg: 8px;
+  --control-radius-xl: 12px;
+}
+.dashboard-shell .admin-page-heading { margin-bottom: 20px; }
+.dashboard-shell .page-title { font-size: 24px; line-height: 32px; }
+.dashboard-shell .data-surface { border-radius: 8px; }
+.dashboard-shell [data-slot="table-header"] { background: var(--muted); }
+.dashboard-shell [data-slot="table-head"] { height: 40px; color: var(--muted-foreground); }
+.dashboard-shell [data-slot="table-cell"] { padding: 12px 16px; }
+.dashboard-shell [data-slot="button"],
+body:has(.dashboard-shell) [data-slot="input"],
+body:has(.dashboard-shell) [data-slot="textarea"],
+body:has(.dashboard-shell) [data-slot="select-trigger"] { border-radius: 6px; }
+.dashboard-shell section[aria-label="客户查询结果"],
+.dashboard-shell section[aria-label="客户筛选"] { border-radius: 12px; }
+.dashboard-shell section[aria-label="客户查询结果"] > header { padding: 16px; }
+@media (max-width: 767px) {
+  .dashboard-shell [data-slot="button"],
+  body:has(.dashboard-shell) [data-slot="sidebar-menu-button"],
+  body:has(.dashboard-shell) [data-slot="sidebar-menu-sub-button"],
+  body:has(.dashboard-shell) [data-slot="sheet-content"] button { min-height: 44px; }
+  body:has(.dashboard-shell) [data-slot="dialog-content"] { max-height: calc(100dvh - 32px); overflow-y: auto; }
+}

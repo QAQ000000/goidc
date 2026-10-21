@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter,useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft,RefreshCw,Save,Trash2 } from "lucide-react";
+import { ArrowLeft,RefreshCw,Save,Trash2,Server,Receipt,MessageSquare,WalletCards,ArrowDownLeft } from "lucide-react";
 import { ApiError,date,money,type Contact } from "@/lib/api";
 import { transactionReturnHref } from "@/lib/transaction-return";
 import { useResource } from "@/hooks/use-resource";
@@ -22,6 +22,8 @@ import { useCustomerDetailMutation } from "./admin-customer-detail-mutation";
 import { CustomerTopupButton } from "./admin-customer-topup";
 import { CustomerReferrerPanel } from "./admin-customer-referrer";
 import { CustomerBusinessCreateActions } from "./admin-customer-business-actions";
+import { AdminPageContainer } from "./admin-page-container";
+import { Card, CardHeader, CardTitle, CardAction, CardContent } from "./ui/card";
 
 type Row=Record<string,unknown>;
 type Page={ items: Row[]; total: number; limit: number; offset: number };
@@ -36,7 +38,7 @@ type SummarySection={ available: boolean; reason: string|null; data: Row|null };
 type CustomerSummary={ customer: Row; as_of: string; currency: string; sections: Record<string,SummarySection> };
 type CustomerDetailTab="summary"|"profile"|"services"|"invoices"|"transactions"|"tickets"|"logs"|"notifications"|"files"|"affiliate";
 const customerDetailTabLabel: Record<CustomerDetailTab,string>={ summary: "摘要",profile: "资料",services: "服务",invoices: "账单",transactions: "交易",tickets: "工单",logs: "日志",notifications: "通知",files: "文件",affiliate: "推广" };
-const panelClass="min-w-0 rounded border bg-card p-4 sm:p-5";
+const panelClass="min-w-0 rounded-xl border border-border bg-card p-4 sm:p-5";
 
 export function AdminCustomerDetailView({ customerId }: { customerId: number }) {
   const actor=useAdminIdentity();
@@ -54,22 +56,17 @@ function CustomerDetailForActor({ customerId }: { customerId: number }) {
   const canView=useAdminPermission("customers.view");
   const customer=useResource<AdminCustomer>(canView? `/admin/customers/${customerId}`:null,false);
   const tabHref=(value: CustomerDetailTab) => { const params=new URLSearchParams(search.toString()); params.delete("section"); if(value==="summary") params.delete("tab"); else params.set("tab",value); return `/admin/customers/${customerId}${params.size? `?${params.toString()}`:""}`; };
-  return <div className="min-w-0 space-y-4">
-    <header className="flex flex-wrap items-start justify-between gap-3">
-      <div className="min-w-0 space-y-1">
-        <Button asChild variant="ghost" size="sm" className="-ml-3">
-          <Link href={returnHref}>
-            <ArrowLeft size={16} />{transactionBack? "返回交易流水":"返回客户列表"}</Link>
-        </Button>
-        <h1 className="break-words text-[22px] leading-[30px] font-semibold">客户 #{customerId}{customer.data? ` · ${customer.data.display_name||customer.data.username}`:""}</h1>{customer.data&&<div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="break-all text-muted-foreground">{customer.data.username}</span>
-          <Status value={customer.data.status} />
-        </div>}</div>
-      <Button variant="outline" disabled={customer.isLoading} onClick={customer.refresh}>
-        <RefreshCw size={16} className={customer.isLoading? "animate-spin":""} />刷新资料</Button>
-    </header>
+  return <AdminPageContainer
+    pageTitle={`客户 #${customerId}${customer.data? ` · ${customer.data.display_name||customer.data.username}`:""}`}
+    pageDescription="查看客户资料，处理服务、账单与关联业务。"
+    pageHeaderAction={<>
+      <Button asChild variant="outline"><Link href={returnHref}><ArrowLeft size={16} />{transactionBack? "返回交易流水":"返回客户列表"}</Link></Button>
+      <Button variant="outline" disabled={customer.isLoading} onClick={customer.refresh}><RefreshCw size={16} className={customer.isLoading? "animate-spin":""} />刷新资料</Button>
+    </>}
+  >
     {!canView? <NoAccess label="客户资料" />:customer.error? <DetailFailure error={customer.error} retry={customer.refresh} />:!customer.data? <Loading />:<>
-      <nav className="flex min-w-0 max-w-full gap-1 overflow-x-auto border-b" aria-label="客户详情页签">{(Object.keys(customerDetailTabLabel) as CustomerDetailTab[]).map(value => <Link key={value} href={tabHref(value)} prefetch={false} scroll={false} aria-current={tab===value? "page":undefined} className={`flex min-h-11 shrink-0 items-center border-b-2 px-4 text-sm font-medium ${tab===value? "border-primary text-primary":"border-transparent text-muted-foreground hover:text-foreground"}`}>{customerDetailTabLabel[value]}</Link>)}</nav>
+      {/* Template TabsList presentation, keeping URL links and ordinary navigation semantics. */}
+      <nav className="flex min-w-0 max-w-full overflow-x-auto" aria-label="客户详情页签"><div className="inline-flex w-max gap-1 rounded-lg bg-muted p-1">{(Object.keys(customerDetailTabLabel) as CustomerDetailTab[]).map(value => <Link key={value} href={tabHref(value)} prefetch={false} scroll={false} aria-current={tab===value? "page":undefined} className={`flex min-h-9 shrink-0 items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${tab===value? "bg-card text-foreground shadow-sm":"text-muted-foreground hover:text-foreground"}`}>{customerDetailTabLabel[value]}</Link>)}</div></nav>
       <div className="grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0 space-y-4" aria-label={`${customerDetailTabLabel[tab]}内容`}>
           {tab==="summary"? <CustomerSummaryView customerId={customerId} />:tab==="profile"? <>
@@ -87,11 +84,12 @@ function CustomerDetailForActor({ customerId }: { customerId: number }) {
             <CustomerNotifications customerId={customerId} />
           </PermissionSection>:<CustomerRelatedPanel key={`${tab}:${requested}`} customerId={customerId} customerName={customer.data.display_name||customer.data.username} tab={tab} initialOrders={requested==="orders"} />}
         </section>
-        <aside className={`${panelClass} space-y-4`} aria-label="当前客户身份与操作">
-          <div>
-            <h2 className="text-base font-semibold">当前客户</h2>
-            <p className="mt-1 break-all text-sm text-muted-foreground">#{customerId} · {customer.data.username}</p>
-          </div>
+        <Card className="order-first min-w-0 gap-4 py-5 xl:order-last" role="complementary" aria-label="当前客户身份与操作">
+          <CardHeader className="px-5">
+            <div className="mb-2 flex items-center gap-3"><span aria-hidden="true" className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-semibold">{Array.from(customer.data.display_name||customer.data.username)[0]}</span><div className="min-w-0"><CardTitle><h2 className="break-words text-base">{customer.data.display_name||customer.data.username}</h2></CardTitle><p className="mt-1 break-all text-xs text-muted-foreground">#{customerId} · {customer.data.username}</p></div></div>
+            <Status value={customer.data.status} />
+          </CardHeader>
+          <CardContent className="space-y-4 px-5">
           <dl className="space-y-3 text-sm">
             <IdentityField label="姓名" value={customer.data.display_name} />
             <IdentityField label="邮箱" value={customer.data.email} />
@@ -110,10 +108,11 @@ function CustomerDetailForActor({ customerId }: { customerId: number }) {
               <CustomerActions row={customer.data} refresh={customer.refresh} />
             </div>
           </details>
-        </aside>
+          </CardContent>
+        </Card>
       </div>
     </>}
-  </div>;
+  </AdminPageContainer>;
 }
 function IdentityField({ label,value }: { label: string; value: string|null|undefined }) {
   return <div className="min-w-0">
@@ -132,13 +131,17 @@ function DetailFailure({ error,retry }: { error: Error; retry: () => void }) {
 }
 function renderValue(value: unknown,monetary=false): string { if(value===null||value===undefined) return "未提供"; return monetary? money(Number(value)):String(value); }
 
+const summaryIcons: Record<string,typeof Server>={ "服务": Server,"未付账单": Receipt,"工单": MessageSquare,"钱包流水": WalletCards,"外部现金": ArrowDownLeft };
 function SummaryBlock({ label,section,fields,note }: { label: string; section?: SummarySection; fields: [string,string,boolean?][]; note?: string }) {
-  return <section className={panelClass}>
-    <h2 className="text-base font-semibold">{label}</h2>{!section? <p className="mt-3 text-sm text-muted-foreground">本次响应未提供此区域。</p>:!section.available? <p className="mt-3 text-sm text-muted-foreground">{section.reason==="permission_denied"? "无权限查看":"当前不可用"}</p>:!section.data? <p className="mt-3 text-sm text-muted-foreground">数据未提供，请刷新摘要核对。</p>:<>
-      <dl className="mt-4 grid grid-cols-2 gap-4">{fields.map(([key,title,monetary]) => <div key={key} className="min-w-0">
-        <dt className="text-sm text-muted-foreground">{title}</dt>
-        <dd className="mt-1 break-words text-lg font-semibold tabular-nums">{renderValue(section.data?.[key],monetary)}</dd>
-      </div>)}</dl>{note&&<p className="mt-4 text-xs leading-5 text-muted-foreground">{note}</p>}</>}</section>;
+  const Icon=summaryIcons[label];
+  return <Card className="min-w-0 gap-4 py-5">
+    <CardHeader className="px-5"><CardTitle><h2 className="text-sm">{label}</h2></CardTitle>{Icon&&<CardAction><Icon size={17} aria-hidden="true" className="text-muted-foreground" /></CardAction>}</CardHeader>
+    <CardContent className="px-5">{!section? <p className="text-sm text-muted-foreground">本次响应未提供此区域。</p>:!section.available? <p className="text-sm text-muted-foreground">{section.reason==="permission_denied"? "无权限查看":"当前不可用"}</p>:!section.data? <p className="text-sm text-muted-foreground">数据未提供，请刷新摘要核对。</p>:<>
+      <dl className="grid grid-cols-2 gap-4">{fields.map(([key,title,monetary]) => <div key={key} className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{title}</dt>
+        <dd className="mt-1.5 break-words text-xl font-semibold tracking-tight tabular-nums">{renderValue(section.data?.[key],monetary)}</dd>
+      </div>)}</dl>{note&&<p className="mt-4 border-t pt-3 text-xs leading-5 text-muted-foreground">{note}</p>}</>}</CardContent>
+  </Card>;
 }
 function CustomerSummaryView({ customerId }: { customerId: number }) {
   const summary=useResource<CustomerSummary>(`/admin/customers/${customerId}/summary`,false);

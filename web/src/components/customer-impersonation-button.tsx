@@ -81,7 +81,7 @@ export function CustomerImpersonationButton({ customer }: { customer: CustomerIm
         type="button"
         disabled={busy || !active}
         onClick={() => void start()}
-        className="w-full bg-[#409eff] hover:bg-[#337ecc] text-white text-xs h-9 rounded font-normal"
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9 rounded font-normal"
       >
         <LogIn size={14} className="mr-1.5" />
         {busy ? "登录中..." : "以该客户登录"}
@@ -91,7 +91,7 @@ export function CustomerImpersonationButton({ customer }: { customer: CustomerIm
       {success && (
         <div role="status" className="text-xs text-muted-foreground mt-1 space-y-1">
           <p>{success}</p>
-          <a href="/console/services" target="_blank" rel="noopener noreferrer" className="text-[#409eff] underline underline-offset-4">打开客户中心</a>
+          <a href="/console/services" target="_blank" rel="noopener noreferrer" className="text-primary underline underline-offset-4">打开客户中心</a>
         </div>
       )}
     </div>
