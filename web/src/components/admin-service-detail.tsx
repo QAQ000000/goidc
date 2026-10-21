@@ -7,6 +7,8 @@ import { ArrowLeft, ExternalLink, Eye, EyeOff, FileText, RefreshCw, UserRound } 
 import { api, date, money, type Service, type User } from "@/lib/api";
 import { PermissionGate, useAdminIdentity, useAdminPermission } from "./workspace";
 import { Button } from "./ui/button";
+import { AdminPageContainer } from "./admin-page-container";
+import { Card, CardContent } from "./ui/card";
 import { Input } from "./ui/input";
 import { Status, cycles as billingCycles } from "./common";
 import { OrderRefundImpact, OrderRefundHoldLabel, orderRefundHold, orderRefundBlocksDelivery } from "./external-refund-order";
@@ -32,7 +34,7 @@ function Field({label,value,children}:{label:string;value?:string|number|null;ch
 }
 
 function Band({title,actions,children}:{title:string;actions?:ReactNode;children:ReactNode}) {
-  return <section className="bg-white border-b"><div className="service-section-heading"><h2 className="font-medium text-sm">{title}</h2><div className="flex flex-wrap items-center gap-2">{actions}</div></div><div className="p-4 sm:p-5">{children}</div></section>;
+  return <Card role="region" aria-label={title} className="gap-0 overflow-hidden py-0 shadow-none"><header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-4 sm:px-5"><h2 className="text-sm font-semibold">{title}</h2><div className="flex flex-wrap items-center gap-2">{actions}</div></header><CardContent className="p-4 sm:p-5">{children}</CardContent></Card>;
 }
 
 function CredentialsField({service}:{service:Service}) {
@@ -73,14 +75,13 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
       <Button variant="ghost" size="sm" asChild><Link href={backHref}><ArrowLeft size={16}/>服务列表</Link></Button>
       <div className="flex flex-wrap gap-2"><PermissionGate permission="customers.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/customers/${service.user_id}?tab=services`}><UserRound size={15}/>{service.customer_name||`客户 #${service.user_id}`}</Link></Button></PermissionGate><Button variant="outline" size="icon-sm" onClick={refresh} aria-label="刷新服务详情" title="刷新服务详情"><RefreshCw size={16}/></Button></div>
     </div>
-    <header className="admin-page-heading flex flex-wrap items-start justify-between gap-4 mb-5">
-      <div className="min-w-0"><h1 className="text-xl font-semibold break-words">{service.name}</h1><p className="text-sm text-muted-foreground mt-2 break-all">服务 #{service.id}<span className="mx-2">·</span>{service.domain}<span className="mx-2">·</span>{service.service_group_name??"未分组"}</p></div>
-      <div className="flex items-center gap-2"><Status value={service.status}/><OrderRefundHoldLabel value={service.external_refund_order_hold} />{pending.length>0&&<button type="button" className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded" onClick={()=>setTab("jobs")}>{pending.length} 个待处理任务</button>}</div>
-    </header>
+    <AdminPageContainer pageTitle={service.name} pageDescription={`服务 #${service.id} · ${service.domain} · ${service.service_group_name??"未分组"}`}
+      pageHeaderAction={<><Status value={service.status}/><OrderRefundHoldLabel value={service.external_refund_order_hold} />{pending.length>0&&<Button type="button" variant="outline" size="sm" onClick={()=>setTab("jobs")}>{pending.length} 个待处理任务</Button>}</>}>
+
     {orderRefundHold(service.external_refund_order_hold) && <div className="mb-5"><OrderRefundImpact reversal={orderRefundHold(service.external_refund_order_hold)!} /></div>}
     <Tabs.Root value={tab} onValueChange={setTab}>
-      <Tabs.List aria-label="服务详情" className="service-detail-tabs">
-        {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"},{id:"management",label:"管理"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="service-detail-tab">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
+      <Tabs.List aria-label="服务详情" className="mb-5 flex max-w-full gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+        {[{id:"product",label:"产品/服务"},{id:"configuration",label:"配置与变更"},{id:"jobs",label:"任务记录"},{id:"history",label:"操作历史"},{id:"management",label:"管理"}].map(item=><Tabs.Trigger key={item.id} value={item.id} className="min-h-11 shrink-0 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm md:min-h-9">{item.label}{item.id==="jobs"&&<span className="ml-2 text-xs text-muted-foreground">{jobs.length}</span>}</Tabs.Trigger>)}
       </Tabs.List>
       <Tabs.Content value="product" className="outline-none space-y-5">
         <Band title="产品" actions={<PermissionGate permission="orders.view"><Button variant="outline" size="sm" asChild><Link href={`/admin/orders/${service.order_id}`}><FileText size={15}/>查看订单</Link></Button></PermissionGate>}>
@@ -124,12 +125,14 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         {resourcePanels}
       </Tabs.Content>
       <Tabs.Content value="configuration" className="outline-none"><ServiceConfigurationChanges service={service} admin refresh={refresh}/>{!!service.config_snapshot?.length&&<Band title="已购配置"><dl className="grid sm:grid-cols-2 gap-4">{service.config_snapshot.map(option=><div key={option.id} className="text-sm"><dt className="text-muted-foreground">{option.group_name}</dt><dd className="mt-1 break-words">{option.label}{(option.quantity??1)!==1?` × ${option.quantity}`:""}</dd></div>)}</dl></Band>}</Tabs.Content>
-      <Tabs.Content value="jobs" className="outline-none bg-white">
-        <div className="service-section-heading"><h2 className="text-sm font-medium">任务记录</h2><Button size="icon-sm" variant="ghost" onClick={refresh} aria-label="刷新任务记录" title="刷新任务记录"><RefreshCw size={16}/></Button></div>
+      <Tabs.Content value="jobs" className="outline-none">
+        <Band title="任务记录" actions={<Button size="icon-sm" variant="ghost" onClick={refresh} aria-label="刷新任务记录" title="刷新任务记录"><RefreshCw size={16}/></Button>}>
         <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>任务</TableHead><TableHead>动作</TableHead><TableHead>状态</TableHead><TableHead>尝试次数</TableHead><TableHead>错误</TableHead><TableHead>时间</TableHead></TableRow></TableHeader><TableBody>{jobs.length?jobs.map(job=><TableRow key={job.id}><TableCell>#{job.id}</TableCell><TableCell>{serviceActionLabels[job.action]??job.action}</TableCell><TableCell><Status value={job.status==="succeeded"&&(isPowerAction(job.action)||["rescue_system","exit_rescue_system","reinstall"].includes(job.action))?"command_accepted":job.status==="succeeded"&&job.action==="reset_password"?"credentials_confirmed":job.status}/></TableCell><TableCell>{job.attempts}</TableCell><TableCell className="max-w-80 whitespace-normal break-words text-destructive">{job.last_error||"-"}</TableCell><TableCell>{date(job.completed_at||job.created_at)}</TableCell></TableRow>):<TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">暂无任务记录</TableCell></TableRow>}</TableBody></Table></div>
+        </Band>
       </Tabs.Content>
       <Tabs.Content value="history" className="outline-none"><ServiceActivityPanel serviceID={service.id} admin/></Tabs.Content>
       <Tabs.Content value="management" className="outline-none space-y-5">{tab==="management"&&<><AdminServiceAdjustments service={service} refresh={refresh}/><AdminServiceAutoRenew service={service} refresh={refresh}/></>}</Tabs.Content>
     </Tabs.Root>
+    </AdminPageContainer>
   </div>;
 }

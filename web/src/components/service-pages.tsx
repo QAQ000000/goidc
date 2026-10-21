@@ -3,6 +3,7 @@ import { ResourceTable } from "./resource-table";
 import { NOKVMServiceDelivery, serviceActionLabels, isPowerAction } from "./nokvm-delivery";
 import { SupplierServiceDelivery } from "./supplier-delivery";
 import { AdminServiceDetail } from "./admin-service-detail";
+import { AdminServiceList } from "./admin-service-list";
 import { ManualDelivery } from "./admin-manual-delivery";
 import { OrderRefundHoldLabel, orderRefundHold, orderRefundBlocksDelivery } from "./external-refund-order";
 import { NOKVMMonitoringPanel } from "./nokvm-monitoring";
@@ -43,16 +44,17 @@ function ServiceList({admin,groupId}:{admin:boolean;groupId?:number}){
   const offset = page * 20;
   const setOffset = (value: number | ((current: number) => number)) => setPage(current => Math.floor((typeof value === "function" ? value(current * 20) : value) / 20));
   const groups=useServiceNavigation(!admin);
-  const {data,error,refresh}=useResource<ServicePage>(ready ? `${admin?"/admin":""}/services/page?group_id=${groupId??""}&status=${state}&q=${encodeURIComponent(query)}&limit=20&offset=${offset}` : null,false);
+  const resource=useResource<ServicePage>(ready ? `${admin?"/admin":""}/services/page?group_id=${groupId??""}&status=${state}&q=${encodeURIComponent(query)}&limit=20&offset=${offset}` : null,false);
+  const {data,error,refresh}=resource;
   useEffect(()=>{
     if(!data?.items.some(s=>s.status==="queued"||s.status==="provisioning"))return;
     const timer=window.setInterval(refresh,2000);return ()=>window.clearInterval(timer);
   },[data,refresh]);
   const group=groups.data?.find(g=>g.id===groupId);
   const missingGroup=groupId!==undefined&&groupId!==0&&!!groups.data&&!group;
+  if(admin) return <AdminServiceList resource={resource} states={adminServiceStates} status={state} setStatus={value=>{setState(value);setPage(0);}} draft={draft} setDraft={setDraft} search={()=>{setQuery(draft);setPage(0);}} page={page} setPage={setPage} suffix={suffix} renderActions={service=><ServiceActions service={service} admin refresh={refresh}/>}/>;
   return <>
     <PageHeading title={admin?"产品服务":groupId===undefined?"我的服务":groupId===0?"未分组服务":group?.name??"服务分组"} description={admin?"业务列表":"查看并管理已购买的服务"}>{!admin&&<ServiceNavigationSettings/>}</PageHeading>
-    {admin&&<nav aria-label="业务状态" className="flex overflow-x-auto border-b mb-5">{[{value:"",label:"全部"},{value:"active",label:"已激活"},{value:"queued",label:"待开通"},{value:"suspended",label:"已暂停"},{value:"terminated",label:"已终止"},{value:"failed",label:"失败"}].map(tab=><button key={tab.value} type="button" aria-current={state===tab.value?"page":undefined} className={`shrink-0 border-b-2 px-5 py-3 text-sm whitespace-nowrap ${state===tab.value?"border-primary text-primary font-medium":"border-transparent text-muted-foreground hover:text-primary"}`} onClick={()=>{setState(tab.value);setOffset(0);}}>{tab.label}</button>)}</nav>}
     {!admin&&<div className="flex flex-wrap items-center gap-3 mb-5"><label className="text-sm flex gap-2 items-center min-w-0">查看分组<select aria-label="查看服务分组" className={`${catalogSelectStyle} sm:max-w-xs`} value={groupId??""} onChange={e=>{window.location.assign(e.target.value?`/console/services/group/${e.target.value}`:"/console/services");}}><option value="">全部服务</option><option value="0">未分组服务</option>{groups.data?.map(g=><option key={g.id} value={g.id}>{g.name}{!g.visible&&"（导航隐藏）"}</option>)}{missingGroup&&<option value={groupId}>已删除的分组</option>}</select></label>{groupId!==undefined&&<Button variant="link" asChild><Link href="/console/services">查看全部服务</Link></Button>}</div>}
     {missingGroup&&<p role="status" className="text-sm text-muted-foreground mb-5">该服务分组已删除，请从全部服务或其他分组继续查看。</p>}
     {!admin&&groups.error&&<Failure error={groups.error} retry={groups.refresh}/>}
