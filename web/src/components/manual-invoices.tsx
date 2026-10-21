@@ -8,6 +8,7 @@ import { api, money, ApiError } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
 import { Workspace, useAdminPermission } from "./workspace";
 import { Failure, Loading } from "./common";
+import { AdminCustomerCreateBoundary, FixedCreateCustomer, useCreateActivity, useCreateLeaveGuard, assertCreateActor, validCreateResult, rememberCreateIntent, forgetCreateIntent, type AdminCustomerCreateContext } from "./admin-customer-context";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -96,23 +97,23 @@ function CustomerPicker({ selected, onSelect, disabled }: { selected: Customer |
 }
 
 export function ManualInvoiceEditorView({ id }: { id?: number }) {
-  return <Workspace title={id ? "编辑人工账单" : "创建人工账单"} admin><ManualInvoiceEditor id={id} /></Workspace>;
+  return <Workspace title={id ? "编辑人工账单" : "创建人工账单"} admin>{id ? <ManualInvoiceEditor id={id} /> : <AdminCustomerCreateBoundary domain="invoice" fallback="/admin/invoices">{context => <ManualInvoiceEditor context={context} />}</AdminCustomerCreateBoundary>}</Workspace>;
 }
 
-function ManualInvoiceEditor({ id }: { id?: number }) {
+function ManualInvoiceEditor({ id, context }: { id?: number; context?: AdminCustomerCreateContext }) {
   const allowed = useAdminPermission("invoices.manage");
   const { data, error, refresh } = useResource<ManualInvoiceRecord>(allowed && id ? `/admin/invoices/${id}` : null, false);
-  const back = id ? `/admin/invoices/${id}` : "/admin/invoices";
+  const back = id ? `/admin/invoices/${id}` : context?.returnTo ?? "/admin/invoices";
   return <>
-    <Button variant="ghost" asChild className="mb-5"><Link href={back}><ArrowLeft />{id ? "返回账单详情" : "返回账单列表"}</Link></Button>
+    <Button variant="ghost" asChild className="mb-5"><Link href={back}><ArrowLeft />{id ? "返回账单详情" : context?.customerId ? "返回客户详情" : "返回账单列表"}</Link></Button>
     <div className="admin-page-heading mb-4"><h1 className="page-title">{id ? "编辑人工账单" : "创建人工账单"}</h1></div>
-    {!allowed ? <p role="alert" className="text-sm text-muted-foreground">没有维护账单的权限</p> : error ? <Failure error={error} retry={refresh} /> : id && !data ? <Loading /> : data && (data.invoice_kind !== "manual" || data.status !== "unpaid" || data.payment_pending || data.import_review_required) ? <p role="alert" className="text-sm text-muted-foreground">此账单当前不可编辑</p> : <ManualInvoiceForm key={`${id ?? "new"}:${data?.version ?? 0}`} invoice={data ?? undefined} reload={refresh} />}
+    {!allowed ? <p role="alert" className="text-sm text-muted-foreground">没有维护账单的权限</p> : error ? <Failure error={error} retry={refresh} /> : id && !data ? <Loading /> : data && (data.invoice_kind !== "manual" || data.status !== "unpaid" || data.payment_pending || data.import_review_required) ? <p role="alert" className="text-sm text-muted-foreground">此账单当前不可编辑</p> : <ManualInvoiceForm key={`${id ?? "new"}:${data?.version ?? 0}`} invoice={data ?? undefined} context={context} reload={refresh} />}
   </>;
 }
 
-function ManualInvoiceForm({ invoice, reload }: { invoice?: ManualInvoiceRecord; reload: () => void }) {
+function ManualInvoiceForm({ invoice, context, reload }: { invoice?: ManualInvoiceRecord; context?: AdminCustomerCreateContext; reload: () => void }) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Customer | null>(null);
+  const [selected, setSelected] = useState<Customer | null>(context?.customer ?? null);
   const [due, setDue] = useState(localDate(invoice?.due_at ?? null));
   const [lines, setLines] = useState<Line[]>(invoice ? invoice.items.map((item, index) => ({ key: index + 1, description: item.description, amount: (item.amount_cents / 100).toFixed(2) })) : [{ key: 1, description: "", amount: "" }]);
   const nextKey = useRef(lines.length + 1);
@@ -120,38 +121,65 @@ function ManualInvoiceForm({ invoice, reload }: { invoice?: ManualInvoiceRecord;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [stale, setStale] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const active = useCreateActivity();
+  const leaving = useRef(false);
+  const [baseline] = useState(() => JSON.stringify({ selected, due, lines }));
+  const dirty = JSON.stringify({ selected, due, lines }) !== baseline;
+  const frozen = busy || uncertain;
+  useCreateLeaveGuard(dirty, frozen, leaving, "账单");
   const parsed = lines.map(line => cents(line.amount));
   const total = parsed.every(n => n !== null) ? parsed.reduce<number>((sum, n) => sum + (n ?? 0), 0) : null;
   const valid = total !== null && total >= 0 && total <= amountLimit && lines.every(line => line.description.trim()) && due && (invoice || selected);
-  function change(key: number, field: "description" | "amount", value: string) { setLines(current => current.map(line => line.key === key ? { ...line, [field]: value } : line)); }
+  function change(key: number, field: "description" | "amount", value: string) { if (!frozen) setLines(current => current.map(line => line.key === key ? { ...line, [field]: value } : line)); }
   async function save(event: React.FormEvent) {
     event.preventDefault();
     if (!valid || busy) return;
-    setBusy(true); setError(""); setStale(false);
+    setBusy(true); context?.setLocked(true); setError(""); setStale(false);
+    const wasUncertain = uncertain; let sent = false; let businessFailure = false;
     try {
-      const body = JSON.stringify({ user_id: invoice?.user_id ?? selected?.id, due_at: new Date(due).toISOString(), expected_version: invoice?.version ?? 0, items: lines.map((line, index) => ({ description: line.description.trim(), amount_cents: parsed[index] })) });
-      if (retry.current?.body !== body) retry.current = { body, key: `manual-save-${crypto.randomUUID()}` };
-      const result = await api<InvoiceResult>(invoice ? `/admin/invoices/${invoice.id}` : "/admin/invoices", { method: invoice ? "PUT" : "POST", body, headers: { "Idempotency-Key": retry.current.key } });
+      if (context) { await assertCreateActor(context, "invoice"); if (!active.current) return; }
+      if (context?.customerId && selected?.id !== context.customerId) throw new Error("客户身份不一致，请从客户详情重新进入");
+      if (!uncertain) {
+        const body = JSON.stringify({ user_id: invoice?.user_id ?? selected?.id, due_at: new Date(due).toISOString(), expected_version: invoice?.version ?? 0, items: lines.map((line, index) => ({ description: line.description.trim(), amount_cents: parsed[index] })) });
+        if (retry.current?.body !== body) retry.current = { body, key: `manual-save-${crypto.randomUUID()}` };
+      }
+      if (!retry.current) throw new Error("原请求不可用，请先核对账单结果");
+      if (context) rememberCreateIntent(context, "invoice", retry.current);
+      sent = true;
+      const result = await api<InvoiceResult>(invoice ? `/admin/invoices/${invoice.id}` : "/admin/invoices", { method: invoice ? "PUT" : "POST", body: retry.current.body, headers: { "Idempotency-Key": retry.current.key } }).catch(error => { businessFailure = error instanceof ApiError && [400, 409, 422].includes(error.status) && !error.code.startsWith("idempotency_"); throw error; });
+      if (!active.current) return;
+      if (!validCreateResult("invoice", result)) throw new Error("账单响应缺少有效编号，原请求仍需核对");
+      if (context) { await assertCreateActor(context, "invoice"); if (!active.current) return; forgetCreateIntent(context, "invoice", retry.current.key); }
+      leaving.current = true;
       router.push(`/admin/invoices/${result.invoice_id}`);
       router.refresh();
     } catch (e) {
+      if (!active.current) return;
       setError((e as Error).message);
-      setStale(e instanceof ApiError && (e.code === "stale_invoice" || e.code === "invoice_payment_pending" || e.code === "invoice_not_editable"));
-    } finally { setBusy(false); }
+      setStale(businessFailure && e instanceof ApiError && (e.code === "stale_invoice" || e.code === "invoice_payment_pending" || e.code === "invoice_not_editable"));
+      if (wasUncertain || sent && !businessFailure) { setUncertain(true); setError("账单保存结果暂时未知。输入已锁定，请使用原请求重试确认，避免重复创建。"); }
+      else { setUncertain(false); if (context && retry.current) forgetCreateIntent(context, "invoice", retry.current.key); context?.setLocked(false); }
+    } finally { if (active.current) setBusy(false); }
+  }
+  function cancel() {
+    if (frozen || (dirty && !window.confirm("账单尚未保存，确认取消本次修改？"))) return;
+    leaving.current = true;
+    router.push(invoice ? `/admin/invoices/${invoice.id}` : context?.returnTo ?? "/admin/invoices");
   }
   return <form onSubmit={save} className="space-y-5">
     <div className="grid md:grid-cols-2 gap-5 border-b pb-5">
-      <div className="space-y-3"><Label>账单客户</Label>{invoice ? <p className="text-sm break-all">{invoice.customer_name} · {invoice.email}</p> : <CustomerPicker selected={selected} onSelect={setSelected} disabled={busy} />}</div>
-      <div className="space-y-3"><Label htmlFor="manual-invoice-due">到期时间</Label><Input id="manual-invoice-due" type="datetime-local" value={due} min="2000-01-01T00:00" max="2200-12-31T23:59" required onChange={e => setDue(e.target.value)} disabled={busy} /><p className="text-sm text-muted-foreground">币种 CNY</p></div>
+      <div className="space-y-3"><Label>账单客户</Label>{invoice ? <p className="text-sm break-all">{invoice.customer_name} · {invoice.email}</p> : context?.customer ? <FixedCreateCustomer customer={context.customer} /> : <CustomerPicker selected={selected} onSelect={setSelected} disabled={frozen} />}</div>
+      <div className="space-y-3"><Label htmlFor="manual-invoice-due">到期时间</Label><Input id="manual-invoice-due" type="datetime-local" value={due} min="2000-01-01T00:00" max="2200-12-31T23:59" required onChange={e => setDue(e.target.value)} disabled={frozen} /><p className="text-sm text-muted-foreground">币种 CNY</p></div>
     </div>
-    <section><div className="flex justify-between items-center gap-3 mb-4"><h2 className="font-semibold">账单项目</h2><Button type="button" size="sm" variant="outline" disabled={busy || lines.length >= 100} onClick={() => setLines(current => [...current, { key: nextKey.current++, description: "", amount: "" }])}><Plus />添加项目</Button></div>
+    <section><div className="flex justify-between items-center gap-3 mb-4"><h2 className="font-semibold">账单项目</h2><Button type="button" size="sm" variant="outline" disabled={frozen || lines.length >= 100} onClick={() => setLines(current => [...current, { key: nextKey.current++, description: "", amount: "" }])}><Plus />添加项目</Button></div>
       <div className="space-y-4">{lines.map((line, index) => <div key={line.key} className="grid sm:grid-cols-[minmax(0,1fr)_10rem_2.25rem] gap-3 border-b pb-4">
-        <div><Label className="mb-2" htmlFor={`invoice-description-${line.key}`}>项目 {index + 1}</Label><Textarea id={`invoice-description-${line.key}`} rows={2} maxLength={500} required value={line.description} disabled={busy} onChange={e => change(line.key, "description", e.target.value)} /></div>
-        <div><Label className="mb-2" htmlFor={`invoice-amount-${line.key}`}>金额（元）</Label><Input id={`invoice-amount-${line.key}`} type="text" maxLength={14} placeholder="0.00" required value={line.amount} disabled={busy} onChange={e => change(line.key, "amount", e.target.value)} aria-invalid={line.amount !== "" && parsed[index] === null} />{line.amount !== "" && parsed[index] === null && <p className="text-xs text-destructive mt-2">金额最多两位小数，限 ±1 亿元</p>}</div>
-        <Button type="button" className="sm:mt-7" variant="ghost" size="icon" title={`删除项目 ${index + 1}`} aria-label={`删除项目 ${index + 1}`} disabled={busy || lines.length === 1} onClick={() => setLines(current => current.filter(item => item.key !== line.key))}><Trash2 /></Button>
+        <div><Label className="mb-2" htmlFor={`invoice-description-${line.key}`}>项目 {index + 1}</Label><Textarea id={`invoice-description-${line.key}`} rows={2} maxLength={500} required value={line.description} disabled={frozen} onChange={e => change(line.key, "description", e.target.value)} /></div>
+        <div><Label className="mb-2" htmlFor={`invoice-amount-${line.key}`}>金额（元）</Label><Input id={`invoice-amount-${line.key}`} type="text" maxLength={14} placeholder="0.00" required value={line.amount} disabled={frozen} onChange={e => change(line.key, "amount", e.target.value)} aria-invalid={line.amount !== "" && parsed[index] === null} />{line.amount !== "" && parsed[index] === null && <p className="text-xs text-destructive mt-2">金额最多两位小数，限 ±1 亿元</p>}</div>
+        <Button type="button" className="sm:mt-7" variant="ghost" size="icon" title={`删除项目 ${index + 1}`} aria-label={`删除项目 ${index + 1}`} disabled={frozen || lines.length === 1} onClick={() => setLines(current => current.filter(item => item.key !== line.key))}><Trash2 /></Button>
       </div>)}</div>
     </section>
-    <div className="flex flex-wrap items-center justify-between gap-5 border-t pt-4"><div><p className="text-sm text-muted-foreground">应收总额</p><p className="text-xl font-semibold money mt-1">{total === null ? "-" : money(total)}</p>{total !== null && (total < 0 || total > amountLimit) && <p className="text-sm text-destructive mt-2">总额必须在 0 到 1 亿元之间</p>}</div><div className="flex gap-2"><Button variant="outline" type="button" disabled={busy} asChild><Link href={invoice ? `/admin/invoices/${invoice.id}` : "/admin/invoices"}>取消</Link></Button><Button disabled={busy || !valid} type="submit"><Save />{busy ? "保存中" : "保存账单"}</Button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-5 border-t pt-4"><div><p className="text-sm text-muted-foreground">应收总额</p><p className="text-xl font-semibold money mt-1">{total === null ? "-" : money(total)}</p>{total !== null && (total < 0 || total > amountLimit) && <p className="text-sm text-destructive mt-2">总额必须在 0 到 1 亿元之间</p>}</div><div className="flex gap-2"><Button variant="outline" type="button" disabled={frozen} onClick={cancel}>取消</Button><Button disabled={busy || !valid} type="submit"><Save />{busy ? "保存中" : uncertain ? "使用原请求重试" : "保存账单"}</Button></div></div>
     {error && <div role="alert" className="space-y-3"><p className="text-sm text-destructive">{error}</p>{stale && <Button type="button" variant="outline" disabled={busy} onClick={reload}>重新载入账单</Button>}</div>}
   </form>;
 }

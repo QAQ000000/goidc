@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter,useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft,RefreshCw,Save,Trash2 } from "lucide-react";
-import { api,ApiError,date,money,type Contact } from "@/lib/api";
+import { ApiError,date,money,type Contact } from "@/lib/api";
 import { transactionReturnHref } from "@/lib/transaction-return";
 import { useResource } from "@/hooks/use-resource";
 import { Button } from "./ui/button";
@@ -19,6 +19,9 @@ import { CustomerFileManager } from "./customer-files";
 import { CustomerImpersonationButton } from "./customer-impersonation-button";
 import { CustomerActions } from "./admin-customers";
 import { useCustomerDetailMutation } from "./admin-customer-detail-mutation";
+import { CustomerTopupButton } from "./admin-customer-topup";
+import { CustomerReferrerPanel } from "./admin-customer-referrer";
+import { CustomerBusinessCreateActions } from "./admin-customer-business-actions";
 
 type Row=Record<string,unknown>;
 type Page={ items: Row[]; total: number; limit: number; offset: number };
@@ -82,7 +85,7 @@ function CustomerDetailForActor({ customerId }: { customerId: number }) {
             </section>
           </PermissionSection>:tab==="notifications"? <PermissionSection permission="notifications.view" label="通知历史">
             <CustomerNotifications customerId={customerId} />
-          </PermissionSection>:<CustomerRelatedPanel key={`${tab}:${requested}`} customerId={customerId} tab={tab} initialOrders={requested==="orders"} />}
+          </PermissionSection>:<CustomerRelatedPanel key={`${tab}:${requested}`} customerId={customerId} customerName={customer.data.display_name||customer.data.username} tab={tab} initialOrders={requested==="orders"} />}
         </section>
         <aside className={`${panelClass} space-y-4`} aria-label="当前客户身份与操作">
           <div>
@@ -205,7 +208,7 @@ function CustomerProfile({
     setName(draft.draft.name); setEmail(draft.draft.email); setStatus(draft.draft.status); setProfile(draft.draft.profile); setCustomFields(draft.draft.customFields); draft.clear();
   }
   async function updateVersion() {
-    try { const current=await api<AdminCustomer>(`/admin/customers/${customer.id}`); setLatest(current); definitions.refresh(); setMessage("最新版本已读取；请核对服务器现值后明确确认覆盖范围，当前输入尚未保存。"); } catch(e) { mutation.setError((e as Error).message); }
+    try { const current=await mutation.readLatest<AdminCustomer>(`/admin/customers/${customer.id}`); if(!current) return; setLatest(current); definitions.refresh(); setMessage("最新版本已读取；请核对服务器现值后明确确认覆盖范围，当前输入尚未保存。"); } catch(e) { mutation.setError((e as Error).message); }
   }
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -379,7 +382,7 @@ function CustomerProfile({
           </div>
         </dl>
         <p className="text-sm text-muted-foreground">继续保存会应用当前表单中已修改的字段；请先与现值核对。</p>
-        <Button type="button" variant="outline" disabled={busy} onClick={() => { setProfileVersion(latest.profile_version); setLatest(null); mutation.acknowledgeConflict(); setMessage("已确认使用最新版本；请再次核对表单后保存。"); }}>已核对，使用该版本</Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={async () => { if(!await mutation.acknowledgeConflict()) return; setProfileVersion(latest.profile_version); setLatest(null); setMessage("已确认使用最新版本；请再次核对表单后保存。"); }}>已核对，使用该版本</Button>
       </section>}
       {mutation.conflict&&<Button type="button" variant="outline" disabled={busy} onClick={() => void updateVersion()}>读取最新版本，保留当前输入</Button>}
 
@@ -412,16 +415,30 @@ function CustomerProfile({
 
 type RelatedTab=Exclude<CustomerDetailTab,"summary"|"profile"|"files"|"notifications">;
 const relatedPermission: Record<RelatedTab,string>={ services: "services.view",invoices: "invoices.view",transactions: "invoices.view",tickets: "tickets.view",logs: "audit.view",affiliate: "customers.view" };
-function CustomerRelatedPanel({ customerId, tab, initialOrders }: { customerId: number; tab: RelatedTab; initialOrders: boolean }) {
-  if (tab === "invoices") return <section className={panelClass}><CustomerBilling customerId={customerId} initialOrders={initialOrders} /></section>;
+function CustomerRelatedPanel({ customerId, customerName, tab, initialOrders }: { customerId: number; customerName: string; tab: RelatedTab; initialOrders: boolean }) {
+  if (tab === "invoices") return <section className={panelClass}><CustomerBilling customerId={customerId} customerName={customerName} initialOrders={initialOrders} /></section>;
+  if (tab === "affiliate") return <CustomerAffiliate customerId={customerId} />;
   return <PermissionSection permission={relatedPermission[tab]} label={customerDetailTabLabel[tab]}>
-    <section className={panelClass}><CustomerHistoryPage customerId={customerId} kind={tab} /></section>
+    <section className={panelClass}>
+      {tab==="tickets"&&<div className="mb-4 flex flex-wrap justify-end gap-2"><CustomerBusinessCreateActions customerId={customerId} kind="tickets" /></div>}
+      <CustomerHistoryPage customerId={customerId} kind={tab} />
+    </section>
   </PermissionSection>;
 }
-function CustomerBilling({ customerId, initialOrders }: { customerId: number; initialOrders: boolean }) {
+function CustomerAffiliate({ customerId }: { customerId: number }) {
+  const [revision,setRevision]=useState(0);
+  return <div className="min-w-0 space-y-4">
+    <CustomerReferrerPanel customerId={customerId} onChanged={() => setRevision(value=>value+1)} />
+    <PermissionSection permission="customers.view" label="推广活动"><section className={panelClass}>
+      <CustomerHistoryPage key={revision} customerId={customerId} kind="affiliate" />
+    </section></PermissionSection>
+  </div>;
+}
+function CustomerBilling({ customerId, customerName, initialOrders }: { customerId: number; customerName: string; initialOrders: boolean }) {
   const viewInvoices = useAdminPermission("invoices.view");
   const viewOrders = useAdminPermission("orders.view");
   const [preferOrders, setPreferOrders] = useState(initialOrders);
+  const [revision,setRevision]=useState(0);
   const orders = viewOrders && (!viewInvoices || preferOrders);
   if (!viewInvoices && !viewOrders) return <NoAccess label="账单与关联订单" />;
   return <div className="min-w-0 space-y-4">
@@ -430,7 +447,11 @@ function CustomerBilling({ customerId, initialOrders }: { customerId: number; in
         <Button variant={orders ? "outline" : "default"} disabled={!viewInvoices} aria-pressed={!orders} onClick={() => { if (viewInvoices) setPreferOrders(false); }}>账单</Button>
         <Button variant={orders ? "default" : "outline"} disabled={!viewOrders} aria-pressed={orders} onClick={() => { if (viewOrders) setPreferOrders(true); }}>关联订单</Button>
       </div>
-    </div><CustomerHistoryPage key={orders ? "orders" : "invoices"} customerId={customerId} kind={orders ? "orders" : "invoices"} /></div>;
+      <div className="flex flex-wrap gap-2">
+        <CustomerBusinessCreateActions customerId={customerId} kind="billing" />
+        <CustomerTopupButton customerId={customerId} customerName={customerName} onCreated={() => { setPreferOrders(false); setRevision(value=>value+1); }} />
+      </div>
+    </div><CustomerHistoryPage key={`${orders ? "orders" : "invoices"}:${revision}`} customerId={customerId} kind={orders ? "orders" : "invoices"} /></div>;
 }
 
 type HistoryKind=RelatedTab|"orders"|"delivery"|"email"|"sms"|"inbox";
@@ -564,10 +585,10 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
     setSupportEmails(false);
   }
 
-  function edit(contact: Contact) {
+  async function edit(contact: Contact) {
+    if(!await mutation.acknowledgeConflict()) return;
     setEditing(contact.id);
     setEditingVersion(contact.version);
-    mutation.acknowledgeConflict();
     setLatestContact(null);
     setUsername(contact.username);
     setEmail(contact.email);
@@ -706,9 +727,9 @@ export function ContactsPanel({ adminCustomerId }: { adminCustomerId?: number })
       <CustomerMutationMessage mutation={mutation} />
       {mutation.conflict&&<div className="space-y-3 rounded border p-3 text-sm">
         <p>联系人已变更；当前输入保留，请读取当前联系人后核对。</p>
-        <Button type="button" variant="outline" disabled={busy} onClick={() => void api<Contact[]>(root).then(items => { refresh(); const item=items.find(value => value.id===editing); if(item) setLatestContact(item); else setMessage("当前联系人已不存在或当前操作为删除，请核对列表后选择原联系人。"); }).catch(error => setMessage((error as Error).message))}>读取最新联系人</Button>{latestContact&&<>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void mutation.readLatest<Contact[]>(root).then(items => { if(!items) return; refresh(); const item=items.find(value => value.id===editing); if(item) setLatestContact(item); else setMessage("当前联系人已不存在或当前操作为删除，请核对列表后选择原联系人。"); }).catch(error => setMessage((error as Error).message))}>读取最新联系人</Button>{latestContact&&<>
           <p className="break-words">服务器现值：{latestContact.username||"未命名"} · {latestContact.email} · {latestContact.phone_number||"未填写手机"} · 版本 {latestContact.version}</p>
-          <Button type="button" variant="outline" onClick={() => { setEditingVersion(latestContact.version); mutation.acknowledgeConflict(); setLatestContact(null); }}>已核对，保留输入并使用该版本</Button>
+          <Button type="button" variant="outline" onClick={async () => { if(!await mutation.acknowledgeConflict()) return; setEditingVersion(latestContact.version); setLatestContact(null); }}>已核对，保留输入并使用该版本</Button>
         </>}</div>}
       {mutation.uncertain&&<PermissionGate permission="customers.manage" bypass={!adminCustomerId}>
         <Button variant="outline" disabled={busy||!writeAllowed} onClick={() => { if(writeAllowed) void mutation.run(root,"POST",{}).then(result => { if(result) { reset(); refresh(); } }); }}>使用原联系人请求重试</Button>

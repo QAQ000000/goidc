@@ -10,7 +10,13 @@ const require = createRequire(path.join(web, 'package.json'));
 const ts = require('typescript');
 const React = require('react');
 const cache = new Map();
-let current, calls, respond, storage, resourcePaths, groupPage, failStorage, orderResources;
+let current, calls, identityCalls, respond, storage, resourcePaths, groupPage, failStorage, orderResources;
+const orderActor = { id: 7, role: 'admin', permissions: ['orders.manage', 'promos.manage', 'promos.view'] };
+const orderContext = {
+  actorId: orderActor.id,
+  actorIdentity: JSON.stringify([orderActor.id, orderActor.role, [...orderActor.permissions].sort(), orderActor.customer_scope, orderActor.customer_ownerless, orderActor.ticket_scope, orderActor.ticket_unassigned]),
+  customerId: null, customer: null, query: '', returnTo: '/admin/orders', error: null, setLocked() {},
+};
 const changed = (before, after) => !before || !after || before.length !== after.length || before.some((value, i) => value !== after[i]);
 const react = {
   ...React,
@@ -48,7 +54,7 @@ function load(filename) {
     if (specifier === './common') return { cycles: { monthly: '月' }, Loading: () => null, Failure: () => null };
     if (specifier === '@/hooks/use-resource') return { useResource: url => { resourcePaths.push(url); return { data: url?.startsWith('/admin/promo-codes/customer-groups') ? groupPage : orderResources.get(url) ?? null, error: null, refresh() {} }; } };
     if (specifier.includes('/ui/')) return ui;
-    if (specifier === '@/lib/api') return { ApiError, money: cents => `¥${(cents / 100).toFixed(2)}`, api: async (url, options = {}) => { const call = { url, ...options }; calls.push(call); return respond(call); } };
+    if (specifier === '@/lib/api') return { ApiError, money: cents => `¥${(cents / 100).toFixed(2)}`, api: async (url, options = {}) => { const call = { url, ...options }; if (url === '/me') { identityCalls.push(call); return orderActor; } calls.push(call); return respond(call); } };
     if (specifier.startsWith('.') || specifier.startsWith('@/')) {
       const base = specifier.startsWith('@/') ? path.join(web, 'src', specifier.slice(2)) : path.resolve(path.dirname(filename), specifier);
       const source = [base, `${base}.tsx`, `${base}.ts`].find(candidate => existsSync(candidate));
@@ -62,7 +68,7 @@ function load(filename) {
   return module.exports;
 }
 const { AdminOrderCreateView } = load(path.join(web, 'src/components/admin-order-create.tsx'));
-const OrderForm = AdminOrderCreateView().props.children.type;
+const OrderForm = AdminOrderCreateView().props.children.props.children(orderContext).type;
 const { PromoCustomerGroups } = load(path.join(web, 'src/components/promo-customer-groups.tsx'));
 function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
@@ -80,10 +86,10 @@ function mount(Component, props = {}) {
   return { props, render() { state.cursor = 0; current = state; let tree; try { tree = Component(props); } finally { current = undefined; } for (const effect of state.effects.splice(0)) effect(); return tree; } };
 }
 function reset() {
-  calls = []; resourcePaths = []; storage = new Map(); orderResources = new Map(); failStorage = false;
+  calls = []; identityCalls = []; resourcePaths = []; storage = new Map(); orderResources = new Map(); failStorage = false;
   groupPage = { items: [{ id: 1, name: 'VIP' }, { id: 2, name: '代理商' }], total: 12, limit: 10, offset: 0 };
   respond = async () => ({ id: 42, code: 'GROUPCODE' });
-  globalThis.window = { addEventListener() {}, removeEventListener() {} };
+  globalThis.window = { addEventListener() {}, removeEventListener() {}, setTimeout, clearTimeout };
   globalThis.document = { addEventListener() {}, removeEventListener() {} };
   globalThis.sessionStorage = {
     getItem: key => storage.get(key) ?? null,
@@ -92,7 +98,7 @@ function reset() {
   };
 }
 function dialog(props = {}) {
-  const element = nodes(mount(OrderForm).render()).find(node => node.type?.name === 'PromoCodeCreateDialog');
+  const element = nodes(mount(OrderForm, { context: orderContext }).render()).find(node => node.type?.name === 'PromoCodeCreateDialog');
   assert.ok(element);
   return mount(element.type, { actorID: 7, open: true, onOpenChange() {}, onCreated() {}, ...props });
 }
@@ -180,7 +186,7 @@ test('an incompatible coupon can be removed explicitly before requoting the same
   orderResources.set('/admin/orders/create-options', { payment_providers: [], mail_enabled: false });
   orderResources.set('/admin/orders/create-options?kind=customers&q=&limit=10&offset=0', { items: [customer], total: 1, limit: 10, offset: 0 });
   orderResources.set('/admin/orders/create-options?kind=products&q=&limit=10&offset=0', { items: [product], total: 1, limit: 10, offset: 0 });
-  const view = mount(OrderForm);
+  const view = mount(OrderForm, { context: orderContext });
   nodes(view.render()).find(node => node.type === 'select' && node.props['aria-label'] === '客户').props.onChange({ target: { value: '17' } });
   nodes(view.render()).find(node => node.type === 'select' && node.props['aria-label'] === '添加其他产品').props.onChange({ target: { value: '11' } });
   input(view.render(), '优惠码').props.onChange({ target: { value: 'NO-STACK' } });
@@ -194,4 +200,5 @@ test('an incompatible coupon can be removed explicitly before requoting the same
   assert.equal(second.promo_code, ''); assert.deepEqual(second.items, first.items); assert.equal(second.customer_id, first.customer_id);
   assert.equal(input(view.render(), '优惠码').props.value, '');
   assert.equal(nodes(view.render()).some(node => node.type === Button && text(node) === '移除优惠码并重新报价'), false);
+  assert.equal(identityCalls.length, 2); assert.ok(identityCalls.every(call => call.portal === 'admin'));
 });

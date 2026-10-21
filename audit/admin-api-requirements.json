@@ -369,7 +369,7 @@
         "/admin/customers/new",
         "/admin/customers/[id]"
       ],
-      "reason": "已按旧44条路由归并34组动作核对批准范围；补高级筛选、未付充值代建与仅后续账单推荐人变更，客户/联系人/字段写入补原凭据与提交前复核。独立跟进、旧资料扩展及API三态明确未恢复，UI独立接线。",
+      "reason": "已按旧44条路由归并34组动作核对批准范围；补高级筛选、未付充值代建与仅后续账单推荐人变更，客户/联系人/字段写入补原凭据与提交前复核。独立跟进、旧资料扩展及API三态明确未恢复；客户核心UI已接摘要、资料/联系人、未付充值代建和推荐人调整，各自版本及原请求恢复独立验收。",
       "current": {
         "endpoints": [
           "DELETE /api/v1/admin/customers/{id}/contacts/{contact_id}",
@@ -2224,7 +2224,7 @@
         "/admin/orders/new",
         "/admin/tickets/new"
       ],
-      "reason": "关联列表、续费/供应商列表及创建客户选项已统一严格customer_id与最终查询范围；客户详情UI仍需保持固定客户及返回路径。",
+      "reason": "关联列表、续费/供应商列表及创建客户选项已统一严格customer_id与最终查询范围；客户详情与三类新建UI已接精确客户、身份锁定和安全返回路径，未知结果恢复保留原意图，非法或范围外客户不回退全局。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/orders",
@@ -2402,7 +2402,7 @@
         "/admin/notifications",
         "/admin/audit"
       ],
-      "reason": "本轮已增加统一11类业务事件、全部已装配渠道的精确客户分页历史，并给旧email/sms/inbox/audit日志增加customer_id；工单/营销保留独立日志。UI待接。",
+      "reason": "本轮已增加统一11类业务事件、全部已装配渠道的精确客户分页历史，并给旧email/sms/inbox/audit日志增加customer_id；工单/营销保留独立日志。客户详情已接通知分区和独立分页，其余通知管理UI仍分别验收。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/logs/email",
@@ -2546,7 +2546,7 @@
       "pages": [
         "/admin"
       ],
-      "reason": "已新增上海自然月商品与人员销售排名，只读复用完整行分摊与业务收款事实、当前客户范围；金额包含余额消费，不能冒充外部现金或利润。首页UI仍为占位。",
+      "reason": "已新增上海自然月商品与人员销售排名，只读复用完整行分摊与业务收款事实、当前客户范围；金额包含余额消费，不能冒充外部现金或利润。首页已接双排名、独立期间/加载/错误重试，具体范围见领域验收矩阵。",
       "current": {
         "endpoints": [
           "GET /api/v1/admin/reports/product-ranking",

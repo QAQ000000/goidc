@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect,useRef,useState } from "react";
-import { api,ApiError } from "@/lib/api";
+import { api,ApiError,type User } from "@/lib/api";
 
 type Attempt={ path: string; method: string; body: string; key: string };
 const isObject=(value: unknown): value is Record<string,unknown> => !!value&&typeof value==="object"&&!Array.isArray(value);
@@ -24,6 +24,12 @@ export function useCustomerDetailMutation(actorID: number|undefined,customerID: 
     return true;
   }
   const root=admin? `/admin/customers/${customerID}`:"";
+  const portal=admin? "admin":"customer";
+  async function identity() {
+    const user=await api<User>("/me",{ portal });
+    const authorized=isObject(user)&&user.id===actorID&&(admin? user.role==="super_admin"||user.role==="admin"&&Array.isArray(user.permissions)&&user.permissions.includes("customers.manage"):user.role==="customer"&&user.id===customerID);
+    if(!authorized) throw new Error("登录身份或客户管理权限已变化，请使用原账户核对；原请求保持不变。");
+  }
   function validPath(path: string,method: string) {
     return action==="profile"? admin&&path===root&&method==="PATCH":(path===`${root}/contacts`&&method==="POST")||(new RegExp(`^${root}/contacts/[1-9][0-9]*$`).test(path)&&(method==="PATCH"||method==="DELETE"));
   }
@@ -47,9 +53,10 @@ export function useCustomerDetailMutation(actorID: number|undefined,customerID: 
   const uncertain=current&&!!state.attempt;
   const ready=current&&state.ready&&!state.blocked;
   async function run<T>(path: string,method: string,payload: unknown): Promise<T|null> {
-    if(!scope||!ready||sending.current||state.conflict&&!original.current) return null;
+    if(!scope||!ready||active.current!==scope||sending.current||state.conflict&&!original.current) return null;
     sending.current=true; setBusy(true);
     let attempt=original.current;
+    let businessFailure=false;
     try {
       if(!attempt) {
         if(!validPath(path,method)||!validBody(payload,method)) throw new Error("请求目标或字段与当前客户动作不匹配");
@@ -59,11 +66,17 @@ export function useCustomerDetailMutation(actorID: number|undefined,customerID: 
         attempt=next; original.current=next;
       }
       if(active.current===scope) setState({ scope,ready: true,attempt,error: "",conflict: false,blocked: false });
-      const result=await api<unknown>(attempt.path,{ method: attempt.method,body: attempt.body,headers: { "Idempotency-Key": attempt.key } });
+      await identity();
+      if(active.current!==scope) return null;
+      let result: unknown;
+      try { result=await api<unknown>(attempt.path,{ method: attempt.method,body: attempt.body,portal,headers: { "Idempotency-Key": attempt.key } }); }
+      catch(error) { businessFailure=true; throw error; }
       const body=JSON.parse(attempt.body) as Record<string,unknown>;
       const positive=(value: unknown): value is number => typeof value==="number"&&Number.isSafeInteger(value)&&value>0;
       const valid=isObject(result)&&typeof result.replayed==="boolean"&&(action==="profile"? result.user_id===customerID&&result.profile_version===Number(body.expected_version)+1:result.customer_id===customerID&&positive(result.id)&&(attempt.method==="DELETE"? result.deleted===true&&String(result.id)===attempt.path.split("/").at(-1):result.version===(attempt.method==="POST"? 1:Number(body.expected_version)+1)&&(attempt.method!=="PATCH"||String(result.id)===attempt.path.split("/").at(-1))));
       if(!valid) throw new Error("响应缺少有效的操作确认，请使用原请求核验");
+      await identity();
+      if(active.current!==scope) return null;
       sessionStorage.removeItem(scope); original.current=null;
       if(active.current!==scope) return null;
       setState({ scope,ready: true,attempt: null,error: "",conflict: false,blocked: false });
@@ -71,11 +84,40 @@ export function useCustomerDetailMutation(actorID: number|undefined,customerID: 
     } catch(error) {
       // Authorization errors and lost responses cannot disprove an earlier
       // execution. A definite validation/version refusal can release the intent.
-      const definite=error instanceof ApiError&&(error.status===400||error.status===422||error.status===409&&error.code!=="idempotency_conflict");
+      const definite=businessFailure&&error instanceof ApiError&&(error.status===400||error.status===422||error.status===409&&error.code!=="idempotency_conflict");
       if(definite) { try { sessionStorage.removeItem(scope); original.current=null; attempt=null; } catch { /* Retain the original intent when storage is unavailable. */ } }
       if(active.current===scope) setState({ scope,ready: true,attempt,error: attempt? `${(error as Error).message}。结果待核验，请使用原请求重试。`:(error as Error).message,conflict: definite&&error instanceof ApiError&&error.status===409,blocked: !attempt&&!definite });
       return null;
     } finally { sending.current=false; if(active.current===scope) setBusy(false); }
   }
-  return { run,ready,busy,acknowledgeConflict: () => setState(previous => ({ ...previous,conflict: false,error: "" })),uncertain,frozen: !ready||busy||uncertain,conflict: current&&state.conflict,error: current? state.error:"",setError: (error: string) => setState(previous => ({ ...previous,error })) };
+  async function readLatest<T>(path: string): Promise<T|null> {
+    if(!scope||!ready||active.current!==scope||sending.current) return null;
+    if(path!==(action==="profile"? root:`${root}/contacts`)) return null;
+    sending.current=true; setBusy(true);
+    try {
+      await identity();
+      if(active.current!==scope) return null;
+      const result=await api<T>(path,{ portal });
+      await identity();
+      return active.current===scope? result:null;
+    } catch(error) {
+      if(active.current===scope) setState(previous => ({ ...previous,error: (error as Error).message }));
+      return null;
+    } finally { sending.current=false; if(active.current===scope) setBusy(false); }
+  }
+  async function acknowledgeConflict() {
+    if(!scope||!ready||active.current!==scope||sending.current||original.current) return false;
+    if(!state.conflict) return true;
+    sending.current=true; setBusy(true);
+    try {
+      await identity();
+      if(active.current!==scope) return false;
+      setState(previous => ({ ...previous,conflict: false,error: "" }));
+      return true;
+    } catch(error) {
+      if(active.current===scope) setState(previous => ({ ...previous,error: (error as Error).message }));
+      return false;
+    } finally { sending.current=false; if(active.current===scope) setBusy(false); }
+  }
+  return { run,readLatest,ready,busy,acknowledgeConflict,uncertain,frozen: !ready||busy||uncertain,conflict: current&&state.conflict,error: current? state.error:"",setError: (error: string) => setState(previous => ({ ...previous,error })) };
 }

@@ -225,7 +225,8 @@
         "node --test scripts/admin-api-inventory.test.mjs scripts/admin-api-consumers.test.mjs",
         "node scripts/admin-api-consumers.mjs",
         "node scripts/test-admin-api.mjs --integration",
-        "node --test scripts/admin-customer-mutation-components.test.mjs"
+        "node --test scripts/admin-customer-mutation-components.test.mjs",
+        "node --test scripts/admin-customer-create-mutation.test.mjs scripts/admin-customer-detail-mutation.test.mjs scripts/admin-customer-topup-components.test.mjs scripts/admin-customer-referrer-components.test.mjs scripts/admin-customer-business-actions.test.mjs scripts/admin-create-customer-context.test.mjs"
       ],
       "evaluation": [
         "isolated PostgreSQL 18 exact run/pass with zero skips: per-section summary grants, customer and ticket scopes, immutable notification ownership, credit cash events, auto-renew lock-wait authorization and no durable credentials derived from impersonation",
