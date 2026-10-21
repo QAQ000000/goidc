@@ -1,6 +1,6 @@
 # 管理员服务管理契约
 
-本文冻结旧服务管理的恢复边界，定义单服务代续费、同客户批量代续费、人工价格及期限和受限状态纠错 API。各批实现与验收分别记录；可信人工收款及服务转移仍为后续批次。前端不得用通用保存或客户身份替代这些动作。
+本文冻结旧服务管理的恢复边界，定义单服务代续费、同客户批量代续费、人工价格及期限、受限状态纠错和可信人工收款 API。各批实现与验收分别记录；服务转移仍为后续批次。前端不得用通用保存或客户身份替代这些动作。
 
 ## 旧行为与本项目取舍
 
@@ -277,10 +277,47 @@ managed模式下普通同步/回调只更新真实上游期限观测，不能覆
 
 这是这两个Store入口的事务防线，不代表仓库所有状态writer具备通用数据库状态机约束；本批无新迁移。接口与UI分别验收，UI尚未接线。
 
+## 第五批：可信人工收款
+
+管理员可为单个自动续费账单登记一次线下全额到账。报价接口为
+`POST /admin/services/{id}/renewals/{invoice_id}/manual-collection-quotes`，提交接口为
+`POST /admin/services/{id}/renewals/{invoice_id}/manual-collections`。两者均要求
+`services.view`、`invoices.view`、`invoices.collect_manual` 和客户范围；沿用管理员会话/API密钥及CSRF规则，响应为 `Cache-Control: private, no-store`。提交还要求稳定 `Idempotency-Key`。
+
+请求必须包含 `expected_version`（账单版本）、`expected_service_version`、正数 `amount_cents`、不早于账单创建且不晚于数据库当前时间的 RFC3339 `received_at`（归一化UTC，最多微秒精度）、`method=bank_transfer|cash|other_offline`、`receiving_account`（最多120字符）、`transaction_no`（最多160字符）、`evidence_ref`（最多500字符）、64 位小写 `evidence_sha256` 及 `reason`（最多500字符）。账户和凭据引用仅保存非秘密标识，不上传银行密码或网关密钥。只支持单服务自动续费账单的全额收款；不支持部分、拆分、批量、充值、购买或信用账单，0 元续费继续使用原显式零支付流程。
+
+报价请求示例（路径均含 `/api/v1` 前缀）：
+
+```json
+{
+  "expected_version":1,
+  "expected_service_version":12,
+  "amount_cents":2500,
+  "received_at":"2026-10-21T08:01:00Z",
+  "method":"bank_transfer",
+  "receiving_account":"对公收款账户尾号1234",
+  "transaction_no":"BANK-20261021-00001",
+  "evidence_ref":"receipt://finance/00001",
+  "evidence_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "reason":"已核对客户续费转账凭证"
+}
+```
+
+报价只读，返回 `service_id/customer_id/invoice_id/invoice_no/invoice_version/service_version/amount_cents/received_at/method/receiving_account/transaction_no/quote_hash/expires_at`。到数据库下一个整五分钟边界失效，有效期最多五分钟；摘要绑定账单、服务、来源和全部输入。报价请求不带 `quote_hash`，提交时在原请求体中补上报价原样返回的 `quote_hash`，其余字段保持一致。
+
+首次提交返回201，原key重放返回200；结果含 `service_id/customer_id/invoice_id/invoice_no/invoice_version/service_version/payment_id/collection_id/amount_cents/received_at/status/renewal_status/replayed`。`status="paid"` 表示本地收款，`renewal_status="completed"` 或供应商的 `pending` 区分权益结果。原key优先恢复历史事实，并在等待、提交前复核权限、客户范围和原管理员凭据。事务先锁管理员/客户、账单再以NOWAIT锁服务，避免与既有余额支付反向锁死；发现在线支付、信用支付、退款、取消、交付或外部未决任务即返回业务冲突。
+
+未知字段或格式错误为400；业务输入不合法为400 `invalid_manual_collection`，权限与范围沿用401/403/404；账单或服务变更为409 `stale_invoice/stale_service`，非全额为 `renewal_amount_changed`，到账日期不合法为 `manual_collection_time_invalid`，原始流水被占用为 `manual_collection_source_occupied`，报价或快照失效为 `stale_manual_collection_quote`。其他结算围栏沿用原业务code。同key异参为409 `idempotency_conflict`。超时或断网保留原key和完整请求体恢复；确定冲突后先刷新账单/服务及报价，再由管理员确认新意图，不自动改用余额或换key补收款。重放返回原提交结果，恢复后另读当前详情。
+
+人工到账写入不可变 `manual_collections` 事实，并关联唯一 `payment_transactions(provider=manual_offline,status=succeeded)`。它不创建支付意图、不接受支付回调、不伪造网关凭据或 webhook；来源写入只支持 READ COMMITTED，其他隔离级别拒绝，人工原始流水号全局唯一，并与在线支付、信用还款和未拒绝的异常退回双向互斥。已存在的真实关单迟到原始证据也阻断新人工收款，异常退款被拒绝不会释放该来源；后到的可信迟到回调继续保留，按同一原始流水锁序列化，不能因人工记录已存在而丢弃外部证据。现有结算链路负责账单付款、续费权益、通知和推广佣金，但不改钱包余额；`paid_at` 与支付完成时间使用实际 `received_at`；权益仍按现有结算时的期限起算规则处理，不因补录更早到账日期而追溯改写权益。供应商服务只进入本地paid、`renewal_status=pending`，待真实上游任务确认后才代表远端续费完成。
+
+人工原始流水以未知线上商户的声明参与迟到款核验；同流水后到的跨渠道异常列为 `unverified_anomaly_cents`，不推断同商户、不额外计入实际现金。年度现金报表新增 `manual_received_cents`，与 `gateway_received_cents` 分列，实际收款和现金净额包含人工到账；交易汇总新增 `manual_income_cents`，网关收入不包含该项。人工事实可进入既有外部退款凭证核验流程，钱包退款会被成功支付记录阻断；原收款事实和支付行不可更新或删除。
+
+第五批 E1 必须在任务自有 PostgreSQL 18、UTC 会话、真实迁移190和同步提交环境中覆盖正向结算、供应商pending、严格输入/权限/范围、流水号跨来源排重、同key与异key并发、余额支付竞态、未知提交恢复、撤权/凭据/报价过期、回滚、数据库不可变配对、年度现金与交易汇总、外部退款往返及无钱包入账。浏览器、真实供应商、远端CI和部署仍需单独验收。
+
 ## 后续批次的固定边界
 
-1. **可信人工收款**：独立财务协议、付款来源/证据和防重复入账；不能模拟网关回调或简单设置paid冒充外部到账。
-2. **服务转移**：源/目标客户范围、启用状态、服务owner代次及双方并发控制；先清未付单、退款、升级、取消及外部未决任务。历史财务留原客户，新单归新客户，默认关闭自动续费，保留明确的合同权益。旧订单购买字段、按服务聚合活动、密码/控制台链接需隔离或交接核验；库存跟随服务，不靠改owner自动失效凭据。
+1. **服务转移**：源/目标客户范围、启用状态、服务owner代次及双方并发控制；先清未付单、退款、升级、取消及外部未决任务。历史财务留原客户，新单归新客户，默认关闭自动续费，保留明确的合同权益。旧订单购买字段、按服务聚合活动、密码/控制台链接需隔离或交接核验；库存跟随服务，不靠改owner自动失效凭据。
 
 后续每批实施前补精确字段、版本、幂等恢复和对应数据库/外部验收；本段不表示这些接口已实现。
 
@@ -302,8 +339,14 @@ managed模式下普通同步/回调只更新真实上游期限观测，不能覆
 
 相邻供应商、自动续费、到期暂停/恢复、同步/回调、配置商品/长账期及本地续费退款共45个额外入口，在同一UTC隔离库串行以race完成，全部run/pass且零失败、零跳过；与后台180项没有重叠。本轮未执行真实worker进程SIGKILL验收，worker方法经本地供应商协议模拟器验证。
 
-全仓Go测试编译、相关包vet、supplier单元race、架构门禁、16项接口盘点/消费者测试及生成器通过。最终源码摘要、严格runner、先期失败与修复记录保留在被忽略的 `output/admin-service-management/`；初轮SQL参数类型及临时库锁容量问题修复后，全量180项在同一最终源码上连续通过。第三批不复用早期8/9或前两批的通过数量。UI、浏览器、真实供应商、远端CI及部署仍为未验证，第四批状态纠错验收单独记录，可信人工收款及转移未实施。
+全仓Go测试编译、相关包vet、supplier单元race、架构门禁、16项接口盘点/消费者测试及生成器通过。最终源码摘要、严格runner、先期失败与修复记录保留在被忽略的 `output/admin-service-management/`；初轮SQL参数类型及临时库锁容量问题修复后，全量180项在同一最终源码上连续通过。第三批不复用早期8/9或前两批的通过数量。UI、浏览器、真实供应商、远端CI及部署仍为未验证，第四批状态纠错及第五批收款验收分别记录。
 
 第四批 E1 已在任务自有 PostgreSQL 18.6、UTC 会话、fsync及同步提交开启的环境完成18个专项入口：新增状态纠错7项及既有权限、人工交付、价格/期限、续费、取消、退款和供应商生命周期11项，race模式全部run/pass，零失败、零跳过。覆盖人工／模拟双向修正、真实一次性服务、最新失败尝试与只读sync、原完成审计及结果变化、业务围栏、同key并发及异key CAS、真实COMMIT回包丢失、审计／回执回滚，以及来源／业务／审计等待后的撤权、范围变化、凭据和权益自然到期。首轮两处无效来源夹具没有将修改后的job_id写入提交请求，已修复；最终18项在最终源码上连续通过，先期日志保留。
 
-全仓Go测试编译、相关包vet、架构门禁、16项盘点/消费者测试、生成器及文档/契约校验通过。既有后台严格runner已登记187个入口，本批未全量重跑；前三批数量仍是各自历史证据。本批源码摘要、最终逐入口JSON和汇总保存在被忽略的 `output/admin-service-status-correction/`。无新迁移，UI尚未接线，浏览器、真实供应商、远端CI和部署未验收；可信人工收款及服务转移仍未实施。
+全仓Go测试编译、相关包vet、架构门禁、16项盘点/消费者测试、生成器及文档/契约校验通过。既有后台严格runner已登记187个入口，本批未全量重跑；前三批数量仍是各自历史证据。本批源码摘要、最终逐入口JSON和汇总保存在被忽略的 `output/admin-service-status-correction/`。无新迁移，UI尚未接线，浏览器、真实供应商、远端CI和部署未验收；第五批收款验收另记，服务转移仍未实施。
+
+第五批 E1 已在任务自有 PostgreSQL 18.6、UTC 会话、fsync及同步提交开启的环境完成16个专项入口（HTTP 13项、Store 3项），以race模式全部run/pass，零失败、零跳过。覆盖全额线下收款、供应商pending、权限与范围、原凭据及自然过期、报价/CAS、同key与异key并发、付款竞态、真实COMMIT回包丢失恢复、回滚、不可变配对、现金及交易汇总、外部退款往返，以及真实schema189→190升级保留原财务证据。已有迟到原始流水阻断新人工收款；后到可信回调仍保留，同流水跨渠道异常列待核验，不重复计入实际现金。
+
+同一最终源码上的66个独立相邻入口覆盖既有管理员续费、年度现金、费用、交易读取、续费退款、关单/异常退款及RBAC，串行race全部run/pass，零失败、零跳过。两组共82项无重叠，并核对1599个源码/迁移/runner文件哈希未变化。初轮环境缺失、SQL零字节散列及测试夹具失败的日志保留；修复迟到原始来源遗漏后，16项与66项已在最终源码上重新完整执行，早期通过数量不并入本次结论。
+
+全仓Go测试编译、相关包vet、架构门禁、16项盘点/消费者测试及生成器、前端typecheck和lint通过。后台严格runner已登记203个入口，本批未全量运行；最终源码摘要、逐项结果和 `final-combined-summary.json` 保存在被忽略的 `output/admin-manual-collections/`。UI尚未接线；浏览器、实际线下收款凭据、真实网关/供应商、worker进程强杀、远端CI、部署及生产升级恢复未验收。服务转移仍未实施，服务人工管理整组继续为partial。

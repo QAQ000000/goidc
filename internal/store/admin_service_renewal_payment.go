@@ -142,6 +142,13 @@ func (s *Store) AdminPayRenewalInvoice(ctx context.Context, actor, serviceID, in
 }
 
 func (s *Store) validateAdminRenewalPaymentInvoice(ctx context.Context, tx pgx.Tx, customer, invoice, invoiceOwner, order int64, kind string, version, amount int64, command adminRenewalPaymentCommand) error {
+	return s.validateAdminRenewalInvoiceAdmission(ctx, tx, customer, invoice, invoiceOwner, order, kind, version, amount, command, true)
+}
+
+// Manual collection still has source-identity waits after service admission.
+// Keep its original credential revocable until those waits finish, while the
+// established balance settlement retains its credential-locking boundary.
+func (s *Store) validateAdminRenewalInvoiceAdmission(ctx context.Context, tx pgx.Tx, customer, invoice, invoiceOwner, order int64, kind string, version, amount int64, command adminRenewalPaymentCommand, lockCredential bool) error {
 	var owner int64
 	var status, mode, cycle string
 	if err := tx.QueryRow(ctx, "SELECT user_id,status,provision_mode,billing_cycle FROM services WHERE id=$1 FOR UPDATE NOWAIT", command.ServiceID).Scan(&owner, &status, &mode, &cycle); err != nil {
@@ -149,7 +156,11 @@ func (s *Store) validateAdminRenewalPaymentInvoice(ctx context.Context, tx pgx.T
 	}
 	// Finance and service locks can wait or lose a race. Authenticate the exact
 	// original request again before exposing fresh business validation results.
-	if err := lockAdminRenewalCredential(ctx, tx, command.Actor); err != nil {
+	credentialCheck := checkAdminRenewalCredential
+	if lockCredential {
+		credentialCheck = lockAdminRenewalCredential
+	}
+	if err := credentialCheck(ctx, tx, command.Actor); err != nil {
 		return err
 	}
 	var singleRenewal bool

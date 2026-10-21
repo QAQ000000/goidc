@@ -52,6 +52,9 @@ FROM invoices WHERE id=$1 AND user_id=$2`, invoiceID, userID).Scan(&out.InvoiceI
 
 func (s *Store) CreatePaymentIntent(ctx context.Context, userID, invoiceID int64, provider, providerPaymentID, checkoutURL, key string, expectedVersion ...int64) (PaymentIntentResult, error) {
 	var out PaymentIntentResult
+	if provider == ManualCollectionProvider {
+		return out, conflict("manual_collection_reserved", "线下到账必须使用管理员人工收款流程")
+	}
 	if userID < 1 || invoiceID < 1 || provider == "" || providerPaymentID == "" || len(key) < 8 || len(key) > 128 {
 		return out, conflict("invalid_payment_intent", "支付参数或幂等键无效")
 	}
@@ -233,6 +236,9 @@ func (s *Store) ProcessPaymentWebhook(ctx context.Context, provider, eventID, pr
 
 func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, providerPaymentID string, invoiceID, amountCents int64, status string, raw []byte, externalTransaction []string, check *PaymentCheck) (WebhookResult, error) {
 	var out WebhookResult
+	if provider == ManualCollectionProvider {
+		return out, conflict("manual_collection_reserved", "人工收款不接受支付渠道回调或查单结算")
+	}
 	if provider == "" || eventID == "" || providerPaymentID == "" || invoiceID < 1 || amountCents < 0 || (status != "succeeded" && status != "failed") || len(raw) == 0 {
 		return out, conflict("invalid_payment_webhook", "支付回调参数无效")
 	}
@@ -261,6 +267,9 @@ func (s *Store) processPaymentWebhook(ctx context.Context, provider, eventID, pr
 // close evidence. Its caller owns authentication, lock preflight and commit.
 func (s *Store) processPaymentWebhookTx(ctx context.Context, tx pgx.Tx, provider, eventID, providerPaymentID string, invoiceID, amountCents int64, status string, raw []byte, externalTransaction []string, check *PaymentCheck, topup bool) (WebhookResult, error) {
 	var out WebhookResult
+	if provider == ManualCollectionProvider {
+		return out, conflict("manual_collection_reserved", "人工收款不接受支付渠道回调或查单结算")
+	}
 	var err error
 	if reviewed, handled, reviewErr := reviewHistoricalAdministratorPayment(ctx, tx, provider, eventID, providerPaymentID, invoiceID, amountCents, status, raw, externalTransaction, check); handled || reviewErr != nil {
 		return reviewed, reviewErr

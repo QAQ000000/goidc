@@ -380,6 +380,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/renewal-quotes", privateAdminOperation(s.auth(s.adminRenewalQuote, true)))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/renewals", privateAdminOperation(s.auth(s.adminCreateRenewal, true)))
 	mux.HandleFunc("POST /api/v1/admin/services/{id}/renewals/{invoice_id}/pay", privateAdminOperation(s.auth(s.adminPayRenewal, true)))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/renewals/{invoice_id}/manual-collection-quotes", privateAdminOperation(s.auth(s.adminServiceManualCollectionQuote, true)))
+	mux.HandleFunc("POST /api/v1/admin/services/{id}/renewals/{invoice_id}/manual-collections", privateAdminOperation(s.auth(s.adminCollectServiceRenewal, true)))
 	mux.HandleFunc("POST /api/v1/admin/service-renewal-batch-quotes", privateAdminOperation(s.auth(s.adminRenewalBatchQuote, true)))
 	mux.HandleFunc("POST /api/v1/admin/service-renewal-batches", privateAdminOperation(s.auth(s.adminCreateRenewalBatch, true)))
 	mux.HandleFunc("GET /api/v1/admin/service-renewal-batches/{batch_id}", privateAdminOperation(s.auth(s.adminRenewalBatch, true)))

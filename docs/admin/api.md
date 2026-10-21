@@ -57,7 +57,7 @@ node scripts/admin-api-consumers.mjs
 ## 客户、商品与服务的逐动作契约
 
 - [客户管理 API](customer-api.md)：旧客户路由按批准动作映射；包含高级筛选、新建/资料/启停、字段目录、联系人、分组/销售、未付充值代建、推荐人调整及受控代登录。资料手机与登录手机号分开，客户等级筛选复用现有规则；独立 CRM、旧资料扩展暂缓，旧 API 三态不恢复。
-- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；第二批同客户最多20项的批量报价、清单登记、进度查询与显式执行。保持独立权限、服务/账单版本、报价窗口、统一回执及供应商pending；人工价格与期限、受限本地状态纠错已有独立协议，可信人工收款/转移继续分批实施，需求组仍为partial。
+- [服务管理 API](service-management-api.md)：第一批单服务报价、代建未付续费单及客户余额付款；第二批同客户最多20项的批量报价、清单登记、进度查询与显式执行；第三批人工价格/期限、第四批受限本地状态纠错及第五批可信人工收款均有独立协议。保持独立权限、服务/账单版本、报价窗口、统一回执及供应商pending；服务转移仍待后续，需求组仍为partial。
 - [商品管理 API](catalog-api.md)：旧十页签逐项映射商品、定价、交付、配置、升级、购买字段、推广、业务文件和快捷链接，列出实际输入/输出、权限、版本、错误及未知结果恢复。创建/复制可选回执和其他 CAS writer 的恢复保证不同，前端不能统一猜测。
 
 两组本轮新增实现已补齐，需求声明的 API 状态为 `implemented`；该字段只表示批准范围的接口已实现，运行验收仍以独立门禁结果为准。前端据领域契约接线，接口实现状态、页面状态、数据库/浏览器/外部及发布证据各自维护。完成必要 API 不等于所有后台 UI 已完成。
@@ -231,13 +231,14 @@ Content-Type: application/json
 | source | 方向与渠道 | 含义 |
 | --- | --- | --- |
 | `payment` | income，具体支付提供方 | 已成功外部支付，含在线充值；统计实收一次 |
+| `manual_receipt` | income，manual_offline | 已核实线下全额收款，显示原流水号；与网关收入分列，现金只计一次 |
 | `external_refund` | expense，退款提供方 | 已确认实际外部退款；非钱包退款 |
 | `ledger` | income/expense/neutral，balance/admin_topup/gateway_topup | 钱包正负变动；gateway_topup为neutral，避免把同次外部收款再记收入 |
 | `credit_consumption` | neutral，credit | 信用支付账单事实；非新现金，按invoice_id稳定标识，不再重复出现invoice fallback |
 | `credit_repayment` | income，credit_repayment | 已登记的真实信用还款，时间为received_at；多次还款分别保留；不返回私密收据/备注 |
 | `invoice` | neutral，unrecorded等 | 历史已付但无上述支付/账本/信用消费证据的兼容项，不能推断为外部收款 |
 
-summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gateway_cents/credit_repayment_cents/cash_income_cents/net_cash_cents` 及currency。旧 `net_gateway_cents=gateway_income_cents-external_refund_cents` 保持兼容；`cash_income_cents=gateway_income_cents+credit_repayment_cents`，`net_cash_cents=cash_income_cents-external_refund_cents`。钱包、消费和信用支付均不加入该现金合计。
+summary返回整数分字段 `gateway_income_cents/manual_income_cents/manual_refund_cents/net_manual_cents/external_refund_cents/net_gateway_cents/credit_repayment_cents/cash_income_cents/net_cash_cents` 及currency。`net_gateway_cents=gateway_income_cents-(external_refund_cents-manual_refund_cents)`，保持既有网关口径并排除人工退款；`net_manual_cents=manual_income_cents-manual_refund_cents`。`cash_income_cents=gateway_income_cents+manual_income_cents+credit_repayment_cents`，`net_cash_cents=cash_income_cents-external_refund_cents`。人工线下收退款单列，不冒充网关收入或支出；钱包、消费和信用支付均不加入该现金合计。
 
 ## 客户操作日志与通知历史
 

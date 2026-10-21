@@ -14,6 +14,7 @@ var ServiceActivityAuditActions = []string{
 	"service.renewal.created", "service.auto_renew.updated", "service.configuration.submitted", "service.configuration.cancelled",
 	"service.pricing.updated", "service.renewal.fixed", "service.term.correction", "service.term.compensation",
 	"service.status.corrected",
+	"service.renewal.manual_collected",
 	"service.configuration.retried", "service.billing_cycle.completed", "service.simulation.completed",
 	"service.cancellation.requested", "service.cancellation.withdrawn", "service.cancellation.approved", "service.cancellation.rejected",
 	"supplier.lifecycle.manual_requested", "supplier.lifecycle.manual_verified", "supplier.lifecycle.manual_cancelled",
@@ -91,7 +92,7 @@ SELECT 'audit'::text AS source,
        CASE WHEN a.action='service.action.queued' THEN a.payload->>'action' ELSE a.action END AS action,
        CASE
          WHEN a.action LIKE 'service.cancellation.%' THEN 'cancellation'
-         WHEN a.action IN ('service.renewal.created','service.auto_renew.updated','service.pricing.updated','service.renewal.fixed','service.term.correction','service.term.compensation') THEN 'billing'
+         WHEN a.action IN ('service.renewal.created','service.auto_renew.updated','service.pricing.updated','service.renewal.fixed','service.term.correction','service.term.compensation','service.renewal.manual_collected') THEN 'billing'
          WHEN a.action LIKE 'service.configuration.%' OR a.action='service.billing_cycle.completed' THEN 'configuration'
          WHEN a.action='service.action.queued' OR a.action='service.manual.completed' OR a.action LIKE 'service.nokvm.%' OR a.action LIKE 'supplier.lifecycle.%' THEN 'operation'
          ELSE 'lifecycle'

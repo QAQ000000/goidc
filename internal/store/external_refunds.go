@@ -22,6 +22,12 @@ var externalRefundEvidenceHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // merchantScope uses only immutable, non-secret original merchant identity.
 func (s *Store) externalRefundMerchantScope(provider, reference string, sealed []byte, expectedInstance ...string) (string, error) {
+	if provider == ManualCollectionProvider {
+		if len(expectedInstance) > 0 && expectedInstance[0] != "" {
+			return "", conflict("external_refund_merchant_unavailable", "人工收款来源不能绑定在线支付实例")
+		}
+		return ManualCollectionMerchantScope(reference, sealed)
+	}
 	if provider == "mock" {
 		return "mock:test-only", nil
 	}

@@ -71,6 +71,9 @@ func (s *Store) PaymentTransactionGateway(ctx context.Context, provider, referen
 // supplied transaction, avoiding a second pool checkout for transaction-scoped
 // callers such as invoice detail rendering.
 func (s *Store) PaymentTransactionGatewayTx(ctx context.Context, tx pgx.Tx, provider, reference string, fallback PaymentConfiguration) (payment.Gateway, bool, error) {
+	if provider == ManualCollectionProvider {
+		return nil, false, nil
+	}
 	var sealed []byte
 	var instanceID string
 	var err error

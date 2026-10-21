@@ -9,13 +9,14 @@ import (
 )
 
 const transactionEntries = `(
- SELECT 'payment:'||pt.id AS event_key,'payment'::text AS source,pt.id,pt.user_id,i.id AS invoice_id,i.invoice_no,
+ SELECT 'payment:'||pt.id AS event_key,CASE WHEN pt.provider='manual_offline' THEN 'manual_receipt' ELSE 'payment' END AS source,pt.id,pt.user_id,i.id AS invoice_id,i.invoice_no,
  coalesce(pt.completed_at,pt.created_at) AS occurred_at,pt.provider AS channel,pt.amount_cents,
- 'income'::text AS direction,coalesce(nullif(pt.external_transaction_id,''),pt.provider_payment_id) AS transaction_no,
- '支付成功 · '||i.invoice_no AS description,
+ 'income'::text AS direction,coalesce(mc.transaction_no,nullif(pt.external_transaction_id,''),pt.provider_payment_id) AS transaction_no,
+ CASE WHEN pt.provider='manual_offline' THEN '人工到账 · ' ELSE '支付成功 · ' END||i.invoice_no AS description,
  CASE WHEN EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.item_type='renew') THEN 'renew'
  WHEN i.invoice_kind='topup' THEN 'topup' WHEN i.order_id IS NOT NULL THEN 'product' ELSE 'other' END AS kind,NULL::bigint AS balance_after
- FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id WHERE pt.status='succeeded'
+ FROM payment_transactions pt JOIN invoices i ON i.id=pt.invoice_id AND i.user_id=pt.user_id
+ LEFT JOIN manual_collections mc ON mc.payment_id=pt.id WHERE pt.status='succeeded'
  UNION ALL
  SELECT 'external-refund:'||r.id,'external_refund',r.id,r.user_id,i.id,i.invoice_no,r.received_at,
  r.provider,r.amount_cents,'expense',r.provider_refund_id,'外部退款到账 · '||i.invoice_no,
@@ -96,16 +97,20 @@ func (s *Store) AdminTransactionEntryPage(ctx context.Context, actor int64, in A
 // repayments are external receipts, separate from gateway receipts.
 func (s *Store) AdminTransactionEntrySummary(ctx context.Context, actor int64, in AdminTransactionFilter) (map[string]any, error) {
 	from, args := adminTransactionEntryFilter(actor, in)
-	var income, refunds, creditRepayments int64
+	var income, manualIncome, refunds, manualRefunds, creditRepayments int64
 	err := s.Pool.QueryRow(ctx, `SELECT coalesce(sum(e.amount_cents) FILTER (WHERE e.source='payment'),0)::bigint,
+ coalesce(sum(e.amount_cents) FILTER (WHERE e.source='manual_receipt'),0)::bigint,
  coalesce(sum(e.amount_cents) FILTER (WHERE e.source='external_refund'),0)::bigint,
- coalesce(sum(e.amount_cents) FILTER (WHERE e.source='credit_repayment'),0)::bigint`+from, args...).Scan(&income, &refunds, &creditRepayments)
+ coalesce(sum(e.amount_cents) FILTER (WHERE e.source='external_refund' AND e.channel='manual_offline'),0)::bigint,
+ coalesce(sum(e.amount_cents) FILTER (WHERE e.source='credit_repayment'),0)::bigint`+from, args...).Scan(&income, &manualIncome, &refunds, &manualRefunds, &creditRepayments)
 	if err != nil {
 		return nil, err
 	}
+	cashIncome := income + manualIncome + creditRepayments
 	return map[string]any{
-		"gateway_income_cents": income, "external_refund_cents": refunds, "net_gateway_cents": income - refunds,
-		"credit_repayment_cents": creditRepayments, "cash_income_cents": income + creditRepayments,
-		"net_cash_cents": income + creditRepayments - refunds, "currency": "CNY",
+		"gateway_income_cents": income, "manual_income_cents": manualIncome, "external_refund_cents": refunds, "net_gateway_cents": income - (refunds - manualRefunds),
+		"manual_refund_cents": manualRefunds, "net_manual_cents": manualIncome - manualRefunds,
+		"credit_repayment_cents": creditRepayments, "cash_income_cents": cashIncome,
+		"net_cash_cents": cashIncome - refunds, "currency": "CNY",
 	}, nil
 }

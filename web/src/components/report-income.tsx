@@ -13,7 +13,7 @@ import { Textarea } from "./ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 
 type CashMonth = {
-  month?: string; received_cents: number; gateway_received_cents: number; credit_received_cents: number;
+  month?: string; received_cents: number; gateway_received_cents: number; manual_received_cents: number; credit_received_cents: number;
   anomaly_received_cents: number; unverified_anomaly_cents: number; refund_cents: number;
   manual_expense_cents: number | null; outgoing_cents: number | null; net_cents: number | null; business_consumption_cents: number;
   simulated_received_cents: number; simulated_refund_cents: number;
@@ -72,7 +72,7 @@ export function AnnualIncomeReport({ year, filtersChanged = false }: { year: num
   const resource = useResource<AnnualCash>(path, false);
   const result = resource.data;
   return <section aria-label="年度现金收支" className="data-surface p-4 space-y-5">
-    <div><h2 className="font-semibold">{year} 年现金收支</h2><p className="mt-1 text-xs text-muted-foreground">现金收入包含网关到账、信用还款和已核验迟到到账；退款按实际凭证日期统计。余额消费单列为业务消费。</p></div>
+    <div><h2 className="font-semibold">{year} 年现金收支</h2><p className="mt-1 text-xs text-muted-foreground">现金收入包含网关到账、人工到账、信用还款和已核验迟到到账；退款按实际凭证日期统计。余额消费单列为业务消费。</p></div>
     {filtersChanged && <p className="text-sm text-muted-foreground">筛选条件已更改，请查询。</p>}
     {resource.error ? <Failure error={resource.error} retry={resource.refresh}/> : !result ? <Loading/> : <>
       <div className="stat-grid"><Stat icon={ArrowDownLeft} label="实际收款" value={money(result.total.received_cents)}/><Stat icon={ArrowUpRight} label="总支出（退款与人工费用）" value={showMoney(result.total.outgoing_cents)}/><Stat icon={Wallet} label="现金净额" value={showMoney(result.total.net_cents)}/><Stat icon={Receipt} label="业务消费（含余额消费）" value={money(result.total.business_consumption_cents)}/></div>
@@ -94,7 +94,7 @@ export function AnnualIncomeReport({ year, filtersChanged = false }: { year: num
       </div>
       <ResourceTable items={[...result.months, { ...result.total, month: "全年总计" }]} rowKey={row => row.month!} columns={[
         {header:"月份",render:row=>row.month}, {header:"实际收款",render:row=>money(row.received_cents)},
-        {header:"网关到账",render:row=>money(row.gateway_received_cents)}, {header:"信用还款",render:row=>money(row.credit_received_cents)},
+        {header:"网关到账",render:row=>money(row.gateway_received_cents)}, {header:"人工到账",render:row=>money(row.manual_received_cents)}, {header:"信用还款",render:row=>money(row.credit_received_cents)},
         {header:"核验迟到到账",render:row=>money(row.anomaly_received_cents)}, {header:"待核验",render:row=>money(row.unverified_anomaly_cents)},
         {header:"退款",render:row=>money(row.refund_cents)}, {header:"人工费用",render:row=>showMoney(row.manual_expense_cents)},
         {header:"总支出",render:row=>showMoney(row.outgoing_cents)}, {header:"现金净额",render:row=>showMoney(row.net_cents)},

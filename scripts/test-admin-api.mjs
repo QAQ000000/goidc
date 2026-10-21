@@ -7,6 +7,19 @@ import { validateIntegrationURL, verifyRequiredGoTests } from './test-compiled-n
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const integrationSuites = {
   'internal/httpapi': [
+    'TestAdminServiceManualCollectionSettlementAndPreservedFacts',
+    'TestAdminServiceManualCollectionStrictInputsPermissionsAndScope',
+    'TestAdminServiceManualCollectionReceiptIdentityAndConcurrentCAS',
+    'TestAdminServiceManualCollectionBusinessFences',
+    'TestAdminServiceManualCollectionPaymentRaces',
+    'TestAdminServiceManualCollectionConcurrentTrustedCallback',
+    'TestAdminServiceManualCollectionRollbackAndUnknownCommit',
+    'TestAdminServiceManualCollectionOriginalCredentialAndAuthorityWaits',
+    'TestAdminServiceManualCollectionRawSourceWaitRechecksCredential',
+    'TestAdminServiceManualCollectionReservedProviderAndImmutableFacts',
+    'TestAdminServiceManualCollectionCashReportsAndRefundRoundTrip',
+    'TestAdminServiceManualCollectionRejectsExistingLateReceipt',
+    'TestAdminServiceManualCollectionPreservesLaterAnomalyWithoutDoubleCash',
     'TestAdminServiceStatusCorrectionProofAndPreservedFacts',
     'TestAdminServiceStatusCorrectionStrictInputsPermissionsAndScope',
     'TestAdminServiceStatusCorrectionSourceAndLifecycleFences',
@@ -179,6 +192,9 @@ export const integrationSuites = {
     'TestImpersonationAPIKeyBindingLookupFailsClosed',
   ],
   'internal/store': [
+    'TestManualCollectionUpgrade189PreservesFinancialEvidence',
+    'TestManualCollectionDatabasePairingAndImmutability',
+    'TestManualCollectionDatabaseCrossSourceTransactionIdentity',
     'TestServiceTermUpgrade187PreservesSnapshotsAndDoesNotInferUpstreamTerms',
     'TestServiceTermDatabaseRejectsUnconfirmedRenewalEffects',
     'TestAdminServiceManagementUpgrade187PreservesFinancialEvidence',
