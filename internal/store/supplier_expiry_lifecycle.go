@@ -213,6 +213,19 @@ func (s *Store) deferSupplierExpiryFromRemote(ctx context.Context, tx pgx.Tx, j 
 	// retains PostgreSQL's microseconds for later renewal provenance checks.
 	originalDue := time.UnixMicro(source.Due)
 	active := strings.EqualFold(strings.TrimSpace(remote.Status), "active")
+	managed, err := supplierTermManaged(ctx, tx, j.ServiceID)
+	if err != nil {
+		return false, err
+	}
+	if managed && active {
+		// The source was rechecked against the customer's managed deadline.
+		// A longer prepaid upstream term does not extend that local contract.
+		// This observation grants no authority to resume an existing pause.
+		if _, err = observeSupplierTerm(ctx, tx, j.ServiceID, due); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
 	if expired && active && due.Unix() == originalDue.Unix() {
 		return false, nil
 	}

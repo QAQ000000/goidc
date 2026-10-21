@@ -3447,7 +3447,7 @@
         "/admin/services",
         "/admin/services/[id]"
       ],
-      "reason": "已批准按独立动作恢复：单服务报价、代建未付续费单与客户余额付款，以及第二批同客户批量报价/登记/查询/显式执行。批量不合单、不自动扣款，新增运行证据独立维护；人工价格/期限、状态纠错、可信人工收款及转移仍待后续批次，整组partial。",
+      "reason": "已批准按独立动作恢复：单服务与同客户批量代续费已实现，第三批独立实现长期固定/恢复合同定价、本次固定应付及客户期限纠错/补偿；统一回执和运行证据逐批记录。状态纠错、可信人工收款及转移仍待后续批次，整组partial。",
       "current": {
         "endpoints": [
           "POST /api/v1/admin/services/{id}/renewal-quotes",
@@ -3456,7 +3456,14 @@
           "POST /api/v1/admin/service-renewal-batch-quotes",
           "POST /api/v1/admin/service-renewal-batches",
           "GET /api/v1/admin/service-renewal-batches/{batch_id}",
-          "POST /api/v1/admin/service-renewal-batches/{batch_id}/execute"
+          "POST /api/v1/admin/service-renewal-batches/{batch_id}/execute",
+          "GET /api/v1/admin/services/{id}/management",
+          "POST /api/v1/admin/services/{id}/renewal-pricing/preview",
+          "PUT /api/v1/admin/services/{id}/renewal-pricing",
+          "POST /api/v1/admin/services/{id}/fixed-renewal-quotes",
+          "POST /api/v1/admin/services/{id}/fixed-renewals",
+          "POST /api/v1/admin/services/{id}/term-adjustment-quotes",
+          "POST /api/v1/admin/services/{id}/term-adjustments"
         ]
       },
       "legacy": {
@@ -3499,14 +3506,27 @@
         "internal/store/admin_service_renewal_payment.go",
         "internal/httpapi/admin_service_renewal_batches.go",
         "internal/httpapi/admin_service_renewal_batches_test.go",
-        "internal/store/admin_service_renewal_batches.go"
+        "internal/store/admin_service_renewal_batches.go",
+        "internal/httpapi/admin_service_management.go",
+        "internal/httpapi/admin_service_management_test.go",
+        "internal/store/admin_service_pricing.go",
+        "internal/store/admin_service_terms.go",
+        "internal/store/supplier_service_terms.go",
+        "db/migrations/188_admin_service_pricing.sql",
+        "db/migrations/189_service_term_management.sql",
+        "internal/store/admin_service_management_upgrade_test.go",
+        "internal/store/service_terms_upgrade_test.go",
+        "internal/supplier/billing_test.go"
       ],
       "acceptance": [
         "报价、未付建单与余额付款独立，真实管理员权限/客户范围/原凭据锁后及提交前复核；不改变auto-renew或长期价格。",
         "服务/账单版本、报价窗口、精确确认金额及统一回执；审计或回执故障原子回滚，不重复扣款；供应商付款仅pending。",
         "批量最多20项同客户有序清单，只原actor访问；报价/登记/查询不建单扣款，execute仅按原顺序执行显式子集。批次、attempt和结果复用统一mutation_operations，无新迁移或旁路表。",
         "单项稳定key跨attempt共享，成功不重扣；确定失败原attempt不重试，新attempt显式选择；未知提交保留原execute key恢复，撤权/过期/范围变化立即停止后项。供应商paid仅表示本地完成，上游仍pending；批量运行验收与第一批证据独立。",
-        "后续批次分离单次/长期价格与客户/上游期限，纠错不复活终态；转移保留历史财务并隔离旧客户隐私。"
+        "后续批次分离单次/长期价格与客户/上游期限，纠错不复活终态；转移保留历史财务并隔离旧客户隐私。",
+        "长期fixed为最终应付且不改原合同及优惠已用次数；contract恢复原合同，单次fixed仅建未付单，不与普通报价互换。",
+        "客户期限纠错/补偿独立权限、预览与统一回执；上游观测不猜测历史期限，managed同步不覆盖客户权益，仅确认续费按原job一次顺延。",
+        "迁移188/189不改变services整行形态，保留历史财务快照；旧writer停止后成套发布。"
       ]
     },
     {

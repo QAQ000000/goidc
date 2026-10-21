@@ -1,6 +1,6 @@
 # 管理员服务管理契约
 
-本文冻结旧服务管理的恢复边界，定义第一批单服务代续费和第二批同客户批量代续费 API。批量协议将只读报价、登记清单、进度查询和显式执行分开，验收与第一批独立记录；人工改价改期、状态纠错、可信人工收款及服务转移仍为后续批次。前端不得用通用保存或客户身份替代这些动作。
+本文冻结旧服务管理的恢复边界，定义单服务代续费、同客户批量代续费和第三批人工价格及期限 API。各批实现与验收分别记录；状态纠错、可信人工收款及服务转移仍为后续批次。前端不得用通用保存或客户身份替代这些动作。
 
 ## 旧行为与本项目取舍
 
@@ -54,11 +54,11 @@
 }
 ```
 
-`base_cents` 是服务合同周期基础价，`discount_cents` 是按服务冻结续费优惠计算的本次减免，`amount_cents=base_cents-discount_cents`。不按现有客户分组重新追溯合同价。`current_due_at` 可以为null。
+contract模式下，`base_cents` 是服务合同周期基础价，`discount_cents` 是按服务冻结续费优惠计算的本次减免，`amount_cents=base_cents-discount_cents`。fixed模式下，`base_cents=amount_cents` 为长期固定最终应付、`discount_cents=0`，保留的原合同估算通过管理状态的 `contract_*` 读取。不按现有客户分组重新追溯合同价。`current_due_at` 可以为null。
 
 报价到数据库时钟的下一个整五分钟边界失效，**有效期最多五分钟**。摘要绑定服务/价格/优惠/供应商快照与该窗口；提交重新计算，不能改摘要或靠客户端时间延长。网络慢或跨边界时需重新报价。
 
-已有未付续费单时返回 `can_create=false`、原 `pending_invoice_id` 和空 `quote_hash`；此时 `base_cents/discount_cents/amount_cents` 仍是按当前合同计算的估算，并非原账单金额。页面应读取并展示原账单，付款取原账单金额和版本，再让管理员明确选择；本接口不替换或删除它。其余业务围栏仍可返回错误，不能把有原账单当作允许付款的保证。
+已有未付续费单时返回 `can_create=false`、原 `pending_invoice_id` 和空 `quote_hash`；此时 `base_cents/discount_cents/amount_cents` 仍是按当前有效定价模式计算的估算，并非原账单金额。页面应读取并展示原账单，付款取原账单金额和版本，再让管理员明确选择；本接口不替换或删除它。其余业务围栏仍可返回错误，不能把有原账单当作允许付款的保证。
 
 ## 代建未付续费单
 
@@ -173,12 +173,85 @@
 
 批量测试覆盖跨客户及越权整批拒绝、20项上限和严格输入、报价只读、登记/GET无业务副作用、有序子集、同key异参、成功不重扣、失败只经新attempt重试、未知提交恢复、执行锁忙和释放、协调会话与业务池隔离、逐项撤权/自然过期/停止、业务围栏、供应商本地paid与远端pending及客户付款竞态。第二批数据库验收与第一批独立记录，具体结果见下方验收边界；批量与自动续费的新增组合场景、浏览器、真实上游及部署未单独验收。
 
+## 第三批：人工价格与客户期限
+
+所有入口沿用管理员认证、CSRF、客户范围、原凭据及 `Cache-Control: private, no-store`。金额为整数分，0须显式提交；未知字段拒绝。新动作权限不随 `services.manage` 自动授予。预览无建单、扣款、延期或上游写入，摘要绑定服务版本、定价/期限快照和数据库时钟的下一个整五分钟边界；提交须带原摘要及版本。长期定价、单次建单和期限调整三个写入口各自使用稳定 `Idempotency-Key`、统一回执与真实管理员审计；等待后及提交前复核权限、范围和原凭据，原key优先恢复历史事实，不因旧报价过期而再次执行。
+
+### 当前管理状态
+
+`GET /admin/services/{id}/management`，要求 `services.view`，返回200：`service_id/customer_id/service_version/status/billing_cycle/pricing_mode/fixed_amount_cents/contract_base_cents/contract_discount_cents/contract_amount_cents/amount_cents/next_due_at/term_mode/supplier_next_due_at/supplier_observed_at`。
+
+`pricing_mode=contract` 时使用服务原合同基价及冻结续费优惠，`fixed` 时 `amount_cents` 为管理员长期固定的最终应付，不再折扣。`contract_*` 保留原合同估算；`fixed_amount_cents` 在contract模式为null。读取原回执后刷新该入口和账单/服务详情，不能把历史回执当当前状态。服务详情及列表保持原 `recurring_price_cents` 合同基价，新增 `renewal_pricing_mode/fixed_renewal_amount_cents`，`renewal_amount_cents` 显示当前有效应付；这组字段名与management投影不同。
+
+`next_due_at` 是客户权益期限。没有人工调整时 `term_mode=follow_supplier`，供应商保持原跟随逻辑；调整后为 `managed`。上游期限及观测时间仅来自真实只读/执行结果，尚未观测为null，不从本地期限反推。非供应商的mode仅标识是否有人工调整来源，不表示存在上游。
+
+### 长期固定续费价与恢复合同价
+
+`POST /admin/services/{id}/renewal-pricing/preview`，要求 `services.view`、`services.pricing`：
+
+```json
+{"expected_version":12,"mode":"fixed","fixed_amount_cents":1900}
+```
+
+恢复原合同模式使用 `{"expected_version":12,"mode":"contract"}`，不传fixed金额。返回200，含 `customer_id/service_id/service_version/mode/fixed_amount_cents/contract_base_cents/contract_discount_cents/contract_amount_cents/amount_cents/billing_cycle/current_due_at/expires_at/quote_hash`。
+
+`PUT /admin/services/{id}/renewal-pricing` 在同一输入上增加 `quote_hash`、必填 `reason`（去首尾空白后最多240字符），提供稳定key；成功及历史重放均200，返回报价字段及 `version/replayed`。固定价独立于原 `recurring_price_cents` 和优惠计数保存；默认续费、自动续费、管理员普通续费均使用固定最终应付，优惠使用次数不增加。恢复contract删除固定覆盖，继续使用原合同与当时剩余优惠次数，不按客户当前分组或商品现价重定价。固定模式期间禁止配置/商品/账期升级，须明确恢复contract后重新报价。
+
+操作不修改已有账单或历史金额。未付关联账单、退款冻结、配置/取消冲突、未完成交付及待核验续费等围栏阻断改价；定价真实变化增加服务版本及自动续费代次，保持开关不变；同模式同金额的no-op仍留审计/回执，但版本及代次不增加。scope 为 `admin:service.pricing.set`。
+
+### 本次固定应付续费
+
+`POST /admin/services/{id}/fixed-renewal-quotes`，要求 `services.view`、`invoices.view`、`services.renew`、`services.renew.override`：
+
+```json
+{"expected_version":12,"amount_cents":1900}
+```
+
+返回200，字段沿用单服务续费报价，`base_cents=amount_cents`、`discount_cents=0`。摘要与普通续费报价隔离，不可互换。
+
+`POST /admin/services/{id}/fixed-renewals` 在输入上增加原 `quote_hash` 及必填 `reason`（去首尾空白后最多240字符），提供稳定key，首次201、重放200，返回既有代建续费单字段。scope 为 `admin:service.renewal.fixed.create`。只建一张未付单，包括0元；不修改长期价格或优惠使用次数，不重复套用分组/优惠码。后续显式余额付款仍要求 `services.renew.pay_balance`，沿用原结算、退款、通知、佣金和供应商任务链路。供应商报价仍读取真实成本/原期限；本地收款不是远端续费完成。
+
+### 客户期限纠错与免费补偿
+
+`POST /admin/services/{id}/term-adjustment-quotes`，要求 `services.view` 及与kind对应的 `services.term.correct` 或 `services.term.compensate`：
+
+```json
+{"expected_version":12,"kind":"compensation","next_due_at":"2026-12-01T08:00:00Z","reason":"服务故障补偿"}
+```
+
+`correction` 允许纠正为早于或晚于原期限，`compensation` 必须严格晚于原期限；均须不同于原期限且为2000–9999年的RFC3339时间，最多微秒精度，不接受null。`reason` 去首尾空白后必填、最多500字符。预览含 `service_id/customer_id/service_version/kind/mode/current_due_at/supplier_next_due_at/supplier_observed_at/next_due_at/expires_at/quote_hash`，mode是当前模式，提交后进入managed。
+
+`POST /admin/services/{id}/term-adjustments` 在原输入上增加 `quote_hash`，提供稳定key；首次与重放200，返回 `service_id/customer_id/service_version/kind/mode/before_due_at/next_due_at/supplier_next_due_at/supplier_observed_at/replayed`，scope为 `admin:service.term.adjust`。原因绑定预览，修改原因须重新预览。
+
+仅启用客户已交付、未终止的active/suspended周期服务可调整；一次性、未复核、库存已释放、未付关联账单、退款冻结、配置/取消/交付未决及未确认供应商续费等阻断。调整不建单、不入账、不改状态、不自动恢复暂停、不修改实际上游期限或宣称真实上游成功；增加服务版本及自动续费代次，保留自动续费开关。免费补偿没有销售收入或收款流水。
+
+managed模式下普通同步/回调只更新真实上游期限观测，不能覆盖客户承诺。真实确认一次供应商续费后，按客户合同账期从客户原期限与确认时刻的较晚者延长一次，并保存按原job唯一的不可变权益事实；重复确认不重复延期，不能用远端到期日直接替换客户期限。自动续费以客户期限为准，managed不沿用“上游尚未到期所以跳过”的跟随模式；可能在上游尚未过期时购买一个周期，仍受真实成本上限及既有支付/任务围栏约束。managed客户期限到期的暂停按客户权益执行，不能因上游更晚而擅自延长；已有远端暂停不冒认新系统暂停来源。
+
+### 第三批错误与恢复
+
+| HTTP / code | 含义与前端处理 |
+| --- | --- |
+| 400 `invalid_service_pricing` / `invalid_fixed_renewal` / `invalid_service_term` | 定价、金额、版本、原因、时间或摘要输入不合法；保留草稿并修正。通用JSON及key错误沿用后台公共协议 |
+| 409 `stale_service` / `service_owner_changed` | 服务版本或客户已变化；先读取当前管理状态，再重新预览和确认 |
+| 409 `stale_pricing_quote` / `stale_renewal_quote` / `stale_service_term_quote` | 对应预览已过期或快照变化；不能自动换摘要后提交，须重新确认 |
+| 409 `invalid_service_term_change` / `service_term_unavailable` | 补偿未延长、期限未变化或服务不满足调整资格；展示明确原因 |
+| 409 `service_term_operation_pending` / `service_action_pending` / `supplier_renewal_pending` / `renewal_invoice_pending` 等业务围栏 | 先处理原账单、交付、退款或取消；不得删除历史事实绕过围栏 |
+| 409 `fixed_service_pricing` | 固定价阻止商品、配置或账期变更；管理员显式恢复contract后重新报价 |
+| 409 `idempotency_conflict` | 同key已绑定其他请求；先核对原意图及历史事实，不能将换key当作未知结果恢复 |
+
+401/403/404及断网/超时不证明原写入失败。三个写入口均保留原body/key，通过原请求重放恢复；确认后再读取management及关联账单。期限调整不会自动恢复远端暂停，供应商续费仍需检查任务是否真实确认。
+
+### 迁移与验收
+
+迁移188新增独立服务固定价，189新增独立客户期限管理/上游观测及供应商确认续费权益事实，不修改services整行形态，不改旧迁移checksum，不猜测或回填历史管理意图/远端期限。旧服务无记录时沿用原行为。发布须先停旧API、worker及其他writer，再迁移并启动配套程序；旧writer不得混跑或直接降级，以免忽略固定价或覆盖客户期限。
+
+第三批 E1 已独立完成后台严格runner的180个入口，包含本批新增14项，全部run/pass且零跳过；相邻回归结果见下方验收边界。UI仍未接线，浏览器、真实供应商、远端CI与部署未验证，不能复用前两批或旧真实上游验收结论。
+
 ## 后续批次的固定边界
 
-1. **人工价格及期限**：一次固定应付、长期固定合同价、恢复自动定价、免费补偿分开授权/预览/审计；自动模式沿合同优惠，固定应付不重复折扣。供应商客户权益与实际期限分开建模后才能开放改期，回读不能静默覆盖客户权益或伪造上游成功。
-2. **状态纠错**：真实动作使用现有适配器；仅允许明确的本地纠错转换，终止态不复活，记录原因、证据及未决任务处置，不开放任意字符串保存。
-3. **可信人工收款**：独立财务协议、付款来源/证据和防重复入账；不能模拟网关回调或简单设置paid冒充外部到账。
-4. **服务转移**：源/目标客户范围、启用状态、服务owner代次及双方并发控制；先清未付单、退款、升级、取消及外部未决任务。历史财务留原客户，新单归新客户，默认关闭自动续费，保留明确的合同权益。旧订单购买字段、按服务聚合活动、密码/控制台链接需隔离或交接核验；库存跟随服务，不靠改owner自动失效凭据。
+1. **状态纠错**：真实动作使用现有适配器；仅允许明确的本地纠错转换，终止态不复活，记录原因、证据及未决任务处置，不开放任意字符串保存。
+2. **可信人工收款**：独立财务协议、付款来源/证据和防重复入账；不能模拟网关回调或简单设置paid冒充外部到账。
+3. **服务转移**：源/目标客户范围、启用状态、服务owner代次及双方并发控制；先清未付单、退款、升级、取消及外部未决任务。历史财务留原客户，新单归新客户，默认关闭自动续费，保留明确的合同权益。旧订单购买字段、按服务聚合活动、密码/控制台链接需隔离或交接核验；库存跟随服务，不靠改owner自动失效凭据。
 
 后续每批实施前补精确字段、版本、幂等恢复和对应数据库/外部验收；本段不表示这些接口已实现。
 
@@ -194,4 +267,10 @@
 
 第二批 E1 已在任务自有 PostgreSQL 18.6、UTC 会话以race模式完成25个专项入口：新增批量10项、既有单服务代续费14项及RBAC路由覆盖1项，全部取得run/pass，零跳过。覆盖真实付款提交回包丢失后的原key恢复、部分余额按原清单顺序执行、失败子集显式重试、逐项凭据过期停止、并发执行互斥、GET不等待业务行锁，以及业务池仅1个连接时两个批次仍可执行和查询进度。首轮21项通过后，任务临时库WAL占满tmpfs导致数据库崩溃；重建并限制WAL后，受影响4项全部复跑通过。原失败日志与复跑日志均保留，这不是一次连续全绿运行。
 
-全仓Go测试编译、相关包vet、架构门禁、16项接口盘点/消费者测试、生成器及契约/文档校验通过。后台严格runner现登记166个入口，本轮未全量重跑；第一批156项及相邻53项仍为历史证据。第二批机器证据位于被忽略的 `output/admin-renewal-batches/`，汇总为 `combined-summary.json`。UI未接线，浏览器、真实供应商、远端CI与部署未验证；模拟供应商结果不代表真实上游验收。
+全仓Go测试编译、相关包vet、架构门禁、16项接口盘点/消费者测试、生成器及契约/文档校验通过。第二批结束时后台严格runner登记166个入口，该批未全量重跑；第一批156项及相邻53项仍为历史证据。第二批机器证据位于被忽略的 `output/admin-renewal-batches/`，汇总为 `combined-summary.json`。UI未接线，浏览器、真实供应商、远端CI与部署未验证；模拟供应商结果不代表真实上游验收。
+
+第三批 E1 在任务自有 PostgreSQL 18.6、UTC 会话、fsync及同步提交开启的环境中完成：后台严格runner全量180个入口，以race模式全部取得run/pass，零失败、零跳过；其中新增HTTP 11项与Store 3项。覆盖长期固定价/恢复原合同及剩余优惠、单次固定与0元续费、收款退款、只读预览/CAS、原key并发及真实COMMIT回包丢失恢复、撤权/自然过期、审计和回执回滚、期限补偿/纠错围栏、上游观测与客户期限隔离、managed自动续费及旧恢复来源失效。真实schema187升级验证旧services与财务快照保持、新表不推断回填；月底及闰年账期计算统一按上海日历截到月末。
+
+相邻供应商、自动续费、到期暂停/恢复、同步/回调、配置商品/长账期及本地续费退款共45个额外入口，在同一UTC隔离库串行以race完成，全部run/pass且零失败、零跳过；与后台180项没有重叠。本轮未执行真实worker进程SIGKILL验收，worker方法经本地供应商协议模拟器验证。
+
+全仓Go测试编译、相关包vet、supplier单元race、架构门禁、16项接口盘点/消费者测试及生成器通过。最终源码摘要、严格runner、先期失败与修复记录保留在被忽略的 `output/admin-service-management/`；初轮SQL参数类型及临时库锁容量问题修复后，全量180项在同一最终源码上连续通过。第三批不复用早期8/9或前两批的通过数量。UI、浏览器、真实供应商、远端CI及部署仍为未验证，状态纠错、可信人工收款及转移未实施。

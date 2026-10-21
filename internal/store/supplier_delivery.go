@@ -452,6 +452,10 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
 	if err != nil {
 		return err
 	}
+	customerDue, err := mergeSupplierCustomerTerm(ctx, tx, j, due)
+	if err != nil {
+		return err
+	}
 	var renewalRecoveryID int64
 	if current == "suspended" && (state == "active" || state == "suspended") {
 		renewalRecoveryID, err = supplierRenewalExpiryRecovery(ctx, tx, j, remote, due, previousReason)
@@ -562,7 +566,7 @@ FROM services WHERE id=$1 FOR UPDATE`, j.ServiceID).Scan(&current, &existing, &p
   (CASE WHEN $10::boolean THEN resource_info-ARRAY['system_billing_suspension_job_id','system_expiry_suspension_job_id'] ELSE resource_info END)-'supplier_renewal_recovery_job_id'
   ELSE (CASE WHEN $10::boolean THEN resource_info-ARRAY['system_billing_suspension_job_id','system_expiry_suspension_job_id'] ELSE resource_info END) END)||$7::jsonb,
  installed_os=CASE WHEN $8<>'' THEN $8::jsonb ELSE installed_os END,
- next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE greatest($9,next_due_at) END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), due, clearBillingOrigin, j.Action == "renew", clearRenewalRecovery)
+ next_due_at=CASE WHEN billing_cycle='once' THEN NULL ELSE $9::timestamptz END WHERE id=$1`, j.ServiceID, state, strconv.FormatInt(remote.UpstreamID, 10), remote.Domain, remote.Username, credentials, resource, string(installedOS), customerDue, clearBillingOrigin, j.Action == "renew", clearRenewalRecovery)
 	if err != nil {
 		return err
 	}

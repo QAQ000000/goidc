@@ -152,10 +152,17 @@ WHERE user_id=$1 AND idempotency_key=$2`, userID, key).Scan(&out.InvoiceID, &out
 			if err = tx.QueryRow(ctx, "SELECT $1::timestamptz>clock_timestamp()+interval '24 hours'", *remoteDue).Scan(&outsideWindow); err != nil {
 				return out, nil, err
 			}
-			if outsideWindow {
+			managed, managedErr := supplierTermManaged(ctx, tx, serviceID)
+			if managedErr != nil {
+				return out, nil, managedErr
+			}
+			if outsideWindow && !managed {
 				// A stale local deadline must never buy another period that the
 				// upstream has already supplied. Admission, binding/account identity
 				// and both quotation versions have been checked under their locks.
+				if _, err = observeSupplierTerm(ctx, tx, serviceID, remoteDue); err != nil {
+					return out, nil, err
+				}
 				if _, err = tx.Exec(ctx, `UPDATE services SET next_due_at=greatest(next_due_at,$2),
 auto_renew_error='',version=version+1,updated_at=clock_timestamp() WHERE id=$1`, serviceID, *remoteDue); err != nil {
 					return out, nil, err
@@ -205,6 +212,15 @@ func lockRenewalTerms(ctx context.Context, tx pgx.Tx, serviceID int64) (renewalT
 	err := tx.QueryRow(ctx, `SELECT s.user_id,s.status,s.billing_cycle,p.name,coalesce(s.recurring_price_cents,oi.price_cents,p.price_cents),s.renewal_discount_percent,s.renewal_promo_code,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,s.version,s.next_due_at,s.auto_renew,s.provision_mode='supplier'
 FROM services s JOIN products p ON p.id=s.product_id LEFT JOIN order_items oi ON oi.id=s.order_item_id WHERE s.id=$1 FOR UPDATE OF s`, serviceID).
 		Scan(&terms.CustomerID, &terms.Status, &terms.Cycle, &terms.ProductName, &terms.BaseCents, &terms.Benefit.Percent, &terms.Benefit.Code, &terms.Benefit.FixedCents, &terms.Benefit.Limit, &terms.Benefit.Used, &terms.Version, &terms.Due, &terms.AutoRenew, &terms.SupplierMode)
+	if err != nil {
+		return terms, err
+	}
+	var fixed *int64
+	if err = tx.QueryRow(ctx, "SELECT (SELECT fixed_amount_cents FROM service_renewal_pricing WHERE service_id=$1)", serviceID).Scan(&fixed); err == nil && fixed != nil {
+		// The override is already the final amount. Contract benefits remain
+		// stored on the service and resume, with the same Used, on restoration.
+		terms.BaseCents, terms.Benefit = *fixed, RenewalBenefit{}
+	}
 	return terms, err
 }
 

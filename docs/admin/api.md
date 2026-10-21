@@ -283,9 +283,11 @@ summary返回整数分字段 `gateway_income_cents/external_refund_cents/net_gat
 
 该接口只修改续费意图，不立即扣款或调用供应商。一次性服务拒绝 `nonrenewable_service`，非active/suspended拒绝 `invalid_auto_renew_state`，本地续费退款hold、未复核资源或不支持续费的供应商按领域错误拒绝。服务等待锁期间撤权、会话/密钥撤销、客户范围变化必须拒绝，不能复用HTTP进入时的缓存授权；服务归属并发变化可返回 `service_owner_changed`，应重新读取。
 
-前端成功后刷新服务详情，后续自动续费/上游回读仍按[交易与自动续费](../transactions.md)和[供应商协议](../supplier-protocol.md)执行。管理员代续费或批量立即续费不能通过改Cookie调用客户接口。单服务与同客户批量代续费及后续价格/期限/纠错/归属批次见[服务管理契约](service-management-api.md)，不在本自动续费开关接口范围。
+前端成功后刷新服务详情，后续自动续费/上游回读仍按[交易与自动续费](../transactions.md)和[供应商协议](../supplier-protocol.md)执行。管理员代续费或批量立即续费不能通过改Cookie调用客户接口。单服务与同客户批量代续费、第三批价格/期限及后续状态/收款/归属批次见[服务管理契约](service-management-api.md)，不在本自动续费开关接口范围。
 
 批量入口为 `POST /admin/service-renewal-batch-quotes`、`POST /admin/service-renewal-batches`、`GET /admin/service-renewal-batches/{batch_id}`、`POST /admin/service-renewal-batches/{batch_id}/execute`。报价只读，登记和查询均不建单或扣款；执行按冻结清单顺序处理明确子集，单项成功回执跨attempt复用。认证/范围变化及未知提交停止后续项目；未确认使用原execute key恢复，确定失败经管理员核对后用新execute key显式重试。只原actor可访问，create与pay_balance分别要求 `services.renew`、`services.renew.pay_balance`，并同时满足服务/账单读取与客户范围。完整字段、状态及协调会话容量见[批量契约](service-management-api.md#第二批同客户批量代续费)；UI与运行验收另记。
+
+第三批入口及字段见[人工价格与客户期限](service-management-api.md#第三批人工价格与客户期限)：`GET /admin/services/{id}/management`、`POST /renewal-pricing/preview`、`PUT /renewal-pricing`、`POST /fixed-renewal-quotes`、`POST /fixed-renewals`、`POST /term-adjustment-quotes`、`POST /term-adjustments`（后六个均续接同一服务路径）。长期定价、单次最终应付与客户期限分权、预览、幂等及审计；原优惠计数保留，供应商实际期限只观测，不把本地调整当作远端执行。188/189须停旧writer成套发布，UI及本批运行证据另记。
 
 ## 代登录与长期凭据
 

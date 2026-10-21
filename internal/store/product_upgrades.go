@@ -122,6 +122,9 @@ func (s *Store) QuoteProductChange(ctx context.Context, userID, serviceID int64,
 		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 			return out, err
 		}
+		if err = requireContractRenewalPricing(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
 		if mode == "nokvm" || mode == "supplier" {
 			return out, conflict("unsupported_supplier_upgrade", "该交付方式暂不支持商品升级，请联系管理员处理")
 		}

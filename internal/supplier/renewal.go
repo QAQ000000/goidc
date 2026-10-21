@@ -122,10 +122,9 @@ func (z *zjmf) ConfirmRenewal(ctx context.Context, r RenewalRequest, id int64) (
 	svc, err := z.Sync(ctx, r.UpstreamID)
 	due, ok := renewalTime(svc.NextDueDate)
 	before, valid := renewalTime(r.PreviousDue)
-	months := BillingMonths(r.Cycle)
 	// Require a complete purchased period, using the supplier's local calendar.
-	expected := before.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, months, 0)
-	if err != nil || svc.ProductID != r.ProductID || !ok || !valid || months == 0 || due.Before(expected) || (svc.Status != "Active" && svc.Status != "active" && svc.Status != "Suspended" && svc.Status != "suspended") {
+	expected, calendarValid := BillingPeriodEnd(before, r.Cycle)
+	if err != nil || svc.ProductID != r.ProductID || !ok || !valid || !calendarValid || due.Before(expected) || (svc.Status != "Active" && svc.Status != "active" && svc.Status != "Suspended" && svc.Status != "suspended") {
 		return out, svc, failure("renewal_due_unconfirmed", true, out)
 	}
 	out.Status, out.Domain, out.NextDueDate = svc.Status, svc.Domain, svc.NextDueDate

@@ -183,6 +183,9 @@ func (s *Store) QuoteBillingCycleChange(ctx context.Context, userID, serviceID i
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
+	if err = requireContractRenewalPricing(ctx, tx, serviceID); err != nil {
+		return out, err
+	}
 	if err = requireNoConfigurationChange(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
@@ -294,6 +297,9 @@ func (s *Store) QuoteConfigurationChange(ctx context.Context, userID, serviceID 
 			return out, err
 		}
 		if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
+			return out, err
+		}
+		if err = requireContractRenewalPricing(ctx, tx, serviceID); err != nil {
 			return out, err
 		}
 		if status != "active" || due == nil || !due.After(time.Now()) || cycle == "once" {
@@ -481,6 +487,9 @@ func (s *Store) SubmitConfigurationChange(ctx context.Context, userID, serviceID
 	if err = requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return out, err
 	}
+	if err = requireContractRenewalPricing(ctx, tx, serviceID); err != nil {
+		return out, err
+	}
 	out, err = scanConfigurationChange(tx.QueryRow(ctx, "SELECT "+configurationChangeColumns+" FROM service_configuration_changes WHERE id=$1 AND service_id=$2 AND user_id=$3 FOR UPDATE", quoteID, serviceID, userID))
 	if err != nil {
 		return out, err
@@ -557,6 +566,9 @@ func queueConfigurationChange(ctx context.Context, tx pgx.Tx, invoiceID int64) e
 	}
 	if !valid {
 		return conflict("upgrade_service_changed", "服务状态已变化，不能支付此变更账单")
+	}
+	if err := requireContractRenewalPricing(ctx, tx, serviceID); err != nil {
+		return err
 	}
 	if err := requireServiceReviewed(ctx, tx, serviceID); err != nil {
 		return err

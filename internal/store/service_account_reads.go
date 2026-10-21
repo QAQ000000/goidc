@@ -13,8 +13,11 @@ const serviceAccountGroupColumns = `,coalesce((SELECT ` + serviceAccountMaskedPu
 EXISTS(SELECT 1 FROM product_upgrade_targets t WHERE t.product_id=s.product_id) AS product_upgrade_available,
 coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents) AS recurring_price_cents,
 s.renewal_discount_percent,s.renewal_promo_code,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used,
-coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents)
- -service_renewal_discount(coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents),s.renewal_discount_percent,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used) AS renewal_amount_cents,
+CASE WHEN EXISTS(SELECT 1 FROM service_renewal_pricing rp WHERE rp.service_id=s.id) THEN 'fixed' ELSE 'contract' END AS renewal_pricing_mode,
+(SELECT fixed_amount_cents FROM service_renewal_pricing rp WHERE rp.service_id=s.id) AS fixed_renewal_amount_cents,
+coalesce((SELECT fixed_amount_cents FROM service_renewal_pricing rp WHERE rp.service_id=s.id),
+ coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents)
+ -service_renewal_discount(coalesce(s.recurring_price_cents,(SELECT oi.price_cents FROM order_items oi WHERE oi.id=s.order_item_id),p.price_cents),s.renewal_discount_percent,s.renewal_fixed_discount_cents,s.renewal_discount_limit,s.renewal_discounts_used)) AS renewal_amount_cents,
 coalesce(s.config_snapshot,(SELECT oi.config_snapshot FROM order_items oi WHERE oi.id=s.order_item_id),'[]'::jsonb) AS config_snapshot,
 coalesce(s.option_ids,(SELECT oi.config_options FROM order_items oi WHERE oi.id=s.order_item_id),'[]'::jsonb) AS option_ids,
 coalesce(s.option_quantities,(SELECT oi.option_quantities FROM order_items oi WHERE oi.id=s.order_item_id),'{}'::jsonb) AS option_quantities`

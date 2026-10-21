@@ -7,6 +7,18 @@ import { validateIntegrationURL, verifyRequiredGoTests } from './test-compiled-n
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const integrationSuites = {
   'internal/httpapi': [
+    'TestAdminServiceManagementManagedAutoRenewalUsesCustomerDeadline',
+    'TestAdminServiceManagementTermCorrectionInvalidatesDeferredRecovery',
+    'TestAdminServiceManagementPricingModesAndRetainedBenefits',
+    'TestAdminServiceManagementFixedRenewalSettlementRefundAndZero',
+    'TestAdminServiceManagementReadOnlyPreviewVersionsAndHashes',
+    'TestAdminServiceManagementStrictInputsPermissionsAndScope',
+    'TestAdminServiceManagementConcurrentReplayAndUnknownCommit',
+    'TestAdminServiceManagementAuditAndReceiptRollback',
+    'TestAdminServiceManagementOriginalCredentialRevocationAndExpiry',
+    'TestAdminServiceManagementTermAdjustmentFencesAndCompensation',
+    'TestAdminServiceManagementSupplierSyncPreservesCompensation',
+
     'TestAdminServiceRenewalBatchQuoteValidationPermissionsAndScope',
     'TestAdminServiceRenewalBatchRegistrationManifestAndIdempotency',
     'TestAdminServiceRenewalBatchPartialBalanceStableAttempts',
@@ -160,6 +172,9 @@ export const integrationSuites = {
     'TestImpersonationAPIKeyBindingLookupFailsClosed',
   ],
   'internal/store': [
+    'TestServiceTermUpgrade187PreservesSnapshotsAndDoesNotInferUpstreamTerms',
+    'TestServiceTermDatabaseRejectsUnconfirmedRenewalEffects',
+    'TestAdminServiceManagementUpgrade187PreservesFinancialEvidence',
     'TestCustomerReferrerUpgrade186PreservesAdministratorHistory',
     'TestCustomerReferrerRejectsSnapshotIsolation',
     'TestCustomerReferrerUpgrade186PreservesFinancialOwnership',

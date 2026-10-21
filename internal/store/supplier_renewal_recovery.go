@@ -108,9 +108,12 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
 		return 0, nil
 	}
 	before, err := supplierDueDate(renewal.PreviousDue)
-	months := supplier.BillingMonths(renewal.Cycle)
-	if err != nil || before == nil || months == 0 || remote.UpstreamID != renewal.UpstreamID || remote.ProductID != renewal.ProductID ||
-		due.Before(before.In(time.FixedZone("Asia/Shanghai", 8*3600)).AddDate(0, months, 0)) {
+	var expected time.Time
+	var calendarValid bool
+	if before != nil {
+		expected, calendarValid = supplier.BillingPeriodEnd(*before, renewal.Cycle)
+	}
+	if err != nil || !calendarValid || remote.UpstreamID != renewal.UpstreamID || remote.ProductID != renewal.ProductID || due.Before(expected) {
 		return 0, nil
 	}
 	var eligible bool
@@ -123,8 +126,10 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
  AND s.resource_info->>'suspend_reason'=$16
  AND NOT s.resource_info ? 'system_billing_suspension_job_id'
  AND coalesce(source.id,0)=$12 AND (coalesce(source.action,'')<>'suspend' OR
-  (`+supplierExpiryRecoverySourceSQL+` AND (source.request_payload->>'expiry_due_unix_micro')::bigint/1000000=
-   floor(extract(epoch FROM $14::timestamptz))::bigint))
+	 (`+supplierExpiryRecoverySourceSQL+` AND (source.request_payload->>'expiry_due_unix_micro')::bigint/1000000=
+	  floor(extract(epoch FROM CASE WHEN EXISTS(SELECT 1 FROM service_term_management t WHERE t.service_id=s.id AND t.mode='managed')
+	   THEN coalesce((SELECT e.before_due FROM service_managed_renewal_effects e WHERE e.job_id=$13 AND e.service_id=s.id),s.next_due_at)
+	   ELSE $14::timestamptz END))::bigint))
  AND s.delivery_snapshot->>'binding_id'=b.id::text
  AND s.delivery_snapshot->>'supplier_id'=a.id::text AND s.delivery_snapshot->>'provider'=$4
  AND a.active AND a.version=$6 AND a.provider=$4
@@ -138,14 +143,20 @@ func supplierRenewalExpiryRecovery(ctx context.Context, tx pgx.Tx, j ProvisionJo
    AND s.delivery_snapshot->'selection'->>'renewal_maximum_cost_cents'=$11::bigint::text)
  )
  AND s.upstream_id=$7 AND s.billing_cycle=$9
- AND $14::timestamptz<=clock_timestamp()+interval '24 hours' AND $15::timestamptz>clock_timestamp()
+	 AND ($14::timestamptz<=clock_timestamp()+interval '24 hours' OR
+	  EXISTS(SELECT 1 FROM service_term_management t WHERE t.service_id=s.id AND t.mode='managed'))
+	 AND $15::timestamptz>clock_timestamp()
+	 AND (NOT EXISTS(SELECT 1 FROM service_term_management t WHERE t.service_id=s.id AND t.mode='managed')
+	  OR EXISTS(SELECT 1 FROM service_managed_renewal_effects e WHERE e.job_id=$13 AND e.service_id=s.id
+	   AND e.after_due>clock_timestamp()
+	   AND (($17::boolean AND s.next_due_at=e.after_due) OR (NOT $17::boolean AND s.next_due_at=e.before_due))))
  AND EXISTS(SELECT 1 FROM invoice_items ii WHERE ii.invoice_id=i.id AND ii.service_id=s.id AND ii.item_type='renew')
  AND `+noOverdueServiceInvoiceSQL+`
  AND NOT EXISTS(SELECT 1 FROM provision_jobs other WHERE other.service_id=s.id AND other.id<>$13
  AND other.action<>'sync' AND other.status IN ('pending','running','waiting_manual','waiting_verification')))`,
 		j.ServiceID, renewal.InvoiceID, evidence.Source.BindingID, evidence.Source.Provider, renewal.SupplierID, renewal.AccountVersion,
 		strconv.FormatInt(renewal.UpstreamID, 10), renewal.ProductID, renewal.Cycle, renewal.Currency, renewal.MaximumCostCents,
-		evidence.Source.LifecycleJobID, id, before, due, reason).Scan(&eligible)
+		evidence.Source.LifecycleJobID, id, before, due, reason, j.Action == "sync").Scan(&eligible)
 	if err != nil || !eligible {
 		return 0, err
 	}

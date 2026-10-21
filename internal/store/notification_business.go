@@ -96,7 +96,9 @@ func (s *Store) queueServiceLifecycleResult(ctx context.Context, tx pgx.Tx, serv
 	// upstream deadline. A completed response without an extension cannot be
 	// described as a renewal success to the customer.
 	if err := tx.QueryRow(ctx, `SELECT (j.request_payload->>'local_invoice_id')::bigint,
- s.next_due_at > (j.request_payload->>'previous_due')::timestamptz
+	 (EXISTS(SELECT 1 FROM service_managed_renewal_effects e WHERE e.job_id=j.id AND e.service_id=s.id AND e.after_due>e.before_due)
+	 OR (NOT EXISTS(SELECT 1 FROM service_term_management t WHERE t.service_id=s.id AND t.mode='managed')
+	 AND s.next_due_at > (j.request_payload->>'previous_due')::timestamptz))
  FROM provision_jobs j JOIN services s ON s.id=j.service_id
  WHERE j.id=$1 AND j.service_id=$2 AND j.action='renew'`, jobID, serviceID).Scan(&invoiceID, &advanced); err != nil {
 		return err
