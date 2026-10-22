@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { RefreshCw } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
 import { date } from "@/lib/api";
 import { adminNavigationItem, can } from "@/lib/admin-navigation";
 import { Workspace, useAdminIdentity } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
-import { Failure, Loading } from "./common";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 type LogRow = Record<string, unknown> & { id: number; created_at: string };
 type LogResult = { items: LogRow[]; total: number; limit: number; offset: number };
@@ -23,7 +25,7 @@ const tabs = [
 ] as const;
 
 const labels: Record<string, string> = {
-  pending: "待处理", sending: "发送中", sent: "成功", expired: "已过期", dead_letter: "失败",
+  pending: "待处理", sending: "发送中", sent: "已发送", expired: "已过期", dead_letter: "失败",
   read: "已读", failed: "失败",
 };
 
@@ -55,11 +57,11 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
   const limit = Number(params?.get("limit")) || 25;
   const page = Math.floor((Number(params?.get("offset")) || 0) / limit);
   const title = kind === "sms" ? "短信日志" : kind === "inbox" ? "站内信日志" : kind === "api" ? "API 日志" : "邮件日志";
-  const columns = useMemo(() => {
-    if (kind === "sms") return [["id", "ID"], ["created_at", "时间"], ["content", "短信内容"], ["username", "用户名"], ["recipient", "电话"], ["status", "是否成功"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
+  const fields = useMemo(() => {
+    if (kind === "sms") return [["id", "ID"], ["created_at", "时间"], ["content", "短信内容"], ["username", "用户名"], ["recipient", "电话"], ["status", "发送状态"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
     if (kind === "inbox") return [["created_at", "发送时间"], ["subject", "标题"], ["username", "用户"], ["status", "状态"]];
     if (kind === "api") return [["id", "ID"], ["created_at", "时间"], ["path", "描述"], ["username", "用户名"], ["status_code", "状态码"], ["correlation_id", "关联编号"], ["remote_ip", "IP"]];
-    return [["id", "ID"], ["created_at", "时间"], ["subject", "主题"], ["recipient", "收件人"], ["success", "是否成功"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
+    return [["id", "ID"], ["created_at", "时间"], ["subject", "主题"], ["recipient", "收件人"], ["status", "投递状态"], ["last_error", "失败原因"], ["remote_ip", "IP"]];
   }, [kind]);
 
   function change(key: string, nextValue: string) {
@@ -72,20 +74,22 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
   }
 
   function clear() {
-    window.history.replaceState(null, "", path);
-    setParams(new URLSearchParams());
+    const next = new URLSearchParams(params ?? undefined);
+    for (const key of ["q", "status", "correlation_id", "method", "username", "recipient", "subject", "phone", "from", "to", "offset"]) next.delete(key);
+    window.history.replaceState(null, "", `${path}${next.size ? `?${next}` : ""}`);
+    setParams(next);
   }
-
-  if (!allowed) return <Workspace admin title={title}><p role="alert">没有查看此日志的权限</p></Workspace>;
-
-  return <Workspace admin title={title}>
-    <div className="min-w-0 max-w-full space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">{title}</h1>
-        <div className="flex flex-wrap gap-1" aria-label="日志类型">
-          {tabs.filter(([href]) => { const item = adminNavigationItem(href); return !!item && can(user, item.permission); }).map(([href, label]) => <Button key={href} asChild size="sm" variant={href === path ? "default" : "outline"}><Link href={href}>{label}</Link></Button>)}
-        </div>
-      </div>
+  function cell(row: LogRow, key: string) {
+    if (key === "created_at") return date(row.created_at);
+    if (key === "status") return <Badge variant="outline">{status(value(row, key))}</Badge>;
+    return value(row, key);
+  }
+  const columns: ResourceColumn<LogRow>[] = fields.map(([key, label]) => ({ id: key, header: label, render: row => cell(row, key), className: "max-w-80 whitespace-normal break-all" }));
+  const regionTitle = `${title}列表`;
+  return <Workspace admin title={title}><AdminListPage title={title}
+    description={kind === "api" ? "查看管理员 API 调用结果及关联编号，不展示请求凭据或敏感参数。" : kind === "inbox" ? "查看站内信发送与阅读状态。" : "查看渠道处理状态；已发送表示渠道接受，不代表收件人最终收到。"}
+    actions={<><Button variant="outline" disabled={logs.isLoading} onClick={logs.refresh}><RefreshCw />刷新</Button>{!params?.has("customer_id") && !params?.has("ticket_id") && <nav className="flex flex-wrap gap-1" aria-label="日志类型">{tabs.filter(([href]) => { const item = adminNavigationItem(href); return !!item && can(user, item.permission); }).map(([href, label]) => <Button key={href} asChild size="sm" variant={href === path ? "default" : "outline"}><Link href={href} aria-current={href === path ? "page" : undefined}>{label}</Link></Button>)}</nav>}</>}
+    filters={allowed &&
       <div className="flex flex-wrap items-end gap-3 rounded border bg-card p-4">
         <label className="min-w-[180px] flex-1 text-sm">关键词<Input aria-label="关键词" placeholder="高级搜索" value={params?.get("q") ?? ""} onChange={e => change("q", e.target.value)} /></label>
         {kind !== "api" && <label className="min-w-[140px] text-sm">状态<select aria-label="状态" className="mt-1 h-9 w-full rounded border bg-background px-2 text-sm" value={params?.get("status") ?? ""} onChange={e => change("status", e.target.value)}><option value="">全部状态</option>{(kind === "inbox" ? ["sent", "read", "failed"] : ["pending", "sending", "sent", "expired", "dead_letter"]).map(s => <option key={s} value={s}>{labels[s]}</option>)}</select></label>}
@@ -101,11 +105,11 @@ export function AdminNotificationLogs({ kind }: { kind: "sms" | "inbox" | "api" 
         <label className="text-sm">结束日期<Input type="date" aria-label="结束日期" value={params?.get("to") ?? ""} onChange={e => change("to", e.target.value)} /></label>
         <Button onClick={() => logs.refresh()}>搜索</Button><Button variant="outline" onClick={clear}>清空</Button>
       </div>
-      {logs.error ? <Failure error={logs.error} retry={logs.refresh} /> : !logs.data ? <Loading /> : <>
-        <div className="min-w-0 overflow-x-auto"><Table className="min-w-[760px]"><TableHeader><TableRow>{columns.map(([, label]) => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>{logs.data.items.map(row => <TableRow key={row.id}>{columns.map(([key]) => <TableCell key={key}>{key === "created_at" ? date(row.created_at) : key === "status" ? status(value(row, key)) : key === "success" ? (row.success ? "是" : "否") : value(row, key)}</TableCell>)}</TableRow>)}</TableBody></Table></div>
-        {!logs.data.items.length && <p role="status" className="py-10 text-center text-sm text-muted-foreground">暂无真实日志记录</p>}
-        <AdminPagination total={logs.data.total} page={page} pageSize={limit} onPageChange={p => change("offset", String(p * limit))} onPageSizeChange={n => change("limit", String(n))} />
-      </>}
-    </div>
-  </Workspace>;
+    }>
+    <AdminListRegion title={regionTitle} allowed={allowed} resource={logs} retry={logs.refresh} summary={logs.data && `共 ${logs.data.total} 条`}
+      pagination={data => <AdminPagination total={data.total} page={page} pageSize={limit} onPageChange={p => change("offset", String(p * limit))} onPageSizeChange={n => change("limit", String(n))} />}>
+      {data => <ResourceTable items={data.items} rowKey={row => row.id} columns={columns} ariaLabel={regionTitle} className="min-w-0" empty="暂无真实日志记录"
+        renderMobile={row => <article className="space-y-3 p-4"><dl className="grid gap-3 text-sm">{fields.map(([key, label]) => <div className="min-w-0" key={key}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="break-all">{cell(row, key)}</dd></div>)}</dl></article>} />}
+    </AdminListRegion>
+  </AdminListPage></Workspace>;
 }

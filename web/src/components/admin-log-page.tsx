@@ -2,19 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useResource } from "@/hooks/use-resource";
-import { date, type User } from "@/lib/api";
-import { can } from "@/lib/admin-navigation";
-import { Workspace } from "./workspace";
+import { date } from "@/lib/api";
+import { RefreshCw } from "lucide-react";
+import { Workspace, useAdminPermission } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
 import { Input } from "./ui/input";
-import { Failure, Loading } from "./common";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
+import { Button } from "./ui/button";
 
 type AuditRow = { id: number; created_at: string; action: string; entity_type: string; entity_id: string; actor_name: string | null };
 type Page = { items: AuditRow[]; total: number; limit: number; offset: number };
 export function AdminLogPage() {
-  const user = useResource<User>("/me");
-  const allowed = can(user.data, "audit.view");
+  const allowed = useAdminPermission("audit.view");
   const [params, setParams] = useState<URLSearchParams | null>(null);
   useEffect(() => {
     const restore = () => setParams(new URLSearchParams(window.location.search));
@@ -37,19 +37,21 @@ export function AdminLogPage() {
     window.history.replaceState(null, "", `/admin/logs/system${next.size ? `?${next}` : ""}`);
     setParams(next);
   }
-  return <Workspace admin title="系统审计日志">
-    <div className="min-w-0 space-y-4">
-      <h1 className="page-title">系统审计日志</h1>
-      {user.error ? <Failure error={user.error} retry={user.refresh} /> : !user.data ? <Loading /> : !allowed ? <p role="alert">无审计查看权限</p> : <>
-        <label className="block max-w-xl text-sm">关键词<Input aria-label="日志关键词" placeholder="搜索操作、对象类型、对象 ID 或操作人" value={q} onChange={e => change("q", e.target.value)} /></label>
-        {resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <>
-          <div className="overflow-x-auto rounded border"><Table><TableHeader><TableRow>{["ID", "时间", "操作人", "操作", "对象类型", "对象 ID"].map(label => <TableHead key={label}>{label}</TableHead>)}</TableRow></TableHeader><TableBody>
-            {resource.data.items.map(item => <TableRow key={item.id}><TableCell>{item.id}</TableCell><TableCell className="whitespace-nowrap">{date(item.created_at)}</TableCell><TableCell>{item.actor_name || "系统 / 已删除用户"}</TableCell><TableCell>{item.action}</TableCell><TableCell>{item.entity_type}</TableCell><TableCell>{item.entity_id || "—"}</TableCell></TableRow>)}
-            {!resource.data.items.length && <TableRow><TableCell colSpan={6} className="py-8 text-center">暂无匹配的审计日志</TableCell></TableRow>}
-          </TableBody></Table></div>
-          <AdminPagination total={resource.data.total} page={page} pageSize={limit} onPageChange={n => change("offset", String(n * limit))} onPageSizeChange={n => change("limit", String(n))} />
-        </>}
-      </>}
-    </div>
-  </Workspace>;
+  const columns: ResourceColumn<AuditRow>[] = [
+    { id: "id", header: "ID", render: row => `#${row.id}` },
+    { id: "time", header: "时间", render: row => date(row.created_at) },
+    { id: "actor", header: "操作人", render: row => row.actor_name || "系统 / 已删除用户" },
+    { id: "action", header: "操作", render: row => row.action, className: "max-w-80 whitespace-normal break-all" },
+    { id: "entity", header: "对象类型", render: row => row.entity_type },
+    { id: "entity_id", header: "对象 ID", render: row => row.entity_id || "—", className: "max-w-64 whitespace-normal break-all" },
+  ];
+  return <Workspace admin title="系统审计日志"><AdminListPage title="系统审计日志" description="查看系统审计元数据，操作记录只读。"
+    actions={<Button variant="outline" disabled={resource.isLoading} onClick={resource.refresh}><RefreshCw />刷新</Button>}
+    filters={allowed && <div className="rounded border border-border bg-card p-4"><label className="block max-w-xl text-sm">关键词<Input aria-label="日志关键词" placeholder="搜索操作、对象类型、对象 ID 或操作人" value={q} onChange={e => change("q", e.target.value)} /></label></div>}>
+    <AdminListRegion title="系统审计日志列表" allowed={allowed} resource={resource} retry={resource.refresh} summary={resource.data && `共 ${resource.data.total} 条`}
+      pagination={data => <AdminPagination total={data.total} page={page} pageSize={limit} onPageChange={n => change("offset", String(n * limit))} onPageSizeChange={n => change("limit", String(n))} />}>
+      {data => <ResourceTable items={data.items} rowKey={row => row.id} columns={columns} ariaLabel="系统审计日志列表" className="min-w-0" empty="暂无匹配的审计日志"
+        renderMobile={row => <article className="p-4"><dl className="grid gap-3 text-sm">{columns.map(column => <div key={column.id} className="min-w-0"><dt className="text-xs text-muted-foreground">{column.header}</dt><dd className="break-all">{column.render(row)}</dd></div>)}</dl></article>} />}
+    </AdminListRegion>
+  </AdminListPage></Workspace>;
 }

@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { useResource } from "@/hooks/use-resource";
 import { api, date } from "@/lib/api";
-import { Workspace } from "./workspace";
+import { Workspace, useAdminPermission } from "./workspace";
 import { AdminPagination } from "./admin-pagination";
-import { Failure, Loading } from "./common";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 
 type LoginRow = { id: number; login_time: string; last_access: string; logout_time: string | null; username: string; display_name: string; ip: string };
 type LoginResult = { items: LoginRow[]; total: number; limit: number; offset: number };
 
 export function AdminLoginLogs() {
+  const allowed = useAdminPermission("audit.view");
   const [params, setParams] = useState<URLSearchParams | null>(null);
   useEffect(() => {
     const restore = () => setParams(new URLSearchParams(window.location.search));
@@ -21,7 +23,7 @@ export function AdminLoginLogs() {
     return () => window.removeEventListener("popstate", restore);
   }, []);
   const query = params?.toString();
-  const resource = useResource<LoginResult>(params ? `/admin/logs/admin-login?${query}` : null, false);
+  const resource = useResource<LoginResult>(allowed && params ? `/admin/logs/admin-login?${query}` : null, false);
   const limit = Number(params?.get("limit")) || 25;
   const page = Math.floor((Number(params?.get("offset")) || 0) / limit);
   function change(key: string, value: string) {
@@ -30,8 +32,17 @@ export function AdminLoginLogs() {
     if (key !== "offset") next.delete("offset");
     const suffix = next.toString(); window.history.replaceState(null, "", `/admin/logs/admin-login${suffix ? `?${suffix}` : ""}`); setParams(next);
   }
-  return <Workspace admin title="管理员登录日志"><div className="min-w-0 max-w-full space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="page-title">管理员登录日志</h1><Button variant="outline" onClick={() => resource.refresh()}>刷新</Button></div>
+  const columns: ResourceColumn<LoginRow>[] = [
+    { id: "id", header: "ID", render: row => `#${row.id}` },
+    { id: "login", header: "登录时间", render: row => date(row.login_time) },
+    { id: "access", header: "最后访问", render: row => date(row.last_access) },
+    { id: "logout", header: "注销时间", render: row => row.logout_time ? date(row.logout_time) : "—" },
+    { id: "name", header: "用户名", render: row => row.display_name || row.username, className: "max-w-64 whitespace-normal break-all" },
+    { id: "ip", header: "IP地址", render: row => row.ip || "—", className: "max-w-64 whitespace-normal break-all" },
+  ];
+  return <Workspace admin title="管理员登录日志"><AdminListPage title="管理员登录日志" description="仅展示管理员登录历史，与客户登录记录分开。"
+    actions={<Button variant="outline" disabled={resource.isLoading} onClick={resource.refresh}><RefreshCw />刷新</Button>}
+    filters={allowed &&
     <div className="flex flex-wrap items-end gap-3 rounded border bg-card p-4">
       <label className="min-w-[220px] flex-1 text-sm">用户名<Input aria-label="用户名" placeholder="请输入用户名" value={params?.get("username") ?? ""} onChange={e => change("username", e.target.value)} /></label>
       <label className="min-w-[180px] text-sm">IP地址<Input aria-label="IP地址" placeholder="请输入 IP" value={params?.get("ip") ?? ""} onChange={e => change("ip", e.target.value)} /></label>
@@ -39,12 +50,13 @@ export function AdminLoginLogs() {
       <label className="text-sm">结束日期<Input type="date" aria-label="结束日期" value={params?.get("to") ?? ""} onChange={e => change("to", e.target.value)} /></label>
       <Button variant="outline" onClick={() => { window.history.replaceState(null, "", "/admin/logs/admin-login"); setParams(new URLSearchParams()); }}>清空</Button>
     </div>
-    {resource.error ? <Failure error={resource.error} retry={resource.refresh} /> : !resource.data ? <Loading /> : <>
-      <div className="min-w-0 overflow-x-auto"><Table className="min-w-[760px]"><TableHeader><TableRow>{["ID", "登录时间", "最后访问", "注销时间", "用户名", "IP地址"].map(x => <TableHead key={x}>{x}</TableHead>)}</TableRow></TableHeader><TableBody>{resource.data.items.map(row => <TableRow key={row.id}><TableCell>{row.id}</TableCell><TableCell>{date(row.login_time)}</TableCell><TableCell>{date(row.last_access)}</TableCell><TableCell>{row.logout_time ? date(row.logout_time) : "—"}</TableCell><TableCell>{row.display_name || row.username}</TableCell><TableCell>{row.ip || "—"}</TableCell></TableRow>)}</TableBody></Table></div>
-      {!resource.data.items.length && <p role="status" className="py-10 text-center text-sm text-muted-foreground">暂无真实登录记录</p>}
-      <AdminPagination total={resource.data.total} page={page} pageSize={limit} onPageChange={p => change("offset", String(p * limit))} onPageSizeChange={n => change("limit", String(n))} />
-    </>}
-  </div></Workspace>;
+    }>
+    <AdminListRegion title="管理员登录日志列表" allowed={allowed} resource={resource} retry={resource.refresh} summary={resource.data && `共 ${resource.data.total} 条`}
+      pagination={data => <AdminPagination total={data.total} page={page} pageSize={limit} onPageChange={p => change("offset", String(p * limit))} onPageSizeChange={n => change("limit", String(n))} />}>
+      {data => <ResourceTable items={data.items} rowKey={row => row.id} columns={columns} ariaLabel="管理员登录日志列表" className="min-w-0" empty="暂无真实登录记录"
+        renderMobile={row => <article className="p-4"><dl className="grid gap-3 text-sm">{columns.map(column => <div key={column.id} className="min-w-0"><dt className="text-xs text-muted-foreground">{column.header}</dt><dd className="break-all">{column.render(row)}</dd></div>)}</dl></article>} />}
+    </AdminListRegion>
+  </AdminListPage></Workspace>;
 }
 
 export function LogCleanupView() {
