@@ -196,27 +196,7 @@ export function TicketsView({ admin = false }: { admin?: boolean }) {
   );
 }
 
-export function AuditView() {
-  return (
-    <AdminListView
-      kind="audit"
-      title="系统日志"
-      description="关键业务变更的不可变记录"
-      endpoint="/admin/audit"
-      columns={[
-        {
-          key: "created_at",
-          label: "时间",
-          render: (r) => date(String(r.created_at)),
-        },
-        { key: "action", label: "描述", render: (r) => <span className="block min-w-48 max-w-96 break-words text-sm">{String(r.action ?? "-")}</span> },
-        { key: "actor_name", label: "操作者", render: (r) => <div><span className="block">{String(r.actor_name ?? "系统")}</span>{r.actor_id != null && <span className="text-xs text-muted-foreground">#{String(r.actor_id)}</span>}</div> },
-        { key: "entity_type", label: "关联对象", render: (r) => <span className="text-sm">{String(r.entity_type ?? "-")}<span className="ml-2 font-mono text-xs text-muted-foreground">#{String(r.entity_id ?? "-")}</span></span> },
-        { key: "id", label: "日志 ID", render: (r) => <span className="font-mono text-xs text-muted-foreground">{String(r.id)}</span> },
-      ]}
-    />
-  );
-}
+export { AuditView } from "./admin-audit";
 
 export function CancellationsView() {
   return <AdminListView kind="cancellations" title="取消申请" description="审核客户提交的服务取消申请" endpoint="/admin/cancellations" columns={[{ key: "id", label: "ID" }, { key: "service_name", label: "产品 / 服务", render: (r) => <PermissionGate permission="services.view"><Link className="text-primary hover:underline" href={`/admin/services/${r.service_id}`}>{String(r.service_name)}<span className="mt-1 block text-xs text-muted-foreground">服务 #{String(r.service_id)}</span></Link></PermissionGate> }, { key: "customer_name", label: "客户", render: (r) => <span>{String(r.customer_name)}<span className="mt-1 block text-xs text-muted-foreground">#{String(r.user_id)}</span></span> }, { key: "type", label: "取消时间", render: (r) => String(r.type) === "immediate" ? "立即取消" : "账期结束" }, { key: "reason", label: "申请原因", render: (r) => <span className="block min-w-48 max-w-80 whitespace-pre-wrap break-words">{String(r.reason)}</span> }, { key: "created_at", label: "申请时间", render: (r) => date(String(r.created_at)) }, { key: "status", label: "状态", render: (r) => <Status value={String(r.status)} /> }, { key: "actions", label: "操作", render: (r, refresh) => <CancellationDecision row={r} refresh={refresh} /> }]} />;

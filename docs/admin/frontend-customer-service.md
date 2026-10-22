@@ -122,10 +122,10 @@
 
 ## 客户字段 `/admin/customer-fields`
 
-- 排版：关键词/类型/启用条件；字段表列label/key、类型、必填、管理员专用、注册展示、排序/启用；右侧或Dialog编辑，底部预览只读样例。
+- 排版：模板页头/新增、关键词/类型/启用条件；公共列表展示label/key、类型、必填/管理员专用、注册标志/实际公开、排序/启用，服务端分页；手机改字段卡片，编辑和删除保留原Dialog。本批不新增注册预览。
 - 组件：六类型选择(text/textarea/number/date/select/boolean)、选项编辑器、正则与说明输入、required/admin_only/show_on_register/active开关、排序；手机字段卡片和单列表单。
 - API：`GET /admin/customer-fields`、`/{id}`、集合 `POST`、单项 `PATCH/DELETE`均要求customers.manage；普通资料表单只读 `/admin/customer-field-definitions`不能借此获CRUD权限。
-- 交互：读取当前定义version后编辑，写键和expected_version按[字段契约](../customer-registration-fields-contract.md)；显示对下次保存/注册的影响，不自动修改现有客户值。
+- 交互：读取当前定义version后编辑，写键和expected_version按[字段契约](../customer-registration-fields-contract.md)；显示对下次保存/注册的影响，不自动修改现有客户值。读取错误或403隐藏旧行、总数及分页，查询草稿保留；页大小/筛选变化回第一页，越界页保留明确返回第一页入口。沿用原员工草稿、身份前后核验、冲突处理和原key/body恢复，不用列表模板重写mutation。
 - 成功刷新字段管理、递交表单的定义缓存；定义变化时客户编辑保留安全草稿并重新核验。停用/删除字段的历史值不悄悄清空，预览不证明公开注册流程已完成新接线。
 
 ## 公共文件分类 `/admin/file-groups`
