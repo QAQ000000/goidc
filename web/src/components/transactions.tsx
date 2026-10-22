@@ -27,11 +27,15 @@ import { ExternalRefunds } from "./external-refunds";
 import { PaymentClose } from "./payment-close";
 import { PaymentExceptionPanel } from "./payment-exception-panel";
 import { PaymentReconciliation } from "./payment-reconciliation";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { AdminPagination } from "./admin-pagination";
+import { AdminInvoiceResults } from "./admin-invoice-results";
+import { AdminInvoiceDetailContent } from "./admin-invoice-detail-content";
 import { AdminStatusTabs } from "./admin-status-tabs";
 import { type OrderItem, type OrderRow, OrderItems, OrderCancel } from "./transaction-orders";
 import { time, OrderLink, ServiceLink } from "./transaction-links";
 
-type Invoice = Omit<ManualInvoiceRecord, "items"> & {
+export type Invoice = Omit<ManualInvoiceRecord, "items"> & {
   topup?: TopupState;
   id: number;
   invoice_no: string;
@@ -107,7 +111,7 @@ type InvoiceActionRow = Pick<
   | "version"
 > & { payments?: PaymentRecord[]; invoice_kind?: string; topup?: TopupState; topup_status?: string; topup_pending_liability_cents?: number };
 
-type InvoiceRow = InvoiceActionRow &
+export type InvoiceRow = InvoiceActionRow &
   Pick<
     Invoice,
     | "user_id"
@@ -179,7 +183,7 @@ function TransactionList({
     offset: String(offset),
   });
   if (state !== "all") params.set("status", state);
-  const { data, error, refresh } = useResource<
+  const { data, error, refresh, isLoading } = useResource<
     TransactionPage<OrderRow | InvoiceRow>
   >(ready ? `${admin ? "/admin" : ""}/${kind}/page?${params}` : null, false);
   const base = admin ? "/admin" : "/console";
@@ -272,6 +276,75 @@ function TransactionList({
       setMergeBusy(false);
     }
   }
+  const mergeDialog = (<MutationDialog
+            open={mergeOpen}
+            busy={mergeBusy}
+            onClose={() => setMergeOpen(false)}
+            title={<>合并人工账单</>}
+            confirm={
+              <>
+                <GitMerge />
+                {mergeBusy ? "合并中" : "确认合并"}
+              </>
+            }
+            onConfirm={() => void mergeInvoices()}
+            confirmDisabled={mergeBusy || !mergeReady}
+          >
+            <p className="text-sm text-muted-foreground">将生成一张新账单，原账单会作废并保留历史记录。</p>
+            <div className="max-h-56 overflow-auto border rounded-md divide-y">
+              {selections.map((item) => (
+                <div
+                  key={item.invoice_id}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+                >
+                  <span className="font-mono break-all">{item.invoice_no}</span>
+                  <span className="money shrink-0">{money(item.amount_cents)}</span>
+                </div>
+              ))}
+            </div>
+            {!sameCustomer && (
+              <p role="alert" className="text-sm text-destructive">
+                只能合并同一客户的账单。
+              </p>
+            )}
+            {selections.length > 20 && (
+              <p role="alert" className="text-sm text-destructive">
+                最多合并 20 张账单。
+              </p>
+            )}
+            {mergeError && (
+              <p role="alert" className="text-sm text-destructive break-words">
+                {mergeError}
+              </p>
+            )}
+          </MutationDialog>);
+  if (admin && kind === "invoices") return <Workspace title={title} admin>
+    <AdminListPage title={title} description="查看应收账单、支付状态和关联订单；合并仅限同一客户的未付人工账单。"
+      actions={<><InvoiceCreateLink /><Button variant="outline" disabled={isLoading} onClick={refresh}><RefreshCw />刷新账单列表</Button></>}
+      filters={<div className="min-w-0 space-y-4 rounded-xl border bg-card p-4">
+        <AdminStatusTabs label="账单状态" value={state} states={invoiceStates} onChange={value => { setState(value); setPage(0); }} />
+        <form aria-label="账单查询" className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" onSubmit={event => { event.preventDefault(); setQuery(draft); setPage(0); }}>
+          <label className="min-w-0 space-y-2 text-sm"><span>关键词</span><Input aria-label="搜索账单" placeholder="账单号、订单号、项目或客户" value={draft} maxLength={120} onChange={event => setDraft(event.target.value)} /></label>
+          <Button variant="outline" type="submit"><Search />搜索</Button>
+        </form>
+      </div>}
+      dialogs={mergeDialog}>
+      <AdminListRegion title="账单查询结果" resource={{ data, error, isLoading }} retry={refresh}
+        summary={data && `共 ${data.total} 张账单`}
+        pagination={result => <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {mergePermission && <Button variant="outline" size="sm" disabled={!mergeReady} onClick={() => { setMergeError(""); setMergeOpen(true); }}><GitMerge />合并账单{selections.length ? ` (${selections.length})` : ""}</Button>}
+            <p className="text-xs text-muted-foreground">本页金额 <span className="money">{money(result.items.reduce((sum, row) => sum + ("amount_cents" in row ? row.amount_cents : row.total_cents), 0))}</span></p>
+          </div>
+          <AdminPagination total={result.total} page={page} pageSize={20} onPageChange={setPage} />
+        </div>}>
+        {result => <AdminInvoiceResults items={result.items as InvoiceRow[]} suffix={suffix}
+          selectAll={mergePermission && <Checkbox aria-label="选择当前页可合并账单" checked={allPageSelected ? true : pageSelected.length > 0 ? "indeterminate" : false} onCheckedChange={value => togglePage(value === true)} />}
+          selection={mergePermission ? row => row.invoice_kind === "manual" && row.status === "unpaid" ? <Checkbox aria-label={`选择账单 ${row.invoice_no}`} checked={!!selected[row.id]} onCheckedChange={value => toggleInvoice(row, value === true)} /> : null : undefined}
+          actions={row => <InvoiceActions key={`${row.id}:${row.status}`} listSuffix={suffix} invoice={row} admin refresh={refresh} />} />}
+      </AdminListRegion>
+    </AdminListPage>
+  </Workspace>;
   return (
     <Workspace title={title} admin={admin}>
       <div className={`${admin ? "admin-page-heading " : ""}flex flex-wrap items-center justify-between gap-3 mb-6`}>
@@ -448,48 +521,7 @@ function TransactionList({
               )
             }
           />
-          <MutationDialog
-            open={mergeOpen}
-            busy={mergeBusy}
-            onClose={() => setMergeOpen(false)}
-            title={<>合并人工账单</>}
-            confirm={
-              <>
-                <GitMerge />
-                {mergeBusy ? "合并中" : "确认合并"}
-              </>
-            }
-            onConfirm={() => void mergeInvoices()}
-            confirmDisabled={mergeBusy || !mergeReady}
-          >
-            <p className="text-sm text-muted-foreground">将生成一张新账单，原账单会作废并保留历史记录。</p>
-            <div className="max-h-56 overflow-auto border rounded-md divide-y">
-              {selections.map((item) => (
-                <div
-                  key={item.invoice_id}
-                  className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                >
-                  <span className="font-mono break-all">{item.invoice_no}</span>
-                  <span className="money shrink-0">{money(item.amount_cents)}</span>
-                </div>
-              ))}
-            </div>
-            {!sameCustomer && (
-              <p role="alert" className="text-sm text-destructive">
-                只能合并同一客户的账单。
-              </p>
-            )}
-            {selections.length > 20 && (
-              <p role="alert" className="text-sm text-destructive">
-                最多合并 20 张账单。
-              </p>
-            )}
-            {mergeError && (
-              <p role="alert" className="text-sm text-destructive break-words">
-                {mergeError}
-              </p>
-            )}
-          </MutationDialog>
+          {mergeDialog}
           <ResourcePagination
             total={data.total}
             offset={offset}
@@ -706,84 +738,7 @@ export function InvoiceDetailView({
     const timer = window.setInterval(refresh, 3000);
     return () => window.clearInterval(timer);
   }, [data?.payment_pending, refresh]);
-  return (
-    <Workspace title="账单详情" admin={admin}>
-      <Button variant="ghost" className="mb-5" asChild>
-        <Link href={admin ? transactionBack ?? supplierBack ?? returnHref : (searchParams.get("from") === "topup" ? "/console/account" : returnHref)}>
-          <ArrowLeft />
-          {!admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表"}
-        </Link>
-      </Button>
-      {error ? (
-        <Failure error={error} retry={refresh} />
-      ) : !data ? (
-        <Loading />
-      ) : (
-        <>
-          <div className={`${admin ? "admin-page-heading " : ""}border-b pb-5 flex flex-wrap justify-between items-start gap-4`}>
-            <div className="min-w-0">
-              <h1 className="font-mono text-sm sm:text-xl font-semibold break-all">
-                {data.invoice_no}
-              </h1>
-              <p className="text-xs text-muted-foreground mt-2">
-                {time(data.created_at)}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 items-center">
-              <Status value={data.status} />
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="刷新账单"
-                title="刷新账单"
-                onClick={refresh}
-              >
-                <RefreshCw />
-              </Button>
-            </div>
-          </div>
-          <div className="py-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            <div>
-              <p className="text-sm text-muted-foreground">账单金额</p>
-              <p className="text-2xl font-semibold money mt-2">
-                {money(data.amount_cents)}
-              </p>
-              <PurchaseDiscountSummary discountCents={data.discount_cents} groupDiscountCents={data.group_discount_cents} promoDiscountCents={data.promo_discount_cents} promoCode={data.promo_code} />
-            </div>
-            <DetailFields
-              className="contents"
-              fields={{
-                到期时间: time(data.due_at),
-                付款时间: time(data.paid_at),
-                关联订单: data.order_id ? (
-                  <OrderLink admin={admin} id={data.order_id} label={data.order_no ?? `#${data.order_id}`} />
-                ) : (
-                  "-"
-                ),
-              }}
-            />
-          </div>
-          {admin && (
-            <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "topup" ? "在线充值账单" : data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
-          )}
-          <div className="pb-5 flex flex-wrap gap-3">
-            <InvoiceActions
-              key={data.invoice_kind === "topup" ? `topup:${data.id}` : `${data.id}:${data.version}:${data.status}`}
-              invoice={data}
-              admin={admin}
-              refresh={refresh}
-            />
-            {admin && (
-              <ManualInvoiceTools
-                key={`${data.id}:${data.version}`}
-                invoice={data}
-                refresh={refresh}
-              />
-            )}
-          </div>
-          <section className="border-y py-5">
-            <h2 className="font-semibold mb-3">账单项目</h2>
-            {data.items.length > 0 ? (
+  const invoiceItems = data && (<>{data.items.length > 0 ? (
               <div className="overflow-auto">
                 <Table>
                   <TableHeader>
@@ -822,11 +777,8 @@ export function InvoiceDetailView({
               </div>
             ) : (
               <OrderItems items={data.order_items} />
-            )}
-          </section>
-          <section className="py-5 border-b">
-            <h2 className="font-semibold mb-3">付款记录</h2>
-            {data.payment_close_anomaly && <p role="alert" className="mb-3 text-sm text-destructive">已关闭支付出现迟到收款异常，账单已冻结，请联系财务核验；请勿重复付款或取消。原收款与操作证据保留。</p>}
+            )}</>);
+  const invoicePayments = data && (<>{data.payment_close_anomaly && <p role="alert" className="mb-3 text-sm text-destructive">已关闭支付出现迟到收款异常，账单已冻结，请联系财务核验；请勿重复付款或取消。原收款与操作证据保留。</p>}
             <div className="overflow-auto">
               <Table>
                 <TableHeader>
@@ -898,8 +850,88 @@ export function InvoiceDetailView({
                   )}
                 </TableBody>
               </Table>
+            </div></>);
+  const backHref = admin ? transactionBack ?? supplierBack ?? returnHref : (searchParams.get("from") === "topup" ? "/console/account" : returnHref);
+  const backLabel = !admin && searchParams.get("from") === "topup" ? "返回账户余额" : transactionBack ? "返回交易流水" : supplierBack ? "返回供应商续费列表" : renewal ? "返回续费订单列表" : "返回账单列表";
+  const backLink = <Button variant="ghost" className="mb-5" asChild><Link href={backHref}><ArrowLeft />{backLabel}</Link></Button>;
+  if (admin) return <Workspace title="账单详情" admin>{backLink}{error ? <Failure error={error} retry={refresh} /> : !data ? <Loading /> : <AdminInvoiceDetailContent data={data}
+    refresh={<Button variant="outline" onClick={refresh}><RefreshCw />刷新账单</Button>}
+    actions={<><InvoiceActions key={data.invoice_kind === "topup" ? `topup:${data.id}` : `${data.id}:${data.version}:${data.status}`} invoice={data} admin refresh={refresh} /><ManualInvoiceTools key={`${data.id}:${data.version}`} invoice={data} refresh={refresh} /></>}
+    items={invoiceItems} payments={invoicePayments}
+    exceptions={<PaymentExceptionPanel invoiceId={data.id} payments={data.payments} refresh={refresh} />}
+    refunds={<ExternalRefunds invoice={data} refreshInvoice={refresh} />} />}</Workspace>;
+  return (
+    <Workspace title="账单详情" admin={admin}>
+      {backLink}
+      {error ? (
+        <Failure error={error} retry={refresh} />
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <>
+          <div className={`${admin ? "admin-page-heading " : ""}border-b pb-5 flex flex-wrap justify-between items-start gap-4`}>
+            <div className="min-w-0">
+              <h1 className="font-mono text-sm sm:text-xl font-semibold break-all">
+                {data.invoice_no}
+              </h1>
+              <p className="text-xs text-muted-foreground mt-2">
+                {time(data.created_at)}
+              </p>
             </div>
-          </section>
+            <div className="flex flex-wrap gap-3 items-center">
+              <Status value={data.status} />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="刷新账单"
+                title="刷新账单"
+                onClick={refresh}
+              >
+                <RefreshCw />
+              </Button>
+            </div>
+          </div>
+          <div className="py-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div>
+              <p className="text-sm text-muted-foreground">账单金额</p>
+              <p className="text-2xl font-semibold money mt-2">
+                {money(data.amount_cents)}
+              </p>
+              <PurchaseDiscountSummary discountCents={data.discount_cents} groupDiscountCents={data.group_discount_cents} promoDiscountCents={data.promo_discount_cents} promoCode={data.promo_code} />
+            </div>
+            <DetailFields
+              className="contents"
+              fields={{
+                到期时间: time(data.due_at),
+                付款时间: time(data.paid_at),
+                关联订单: data.order_id ? (
+                  <OrderLink admin={admin} id={data.order_id} label={data.order_no ?? `#${data.order_id}`} />
+                ) : (
+                  "-"
+                ),
+              }}
+            />
+          </div>
+          {admin && (
+            <div className="mb-4 grid gap-2 border-b pb-4 text-sm sm:grid-cols-2"><div><span className="text-muted-foreground mr-3">客户</span>{data.customer_name || `#${data.user_id}`}<span className="ml-2 text-muted-foreground break-all">{data.email}</span></div><div><span className="text-muted-foreground mr-3">账单类型</span>{data.invoice_kind === "topup" ? "在线充值账单" : data.invoice_kind === "manual" ? "人工账单" : "自动账单"}</div></div>
+          )}
+          <div className="pb-5 flex flex-wrap gap-3">
+            <InvoiceActions
+              key={data.invoice_kind === "topup" ? `topup:${data.id}` : `${data.id}:${data.version}:${data.status}`}
+              invoice={data}
+              admin={admin}
+              refresh={refresh}
+            />
+            {admin && (
+              <ManualInvoiceTools
+                key={`${data.id}:${data.version}`}
+                invoice={data}
+                refresh={refresh}
+              />
+            )}
+          </div>
+          <section className="border-y py-5"><h2 className="font-semibold mb-3">账单项目</h2>{invoiceItems}</section>
+          <section className="py-5 border-b"><h2 className="font-semibold mb-3">付款记录</h2>{invoicePayments}</section>
           {admin && <PaymentExceptionPanel invoiceId={data.id} payments={data.payments} refresh={refresh} />}
           {admin && <ExternalRefunds invoice={data} refreshInvoice={refresh} />}
         </>
