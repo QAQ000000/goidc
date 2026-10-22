@@ -18,6 +18,7 @@ export const integrationSuites = {
     "TestCustomerGroupAdminPreservesLegacyReceiptsAndAuditRollback"
   ],
   "internal/httpapi": [
+    "TestCustomerProductDiscountMatrixIdentityLifecycle",
     "TestCustomerGroupPricingLegacyProductGroupReceiptsReplay",
     "TestCustomerGroupPricingDefaultQuoteCheckoutAndReadModels",
     "TestCustomerGroupPricingProductRuleOverridesAndRemovalFallsBack",

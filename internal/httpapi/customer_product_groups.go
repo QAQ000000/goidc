@@ -152,20 +152,12 @@ func validateCustomerProductDiscount(in *customerProductDiscountInput) error {
 func (s *Server) adminCustomerProductDiscounts(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	limit, offset := pagination(r)
-	where := `($1='' OR cg.name ILIKE '%'||$1||'%' OR pg.name ILIKE '%'||$1||'%')`
-	s.writeListPage(w, r, `SELECT count(*) FROM customer_product_groups pg CROSS JOIN customer_groups cg WHERE `+where,
-		`
-SELECT d.id, d.customer_group_id, cg.name AS customer_group_name,
-       d.product_group_id, pg.name AS product_group_name,
-       COALESCE(d.discount_type,'none') AS discount_type,
-       COALESCE(d.discount_percent,0) AS discount_percent,
-       COALESCE(d.fixed_discount_cents,0) AS fixed_discount_cents,
-       COALESCE(d.version,0) AS version
-FROM customer_product_groups pg
-CROSS JOIN customer_groups cg
-LEFT JOIN customer_product_group_discounts d ON d.product_group_id=pg.id AND d.customer_group_id=cg.id
-WHERE `+where+`
-ORDER BY pg.id,cg.id`, []any{q}, limit, offset)
+	page, err := s.db.AdminCustomerProductDiscountsPage(r.Context(), q, limit, offset)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	write(w, http.StatusOK, page)
 }
 
 func (s *Server) saveCustomerProductDiscount(w http.ResponseWriter, r *http.Request) {

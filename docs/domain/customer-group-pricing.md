@@ -23,6 +23,10 @@
 
 范围在报价、应用到购物车、实际结账和升级用券时重新校验。升级不重新计算既有服务的客户组减免；升级专用券沿既有模式在付款时再次核对资格，循环续费券则使用冻结权益。编辑范围要求当前优惠码版本；同键重放保持原范围，改 body 必须换键。删除被券引用的客户组被外键拒绝，避免删除最后一个组后意外扩大为全客户。券的核销金额仅保存券的优惠，不含组减免。
 
+## 后台规则矩阵读取
+
+`GET /admin/customer-product-discounts`按商品组与客户组组合分页，支持名称`q`筛选。每行的`customer_group_id/product_group_id`来自组本身，始终为正整数；没有专属规则时，规则`id`为null，`discount_type=none`、金额/百分比与`version`为0。首次设置提交该组对和版本0；已有规则提交实际版本，清除后仍保留可设置的组合行。读取由`Store.AdminCustomerProductDiscountsPage`负责，HTTP仅解析查询及分页；权限和原写入/回执协议不变。回归`TestCustomerProductDiscountMatrixIdentityLifecycle`已加入分组定价严格runner。
+
 ## 报价、历史与续费
 
 - `POST /api/v1/cart/quote` 接受 `cart_version` 和所选 `item_ids`，返回服务端价格、分组/券减免、每行来源和 `quote_hash`。购物车部分选中也重新报价，不按全购物车比例猜测优惠。

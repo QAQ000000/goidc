@@ -248,3 +248,30 @@ func (s *Store) SaveCustomerProductDiscount(ctx context.Context, actor int64, ke
 	}
 	return result, commitAdminPricingMutation(ctx, tx, actor)
 }
+
+// Identity belongs to the group pair even before a dedicated rule exists.
+func (s *Store) AdminCustomerProductDiscountsPage(ctx context.Context, query string, limit, offset int) (map[string]any, error) {
+	const base = ` FROM customer_product_groups pg CROSS JOIN customer_groups cg
+ LEFT JOIN customer_product_group_discounts d ON d.product_group_id=pg.id AND d.customer_group_id=cg.id
+ WHERE ($1='' OR cg.name ILIKE '%'||$1||'%' OR pg.name ILIKE '%'||$1||'%')`
+	var total int64
+	if err := s.Pool.QueryRow(ctx, "SELECT count(*)"+base, query).Scan(&total); err != nil {
+		return nil, err
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT d.id,cg.id AS customer_group_id,cg.name AS customer_group_name,
+ pg.id AS product_group_id,pg.name AS product_group_name,
+ COALESCE(d.discount_type,'none') AS discount_type,COALESCE(d.discount_percent,0) AS discount_percent,
+ COALESCE(d.fixed_discount_cents,0) AS fixed_discount_cents,COALESCE(d.version,0) AS version`+base+
+		` ORDER BY pg.id,cg.id LIMIT $2 OFFSET $3`, query, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items, err := pgx.CollectRows(rows, pgx.RowToMap)
+	if err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []map[string]any{}
+	}
+	return map[string]any{"items": items, "total": total, "limit": limit, "offset": offset}, nil
+}
