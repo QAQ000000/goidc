@@ -24,6 +24,9 @@ import { useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { AdminServiceAdjustments } from "./admin-service-adjustments";
 import { AdminServiceAutoRenew } from "./admin-service-auto-renew";
 import { AdminServiceRenewals } from "./admin-service-renewals";
+import { AdminServiceManualCollection } from "./admin-service-manual-collection";
+import { AdminServiceStatusCorrection } from "./admin-service-status-correction";
+import { AdminServiceTransfer } from "./admin-service-transfer";
 
 const serviceStates = ["pending_payment", "queued", "provisioning", "active", "suspended", "failed", "cancelled", "terminated", "import_review_required"] as const;
 
@@ -132,7 +135,18 @@ export function AdminServiceDetail({service,refresh,manualDelivery,resourcePanel
         </Band>
       </Tabs.Content>
       <Tabs.Content value="history" className="outline-none"><ServiceActivityPanel serviceID={service.id} admin/></Tabs.Content>
-      <Tabs.Content value="management" className="outline-none space-y-5">{tab==="management"&&<><AdminServiceAdjustments service={service} refresh={refresh}/><AdminServiceRenewals service={service} refresh={refresh}/><AdminServiceAutoRenew service={service} refresh={refresh}/></>}</Tabs.Content>
+      <Tabs.Content value="management" className="outline-none space-y-5">
+        {tab === "management" && (
+          <>
+            <AdminServiceAdjustments service={service} refresh={refresh} />
+            <AdminServiceRenewals service={service} refresh={refresh} />
+            <AdminServiceManualCollection service={service} refresh={refresh} />
+            <AdminServiceStatusCorrection service={service} refresh={refresh} />
+            <AdminServiceTransfer service={service} refresh={refresh} />
+            <AdminServiceAutoRenew service={service} refresh={refresh} />
+          </>
+        )}
+      </Tabs.Content>
     </Tabs.Root>
     </AdminPageContainer>
   </div>;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { RefreshCw, Search, Server } from "lucide-react";
 import { date, money, type Service, type ServicePage } from "@/lib/api";
 import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { AdminServiceBatchRenewals } from "./admin-service-batch-renewals";
 import { AdminPagination } from "./admin-pagination";
 import { ResourceTable, type ResourceColumn } from "./resource-table";
 import { Status, cycles, statusNames } from "./common";
@@ -58,6 +59,7 @@ export function AdminServiceList({ resource, states, status, setStatus, draft, s
       <label className="min-w-0 space-y-2 text-sm"><span>关键词</span><Input aria-label="搜索服务" value={draft} onChange={event => setDraft(event.target.value)} placeholder="搜索服务名称或标识" /></label>
       <Button type="submit" variant="outline"><Search className="size-4" />搜索</Button>
     </form>}>
+    <AdminServiceBatchRenewals services={allowed && !resource.error ? resource.data?.items ?? [] : []} refresh={resource.refresh}/>
     <AdminListRegion title="服务查询结果" allowed={allowed} resource={resource} retry={resource.refresh}
       summary={resource.data && `共 ${resource.data.total} 个服务`}
       pagination={data => <AdminPagination total={data.total} page={page} pageSize={20} onPageChange={setPage} />}>
