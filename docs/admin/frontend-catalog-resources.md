@@ -93,9 +93,11 @@ API为`/option-groups`、`/options`、`/price-tiers`与`/configuration-rules`的
 
 目标是组织客户“已购服务”导航，独立于购买分组；入口商品设置，行内可查看所属商品，返回原来源。桌面表格列名称、图标、排序、version、操作；右上新建，编辑用窄抽屉。
 
-字段仅名称、图标和排序，图标选择`server/cloud/database/globe/box`且同时显示文字。无slug/active字段，不提供对应开关；排序用数字。删除弹窗必须选现有目标组，明确商品归属迁移，不把删除写成丢弃服务或删除商品。
+字段仅名称、图标和排序，图标选择`server/cloud/database/globe/box`且同时显示文字。无slug/active字段，不提供对应开关；排序用数字。删除弹窗选择现有目标组或明确转为未分组，说明商品归属迁移，不把删除写成丢弃服务或删除商品。
 
 `GET/POST /admin/service-groups`、`PUT/DELETE /{id}`；读`products.view`，写还需`products.manage`。修改带`expected_version`，删除带`target_group_id`与原版本；成功刷新组列表和商品归属，未知先重读核对，不承诺不存在的统一回执。手机用图标+名称卡片，编辑与迁移确认Sheet保留完整目标名称。
+
+服务分组目录已使用公共列表区域、声明式列及手机图标卡片；沿用模板Dialog编辑和迁移确认，保留版本、关联商品数与只读查看。接口返回完整数组，不增加虚构分页。此适配不改变商品归属设置与客户自定义导航组件的业务协议。
 
 ## 8. 供应商账户 `/admin/suppliers`
 

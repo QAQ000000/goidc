@@ -1,13 +1,15 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Save, Trash2, Settings2 } from "lucide-react";
+import { Plus, Save, Trash2, Settings2, RefreshCw } from "lucide-react";
 import { api, type Product, type ServiceGroup } from "@/lib/api";
 import { serviceIcon, serviceIconLabels } from "@/lib/service-icons";
 import { useResource } from "@/hooks/use-resource";
 import { useServiceNavigation, refreshServiceNavigation } from "@/hooks/use-service-navigation";
 import { Workspace, useAdminPermission } from "./workspace";
 import { Failure, Loading } from "./common";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
 import { catalogSelectStyle } from "./catalog-admin";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -15,13 +17,28 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 export function ServiceGroupsView(){return <Workspace title="服务分组" admin><GroupManager/></Workspace>;}
 function GroupManager(){
- const groups=useResource<ServiceGroup[]>("/admin/service-groups",false);
+ const allowed=useAdminPermission("products.view");
+ const groups=useResource<ServiceGroup[]>(allowed?"/admin/service-groups":null,false);
  const [edit,setEdit]=useState<ServiceGroup|null>(null);const [remove,setRemove]=useState<ServiceGroup|null>(null);
  const manage=useAdminPermission("products.manage");
  function done(){setEdit(null);setRemove(null);groups.refresh();}
  async function reload(){const list=await api<ServiceGroup[]>("/admin/service-groups");setEdit(list.find(g=>g.id===edit?.id)??null);setRemove(list.find(g=>g.id===remove?.id)??null);groups.refresh();}
- return <><div className="flex flex-wrap justify-between items-end gap-3 mb-8"><div><h1 className="page-title">服务分组</h1><p className="text-sm text-muted-foreground mt-2">按商品归属组织客户中心服务导航</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/admin/products">产品目录</Link></Button>{manage&&<Button onClick={()=>setEdit({id:0,name:"",icon:"server",sort_order:0,version:0})}><Plus/>新增服务分组</Button>}</div></div><p className="text-sm text-muted-foreground mb-6">客户可选择显示哪些分组，隐藏后仍可从全部服务访问。商品迁移分组会同时改变其既有服务的归属。</p>
- {groups.error?<Failure error={groups.error} retry={groups.refresh}/>:!groups.data?<Loading/>:<div className="divide-y border-y">{groups.data.map(g=>{const Icon=serviceIcon(g.icon);return <article key={g.id} className="py-5 flex flex-wrap gap-3 justify-between items-center"><div className="min-w-0 flex-1"><h2 className="font-medium flex gap-2 items-center"><Icon size={18}/><span className="break-all">{g.name}</span></h2><p className="text-xs text-muted-foreground mt-2">排序 {g.sort_order} · {g.product_count} 个商品 · 版本 {g.version}</p></div><div className="flex gap-2"><Button variant="outline" aria-label={`编辑服务分组 ${g.name}`} onClick={()=>setEdit(g)}>{manage?"编辑":"查看"}</Button>{manage&&<Button variant="outline" aria-label={`删除服务分组 ${g.name}`} onClick={()=>setRemove(g)}><Trash2 size={16}/>删除</Button>}</div></article>;})}{groups.data.length===0&&<p className="py-16 text-center text-muted-foreground">暂无服务分组；既有服务仍显示在全部服务中。</p>}</div>}
+ const identity=(g:ServiceGroup)=>{const Icon=serviceIcon(g.icon);return <div className="min-w-0 space-y-1"><p className="flex items-start gap-2 font-medium"><Icon className="mt-0.5 shrink-0" size={18}/><span className="break-all">{g.name}</span></p><p className="text-xs text-muted-foreground">#{g.id} · 版本 {g.version}</p></div>;};
+ const actions=(g:ServiceGroup)=><div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" aria-label={`编辑服务分组 ${g.name}`} onClick={()=>setEdit(g)}>{manage?"编辑":"查看"}</Button>{manage&&<Button size="sm" variant="outline" aria-label={`删除服务分组 ${g.name}`} onClick={()=>setRemove(g)}><Trash2 size={16}/>删除</Button>}</div>;
+ const columns:ResourceColumn<ServiceGroup>[]=[
+  {id:"name",header:"服务分组",render:identity,className:"max-w-80 whitespace-normal"},
+  {id:"count",header:"关联商品",render:g=>`${g.product_count??0} 个商品`},
+  {id:"sort",header:"排序",render:g=>g.sort_order},
+  {id:"actions",header:"操作",render:actions},
+ ];
+ return <><AdminListPage title="服务分组" description="按商品归属组织客户中心服务导航；商品迁移分组也会改变其既有服务的归属。"
+  actions={<><Button variant="outline" disabled={groups.isLoading} onClick={groups.refresh}><RefreshCw/>刷新</Button><Button variant="outline" asChild><Link href="/admin/products">产品目录</Link></Button>{manage&&<Button onClick={()=>setEdit({id:0,name:"",icon:"server",sort_order:0,version:0})}><Plus/>新增服务分组</Button>}</>}
+  feedback={<p className="text-sm text-muted-foreground">客户可选择显示哪些分组，隐藏后仍可从全部服务访问。</p>}>
+  <AdminListRegion title="服务分组列表" allowed={allowed} resource={groups} retry={groups.refresh} summary={groups.data&&`共 ${groups.data.length} 个分组`}>
+   {data=><ResourceTable items={data} rowKey={g=>g.id} columns={columns} className="min-w-0" ariaLabel="服务分组列表" empty="暂无服务分组；既有服务仍显示在全部服务中。"
+    renderMobile={g=><article className="space-y-4 p-4">{identity(g)}<p className="text-sm text-muted-foreground">排序 {g.sort_order} · {g.product_count??0} 个商品</p>{actions(g)}</article>}/>}
+  </AdminListRegion>
+ </AdminListPage>
  <Dialog open={!!edit} onOpenChange={open=>{if(!open)setEdit(null);}}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{edit?.id?(manage?"编辑服务分组":"查看服务分组"):"新增服务分组"}</DialogTitle><DialogDescription>排序数字较小的分组优先显示，同值按编号排序。</DialogDescription></DialogHeader>{edit&&<GroupForm key={`${edit.id}:${edit.version}`} initial={edit} manage={manage} onDone={done} onReload={reload}/>}</DialogContent></Dialog>
  <Dialog open={!!remove} onOpenChange={open=>{if(!open)setRemove(null);}}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>删除服务分组</DialogTitle><DialogDescription>关联商品及其服务将转入选定目标，客户对此分组的显示设置将清除。</DialogDescription></DialogHeader>{remove&&<GroupDelete key={`${remove.id}:${remove.version}`} group={remove} groups={groups.data??[]} onDone={done} onReload={reload}/>}</DialogContent></Dialog>
  </>;

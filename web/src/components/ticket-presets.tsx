@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Save, Trash2 } from "lucide-react";
+import { Plus, Pencil, Save, Trash2, RefreshCw } from "lucide-react";
 import {
   api,
   type TicketReplyPreset,
@@ -25,15 +25,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import { Failure, Loading } from "./common";
-import {
-  Table,
-  TableHeader,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-} from "./ui/table";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { ResourceTable, type ResourceColumn } from "./resource-table";
+import { Badge } from "./ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
+
 
 export function TicketPresetsView() {
   return (
@@ -44,18 +40,13 @@ export function TicketPresetsView() {
 }
 function PresetManager() {
   const manage = useAdminPermission("ticket_presets.manage");
-  const {
-    data: categories,
-    error: categoryError,
-    refresh: refreshCategories,
-  } = useResource<TicketReplyPresetCategory[]>(
-    "/admin/ticket-reply-preset-categories",
-  );
-  const {
-    data: presets,
-    error: presetError,
-    refresh: refreshPresets,
-  } = useResource<TicketReplyPreset[]>("/admin/ticket-reply-presets");
+  const allowed = useAdminPermission("ticket_presets.view");
+  const categoryResource = useResource<TicketReplyPresetCategory[]>(allowed ? "/admin/ticket-reply-preset-categories" : null, false);
+  const presetResource = useResource<TicketReplyPreset[]>(allowed ? "/admin/ticket-reply-presets" : null, false);
+  const { data: categories, error: categoryError, refresh: refreshCategories } = categoryResource;
+  const { data: presets, error: presetError, refresh: refreshPresets } = presetResource;
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [presetOpen, setPresetOpen] = useState(false);
   const [categoryName, setCategoryName] = useState("");
   const [categorySort, setCategorySort] = useState(0);
   const [categoryActive, setCategoryActive] = useState(true);
@@ -87,6 +78,7 @@ function PresetManager() {
           }),
         },
       );
+      setCategoryOpen(false);
       setCategoryName("");
       setCategorySort(0);
       setCategoryActive(true);
@@ -126,6 +118,7 @@ function PresetManager() {
           }),
         },
       );
+      setPresetOpen(false);
       setEditingPreset(null);
       setPresetTitle("");
       setPresetBody("");
@@ -179,37 +172,43 @@ function PresetManager() {
       setBusy(false);
     }
   }
-  if (categoryError || presetError)
-    return (
-      <Failure
-        error={categoryError ?? presetError!}
-        retry={() => {
-          refreshCategories();
-          refreshPresets();
-        }}
-      />
-    );
-  if (!categories || !presets) return <Loading />;
-  return (
-    <>
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
-        <div>
-          <h1 className="page-title">预设回复</h1>
-          <p className="text-muted-foreground mt-2">
-            维护管理员常用的工单回复内容
-          </p>
-        </div>
+  const categoryActions = (category: TicketReplyPresetCategory) => <PermissionGate permission="ticket_presets.manage"><div className="flex gap-1"><Button type="button" variant="ghost" size="icon-sm" aria-label={`编辑分类 ${category.name}`} title="编辑分类" disabled={busy} onClick={() => { setCategoryOpen(true); setEditingCategory(category); setCategoryName(category.name); setCategorySort(category.sort_order); setCategoryActive(category.active); setMessage(""); }}><Pencil /></Button><Button type="button" variant="ghost" size="icon-sm" aria-label={`删除分类 ${category.name}`} title="删除分类" disabled={busy || !presets || !!presetError || presets.some(item => item.category_id === category.id)} onClick={() => void removeCategory(category.id)}><Trash2 /></Button></div></PermissionGate>;
+  const presetActions = (preset: TicketReplyPreset) => <PermissionGate permission="ticket_presets.manage"><div className="flex gap-1"><Button type="button" variant="ghost" size="icon-sm" title="编辑预设" aria-label={`编辑 ${preset.title}`} disabled={busy || !categories || !!categoryError} onClick={() => { setPresetOpen(true); setEditingPreset(preset); setPresetTitle(preset.title); setPresetBody(preset.body); setPresetCategory(String(preset.category_id)); setPresetActive(preset.active); setMessage(""); }}><Pencil /></Button><Button variant="ghost" size="icon-sm" title="删除预设" aria-label={`删除 ${preset.title}`} disabled={busy} onClick={() => void removePreset(preset.id)}><Trash2 /></Button></div></PermissionGate>;
+  const state = (active: boolean) => <Badge variant="outline">{active ? "启用" : "停用"}</Badge>;
+  const body = (preset: TicketReplyPreset) => <details className="max-w-xl text-sm"><summary className="cursor-pointer text-muted-foreground">查看完整回复</summary><p className="mt-2 whitespace-pre-wrap break-all">{preset.body}</p></details>;
+  const categoryColumns: ResourceColumn<TicketReplyPresetCategory>[] = [
+    { id: "name", header: "分类", render: category => <div className="space-y-1 break-all"><p className="font-medium">{category.name}</p><p className="text-xs text-muted-foreground">#{category.id} · 排序 {category.sort_order}</p></div>, className: "max-w-60 whitespace-normal" },
+    { id: "state", header: "状态", render: category => state(category.active) },
+    { id: "actions", header: "操作", render: categoryActions },
+  ];
+  const presetColumns: ResourceColumn<TicketReplyPreset>[] = [
+    { id: "title", header: "回复标题", render: preset => <div className="space-y-1 break-all"><p className="font-medium">{preset.title}</p><p className="text-xs text-muted-foreground">#{preset.id} · {preset.category_name}</p></div>, className: "max-w-64 whitespace-normal" },
+    { id: "state", header: "状态", render: preset => state(preset.active) },
+    { id: "body", header: "回复内容", render: body, className: "max-w-xl whitespace-normal" },
+    { id: "actions", header: "操作", render: presetActions },
+  ];
+  return <AdminListPage title="预设回复" description="维护客服常用回复，分类与回复分别加载；预设文字不会直接发送给客户。"
+    actions={<><Button variant="outline" disabled={categoryResource.isLoading || presetResource.isLoading} onClick={() => { refreshCategories(); refreshPresets(); }}><RefreshCw />刷新</Button>{manage && <><Button variant="outline" onClick={() => { setEditingCategory(null); setCategoryName(""); setCategorySort(0); setCategoryActive(true); setMessage(""); setCategoryOpen(true); }}><Plus />新增分类</Button><Button disabled={!categories || !!categoryError} onClick={() => { setEditingPreset(null); setPresetCategory("none"); setPresetTitle(""); setPresetBody(""); setPresetActive(true); setMessage(""); setPresetOpen(true); }}><Plus />新增预设回复</Button></>}</>}
+    feedback={message && !categoryOpen && !presetOpen && <p role="alert" className="break-all text-sm text-destructive">{message}</p>}>
+    <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+      <div className="min-w-0 space-y-5">
+
+        <AdminListRegion title="预设回复分类列表" allowed={allowed} resource={categoryResource} retry={refreshCategories} summary={categories && `共 ${categories.length} 个分类`}>
+          {data => <ResourceTable items={data} rowKey={category => category.id} columns={categoryColumns} ariaLabel="预设回复分类列表" className="min-w-0" empty="暂无预设回复分类"
+            renderMobile={category => <article className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><p className="min-w-0 break-all font-medium">{category.name}</p>{state(category.active)}</div><p className="text-xs text-muted-foreground">#{category.id} · 排序 {category.sort_order}</p>{categoryActions(category)}</article>} />}
+        </AdminListRegion>
       </div>
-      {message && (
-        <p role="alert" className="text-destructive mb-4">
-          {message}
-        </p>
-      )}
-      <div className="grid xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-5">
-        <section className="border-y py-4">
-          <h2 className="font-semibold">
-            {editingCategory ? "编辑分类" : "新增分类"}
-          </h2>
+      <div className="min-w-0 space-y-5">
+
+        <AdminListRegion title="预设回复列表" allowed={allowed} resource={presetResource} retry={refreshPresets} summary={presets && `共 ${presets.length} 条回复`}>
+          {data => <ResourceTable items={data} rowKey={preset => preset.id} columns={presetColumns} ariaLabel="预设回复列表" className="min-w-0" empty="暂无预设回复"
+            renderMobile={preset => <article className="space-y-3 p-4"><div className="flex items-start justify-between gap-3"><p className="min-w-0 break-all font-medium">{preset.title}</p>{state(preset.active)}</div><p className="break-all text-xs text-muted-foreground">#{preset.id} · {preset.category_name}</p>{body(preset)}{presetActions(preset)}</article>} />}
+        </AdminListRegion>
+      </div>
+    </div>
+    <Dialog open={categoryOpen && manage} onOpenChange={open => { if (!busy) setCategoryOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{editingCategory ? "编辑分类" : "新增分类"}</DialogTitle><DialogDescription>分类用于组织预设文字；已有回复的分类不可删除。</DialogDescription></DialogHeader>
+{message && <p role="alert" className="break-all text-sm text-destructive">{message}</p>}
+
           <PermissionGate permission="ticket_presets.manage">
             <form
               className="mt-4 space-y-4"
@@ -288,66 +287,16 @@ function PresetManager() {
               </div>
             </form>
           </PermissionGate>
-          <div className="mt-4 space-y-2">
-            {categories.map((category) => (
-              <div
-                key={category.id}
-                className="flex flex-wrap items-center justify-between gap-2 border-t py-3"
-              >
-                <span className="min-w-0 break-all">{category.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  排序 {category.sort_order} ·{" "}
-                  {category.active ? "启用" : "停用"}
-                </span>
-                <PermissionGate permission="ticket_presets.manage">
-                  <div className="flex gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`编辑分类 ${category.name}`}
-                      title="编辑分类"
-                      disabled={busy}
-                      onClick={() => {
-                        setEditingCategory(category);
-                        setCategoryName(category.name);
-                        setCategorySort(category.sort_order);
-                        setCategoryActive(category.active);
-                        setMessage("");
-                      }}
-                    >
-                      <Pencil />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`删除分类 ${category.name}`}
-                      title="删除分类"
-                      disabled={
-                        busy ||
-                        presets.some((item) => item.category_id === category.id)
-                      }
-                      onClick={() => void removeCategory(category.id)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </PermissionGate>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="border-y py-4">
-          <h2 className="font-semibold">
-            {editingPreset ? "编辑预设回复" : "新增预设回复"}
-          </h2>
+    </DialogContent></Dialog>
+    <Dialog open={presetOpen && manage} onOpenChange={open => { if (!busy) setPresetOpen(open); }}><DialogContent className="max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>{editingPreset ? "编辑预设回复" : "新增预设回复"}</DialogTitle><DialogDescription>维护客服可插入工单草稿的文字，保存不会直接发送。</DialogDescription></DialogHeader>
+{message && <p role="alert" className="break-all text-sm text-destructive">{message}</p>}
+
           <PermissionFields permission="ticket_presets.manage">
             <form
               className="mt-4 space-y-4"
               onSubmit={(event) => void createPreset(event)}
             >
-              <fieldset disabled={busy} className="space-y-4">
+              <fieldset disabled={busy || !categories || !!categoryError} className="space-y-4">
                 <Select
                   value={presetCategory}
                   onValueChange={setPresetCategory}
@@ -357,7 +306,7 @@ function PresetManager() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">选择分类</SelectItem>
-                    {categories
+                    {(categories ?? [])
                       .filter(
                         (category) =>
                           category.active ||
@@ -452,82 +401,6 @@ function PresetManager() {
               </fieldset>
             </form>
           </PermissionFields>
-        </section>
-      </div>
-      <section className="mt-5">
-        <h2 className="font-semibold mb-4">现有预设</h2>
-        <div className="overflow-x-auto border-y">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>标题</TableHead>
-                <TableHead>分类</TableHead>
-                <TableHead>状态</TableHead>
-                <TableHead>回复内容</TableHead>
-                <TableHead>操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {presets.map((preset) => (
-                <TableRow key={preset.id}>
-                  <TableCell>{preset.id}</TableCell>
-                  <TableCell className="max-w-64 whitespace-normal break-all">
-                    {preset.title}
-                  </TableCell>
-                  <TableCell>{preset.category_name}</TableCell>
-                  <TableCell>{preset.active ? "启用" : "停用"}</TableCell>
-                  <TableCell className="max-w-xl whitespace-pre-wrap break-all">
-                    {preset.body}
-                  </TableCell>
-                  <TableCell>
-                    <PermissionGate permission="ticket_presets.manage">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        title="编辑预设"
-                        aria-label={`编辑 ${preset.title}`}
-                        disabled={busy}
-                        onClick={() => {
-                          setEditingPreset(preset);
-                          setPresetTitle(preset.title);
-                          setPresetBody(preset.body);
-                          setPresetCategory(String(preset.category_id));
-                          setPresetActive(preset.active);
-                          setMessage("");
-                        }}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="删除预设"
-                        aria-label={`删除 ${preset.title}`}
-                        disabled={busy}
-                        onClick={() => void removePreset(preset.id)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </PermissionGate>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {presets.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="py-10 text-center text-muted-foreground"
-                  >
-                    暂无预设回复
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </section>
-    </>
-  );
+    </DialogContent></Dialog>
+  </AdminListPage>;
 }
