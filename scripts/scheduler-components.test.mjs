@@ -63,7 +63,8 @@ function load(filename) {
   return module.exports;
 }
 const { AdminSchedulerLogs } = load(path.join(web, 'src/components/admin-scheduler-logs.tsx'));
-const { Failure, Loading } = load(path.join(web, 'src/components/common.tsx'));
+const { AdminListPage, AdminListRegion } = load(path.join(web, 'src/components/admin-list-page.tsx'));
+const { ResourceTable } = load(path.join(web, 'src/components/resource-table.tsx'));
 const { Button } = load(path.join(web, 'src/components/ui/button.tsx'));
 const { TableCell } = load(path.join(web, 'src/components/ui/table.tsx'));
 const logPath = '/admin/logs/jobs?';
@@ -100,18 +101,24 @@ function mount() {
 function nodes(element) {
   if (!element || typeof element !== 'object') return [];
   if (Array.isArray(element)) return element.flatMap(nodes);
+  if (element.type === AdminListPage) return [element, ...[element.props.actions, element.props.filters, element.props.feedback, element.props.children, element.props.dialogs].flatMap(nodes)];
+  if (element.type === AdminListRegion || element.type === ResourceTable) return [element, ...nodes(element.type(element.props))];
   return [element, ...React.Children.toArray(element.props?.children).flatMap(nodes)];
 }
 function text(element) {
   if (typeof element === 'string' || typeof element === 'number') return String(element);
   if (!element) return '';
   if (Array.isArray(element)) return element.map(text).join('');
+  if (element.type === AdminListPage) return [element.props.actions, element.props.filters, element.props.feedback, element.props.children, element.props.dialogs].map(text).join('');
+  if (element.type === AdminListRegion || element.type === ResourceTable) return text(element.type(element.props));
   return React.Children.toArray(element.props?.children).map(text).join('');
 }
 function find(tree, predicate) { const result = nodes(tree).find(predicate); assert.ok(result, 'expected component/control'); return result; }
 const taskSelect = tree => find(tree, item => item.type === 'select' && item.props['aria-label'] === '任务类别');
 const taskOptions = tree => nodes(taskSelect(tree)).filter(item => item.type === 'option').map(item => ({ key: item.props.value, name: text(item) }));
-const cell = (tree, value) => find(tree, item => item.type === TableCell && text(item) === value);
+const cell = (tree, value) => find(tree, item => item.type === TableCell && (text(item) === value || nodes(item).some(child => child.type === 'p' && text(child) === value)));
+const failed = tree => nodes(tree).filter(item => item.type === AdminListRegion && item.props.resource.error);
+const loading = tree => nodes(tree).filter(item => item.type === AdminListRegion && !item.props.resource.data && !item.props.resource.error);
 
 test('task options and row labels follow the returned catalog, including name changes', () => {
   reset();
@@ -141,14 +148,14 @@ test('log failure preserves the trend and only retries the failed log request', 
   const error = new Error('日志读取失败');
   resources.set(logPath, { error });
   const render = mount();
-  const failure = find(render(), item => item.type === Failure);
-  assert.equal(failure.props.error, error);
+  const failure = failed(render())[0];
+  assert.equal(failure.props.resource.error, error);
   cell(render(), '2026-10-18');
   assert.deepEqual(taskOptions(render()), [{ key: '', name: '全部任务' }]);
   failure.props.retry();
   assert.deepEqual(refreshes, [logPath]);
   resources.set(logPath, { data: { items: [run], total: 1, tasks: [task] } });
-  assert.equal(nodes(render()).filter(item => item.type === Failure).length, 0);
+  assert.equal(failed(render()).length, 0);
   cell(render(), task.name);
 });
 
@@ -157,8 +164,8 @@ test('trend failure preserves metadata and log rows and only retries the trend r
   const error = new Error('趋势读取失败');
   resources.set(trendPath, { error });
   const render = mount();
-  const failure = find(render(), item => item.type === Failure);
-  assert.equal(failure.props.error, error);
+  const failure = failed(render())[0];
+  assert.equal(failure.props.resource.error, error);
   cell(render(), task.name);
   assert.deepEqual(taskOptions(render()), [{ key: '', name: '全部任务' }, task]);
   failure.props.retry();
@@ -170,8 +177,8 @@ test('loading either resource keeps the other resource visible', () => {
     reset();
     resources.delete(missing);
     const tree = mount()();
-    assert.equal(nodes(tree).filter(item => item.type === Loading).length, 1);
-    assert.equal(nodes(tree).filter(item => item.type === Failure).length, 0);
+    assert.equal(loading(tree).length, 1);
+    assert.equal(failed(tree).length, 0);
     cell(tree, missing === logPath ? '2026-10-18' : task.name);
   }
 });
@@ -185,11 +192,11 @@ test('the selected task stays visible while metadata loads or fails, then takes 
   const expected = [{ key: '', name: '全部任务' }, { key: task.key, name: `当前任务：${task.key}` }];
   assert.equal(taskSelect(render()).props.value, task.key);
   assert.deepEqual(taskOptions(render()), expected);
-  assert.equal(nodes(render()).filter(item => item.type === Loading).length, 1);
+  assert.equal(loading(render()).length, 1);
   cell(render(), '2026-10-18');
   resources.set(filteredLogPath, { error: new Error('日志暂不可用') });
   assert.deepEqual(taskOptions(render()), expected);
-  find(render(), item => item.type === Failure).props.retry();
+  failed(render())[0].props.retry();
   assert.deepEqual(refreshes, [filteredLogPath]);
   resources.set(filteredLogPath, { data: { items: [run], total: 1, tasks: [task] } });
   assert.deepEqual(taskOptions(render()), [{ key: '', name: '全部任务' }, task]);
