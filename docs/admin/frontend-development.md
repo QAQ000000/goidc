@@ -83,7 +83,9 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 新购订单列表（含共享的供应商订单视图）使用公共列表区域和 [AdminOrderResults](../../web/src/components/admin-order-results.tsx)：桌面归并订单/客户/时间、商品/域名/IP、净应付/付款、订单/审核状态；完整备注、销售及供应商成本快照在逐行展开区，手机改为订单卡片，既有选择和领域动作由父级提供。详情的 [AdminOrderDetailContent](../../web/src/components/admin-order-detail-content.tsx)仅负责模板卡片排版：桌面右侧摘要/建单信息，手机摘要在前；商品配置、折扣快照、关联服务和原备注表单保留。查询、提成请求、审核/取消/删除/延后开票及备注版本协议继续留在领域控制器；续费订单和代下单页不计入本批内页适配。
 
-账单列表沿用公共列表区域及固定每页20项分页，[AdminInvoiceResults](../../web/src/components/admin-invoice-results.tsx)负责账单/客户/来源、金额、状态和到期时间列及手机卡片；导入待复核、支付待确认和关单异常与账单状态分别显示。详情的 [AdminInvoiceDetailContent](../../web/src/components/admin-invoice-detail-content.tsx)只组合模板卡片，桌面右侧摘要和允许操作、左侧项目/资金/异常/外退，手机摘要在前。项目、优惠快照、付款流水和原有财务组件通过领域插槽复用，合并仍使用原版本及幂等请求；客户前台保留原布局。人工账单新建/编辑、交易流水及发票审核内页不计入本批适配。
+账单列表沿用公共列表区域及固定每页20项分页，[AdminInvoiceResults](../../web/src/components/admin-invoice-results.tsx)负责账单/客户/来源、金额、状态和到期时间列及手机卡片；导入待复核、支付待确认和关单异常与账单状态分别显示。详情的 [AdminInvoiceDetailContent](../../web/src/components/admin-invoice-detail-content.tsx)只组合模板卡片，桌面右侧摘要和允许操作、左侧项目/资金/异常/外退，手机摘要在前。项目、优惠快照、付款流水和原有财务组件通过领域插槽复用，合并仍使用原版本及幂等请求；客户前台保留原布局。人工账单新建/编辑及发票审核内页不计入账单批次适配。
+
+交易流水沿用原有URL筛选和独立的分页/汇总API，使用公共列表区域、模板Card及 [AdminTransactionResults](../../web/src/components/admin-transaction-results.tsx) 的列定义和手机卡片；按 `event_key` 标识跨来源记录。现金收入/实际外部退款/现金净额直接读取后端全筛选汇总，展开区分别展示网关、人工线下和历史信用还款来源，不把当前页、钱包内转或账单结算当作现金合计。20/50/100条分页、金额转整数分、客户链接权限及详情返回上下文保留；汇总和明细各自失败/重试，无权限时不显示旧数据。本批不增加资金写入或导出。
 
 模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
 
