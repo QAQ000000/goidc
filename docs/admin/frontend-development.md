@@ -81,6 +81,8 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 服务列表使用同一公共列表骨架，列定义及手机服务卡片集中在 [AdminServiceList](../../web/src/components/admin-service-list.tsx)，沿用原有查询参数、固定每页20项和轮询；搜索提交及状态变更回第一页，详情返回保留列表查询。状态筛选使用完整受支持状态集合，不同时保留两套近似状态栏。服务详情使用模板页头、Card和五个Radix页签；人工交付、资源凭据、管理动作和结果恢复仍由既有领域组件负责。本批不增加批量续费入口，不将后台页面适配外推为客户前台已重写。
 
+新购订单列表（含共享的供应商订单视图）使用公共列表区域和 [AdminOrderResults](../../web/src/components/admin-order-results.tsx)：桌面归并订单/客户/时间、商品/域名/IP、净应付/付款、订单/审核状态；完整备注、销售及供应商成本快照在逐行展开区，手机改为订单卡片，既有选择和领域动作由父级提供。详情的 [AdminOrderDetailContent](../../web/src/components/admin-order-detail-content.tsx)仅负责模板卡片排版：桌面右侧摘要/建单信息，手机摘要在前；商品配置、折扣快照、关联服务和原备注表单保留。查询、提成请求、审核/取消/删除/延后开票及备注版本协议继续留在领域控制器；续费订单和代下单页不计入本批内页适配。
+
 模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
 
 ## 读取、URL 与权限
