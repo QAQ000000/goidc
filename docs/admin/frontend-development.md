@@ -103,6 +103,8 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 任务概览与统一队列共用 [AdminJobsView](../../web/src/components/admin-jobs.tsx) 的公共列表、声明式列及手机卡片。队列保留即时URL筛选、服务端分页和来源/ID组合行键，仅展示脱敏错误标记；服务链接受服务查看权限控制。超级管理员的Worker运行面板保持独立请求和重试，普通管理员不请求runtime；任务汇总不代表worker健康或调度历史。本批不增加统一任务重试、轮询或新渠道汇总。
 
+服务详情的单服务续费沿用模板卡片，明确区分预览/未付建单和客户余额付款；普通与本次固定应付共用恢复意图，权限各自控制。只保存必要账单投影和原body/key，报价失效后仍可恢复历史请求；未知请求不因后续冲突变为可编辑新请求。余额付款使用真实账单版本和金额，零元也独立确认；仅有代付权限的管理员可直接读取既有单项续费单。批量续费、人工收款、状态纠错与过户需要分别验收，不以这些组件草稿或后端通过代替前端闭环。
+
 只读响应不得直接展开为写入DTO。[配置请求字段](../../web/src/lib/admin-configuration-inputs.ts)按具体内容类型、等级和工单状态声明写字段：编辑移除id/version/时间及计算字段，资源version映射expected_version；工单状态仅创建传slug，内置标题禁止编辑。官网字段表单同时提供标识与名称，导航不提供API未支持的说明字段；内容删除沿各端点要求发送必要身份字段及版本，文件分组删除只发送版本。字段投影回归见 `scripts/admin-configuration-inputs.test.mjs`，不新增通用CRUD或改变后端幂等保证。
 
 模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
