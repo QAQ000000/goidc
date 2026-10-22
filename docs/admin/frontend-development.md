@@ -87,6 +87,8 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 交易流水沿用原有URL筛选和独立的分页/汇总API，使用公共列表区域、模板Card及 [AdminTransactionResults](../../web/src/components/admin-transaction-results.tsx) 的列定义和手机卡片；按 `event_key` 标识跨来源记录。现金收入/实际外部退款/现金净额直接读取后端全筛选汇总，展开区分别展示网关、人工线下和历史信用还款来源，不把当前页、钱包内转或账单结算当作现金合计。20/50/100条分页、金额转整数分、客户链接权限及详情返回上下文保留；汇总和明细各自失败/重试，无权限时不显示旧数据。本批不增加资金写入或导出。
 
+发票审核列表使用公共列表区域、状态栏、固定每页20项分页及 [AdminInvoiceApplicationResults](../../web/src/components/admin-invoice-application-results.tsx) 的列定义和手机卡片；筛选重置页码，详情返回保留状态及页码。列表API未提供电子文件状态，因此不展示该列、不逐行追加详情请求。详情的 [AdminInvoiceApplicationDetail](../../web/src/components/admin-invoice-application-detail.tsx)组合快照、账单、审核/调整记录和操作卡片，手机按快照→账单→历史→摘要/操作排列；只读管理员可看完整调整原因及发票编号。原审核/调整版本与幂等请求、文件上传及授权下载仍由共享领域控制器负责，客户前台沿用原布局。本批只适配申请列表/详情，不含客户申请表单或税务服务接入。
+
 模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
 
 ## 读取、URL 与权限

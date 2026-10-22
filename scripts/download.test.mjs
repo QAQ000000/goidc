@@ -69,7 +69,7 @@ function browser(t, options = {}) {
   globalThis.window = {
     setTimeout(callback, ms) { state.timers.push({ callback, ms }); },
     dispatchEvent(event) { state.events.push(event); },
-    location: { assign(url) { state.navigations.push(url); } },
+    location: { pathname: '/console/invoice-applications', assign(url) { state.navigations.push(url); } },
   };
   t.mock.method(URL, 'createObjectURL', blob => { state.blobs.push(blob); return `blob:download-${state.blobs.length}`; });
   t.mock.method(URL, 'revokeObjectURL', url => { state.revoked.push(url); });
@@ -149,7 +149,7 @@ test('fetchDownload retains authorized fetch options and uses a server filename 
   await client.fetchDownload({ id: 7, filename: 'item.pdf' }, '/customer-files/7/file');
   await client.fetchDownload({ id: 8, filename: 'fallback.pdf' });
   assert.deepEqual(requests.map(item => item.url), ['/api/v1/customer-files/7/file', '/api/v1/downloads/8/file']);
-  for (const { options } of requests) assert.deepEqual(options, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'zjmfgo' } });
+  for (const { options } of requests) assert.deepEqual(options, { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'zjmfgo', 'X-Auth-Portal': 'customer' } });
   assert.deepEqual(state.anchors.map(item => item.download), ['文件.pdf', 'fallback.pdf']);
   assert.deepEqual(await Promise.all(state.blobs.map(blob => blob.text())), ['bytes', 'bytes']);
 });

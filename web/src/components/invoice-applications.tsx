@@ -3,7 +3,7 @@
 import { useAdminListNavigation, useAdminListReturnHref } from "@/hooks/use-admin-list-navigation";
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Ban, FileCheck, FileUp, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, FileCheck, FileUp, Pencil, Plus, Receipt, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, date, money, upload } from "@/lib/api";
 import { useResource } from "@/hooks/use-resource";
@@ -18,7 +18,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Checkbox } from "./ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Failure, Loading } from "./common";
-import { Badge } from "./ui/badge";
+import { ApplicationStatus, applicationStatusLabels as statusLabel } from "./invoice-application-status";
+import { AdminListPage, AdminListRegion } from "./admin-list-page";
+import { AdminPagination } from "./admin-pagination";
+import { AdminStatusTabs } from "./admin-status-tabs";
+import { AdminInvoiceApplicationResults } from "./admin-invoice-application-results";
+import { AdminInvoiceApplicationDetail } from "./admin-invoice-application-detail";
 import { Workspace, useAdminPermission } from "./workspace";
 import { type Profile, type Address, clean, ProfileEditor, AddressEditor } from "./invoice-information-editors";
 
@@ -30,7 +35,7 @@ type SourceInvoice = {
   invoice_kind: string;
 };
 
-type Application = {
+export type Application = {
   id: number;
   user_id: number;
   status: "pending" | "rejected" | "issued";
@@ -77,13 +82,7 @@ type Application = {
 
 type Page<T> = { items: T[]; total: number; limit: number; offset: number };
 
-const statusLabel = { pending: "待审核", rejected: "已驳回", issued: "已开具" };
-
 const applicationStates = ["pending", "rejected", "issued"] as const;
-
-function ApplicationStatus({ status }: { status: Application["status"] }) {
-  return <Badge variant="outline">{statusLabel[status]}</Badge>;
-}
 
 export function InvoiceApplicationListView({
   admin = false,
@@ -101,10 +100,20 @@ function ApplicationList({ admin }: { admin: boolean }) {
   const { status, setStatus, page, setPage, ready, suffix } = useAdminListNavigation(admin, applicationStates);
   const offset = page * 20;
   const setOffset = (value: number | ((current: number) => number)) => setPage(current => Math.floor((typeof value === "function" ? value(current * 20) : value) / 20));
-  const { data, error, refresh } = useResource<Page<Application>>(
+  const allowed = useAdminPermission("invoice_applications.view");
+  const { data, error, refresh, isLoading } = useResource<Page<Application>>(
     ready ? `${admin ? "/admin" : ""}/invoice-applications?limit=20&offset=${offset}${status !== "all" ? `&status=${status}` : ""}` : null,
     false,
   );
+  if (admin) return <AdminListPage title="发票审核" description="审核客户税务发票申请；应收账单在财务账单中管理。"
+    actions={<Button variant="outline" disabled={isLoading} onClick={refresh}><RefreshCw aria-hidden="true" />刷新</Button>}
+    filters={<AdminStatusTabs value={status} onChange={value => { setStatus(value); setPage(0); }} states={statusLabel} label="发票申请状态" />}>
+    <AdminListRegion title="发票申请列表" allowed={allowed} resource={{ data, error, isLoading }} retry={refresh}
+      summary={data && `共 ${data.total} 条申请`}
+      pagination={result => <AdminPagination total={result.total} page={page} pageSize={20} onPageChange={setPage} />}>
+      {result => <AdminInvoiceApplicationResults items={result.items} suffix={suffix} />}
+    </AdminListRegion>
+  </AdminListPage>;
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -128,9 +137,6 @@ function ApplicationList({ admin }: { admin: boolean }) {
           </div>
         )}
       </div>
-      {admin && <div className="mb-4 flex overflow-x-auto border-b" role="group" aria-label="发票申请状态">
-        {Object.entries({ all: "全部", ...statusLabel }).map(([key, label]) => <button key={key} type="button" aria-pressed={status === key} onClick={() => { setStatus(key); setOffset(0); }} className={`shrink-0 border-b-2 px-4 py-3 text-sm ${status === key ? "border-primary font-medium text-primary" : "border-transparent text-muted-foreground"}`}>{label}</button>)}
-      </div>}
       {!admin && <Select
         value={status}
         onValueChange={(value) => {
@@ -780,39 +786,7 @@ function ApplicationDetailContent({
       refresh();
     } catch (e) { setReviewError((e as Error).message); } finally { setBusy(false); }
   }
-  return (
-    <>
-      <div className="mb-5">
-        <Button variant="ghost" asChild>
-          <Link href={admin ? backHref : "/console/invoice-applications"}>
-            <Receipt />
-            返回列表
-          </Link>
-        </Button>
-      </div>
-      {error ? (
-        <Failure error={error} retry={refresh} />
-      ) : !data ? (
-        <Loading />
-      ) : (
-        <div className="space-y-5 max-w-4xl">
-          <div className="flex flex-wrap justify-between gap-3">
-            <div>
-              <h1 className="page-title break-all">
-                {data.title || data.profile_snapshot?.title || "发票申请"}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                申请 #{data.id} · {money(data.amount_cents)}
-              </p>
-            </div>
-            <ApplicationStatus status={data.status} />
-          </div>
-          {admin && (
-            <p className="text-sm">
-              {data.customer_name} · {data.customer_email}
-            </p>
-          )}
-          <section className="border-y py-4">
+  const snapshot = data && (<section className={admin ? "" : "border-y py-4"}>
             <h2 className="font-semibold mb-3">发票抬头</h2>
             <DetailFields
               className="grid sm:grid-cols-2 gap-3 text-sm mb-6"
@@ -840,8 +814,8 @@ function ApplicationDetailContent({
                 .filter(Boolean)
                 .join(" ")}
             </p>
-          </section>
-          <section>
+          </section>);
+  const items = data && (<section>
             <h2 className="font-semibold mb-3">账单项目</h2>
             <div className="border rounded-md divide-y">
               {data.items?.map((item) => (
@@ -858,9 +832,9 @@ function ApplicationDetailContent({
                 </div>
               ))}
             </div>
-          </section>
-          {data.status === "issued" && (
-            <section className="border-t pt-4 space-y-3">
+          </section>);
+  const files = data && data.status === "issued" && (
+            <section className={admin ? "space-y-3" : "border-t pt-4 space-y-3"}>
               <h2 className="font-semibold">电子发票文件</h2>
               {data.documents?.length ? data.documents.map((file) => (
                 <div key={file.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -871,18 +845,18 @@ function ApplicationDetailContent({
               {admin && allowed && <div className="space-y-2"><Label>文件对应记录</Label><Select value={documentTarget} disabled={busy} onValueChange={setDocumentTarget}><SelectTrigger aria-label="文件对应记录"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="0">原发票</SelectItem>{data.adjustments?.map((item)=><SelectItem key={item.id} value={String(item.id)}>{item.action === "void" ? "作废记录" : "红字发票"} · {item.document_number || item.id}</SelectItem>)}</SelectContent></Select><p className="text-xs text-muted-foreground">上传至所选记录；已有文件会被替换。</p></div>}
               {admin && allowed && <label className="inline-flex"><Button asChild variant="outline" disabled={busy}><span><FileUp />上传文件</span></Button><input className="sr-only" type="file" accept=".pdf,.xml,application/pdf,application/xml" disabled={busy} onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadDocument(file); e.currentTarget.value = ""; }} /></label>}
             </section>
-          )}
-          {admin && allowed && data.status === "issued" && (
-            <section className="border-t pt-4 space-y-3">
+          );
+  const adjustments = data && admin && allowed && data.status === "issued" && (
+            <section className={admin ? "space-y-3" : "border-t pt-4 space-y-3"}>
               <h2 className="font-semibold">作废或红冲</h2><p className="text-sm text-muted-foreground">登记已在线下完成的税务处理结果；登记不会办理税务作废、红冲或退款。</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="destructive" disabled={busy} onClick={() => setAdjustmentAction("void")}><Ban />登记作废</Button>
                 <Button variant="outline" disabled={busy} onClick={() => setAdjustmentAction("red")}><FileCheck />登记红冲</Button>
               </div>
-              {data.adjustments?.map((item) => <p key={item.id} className="text-sm">{item.action === "void" ? "作废" : "红冲"} · {date(item.created_at)} · {item.document_number || item.note}</p>)}
+
             </section>
-          )}
-          {admin && allowed && data.status === "pending" && (
+          );
+  const reviewActions = data && admin && allowed && data.status === "pending" && (
             <div className="flex gap-2">
               <Button
                 variant="destructive"
@@ -906,9 +880,9 @@ function ApplicationDetailContent({
                 登记已开具
               </Button>
             </div>
-          )}
-          {data.status !== "pending" && (
-            <section className="border-t pt-4 text-sm space-y-2">
+          );
+  const history = data && data.status !== "pending" && (
+            <section className={admin ? "text-sm space-y-2" : "border-t pt-4 text-sm space-y-2"}>
               <h2 className="font-semibold">审核记录</h2>
               <p>{data.reviewed_at ? date(data.reviewed_at) : ""}</p>
               <p className="break-all">{data.review_note}</p>
@@ -919,8 +893,9 @@ function ApplicationDetailContent({
                 </p>
               )}
             </section>
-          )}
-          <MutationDialog
+          );
+  const dialogs = data && (<>
+<MutationDialog
             open={!!reviewStatus}
             busy={busy}
             onClose={() => setReviewStatus(null)}
@@ -1021,6 +996,52 @@ function ApplicationDetailContent({
               disabled={busy}
             />
           </MutationDialog>
+</>);
+  const feedback = reviewError && <p role="alert" className="text-sm text-destructive">{reviewError}</p>;
+  return (
+    <>
+      <div className="mb-5">
+        <Button variant="ghost" asChild>
+          <Link href={admin ? backHref : "/console/invoice-applications"}>
+            <Receipt />
+            返回列表
+          </Link>
+        </Button>
+      </div>
+      {error ? (
+        <Failure error={error} retry={refresh} />
+      ) : !data ? (
+        <Loading />
+      ) : admin ? (
+        <AdminInvoiceApplicationDetail data={data}
+          refresh={<Button variant="outline" disabled={busy} onClick={refresh}><RefreshCw aria-hidden="true" />刷新</Button>}
+          snapshot={snapshot} items={items} files={files} adjustments={adjustments}
+          review={reviewActions} history={history} dialogs={dialogs} feedback={feedback} />
+      ) : (
+        <div className="space-y-5 max-w-4xl">
+          <div className="flex flex-wrap justify-between gap-3">
+            <div>
+              <h1 className="page-title break-all">
+                {data.title || data.profile_snapshot?.title || "发票申请"}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                申请 #{data.id} · {money(data.amount_cents)}
+              </p>
+            </div>
+            <ApplicationStatus status={data.status} />
+          </div>
+          {admin && (
+            <p className="text-sm">
+              {data.customer_name} · {data.customer_email}
+            </p>
+          )}
+          {snapshot}
+          {items}
+          {files}
+          {adjustments}
+          {reviewActions}
+          {history}
+          {dialogs}
           {reviewError && (
             <p role="alert" className="text-sm text-destructive">
               {reviewError}
