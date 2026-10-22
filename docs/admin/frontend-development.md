@@ -89,6 +89,10 @@ export function Directory({ allowed, resource, filters, refresh, navigate }: Pro
 
 发票审核列表使用公共列表区域、状态栏、固定每页20项分页及 [AdminInvoiceApplicationResults](../../web/src/components/admin-invoice-application-results.tsx) 的列定义和手机卡片；筛选重置页码，详情返回保留状态及页码。列表API未提供电子文件状态，因此不展示该列、不逐行追加详情请求。详情的 [AdminInvoiceApplicationDetail](../../web/src/components/admin-invoice-application-detail.tsx)组合快照、账单、审核/调整记录和操作卡片，手机按快照→账单→历史→摘要/操作排列；只读管理员可看完整调整原因及发票编号。原审核/调整版本与幂等请求、文件上传及授权下载仍由共享领域控制器负责，客户前台沿用原布局。本批只适配申请列表/详情，不含客户申请表单或税务服务接入。
 
+常规目录按同类页面批量接线：官网字段、导航、友情链接、文件分组、客户等级、工单状态和传递规则共用既有列表区域、分页及手机卡片，查询参数和原表单留在领域组件。客户等级将六项AND条件归并展示，传递规则的长回复用可展开纯文本显示。列表失败或403时统一隐藏旧行、总数及分页。机械展示调整集中构建，逐页核对数据/权限，对改变的交互补实际浏览器验证；未改动的后端不重复运行全套回归。
+
+只读响应不得直接展开为写入DTO。[配置请求字段](../../web/src/lib/admin-configuration-inputs.ts)按具体内容类型、等级和工单状态声明写字段：编辑移除id/version/时间及计算字段，资源version映射expected_version；工单状态仅创建传slug，内置标题禁止编辑。官网字段表单同时提供标识与名称，导航不提供API未支持的说明字段；内容删除沿各端点要求发送必要身份字段及版本，文件分组删除只发送版本。字段投影回归见 `scripts/admin-configuration-inputs.test.mjs`，不新增通用CRUD或改变后端幂等保证。
+
 模板的Clerk、演示数据/API、主题选择、快捷搜索及无对应业务接口的控件不纳入产品。MIT版权全文见 [许可证](../../web/licenses/next-shadcn-dashboard-starter.MIT)。后续页面沿用这些原模板组件和布局，仅补领域数据、权限及操作接线，不再逐页重设计骨架。
 
 ## 读取、URL 与权限

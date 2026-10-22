@@ -104,7 +104,7 @@ jobs:
           npm --prefix web run lint
           npm --prefix web run typecheck
           npm --prefix web run test:proxy
-          node --test scripts/resource-components.test.mjs scripts/admin-list-components.test.mjs scripts/admin-customer-directory-components.test.mjs
+          node --test scripts/resource-components.test.mjs scripts/admin-list-components.test.mjs scripts/admin-customer-directory-components.test.mjs scripts/admin-configuration-inputs.test.mjs
           node --test scripts/channel-components.test.mjs scripts/notification-center-components.test.mjs scripts/web-push-components.test.mjs scripts/web-push-proxy.test.mjs
           node --test scripts/download.test.mjs
           node --test scripts/site-theme.test.mjs
